@@ -19,7 +19,7 @@ cd my-app
 ## Installation
 
 ```bash showLineNumbers
-bun add convex better-convex convex-helpers zod @tanstack/react-query
+bun add convex better-convex convex-helpers zod @tanstack/react-query @tanstack/react-query-devtools
 ```
 
 ## Configure Folder Structure
@@ -76,6 +76,13 @@ Update your tsconfig with required settings:
 See [Concepts](/docs/concepts) for detailed folder structure explanation.
 
 ## Initialize Convex
+
+Create the following folder structure in your project:
+
+```plaintext showLineNumbers
+convex/
+└── functions/
+```
 
 Start the Better Convex dev server:
 
@@ -270,10 +277,9 @@ Create the cRPC context:
 ```tsx title="src/lib/convex/crpc.tsx" showLineNumbers {1-4,6-9}
 import { api } from '@convex/api';
 import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import { createCRPCContext } from 'better-convex/react';
 
-export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<Api>({
+export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<typeof api>({
   api,
   meta,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
@@ -283,16 +289,17 @@ export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<Api>({
 Wrap your app:
 
 ```tsx title="src/app/providers.tsx" showLineNumbers {3-8,10,12-14,17-20,23-25}
-'use client';
+"use client";
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import {
   ConvexProvider,
   ConvexReactClient,
   getQueryClientSingleton,
   getConvexQueryClientSingleton,
-} from 'better-convex/react';
-import { CRPCProvider } from '@/lib/convex/crpc';
+} from "better-convex/react";
+import { CRPCProvider } from "@/lib/convex/crpc";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -319,12 +326,10 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <CRPCProvider
-        convexClient={convex}
-        convexQueryClient={convexQueryClient}
-      >
+      <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
         {children}
       </CRPCProvider>
+      <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
 }
