@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: 65
 tags: [code-review, race-condition, state-management, react]
