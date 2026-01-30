@@ -66,6 +66,7 @@ jobs:
           claude_args: |
             --max-turns 1000
             --allowedTools "Bash,Edit,Glob,Grep,Read,Task,Write,WebFetch,WebSearch,mcp__github_comment__update_claude_comment"
+            --system-prompt "When you receive a slash command like /lfg, /plan, /work, /review, /brainstorm, first read .claude/commands/{command}.md to understand the workflow steps to execute."
 
           additional_permissions: |
             actions: read
