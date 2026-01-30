@@ -65,6 +65,7 @@ jobs:
             }
           claude_args: |
             --max-turns 1000
+            --allowedTools "Bash,Edit,Glob,Grep,Read,Task,Write,WebFetch,WebSearch,mcp__github_comment__update_claude_comment"
 
           additional_permissions: |
             actions: read
