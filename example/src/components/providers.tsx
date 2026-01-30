@@ -1,18 +1,11 @@
-import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
-import { BetterConvexProvider } from '@/lib/convex/convex-provider';
-import { caller, crpc, HydrateClient, prefetch } from '@/lib/convex/rsc';
+import { caller, crpc, prefetch } from '@/lib/convex/rsc';
+import { ClientProviders } from './client-providers';
 
 export async function Providers({ children }: { children: ReactNode }) {
   const token = await caller.getToken();
 
   prefetch(crpc.user.getCurrentUser.queryOptions());
 
-  return (
-    <BetterConvexProvider token={token}>
-      <HydrateClient>
-        <NuqsAdapter>{children}</NuqsAdapter>
-      </HydrateClient>
-    </BetterConvexProvider>
-  );
+  return <ClientProviders token={token}>{children}</ClientProviders>;
 }
