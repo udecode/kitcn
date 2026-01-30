@@ -18,6 +18,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { DarkModeToggle } from '@/components/dark-mode-toggle';
 import { OrganizationSwitcher } from '@/components/organization/organization-switcher';
 import { Button } from '@/components/ui/button';
 import {
@@ -140,6 +141,7 @@ export function BreadcrumbNav() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            <DarkModeToggle />
             {isAuth ? (
               <>
                 <OrganizationSwitcher />
