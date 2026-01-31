@@ -1,4 +1,5 @@
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { ThemeProvider } from 'next-themes';
 import type { ReactNode } from 'react';
 import { BetterConvexProvider } from '@/lib/convex/convex-provider';
 import { caller, crpc, HydrateClient, prefetch } from '@/lib/convex/rsc';
@@ -11,7 +12,9 @@ export async function Providers({ children }: { children: ReactNode }) {
   return (
     <BetterConvexProvider token={token}>
       <HydrateClient>
-        <NuqsAdapter>{children}</NuqsAdapter>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <NuqsAdapter>{children}</NuqsAdapter>
+        </ThemeProvider>
       </HydrateClient>
     </BetterConvexProvider>
   );

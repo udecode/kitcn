@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { OrganizationSwitcher } from '@/components/organization/organization-switcher';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -140,6 +141,7 @@ export function BreadcrumbNav() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             {isAuth ? (
               <>
                 <OrganizationSwitcher />
