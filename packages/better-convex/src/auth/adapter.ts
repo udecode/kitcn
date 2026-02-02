@@ -363,7 +363,37 @@ export const httpAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
-          if (data.where?.length === 1 && data.where[0].operator === 'eq') {
+
+          // Support multiple AND conditions with eq operator only
+          const isValidWhere =
+            data.where?.length &&
+            data.where.every(
+              (w) =>
+                (w.operator === 'eq' || w.operator === undefined) &&
+                w.connector !== 'OR'
+            );
+
+          if (isValidWhere) {
+            // Validate exactly 1 match before updating
+            const countResult = await handlePagination(
+              async ({ paginationOpts }) =>
+                await ctx.runQuery(authFunctions.findMany, {
+                  model: data.model,
+                  paginationOpts,
+                  where: parseWhere(data.where),
+                }),
+              { limit: 2 }
+            );
+
+            if (countResult.docs.length === 0) {
+              throw new Error(`No ${data.model} found matching criteria`);
+            }
+            if (countResult.docs.length > 1) {
+              throw new Error(
+                `Multiple ${data.model} found matching criteria. Expected exactly 1.`
+              );
+            }
+
             const onUpdateHandle =
               authFunctions.onUpdate && triggers?.[data.model]?.onUpdate
                 ? ((await createFunctionHandle(
@@ -675,7 +705,41 @@ export const dbAdapter = <
           );
         },
         update: async (data): Promise<any> => {
-          if (data.where?.length === 1 && data.where[0].operator === 'eq') {
+          // Support multiple AND conditions with eq operator only
+          const isValidWhere =
+            data.where?.length &&
+            data.where.every(
+              (w) =>
+                (w.operator === 'eq' || w.operator === undefined) &&
+                w.connector !== 'OR'
+            );
+
+          if (isValidWhere) {
+            // Validate exactly 1 match before updating
+            const countResult = await handlePagination(
+              async ({ paginationOpts }) =>
+                await findManyHandler(
+                  ctx,
+                  {
+                    model: data.model,
+                    paginationOpts,
+                    where: parseWhere(data.where),
+                  },
+                  schema,
+                  betterAuthSchema
+                ),
+              { limit: 2 }
+            );
+
+            if (countResult.docs.length === 0) {
+              throw new Error(`No ${data.model} found matching criteria`);
+            }
+            if (countResult.docs.length > 1) {
+              throw new Error(
+                `Multiple ${data.model} found matching criteria. Expected exactly 1.`
+              );
+            }
+
             const onUpdateHandle =
               authFunctions.onUpdate && triggers?.[data.model]?.onUpdate
                 ? ((await createFunctionHandle(
