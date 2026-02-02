@@ -1,5 +1,14 @@
 # better-convex
 
+## 0.5.8
+
+### Patch Changes
+
+- [#73](https://github.com/udecode/better-convex/pull/73) [`232d126`](https://github.com/udecode/better-convex/commit/232d12697602e5c1cb3965b6e12cfe9b880d3c5c) Thanks [@zbeyens](https://github.com/zbeyens)! - Support multiple WHERE conditions in `update()` for Better Auth organization plugin compatibility.
+  - Multiple AND conditions with equality checks now work
+  - Validates exactly 1 document matches before updating (prevents accidental bulk updates)
+  - OR conditions and non-eq operators still require `updateMany()`
+
 ## 0.5.7
 
 ### Patch Changes
