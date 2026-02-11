@@ -1,0 +1,439 @@
+---
+title: Setup
+description: Set up better-convex with Better Auth for a TanStack Start app.
+links:
+  doc: https://nextjs.org/docs/app
+---
+
+import { InfoIcon } from "lucide-react";
+
+In this guide, you'll set up better-convex with Better Auth for a TanStack Start
+app.
+
+<Callout icon={<InfoIcon />}>
+  **Prerequisite:** Complete [Auth Server](/docs/auth/server) first to configure
+  your Convex backend.
+</Callout>
+
+## Installation
+
+First, install the required packages:
+
+```bash
+bun add better-convex better-auth@1.4.9 @tanstack/react-query superjson
+```
+
+<Callout icon={<InfoIcon />}>
+  **Note:** Complete [React Setup](/docs/react/setup) first to create your
+  `query-client.ts` with `hydrationConfig`.
+</Callout>
+
+## Auth Client & Auth Server Functions
+
+After configuring Better Auth in Convex, you'll set up the auth client and
+server functions in your TanStack Start app. The auth client manages
+authentication state and tokens, while the server functions handle
+authentication logic on the server.
+
+```ts title="src/lib/convex/auth/auth-client.ts"
+import type { Auth } from "@convex/auth-shared";
+import { convexClient } from "@convex-dev/better-auth/client/plugins";
+import {
+  adminClient,
+  apiKeyClient,
+  emailOTPClient,
+  inferAdditionalFields,
+} from "better-auth/client/plugins";
+import { createAuthClient } from "better-auth/react";
+
+export const authClient = createAuthClient({
+  baseURL:
+    typeof window === "undefined"
+      ? (import.meta.env.VITE_SITE_URL as string | undefined)
+      : window.location.origin,
+  sessionOptions: {
+    // Disable session polling on tab focus (saves ~500ms HTTP call per focus)
+    refetchOnWindowFocus: false,
+  },
+  plugins: [
+    inferAdditionalFields<Auth>(),
+    adminClient(),
+    apiKeyClient(),
+    emailOTPClient(),
+    convexClient(),
+  ],
+});
+```
+
+```ts title="src/lib/convex/auth/auth-server.ts"
+import { api } from "@convex/api";
+import { meta } from "@convex/meta";
+import { convexBetterAuthReactStart } from "@convex-dev/better-auth/react-start";
+
+export const {
+  handler,
+  getToken,
+  fetchAuthQuery,
+  fetchAuthMutation,
+  fetchAuthAction,
+} = convexBetterAuthReactStart({
+  convexUrl: process.env.VITE_CONVEX_URL,
+  convexSiteUrl: process.env.VITE_CONVEX_SITE_URL,
+});
+```
+
+## Auth API Endpoint
+
+Better Auth requires an API endpoint to handle authentication requests. In TanStack Start dev mode, create a new API route at `src/api/auth.$.ts` file:
+
+```ts title="src/api/auth.$.ts"
+import { createFileRoute } from "@tanstack/react-router";
+import { handler } from "@/lib/convex/auth/auth-server";
+
+export const Route = createFileRoute("/api/auth/$")({
+  server: {
+    handlers: {
+      GET: ({ request, context }) => handler(request, context),
+      POST: ({ request, context }) => handler(request, context),
+    },
+  },
+});
+```
+
+## Caller Factory & Server Context
+
+First, create a caller factory for Better Auth:
+
+```ts title="src/lib/convex/server.ts"
+import { api } from "@convex/api";
+import { meta } from "@convex/meta";
+import { createCallerFactory } from "better-convex/server";
+import { getRequestHeaders } from "@tanstack/react-start/server";
+import { getToken } from "./auth/auth-server";
+
+const { createContext, createCaller } = createCallerFactory({
+  api,
+  convexSiteUrl: process.env.VITE_CONVEX_SITE_URL,
+  meta,
+  auth: {
+    getToken: async () => {
+      return {
+        token: await getToken(),
+      };
+    },
+  },
+});
+
+type ServerCaller = ReturnType<typeof createCaller>;
+
+async function makeContext() {
+  const headers = await getRequestHeaders();
+  return createContext({ headers });
+}
+
+function createServerCaller(): ServerCaller {
+  return createCaller(async () => {
+    return await makeContext();
+  });
+}
+
+export function runServerCall<T>(fn: (caller: ServerCaller) => Promise<T> | T) {
+  const caller = createServerCaller();
+  return fn(caller);
+}
+```
+
+The `runServerCall` helper can be used later to call your CRPC functions from
+TanStack Start server-side functions. For example:
+
+```ts
+import { runServerCall } from "@/lib/convex/server";
+import { createServerFn } from "@tanstack/react-start";
+
+export const getCurrentUser = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return await runServerCall((caller) => caller.users.getSessionUser({}));
+  },
+);
+```
+
+## Router Context
+
+Now define the query-client types needed for the router context:
+
+```tsx title="src/routes/_root.tsx"
+import type { QueryClient } from "@tanstack/react-query";
+import { createRootRouteWithContext } from "@tanstack/react-router";
+import type { ConvexQueryClient, ConvexReactClient } from "better-convex/react";
+import { createSeo } from "@/lib/seo";
+import appCss from "../styles.css?url";
+
+export const Route = createRootRouteWithContext<{
+  convex: ConvexReactClient; // we will pass this later to providers to reduce some boilerplate code
+  queryClient: QueryClient;
+  convexQueryClient: ConvexQueryClient;
+}>()({
+  head: () => ({
+    ...createSeo(),
+    links: [
+      {
+        rel: "stylesheet",
+        href: appCss,
+      },
+    ],
+  }),
+  component: RootComponent,
+  shellComponent: RootDocument,
+  beforeLoad: async (ctx) => {
+    // todo
+  },
+});
+```
+
+Then initialize them in `router.tsx`:
+
+```tsx title="src/router.tsx"
+import { createRouter } from "@tanstack/react-router";
+import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
+import {
+  ConvexReactClient,
+  getConvexQueryClientSingleton,
+  getQueryClientSingleton,
+} from "better-convex/react";
+import { initCRPC } from "@/lib/convex/crpc";
+import { NotFound } from "./components/not-found";
+import { createQueryClient } from "./lib/convex/query-client";
+import { routeTree } from "./routeTree.gen";
+
+// https://tanstack.com/start/latest/docs/framework/react/guide/routing#the-router
+// Create a new router instance
+export const getRouter = () => {
+  const convexClientUrl: string | undefined | null = import.meta.env
+    .VITE_CONVEX_URL;
+
+  if (!convexClientUrl) {
+    console.error("VITE_CONVEX_URL is not set");
+    throw new Error("VITE_CONVEX_URL is not set");
+  }
+
+  const convex = new ConvexReactClient(convexClientUrl);
+  const convexSiteUrl = import.meta.env.VITE_CONVEX_SITE_URL;
+
+  if (!convexSiteUrl) {
+    console.error("VITE_CONVEX_SITE_URL is not set");
+    throw new Error("VITE_CONVEX_SITE_URL is not set");
+  }
+
+  const queryClient = getQueryClientSingleton(createQueryClient);
+  const convexQueryClient = getConvexQueryClientSingleton({
+    convex,
+    queryClient,
+  });
+
+  initCRPC(convexSiteUrl);
+
+  const router = createRouter({
+    routeTree,
+    context: {
+      convex,
+      queryClient,
+      convexQueryClient,
+    },
+    scrollRestoration: true,
+    defaultPreloadStaleTime: 0,
+    defaultNotFoundComponent: NotFound,
+    defaultErrorComponent: (err) => <p>{err.error.stack}</p>,
+  });
+
+  setupRouterSsrQueryIntegration({
+    router,
+    queryClient,
+  });
+  return router;
+};
+```
+
+Here, `initCRPC` is imported from `src/lib/convex/crpc.tsx` and defined as:
+
+```tsx title="src/lib/convex/crpc.tsx"
+import { api } from "@convex/api";
+import { meta } from "@convex/meta";
+import { createCRPCContext } from "better-convex/react";
+import type { ComponentProps } from "react";
+
+type CRPCContext = ReturnType<typeof createCRPCContext<typeof api>>;
+
+let crpcContext: CRPCContext | null = null;
+
+export function initCRPC(convexSiteUrl: string) {
+  if (!crpcContext) {
+    crpcContext = createCRPCContext<typeof api>({
+      api,
+      meta,
+      convexSiteUrl,
+    });
+  }
+
+  return crpcContext;
+}
+
+function getCRPCContext() {
+  if (!crpcContext) {
+    throw new Error("CRPC context not initialized");
+  }
+
+  return crpcContext;
+}
+
+type CRPCProviderProps = ComponentProps<CRPCContext["CRPCProvider"]>;
+
+export function CRPCProvider(props: CRPCProviderProps) {
+  const { CRPCProvider: Provider } = getCRPCContext();
+
+  return <Provider {...props} />;
+}
+
+export function useCRPC() {
+  return getCRPCContext().useCRPC();
+}
+
+export function useCRPCClient() {
+  return getCRPCContext().useCRPCClient();
+}
+```
+
+## Providers
+
+Here we'll focus on the auth providers. The non-auth providers are largely the
+same.
+
+Before setting up the providers, get the token on the server in your `_root.tsx`
+`beforeLoad` function:
+
+```tsx title="src/routes/_root.tsx"
+import type { QueryClient } from "@tanstack/react-query";
+import { createRootRouteWithContext } from "@tanstack/react-router";
+import type { ConvexQueryClient, ConvexReactClient } from "better-convex/react";
+import { createSeo } from "@/lib/seo";
+import appCss from "../styles.css?url";
+
+export const Route = createRootRouteWithContext<{
+  convex: ConvexReactClient; // we will pass this later to providers to reduce some boilerplate code
+  queryClient: QueryClient;
+  convexQueryClient: ConvexQueryClient;
+}>()({
+  head: () => ({
+    ...createSeo(),
+    links: [
+      {
+        rel: "stylesheet",
+        href: appCss,
+      },
+    ],
+  }),
+  component: RootComponent,
+  shellComponent: RootDocument,
+  beforeLoad: async (ctx) => {
+    const token = await getSessionToken(); // a server function that calls the getToken function in auth-server.ts and returns the token
+    if (token) {
+      ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
+    }
+
+    const currentUser = token ? await getCurrentUser() : null; // optional, defined by you as seen in the example above
+
+    return {
+      // up to you what you want to return in the context
+      isAuthenticated: !!token && !!currentUser,
+      currentUser,
+      token,
+    };
+  },
+});
+```
+
+Here, `getSessionToken` is defined as:
+
+```ts title="src/functions/getSessionToken.ts"
+import { getToken } from "@/lib/convex/auth/auth-server";
+import { createServerFn } from "@tanstack/react-start";
+
+export const getSessionToken = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return await getToken();
+  },
+);
+```
+
+So now we have access to the token in the `beforeLoad` function, and we can get it in our providers component:
+
+```tsx title="src/lib/convex/convex-provider.tsx"
+import { QueryClientProvider } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
+import { ConvexAuthProvider } from "better-convex/auth-client";
+import { CRPCProvider } from "@/lib/convex/crpc";
+import { authClient } from "./auth/auth-client";
+
+export function BetterConvexProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { convex, token } = useRouteContext({ from: "__root__" });
+  return (
+    <ConvexAuthProvider
+      authClient={authClient}
+      client={convex}
+      initialToken={token}
+      onMutationUnauthorized={() => {
+        //...
+      }}
+      onQueryUnauthorized={({ queryName }) => {
+        console.log(`Unauthorized query: ${queryName}`);
+      }}
+    >
+      <QueryProvider>{children}</QueryProvider>
+    </ConvexAuthProvider>
+  );
+}
+
+function QueryProvider({ children }: { children: React.ReactNode }) {
+  const { convex, queryClient, convexQueryClient } = useRouteContext({
+    from: "__root__",
+  });
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
+        {children}
+      </CRPCProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+And finally, we need to use this `BetterConvexProvider` in our `_root.tsx` file:
+
+```tsx title="src/routes/_root.tsx"
+function RootComponent() {
+  return (
+    <>
+      <BetterConvexProvider>
+        <Header />
+        <main className="relative flex-1 pt-12">
+          <Outlet />
+        </main>
+        <Footer />
+      </BetterConvexProvider>
+    </>
+  );
+}
+```
+
+You can now call your Convex functions from both loaders and client-side
+components, with auth support.
+
+Note: You may see an error saying an environment variable starting with
+`NEXT_PUBLIC_` is not set. You can add it to your local env file and safely
+ignore it for now.
+
+And this might not be the best solution, so feel free to suggest improvements.

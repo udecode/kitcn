@@ -31,6 +31,8 @@
     "---Next.js---",
     "nextjs/setup",
     "nextjs/rsc",
+    "---Tanstack Start---",
+    "tanstack-start/setup",
     "---Auth---",
     "auth/index",
     "auth/server",

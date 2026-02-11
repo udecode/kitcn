@@ -89,7 +89,7 @@
     },
     "packages/better-convex": {
       "name": "better-convex",
-      "version": "0.5.7",
+      "version": "0.5.8",
       "bin": {
         "better-convex": "./dist/cli.cjs",
       },
