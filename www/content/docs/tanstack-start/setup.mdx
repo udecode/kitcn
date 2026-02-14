@@ -416,7 +416,6 @@ And finally, we need to use this `BetterConvexProvider` in our `_root.tsx` file:
 ```tsx title="src/routes/_root.tsx"
 function RootComponent() {
   return (
-    <>
       <BetterConvexProvider>
         <Header />
         <main className="relative flex-1 pt-12">
@@ -424,7 +423,6 @@ function RootComponent() {
         </main>
         <Footer />
       </BetterConvexProvider>
-    </>
   );
 }
 ```
