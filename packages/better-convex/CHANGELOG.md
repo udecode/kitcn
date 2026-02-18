@@ -1,5 +1,24 @@
 # better-convex
 
+## 0.6.1
+
+### Patch Changes
+
+- [#82](https://github.com/udecode/better-convex/pull/82) [`aed9972`](https://github.com/udecode/better-convex/commit/aed9972f5869949cfc02ca2eb6bfcb7e57fb754d) Thanks [@zbeyens](https://github.com/zbeyens)! - Migration example: https://github.com/udecode/better-convex/pull/82
+
+  Added `AnyColumn` type export for self-referencing foreign keys (mirrors Drizzle's `AnyPgColumn`).
+
+  ```ts
+  import { type AnyColumn, convexTable, text } from "better-convex/orm";
+
+  export const comments = convexTable("comments", {
+    body: text().notNull(),
+    parentId: text().references((): AnyColumn => comments.id, {
+      onDelete: "cascade",
+    }),
+  });
+  ```
+
 ## 0.6.0
 
 ### Minor Changes
