@@ -3,7 +3,7 @@
 import type { InferInsertModel, InferSelectModel } from 'better-convex/orm';
 import type { Doc } from '../functions/_generated/dataModel';
 import type { todosTable, userTable } from '../functions/schema';
-import type { ApiInputs, ApiOutputs, Insert, Select, TableName } from './types';
+import type { ApiInputs, ApiOutputs, Insert, Select, TableName } from './api';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
@@ -74,58 +74,31 @@ type _TodoDeletionTimeIsDate = Expect<
   Equal<Select<'todos'>['deletionTime'], Date | null>
 >;
 
-// Source-truth from generated Convex API currently exposes temporal fields as `any`.
-type _CreateTodoDueDateInputIsAny = Expect<
-  Equal<IsAny<ApiInputs['todos']['create']['dueDate']>, true>
+// Date-hint-enhanced API types should NOT be `any`.
+type _CreateTodoDueDateInputNotAny = Expect<
+  Equal<IsAny<ApiInputs['todos']['create']['dueDate']>, false>
 >;
-type _UpdateTodoDueDateInputIsAny = Expect<
-  Equal<IsAny<ApiInputs['todos']['update']['dueDate']>, true>
+type _UpdateTodoDueDateInputNotAny = Expect<
+  Equal<IsAny<ApiInputs['todos']['update']['dueDate']>, false>
 >;
-type _PendingInvitationExpiresAtOutputIsAny = Expect<
+type _TodoCreatedAtOutputNotAny = Expect<
+  Equal<IsAny<ApiOutputs['todos']['list']['page'][number]['createdAt']>, false>
+>;
+type _TodoCreatedAtOutputIsDate = Expect<
+  Equal<ApiOutputs['todos']['list']['page'][number]['createdAt'], Date>
+>;
+type _OrganizationMemberCreatedAtOutputNotAny = Expect<
   Equal<
     IsAny<
-      ApiOutputs['organization']['listPendingInvitations'][number]['expiresAt']
+      ApiOutputs['organization']['listMembers']['members'][number]['createdAt']
     >,
-    true
+    false
   >
 >;
-type _UserInvitationExpiresAtOutputIsAny = Expect<
+type _OrganizationMemberCreatedAtOutputIsDate = Expect<
   Equal<
-    IsAny<
-      ApiOutputs['organization']['listUserInvitations'][number]['expiresAt']
-    >,
-    true
-  >
->;
-type _OverviewInvitationExpiresAtOutputIsAny = Expect<
-  Equal<
-    IsAny<
-      NonNullable<
-        NonNullable<
-          ApiOutputs['organization']['getOrganizationOverview']
-        >['invitation']
-      >['expiresAt']
-    >,
-    true
-  >
->;
-type _AdminBanExpiresAtOutputIsAny = Expect<
-  Equal<
-    IsAny<
-      NonNullable<
-        ApiOutputs['admin']['getAllUsers']['page'][number]
-      >['banExpiresAt']
-    >,
-    true
-  >
->;
-type _TodoDueDateOutputIsAny = Expect<
-  Equal<IsAny<ApiOutputs['todos']['list']['page'][number]['dueDate']>, true>
->;
-type _TodoDeletionTimeOutputIsAny = Expect<
-  Equal<
-    IsAny<ApiOutputs['todos']['list']['page'][number]['deletionTime']>,
-    true
+    ApiOutputs['organization']['listMembers']['members'][number]['createdAt'],
+    Date
   >
 >;
 
@@ -169,12 +142,24 @@ type _TodoDeletionTimeDocIsNumber = Expect<
   Equal<Doc<'todos'>['deletionTime'], number | null | undefined>
 >;
 
-const _validNumericCreateDueDate: ApiInputs['todos']['create'] = {
+const _validDateCreateDueDate: ApiInputs['todos']['create'] = {
   title: 'x',
+  dueDate: new Date(),
+};
+
+const _validDateUpdateDueDate: ApiInputs['todos']['update'] = {
+  id: 'x' as any,
+  dueDate: new Date(),
+};
+
+const _invalidNumericCreateDueDate: ApiInputs['todos']['create'] = {
+  title: 'x',
+  // @ts-expect-error Date-hint input should reject numeric timestamp
   dueDate: 1700000000000,
 };
 
-const _validNumericUpdateDueDate: ApiInputs['todos']['update'] = {
+const _invalidNumericUpdateDueDate: ApiInputs['todos']['update'] = {
   id: 'x' as any,
+  // @ts-expect-error Date-hint input should reject numeric timestamp
   dueDate: 1700000000000,
 };

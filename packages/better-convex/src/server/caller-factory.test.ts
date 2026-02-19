@@ -7,6 +7,18 @@ import { createCallerFactory } from './caller-factory';
 const CONVEX_SITE_URL_NOT_SET_RE = /CONVEX_SITE_URL is not set/i;
 const CONVEX_SITE_URL_INVALID_DOMAIN_RE = /should end in \.convex\.site/i;
 
+const withQueryLeafMeta = (api: {
+  posts: { list: ReturnType<typeof makeFunctionReference<'query'>> };
+}) =>
+  ({
+    posts: {
+      list: Object.assign(api.posts.list, {
+        type: 'query',
+        functionRef: api.posts.list,
+      }),
+    },
+  }) as const;
+
 describe('server/caller-factory', () => {
   afterEach(() => {
     // Ensure spies are restored even if a test fails.
@@ -20,7 +32,6 @@ describe('server/caller-factory', () => {
       createCallerFactory({
         api: {},
         convexSiteUrl: '',
-        meta: {} as any,
       })
     ).toThrow(CONVEX_SITE_URL_NOT_SET_RE);
 
@@ -28,7 +39,6 @@ describe('server/caller-factory', () => {
       createCallerFactory({
         api: {},
         convexSiteUrl: 'https://example.convex.cloud',
-        meta: {} as any,
       })
     ).toThrow(CONVEX_SITE_URL_INVALID_DOMAIN_RE);
   });
@@ -43,15 +53,14 @@ describe('server/caller-factory', () => {
     const api = {
       posts: { list: makeFunctionReference<'query'>('posts:list') },
     };
-    const meta = { posts: { list: { type: 'query' } } } as any;
+    const apiWithMeta = withQueryLeafMeta(api);
 
     const getToken = mock(async () => ({ token: undefined }));
 
     const { createContext } = createCallerFactory({
-      api,
+      api: apiWithMeta,
       convexSiteUrl: 'https://example.convex.site',
       auth: { getToken },
-      meta,
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -73,12 +82,12 @@ describe('server/caller-factory', () => {
     const api = {
       posts: { list: makeFunctionReference<'query'>('posts:list') },
     };
-    const meta = { posts: { list: { type: 'query' } } } as any;
+    const apiWithMeta = withQueryLeafMeta(api);
 
     const getToken = mock(async () => ({ token: 't0', isFresh: true }));
 
     const { createContext } = createCallerFactory({
-      api,
+      api: apiWithMeta,
       convexSiteUrl: 'https://example.convex.site',
       auth: {
         getToken,
@@ -88,7 +97,6 @@ describe('server/caller-factory', () => {
           'code' in e &&
           (e as any).code === 'UNAUTHORIZED',
       },
-      meta,
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -110,7 +118,7 @@ describe('server/caller-factory', () => {
     const api = {
       posts: { list: makeFunctionReference<'query'>('posts:list') },
     };
-    const meta = { posts: { list: { type: 'query' } } } as any;
+    const apiWithMeta = withQueryLeafMeta(api);
 
     const getToken = mock(
       async (_siteUrl: string, _headers: Headers, opts?: any) => {
@@ -120,10 +128,9 @@ describe('server/caller-factory', () => {
     );
 
     const { createContext } = createCallerFactory({
-      api,
+      api: apiWithMeta,
       convexSiteUrl: 'https://example.convex.site',
       auth: { getToken, isUnauthorized: () => false },
-      meta,
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -146,15 +153,14 @@ describe('server/caller-factory', () => {
     const api = {
       posts: { list: makeFunctionReference<'query'>('posts:list') },
     };
-    const meta = { posts: { list: { type: 'query' } } } as any;
+    const apiWithMeta = withQueryLeafMeta(api);
 
     const getToken = mock(async () => ({ token: 't0', isFresh: true }));
 
     const { createContext } = createCallerFactory({
-      api,
+      api: apiWithMeta,
       convexSiteUrl: 'https://example.convex.site',
       auth: { getToken, isUnauthorized: () => false },
-      meta,
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -177,15 +183,14 @@ describe('server/caller-factory', () => {
     const api = {
       posts: { list: makeFunctionReference<'query'>('posts:list') },
     };
-    const meta = { posts: { list: { type: 'query' } } } as any;
+    const apiWithMeta = withQueryLeafMeta(api);
 
     const getToken = mock(async () => ({ token: 't0', isFresh: true }));
 
     const { createContext } = createCallerFactory({
-      api,
+      api: apiWithMeta,
       convexSiteUrl: 'https://example.convex.site',
       auth: { getToken, isUnauthorized: () => false },
-      meta,
       transformer: {
         input: {
           serialize: (value: unknown) => ({ $in: value }),

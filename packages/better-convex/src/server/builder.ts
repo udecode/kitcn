@@ -69,6 +69,14 @@ const paginatedSchemaForTypes = z.object({
 /** Paginated schema type - both cursor and limit are required after .paginated() */
 type PaginatedInputSchema = typeof paginatedSchemaForTypes;
 
+/** Paginated schema type for external callers - both fields are optional due defaults. */
+const paginatedSchemaForClientTypes = z.object({
+  cursor: z.union([z.string(), z.null()]).optional(),
+  limit: z.number().optional(),
+});
+
+type PaginatedClientInputSchema = typeof paginatedSchemaForClientTypes;
+
 /**
  * Infer input type from ZodObject schema (for handlers)
  */
@@ -76,6 +84,16 @@ type InferInput<T> = T extends UnsetMarker
   ? Record<string, never>
   : T extends z.ZodObject<any>
     ? z.infer<T>
+    : never;
+
+/**
+ * Infer raw client input before defaults/transforms.
+ * Used for generated API arg typing.
+ */
+type InferClientInput<T> = T extends UnsetMarker
+  ? Record<string, never>
+  : T extends z.ZodObject<any>
+    ? z.input<T>
     : never;
 
 /**
@@ -87,6 +105,20 @@ type InferMiddlewareInput<T> = T extends UnsetMarker
   : T extends z.ZodObject<any>
     ? z.infer<T>
     : unknown;
+
+/**
+ * Static-only type hint attached to cRPC exports.
+ *
+ * Convex validators can widen unsupported types (like Date) to `any`.
+ * Codegen can read this hint from `typeof import(...).fn` to recover precise
+ * TypeScript input/output types for generated client API refs.
+ */
+export type CRPCFunctionTypeHint<TArgs, TReturns> = {
+  readonly __betterConvexTypeHint?: {
+    readonly args: TArgs;
+    readonly returns: TReturns;
+  };
+};
 
 // =============================================================================
 // Types for Configuration
@@ -619,6 +651,7 @@ export class QueryProcedureBuilder<
   TContext,
   TContextOverrides extends UnsetMarker | object = UnsetMarker,
   TInput extends UnsetMarker | z.ZodObject<any> = UnsetMarker,
+  TClientInput extends UnsetMarker | z.ZodObject<any> = TInput,
   TOutput extends UnsetMarker | z.ZodTypeAny = UnsetMarker,
   TMeta extends object = object,
 > extends ProcedureBuilder<
@@ -654,6 +687,7 @@ export class QueryProcedureBuilder<
     TContext,
     Overwrite<TContextOverrides, $ContextOverridesOut>,
     TInput,
+    TClientInput,
     TOutput,
     TMeta
   > {
@@ -668,6 +702,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     TInput,
+    TClientInput,
     TOutput,
     TMeta
   > {
@@ -682,6 +717,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     IntersectIfDefined<TInput, TNewInput>,
+    IntersectIfDefined<TClientInput, TNewInput>,
     TOutput,
     TMeta
   > {
@@ -705,6 +741,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     IntersectIfDefined<TInput, PaginatedInputSchema>,
+    IntersectIfDefined<TClientInput, PaginatedClientInputSchema>,
     z.ZodObject<{
       continueCursor: z.ZodUnion<[z.ZodString, z.ZodNull]>;
       isDone: z.ZodBoolean;
@@ -750,6 +787,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     TInput,
+    TClientInput,
     TNewOutput,
     TMeta
   > {
@@ -763,12 +801,17 @@ export class QueryProcedureBuilder<
       input: InferInput<TInput>;
     }) => Promise<TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult>
   ) {
-    return this._createFunction(
+    const fn = this._createFunction(
       handler,
       this._def.functionConfig.base,
       zCustomQuery,
       'query'
     );
+    return fn as typeof fn &
+      CRPCFunctionTypeHint<
+        InferClientInput<TClientInput>,
+        TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult
+      >;
   }
 
   /** Mark as internal - returns chainable builder using internal function */
@@ -777,6 +820,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     TInput,
+    TClientInput,
     TOutput,
     TMeta
   > {
@@ -898,12 +942,17 @@ export class MutationProcedureBuilder<
       input: InferInput<TInput>;
     }) => Promise<TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult>
   ) {
-    return this._createFunction(
+    const fn = this._createFunction(
       handler,
       this._def.functionConfig.base,
       zCustomMutation,
       'mutation'
     );
+    return fn as typeof fn &
+      CRPCFunctionTypeHint<
+        InferClientInput<TInput>,
+        TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult
+      >;
   }
 
   /** Mark as internal - returns chainable builder using internal function */
@@ -1029,12 +1078,17 @@ export class ActionProcedureBuilder<
       input: InferInput<TInput>;
     }) => Promise<TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult>
   ) {
-    return this._createFunction(
+    const fn = this._createFunction(
       handler,
       this._def.functionConfig.base,
       zCustomAction,
       'action'
     );
+    return fn as typeof fn &
+      CRPCFunctionTypeHint<
+        InferClientInput<TInput>,
+        TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult
+      >;
   }
 
   /** Mark as internal - returns chainable builder using internal function */
@@ -1077,6 +1131,7 @@ type CRPCInstance<
   query: QueryProcedureBuilder<
     TQueryCtx,
     TQueryCtx,
+    UnsetMarker,
     UnsetMarker,
     UnsetMarker,
     UnsetMarker,
@@ -1187,6 +1242,7 @@ class CRPCBuilderWithContext<
       query: new QueryProcedureBuilder<
         TQueryCtx,
         TQueryCtx,
+        UnsetMarker,
         UnsetMarker,
         UnsetMarker,
         UnsetMarker,

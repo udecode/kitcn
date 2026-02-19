@@ -17,6 +17,7 @@ import type {
   VanillaCRPCClient,
 } from '../crpc/types';
 import type { CRPCHttpRouter, HttpRouterRecord } from '../server/http-router';
+import { buildMetaIndex } from '../shared/meta-utils';
 import { useAuthStore, useFetchAccessToken } from './auth-store';
 import type { ConvexQueryClient } from './client';
 import {
@@ -86,7 +87,6 @@ export type CRPCHttpOptions = {
 
 export type CreateCRPCContextOptions<TApi> = {
   api: TApi;
-  meta: Meta;
   /** Optional payload transformer (always composed with built-in Date support). */
   transformer?: DataTransformerOptions;
 } & Partial<CRPCHttpOptions>;
@@ -104,23 +104,18 @@ type ExtractHttpRouter<TApi> = TApi extends { http?: infer R }
 /**
  * Create CRPC context, provider, and hooks for a Convex API.
  *
- * @param options - Configuration object containing api, meta, and optional HTTP settings
+ * @param options - Configuration object containing api and optional HTTP settings
  * @returns Object with CRPCProvider, useCRPC, and useCRPCClient
  *
  * @example
  * ```tsx
  * // lib/crpc.ts
  * import { api } from '@convex/api';
- * import { meta } from '@convex/meta';
  * import { createCRPCContext } from 'better-convex/react';
  *
- * // Without HTTP endpoints
- * export const { useCRPC } = createCRPCContext({ api, meta });
- *
- * // With HTTP endpoints (Api = Api & { http?: typeof appRouter })
- * export const { useCRPC } = createCRPCContext<Api>({
+ * // Works for both regular Convex functions and generated HTTP router types
+ * export const { useCRPC } = createCRPCContext({
  *   api,
- *   meta,
  *   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
  * });
  *
@@ -139,7 +134,8 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
 ) {
   type THttpRouter = ExtractHttpRouter<TApi>;
 
-  const { api, meta, ...httpOptions } = options;
+  const { api, ...httpOptions } = options;
+  const meta = buildMetaIndex(api);
   // Create contexts
   const CRPCProxyContext = createContext<CRPCClient<TApi> | null>(null);
   const VanillaClientContext = createContext<VanillaCRPCClient<TApi> | null>(

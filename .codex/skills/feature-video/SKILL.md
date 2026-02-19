@@ -26,6 +26,7 @@ This command creates professional video walkthroughs of features for PR document
 - Git repository with a PR to document
 - `ffmpeg` installed (for video conversion)
 - `rclone` configured (optional, for cloud upload - see rclone skill)
+- Public R2 base URL known (for example, `https://<public-domain>.r2.dev`)
 </requirements>
 
 ## Setup
@@ -212,6 +213,9 @@ ffmpeg -y -framerate 0.5 -pattern_type glob -i 'tmp/screenshots/*.png' \
 # Check rclone is configured
 rclone listremotes
 
+# Set your public base URL (NO trailing slash)
+PUBLIC_BASE_URL="https://<your-public-r2-domain>.r2.dev"
+
 # Upload video, preview GIF, and screenshots to cloud storage
 # Use --s3-no-check-bucket to avoid permission errors
 rclone copy tmp/videos/ r2:kieran-claude/pr-videos/pr-[number]/ --s3-no-check-bucket --progress
@@ -219,12 +223,17 @@ rclone copy tmp/screenshots/ r2:kieran-claude/pr-videos/pr-[number]/screenshots/
 
 # List uploaded files
 rclone ls r2:kieran-claude/pr-videos/pr-[number]/
-```
 
-Public URLs (R2 with public access):
-```
-Video: https://pub-4047722ebb1b4b09853f24d3b61467f1.r2.dev/pr-videos/pr-[number]/feature-demo.mp4
-Preview: https://pub-4047722ebb1b4b09853f24d3b61467f1.r2.dev/pr-videos/pr-[number]/feature-demo-preview.gif
+# Build and validate public URLs BEFORE updating PR
+VIDEO_URL="$PUBLIC_BASE_URL/pr-videos/pr-[number]/feature-demo.mp4"
+PREVIEW_URL="$PUBLIC_BASE_URL/pr-videos/pr-[number]/feature-demo-preview.gif"
+
+curl -I "$VIDEO_URL"
+curl -I "$PREVIEW_URL"
+
+# Require HTTP 200 for both URLs; stop if either fails
+curl -I "$VIDEO_URL" | head -n 1 | grep -q ' 200 ' || exit 1
+curl -I "$PREVIEW_URL" | head -n 1 | grep -q ' 200 ' || exit 1
 ```
 
 </upload_video>
@@ -254,7 +263,7 @@ If the PR already has a video section, replace it. Otherwise, append:
 
 Example:
 ```markdown
-[![Feature Demo](https://pub-4047722ebb1b4b09853f24d3b61467f1.r2.dev/pr-videos/pr-137/feature-demo-preview.gif)](https://pub-4047722ebb1b4b09853f24d3b61467f1.r2.dev/pr-videos/pr-137/feature-demo.mp4)
+[![Feature Demo](https://<your-public-r2-domain>.r2.dev/pr-videos/pr-137/feature-demo-preview.gif)](https://<your-public-r2-domain>.r2.dev/pr-videos/pr-137/feature-demo.mp4)
 ```
 
 **Update the PR:**

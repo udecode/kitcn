@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiInputs, ApiOutputs } from '@convex/types';
+import type { ApiInputs, ApiOutputs } from '@convex/api';
 import { skipToken } from '@tanstack/react-query';
 import { useInfiniteQuery } from 'better-convex/react';
 import { Archive, Loader2 } from 'lucide-react';

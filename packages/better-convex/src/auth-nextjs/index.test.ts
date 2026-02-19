@@ -15,9 +15,8 @@ describe('convexBetterAuth', () => {
 
     try {
       const result = convexBetterAuth({
-        api: {} as any,
+        api: {},
         convexSiteUrl: 'https://my-app.convex.site',
-        meta: {} as any,
       });
 
       await result.handler.GET(

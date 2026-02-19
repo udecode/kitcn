@@ -23,7 +23,7 @@ export interface AuthMiddlewareOptions {
  * app.use('/api/*', cors({ origin: process.env.SITE_URL, credentials: true }));
  * app.use(authMiddleware(getAuth));
  *
- * export default createHttpRouter(app, appRouter);
+ * export default createHttpRouter(app, httpRouter);
  * ```
  */
 export function authMiddleware(

@@ -429,13 +429,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 ```tsx title="src/lib/convex/crpc.tsx" showLineNumbers {1-4,6-9}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import { createCRPCContext } from 'better-convex/react';
 
-export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<Api>({
+export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
   api,
-  meta,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
 });
 ```
@@ -553,7 +550,7 @@ const { data } = useQuery(crpc.user.get.queryOptions({ id }, {
 
 **1. `prefetch()` - Fire-and-forget, non-blocking (NEW):**
 ```tsx showLineNumbers {1,4,6-8,13}
-import { prefetch, HydrateClient } from '@/lib/convex/server';
+import { crpc, prefetch, HydrateClient } from '@/lib/convex/rsc';
 
 export default async function Page() {
   prefetch(crpc.user.list.queryOptions({}));
@@ -573,7 +570,7 @@ function UserList() {
 
 **2. `caller` - Direct server calls:**
 ```tsx showLineNumbers {1,4-5}
-import { caller } from '@/lib/convex/server';
+import { caller } from '@/lib/convex/rsc';
 
 export default async function Page() {
   const users = await caller.user.list({});
@@ -583,7 +580,7 @@ export default async function Page() {
 
 **3. `preloadQuery()` - Awaited, data + hydration:**
 ```tsx showLineNumbers {1,4,6-10}
-import { preloadQuery, HydrateClient } from '@/lib/convex/rsc';
+import { crpc, preloadQuery, HydrateClient } from '@/lib/convex/rsc';
 
 export default async function Page() {
   const users = await preloadQuery(crpc.user.list.queryOptions({}));
@@ -596,16 +593,31 @@ export default async function Page() {
 }
 ```
 
-### HydrateClient Setup
+### Server + RSC Setup
 
-```tsx title="src/lib/convex/server.ts" showLineNumbers {1,4-6}
-import { createCallerFactory, createHydrateClient, createPrefetch } from 'better-convex/rsc';
-import { api } from '@convex/_generated/api';
-import { meta } from '@convex/meta';
+```tsx title="src/lib/convex/server.ts" showLineNumbers {1,4-8}
+import { api } from '@convex/api';
+import { createCallerFactory } from 'better-convex/server';
 
-export const createCaller = createCallerFactory(api, meta);
-export const caller = createCaller();
-export const { HydrateClient, prefetch } = createHydrateClient(api, meta);
+export const { createContext, createCaller } = createCallerFactory({
+  api,
+  convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
+});
+```
+
+```tsx title="src/lib/convex/rsc.tsx" showLineNumbers {3-4,6-8,11-12}
+import 'server-only';
+
+import { api } from '@convex/api';
+import { createServerCRPCProxy } from 'better-convex/rsc';
+import { cache } from 'react';
+import { headers } from 'next/headers';
+
+import { createCaller, createContext } from './server';
+
+const createRSCContext = cache(async () => createContext({ headers: await headers() }));
+export const caller = createCaller(createRSCContext);
+export const crpc = createServerCRPCProxy({ api });
 ```
 
 ## Quick Reference

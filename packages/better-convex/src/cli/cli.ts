@@ -24,7 +24,7 @@ export type ParsedArgs = {
   outputDir?: string;
 };
 
-// Parse args: better-convex [command] [--meta <dir>] [--debug] [...convex-args]
+// Parse args: better-convex [command] [--api <dir>] [--debug] [...convex-args]
 export function parseArgs(argv: string[]): ParsedArgs {
   let debug = false;
   let outputDir: string | undefined;
@@ -38,7 +38,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
-    if (a === '--meta') {
+    if (a === '--api') {
       outputDir = argv[i + 1];
       i += 1; // skip value
       continue;
@@ -106,7 +106,7 @@ export async function run(
       cwd: process.cwd(),
       env: {
         ...process.env,
-        BETTER_CONVEX_OUTPUT_DIR: outputDir || '',
+        BETTER_CONVEX_API_OUTPUT_DIR: outputDir || '',
         BETTER_CONVEX_DEBUG: debug ? '1' : '',
       },
     });

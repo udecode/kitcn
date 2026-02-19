@@ -1,0 +1,228 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { getFunctionName } from 'convex/server';
+import { generateMeta, getConvexConfig } from '../cli/codegen';
+import { createServerCRPCProxy } from '../rsc/proxy-server';
+
+const HTTP_ROUTE_NOT_FOUND_MISSING_RE = /HTTP route not found: missing/i;
+
+function mkTempDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-integration-'));
+}
+
+function writeFile(filePath: string, content: string) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content, 'utf-8');
+}
+
+describe('integration/generated-api', () => {
+  test('codegen smoke test runs against real repo convex directory', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+    const repoRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../..'
+    );
+    const sourceConvexDir = path.join(repoRoot, 'convex');
+    const sourceConvexConfig = path.join(repoRoot, 'convex.json');
+
+    process.chdir(dir);
+    try {
+      fs.cpSync(sourceConvexDir, path.join(dir, 'convex'), { recursive: true });
+      fs.copyFileSync(sourceConvexConfig, path.join(dir, 'convex.json'));
+
+      await generateMeta(undefined, { silent: true });
+
+      const { outputFile } = getConvexConfig();
+      const generated = fs.readFileSync(outputFile, 'utf-8');
+
+      expect(generated).toContain('export const api = {');
+      expect(generated).toContain('export type Api = typeof api;');
+      expect(generated).toContain(
+        'export type ApiInputs = inferApiInputs<Api>;'
+      );
+      expect(generated).toContain(
+        'export type ApiOutputs = inferApiOutputs<Api>;'
+      );
+      expect(generated).toContain(
+        'import type { ActionCtx, MutationCtx, QueryCtx }'
+      );
+      expect(generated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
+      );
+      expect(generated).toContain('export type OrmCtx<');
+      expect(generated).toContain(
+        'export type OrmQueryCtx = OrmCtx<QueryCtx>;'
+      );
+      expect(generated).toContain(
+        'export type OrmMutationCtx = OrmCtx<MutationCtx>;'
+      );
+      expect(generated).toContain(
+        'export type TableName = keyof typeof tables;'
+      );
+      expect(generated).toContain('export type Select<T extends TableName>');
+      expect(generated).toContain('export type Insert<T extends TableName>');
+      expect(generated).not.toContain('WithHttpRouter');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generated api works with merged leaves and server proxy', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+    const packageRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../..'
+    );
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `export { createApiLeaf } from ${JSON.stringify(path.join(packageRoot, 'src', 'server', 'api-entry.ts'))};`
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        const makeRef = (name) => ({ [Symbol.for("functionName")]: name });
+
+        export const api = {
+          admin: {
+            checkUserAdminStatus: makeRef("admin:checkUserAdminStatus"),
+          },
+          todos: {
+            create: makeRef("todos:create"),
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'admin.ts'),
+        `
+        export const checkUserAdminStatus = {
+          _crpcMeta: {
+            type: "query",
+            auth: "required",
+            role: "admin",
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const create = {
+          _crpcMeta: {
+            type: "mutation",
+            auth: "required",
+            rateLimit: "todo/create",
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'http.ts'),
+        `
+        export const health = {
+          _crpcHttpRoute: { path: "/api/health", method: "GET" },
+        };
+
+        export const httpRouter = {
+          _def: {
+            router: true,
+            procedures: {
+              health: {
+                _crpcHttpRoute: { path: "/api/health", method: "GET" },
+              },
+            },
+          },
+        };
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+      const { outputFile } = getConvexConfig();
+      const generatedSource = fs.readFileSync(outputFile, 'utf-8');
+      expect(generatedSource).toContain(
+        'http: undefined as unknown as typeof httpRouter,'
+      );
+      expect(generatedSource).toContain('export type Api = typeof api;');
+      expect(generatedSource).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
+      );
+      expect(generatedSource).not.toContain('WithHttpRouter');
+      const generated = await import(pathToFileURL(outputFile).href);
+      const api = generated.api as any;
+
+      expect(generated).toHaveProperty('api');
+      expect(generated).not.toHaveProperty('crpcMeta');
+      expect(api).not.toHaveProperty('__betterConvexCrpcMeta');
+      expect(api.http).toBeUndefined();
+
+      expect(api.admin.checkUserAdminStatus.type).toBe('query');
+      expect(api.admin.checkUserAdminStatus.auth).toBe('required');
+      expect(api.admin.checkUserAdminStatus.role).toBe('admin');
+      expect(getFunctionName(api.admin.checkUserAdminStatus)).toBe(
+        'admin:checkUserAdminStatus'
+      );
+      expect(getFunctionName(api.admin.checkUserAdminStatus.functionRef)).toBe(
+        'admin:checkUserAdminStatus'
+      );
+
+      expect(api.todos.create.type).toBe('mutation');
+      expect(api.todos.create.rateLimit).toBe('todo/create');
+      expect(getFunctionName(api.todos.create)).toBe('todos:create');
+      expect(getFunctionName(api.todos.create.functionRef)).toBe(
+        'todos:create'
+      );
+
+      const crpc = createServerCRPCProxy({ api }) as any;
+      const queryOptions = crpc.admin.checkUserAdminStatus.queryOptions(
+        { userId: 'u_1' },
+        { skipUnauth: true }
+      );
+      expect(queryOptions.queryKey).toEqual([
+        'convexQuery',
+        'admin:checkUserAdminStatus',
+        { userId: 'u_1' },
+      ]);
+      expect(queryOptions.meta).toMatchObject({
+        authType: 'required',
+        skipUnauth: true,
+      });
+      expect(crpc.admin.checkUserAdminStatus.meta).toEqual({
+        type: 'query',
+        auth: 'required',
+        role: 'admin',
+      });
+
+      expect(crpc.http.health.queryOptions({})).toMatchObject({
+        queryKey: ['httpQuery', 'health', {}],
+        meta: { path: '/api/health', method: 'GET' },
+      });
+      expect(() => crpc.http.missing.queryOptions({})).toThrow(
+        HTTP_ROUTE_NOT_FOUND_MISSING_RE
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+});

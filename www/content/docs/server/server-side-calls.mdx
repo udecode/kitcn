@@ -57,13 +57,11 @@ The caller requires the Convex **site URL** (for HTTP actions), which is differe
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {4-8}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
 import { createCallerFactory } from 'better-convex/server';
 
 export const { createContext, createCaller } = createCallerFactory({
   api,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
-  meta,
 });
 ```
 
@@ -77,7 +75,6 @@ Use `createCallerFactory` with a custom `getToken` function.
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {7-11}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
 import { createCallerFactory } from 'better-convex/server';
 
 export const { createContext, createCaller } = createCallerFactory({
@@ -90,12 +87,11 @@ export const { createContext, createCaller } = createCallerFactory({
       return { token };
     },
   },
-  meta,
 });
 ```
 
 <Callout icon={<InfoIcon />}>
-  **Note:** The `meta` parameter is generated via CLI. See [Metadata](/docs/server/metadata) for setup.
+  **Note:** The generated `api` object already includes cRPC metadata. No separate `meta` parameter is needed.
 </Callout>
 
 If you customize `transformer`, use the same transformer in:
@@ -225,6 +221,6 @@ type ConvexContext<TApi> = {
 ## Next Steps
 
 <Cards>
-  <Card title="Metadata" href="/docs/server/metadata" />
+  <Card title="Metadata" href="/docs/server/apidata" />
   <Card title="RSC" href="/docs/nextjs/rsc" />
 </Cards>

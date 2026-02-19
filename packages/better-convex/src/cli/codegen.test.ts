@@ -25,7 +25,7 @@ describe('cli/codegen', () => {
       const cfg = getConvexConfig();
       expect(cfg).toEqual({
         functionsDir: path.join(cwd, 'convex'),
-        outputFile: path.join(cwd, 'convex', 'shared', 'meta.ts'),
+        outputFile: path.join(cwd, 'convex', 'shared', 'api.ts'),
       });
     } finally {
       process.chdir(oldCwd);
@@ -47,19 +47,55 @@ describe('cli/codegen', () => {
       const cfg = getConvexConfig('out/meta');
       expect(cfg).toEqual({
         functionsDir: path.join(cwd, 'fn'),
-        outputFile: path.join(cwd, 'out', 'meta', 'meta.ts'),
+        outputFile: path.join(cwd, 'out', 'meta', 'api.ts'),
       });
     } finally {
       process.chdir(oldCwd);
     }
   });
 
-  test('generateMeta extracts _crpcMeta and _crpcHttpRoute, skips private/internal, and dedupes _http routes', async () => {
+  test('generateMeta emits merged public api leaves and dedupes _http routes', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
     process.chdir(dir);
     try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      // Runtime Convex API refs used as values in generated api.ts.
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          items: {
+            queries: {
+              get: { ref: 'items:queries:get' },
+              list: { ref: 'items:queries:list' },
+            },
+          },
+          posts: {
+            create: { ref: 'posts:create' },
+          },
+        };
+        `.trim()
+      );
+
       // Functions (Convex default).
       writeFile(
         path.join(dir, 'convex', 'items', 'queries.ts'),
@@ -72,6 +108,12 @@ describe('cli/codegen', () => {
             rateLimit: 10,
             dev: true,
             nested: { a: 1 },
+          },
+        };
+
+        export const get = {
+          _crpcMeta: {
+            type: 'query',
           },
         };
 
@@ -100,7 +142,19 @@ describe('cli/codegen', () => {
       // Excluded by isValidConvexFile.
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
-        `export const shouldNotAppear = { _crpcMeta: { type: 'query' } };`
+        `
+        export const tables = {
+          users: { table: 'users' },
+          todos: { table: 'todos' },
+        };
+
+        export const relations = {
+          users: {},
+          todos: {},
+        };
+
+        export const shouldNotAppear = { _crpcMeta: { type: 'query' } };
+        `.trim()
       );
       // Excluded by private file/dir rule.
       writeFile(
@@ -118,6 +172,15 @@ describe('cli/codegen', () => {
         `
         export const get = {
           _crpcHttpRoute: { path: '/api/todos/:id', method: 'GET' },
+        };
+
+        export const httpRouter = {
+          _def: {
+            router: true,
+            procedures: {
+              health: {},
+            },
+          },
         };
 
         export function __cov() {
@@ -153,41 +216,396 @@ describe('cli/codegen', () => {
 
       const { outputFile } = getConvexConfig();
       expect(fs.existsSync(outputFile)).toBe(true);
+      const generated = fs.readFileSync(outputFile, 'utf-8');
+      expect(generated).toContain(
+        'import { createApiLeaf } from "better-convex/server";'
+      );
+      expect(generated).toContain(
+        'import type { inferApiInputs, inferApiOutputs } from "better-convex/server";'
+      );
+      expect(generated).toContain(
+        'import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";'
+      );
+      expect(generated).toContain(
+        'import type { InferInsertModel, InferSelectModel, GenericOrmCtx } from "better-convex/orm";'
+      );
+      expect(generated).toContain('import type { httpRouter } from "../http";');
+      expect(generated).toContain('import type { tables } from "../schema";');
+      expect(generated).toContain(
+        'import type { relations } from "../schema";'
+      );
+      expect(generated).toContain(
+        'http: undefined as unknown as typeof httpRouter,'
+      );
+      expect(generated).toContain('export type Api = typeof api;');
+      expect(generated).toContain(
+        'export type ApiInputs = inferApiInputs<Api>;'
+      );
+      expect(generated).toContain(
+        'export type ApiOutputs = inferApiOutputs<Api>;'
+      );
+      expect(generated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
+      );
+      expect(generated).toContain(
+        'export type OrmCtx<Ctx extends QueryCtx | MutationCtx = QueryCtx> = GenericOrmCtx<Ctx, typeof relations>;'
+      );
+      expect(generated).toContain(
+        'export type OrmQueryCtx = OrmCtx<QueryCtx>;'
+      );
+      expect(generated).toContain(
+        'export type OrmMutationCtx = OrmCtx<MutationCtx>;'
+      );
+      expect(generated).toContain(
+        'export type TableName = keyof typeof tables;'
+      );
+      expect(generated).toContain(
+        'export type Select<T extends TableName> = InferSelectModel<(typeof tables)[T]>;'
+      );
+      expect(generated).toContain(
+        'export type Insert<T extends TableName> = InferInsertModel<(typeof tables)[T]>;'
+      );
+      expect(generated).not.toContain('const decorateApiFunction');
+      expect(generated).not.toContain('ApiFunctionEntry');
+      expect(generated).not.toContain('ApiFunctionLeafMeta');
+      expect(generated).not.toContain('ApiFunctionRefFromExport');
 
       const module = await import(pathToFileURL(outputFile).href);
-      expect(module).toHaveProperty('meta');
+      expect(module).toHaveProperty('api');
+      expect(module).not.toHaveProperty('crpcMeta');
 
-      const meta = module.meta as any;
+      const api = module.api as any;
+      expect(api.http).toBeUndefined();
 
-      // Module keys are file paths without ".ts". Nested modules are joined with "/".
-      expect(meta).toHaveProperty(['items/queries']);
-      expect(meta['items/queries'].list).toEqual({
-        auth: 'optional',
-        dev: true,
-        rateLimit: 10,
-        role: 'admin',
-        type: 'query',
-      });
-      expect(meta['items/queries']).not.toHaveProperty('internalOnly');
-      expect(meta['items/queries']).not.toHaveProperty('_private');
+      // Leaf uses merged metadata + functionRef while preserving runtime ref identity.
+      expect(api.items.queries.list.ref).toBe('items:queries:list');
+      expect(api.items.queries.list.type).toBe('query');
+      expect(api.items.queries.list.auth).toBe('optional');
+      expect(api.items.queries.list.role).toBe('admin');
+      expect(api.items.queries.list.rateLimit).toBe(10);
+      expect(api.items.queries.list.dev).toBe(true);
+      expect(api.items.queries.list.functionRef).toBe(api.items.queries.list);
+      expect(api.items.queries).not.toHaveProperty('internalOnly');
+      expect(api.items.queries).not.toHaveProperty('_private');
 
-      expect(meta.posts.create).toEqual({ type: 'mutation' });
+      expect(api.posts.create.ref).toBe('posts:create');
+      expect(api.posts.create.type).toBe('mutation');
+      expect(api.posts.create.functionRef).toBe(api.posts.create);
 
-      // Excluded files should not appear.
-      expect(meta).not.toHaveProperty('schema');
-      expect(meta).not.toHaveProperty('_private');
-      expect(meta).not.toHaveProperty('_generated');
+      // Hidden metadata key should not exist anymore.
+      expect(Object.keys(api)).not.toContain('__betterConvexCrpcMeta');
 
-      // HTTP route map is always present and should prefer longer/nested keys.
-      expect(meta._http['todos.get']).toEqual({
+      // HTTP route map is present on api root and should prefer longer/nested keys.
+      expect(api._http['todos.get']).toEqual({
         path: '/api/todos/:id',
         method: 'GET',
       });
-      expect(meta._http['todos.create']).toEqual({
+      expect(api._http['todos.create']).toEqual({
         path: '/api/todos',
         method: 'POST',
       });
-      expect(meta._http).not.toHaveProperty('get');
+      expect(api._http).not.toHaveProperty('get');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta omits optional type helpers when schema tables and httpRouter are missing', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export default {};
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'http.ts'),
+        `
+        export default {};
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const { outputFile } = getConvexConfig();
+      const generated = fs.readFileSync(outputFile, 'utf-8');
+      expect(generated).toContain(
+        'import type { inferApiInputs, inferApiOutputs } from "better-convex/server";'
+      );
+      expect(generated).toContain(
+        'import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";'
+      );
+      expect(generated).not.toContain('WithHttpRouter');
+      expect(generated).toContain('export type Api = typeof api;');
+      expect(generated).toContain(
+        'export type ApiInputs = inferApiInputs<Api>;'
+      );
+      expect(generated).toContain(
+        'export type ApiOutputs = inferApiOutputs<Api>;'
+      );
+      expect(generated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
+      );
+      expect(generated).not.toContain('GenericOrmCtx');
+      expect(generated).not.toContain('export type OrmCtx<');
+      expect(generated).not.toContain('export type OrmQueryCtx');
+      expect(generated).not.toContain('export type OrmMutationCtx');
+      expect(generated).not.toContain('InferSelectModel');
+      expect(generated).not.toContain('InferInsertModel');
+      expect(generated).not.toContain('TableName');
+      expect(generated).not.toContain('export type Select<');
+      expect(generated).not.toContain('export type Insert<');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta keeps table helpers but omits Orm* helpers when relations export is missing', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export const tables = {
+          todos: { table: 'todos' },
+        };
+        export default {};
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'http.ts'),
+        `
+        export default {};
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const { outputFile } = getConvexConfig();
+      const generated = fs.readFileSync(outputFile, 'utf-8');
+      expect(generated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
+      );
+      expect(generated).toContain(
+        'export type TableName = keyof typeof tables;'
+      );
+      expect(generated).toContain(
+        'export type Select<T extends TableName> = InferSelectModel<(typeof tables)[T]>;'
+      );
+      expect(generated).toContain(
+        'export type Insert<T extends TableName> = InferInsertModel<(typeof tables)[T]>;'
+      );
+
+      expect(generated).not.toContain('import type { relations }');
+      expect(generated).not.toContain('GenericOrmCtx');
+      expect(generated).not.toContain('export type OrmCtx<');
+      expect(generated).not.toContain('export type OrmQueryCtx');
+      expect(generated).not.toContain('export type OrmMutationCtx');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta does not infer HTTP router from legacy appRouter export', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: { type: 'query' },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'http.ts'),
+        `
+        export const appRouter = {
+          _def: { router: true, procedures: {} },
+        };
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const { outputFile } = getConvexConfig();
+      const generated = fs.readFileSync(outputFile, 'utf-8');
+      expect(generated).not.toContain('import type { httpRouter }');
+      expect(generated).not.toContain('WithHttpRouter');
+      expect(generated).toContain('export type Api = typeof api;');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta rejects reserved root http namespace', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          http: {
+            list: { ref: 'http:list' },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'http.ts'),
+        `
+        export const list = {
+          _crpcMeta: { type: 'query' },
+        };
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        /root "http" namespace is reserved/i
+      );
     } finally {
       process.chdir(oldCwd);
     }

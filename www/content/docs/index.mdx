@@ -115,7 +115,8 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
    `bunx convex dev --once --configure new --team <team_slug> --project <project_slug> --dev-deployment local`
 5. If bootstrap fails with `Cannot prompt for input in non-interactive terminals`, re-run with explicit `--team` and `--project` values.
 6. If `better-convex codegen` fails with `Local backend isn't running`, start `bunx better-convex dev` in another terminal and retry.
-7. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
+7. For new local deployments, backend data is project-local in `.convex/`, so each worktree/clone has isolated state.
+8. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
 
 **Bottom-up approach:**
 1. Follow [Quickstart](/docs/quickstart) for initial setup

@@ -35,9 +35,9 @@ describe('createCRPCContext', () => {
   });
 
   test('useCRPC/useCRPCClient throw when used outside CRPCProvider', () => {
+    const api = {} as any;
     const { useCRPC, useCRPCClient } = createCRPCContext({
-      api: {},
-      meta: {} as any,
+      api,
     });
 
     expect(() => renderHook(() => useCRPC())).toThrow(
@@ -49,11 +49,18 @@ describe('createCRPCContext', () => {
   });
 
   test('provides meta and ConvexQueryClient via context', () => {
-    const meta = { users: { list: { auth: 'optional' } } } as any;
+    const api = {
+      users: {
+        list: {
+          type: 'query',
+          auth: 'optional',
+        },
+      },
+    } as any;
     const convexQueryClient = { kind: 'queryClient' } as any;
     const convexClient = {} as any;
 
-    const { CRPCProvider } = createCRPCContext({ api: {}, meta });
+    const { CRPCProvider } = createCRPCContext({ api });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <CRPCProvider
         convexClient={convexClient}
@@ -64,12 +71,22 @@ describe('createCRPCContext', () => {
     );
 
     const metaResult = renderHook(() => useMeta(), { wrapper });
-    expect(metaResult.result.current).toBe(meta);
+    expect(metaResult.result.current).toEqual({
+      users: {
+        list: {
+          type: 'query',
+          auth: 'optional',
+        },
+      },
+    });
 
     const fnMetaResult = renderHook(() => useFnMeta()('users', 'list'), {
       wrapper,
     });
-    expect(fnMetaResult.result.current).toEqual({ auth: 'optional' });
+    expect(fnMetaResult.result.current).toEqual({
+      type: 'query',
+      auth: 'optional',
+    });
 
     const queryClientResult = renderHook(() => useConvexQueryClient(), {
       wrapper,
@@ -96,15 +113,17 @@ describe('createCRPCContext', () => {
     const meta = {
       _http: { 'todos.get': { method: 'GET', path: '/todos/:id' } },
     } as any;
+    const api = {
+      _http: meta._http,
+    } as any;
 
     try {
       const convexQueryClient = {} as any;
       const convexClient = {} as any;
 
       const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
-        api: {},
+        api,
         convexSiteUrl: 'https://example.convex.site',
-        meta,
       });
 
       const wrapper = ({ children }: { children: ReactNode }) => (
@@ -165,7 +184,6 @@ describe('createCRPCContext', () => {
       serialize: (value: unknown) => value,
       deserialize: (value: unknown) => value,
     };
-    const meta = {} as any;
     const api = {} as any;
 
     try {
@@ -174,7 +192,6 @@ describe('createCRPCContext', () => {
 
       const { CRPCProvider } = createCRPCContext({
         api,
-        meta,
         transformer,
       });
 
@@ -189,14 +206,10 @@ describe('createCRPCContext', () => {
 
       renderHook(() => useMeta(), { wrapper });
 
-      expect(createOptionsProxySpy).toHaveBeenCalledWith(
-        api,
-        meta,
-        transformer
-      );
+      expect(createOptionsProxySpy).toHaveBeenCalledWith(api, {}, transformer);
       expect(createVanillaProxySpy).toHaveBeenCalledWith(
         api,
-        meta,
+        {},
         convexClient,
         transformer
       );

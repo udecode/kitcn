@@ -1,4 +1,5 @@
 import { makeFunctionReference } from 'convex/server';
+import { createApiLeaf } from '../server/api-entry';
 
 import { createServerCRPCProxy } from './proxy-server';
 
@@ -6,19 +7,22 @@ const HTTP_ROUTE_NOT_FOUND_MISSING_RE = /HTTP route not found: missing/i;
 
 describe('rsc/proxy-server', () => {
   test('queryOptions delegates to convexQuery and attaches correct key/meta', () => {
-    const api = {
+    const listRef = makeFunctionReference<
+      'query',
+      { tag: string },
+      { items: string[] }
+    >('posts:list');
+
+    const apiWithMeta = {
       posts: {
-        list: makeFunctionReference<'query'>('posts:list'),
+        list: createApiLeaf<'query', typeof listRef>(listRef, {
+          type: 'query',
+          auth: 'optional',
+        }),
       },
     } as const;
 
-    const meta = {
-      posts: {
-        list: { type: 'query', auth: 'optional' },
-      },
-    } as any;
-
-    const crpc = createServerCRPCProxy({ api, meta });
+    const crpc = createServerCRPCProxy({ api: apiWithMeta });
     const opts = crpc.posts.list.queryOptions(
       { tag: 'x' },
       { skipUnauth: true }
@@ -35,7 +39,7 @@ describe('rsc/proxy-server', () => {
       },
     } as const;
 
-    const crpc = createServerCRPCProxy({ api, meta: {} as any });
+    const crpc = createServerCRPCProxy({ api });
     expect(crpc.posts.list.infiniteQueryKey()).toEqual([
       'convexQuery',
       'posts:list',
@@ -44,20 +48,27 @@ describe('rsc/proxy-server', () => {
   });
 
   test('meta returns function metadata from the provided meta object', () => {
-    const api = {
+    const listRef = makeFunctionReference<
+      'query',
+      { tag: string },
+      { items: string[] }
+    >('posts:list');
+
+    const apiWithMeta = {
       posts: {
-        list: makeFunctionReference<'query'>('posts:list'),
+        list: createApiLeaf<'query', typeof listRef>(listRef, {
+          type: 'query',
+          auth: 'required',
+          limit: 10,
+        }),
       },
     } as const;
 
-    const meta = {
-      posts: {
-        list: { type: 'query', auth: 'required', limit: 10 },
-      },
-    } as any;
-
-    const crpc = createServerCRPCProxy({ api, meta });
-    expect(crpc.posts.list.meta).toEqual({
+    const crpc = createServerCRPCProxy({ api: apiWithMeta });
+    const listWithRuntimeMeta = crpc.posts.list as unknown as {
+      meta: Record<string, unknown>;
+    };
+    expect(listWithRuntimeMeta.meta).toEqual({
       type: 'query',
       auth: 'required',
       limit: 10,
@@ -65,14 +76,21 @@ describe('rsc/proxy-server', () => {
   });
 
   test('http.queryOptions uses meta._http route map and throws on missing routes', () => {
-    const api = {} as const;
-    const meta = {
+    const api = {
+      http: {
+        health: makeFunctionReference<'query', Record<string, never>, unknown>(
+          'http:health'
+        ),
+        missing: makeFunctionReference<'query', Record<string, never>, unknown>(
+          'http:missing'
+        ),
+      },
       _http: {
         health: { path: '/api/health', method: 'GET' },
       },
-    } as any;
+    } as const;
 
-    const crpc = createServerCRPCProxy({ api, meta }) as any;
+    const crpc = createServerCRPCProxy({ api });
 
     expect(crpc.http.health.queryOptions({})).toMatchObject({
       queryKey: ['httpQuery', 'health', {}],

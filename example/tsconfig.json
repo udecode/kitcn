@@ -23,7 +23,7 @@
     "resolveJsonModule": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@convex/*": ["./convex/functions/_generated/*", "./convex/shared/*"],
+      "@convex/*": ["./convex/shared/*"],
       "fumadocs-mdx:collections/*": ["./.source/*"]
     },
     "types": ["bun-types"],

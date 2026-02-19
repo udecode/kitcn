@@ -4,8 +4,8 @@ import { createJiti } from 'jiti';
 import { isValidConvexFile } from '../shared/meta-utils';
 
 /**
- * Generate meta.ts with metadata for all Convex functions.
- * Uses runtime imports to extract _crpcMeta from CRPC functions.
+ * Generate api.ts with cRPC metadata and client-facing public API refs.
+ * Uses runtime imports to extract _crpcMeta from cRPC functions.
  */
 
 type FnMeta = Record<string, unknown>;
@@ -21,6 +21,16 @@ const VALID_IDENTIFIER_RE = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 /** Pattern to strip .ts extension */
 const TS_EXTENSION_RE = /\.ts$/;
+
+type ApiTreeNode = {
+  children: Record<string, ApiTreeNode>;
+  functions: Array<{
+    fnName: string;
+    fnType: 'query' | 'mutation' | 'action';
+    moduleName: string;
+    fnMeta: FnMeta;
+  }>;
+};
 
 /** CRPC metadata attached to functions at runtime */
 type CRPCMeta = {
@@ -48,6 +58,248 @@ function listFilesRecursive(cwd: string, relDir = ''): string[] {
   return files;
 }
 
+function ensureRelativeImportPath(value: string): string {
+  if (value.startsWith('.') || value.startsWith('/')) {
+    return value;
+  }
+  return `./${value}`;
+}
+
+function normalizeImportPath(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
+function formatKey(key: string): string {
+  return VALID_IDENTIFIER_RE.test(key) ? key : `'${key}'`;
+}
+
+function getAccessPath(base: string, segments: string[]): string {
+  return segments.reduce(
+    (acc, segment) => `${acc}[${JSON.stringify(segment)}]`,
+    base
+  );
+}
+
+function getModuleImportPath(
+  outputFile: string,
+  functionsDir: string,
+  moduleName: string
+): string {
+  const moduleFile = path.join(functionsDir, moduleName);
+  const relativePath = path.relative(path.dirname(outputFile), moduleFile);
+  return ensureRelativeImportPath(normalizeImportPath(relativePath));
+}
+
+function getRuntimeApiImportPath(
+  outputFile: string,
+  functionsDir: string
+): string {
+  const runtimeApiFile = path.join(functionsDir, '_generated', 'api.js');
+  const relativePath = path.relative(path.dirname(outputFile), runtimeApiFile);
+  return ensureRelativeImportPath(normalizeImportPath(relativePath));
+}
+
+function getSchemaImportPath(outputFile: string, functionsDir: string): string {
+  const schemaFile = path.join(functionsDir, 'schema');
+  const relativePath = path.relative(path.dirname(outputFile), schemaFile);
+  return ensureRelativeImportPath(normalizeImportPath(relativePath));
+}
+
+function getServerTypesImportPath(
+  outputFile: string,
+  functionsDir: string
+): string {
+  const serverTypesFile = path.join(functionsDir, '_generated', 'server');
+  const relativePath = path.relative(path.dirname(outputFile), serverTypesFile);
+  return ensureRelativeImportPath(normalizeImportPath(relativePath));
+}
+
+function getHttpImportPath(outputFile: string, functionsDir: string): string {
+  const httpFile = path.join(functionsDir, 'http');
+  const relativePath = path.relative(path.dirname(outputFile), httpFile);
+  return ensureRelativeImportPath(normalizeImportPath(relativePath));
+}
+
+function hasNamedExport(filePath: string, exportName: string): boolean {
+  if (!fs.existsSync(filePath)) {
+    return false;
+  }
+
+  const source = fs.readFileSync(filePath, 'utf-8');
+  const directPattern = new RegExp(
+    `\\bexport\\s+(?:const|let|var|function|class|type|interface)\\s+${exportName}\\b`
+  );
+  if (directPattern.test(source)) {
+    return true;
+  }
+
+  const namedExportsPattern = /\bexport\s*{([^}]*)}/g;
+  for (const match of source.matchAll(namedExportsPattern)) {
+    const exportList = match[1] ?? '';
+    const listPattern = new RegExp(`\\b${exportName}\\b`);
+    if (listPattern.test(exportList)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function createApiTree(meta: Meta): ApiTreeNode {
+  const root: ApiTreeNode = { children: {}, functions: [] };
+
+  for (const [moduleName, fns] of Object.entries(meta)) {
+    const pathSegments = moduleName.split('/').filter(Boolean);
+    let node = root;
+
+    for (const segment of pathSegments) {
+      node.children[segment] ??= { children: {}, functions: [] };
+      node = node.children[segment]!;
+    }
+
+    for (const fnName of Object.keys(fns).sort()) {
+      const fnMeta = fns[fnName] ?? {};
+      const type = fnMeta.type;
+      const fnType =
+        type === 'query' || type === 'mutation' || type === 'action'
+          ? type
+          : 'query';
+      node.functions.push({
+        fnName,
+        fnType,
+        moduleName,
+        fnMeta: {
+          ...fnMeta,
+          type: fnType,
+        },
+      });
+    }
+  }
+
+  return root;
+}
+
+function formatMetaValue(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return JSON.stringify(value);
+  }
+  if (typeof value === 'boolean' || typeof value === 'number') {
+    return String(value);
+  }
+  return null;
+}
+
+function emitFnMetaLiteral(fnMeta: FnMeta): string {
+  const metaProps: string[] = [];
+  for (const [key, value] of Object.entries(fnMeta).sort(([a], [b]) =>
+    a.localeCompare(b)
+  )) {
+    if (value === undefined) continue;
+    const formatted = formatMetaValue(value);
+    if (formatted !== null) {
+      metaProps.push(`${key}: ${formatted}`);
+    }
+  }
+
+  return `{ ${metaProps.join(', ')} }`;
+}
+
+function emitHttpRoutes(
+  dedupedRoutes: Record<string, HttpRoute>,
+  indentLevel: number
+): string[] {
+  const indent = '  '.repeat(indentLevel);
+  const lines: string[] = [];
+  for (const [routeKey, route] of Object.entries(dedupedRoutes).sort(
+    ([a], [b]) => a.localeCompare(b)
+  )) {
+    lines.push(
+      `${indent}${formatKey(routeKey)}: { path: ${JSON.stringify(route.path)}, method: ${JSON.stringify(route.method)} },`
+    );
+  }
+  return lines;
+}
+
+function emitApiObject(
+  tree: ApiTreeNode,
+  pathSegments: string[],
+  outputFile: string,
+  functionsDir: string,
+  indentLevel: number,
+  dedupedRoutes: Record<string, HttpRoute>,
+  hasHttpRouterExport: boolean
+): string[] {
+  const indent = '  '.repeat(indentLevel);
+  const lines: string[] = [];
+
+  const childKeys = Object.keys(tree.children).sort((a, b) =>
+    a.localeCompare(b)
+  );
+  const functionEntries = [...tree.functions].sort((a, b) =>
+    a.fnName.localeCompare(b.fnName)
+  );
+
+  const childSet = new Set(childKeys);
+  for (const entry of functionEntries) {
+    if (childSet.has(entry.fnName)) {
+      throw new Error(
+        `Codegen conflict at ${pathSegments.join('/')}: export "${entry.fnName}" conflicts with directory of same name.`
+      );
+    }
+  }
+
+  const mergedKeys = [
+    ...childKeys,
+    ...functionEntries.map((entry) => entry.fnName),
+  ].sort((a, b) => a.localeCompare(b));
+
+  for (const key of mergedKeys) {
+    if (childSet.has(key)) {
+      const childNode = tree.children[key]!;
+      lines.push(`${indent}${formatKey(key)}: {`);
+      lines.push(
+        ...emitApiObject(
+          childNode,
+          [...pathSegments, key],
+          outputFile,
+          functionsDir,
+          indentLevel + 1,
+          dedupedRoutes,
+          hasHttpRouterExport
+        )
+      );
+      lines.push(`${indent}},`);
+      continue;
+    }
+
+    const fnEntry = functionEntries.find((entry) => entry.fnName === key);
+    if (!fnEntry) continue;
+
+    const runtimeAccess = getAccessPath('convexApi', [...pathSegments, key]);
+    const moduleImportPath = getModuleImportPath(
+      outputFile,
+      functionsDir,
+      fnEntry.moduleName
+    );
+    const fnMetaLiteral = emitFnMetaLiteral(fnEntry.fnMeta);
+
+    lines.push(
+      `${indent}${formatKey(key)}: createApiLeaf<${JSON.stringify(fnEntry.fnType)}, typeof import(${JSON.stringify(moduleImportPath)}).${key}>(${runtimeAccess}, ${fnMetaLiteral}),`
+    );
+  }
+
+  if (pathSegments.length === 0) {
+    if (hasHttpRouterExport) {
+      lines.push(`${indent}http: undefined as unknown as typeof httpRouter,`);
+    }
+    lines.push(`${indent}_http: {`);
+    lines.push(...emitHttpRoutes(dedupedRoutes, indentLevel + 1));
+    lines.push(`${indent}},`);
+  }
+
+  return lines;
+}
+
 export function getConvexConfig(outputDir?: string): {
   functionsDir: string;
   outputFile: string;
@@ -60,11 +312,11 @@ export function getConvexConfig(outputDir?: string): {
   const functionsDir = convexConfig.functions || 'convex';
   const functionsDirPath = path.join(process.cwd(), functionsDir);
 
-  // Default: convex/shared/meta.ts, or custom outputDir/meta.ts
+  // Default: convex/shared/api.ts, or custom outputDir/api.ts
   const outputFile = path.join(
     process.cwd(),
     outputDir || 'convex/shared',
-    'meta.ts'
+    'api.ts'
   );
 
   return {
@@ -97,7 +349,7 @@ function isCRPCHttpRouter(value: unknown): value is {
 }
 
 /**
- * Import a module using jiti and extract CRPC metadata from exports
+ * Import a module using jiti and extract cRPC metadata from exports.
  */
 async function parseModuleRuntime(
   filePath: string,
@@ -122,7 +374,7 @@ async function parseModuleRuntime(
     // Skip private exports
     if (name.startsWith('_')) continue;
 
-    // Check if this is a CRPC function with metadata
+    // Check if this is a cRPC function with metadata
     const meta = (value as any)?._crpcMeta as CRPCMeta | undefined;
 
     if (meta?.type) {
@@ -190,7 +442,7 @@ export async function generateMeta(
   const silent = options?.silent ?? false;
 
   if (debug) {
-    console.info('🔍 Scanning Convex functions for metadata...\n');
+    console.info('🔍 Scanning Convex functions for cRPC metadata...\n');
   }
 
   // Create jiti instance for importing TypeScript files
@@ -242,37 +494,6 @@ export async function generateMeta(
     }
   }
 
-  // Helper: quote key if needed (contains slashes, dots, spaces, etc.)
-  const formatKey = (key: string) =>
-    VALID_IDENTIFIER_RE.test(key) ? key : `'${key}'`;
-
-  // Generate output with proper formatting for objects
-  const metaEntries = Object.entries(meta)
-    .map(([module, fns]) => {
-      const fnEntries = Object.entries(fns)
-        .map(([fn, fnMeta]) => {
-          const metaProps: string[] = [];
-          // All properties alphabetically
-          for (const [key, value] of Object.entries(fnMeta).sort()) {
-            if (value === undefined) continue;
-            if (typeof value === 'string') {
-              metaProps.push(`${key}: '${value}'`);
-            } else if (typeof value === 'boolean') {
-              metaProps.push(`${key}: ${value}`);
-            } else if (typeof value === 'number') {
-              metaProps.push(`${key}: ${value}`);
-            }
-          }
-          const metaStr = `{ ${metaProps.join(', ')} }`;
-          return `    ${fn}: ${metaStr}`;
-        })
-        .join(',\n');
-      return `  ${formatKey(module)}: {\n${fnEntries},\n  }`;
-    })
-    .join(',\n');
-
-  const metaContent = metaEntries ? `\n${metaEntries},\n` : '';
-
   // Dedupe HTTP routes: prefer nested paths (todos.get) over flat (get)
   // by keeping only routes where no other route has same path with longer key
   const routesByPath = new Map<string, { key: string; route: HttpRoute }[]>();
@@ -292,35 +513,120 @@ export async function generateMeta(
     dedupedRoutes[best.key] = best.route;
   }
 
-  // Generate _http entries (merged into meta)
-  const httpEntries = Object.entries(dedupedRoutes)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(
-      ([name, route]) =>
-        `    ${formatKey(name)}: { path: '${route.path}', method: '${route.method}' }`
-    )
-    .join(',\n');
-  const httpContent = httpEntries ? `\n${httpEntries},\n  ` : '';
+  const runtimeApiImportPath = getRuntimeApiImportPath(
+    outputFile,
+    functionsDir
+  );
+  const schemaImportPath = getSchemaImportPath(outputFile, functionsDir);
+  const serverTypesImportPath = getServerTypesImportPath(
+    outputFile,
+    functionsDir
+  );
+  const httpImportPath = getHttpImportPath(outputFile, functionsDir);
+  const hasTablesExport = hasNamedExport(
+    path.join(functionsDir, 'schema.ts'),
+    'tables'
+  );
+  const hasRelationsExport = hasNamedExport(
+    path.join(functionsDir, 'schema.ts'),
+    'relations'
+  );
+  const hasHttpRouterExport = hasNamedExport(
+    path.join(functionsDir, 'http.ts'),
+    'httpRouter'
+  );
 
-  // Add _http to meta content
-  const fullMetaContent = metaContent
-    ? `${metaContent}  _http: {${httpContent}},\n`
-    : `\n  _http: {${httpContent}},\n`;
+  const apiTree = createApiTree(meta);
+  const hasRootHttpNamespace =
+    Object.hasOwn(apiTree.children, 'http') ||
+    apiTree.functions.some((entry) => entry.fnName === 'http');
+  if (hasRootHttpNamespace) {
+    throw new Error(
+      'Codegen conflict: root "http" namespace is reserved for generated HTTP router types. Rename your Convex module/function.'
+    );
+  }
+  const apiObjectLines = emitApiObject(
+    apiTree,
+    [],
+    outputFile,
+    functionsDir,
+    1,
+    dedupedRoutes,
+    hasHttpRouterExport
+  );
+  const apiObjectBody =
+    apiObjectLines.length > 0 ? `\n${apiObjectLines.join('\n')}\n` : '\n';
+
+  const serverTypeImports =
+    'import type { inferApiInputs, inferApiOutputs } from "better-convex/server";';
+  const ctxTypeImports = `import type { ActionCtx, MutationCtx, QueryCtx } from ${JSON.stringify(serverTypesImportPath)};`;
+
+  const ormTypeImports = [
+    hasTablesExport ? 'InferInsertModel' : null,
+    hasTablesExport ? 'InferSelectModel' : null,
+    hasRelationsExport ? 'GenericOrmCtx' : null,
+  ].filter((item): item is string => !!item);
+
+  const optionalImports = [
+    ormTypeImports.length > 0
+      ? `import type { ${ormTypeImports.join(', ')} } from "better-convex/orm";`
+      : null,
+    hasHttpRouterExport
+      ? `import type { httpRouter } from ${JSON.stringify(httpImportPath)};`
+      : null,
+    hasTablesExport
+      ? `import type { tables } from ${JSON.stringify(schemaImportPath)};`
+      : null,
+    hasRelationsExport
+      ? `import type { relations } from ${JSON.stringify(schemaImportPath)};`
+      : null,
+  ]
+    .filter((line): line is string => !!line)
+    .join('\n');
+
+  const apiTypeLine = 'export type Api = typeof api;';
+
+  const optionalTypeExports = [
+    'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;',
+    hasRelationsExport
+      ? `
+export type OrmCtx<Ctx extends QueryCtx | MutationCtx = QueryCtx> = GenericOrmCtx<Ctx, typeof relations>;
+export type OrmQueryCtx = OrmCtx<QueryCtx>;
+export type OrmMutationCtx = OrmCtx<MutationCtx>;`
+      : null,
+    hasTablesExport
+      ? `
+export type TableName = keyof typeof tables;
+export type Select<T extends TableName> = InferSelectModel<(typeof tables)[T]>;
+export type Insert<T extends TableName> = InferInsertModel<(typeof tables)[T]>;`
+      : null,
+  ]
+    .filter((entry): entry is string => !!entry)
+    .join('\n');
 
   const output = `// biome-ignore-all format: generated
 // This file is auto-generated by better-convex
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
 
-export const meta = {${fullMetaContent}} as const;
+import { createApiLeaf } from "better-convex/server";
+${serverTypeImports}
+${ctxTypeImports}
+import { api as convexApi } from ${JSON.stringify(runtimeApiImportPath)};
+${optionalImports ? `\n${optionalImports}` : ''}
 
-export type Meta = typeof meta;
+export const api = {${apiObjectBody}} as const;
+
+${apiTypeLine}
+export type ApiInputs = inferApiInputs<Api>;
+export type ApiOutputs = inferApiOutputs<Api>;
+${optionalTypeExports}
 `;
 
-  // Ensure _meta directory exists
-  const metaDir = path.dirname(outputFile);
+  // Ensure output directory exists
+  const outputDirname = path.dirname(outputFile);
 
-  if (!fs.existsSync(metaDir)) {
-    fs.mkdirSync(metaDir, { recursive: true });
+  if (!fs.existsSync(outputDirname)) {
+    fs.mkdirSync(outputDirname, { recursive: true });
   }
 
   fs.writeFileSync(outputFile, output);
@@ -340,7 +646,7 @@ export type Meta = typeof meta;
         `   ${Object.keys(meta).length} modules, ${totalFunctions} functions`
       );
     } else {
-      console.info(`✔ ${time} Convex meta ready! (${elapsed}s)`);
+      console.info(`✔ ${time} Convex api ready! (${elapsed}s)`);
     }
   }
 }

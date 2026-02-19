@@ -3,12 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { generateMeta, getConvexConfig } from './codegen.js';
 
 export function getWatchPatterns(functionsDir: string): string[] {
-  // Watch api.d.ts, http.ts, and routers/**/*.ts for HTTP route changes
-  // Note: routers/ is sibling to functions/, not inside it
+  // Watch function source files + HTTP route sources.
+  // Note: routers/ is sibling to functions/, not inside it.
   const convexDir = path.dirname(functionsDir);
   return [
-    path.join(functionsDir, '_generated', 'api.d.ts'),
-    path.join(functionsDir, 'http.ts'),
+    path.join(functionsDir, '**', '*.ts'),
     path.join(convexDir, 'routers', '**', '*.ts'),
   ];
 }
@@ -25,7 +24,7 @@ export async function startWatcher(opts?: {
   getConvexConfig?: typeof getConvexConfig;
 }) {
   const outputDir =
-    opts?.outputDir ?? (process.env.BETTER_CONVEX_OUTPUT_DIR || undefined);
+    opts?.outputDir ?? (process.env.BETTER_CONVEX_API_OUTPUT_DIR || undefined);
   const debug = opts?.debug ?? process.env.BETTER_CONVEX_DEBUG === '1';
   const debounceMs = opts?.debounceMs ?? 100;
   const resolveConfig = opts?.getConvexConfig ?? getConvexConfig;

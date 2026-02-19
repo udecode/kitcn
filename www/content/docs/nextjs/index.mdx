@@ -75,13 +75,11 @@ First, create a caller factory for Better Auth:
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {3,5-9}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
 import { convexBetterAuth } from 'better-convex/auth-nextjs';
 
 export const { createContext, createCaller, handler } = convexBetterAuth({
   api,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
-  meta,
 });
 ```
 
@@ -101,7 +99,6 @@ And the options:
 | `convexSiteUrl` | Convex site URL (must end in `.convex.site`) |
 | `auth.jwtCache` | Enable/disable JWT caching (default: `true`) |
 | `auth.isUnauthorized` | Custom UNAUTHORIZED error detection |
-| `meta` | Procedure metadata from `@convex/meta` |
 
 <Callout icon={<InfoIcon />}>
 **Note:** Not using Better Auth? See [Server Side Calls](/docs/server/server-side-calls).
@@ -181,8 +178,6 @@ Now let's create the RSC helpers file:
 import 'server-only';
 
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import type { FetchQueryOptions } from '@tanstack/react-query';
 import {
   dehydrate,
@@ -208,7 +203,7 @@ const createRSCContext = cache(async () =>
 export const caller = createCaller(createRSCContext);
 
 // Server-compatible cRPC proxy (queryOptions only)
-export const crpc = createServerCRPCProxy<Api>({ api, meta });
+export const crpc = createServerCRPCProxy({ api });
 
 // Create server QueryClient with HTTP-based fetching
 function createServerQueryClient() {
@@ -270,7 +265,7 @@ export function preloadQuery<
 import { createServerCRPCProxy } from 'better-convex/rsc';
 
 // Server proxy - queryOptions only, no auth config
-const crpc = createServerCRPCProxy({ api, meta });
+const crpc = createServerCRPCProxy({ api });
 crpc.posts.list.queryOptions({}); // Works
 crpc.posts.create.mutationOptions(); // Not available in RSC
 ```

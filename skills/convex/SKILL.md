@@ -47,7 +47,7 @@ Only remember these non-parity deltas:
 2. No `z.void()` outputs; use `.output(z.null())` for no-value mutations.
 3. Stacked `.input(...)` calls merge input shapes.
 4. `.paginated({ limit, item })` must be before `.query()` and auto-adds `input.cursor` + `input.limit`, output `{ page, continueCursor, isDone }`.
-5. Metadata is codegen’d to client (`@convex/meta`) so never put secrets in `.meta(...)`; chaining `.meta(...)` is shallow merge and supports `defaultMeta`.
+5. Metadata is codegen’d onto `@convex/api` leaves (`api.namespace.fn.meta`) so never put secrets in `.meta(...)`; chaining `.meta(...)` is shallow merge and supports `defaultMeta`.
 6. Auth metadata drives client behavior: `auth: "optional"` waits for auth load then runs, `auth: "required"` waits then skips when logged out.
 7. `ctx.orm` enforces constraints + RLS; `ctx.db` bypasses them.
 8. Non-paginated `findMany()` must be explicitly sized (`limit`, cursor mode, schema `defaultLimit`, or explicit `allowFullScan`).
@@ -106,28 +106,6 @@ Typical feature touches:
 4. React hooks (query/mutation/infinite) using cRPC options.
 5. Optional: HTTP route(s), scheduling hooks.
 6. Tests for auth/error/trigger behavior.
-
-## One-Shot Simulation Guardrails
-
-When the task is simulation-heavy, follow these conventions first:
-
-1. cRPC context: use typed split context (`MaybeAuthCtx`, `AuthCtx`) + a single session resolver helper (for example `getSessionUser`).
-2. Pagination: prefer `.paginated({ limit, item })` for list endpoints consumed by infinite queries.
-3. `orderBy` shape: always object form (`orderBy: { updatedAt: "desc" }`), never array form.
-4. Aggregates feature gate:
-   - If `Aggregates: Yes`, wire component + helper + schema triggers together.
-   - If `Aggregates: No`, remove all aggregate imports, helper modules, component config, and schema trigger hooks in the same edit.
-5. Rate limiter component: use static `components` import in `rate-limiter.ts`. Never use lazy imports in Convex code.
-6. Not-found tests: do not fabricate Convex document IDs; use real inserted IDs or semantic lookup keys (slug/name/email).
-7. Bootstrap smoke must pass before feature polish:
-   - `bunx convex run internal.seed.seed`
-   - `bunx convex run internal.init.default`
-   - one public query + one auth-protected query.
-8. Never index `createdAt`; use `updatedAt` (or another explicit sortable column) for index definitions.
-9. If `internal.seed.seed` / `internal.init.default` hangs with `Returned promise will never resolve`, trace trigger recursion or stale component wiring, move invariant/counter sync out of recursive trigger paths into explicit mutation helpers, then rerun codegen and bootstrap smoke checks.
-10. Keep one-time setup/bootstrap/codegen/env instructions in `references/setup.md` (do not duplicate here).
-
----
 
 ## Core Patterns
 
@@ -562,9 +540,10 @@ Required test pairing:
 
 Preconditions (must be true before writing/using `useCRPC()` code paths):
 
-1. Generated imports exist (`@convex/api`, `@convex/meta`) from setup bootstrap.
+1. Generated imports exist (`@convex/api`) from setup bootstrap.
 2. Provider chain is mounted (`CRPCProvider` inside QueryClient + Convex provider flow).
 3. If bootstrap/provider prerequisites are missing, stop feature work and complete `references/setup.md` (Sections 5.5, 7.4, 8.A.4) first.
+4. Backend state is project-local in `.convex/` (per worktree/clone), so debug state in the current repo instead of `~/.convex`.
 
 `useCRPC()` pattern:
 
@@ -579,7 +558,7 @@ const createProject = useMutation(crpc.project.createProject.mutationOptions());
 // No invalidateQueries: subscribed queries update via Convex real-time.
 ```
 
-If generated API/meta imports are missing (`@convex/api`, `@convex/meta`):
+If generated API import is missing (`@convex/api`):
 
 1. Stop feature coding and finish bootstrap first.
 2. Follow `references/setup.md` Section 5.5 for exact setup/bootstrap commands and recovery steps.
@@ -723,24 +702,27 @@ Before calling a feature done:
 9. `ctx.db` is not used on paths that rely on ORM constraints/RLS.
 10. Paginated endpoints use `.paginated(...)` + ORM cursor flow (not ad-hoc wrappers).
 11. For any predicate/full-scan-like path, `.withIndex(...)` + bound (`limit`/`maxScan`) is explicit.
+12. NEVER use `@ts-nocheck`, no global lint-rule downgrades, no unresolved lint warnings in touched files.
 
 ## Common Mistakes (And Fixes)
 
-| Mistake                                             | Correct pattern                                                                          |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Raw Convex handler for new feature procedures       | cRPC builders (`publicQuery`, `authMutation`, etc.)                                      |
-| Write-time side effects duplicated across mutations | Schema trigger, or one centralized mutation-side sync helper when trigger path is unsafe |
-| Missing bounds on list/search                       | Add `limit` + cursor/pagination                                                          |
-| `orderBy` written as array objects                  | Use object form: `orderBy: { updatedAt: "desc" }`                                        |
-| Using `ctx.db` for policy-sensitive reads           | Use `ctx.orm` (RLS/constraints path)                                                     |
-| Throwing generic `Error` for expected outcomes      | Throw `CRPCError` with explicit code                                                     |
-| Infinite list with TanStack native hook directly    | Use `useInfiniteQuery` from `better-convex/react`                                        |
-| Primitive root input (`z.string()`)                 | Use root `z.object(...)` input schema                                                    |
-| Returning nothing with `z.void()`                   | Use `.output(z.null())` or omit explicit output                                          |
-| Manual pagination wrappers for infinite endpoints   | Use `.paginated({ limit, item })`                                                        |
-| Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                 |
-| Aggregates disabled but helper/config still present | Remove aggregate helper + schema hooks + app config together                             |
-| Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                             |
+| Mistake                                             | Correct pattern                                                                           |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Raw Convex handler for new feature procedures       | cRPC builders (`publicQuery`, `authMutation`, etc.)                                       |
+| Write-time side effects duplicated across mutations | Schema trigger, or one centralized mutation-side sync helper when trigger path is unsafe  |
+| Missing bounds on list/search                       | Add `limit` + cursor/pagination                                                           |
+| `orderBy` written as array objects                  | Use object form: `orderBy: { updatedAt: "desc" }`                                         |
+| Using `ctx.db` for policy-sensitive reads           | Use `ctx.orm` (RLS/constraints path)                                                      |
+| Throwing generic `Error` for expected outcomes      | Throw `CRPCError` with explicit code                                                      |
+| Infinite list with TanStack native hook directly    | Use `useInfiniteQuery` from `better-convex/react`                                         |
+| Primitive root input (`z.string()`)                 | Use root `z.object(...)` input schema                                                     |
+| Returning nothing with `z.void()`                   | Use `.output(z.null())` or omit explicit output                                           |
+| Manual pagination wrappers for infinite endpoints   | Use `.paginated({ limit, item })`                                                         |
+| Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                  |
+| Aggregates disabled but helper/config still present | Remove aggregate helper + schema hooks + app config together                              |
+| Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                              |
+| Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup.md` |
+| Relaxing lint rules to pass checks                  | Keep baseline lint config; fix code-level warnings/errors instead                         |
 
 ## Reference Escalation Map (Load Only If Needed)
 

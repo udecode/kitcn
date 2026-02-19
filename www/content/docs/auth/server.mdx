@@ -356,11 +356,11 @@ Now we'll expose Better Auth's endpoints via HTTP.
     // Better Auth middleware
     app.use(authMiddleware(getAuth));
 
-    export const appRouter = router({
+    export const httpRouter = router({
       // Add your routers here
     });
 
-    export default createHttpRouter(app, appRouter);
+    export default createHttpRouter(app, httpRouter);
     ```
   </Tab>
   <Tab value="Convex">

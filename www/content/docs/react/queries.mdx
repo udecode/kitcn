@@ -403,7 +403,7 @@ If you're coming from vanilla Convex, here's what changes.
     ```tsx showLineNumbers {1-2,5-6,8}
     import { useQuery } from '@tanstack/react-query';
     import { useCRPC } from '@/lib/convex/crpc';
-    import type { ApiOutputs } from '@convex/types';
+    import type { ApiOutputs } from '@convex/api';
 
     const crpc = useCRPC();
     const { data } = useQuery(crpc.user.list.queryOptions({}));

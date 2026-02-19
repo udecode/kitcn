@@ -73,19 +73,19 @@ app.use('/api/*', cors({
 
 app.use(authMiddleware(getAuth));
 
-export const appRouter = router({
+export const httpRouter = router({
   health,
   todos: todosRouter,
 });
 
-export default createHttpRouter(app, appRouter);
+export default createHttpRouter(app, httpRouter);
 ```
 
 | Component | Purpose |
 |-----------|---------|
 | `Hono` | Route handling, middleware, CORS |
 | `authMiddleware(getAuth)` | Better Auth routes middleware |
-| `createHttpRouter(app, appRouter)` | Creates Convex HttpRouter with Hono + cRPC |
+| `createHttpRouter(app, httpRouter)` | Creates Convex HttpRouter with Hono + cRPC |
 
 ## Defining Routes
 

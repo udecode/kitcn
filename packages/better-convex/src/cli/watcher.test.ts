@@ -3,11 +3,10 @@ import path from 'node:path';
 import { getWatchPatterns, startWatcher } from './watcher';
 
 describe('cli/watcher', () => {
-  test('getWatchPatterns includes api.d.ts, http.ts, and routers/**/*.ts', () => {
+  test('getWatchPatterns includes function sources and routers/**/*.ts', () => {
     const functionsDir = '/repo/convex';
     expect(getWatchPatterns(functionsDir)).toEqual([
-      path.join(functionsDir, '_generated', 'api.d.ts'),
-      path.join(functionsDir, 'http.ts'),
+      path.join(functionsDir, '**', '*.ts'),
       path.join('/repo', 'routers', '**', '*.ts'),
     ]);
   });
@@ -40,7 +39,7 @@ describe('cli/watcher', () => {
 
     const getConvexConfigStub = (outputDir?: string) => {
       expect(outputDir).toBe('out');
-      return { functionsDir: '/repo/convex', outputFile: '/repo/out/meta.ts' };
+      return { functionsDir: '/repo/convex', outputFile: '/repo/out/api.ts' };
     };
 
     await startWatcher({

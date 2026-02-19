@@ -180,11 +180,11 @@ export class HttpRouterWithHono extends HttpRouter {
  * });
  *
  * // In http.ts
- * export const appRouter = router({
+ * export const httpRouter = router({
  *   todos: todosRouter,
  *   health,
  * });
- * export type AppRouter = typeof appRouter;
+ * export type AppRouter = typeof httpRouter;
  * ```
  */
 export function createHttpRouterFactory() {
@@ -243,7 +243,7 @@ export function createHttpRouterFactory() {
  * const app = new Hono();
  * app.use('/api/*', cors({ origin: process.env.SITE_URL, credentials: true }));
  *
- * export default createHttpRouter(app, appRouter);
+ * export default createHttpRouter(app, httpRouter);
  * ```
  */
 export function createHttpRouter<TRecord extends HttpRouterRecord>(
@@ -292,7 +292,7 @@ export function createHttpRouter<TRecord extends HttpRouterRecord>(
  *
  * @example
  * ```ts
- * export const httpRoutes = extractRouteMap(appRouter._def.procedures);
+ * export const httpRoutes = extractRouteMap(httpRouter._def.procedures);
  * ```
  */
 export function extractRouteMap<T extends Record<string, HttpProcedure>>(

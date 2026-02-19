@@ -255,6 +255,14 @@ date: YYYY-MM-DD
 - Performance implications
 - Security considerations
 
+## System-Wide Impact
+
+- **Interaction graph**: [What callbacks/middleware/observers fire when this runs?]
+- **Error propagation**: [How do errors flow across layers? Do retry strategies align?]
+- **State lifecycle risks**: [Can partial failure leave orphaned/inconsistent state?]
+- **API surface parity**: [What other interfaces expose similar functionality and need the same change?]
+- **Integration test scenarios**: [Cross-layer scenarios that unit tests won't catch]
+
 ## Acceptance Criteria
 
 - [ ] Detailed requirement 1
@@ -343,6 +351,28 @@ date: YYYY-MM-DD
 ## Alternative Approaches Considered
 
 [Other solutions evaluated and why rejected]
+
+## System-Wide Impact
+
+### Interaction Graph
+
+[Map the chain reaction: what callbacks, middleware, observers, and event handlers fire when this code runs? Trace at least two levels deep. Document: "Action X triggers Y, which calls Z, which persists W."]
+
+### Error & Failure Propagation
+
+[Trace errors from lowest layer up. List specific error classes and where they're handled. Identify retry conflicts, unhandled error types, and silent failure swallowing.]
+
+### State Lifecycle Risks
+
+[Walk through each step that persists state. Can partial failure orphan rows, duplicate records, or leave caches stale? Document cleanup mechanisms or their absence.]
+
+### API Surface Parity
+
+[List all interfaces (classes, DSLs, endpoints) that expose equivalent functionality. Note which need updating and which share the code path.]
+
+### Integration Test Scenarios
+
+[3-5 cross-layer test scenarios that unit tests with mocks would never catch. Include expected behavior for each.]
 
 ## Acceptance Criteria
 

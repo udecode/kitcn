@@ -1,12 +1,9 @@
-/** biome-ignore-all lint/suspicious/noExplicitAny: lib */
-
 /**
  * Lazy caller that creates context on each procedure invocation.
  * Matches tRPC's appRouter.createCaller(createTRPCContext) pattern.
  */
 
-import type { FunctionReference } from 'convex/server';
-
+import { getFuncRef } from '../shared/meta-utils';
 import type { ServerCaller } from './caller';
 
 // Context shape with caller and auth properties
@@ -28,23 +25,6 @@ export type LazyCaller<TApi> = ServerCaller<TApi> & {
   /** Get the auth token (for RSC prefetching) */
   getToken: () => Promise<string | undefined>;
 };
-
-function getFuncRef(
-  api: Record<string, unknown>,
-  path: string[]
-): FunctionReference<'query' | 'mutation' | 'action'> {
-  let current: unknown = api;
-
-  for (const key of path) {
-    if (current && typeof current === 'object') {
-      current = (current as Record<string, unknown>)[key];
-    } else {
-      throw new Error(`Invalid caller path: ${path.join('.')}`);
-    }
-  }
-
-  return current as FunctionReference<'query' | 'mutation' | 'action'>;
-}
 
 function traverseCaller<TApi>(
   caller: ServerCaller<TApi>,
@@ -99,7 +79,14 @@ function createRecursiveProxyWithLazyContext<
     },
     async apply(_target, _thisArg, argsList) {
       // Validate path exists in api
-      getFuncRef(api, path);
+      try {
+        getFuncRef(api, path);
+      } catch (error) {
+        const displayPath = path.length > 0 ? path.join('.') : '<root>';
+        throw new Error(`Invalid caller path: ${displayPath}`, {
+          cause: error as Error,
+        });
+      }
 
       // Lazy context creation happens here
       const ctx = await createContext();

@@ -11,12 +11,15 @@ import { convexInfiniteQueryOptions, convexQuery } from '../crpc/query-options';
 import type { CRPCClient, InfiniteQueryOptsParam, Meta } from '../crpc/types';
 import type { HttpCRPCClientFromRouter } from '../react/http-proxy';
 import type { CRPCHttpRouter, HttpRouterRecord } from '../server/http-router';
-import { getFuncRef, getFunctionMeta } from '../shared/meta-utils';
+import {
+  buildMetaIndex,
+  getFuncRef,
+  getFunctionMeta,
+} from '../shared/meta-utils';
 import { buildHttpQueryOptions } from './http-server';
 
 export type CreateServerCRPCProxyOptions<TApi> = {
   api: TApi;
-  meta: Meta;
 };
 
 /**
@@ -116,11 +119,9 @@ function createRecursiveProxy(
  * ```tsx
  * // src/lib/convex/rsc.tsx
  * import { api } from '@convex/api';
- * import { meta } from '@convex/meta';
- * import type { Api } from '@convex/types';
  *
  * // Proxy just builds query options - no auth config here
- * export const crpc = createServerCRPCProxy<Api>({ api, meta });
+ * export const crpc = createServerCRPCProxy({ api });
  *
  * // Auth + execution config in QueryClient
  * const queryClient = new QueryClient({
@@ -138,6 +139,7 @@ function createRecursiveProxy(
 export function createServerCRPCProxy<TApi extends Record<string, unknown>>(
   options: CreateServerCRPCProxyOptions<TApi>
 ): ServerCRPCClient<TApi> {
-  const { api, meta } = options;
+  const { api } = options;
+  const meta = buildMetaIndex(api);
   return createRecursiveProxy(api, [], meta) as ServerCRPCClient<TApi>;
 }

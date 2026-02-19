@@ -31,7 +31,7 @@ describe('cli/cli', () => {
       outputDir: undefined,
     });
 
-    expect(parseArgs(['--debug', '--meta', 'out/dir'])).toEqual({
+    expect(parseArgs(['--debug', '--api', 'out/dir'])).toEqual({
       command: 'dev',
       restArgs: [],
       convexArgs: [],
@@ -40,7 +40,7 @@ describe('cli/cli', () => {
     });
 
     expect(
-      parseArgs(['--debug', '--meta', 'out', 'codegen', '--foo', 'bar'])
+      parseArgs(['--debug', '--api', 'out', 'codegen', '--foo', 'bar'])
     ).toEqual({
       command: 'codegen',
       restArgs: ['--foo', 'bar'],
@@ -61,7 +61,7 @@ describe('cli/cli', () => {
     const syncEnvStub = mock(async () => {});
 
     const exitCode = await run(
-      ['--debug', '--meta', 'custom/out', 'codegen', '--prod'],
+      ['--debug', '--api', 'custom/out', 'codegen', '--prod'],
       {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
@@ -114,7 +114,7 @@ describe('cli/cli', () => {
     const syncEnvStub = mock(async () => {});
 
     const exitCode = await run(
-      ['--debug', 'env', 'get', 'FOO', '--meta', 'ignored'],
+      ['--debug', 'env', 'get', 'FOO', '--api', 'ignored'],
       {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
@@ -140,7 +140,7 @@ describe('cli/cli', () => {
     const syncEnvStub = mock(async () => {});
 
     const exitCode = await run(
-      ['deploy', '--debug', '--meta', 'out', '--prod'],
+      ['deploy', '--debug', '--api', 'out', '--prod'],
       {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
@@ -182,7 +182,7 @@ describe('cli/cli', () => {
       const generateMetaStub = mock(async () => {});
       const syncEnvStub = mock(async () => {});
 
-      const exitCode = await run(['--debug', '--meta', 'out'], {
+      const exitCode = await run(['--debug', '--api', 'out'], {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
         generateMeta: generateMetaStub as any,
@@ -196,7 +196,7 @@ describe('cli/cli', () => {
       expect(calls[0].cmd).toBe('bun');
       expect(Array.isArray(calls[0].args)).toBe(true);
       expect((calls[0].args[0] as string).endsWith('/watcher.ts')).toBe(true);
-      expect(calls[0].opts?.env?.BETTER_CONVEX_OUTPUT_DIR).toBe('out');
+      expect(calls[0].opts?.env?.BETTER_CONVEX_API_OUTPUT_DIR).toBe('out');
       expect(calls[0].opts?.env?.BETTER_CONVEX_DEBUG).toBe('1');
 
       expect(calls[1]).toEqual({

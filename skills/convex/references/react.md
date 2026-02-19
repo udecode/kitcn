@@ -9,13 +9,10 @@ Covers all better-convex React client, TanStack Query integration, and Next.js R
 ```ts
 // src/lib/convex/crpc.tsx
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import { createCRPCContext } from 'better-convex/react';
 
-export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<Api>({
+export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
   api,
-  meta,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
   transformer, // optional — Date always enabled ($date wire tag). Use createTaggedTransformer for extra codecs.
 });
@@ -480,14 +477,13 @@ new QueryClient({
 ## Type Inference
 
 ```ts
-// convex/types.ts
-import type { inferApiInputs, inferApiOutputs, WithHttpRouter } from 'better-convex/server';
+// convex/api.ts
+import type { inferApiInputs, inferApiOutputs } from 'better-convex/server';
 import type { api } from './_generated/api';
-import type { appRouter } from './http';
 
-export type Api = WithHttpRouter<typeof api, typeof appRouter>;
-export type ApiInputs = inferApiInputs<Api>;
-export type ApiOutputs = inferApiOutputs<Api>;
+export type Api = typeof api;
+export type ApiInputs = inferApiInputs<typeof api>;
+export type ApiOutputs = inferApiOutputs<typeof api>;
 ```
 
 Bracket notation:
@@ -506,13 +502,11 @@ type OrgMember = ApiOutputs['organization']['members']['list'][number]; // array
 ```ts
 // src/lib/convex/server.ts
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
 import { convexBetterAuth } from 'better-convex/auth-nextjs';
 
 export const { createContext, createCaller, handler } = convexBetterAuth({
   api,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
-  meta,
 });
 ```
 
@@ -522,7 +516,7 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 | `createCaller` | Server-side caller factory |
 | `handler` | Next.js API route handler (`export const { GET, POST } = handler;`) |
 
-Options: `api`, `convexSiteUrl`, `meta`, `auth.jwtCache` (default true), `auth.isUnauthorized`.
+Options: `api`, `convexSiteUrl`, `auth.jwtCache` (default true), `auth.isUnauthorized`.
 
 ### Client Provider with Auth
 
@@ -562,7 +556,7 @@ const createRSCContext = cache(async () => createContext({ headers: await header
 export const caller = createCaller(createRSCContext);
 
 // Server cRPC proxy (queryOptions only, no mutations)
-export const crpc = createServerCRPCProxy<Api>({ api, meta });
+export const crpc = createServerCRPCProxy({ api });
 
 // Server QueryClient with HTTP-based fetching
 const createServerQueryClient = () => new QueryClient({

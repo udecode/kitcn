@@ -13,8 +13,8 @@ import type {
 } from 'convex/server';
 import type { DataTransformerOptions } from '../crpc/transformer';
 import type { EmptyObject } from '../internal/upstream';
+import { buildMetaIndex } from '../shared/meta-utils';
 import {
-  type CallerMeta,
   type CallerOpts,
   createServerCaller,
   type ServerCaller,
@@ -49,8 +49,6 @@ type CreateCallerFactoryOptions<TApi> = {
   convexSiteUrl: string;
   /** Auth options. Pass to enable authenticated calls with JWT caching. */
   auth?: AuthOptions;
-  /** Procedure metadata. */
-  meta: CallerMeta;
   /** Optional wire transformer for request/response payloads (always composed with Date). */
   transformer?: DataTransformerOptions;
 };
@@ -95,7 +93,6 @@ export type ConvexContext<TApi> = {
  *   api,
  *   convexSiteUrl: env.NEXT_PUBLIC_CONVEX_SITE_URL,
  *   auth: { getToken },
- *   meta,
  * });
  * ```
  */
@@ -108,6 +105,7 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
   const siteUrl = parseConvexSiteUrl(opts.convexSiteUrl);
   const getToken = opts.auth?.getToken ?? noAuthGetToken;
   const isUnauthorized = opts.auth?.isUnauthorized;
+  const crpcMeta = buildMetaIndex(opts.api);
 
   // Internal: call with token and retry logic
   const callWithTokenAndRetry = async <
@@ -216,7 +214,7 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
         fetchQuery: fetchAuthQuery,
         fetchMutation: fetchAuthMutation,
         fetchAction: fetchAuthAction,
-        meta: opts.meta,
+        meta: crpcMeta,
         transformer: opts.transformer,
       }),
     };

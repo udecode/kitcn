@@ -1,12 +1,23 @@
 /* biome-ignore-all lint: compile-time type assertions with intentional errors */
 
-import type { FunctionReference } from 'convex/server';
+import {
+  type FunctionReference,
+  type GenericActionCtx,
+  type GenericMutationCtx,
+  type GenericQueryCtx,
+  makeFunctionReference,
+} from 'convex/server';
 import { z } from 'zod';
-import type { Meta } from '../crpc/types';
+import type { CRPCClient } from '../crpc/types';
+import type { GenericOrmCtx } from '../orm';
+import { createCRPCContext } from '../react/context';
+import { createServerCRPCProxy } from '../rsc/proxy-server';
+import { createApiLeaf } from '../server/api-entry';
+import type { ServerCaller } from '../server/caller';
 import type { CRPCHttpRouter } from '../server/http-router';
 import type { HttpProcedure } from '../server/http-types';
+import type { inferApiInputs, inferApiOutputs } from '../server/infer';
 import type { UnsetMarker } from '../server/types';
-import { createCRPCContext } from './context';
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type Equal<A, B> =
@@ -122,28 +133,12 @@ type ApiWithHttp = BaseApi & {
   http?: HttpRouter;
 };
 
-const meta = {
-  organization: {
-    get: { auth: 'required', type: 'query' },
-    list: { auth: 'required', type: 'query' },
-    listMembers: { auth: 'required', type: 'query' },
-    update: { auth: 'required', type: 'mutation' },
-  },
-  jobs: {
-    reindex: { auth: 'required', type: 'action' },
-  },
-  _http: {
-    health: { path: '/api/health', method: 'GET' },
-    'todos.list': { path: '/api/todos', method: 'GET' },
-    'todos.create': { path: '/api/todos', method: 'POST' },
-  },
-} as unknown as Meta;
-
-const crpcWithHttpContext = createCRPCContext<ApiWithHttp>({
-  api: {} as ApiWithHttp,
+const apiWithHttp = {} as ApiWithHttp;
+const crpcWithHttpContext = createCRPCContext({
+  api: apiWithHttp,
   convexSiteUrl: 'https://demo.convex.site',
-  meta,
 });
+const serverCrpcWithHttp = createServerCRPCProxy({ api: apiWithHttp });
 
 type CRPCWithHttp = ReturnType<typeof crpcWithHttpContext.useCRPC>;
 type VanillaWithHttp = ReturnType<typeof crpcWithHttpContext.useCRPCClient>;
@@ -211,6 +206,7 @@ crpc.organization.get.infiniteQueryOptions({ slug: 'acme' });
 
 crpc.http.health.queryOptions();
 crpc.http.todos.list.queryOptions({ searchParams: { limit: '20' } });
+serverCrpcWithHttp.http.health.queryOptions();
 // @ts-expect-error unknown query key
 crpc.http.todos.list.queryOptions({ searchParams: { nope: '1' } });
 // @ts-expect-error query params are URL strings on client input
@@ -269,20 +265,140 @@ type _httpListOutputNotAny = Expect<Equal<false, IsAny<HttpListOutput>>>;
 
 const crpcNoHttpContext = createCRPCContext<BaseApi>({
   api: {} as BaseApi,
-  meta: {
-    organization: {
-      get: { type: 'query' },
-      list: { type: 'query' },
-      listMembers: { type: 'query' },
-      update: { type: 'mutation' },
-    },
-    jobs: {
-      reindex: { type: 'action' },
-    },
-  } as unknown as Meta,
 });
 
 type CRPCNoHttp = ReturnType<typeof crpcNoHttpContext.useCRPC>;
 declare const crpcNoHttp: CRPCNoHttp;
 // @ts-expect-error http namespace should not exist without HTTP router types
 crpcNoHttp.http;
+
+declare const callerWithHttpApi: ServerCaller<ApiWithHttp>;
+// @ts-expect-error server caller should not expose http namespace
+callerWithHttpApi.http;
+
+// ============================================================================
+// Generated-leaf style coverage (createApiLeaf + inferApiInputs/Outputs)
+// ============================================================================
+
+const todosCreateRef = makeFunctionReference<
+  'mutation',
+  { title: string; dueDate: Date | null | undefined },
+  { id: string; createdAt: Date }
+>('todos:create');
+
+const todosGetRef = makeFunctionReference<
+  'query',
+  { id: string },
+  { id: string; dueDate: Date | null; createdAt: Date }
+>('todos:get');
+
+const generatedLikeApi = {
+  todos: {
+    create: createApiLeaf<'mutation', typeof todosCreateRef>(todosCreateRef, {
+      type: 'mutation',
+      auth: 'required',
+      rateLimit: 'todo/create',
+    }),
+    get: createApiLeaf<'query', typeof todosGetRef>(todosGetRef, {
+      type: 'query',
+      auth: 'optional',
+    }),
+  },
+  _http: {
+    health: { path: '/api/health', method: 'GET' },
+  },
+} as const;
+
+type GeneratedLikeApi = typeof generatedLikeApi;
+type GeneratedInputs = inferApiInputs<GeneratedLikeApi>;
+type GeneratedOutputs = inferApiOutputs<GeneratedLikeApi>;
+
+type _generatedCreateInputDueDate = Expect<
+  Equal<GeneratedInputs['todos']['create']['dueDate'], Date | null | undefined>
+>;
+type _generatedCreateOutputCreatedAt = Expect<
+  Equal<GeneratedOutputs['todos']['create']['createdAt'], Date>
+>;
+type _generatedGetOutputDueDate = Expect<
+  Equal<GeneratedOutputs['todos']['get']['dueDate'], Date | null>
+>;
+
+type _generatedInputNotAny = Expect<
+  Equal<false, IsAny<GeneratedInputs['todos']['create']['dueDate']>>
+>;
+type _generatedOutputNotAny = Expect<
+  Equal<false, IsAny<GeneratedOutputs['todos']['create']['createdAt']>>
+>;
+
+type _generatedFunctionRefType = Expect<
+  Equal<
+    typeof generatedLikeApi.todos.create.functionRef,
+    FunctionReference<
+      'mutation',
+      'public',
+      { title: string; dueDate: Date | null | undefined },
+      { id: string; createdAt: Date }
+    >
+  >
+>;
+
+// ============================================================================
+// Generated api.ts context alias coverage
+// ============================================================================
+
+type GeneratedGenericCtx =
+  | GenericQueryCtx<any>
+  | GenericMutationCtx<any>
+  | GenericActionCtx<any>;
+
+type GeneratedOrmCtx<
+  Ctx extends
+    | GenericQueryCtx<any>
+    | GenericMutationCtx<any> = GenericQueryCtx<any>,
+> = GenericOrmCtx<Ctx, any>;
+
+type GeneratedOrmQueryCtx = GeneratedOrmCtx<GenericQueryCtx<any>>;
+type GeneratedOrmMutationCtx = GeneratedOrmCtx<GenericMutationCtx<any>>;
+
+type _generatedGenericCtxIncludesAction = Expect<
+  Equal<
+    Extract<GeneratedGenericCtx, GenericActionCtx<any>> extends never
+      ? false
+      : true,
+    true
+  >
+>;
+type _generatedOrmQueryCtxHasOrm = Expect<
+  Equal<'orm' extends keyof GeneratedOrmQueryCtx ? true : false, true>
+>;
+type _generatedOrmMutationCtxHasOrm = Expect<
+  Equal<'orm' extends keyof GeneratedOrmMutationCtx ? true : false, true>
+>;
+type _generatedOrmMutationCtxHasScheduler = Expect<
+  Equal<'scheduler' extends keyof GeneratedOrmMutationCtx ? true : false, true>
+>;
+
+type _underscoreMetaExcludedFromClient = Expect<
+  Equal<
+    '_http' extends keyof CRPCClient<GeneratedLikeApi> ? true : false,
+    false
+  >
+>;
+
+declare const runMutation: <T extends FunctionReference<'mutation'>>(
+  fn: T,
+  args: T['_args']
+) => void;
+runMutation(generatedLikeApi.todos.create, {
+  title: 'x',
+  dueDate: new Date(),
+});
+runMutation(generatedLikeApi.todos.create.functionRef, {
+  title: 'x',
+  dueDate: null,
+});
+// @ts-expect-error dueDate keeps Date/null/undefined typing
+runMutation(generatedLikeApi.todos.create, { title: 'x', dueDate: 123 });
+
+const generatedRscProxy = createServerCRPCProxy({ api: generatedLikeApi });
+generatedRscProxy.todos.get.queryOptions({ id: 'todo_1' });

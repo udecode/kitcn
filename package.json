@@ -30,7 +30,7 @@
   "dependencies": {
     "@convex-dev/better-auth": "0.10.10",
     "@tanstack/react-query": "5.90.20",
-    "convex": "1.31.7",
+    "convex": "1.32.0",
     "hono": "4.11.9",
     "next": "16.1.6",
     "react": "19.2.4",

@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiInputs } from '@convex/types';
+import type { ApiInputs } from '@convex/api';
 import { skipToken, useMutation, useQuery } from '@tanstack/react-query';
 import {
   Calendar,
@@ -145,9 +145,11 @@ export function OrganizationOverview({
 
   const isOwner = organization.role === 'owner';
   const canEdit = isOwner && !organization.isPersonal;
-  const daysActive = Math.floor(
-    (now - organization.createdAt.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const daysActive = organization.createdAt
+    ? Math.floor(
+        (now - organization.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+      )
+    : 0;
 
   const handleManageSubscription = async () => {
     try {
@@ -205,11 +207,13 @@ export function OrganizationOverview({
           <div>
             <p className="text-muted-foreground text-xs">Created</p>
             <p className="font-medium text-sm">
-              {new Date(organization.createdAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
+              {organization.createdAt
+                ? new Date(organization.createdAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })
+                : 'Unknown'}
             </p>
           </div>
         </div>

@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/performance/noBarrelFile: lib */
 
 export * from '../internal/upstream/server/zod4';
+export * from './api-entry';
 export * from './builder';
 export * from './caller';
 export * from './caller-factory';

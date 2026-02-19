@@ -24,10 +24,10 @@ app.use(
 
 app.use(authMiddleware(getAuth));
 
-export const appRouter = router({
+export const httpRouter = router({
   health,
   todos: todosRouter,
   examples: examplesRouter,
 });
 
-export default createHttpRouter(app, appRouter);
+export default createHttpRouter(app, httpRouter);

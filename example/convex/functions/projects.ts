@@ -2,7 +2,7 @@ import { and, eq, unsetToken } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authMutation, authQuery, optionalAuthQuery } from '../lib/crpc';
-import type { Insert, Select } from '../shared/types';
+import type { Insert, Select } from '../shared/api';
 import { aggregateProjectMembers, aggregateTodosByProject } from './aggregates';
 import { projectMembersTable, projectsTable } from './schema';
 

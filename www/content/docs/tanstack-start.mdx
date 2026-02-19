@@ -105,7 +105,6 @@ First, create a caller factory for Better Auth:
 
 ```ts title="src/lib/convex/server.ts"
 import { api } from "@convex/api";
-import { meta } from "@convex/meta";
 import { createCallerFactory } from "better-convex/server";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { getToken } from "./auth/auth-server";
@@ -113,7 +112,6 @@ import { getToken } from "./auth/auth-server";
 const { createContext, createCaller } = createCallerFactory({
   api,
   convexSiteUrl: process.env.VITE_CONVEX_SITE_URL!,
-  meta,
   auth: {
     getToken: async () => {
       return {
@@ -256,7 +254,6 @@ Here, `initCRPC` is imported from `src/lib/convex/crpc.tsx` and defined as:
 
 ```tsx title="src/lib/convex/crpc.tsx"
 import { api } from "@convex/api";
-import { meta } from "@convex/meta";
 import { createCRPCContext } from "better-convex/react";
 import type { ComponentProps } from "react";
 
@@ -268,7 +265,6 @@ export function initCRPC(convexSiteUrl: string) {
   if (!crpcContext) {
     crpcContext = createCRPCContext<typeof api>({
       api,
-      meta,
       convexSiteUrl,
     });
   }

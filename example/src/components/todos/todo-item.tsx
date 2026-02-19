@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiOutputs } from '@convex/types';
+import type { ApiOutputs } from '@convex/api';
 import { useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Calendar, Edit, MoreHorizontal, RotateCcw, Trash } from 'lucide-react';

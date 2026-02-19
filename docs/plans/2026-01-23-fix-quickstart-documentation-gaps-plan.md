@@ -17,7 +17,7 @@ A user spent 2+ hours trying to follow the getting started guide and couldn't ge
 
 From GitHub issue feedback (dickermoshe):
 
-1. **Missing `types.ts`** - Step 4 imports `@convex/types` but never tells users to create `convex/shared/types.ts`
+1. **Missing `types.ts`** - Step 4 imports `@convex/api` but never tells users to create `convex/shared/api.ts`
 2. **Missing `ents.ts`** - `ctx.table` tab imports `./ents` but file doesn't exist and isn't documented
 3. **Example project broken** - Clone + `bun install` doesn't work
 4. **Scattered snippets** - Documentation has incompatible examples across sections
@@ -60,7 +60,7 @@ graph TD
 
 1. **Add `types.ts` creation step** (before Step 4 "Set Up Client")
 
-```ts title="convex/shared/types.ts"
+```ts title="convex/shared/api.ts"
 import type { api } from '../functions/_generated/api';
 
 // Use this for minimal setup without HTTP router
@@ -271,7 +271,7 @@ bun add convex better-convex convex-helpers zod @tanstack/react-query
 +
 +Create the type utilities for client-side type inference:
 +
-+```ts title="convex/shared/types.ts"
++```ts title="convex/shared/api.ts"
 +import type { api } from '../functions/_generated/api';
 +
 +export type Api = typeof api;
@@ -288,7 +288,7 @@ bun add convex better-convex convex-helpers zod @tanstack/react-query
 
 - Style guide: [docs/solutions/style.md](docs/solutions/style.md)
 - Simulation testing: [docs/solutions/simulate-doc.md](docs/solutions/simulate-doc.md)
-- Example types.ts: [example/convex/shared/types.ts:1-22](example/convex/shared/types.ts)
+- Example types.ts: [example/convex/shared/api.ts:1-22](example/convex/shared/api.ts)
 - Example ents.ts: [example/convex/lib/ents.ts:1-41](example/convex/lib/ents.ts)
 - Current quickstart: [www/content/docs/quickstart.mdx](www/content/docs/quickstart.mdx)
 - Templates: [www/content/docs/templates.mdx](www/content/docs/templates.mdx)

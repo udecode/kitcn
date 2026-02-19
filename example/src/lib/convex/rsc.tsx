@@ -1,8 +1,6 @@
 import 'server-only';
 
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import type { FetchQueryOptions } from '@tanstack/react-query';
 import {
   dehydrate,
@@ -37,7 +35,7 @@ const createRSCContext = cache(async () =>
 export const caller = createCaller(createRSCContext);
 
 // App-specific CRPC proxy for RSC (uses server-compatible proxy)
-export const crpc = createServerCRPCProxy<Api>({ api, meta });
+export const crpc = createServerCRPCProxy({ api });
 
 /** Create server-side QueryClient with HTTP-based queryFn */
 function createServerQueryClient() {

@@ -233,7 +233,7 @@ app.use('/api/*', cors({
   credentials: true,
 }));
 app.use(authMiddleware(getAuth));
-export default createHttpRouter(app, appRouter);
+export default createHttpRouter(app, httpRouter);
 ```
 
 ### 6. Environment Variables

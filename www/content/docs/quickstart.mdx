@@ -56,7 +56,7 @@ convex/
 ├── lib/                 # Server helpers (NOT deployed)
 │   └── crpc.ts          # cRPC builder
 └── shared/              # Client-importable
-    └── meta.ts          # Generated procedure metadata
+    └── api.ts          # Generated procedure metadata
 ```
 
 Create these folders:
@@ -74,7 +74,7 @@ Next, add these settings to your existing `tsconfig.json`:
     "strictFunctionTypes": false,
     "paths": {
       "@/*": ["./src/*"],
-      "@convex/*": ["./convex/functions/_generated/*", "./convex/shared/*"]
+      "@convex/*": ["./convex/shared/*"]
     }
   }
 }
@@ -82,6 +82,7 @@ Next, add these settings to your existing `tsconfig.json`:
 
 <Callout icon={<InfoIcon />}>
 `strictFunctionTypes: false` is required for middleware type inference to work correctly.
+Use relative imports for `convex/functions/_generated/*` inside backend Convex files.
 </Callout>
 
 See [Concepts](/docs/concepts) for detailed folder structure explanation.
@@ -137,10 +138,14 @@ Start the Better Convex dev server:
 bunx better-convex dev
 ```
 
-This generates `convex/functions/_generated/` (types) and `convex/shared/meta.ts` (procedure metadata). Keep it running in a separate terminal.
+This generates `convex/functions/_generated/` (types) and `convex/shared/api.ts` (procedure metadata). Keep it running in a separate terminal.
 
 <Callout icon={<InfoIcon />}>
 For one-time codegen without watch mode, use `bunx better-convex codegen`.
+</Callout>
+
+<Callout icon={<InfoIcon />}>
+For new local deployments, Convex stores backend data in `.convex/` at your project root. This gives each worktree/clone isolated local state.
 </Callout>
 
 ## Environment Variables
@@ -275,12 +280,10 @@ The `.output()` schema is required for proper TypeScript inference when using `s
 
 ```tsx title="src/lib/convex/crpc.tsx" showLineNumbers {1-3,5-8}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
 import { createCRPCContext } from 'better-convex/react';
 
 export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<typeof api>({
   api,
-  meta,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
 });
 ```

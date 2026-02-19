@@ -328,7 +328,7 @@ import { todosRouter } from '../routers/todos';
 import { usersRouter } from '../routers/users';
 
 // Combine all routes into app router
-export const appRouter = router({
+export const httpRouter = router({
   health,
   todos: todosRouter,
   users: usersRouter,
@@ -372,12 +372,12 @@ app.use(
 app.use(authMiddleware(getAuth));
 
 // cRPC router
-export const appRouter = router({
+export const httpRouter = router({
   health,
   todos: todosRouter,
 });
 
-export default createHttpRouter(app, appRouter);
+export default createHttpRouter(app, httpRouter);
 ```
 
 ### Key Components
@@ -386,7 +386,7 @@ export default createHttpRouter(app, appRouter);
 |-----------|---------|
 | `Hono` | Route handling, middleware, CORS |
 | `authMiddleware(getAuth)` | Better Auth routes middleware |
-| `createHttpRouter(app, appRouter)` | Creates Convex HttpRouter with Hono + cRPC |
+| `createHttpRouter(app, httpRouter)` | Creates Convex HttpRouter with Hono + cRPC |
 
 ## CORS
 
@@ -647,13 +647,10 @@ The HTTP proxy is automatically available when you set up cRPC.
 
 ```tsx title="lib/convex/crpc.tsx"
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import { createCRPCContext } from 'better-convex/react';
 
-export const { CRPCProvider, useCRPC } = createCRPCContext<Api>({
+export const { CRPCProvider, useCRPC } = createCRPCContext({
   api,
-  meta,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!, // Required for HTTP
 });
 ```
@@ -1028,7 +1025,7 @@ export async function POST(request: Request) {
   // Create context with auth headers
   const ctx = await createContext({ headers: request.headers });
 
-  // Query using the caller (matches your appRouter structure)
+  // Query using the caller (matches your httpRouter structure)
   const todos = await ctx.caller.todos.list({ limit: 10 });
 
   // Mutations
