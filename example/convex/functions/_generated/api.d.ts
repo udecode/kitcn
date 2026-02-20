@@ -791,7 +791,23 @@ export declare const api: {
  * ```
  */
 export declare const internal: {
-  auth: {
+  email: {
+    sendOrganizationInviteEmail: FunctionReference<
+      "action",
+      "internal",
+      {
+        acceptUrl: string;
+        invitationId: string;
+        inviterEmail: string;
+        inviterName: string;
+        organizationName: string;
+        role: string;
+        to: string;
+      },
+      string
+    >;
+  };
+  generated: {
     beforeCreate: FunctionReference<
       "mutation",
       "internal",
@@ -945,6 +961,8 @@ export declare const internal: {
       any
     >;
     rotateKeys: FunctionReference<"action", "internal", {}, any>;
+    scheduledDelete: FunctionReference<"mutation", "internal", any, any>;
+    scheduledMutationBatch: FunctionReference<"mutation", "internal", any, any>;
     updateMany: FunctionReference<
       "mutation",
       "internal",
@@ -973,26 +991,6 @@ export declare const internal: {
       },
       any
     >;
-  };
-  email: {
-    sendOrganizationInviteEmail: FunctionReference<
-      "action",
-      "internal",
-      {
-        acceptUrl: string;
-        invitationId: string;
-        inviterEmail: string;
-        inviterName: string;
-        organizationName: string;
-        role: string;
-        to: string;
-      },
-      string
-    >;
-  };
-  generated: {
-    scheduledDelete: FunctionReference<"mutation", "internal", any, any>;
-    scheduledMutationBatch: FunctionReference<"mutation", "internal", any, any>;
   };
   init: {
     default: FunctionReference<"mutation", "internal", {}, null>;

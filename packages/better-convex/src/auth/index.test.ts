@@ -12,5 +12,8 @@ describe('auth public exports', () => {
     expect(typeof auth.dbAdapter).toBe('function');
     expect(typeof auth.httpAdapter).toBe('function');
     expect(typeof auth.convex).toBe('function');
+    expect(typeof auth.defineAuth).toBe('function');
+    expect(typeof auth.createAuthRuntime).toBe('function');
+    expect(typeof auth.createDisabledAuthRuntime).toBe('function');
   });
 });

@@ -6,7 +6,7 @@ import {
 } from 'better-auth/plugins/organization/access';
 import type { Doc } from '../functions/_generated/dataModel';
 // biome-ignore lint/style/noRestrictedImports: types
-import type { getAuth } from '../functions/auth';
+import type { getAuth } from '../functions/generated';
 import type { Select } from './api';
 
 export type Auth = ReturnType<typeof getAuth>;

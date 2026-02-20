@@ -1,90 +1,19 @@
-// IMPORTANT: Import polyfills FIRST
-import '../lib/polar-polyfills';
-
-import { type BetterAuthOptions, betterAuth } from 'better-auth';
 import { admin, organization } from 'better-auth/plugins';
-import {
-  type AuthFunctions,
-  convex,
-  createApi,
-  createClient,
-} from 'better-convex/auth';
+import { convex } from 'better-convex/auth';
 import { eq } from 'better-convex/orm';
 import { requireActionCtx } from 'better-convex/server';
 import { getEnv } from '../lib/get-env';
 import { createPersonalOrganization } from '../lib/organization-helpers';
 import { ac, roles } from '../shared/auth-shared';
 import { internal } from './_generated/api';
-import type { DataModel } from './_generated/dataModel';
 import authConfig from './auth.config';
-import { type GenericCtx, type MutationCtx, withOrm } from './generated';
-import schema, { sessionTable } from './schema';
+import type { MutationCtx } from './generated';
+import { defineAuth } from './generated';
+import { sessionTable } from './schema';
 
-const authFunctions: AuthFunctions = internal.auth;
-
-export const authClient = createClient<DataModel, typeof schema, MutationCtx>({
-  authFunctions,
-  schema,
-  context: withOrm,
-  triggers: {
-    user: {
-      beforeCreate: async (_ctx, data) => {
-        const env = getEnv();
-        const adminEmails = env.ADMIN;
-
-        // Check if this user email is in the admin list and update role
-        const role =
-          data.role !== 'admin' && adminEmails?.includes(data.email)
-            ? 'admin'
-            : data.role;
-
-        return {
-          ...data,
-          role,
-        };
-      },
-      onCreate: async (ctx, user) => {
-        // Create personal organization for the new user
-        await createPersonalOrganization(ctx, {
-          email: user.email,
-          image: user.image || null,
-          name: user.name,
-          userId: user._id,
-        });
-
-        // Create Polar customer for the new user
-        await ctx.scheduler.runAfter(0, internal.polarCustomer.createCustomer, {
-          email: user.email,
-          name: user.name,
-          userId: user._id,
-        });
-      },
-    },
-    session: {
-      onCreate: async (ctx, session) => {
-        if (!session.activeOrganizationId) {
-          const user = await ctx.orm.query.user.findFirst({
-            where: { id: session.userId },
-          });
-          if (!user) return;
-
-          const activeOrganizationId =
-            user.lastActiveOrganizationId ??
-            user.personalOrganizationId ??
-            null;
-
-          await ctx.orm
-            .update(sessionTable)
-            .set({ activeOrganizationId })
-            .where(eq(sessionTable.id, session._id));
-        }
-      },
-    },
-  },
-});
-
-const getAuthOptions = (ctx: GenericCtx) => {
+export default defineAuth((ctx) => {
   const env = getEnv();
+  const mutationCtx = ctx as MutationCtx;
 
   return {
     emailAndPassword: {
@@ -141,70 +70,6 @@ const getAuthOptions = (ctx: GenericCtx) => {
           // expirationSeconds: 70, // testing value, default is 15m expiry (60s leeway)
         },
       }),
-      // TODO: polar breaks performance, disable for now
-      // polar({
-      //   client: new Polar({
-      //     accessToken: env.POLAR_ACCESS_TOKEN!,
-      //     server:
-      //       env.POLAR_SERVER === 'production'
-      //         ? 'production'
-      //         : 'sandbox',
-      //   }),
-      //   // NO createCustomerOnSignUp - handled via scheduler in user.onCreate trigger
-      //   use: [
-      //     checkout({
-      //       authenticatedUsersOnly: true,
-      //       products: [
-      //         {
-      //           productId: env.POLAR_PRODUCT_PREMIUM,
-      //           slug: 'premium',
-      //         },
-      //       ],
-      //       successUrl: `${env.SITE_URL}/success?checkout_id={CHECKOUT_ID}`,
-      //       theme: 'light',
-      //     }),
-      //     portal(), // Customer portal management
-      //     webhooks({
-      //       secret: env.POLAR_WEBHOOK_SECRET!,
-
-      //       // Link Polar customer to user via externalId
-      //       onCustomerCreated: async (payload) => {
-      //         // IMPORTANT: Use externalId, not metadata.userId
-      //         const userId = payload?.data.externalId;
-      //         if (!userId) return;
-
-      //         await (ctx as ActionCtx).runMutation(
-      //           internal.polarCustomer.updateUserPolarCustomerId,
-      //           {
-      //             customerId: payload.data.id,
-      //             userId,
-      //           }
-      //         );
-      //       },
-
-      //       // Create subscription record
-      //       onSubscriptionCreated: async (payload) => {
-      //         // IMPORTANT: Check customer.externalId, not customer.metadata.userId
-      //         if (!payload.data.customer.externalId) return;
-
-      //         await (ctx as ActionCtx).runMutation(
-      //           internal.polarSubscription.createSubscription,
-      //           { subscription: convertToDatabaseSubscription(payload.data) }
-      //         );
-      //       },
-
-      //       // Update subscription
-      //       onSubscriptionUpdated: async (payload) => {
-      //         if (!payload.data.customer.externalId) return;
-
-      //         await (ctx as ActionCtx).runMutation(
-      //           internal.polarSubscription.updateSubscription,
-      //           { subscription: convertToDatabaseSubscription(payload.data) }
-      //         );
-      //       },
-      //     }),
-      //   ],
-      // }),
     ],
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
@@ -295,35 +160,64 @@ const getAuthOptions = (ctx: GenericCtx) => {
         enabled: false,
       },
     },
-    database: authClient.adapter(ctx, getAuthOptions),
-  } satisfies BetterAuthOptions;
-};
+    triggers: {
+      user: {
+        beforeCreate: async (data) => {
+          const adminEmails = env.ADMIN;
 
-export const getAuth = (ctx: GenericCtx) => betterAuth(getAuthOptions(ctx));
+          // Check if this user email is in the admin list and update role.
+          const role =
+            data.role !== 'admin' && adminEmails?.includes(data.email)
+              ? 'admin'
+              : data.role;
 
-export const {
-  create,
-  deleteMany,
-  deleteOne,
-  findMany,
-  findOne,
-  updateMany,
-  updateOne,
-  getLatestJwks,
-  rotateKeys,
-} = createApi(schema, getAuth, {
-  context: withOrm,
-  skipValidation: true,
+          return {
+            ...data,
+            role,
+          };
+        },
+        onCreate: async (user) => {
+          // Create personal organization for the new user.
+          await createPersonalOrganization(mutationCtx, {
+            email: user.email,
+            image: user.image || null,
+            name: user.name,
+            userId: user._id,
+          });
+
+          // Create Polar customer for the new user.
+          await mutationCtx.scheduler.runAfter(
+            0,
+            internal.polarCustomer.createCustomer,
+            {
+              email: user.email,
+              name: user.name,
+              userId: user._id,
+            }
+          );
+        },
+      },
+      session: {
+        onCreate: async (session) => {
+          if (!session.activeOrganizationId) {
+            const userId = String(session.userId);
+            const user = await mutationCtx.orm.query.user.findFirst({
+              where: { id: userId },
+            });
+            if (!user) return;
+
+            const activeOrganizationId =
+              user.lastActiveOrganizationId ??
+              user.personalOrganizationId ??
+              null;
+
+            await mutationCtx.orm
+              .update(sessionTable)
+              .set({ activeOrganizationId })
+              .where(eq(sessionTable.id, session._id));
+          }
+        },
+      },
+    },
+  };
 });
-
-export const {
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
-} = authClient.triggersApi();
-
-// biome-ignore lint/suspicious/noExplicitAny: Required for Better Auth CLI
-export const auth = betterAuth(getAuthOptions({} as any));

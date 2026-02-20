@@ -14,7 +14,7 @@ bun add @polar-sh/better-auth @polar-sh/sdk buffer
 
 ## Server Config
 
-### Polyfills (REQUIRED)
+### Polyfills (Conditional)
 
 Convex needs Buffer polyfill for Polar SDK:
 
@@ -48,9 +48,9 @@ import { checkout, polar, portal, usage, webhooks } from '@polar-sh/better-auth'
 import { Polar } from '@polar-sh/sdk';
 import type { ActionCtx } from './_generated/server';
 import { internal } from './_generated/api';
+import { defineAuth } from './generated';
 
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     // ... existing config
     plugins: [
       polar({
@@ -98,7 +98,7 @@ const getAuthOptions = (ctx: GenericCtx) =>
         ],
       }),
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ### Customer Creation via Trigger
@@ -107,10 +107,12 @@ Create Polar customer asynchronously on signup:
 
 ```ts
 // convex/functions/auth.ts
-export const authClient = createClient<DataModel, typeof schema>({
+import { defineAuth } from './generated';
+
+export default defineAuth((ctx) => ({
   triggers: {
     user: {
-      onCreate: async (ctx, user) => {
+      onCreate: async (user) => {
         await ctx.scheduler.runAfter(0, internal.polarCustomer.createCustomer, {
           email: user.email,
           name: user.name || user.username,
@@ -119,15 +121,16 @@ export const authClient = createClient<DataModel, typeof schema>({
       },
     },
   },
-});
+}));
 ```
 
 ### Customer Deletion Sync
 
 ```ts
 // convex/functions/auth.ts
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+import { defineAuth } from './generated';
+
+export default defineAuth((ctx) => ({
     user: {
       deleteUser: {
         enabled: true,
@@ -137,7 +140,7 @@ const getAuthOptions = (ctx: GenericCtx) =>
         },
       },
     },
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ## Client Config

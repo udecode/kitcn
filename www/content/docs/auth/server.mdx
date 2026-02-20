@@ -48,53 +48,19 @@ export default {
 } satisfies AuthConfig;
 ```
 
-## 2. Create Auth Client
+## 2. Define Auth Contract
 
-Now we'll create the auth client. This connects Better Auth to your Convex database and lets you add triggers for user lifecycle events:
+Now define `auth.ts` as a single default export. `better-convex` codegen will generate the runtime (`getAuth`, CRUD handlers, trigger handlers, and static `auth`) in `convex/functions/generated.ts`.
 
-```ts title="convex/functions/auth.ts" showLineNumbers {7,10-15,22-27,41-45,50-53,58-65,68-80}
-import { betterAuth, type BetterAuthOptions } from 'better-auth';
+```ts title="convex/functions/auth.ts" showLineNumbers {3,6-11,13-22}
 import { admin } from 'better-auth/plugins';
-import { convex, createClient, createApi, type AuthFunctions } from 'better-convex/auth';
-import { internal } from './_generated/api';
-import type { DataModel } from './_generated/dataModel';
-import { type GenericCtx, withOrm } from './generated';
-import schema from './schema';
+import { convex } from 'better-convex/auth';
 import authConfig from './auth.config';
-const authFunctions: AuthFunctions = internal.auth;
+import { defineAuth } from './generated';
 
-// Create client with Convex adapter and auth triggers
-export const authClient = createClient<DataModel, typeof schema>({
-  authFunctions,
-  schema,
-  context: withOrm, // Optional: enrich auth mutation + trigger ctx once
-  triggers: {
-    user: {
-      beforeCreate: async (_ctx, data) => {
-      // Ensure every user has a username
-      const username =
-        data.username?.trim() ||
-        data.email?.split('@')[0] ||
-        `user-${Date.now()}`;
-
-      return { ...data, username };
-    },
-      onCreate: async (ctx, user) => {
-        // Create related records after signup
-        await ctx.orm.insert(profiles).values({
-          userId: user.id,
-          bio: '',
-        });
-      },
-    },
-  },
-});
-
-// Auth options factory
-export const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => {
+  return {
     baseURL: process.env.SITE_URL!,
-    database: authClient.adapter(ctx, getAuthOptions),
     plugins: [
       convex({
         authConfig,
@@ -106,52 +72,30 @@ export const getAuthOptions = (ctx: GenericCtx) =>
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24 * 15, // 15 days
     },
-    socialProviders: {
-      google: {
-        clientId: process.env.GOOGLE_CLIENT_ID!,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
+    triggers: {
+      user: {
+        beforeCreate: async (data) => {
+          const username =
+            data.username?.trim() ??
+            data.email?.split('@')[0] ??
+            `user-${Date.now()}`;
+          return { ...data, username };
+        },
+        onCreate: async (user) => {
+          // `ctx` from defineAuth closure is available here.
+          // Example: await ctx.scheduler.runAfter(...);
+          void user;
+          void ctx;
+        },
       },
     },
-    // Fallback for CLI schema generation
-    trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
-  }) satisfies BetterAuthOptions;
-
-// Create auth instance for all Convex contexts
-export const getAuth = (ctx: GenericCtx) => betterAuth(getAuthOptions(ctx));
-
-// Export trigger handlers for Convex
-export const {
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
-} = authClient.triggersApi();
-
-// Export CRUD functions for Better Auth
-export const {
-  create,
-  deleteMany,
-  deleteOne,
-  findMany,
-  findOne,
-  updateMany,
-  updateOne,
-  getLatestJwks,
-  rotateKeys,
-} = createApi(schema, getAuth, {
-  context: withOrm, // Optional: same context enrichment
-  skipValidation: true, // Smaller generated types
+  };
 });
-
-// Export auth instance for Better Auth CLI
-// biome-ignore lint/suspicious/noExplicitAny: Required for CLI
-export const auth = betterAuth(getAuthOptions({} as any));
 ```
 
 <Callout icon={<InfoIcon />}>
-Run `npx convex dev` first to generate `internal.auth` types.
+Run `better-convex dev` or `better-convex codegen` first, then create `auth.ts` using `defineAuth` from `./generated`, then re-run codegen. Runtime exports live in `convex/functions/generated.ts` and include `authEnabled` for setup checks.
 </Callout>
 
 ## 3. Update Schema
@@ -163,7 +107,7 @@ Your database needs tables for users, sessions, accounts, and more. You have two
     The easiest approach is to let the Better Auth CLI generate the tables based on your plugins:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/auth.ts
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
     ```
 
     Then import in your schema:
@@ -335,7 +279,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
     import { router } from '../lib/crpc';
-    import { getAuth } from './auth';
+    import { getAuth } from './generated';
 
     const app = new Hono();
 
@@ -365,7 +309,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
     import '../lib/http-polyfills';
     import { registerRoutes } from 'better-convex/auth';
     import { httpRouter } from 'convex/server';
-    import { getAuth } from './auth';
+    import { getAuth } from './generated';
 
     const http = httpRouter();
 
@@ -385,7 +329,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
     import { HttpRouterWithHono } from 'better-convex/server';
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
-    import { getAuth } from './auth';
+    import { getAuth } from './generated';
 
     const app = new Hono();
 
@@ -467,7 +411,7 @@ export const someAction = publicAction.action(async ({ ctx }) => {
 });
 ```
 
-`authClient.adapter(ctx, getAuthOptions)` auto-selects:
+Generated `getAuth(ctx)` uses the same context-aware adapter selection internally:
 
 | Adapter | Context | Behavior |
 |---------|---------|----------|

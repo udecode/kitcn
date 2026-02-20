@@ -17,8 +17,8 @@ The main differences between the packages:
 |--------|------------------------|---------------|
 | Architecture | Convex component pattern | Direct integration |
 | Triggers | Not built-in | `triggers: { user, session }` |
-| Client Creation | `createClient(components.betterAuth, {...})` | `createClient({ authFunctions, schema })` |
-| DB Adapter | `authComponent.adapter(ctx)` | `authClient.adapter(ctx, getAuthOptions)` |
+| Auth Contract | `createAuthOptions/getAuth` split | `default defineAuth((ctx) => ({ ...options, triggers }))` |
+| DB Adapter | `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` (context-aware adapter) |
 | Provider | `ConvexBetterAuthProvider` | `ConvexAuthProvider` |
 | React Utils | `AuthBoundary` | `createAuthMutations()`, auth store |
 
@@ -125,11 +125,9 @@ npx convex import ./migration.zip --replace -y
     ```ts showLineNumbers {2,5}
     import { defineApp } from "convex/server";
     import betterAuth from "./betterAuth/convex.config";
-    import resend from "@convex-dev/resend/convex.config";
 
     const app = defineApp();
     app.use(betterAuth);  // Remove this line
-    app.use(resend);
 
     export default app;
     ```
@@ -137,10 +135,8 @@ npx convex import ./migration.zip --replace -y
   <CompareItem title="After (convex/convex.config.ts)">
     ```ts showLineNumbers
     import { defineApp } from "convex/server";
-    import resend from "@convex-dev/resend/convex.config";
 
     const app = defineApp();
-    app.use(resend);  // Keep other components
 
     export default app;
     ```
@@ -217,96 +213,32 @@ This is the main migration. We'll replace the component-based client with direct
     ```
   </CompareItem>
   <CompareItem title="After (direct pattern)">
-    ```ts showLineNumbers title="convex/functions/auth.ts" {3,8,11-30,33,40-44,47}
-    import { convex } from "@convex-dev/better-auth/plugins";
-    import { betterAuth, type BetterAuthOptions } from "better-auth";
-    import { createApi, createClient, type AuthFunctions } from "better-convex/auth";
-    import { internal } from "./_generated/api";
-    import type { DataModel } from "./_generated/dataModel";
-    import { type GenericCtx, withOrm } from "./generated";
+    ```ts showLineNumbers title="convex/functions/auth.ts" {3,6-20}
+    import { admin } from "better-auth/plugins";
+    import { convex } from "better-convex/auth";
     import authConfig from "./auth.config";
-    import schema from "./schema";
+    import { defineAuth } from "./generated";
 
-    // Reference internal auth functions (generated after first `npx convex dev`)
-    const authFunctions: AuthFunctions = internal.auth;
-
-    // Create the auth client with triggers
-    export const authClient = createClient<DataModel, typeof schema>({
-      authFunctions,
-      schema,
-      context: withOrm, // Optional: enrich auth mutation + trigger ctx once
+    export default defineAuth((ctx) => ({
+      baseURL: process.env.SITE_URL!,
+      emailAndPassword: { enabled: true },
+      plugins: [
+        convex({
+          authConfig,
+          jwks: process.env.JWKS,
+        }),
+        admin(),
+      ],
       triggers: {
         user: {
-          beforeCreate: async (_ctx, data) => {
-            // Transform user data before creation
-            return data;
-          },
-          onCreate: async (ctx, user) => {
-            // Side effects after user creation
-            console.log("User created:", user.id);
-          },
-        },
-        session: {
-          onCreate: async (ctx, session) => {
-            // Side effects after session creation
-          },
+          beforeCreate: async (data) => data,
+          onCreate: async (user) => {},
         },
       },
-    });
-
-    // Auth options factory
-    const getAuthOptions = (ctx: GenericCtx) =>
-      ({
-        baseURL: process.env.SITE_URL!,
-        emailAndPassword: { enabled: true },
-        socialProviders: {
-          github: {
-            clientId: process.env.GITHUB_CLIENT_ID!,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-          },
-        },
-        plugins: [
-          convex({
-            authConfig,
-            jwks: process.env.JWKS,
-          }),
-        ],
-        database: authClient.adapter(ctx, getAuthOptions),
-      }) satisfies BetterAuthOptions;
-
-    // Single context-aware auth entrypoint
-    export const getAuth = (ctx: GenericCtx) =>
-      betterAuth(getAuthOptions(ctx));
-
-    // Generate internal CRUD functions
-    export const {
-      create,
-      deleteMany,
-      deleteOne,
-      findMany,
-      findOne,
-      updateMany,
-      updateOne,
-      getLatestJwks,
-      rotateKeys,
-    } = createApi(schema, getAuth, {
-      context: withOrm, // Optional: same context enrichment
-    });
-
-    // Generate trigger handlers
-    export const {
-      beforeCreate,
-      beforeDelete,
-      beforeUpdate,
-      onCreate,
-      onDelete,
-      onUpdate,
-    } = authClient.triggersApi();
-
-    // Export for Better Auth CLI
-    // biome-ignore lint/suspicious/noExplicitAny: Required for CLI
-    export const auth = betterAuth(getAuthOptions({} as any));
+    }));
     ```
+
+    Runtime handlers (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `auth`) are generated in `convex/functions/generated.ts` after `better-convex dev` / `better-convex codegen`.
   </CompareItem>
 </Compare>
 
@@ -314,14 +246,14 @@ This is the main migration. We'll replace the component-based client with direct
 
 | Before | After |
 |--------|-------|
-| `createClient(components.betterAuth, {...})` | `createClient({ authFunctions, schema, triggers })` |
-| ORM context setup | `context` |
-| `authComponent.adapter(ctx)` | `authClient.adapter(ctx, getAuthOptions)` |
-| `authComponent.clientApi()` | `createApi()` generates internal functions |
-| No triggers | Built-in `triggers: { user, session }` |
+| `createAuthOptions/getAuth` split | `default defineAuth((ctx) => ({ ...options, triggers }))` |
+| Runtime exports from `auth.ts` | Generated runtime in `convex/functions/generated.ts` |
+| `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` with context-aware adapter |
+| Trigger signature `(ctx, ...)` | Doc-first trigger signatures `(...)` with closure `ctx` |
+| Component namespace routing | Generated contract + `internal.generated.*` handlers |
 
 <Callout icon={<InfoIcon />}>
-**Context-aware adapter:** `authClient.adapter(ctx, getAuthOptions)` automatically picks direct DB access in queries/mutations and HTTP adapter behavior in actions/HTTP contexts.
+**Context-aware adapter:** use generated `getAuth(ctx)`; generated runtime picks direct DB access in queries/mutations and HTTP adapter behavior in actions/HTTP contexts.
 </Callout>
 
 ## Step 5: Add Polyfills
@@ -391,7 +323,7 @@ Use Hono only when you need cRPC or Hono middleware.
         import '../lib/http-polyfills';
         import { registerRoutes } from 'better-convex/auth';
         import { httpRouter } from 'convex/server';
-        import { getAuth } from './auth';
+        import { getAuth } from './generated';
 
         const http = httpRouter();
 
@@ -411,7 +343,7 @@ Use Hono only when you need cRPC or Hono middleware.
         import { HttpRouterWithHono } from 'better-convex/server';
         import { Hono } from 'hono';
         import { cors } from 'hono/cors';
-        import { getAuth } from './auth';
+        import { getAuth } from './generated';
 
         const app = new Hono();
 
@@ -440,7 +372,7 @@ Use Hono only when you need cRPC or Hono middleware.
         import { Hono } from 'hono';
         import { cors } from 'hono/cors';
         import { router } from '../lib/crpc';
-        import { getAuth } from './auth';
+        import { getAuth } from './generated';
 
         const app = new Hono();
 
@@ -585,64 +517,68 @@ Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
 
 ## Step 9: Remove AuthBoundary
 
-If you were using `AuthBoundary`, you can now handle auth errors via provider callbacks instead.
-
-**If you used `AuthBoundary`:**
-```tsx showLineNumbers
-import { AuthBoundary } from "@convex-dev/better-auth/react";
-
-export const ClientAuthBoundary = ({ children }) => {
-  const router = useRouter();
-  return (
-    <AuthBoundary
-      authClient={authClient}
-      onUnauth={() => router.push("/sign-in")}
-      getAuthUserFn={api.auth.getAuthUser}
-      isAuthError={isAuthError}
-    >
-      {children}
-    </AuthBoundary>
-  );
-};
-```
-
 Remove `AuthBoundary` and use the provider's `onQueryUnauthorized` and `onMutationUnauthorized` callbacks instead (configured in Step 8).
 
 ## Step 10: Update Schema
 
 If you were using the auto-generated component schema, you'll now define auth tables in your main schema.
 
-<Tabs groupId="schema" items={["CLI Generate", "Manual"]} persist>
-  <Tab value="CLI Generate">
-    Generate auth tables using the Better Auth CLI:
+<Tabs groupId="schema-style" items={["ORM", "DB"]} persist>
+  <Tab value="ORM">
+    Use this when your app schema uses `better-convex/orm` (`convexTable`, `defineSchema`).
+
+    Generate auth tables:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/auth.ts
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+    ```
+
+    Merge generated auth tables into your ORM schema:
+
+    ```ts title="convex/functions/schema.ts" showLineNumbers
+    import { defineSchema } from 'better-convex/orm';
+    import { authSchema } from './authSchema';
+
+    export const tables = {
+      ...authSchema,
+      // ...your app convexTable definitions
+    };
+
+    export default defineSchema(tables, { strict: false });
     ```
 
     <Callout icon={<InfoIcon />}>
-    **Auto selection:** `authClient.adapter(...).createSchema` detects ORM schema metadata (`Symbol.for("better-convex:OrmSchemaOptions")`).
-    - With ORM metadata, CLI output uses `better-convex/orm` (`convexTable`, `defineSchema`) and includes `.unique()` plus `.references(...)`.
-    - Without ORM metadata, CLI output stays on the existing Convex `defineTable` format.
-    - ORM output intentionally does not emit `onDelete`/cascade action config.
+    CLI emits ORM-flavored output (`convexTable`, `defineSchema`) when ORM schema metadata is detected.
     </Callout>
+  </Tab>
+  <Tab value="DB">
+    Use this when your app schema uses `convex/server` (`defineTable`, `defineSchema`).
 
-    Then import in your schema:
+    Generate auth tables:
 
-    ```ts title="convex/functions/schema.ts" showLineNumbers {2,5}
+    ```bash
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+    ```
+
+    Merge generated auth tables into your Convex schema:
+
+    ```ts title="convex/functions/schema.ts" showLineNumbers
     import { defineSchema } from 'convex/server';
     import { authSchema } from './authSchema';
 
     export default defineSchema({
       ...authSchema,
-      // Your other tables
+      // ...your app defineTable definitions
     });
     ```
-  </Tab>
-  <Tab value="Manual">
-    See [Auth Server Setup](/docs/auth/server#3-update-schema) for the full schema definition.
+
+    <Callout icon={<InfoIcon />}>
+    Without ORM metadata, CLI output stays on Convex `defineTable` format.
+    </Callout>
   </Tab>
 </Tabs>
+
+For fully manual table definitions, see [Auth Server Setup](/docs/auth/server#3-update-schema).
 
 ## Step 11: Migrate Helper Methods
 
@@ -715,7 +651,7 @@ The component pattern provided several helper methods on `authComponent`. These 
 
     // Option 2: Use Better Auth API directly
     const headers = await getHeaders(ctx);
-    const auth = getAuth(ctx); // Your getAuth function from auth.ts
+    const auth = getAuth(ctx); // generated getAuth from convex/functions/generated.ts
     const session = await auth.api.getSession({ headers });
     ```
   </CompareItem>
@@ -752,7 +688,7 @@ The component pattern provided several helper methods on `authComponent`. These 
 - [ ] **Component data:** Migrate `betterAuth` component data to app namespace before deletion
 - [ ] **betterAuth folder:** Delete the entire `convex/betterAuth/` directory
 - [ ] **auth.config.ts:** Add `jwks: process.env.JWKS` option
-- [ ] **auth.ts:** Rewrite using new `createClient` and `createApi` patterns
+- [ ] **auth.ts:** Rewrite to `export default defineAuth((ctx) => ({ ...options, triggers }))`
 - [ ] **auth-client.ts:** Add `createAuthMutations`, update imports
 - [ ] **Provider:** Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`
 - [ ] **AuthBoundary:** Remove and use provider callbacks
@@ -1068,17 +1004,67 @@ export function SignOutButton() {
 
 ## Troubleshooting
 
-### "authFunctions is undefined"
+### "Auth runtime is disabled ..."
 
-Run `npx convex dev` first to generate the internal API, then reference it correctly:
+Generated runtime can be disabled when `convex/functions/auth.ts` is missing or lacks a default export.
 
 ```ts
-const authFunctions: AuthFunctions = internal.auth;
+import { defineAuth } from './generated';
+
+export default defineAuth((ctx) => ({
+  // ...options
+}));
 ```
+
+Then run:
+
+```bash
+npx better-convex codegen
+```
+
+### Better Auth CLI says config is invalid / cannot read auth config
+
+Use generated config entrypoint (not `auth.ts`):
+
+```bash
+npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+```
+
+If it still fails, re-run `better-convex codegen` first so generated exports are up to date.
+
+### `TypeError: e.auth is not a function` on `/api/auth/*`
+
+Your HTTP routes are likely wiring old auth imports.
+
+Use generated `getAuth`:
+
+```ts
+import { getAuth } from './generated';
+```
+
+and keep either:
+1. `app.use(authMiddleware(getAuth))`, or
+2. `registerRoutes(http, getAuth, ...)`.
 
 ### "Auth triggers not firing"
 
-Auth triggers must be defined in `createClient({ triggers: ... })`. They only fire through Better Auth flows, not direct database operations.
+Auth triggers must be defined inside `defineAuth((ctx) => ({ triggers: ... }))`.
+
+They only fire through Better Auth flows, not direct database operations.
+
+### `MessageChannel is not defined`
+
+Add the HTTP polyfill from Step 5 if your runtime lacks `MessageChannel`.
+
+### Auth routes missing from generated API types
+
+In `convex/functions/http.ts`, export your router as:
+
+```ts
+export const httpRouter = router({ ... });
+```
+
+This name is required for codegen to include HTTP route types.
 
 ## Next Steps
 

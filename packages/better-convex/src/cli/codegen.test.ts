@@ -170,6 +170,11 @@ describe('cli/codegen', () => {
         path.join(dir, 'convex', '_generated', 'api.ts'),
         `export const shouldNotAppear = { _crpcMeta: { type: 'query' } };`
       );
+      // Excluded auth module (to prevent generated/auth circular scan issues).
+      writeFile(
+        path.join(dir, 'convex', 'auth.ts'),
+        `export const shouldBeIgnoredAuth = { _crpcMeta: { type: 'query' } };`
+      );
 
       // HTTP routes: export-level + router-level with duplicate route keys.
       writeFile(
@@ -267,12 +272,13 @@ describe('cli/codegen', () => {
       expect(generated).not.toContain('ApiFunctionLeafMeta');
       expect(generated).not.toContain('ApiFunctionRefFromExport');
       expect(generated).not.toContain('shouldBeIgnored');
+      expect(generated).not.toContain('shouldBeIgnoredAuth');
 
       expect(serverGenerated).toContain(
-        'import { createOrm, type GenericOrmCtx, type OrmFunctions } from "better-convex/orm";'
+        "import { createOrm, type GenericOrmCtx, type OrmFunctions } from 'better-convex/orm';"
       );
       expect(serverGenerated).toContain(
-        'import { initCRPC as baseInitCRPC } from "better-convex/server";'
+        "import { initCRPC as baseInitCRPC } from 'better-convex/server';"
       );
       expect(serverGenerated).toContain('export const orm = createOrm({');
       expect(serverGenerated).toContain(
@@ -287,6 +293,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
       );
+      expect(serverGenerated).toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
@@ -430,6 +437,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
       );
+      expect(serverGenerated).toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
       );
@@ -536,6 +544,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
       );
+      expect(serverGenerated).toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
       );
@@ -608,6 +617,352 @@ describe('cli/codegen', () => {
       expect(generated).not.toContain('import type { httpRouter }');
       expect(generated).not.toContain('WithHttpRouter');
       expect(generated).toContain('export type Api = typeof api;');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta emits generated auth runtime in server contract when auth.ts exports default auth definition', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export const tables = {
+          todos: { table: 'todos' },
+        };
+        export const relations = {
+          todos: {},
+        };
+        export default {};
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'auth.ts'),
+        `
+        export default (_ctx) => ({
+          baseURL: "http://localhost:3000",
+          triggers: {},
+        });
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      expect(generatedServer).toContain('createAuthRuntime');
+      expect(generatedServer).toContain(
+        "import * as authDefinitionModule from './auth';"
+      );
+      expect(generatedServer).toContain('getGeneratedAuthDisabledReason,');
+      expect(generatedServer).toContain(
+        'type AuthDefinitionFromFile = Extract<'
+      );
+      expect(generatedServer).toContain('createAuthRuntime<');
+      expect(generatedServer).toContain('ReturnType<AuthDefinitionFromFile>');
+      expect(generatedServer).toContain(
+        'resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
+      );
+      expect(generatedServer).toContain(
+        'getGeneratedAuthDisabledReason("default_export_unavailable")'
+      );
+      expect(generatedServer).toContain('export function defineAuth<');
+      expect(generatedServer).toContain('auth: authDefinition,');
+      expect(generatedServer).toContain('context: withOrm,');
+      expect(generatedServer).toContain('authEnabled,');
+      expect(generatedServer).not.toContain('createDisabledAuthRuntime');
+      expect(generatedServer).not.toContain(
+        'const authFunctions: AuthFunctions'
+      );
+      expect(generatedServer).not.toContain(
+        'import { type AuthFunctions, createApi, createClient } from "better-convex/auth";'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta emits auth runtime without ORM wiring when relations export is missing', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export const tables = {
+          todos: { table: 'todos' },
+        };
+        export default {};
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'auth.ts'),
+        `
+        export default (_ctx) => ({
+          baseURL: "http://localhost:3000",
+          triggers: {},
+        });
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      expect(generatedServer).toContain('createAuthRuntime');
+      expect(generatedServer).toContain(
+        "import * as authDefinitionModule from './auth';"
+      );
+      expect(generatedServer).toContain('getGeneratedAuthDisabledReason,');
+      expect(generatedServer).toContain(
+        'type AuthDefinitionFromFile = Extract<'
+      );
+      expect(generatedServer).toContain('createAuthRuntime<');
+      expect(generatedServer).toContain('ReturnType<AuthDefinitionFromFile>');
+      expect(generatedServer).toContain(
+        'getGeneratedAuthDisabledReason("default_export_unavailable")'
+      );
+      expect(generatedServer).toContain('export function defineAuth<');
+      expect(generatedServer).toContain(
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+      );
+      expect(generatedServer).not.toContain('createOrm');
+      expect(generatedServer).not.toContain('withOrm');
+      expect(generatedServer).not.toContain('context: withOrm,');
+      expect(generatedServer).not.toContain('createDisabledAuthRuntime');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta emits disabled auth runtime when auth.ts is missing', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export const tables = {
+          todos: { table: 'todos' },
+        };
+        export const relations = {
+          todos: {},
+        };
+        export default {};
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      expect(generatedServer).toContain('createDisabledAuthRuntime');
+      expect(generatedServer).toContain(
+        'const authRuntime = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
+      );
+      expect(generatedServer).toContain(
+        'getGeneratedAuthDisabledReason("missing_auth_file")'
+      );
+      expect(generatedServer).toContain('export function defineAuth<');
+      expect(generatedServer).toContain('authEnabled,');
+      expect(generatedServer).not.toContain(
+        "import * as authDefinitionModule from './auth';"
+      );
+      expect(generatedServer).not.toContain('createAuthRuntime<DataModel');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta emits disabled auth runtime when auth.ts exists without default auth export', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export default {};
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'auth.ts'),
+        `
+        export const getAuthOptions = (_ctx) => ({
+          baseURL: "http://localhost:3000",
+        });
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      expect(generatedServer).toContain('createDisabledAuthRuntime');
+      expect(generatedServer).toContain(
+        'getGeneratedAuthDisabledReason("missing_default_export")'
+      );
+      expect(generatedServer).toContain('export function defineAuth<');
+      expect(generatedServer).not.toContain(
+        "import * as authDefinitionModule from './auth';"
+      );
     } finally {
       process.chdir(oldCwd);
     }

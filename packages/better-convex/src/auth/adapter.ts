@@ -9,6 +9,7 @@ import {
   createFunctionHandle,
   type FunctionHandle,
   type GenericDataModel,
+  type GenericMutationCtx,
   type PaginationOptions,
   type PaginationResult,
   type SchemaDefinition,
@@ -27,7 +28,7 @@ import {
   updateManyHandler,
   updateOneHandler,
 } from './create-api';
-import type { AuthFunctions, Triggers } from './create-client';
+import type { AuthFunctions, TriggerResolver, Triggers } from './create-client';
 
 export const handlePagination = async (
   next: ({
@@ -196,7 +197,7 @@ export const httpAdapter = <
     authFunctions: AuthFunctions;
     debugLogs?: DBAdapterDebugLogOption;
     schema?: Schema;
-    triggers?: Triggers<DataModel, Schema>;
+    triggers?: TriggerResolver<DataModel, Schema>;
   }
 ) => {
   return createAdapterFactory({
@@ -205,8 +206,12 @@ export const httpAdapter = <
       debugLogs: debugLogs || false,
     },
     adapter: ({ options }) => {
+      const resolveTriggers = () =>
+        typeof triggers === 'function'
+          ? triggers(ctx as GenericMutationCtx<DataModel>)
+          : triggers;
       const getTriggers = (model: string) =>
-        triggers?.[model as keyof Triggers<DataModel, Schema>];
+        resolveTriggers()?.[model as keyof Triggers<DataModel, Schema>];
 
       // Disable telemetry in all cases because it requires Node
       options.telemetry = { enabled: false };
@@ -508,7 +513,7 @@ export const dbAdapter = <
     authFunctions: AuthFunctions;
     schema: Schema;
     debugLogs?: DBAdapterDebugLogOption;
-    triggers?: Triggers<DataModel, Schema>;
+    triggers?: TriggerResolver<DataModel, Schema>;
   }
 ) => {
   const betterAuthSchema = getAuthTables(getAuthOptions({} as any));
@@ -519,8 +524,12 @@ export const dbAdapter = <
       debugLogs: debugLogs || false,
     },
     adapter: ({ options }) => {
+      const resolveTriggers = () =>
+        typeof triggers === 'function'
+          ? triggers(ctx as GenericMutationCtx<DataModel>)
+          : triggers;
       const getTriggers = (model: string) =>
-        triggers?.[model as keyof Triggers<DataModel, Schema>];
+        resolveTriggers()?.[model as keyof Triggers<DataModel, Schema>];
 
       // Disable telemetry in all cases because it requires Node
       options.telemetry = { enabled: false };

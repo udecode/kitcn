@@ -76,9 +76,8 @@ describe('auth/create-api createApi()', () => {
       (api.rotateKeys as any)._handler({ id: 'ctx2' }, {})
     ).resolves.toBe('rotated');
 
-    // createApi() calls getAuth({} as any) once during construction to read options.
-    // The two action handlers call getAuth(ctx) for the provided ctx values.
-    expect(authCalls).toEqual([{}, { id: 'ctx1' }, { id: 'ctx2' }]);
+    // createApi() now resolves auth lazily, so only action handlers call getAuth(ctx).
+    expect(authCalls).toEqual([{ id: 'ctx1' }, { id: 'ctx2' }]);
   });
 
   test('generated functions execute their handler closures (coverage smoke)', async () => {
@@ -213,7 +212,7 @@ describe('auth/create-api createApi()', () => {
     expect(runMutation).toHaveBeenCalled();
   });
 
-  test('skipValidation toggles exported arg schema shape', async () => {
+  test('validateInput toggles exported arg schema shape', async () => {
     const getAuth = (_ctx: any) => ({
       options: {
         plugins: [
@@ -233,16 +232,16 @@ describe('auth/create-api createApi()', () => {
       },
     });
 
-    const strict = createApi(schema, getAuth as any);
-    const loose = createApi(schema, getAuth as any, {
-      skipValidation: true,
+    const loose = createApi(schema, getAuth as any);
+    const strict = createApi(schema, getAuth as any, {
+      validateInput: true,
     });
 
-    const strictFindOneArgs = JSON.parse((strict.findOne as any).exportArgs());
     const looseFindOneArgs = JSON.parse((loose.findOne as any).exportArgs());
+    const strictFindOneArgs = JSON.parse((strict.findOne as any).exportArgs());
 
-    expect(strictFindOneArgs.value.model.fieldType.type).toBe('union');
     expect(looseFindOneArgs.value.model.fieldType.type).toBe('string');
+    expect(strictFindOneArgs.value.model.fieldType.type).toBe('union');
   });
 
   test('options.internalMutation overrides internalMutationGeneric', async () => {
@@ -273,7 +272,6 @@ describe('auth/create-api createApi()', () => {
 
     createApi(schema, getAuth as any, {
       internalMutation: internalMutation as any,
-      skipValidation: true,
     });
 
     // create/deleteMany/deleteOne/updateMany/updateOne all use mutationBuilder
@@ -306,7 +304,6 @@ describe('auth/create-api createApi()', () => {
         order.push('context');
         return { ...ctx, mutationWrapped: true };
       },
-      skipValidation: true,
     });
 
     const store = new Map<string, any>();

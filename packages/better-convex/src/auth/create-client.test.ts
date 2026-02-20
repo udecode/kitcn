@@ -26,21 +26,21 @@ describe('createClient', () => {
 
     const triggers = {
       user: {
-        beforeCreate: async (_ctx: unknown, data: any) => ({
+        beforeCreate: async (data: any) => ({
           ...data,
           tagged: true,
         }),
-        beforeDelete: async (_ctx: unknown, doc: any) => ({
+        beforeDelete: async (doc: any) => ({
           ...doc,
           deletedByHook: true,
         }),
-        beforeUpdate: async (_ctx: unknown, _doc: any, update: any) => ({
+        beforeUpdate: async (_doc: any, update: any) => ({
           ...update,
           updatedByHook: true,
         }),
-        onCreate: async (_ctx: unknown, _doc: any) => {},
-        onDelete: async (_ctx: unknown, _doc: any) => {},
-        onUpdate: async (_ctx: unknown, _newDoc: any, _oldDoc: any) => {},
+        onCreate: async (_doc: any) => {},
+        onDelete: async (_doc: any) => {},
+        onUpdate: async (_newDoc: any, _oldDoc: any) => {},
       },
     } as any;
 
@@ -112,9 +112,9 @@ describe('createClient', () => {
   test('applies context before executing trigger callbacks', async () => {
     const internalMutation = ((config: any) => config) as any;
 
-    const beforeCreate = mock(async (ctx: any, data: any) => ({
+    const beforeCreate = mock(async (data: any) => ({
       ...data,
-      usedOrm: ctx.orm === true,
+      usedOrm: true,
     }));
 
     const client = createClient({
@@ -122,11 +122,14 @@ describe('createClient', () => {
       internalMutation,
       schema: {} as any,
       context: async (ctx: any) => ({ ...ctx, orm: true }),
-      triggers: {
+      triggers: (ctx: any) => ({
         user: {
-          beforeCreate,
+          beforeCreate: async (data: any) => {
+            expect(ctx.orm).toBe(true);
+            return beforeCreate(data);
+          },
         },
-      } as any,
+      }),
     });
 
     const api = client.triggersApi() as any;
@@ -141,11 +144,9 @@ describe('createClient', () => {
   });
 
   test('applies context transforms for trigger callbacks', async () => {
-    const beforeCreate = mock(async (ctx: any, data: any) => ({
+    const beforeCreate = mock(async (data: any) => ({
       ...data,
-      transformed: {
-        context: ctx.contextWrapped === true,
-      },
+      transformed: true,
     }));
 
     const client = createClient({
@@ -155,11 +156,14 @@ describe('createClient', () => {
         ...ctx,
         contextWrapped: true,
       }),
-      triggers: {
+      triggers: (ctx: any) => ({
         user: {
-          beforeCreate,
+          beforeCreate: async (data: any) => {
+            expect(ctx.contextWrapped).toBe(true);
+            return beforeCreate(data);
+          },
         },
-      } as any,
+      }),
     });
 
     const api = client.triggersApi() as any;
@@ -171,9 +175,7 @@ describe('createClient', () => {
     expect(beforeCreate).toHaveBeenCalled();
     expect(result).toEqual({
       email: 'a@b.com',
-      transformed: {
-        context: true,
-      },
+      transformed: true,
     });
   });
 

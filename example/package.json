@@ -10,7 +10,7 @@
     "dev": "mprocs",
     "dev:app": "next dev --port 3005",
     "gen": "next typegen",
-    "gen:auth": "@better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/auth.ts",
+    "gen:auth": "bunx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts",
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "reset": "convex run reset:reset && sleep 5 && convex run init",

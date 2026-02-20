@@ -12,9 +12,9 @@ See [Better Auth Organization Plugin](https://www.better-auth.com/docs/plugins/o
 // convex/functions/auth.ts
 import { organization } from 'better-auth/plugins';
 import type { ActionCtx } from './_generated/server';
+import { defineAuth } from './generated';
 
-export const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     plugins: [
       convex({ authConfig, jwks: process.env.JWKS }),
       admin(),
@@ -43,7 +43,7 @@ export const getAuthOptions = (ctx: GenericCtx) =>
         },
       }),
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ## Client Config

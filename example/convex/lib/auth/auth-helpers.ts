@@ -109,21 +109,24 @@ export const createUser = async (
   // WARNING: This bypasses Better Auth hooks including:
   const now = new Date();
 
-  const beforeCreateData = await ctx.runMutation(internal.auth.beforeCreate, {
-    data: {
-      bio: args.bio,
-      createdAt: now,
-      email: args.email,
-      emailVerified: false,
-      github: args.github,
-      image: args.image,
-      location: args.location,
-      name: args.name,
-      role: args.role ?? 'user',
-      updatedAt: now,
-    },
-    model: 'user',
-  });
+  const beforeCreateData = await ctx.runMutation(
+    internal.generated.beforeCreate,
+    {
+      data: {
+        bio: args.bio,
+        createdAt: now,
+        email: args.email,
+        emailVerified: false,
+        github: args.github,
+        image: args.image,
+        location: args.location,
+        name: args.name,
+        role: args.role ?? 'user',
+        updatedAt: now,
+      },
+      model: 'user',
+    }
+  );
 
   const [{ id: userId }] = await ctx.orm
     .insert(userTable)
@@ -134,7 +137,7 @@ export const createUser = async (
     where: { id: { eq: userId } },
   });
 
-  await ctx.runMutation(internal.auth.onCreate, {
+  await ctx.runMutation(internal.generated.onCreate, {
     doc: user,
     model: 'user',
   });

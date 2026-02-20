@@ -130,6 +130,7 @@ export function buildMetaIndex(api: Record<string, unknown>): Meta {
 /** Files to exclude from meta generation */
 const EXCLUDED_FILES = new Set([
   'schema.ts',
+  'auth.ts',
   'generated.ts',
   'convex.config.ts',
   'auth.config.ts',

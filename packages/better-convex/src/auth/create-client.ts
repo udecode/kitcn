@@ -1,24 +1,22 @@
 import type { BetterAuthOptions } from 'better-auth';
 
 import {
-  type DocumentByName,
   type FunctionReference,
   type GenericDataModel,
   type GenericMutationCtx,
   type GenericSchema,
   internalMutationGeneric,
   type SchemaDefinition,
-  type TableNamesInDataModel,
 } from 'convex/server';
 import { v } from 'convex/values';
 import {
   customCtx,
   customMutation,
 } from '../internal/upstream/server/customFunctions';
-
 import type { GenericCtx } from '../server/context-utils';
 import { isQueryCtx } from '../server/context-utils';
 import { dbAdapter, httpAdapter } from './adapter';
+import type { GenericAuthTriggers } from './define-auth';
 
 export type AuthFunctions = {
   create: FunctionReference<'mutation', 'internal', Record<string, any>>;
@@ -39,48 +37,16 @@ export type AuthFunctions = {
 export type Triggers<
   DataModel extends GenericDataModel,
   Schema extends SchemaDefinition<any, any>,
+> = GenericAuthTriggers<DataModel, Schema>;
+
+export type TriggerResolver<
+  DataModel extends GenericDataModel,
+  Schema extends SchemaDefinition<any, any>,
   TriggerCtx extends
     GenericMutationCtx<DataModel> = GenericMutationCtx<DataModel>,
-> = {
-  [K in Extract<
-    keyof Schema['tables'] & string,
-    TableNamesInDataModel<DataModel>
-  >]?: {
-    beforeCreate?: (
-      ctx: TriggerCtx,
-      data: Omit<DocumentByName<DataModel, K>, '_id' | '_creationTime'>
-    ) => Promise<
-      Omit<DocumentByName<DataModel, K>, '_id' | '_creationTime'> | undefined
-    >;
-    beforeDelete?: (
-      ctx: TriggerCtx,
-      doc: DocumentByName<DataModel, K>
-    ) => Promise<DocumentByName<DataModel, K> | undefined>;
-    beforeUpdate?: (
-      ctx: TriggerCtx,
-      doc: DocumentByName<DataModel, K>,
-      update: Partial<
-        Omit<DocumentByName<DataModel, K>, '_id' | '_creationTime'>
-      >
-    ) => Promise<
-      | Partial<Omit<DocumentByName<DataModel, K>, '_id' | '_creationTime'>>
-      | undefined
-    >;
-    onCreate?: (
-      ctx: TriggerCtx,
-      doc: DocumentByName<DataModel, K>
-    ) => Promise<void>;
-    onDelete?: (
-      ctx: TriggerCtx,
-      doc: DocumentByName<DataModel, K>
-    ) => Promise<void>;
-    onUpdate?: (
-      ctx: TriggerCtx,
-      newDoc: DocumentByName<DataModel, K>,
-      oldDoc: DocumentByName<DataModel, K>
-    ) => Promise<void>;
-  };
-};
+> =
+  | Triggers<DataModel, Schema>
+  | ((ctx: TriggerCtx) => Triggers<DataModel, Schema> | undefined);
 
 export const createClient = <
   DataModel extends GenericDataModel,
@@ -94,7 +60,7 @@ export const createClient = <
   context?: (
     ctx: GenericMutationCtx<DataModel>
   ) => TriggerCtx | Promise<TriggerCtx>;
-  triggers?: Triggers<DataModel, Schema, TriggerCtx>;
+  triggers?: TriggerResolver<DataModel, Schema, TriggerCtx>;
 }) => ({
   authFunctions: config.authFunctions,
   triggers: config.triggers,
@@ -120,8 +86,12 @@ export const createClient = <
           )
         ) as typeof mutationBuilderBase)
       : mutationBuilderBase;
-    const getTriggers = (model: string) =>
-      config.triggers?.[model as keyof Triggers<DataModel, Schema, TriggerCtx>];
+    const resolveTriggers = (ctx: TriggerCtx) =>
+      typeof config.triggers === 'function'
+        ? config.triggers(ctx)
+        : config.triggers;
+    const getTriggers = (model: string, ctx: TriggerCtx) =>
+      resolveTriggers(ctx)?.[model as keyof Triggers<DataModel, Schema>];
     const resolveTriggerCtx = async (ctx: GenericMutationCtx<DataModel>) =>
       hasMutationCtxTransforms
         ? (ctx as TriggerCtx)
@@ -137,8 +107,7 @@ export const createClient = <
           const triggerCtx = await resolveTriggerCtx(ctx);
 
           return (
-            (await getTriggers(args.model)?.beforeCreate?.(
-              triggerCtx,
+            (await getTriggers(args.model, triggerCtx)?.beforeCreate?.(
               args.data
             )) ?? args.data
           );
@@ -153,8 +122,7 @@ export const createClient = <
           const triggerCtx = await resolveTriggerCtx(ctx);
 
           return (
-            (await getTriggers(args.model)?.beforeDelete?.(
-              triggerCtx,
+            (await getTriggers(args.model, triggerCtx)?.beforeDelete?.(
               args.doc
             )) ?? args.doc
           );
@@ -170,8 +138,7 @@ export const createClient = <
           const triggerCtx = await resolveTriggerCtx(ctx);
 
           return (
-            (await getTriggers(args.model)?.beforeUpdate?.(
-              triggerCtx,
+            (await getTriggers(args.model, triggerCtx)?.beforeUpdate?.(
               args.doc,
               args.update
             )) ?? args.update
@@ -185,7 +152,7 @@ export const createClient = <
         },
         handler: async (ctx, args) => {
           const triggerCtx = await resolveTriggerCtx(ctx);
-          await getTriggers(args.model)?.onCreate?.(triggerCtx, args.doc);
+          await getTriggers(args.model, triggerCtx)?.onCreate?.(args.doc);
         },
       }),
       onDelete: mutationBuilder({
@@ -195,7 +162,7 @@ export const createClient = <
         },
         handler: async (ctx, args) => {
           const triggerCtx = await resolveTriggerCtx(ctx);
-          await getTriggers(args.model)?.onDelete?.(triggerCtx, args.doc);
+          await getTriggers(args.model, triggerCtx)?.onDelete?.(args.doc);
         },
       }),
       onUpdate: mutationBuilder({
@@ -206,8 +173,7 @@ export const createClient = <
         },
         handler: async (ctx, args) => {
           const triggerCtx = await resolveTriggerCtx(ctx);
-          await getTriggers(args.model)?.onUpdate?.(
-            triggerCtx,
+          await getTriggers(args.model, triggerCtx)?.onUpdate?.(
             args.newDoc,
             args.oldDoc
           );

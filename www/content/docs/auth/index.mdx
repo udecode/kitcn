@@ -44,7 +44,7 @@ Use one entrypoint everywhere:
 const auth = getAuth(ctx);
 ```
 
-`authClient.adapter(ctx, getAuthOptions)` automatically chooses:
+Use generated `getAuth(ctx)`; generated runtime handles context-aware adapter selection:
 - direct DB adapter for queries/mutations (`ctx.db` available)
 - HTTP adapter for actions/HTTP contexts (`ctx.runQuery`/`ctx.runMutation`)
 

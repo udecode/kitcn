@@ -46,34 +46,31 @@ Run after the database write. Use for side effects.
 
 ## Setup
 
-Pass triggers to `createClient`:
+Define triggers in `auth.ts` with `defineAuth`. Trigger handlers are doc-first, and `ctx` is available from the `defineAuth((ctx) => ...)` closure:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {1-2,6-20}
-import { createClient } from 'better-convex/auth';
-import { withOrm } from './generated';
+```ts title="convex/functions/auth.ts" showLineNumbers {1-2,5-20}
+import { defineAuth } from './generated';
 
-export const authClient = createClient({
-  authFunctions: internal.auth,
-  schema,
-  context: withOrm, // inject ctx.orm once for auth mutation + trigger handlers
+export default defineAuth((ctx) => ({
+  baseURL: process.env.SITE_URL!,
   triggers: {
     user: {
-      beforeCreate: async (ctx, data) => { /* ... */ },
-      onCreate: async (ctx, doc) => { /* ... */ },
-      beforeUpdate: async (ctx, doc, update) => { /* ... */ },
-      onUpdate: async (ctx, newDoc, oldDoc) => { /* ... */ },
-      beforeDelete: async (ctx, doc) => { /* ... */ },
-      onDelete: async (ctx, doc) => { /* ... */ },
+      beforeCreate: async (data) => { /* ... */ },
+      onCreate: async (doc) => { void ctx; void doc; },
+      beforeUpdate: async (doc, update) => { /* ... */ },
+      onUpdate: async (newDoc, oldDoc) => { /* ... */ },
+      beforeDelete: async (doc) => { /* ... */ },
+      onDelete: async (doc) => { /* ... */ },
     },
     session: {
-      onCreate: async (ctx, session) => { /* ... */ },
+      onCreate: async (session) => { /* ... */ },
     },
   },
-});
+}));
 ```
 
 <Callout icon={<InfoIcon />}>
-Use `context: withOrm` so auth trigger handlers can use `ctx.orm`.
+When your schema exports `relations`, generated runtime wires auth through `withOrm`, so closure `ctx` can use `ctx.orm` and `ctx.scheduler`.
 </Callout>
 
 ## User Triggers
@@ -85,7 +82,7 @@ Transform user data before insertion:
 ```ts showLineNumbers {3-12}
 triggers: {
   user: {
-    beforeCreate: async (ctx, data) => {
+    beforeCreate: async (data) => {
       // Generate unique username
       const username = await generateUniqueUsername(ctx, data.name);
 
@@ -109,7 +106,7 @@ Create related records after user signup:
 ```ts showLineNumbers {3-19}
 triggers: {
   user: {
-    onCreate: async (ctx, user) => {
+    onCreate: async (user) => {
       // Create default profile
       await ctx.orm.insert(profiles).values({
         userId: user.id,
@@ -141,7 +138,7 @@ Sync changes to related records:
 ```ts showLineNumbers {3-16}
 triggers: {
   user: {
-    onUpdate: async (ctx, newDoc, oldDoc) => {
+    onUpdate: async (newDoc, oldDoc) => {
       // Sync avatar change to profiles
       if (newDoc.image !== oldDoc.image) {
         const profile = await ctx.orm.query.profiles.findFirst({
@@ -171,7 +168,7 @@ Cascade deletes in triggers are permanent. Test thoroughly and consider soft del
 ```ts showLineNumbers {3-20}
 triggers: {
   user: {
-    onDelete: async (ctx, user) => {
+    onDelete: async (user) => {
       // Index profiles.userId and organizations.ownerId.
       // Delete user's profiles
       const profilesToDelete = await ctx.orm.query.profiles.findMany({
@@ -204,7 +201,7 @@ Set default session state:
 ```ts showLineNumbers {3-18}
 triggers: {
   session: {
-    onCreate: async (ctx, sessionDoc) => {
+    onCreate: async (sessionDoc) => {
       // Set active organization from user's last active
       if (!sessionDoc.activeOrganizationId) {
         const user = await ctx.orm.query.user.findFirst({
@@ -223,12 +220,12 @@ triggers: {
 }
 ```
 
-## Export Trigger Functions
+## Trigger Runtime Exports
 
-After configuring triggers, export them from your auth file:
+You do not export trigger handlers manually from `auth.ts`.
+Run `better-convex dev` / `better-convex codegen` and use generated runtime exports from `convex/functions/generated.ts`:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {2-9}
-// Export trigger functions for Better Auth adapter
+```ts title="convex/functions/generated.ts" showLineNumbers
 export const {
   beforeCreate,
   beforeDelete,
@@ -236,10 +233,8 @@ export const {
   onCreate,
   onDelete,
   onUpdate,
-} = authClient.triggersApi();
+} = authRuntime;
 ```
-
-These functions are called by the Better Auth adapter during CRUD operations.
 
 ## Type Safety
 
@@ -249,21 +244,21 @@ Triggers are fully typed based on your schema:
 triggers: {
   user: {
     // `data` is typed as Infer<Schema['tables']['user']['validator']>
-    beforeCreate: async (ctx, data) => {
+    beforeCreate: async (data) => {
       data.email; // string
       data.name;  // string | null
       return data;
     },
 
     // `doc` includes id and system fields
-    onCreate: async (ctx, doc) => {
+    onCreate: async (doc) => {
       doc.id;           // Id<'user'>
       doc._creationTime; // number
       doc.email;         // string
     },
 
     // `update` is Partial of the validator
-    beforeUpdate: async (ctx, doc, update) => {
+    beforeUpdate: async (doc, update) => {
       update.name;  // string | null | undefined
       update.email; // string | undefined
       return update;

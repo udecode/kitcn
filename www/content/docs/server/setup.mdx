@@ -38,6 +38,7 @@ These import paths assume `convex.json` has `"functions": "convex/functions"`. I
 
 `convex/functions/generated.ts` is generated and is the canonical server contract.
 It includes `initCRPC` and ORM helpers when `relations` exists.
+It also exports `defineAuth` for `auth.ts` authoring and includes Better Auth runtime wiring when `auth.ts` has a default export.
 Use `.create()` directly, then chain `.meta()`/middleware as needed.
 
 ### Payload Transformer (Optional)
@@ -299,7 +300,7 @@ convex/
 │   ├── user.ts       # → crpc.user.list, crpc.user.create
 │   ├── session.ts    # → crpc.session.getByToken
 │   ├── account.ts    # → crpc.account.list, crpc.account.delete
-│   └── generated.ts  # Generated ORM + context contract
+│   └── generated.ts  # Generated server contract (ORM + initCRPC + auth runtime)
 ├── lib/
 │   └── crpc.ts       # Setup + procedure variants
 └── shared/           # Client-importable

@@ -32,11 +32,11 @@ Ensure you have [Auth Server](/docs/auth/server) set up before adding admin feat
 
 Add the admin plugin to your auth options:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {5-12}
+```ts title="convex/functions/auth.ts" showLineNumbers {2,5-13}
 import { admin } from 'better-auth/plugins';
+import { defineAuth } from './generated';
 
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     // ... existing config
     plugins: [
       admin({
@@ -48,7 +48,7 @@ const getAuthOptions = (ctx: GenericCtx) =>
       }),
       // ... other plugins
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ### Admin Assignment via Environment
@@ -61,25 +61,25 @@ ADMIN=admin@example.com,other@example.com
 
 Assign admin role on user creation:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {5-15}
-export const authClient = createClient<DataModel, typeof schema>({
+```ts title="convex/functions/auth.ts" showLineNumbers {1,4-15}
+import { defineAuth } from './generated';
+
+export default defineAuth((ctx) => ({
   // ... config
   triggers: {
     user: {
-      beforeCreate: async (_ctx, data) => {
+      beforeCreate: async (data) => {
         const env = getEnv();
         const adminEmails = env.ADMIN;
-
         const role =
           data.role !== 'admin' && adminEmails?.includes(data.email)
             ? 'admin'
             : data.role;
-
         return { ...data, role };
       },
     },
   },
-});
+}));
 ```
 
 ## 2. Client Configuration

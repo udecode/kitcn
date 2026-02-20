@@ -38,8 +38,7 @@ import type {
   MutationCtx,
   QueryCtx,
 } from '../functions/_generated/server';
-import { getAuth } from '../functions/auth';
-import { initCRPC, type OrmCtx } from '../functions/generated';
+import { getAuth, initCRPC, type OrmCtx } from '../functions/generated';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';

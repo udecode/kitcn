@@ -595,44 +595,21 @@ If the command reports local backend is not running, start `bunx better-convex d
 This initializes `JWKS` (and `BETTER_AUTH_SECRET`) if missing when deployment access is healthy.
 Malformed `JWKS` values can fail Convex module analysis during push/codegen.
 
-### 6.3 Create auth client and options
+### 6.3 Define auth contract
 
 **Create:** `convex/functions/auth.ts`
 
 ```ts
-import { type BetterAuthOptions, betterAuth } from "better-auth";
-import {
-  type AuthFunctions,
-  convex,
-  createApi,
-  createClient,
-} from "better-convex/auth";
-
-import { withOrm, type GenericCtx, type MutationCtx } from "../functions/generated";
-import { internal } from "./_generated/api";
-import type { DataModel } from "./_generated/dataModel";
+import { convex } from "better-convex/auth";
 import authConfig from "./auth.config";
-import schema from "./schema";
+import { defineAuth } from "./generated";
 
-const authFunctions: AuthFunctions = internal.auth;
-
-export const authClient = createClient<
-  DataModel,
-  typeof schema,
-  MutationCtx
->({
-  authFunctions,
-  schema,
-  context: withOrm,
-});
-
-export const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => {
+  return {
     baseURL:
       process.env.SITE_URL ??
       process.env.NEXT_PUBLIC_SITE_URL ??
       "http://localhost:3000",
-    database: authClient.adapter(ctx, getAuthOptions),
     plugins: [
       convex({
         authConfig,
@@ -648,45 +625,30 @@ export const getAuthOptions = (ctx: GenericCtx) =>
         process.env.NEXT_PUBLIC_SITE_URL ??
         "http://localhost:3000",
     ],
-  }) satisfies BetterAuthOptions;
-
-export const getAuth = (ctx: GenericCtx) => betterAuth(getAuthOptions(ctx));
-
-export const {
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
-} = authClient.triggersApi();
-
-export const {
-  create,
-  deleteMany,
-  deleteOne,
-  findMany,
-  findOne,
-  updateMany,
-  updateOne,
-  getLatestJwks,
-  rotateKeys,
-} = createApi(schema, getAuth, {
-  context: withOrm,
-  skipValidation: true,
+    triggers: {
+      user: {
+        beforeCreate: async (data) => {
+          const adminEmails = (process.env.ADMIN ?? "").split(",");
+          const role =
+            data.role !== "admin" && adminEmails.includes(data.email)
+              ? "admin"
+              : data.role;
+          return { ...data, role };
+        },
+      },
+    },
+  };
 });
-
-// biome-ignore lint/suspicious/noExplicitAny: required for CLI schema tooling
-export const auth = betterAuth(getAuthOptions({} as any));
 ```
 
-Canonical rule: always use `getAuth(ctx)` + `authClient.adapter(ctx, getAuthOptions)`.
+Canonical rule:
 
-Typing note:
+1. Run `bunx better-convex dev` or `bunx better-convex codegen` first to generate `convex/functions/generated.ts`.
+2. `auth.ts` default-exports `defineAuth((ctx) => ({ ...options, triggers }))` imported from `./generated`.
+3. Import runtime auth contract (`getAuth`, `authClient`, CRUD/triggers, `auth`) from `convex/functions/generated.ts`.
+4. If `auth.ts` is missing or incomplete, codegen still succeeds and generated runtime exports `authEnabled = false` with setup guidance at call time.
 
-1. Import `GenericCtx` from `../functions/generated` (generated) instead of redefining it locally.
-2. Import `MutationCtx` from `../functions/generated` (generated) instead of deriving it inline.
-3. Do not import a `GenericCtx` type from `better-convex/auth` for this file.
+Do not manually create `authClient`, `createApi` exports, or static `auth` in `auth.ts`.
 
 ### 6.3.1 User session query module
 
@@ -700,7 +662,7 @@ Ordering note:
 import { z } from "zod";
 import { getHeaders } from "better-convex/auth";
 
-import { getAuth } from "./auth";
+import { getAuth } from "./generated";
 import { publicQuery } from "../lib/crpc";
 
 export const getSessionUser = publicQuery
@@ -746,7 +708,7 @@ export const getIsAuthenticated = publicQuery
 
 ```ts
 import type { Doc } from "../functions/_generated/dataModel";
-import type { getAuth } from "../functions/auth";
+import type { getAuth } from "../functions/generated";
 import type { Select } from "./api";
 
 export type Auth = ReturnType<typeof getAuth>;
@@ -772,7 +734,7 @@ Otherwise add these tables:
 
 Keep all auth reads/writes on ORM table definitions in `convex/functions/schema.ts`.
 
-### 6.5 Required polyfill for auth HTTP runtime
+### 6.5 Conditional polyfill for auth HTTP runtime
 
 **Create:** `convex/lib/http-polyfills.ts`
 
@@ -828,7 +790,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { router } from "../lib/crpc";
-import { getAuth } from "./auth";
+import { getAuth } from "./generated";
 
 const app = new Hono();
 
@@ -892,7 +854,7 @@ After non-auth baseline is green, replace `convex/lib/crpc.ts` with this auth-aw
 import { getHeaders } from "better-convex/auth";
 import { CRPCError } from "better-convex/server";
 
-import { getAuth } from "../functions/auth";
+import { getAuth } from "../functions/generated";
 import { initCRPC } from "../functions/generated";
 
 const c = initCRPC

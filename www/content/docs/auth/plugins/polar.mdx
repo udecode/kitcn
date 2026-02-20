@@ -62,7 +62,7 @@ export const getPolarClient = () =>
 
 ### Better Auth with Polar Plugin
 
-```ts title="convex/functions/auth.ts" showLineNumbers {2,5-6,11-53}
+```ts title="convex/functions/auth.ts" showLineNumbers {2,7,10-53}
 // IMPORTANT: Import polyfills FIRST
 import '../lib/polar-polyfills';
 
@@ -70,9 +70,9 @@ import { checkout, polar, portal, usage, webhooks } from '@polar-sh/better-auth'
 import { Polar } from '@polar-sh/sdk';
 import type { ActionCtx } from './_generated/server';
 import { internal } from './_generated/api';
+import { defineAuth } from './generated';
 
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     // ... existing config
     plugins: [
       polar({
@@ -125,20 +125,22 @@ const getAuthOptions = (ctx: GenericCtx) =>
         ],
       }),
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ### Customer Creation via Trigger
 
 Create Polar customer asynchronously when user signs up:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {5-11}
-export const authClient = createClient<DataModel, typeof schema>({
+```ts title="convex/functions/auth.ts" showLineNumbers {1,4-14}
+import { defineAuth } from './generated';
+
+export default defineAuth((ctx) => ({
   // ... config
   triggers: {
     user: {
-      onCreate: async (ctx, user) => {
-        // Create Polar customer via scheduler
+      onCreate: async (user) => {
+        // Create Polar customer via scheduler from defineAuth closure ctx
         await ctx.scheduler.runAfter(0, internal.polarCustomer.createCustomer, {
           email: user.email,
           name: user.name || user.username,
@@ -147,7 +149,7 @@ export const authClient = createClient<DataModel, typeof schema>({
       },
     },
   },
-});
+}));
 ```
 
 ## 3. Client Configuration
@@ -675,9 +677,10 @@ export const resumeSubscription = authAction
 
 Sync user deletion with Polar:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {3-10}
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+```ts title="convex/functions/auth.ts" showLineNumbers {1,4-14}
+import { defineAuth } from './generated';
+
+export default defineAuth((ctx) => ({
     user: {
       deleteUser: {
         enabled: true,
@@ -689,7 +692,7 @@ const getAuthOptions = (ctx: GenericCtx) =>
         },
       },
     },
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ## Environment Variables

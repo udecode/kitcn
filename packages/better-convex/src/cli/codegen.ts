@@ -21,6 +21,8 @@ const VALID_IDENTIFIER_RE = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 /** Pattern to strip .ts extension */
 const TS_EXTENSION_RE = /\.ts$/;
+/** Pattern to detect default exports in auth contract files. */
+const DEFAULT_EXPORT_RE = /\bexport\s+default\b/;
 
 type ApiTreeNode = {
   children: Record<string, ApiTreeNode>;
@@ -133,11 +135,19 @@ function getGeneratedServerOutputFile(functionsDir: string): string {
   return path.join(functionsDir, 'generated.ts');
 }
 
+type GeneratedAuthContract = {
+  hasAuthFile: boolean;
+  hasAuthDefaultExport: boolean;
+};
+
 function emitGeneratedServerFile(
   outputFile: string,
   functionsDir: string,
-  hasRelationsExport: boolean
+  hasRelationsExport: boolean,
+  authContract: GeneratedAuthContract
 ): string {
+  const asSingleQuotedImport = (importPath: string) =>
+    `'${importPath.replaceAll("'", "\\'")}'`;
   const serverTypesImportPath = getServerTypesImportPath(
     outputFile,
     functionsDir
@@ -148,10 +158,97 @@ function emitGeneratedServerFile(
     functionsDir
   );
   const schemaImportPath = getSchemaImportPath(outputFile, functionsDir);
+  const serverTypesImportLiteral = asSingleQuotedImport(serverTypesImportPath);
+  const dataModelImportLiteral = asSingleQuotedImport(dataModelImportPath);
+  const runtimeApiImportLiteral = asSingleQuotedImport(runtimeApiImportPath);
+  const schemaImportLiteral = asSingleQuotedImport(schemaImportPath);
   const moduleNamespace = path.basename(outputFile, '.ts');
   const ormFunctionsAccessor = VALID_IDENTIFIER_RE.test(moduleNamespace)
     ? `.${moduleNamespace}`
     : `[${JSON.stringify(moduleNamespace)}]`;
+  const hasAuthFile = authContract.hasAuthFile;
+  const hasAuthDefaultExport = authContract.hasAuthDefaultExport;
+  const disabledAuthReasonKind = hasAuthFile
+    ? hasAuthDefaultExport
+      ? 'default_export_unavailable'
+      : 'missing_default_export'
+    : 'missing_auth_file';
+
+  const authRuntimeImportSpecifiers = [
+    'type BetterAuthOptionsWithoutDatabase',
+    'defineAuth as baseDefineAuth',
+    'createAuthRuntime',
+    'type GenericAuthDefinition',
+    'getGeneratedAuthDisabledReason',
+    hasAuthDefaultExport
+      ? 'resolveGeneratedAuthDefinition'
+      : 'createDisabledAuthRuntime',
+  ];
+  const authRuntimeImports = `import {
+  ${authRuntimeImportSpecifiers.join(',\n  ')},
+} from "better-convex/auth";`;
+  const authDefinitionImport = hasAuthDefaultExport
+    ? "import * as authDefinitionModule from './auth';"
+    : '';
+
+  const authBody = `
+${
+  hasAuthDefaultExport
+    ? `type AuthDefinitionFromFile = Extract<
+  typeof authDefinitionModule extends { default: infer T } ? T : never,
+  (...args: unknown[]) => unknown
+>;
+
+const authDefinition = ((ctx: GenericCtx) =>
+  resolveGeneratedAuthDefinition<AuthDefinitionFromFile>(
+    authDefinitionModule,
+    getGeneratedAuthDisabledReason(${JSON.stringify(disabledAuthReasonKind)})
+  )(ctx)) as AuthDefinitionFromFile;
+
+`
+    : ''
+}
+const authRuntime = ${
+    hasAuthDefaultExport
+      ? `createAuthRuntime<
+  DataModel,
+  typeof schema,
+  MutationCtx,
+  GenericCtx,
+  ReturnType<AuthDefinitionFromFile>
+>({
+  internal,
+  moduleName: ${JSON.stringify(moduleNamespace)},
+  schema,
+  auth: authDefinition,${hasRelationsExport ? '\n  context: withOrm,' : ''}
+})`
+      : `createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({
+  reason: getGeneratedAuthDisabledReason(${JSON.stringify(disabledAuthReasonKind)}),
+})`
+  };
+
+export const {
+  authEnabled,
+  authClient,
+  getAuth,
+  auth,
+  create,
+  deleteMany,
+  deleteOne,
+  findMany,
+  findOne,
+  updateMany,
+  updateOne,
+  getLatestJwks,
+  rotateKeys,
+  beforeCreate,
+  beforeDelete,
+  beforeUpdate,
+  onCreate,
+  onDelete,
+  onUpdate,
+} = authRuntime;
+`;
 
   if (!hasRelationsExport) {
     return `// biome-ignore-all format: generated
@@ -159,17 +256,28 @@ function emitGeneratedServerFile(
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
 
 import { initCRPC as baseInitCRPC } from "better-convex/server";
-import type { DataModel } from ${JSON.stringify(dataModelImportPath)};
+${hasAuthDefaultExport ? `import { internal } from ${runtimeApiImportLiteral};` : ''}
+import type { DataModel } from ${dataModelImportLiteral};
 import type {
   ActionCtx as ServerActionCtx,
   MutationCtx as ServerMutationCtx,
   QueryCtx as ServerQueryCtx,
-} from ${JSON.stringify(serverTypesImportPath)};
+} from ${serverTypesImportLiteral};
+${authRuntimeImports}
+${authDefinitionImport ? `${authDefinitionImport}\n` : ''}import schema from ${schemaImportLiteral};
 
 export type QueryCtx = ServerQueryCtx;
 export type MutationCtx = ServerMutationCtx;
 export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;
 export const initCRPC = baseInitCRPC.dataModel<DataModel>();
+export function defineAuth<
+  AuthOptions extends BetterAuthOptionsWithoutDatabase = BetterAuthOptionsWithoutDatabase,
+>(
+  definition: GenericAuthDefinition<GenericCtx, DataModel, typeof schema, AuthOptions>
+) {
+  return baseDefineAuth(definition);
+}
+${authBody}
 `;
   }
 
@@ -177,17 +285,18 @@ export const initCRPC = baseInitCRPC.dataModel<DataModel>();
 // This file is auto-generated by better-convex
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
 
-import { createOrm, type GenericOrmCtx, type OrmFunctions } from "better-convex/orm";
-import { initCRPC as baseInitCRPC } from "better-convex/server";
-import type { DataModel } from ${JSON.stringify(dataModelImportPath)};
+${authRuntimeImports}
+import { createOrm, type GenericOrmCtx, type OrmFunctions } from 'better-convex/orm';
+import { initCRPC as baseInitCRPC } from 'better-convex/server';
+import { internal } from ${runtimeApiImportLiteral};
+import type { DataModel } from ${dataModelImportLiteral};
 import type {
   ActionCtx as ServerActionCtx,
   MutationCtx as ServerMutationCtx,
   QueryCtx as ServerQueryCtx,
-} from ${JSON.stringify(serverTypesImportPath)};
-import { internalMutation } from ${JSON.stringify(serverTypesImportPath)};
-import { internal } from ${JSON.stringify(runtimeApiImportPath)};
-import { relations } from ${JSON.stringify(schemaImportPath)};
+} from ${serverTypesImportLiteral};
+import { internalMutation } from ${serverTypesImportLiteral};
+${authDefinitionImport ? `${authDefinitionImport}\n` : ''}import schema, { relations } from ${schemaImportLiteral};
 
 const ormFunctions = (internal as unknown as Record<string, OrmFunctions>)${ormFunctionsAccessor};
 
@@ -212,6 +321,14 @@ export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({
 });
 
 export const { scheduledMutationBatch, scheduledDelete } = orm.api();
+export function defineAuth<
+  AuthOptions extends BetterAuthOptionsWithoutDatabase = BetterAuthOptionsWithoutDatabase,
+>(
+  definition: GenericAuthDefinition<GenericCtx, DataModel, typeof schema, AuthOptions>
+) {
+  return baseDefineAuth(definition);
+}
+${authBody}
 `;
 }
 
@@ -238,6 +355,14 @@ function hasNamedExport(filePath: string, exportName: string): boolean {
   }
 
   return false;
+}
+
+function hasDefaultExport(filePath: string): boolean {
+  if (!fs.existsSync(filePath)) {
+    return false;
+  }
+  const source = fs.readFileSync(filePath, 'utf-8');
+  return DEFAULT_EXPORT_RE.test(source);
 }
 
 function createApiTree(meta: Meta): ApiTreeNode {
@@ -626,6 +751,10 @@ export async function generateMeta(
     path.join(functionsDir, 'http.ts'),
     'httpRouter'
   );
+  const authFilePath = path.join(functionsDir, 'auth.ts');
+  const hasAuthFile = fs.existsSync(authFilePath);
+  const hasAuthDefaultExport = hasDefaultExport(authFilePath);
+  const authContract = { hasAuthFile, hasAuthDefaultExport };
 
   const apiTree = createApiTree(meta);
   const hasRootHttpNamespace =
@@ -704,7 +833,8 @@ ${optionalTypeExports}
   const serverOutput = emitGeneratedServerFile(
     serverOutputFile,
     functionsDir,
-    hasRelationsExport
+    hasRelationsExport,
+    authContract
   );
 
   // Ensure output directory exists

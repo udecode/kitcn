@@ -91,14 +91,15 @@ function LoginForm() {
 
 First enable email/password in your Convex auth config:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {3-5}
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
-    emailAndPassword: {
-      enabled: true,
-    },
-    // ... rest of config
-  }) satisfies BetterAuthOptions;
+```ts title="convex/functions/auth.ts" showLineNumbers {1,4-8}
+import { defineAuth } from './generated';
+
+export default defineAuth((ctx) => ({
+  emailAndPassword: {
+    enabled: true,
+  },
+  // ... rest of config
+}));
 ```
 
 Then use the sign in/up hooks:

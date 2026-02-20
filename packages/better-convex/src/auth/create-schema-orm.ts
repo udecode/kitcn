@@ -74,6 +74,11 @@ const LEADING_DIGIT_REGEX = /^[0-9]/;
 const renderObjectKey = (value: string) =>
   VALID_IDENTIFIER_REGEX.test(value) ? value : JSON.stringify(value);
 
+const renderPropertyAccess = (objectName: string, propertyName: string) =>
+  VALID_IDENTIFIER_REGEX.test(propertyName)
+    ? `${objectName}.${propertyName}`
+    : `${objectName}[${JSON.stringify(propertyName)}]`;
+
 const toIdentifier = (value: string) => {
   const normalized = value.replace(/[^a-zA-Z0-9_$]/g, '_');
   if (!normalized) {
@@ -230,7 +235,7 @@ export const createSchemaOrm = async ({
           attr.references.model,
           attr.references.field
         );
-        expression += `.references(() => ${referencedEntry.varName}[${JSON.stringify(targetField)}])`;
+        expression += `.references(() => ${renderPropertyAccess(referencedEntry.varName, targetField)})`;
       }
 
       return `    ${key}: ${expression},`;
@@ -247,7 +252,7 @@ export const createSchemaOrm = async ({
         state.ormImports.add('index');
 
         const fieldsCall = indexArray
-          .map((fieldName) => `${entry.varName}[${JSON.stringify(fieldName)}]`)
+          .map((fieldName) => renderPropertyAccess(entry.varName, fieldName))
           .join(', ');
 
         return `index(${JSON.stringify(indexName)}).on(${fieldsCall})`;

@@ -313,7 +313,7 @@ export const userTable = convexTable('user', {/* ... */}, () => [
 ## Better Auth Note
 
 Auth triggers (`triggers: { user, session }`) are separate from DB triggers.  
-For DB-level side effects, keep schema triggers and use `context: withOrm` in auth setup.
+For DB-level side effects, keep schema triggers; generated auth wiring in `convex/functions/generated.ts` handles ORM context when `relations` exists.
 
 ## Best Practices
 

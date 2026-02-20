@@ -58,7 +58,7 @@ import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { router } from '../lib/crpc';
-import { getAuth } from './auth';
+import { getAuth } from './generated';
 import { todosRouter } from '../routers/todos';
 import { health } from '../routers/health';
 

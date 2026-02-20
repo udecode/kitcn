@@ -6,7 +6,7 @@ Covers Better Auth integration with Convex: server setup, client hooks, triggers
 
 **Local approach** — auth tables live in your app schema (not a component). Triggers directly access app tables via `ctx.orm`. Single transaction.
 
-**Context-aware adapter** — `authClient.adapter(ctx, getAuthOptions)` auto-selects:
+**Context-aware adapter** — generated `getAuth(ctx)` auto-selects:
 
 | Context | Adapter | Behavior |
 |---------|---------|----------|
@@ -67,72 +67,50 @@ export default {
 } satisfies AuthConfig;
 ```
 
-### 2. Create Auth Client
+### 2. Define Auth Contract
 
 ```ts
 // convex/functions/auth.ts
-import { betterAuth, type BetterAuthOptions } from 'better-auth';
-import { convex, createClient, createApi, type AuthFunctions } from 'better-convex/auth';
-import { internal } from './_generated/api';
-import schema from './schema';
+import { admin } from 'better-auth/plugins';
+import { convex } from 'better-convex/auth';
 import authConfig from './auth.config';
-import { type GenericCtx, withOrm } from './generated';
-const authFunctions: AuthFunctions = internal.auth;
+import { defineAuth } from './generated';
 
-// Client with triggers
-export const authClient = createClient<DataModel, typeof schema>({
-  authFunctions,
-  schema,
-  context: withOrm, // enrich auth mutation + trigger ctx with ctx.orm
+export default defineAuth((ctx) => ({
+  baseURL: process.env.SITE_URL!,
+  plugins: [
+    convex({
+      authConfig,
+      jwks: process.env.JWKS,
+    }),
+    admin(),
+  ],
+  trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
   triggers: {
     user: {
-      beforeCreate: async (_ctx, data) => {
-        const username = data.username?.trim() || data.email?.split('@')[0] || `user-${Date.now()}`;
+      beforeCreate: async (data) => {
+        const username =
+          data.username?.trim() ?? data.email?.split('@')[0] ?? `user-${Date.now()}`;
         return { ...data, username };
       },
-      onCreate: async (ctx, user) => {
-        await ctx.orm.insert(profiles).values({ userId: user.id, bio: '' });
+      onCreate: async (user) => {
+        void user;
+        void ctx; // closure ctx for orm/scheduler side-effects
       },
     },
   },
-});
-
-// Auth options factory
-export const getAuthOptions = (ctx: GenericCtx) => ({
-  baseURL: process.env.SITE_URL!,
-  database: authClient.adapter(ctx, getAuthOptions),
-  plugins: [
-    convex({ authConfig, jwks: process.env.JWKS }),
-    admin(),
-  ],
-  session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 * 15 },
-  socialProviders: {
-    google: { clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET! },
-  },
-  trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
-}) satisfies BetterAuthOptions;
-
-// Auth instance for all contexts
-export const getAuth = (ctx: GenericCtx) => betterAuth(getAuthOptions(ctx));
-
-// Export triggers for Better Auth adapter
-export const { beforeCreate, beforeDelete, beforeUpdate, onCreate, onDelete, onUpdate } =
-  authClient.triggersApi();
-
-// Export CRUD + key functions
-export const { create, deleteMany, deleteOne, findMany, findOne, updateMany, updateOne, getLatestJwks, rotateKeys } =
-  createApi(schema, getAuth, { context: withOrm, skipValidation: true });
-
-// For Better Auth CLI
-export const auth = betterAuth(getAuthOptions({} as any));
+}));
 ```
+
+Run `better-convex dev` / `better-convex codegen` first, then define `auth.ts`, then rerun codegen.  
+Use runtime exports (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `auth`) from `convex/functions/generated.ts`.
 
 ### 3. Schema (ORM API)
 
 Generate with CLI or define manually:
 
 ```bash
-npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/auth.ts
+npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
 ```
 
 Manual template:
@@ -193,7 +171,7 @@ export const jwks = convexTable('jwks', {
 });
 ```
 
-### 4. Polyfills (Required)
+### 4. Polyfills (Conditional)
 
 ```ts
 // convex/lib/http-polyfills.ts — import at top of http.ts before other imports
@@ -221,7 +199,7 @@ import { authMiddleware } from 'better-convex/auth';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { getAuth } from './auth';
+import { getAuth } from './generated';
 
 const app = new Hono();
 app.use('/api/*', cors({
@@ -418,38 +396,39 @@ import { ConvexProviderWithAuth } from 'better-convex/react';
 
 ## Auth Triggers
 
-Pass to `createClient({ triggers })`. Before triggers run in same transaction. After triggers run post-write.
+Define triggers in `auth.ts` via `defineAuth((ctx) => ({ triggers }))`. Before triggers run in the same transaction; after triggers run post-write.
 
 ### User Triggers
 
 | Trigger | Signature | Return |
 |---------|-----------|--------|
-| `beforeCreate` | `(ctx, data) => data \| undefined` | Modified data |
-| `onCreate` | `(ctx, doc) => void` | Side effects |
-| `beforeUpdate` | `(ctx, doc, update) => update \| undefined` | Modified update |
-| `onUpdate` | `(ctx, newDoc, oldDoc) => void` | Sync changes |
-| `beforeDelete` | `(ctx, doc) => doc \| undefined` | Modified doc |
-| `onDelete` | `(ctx, doc) => void` | Cleanup |
+| `beforeCreate` | `(data) => data \| undefined` | Modified data |
+| `onCreate` | `(doc) => void` | Side effects |
+| `beforeUpdate` | `(doc, update) => update \| undefined` | Modified update |
+| `onUpdate` | `(newDoc, oldDoc) => void` | Sync changes |
+| `beforeDelete` | `(doc) => doc \| undefined` | Modified doc |
+| `onDelete` | `(doc) => void` | Cleanup |
 
 ```ts
+// `ctx` is from defineAuth((ctx) => ({ triggers: ... })) closure.
 triggers: {
   user: {
-    beforeCreate: async (ctx, data) => {
+    beforeCreate: async (data) => {
       const username = await generateUniqueUsername(ctx, data.name);
       const role = adminEmails.includes(data.email) ? 'admin' : 'user';
       return { ...data, username, role };
     },
-    onCreate: async (ctx, user) => {
+    onCreate: async (user) => {
       await ctx.orm.insert(profiles).values({ userId: user.id, bio: '' });
       await ctx.scheduler.runAfter(0, internal.emails.sendWelcome, { userId: user.id });
     },
-    onUpdate: async (ctx, newDoc, oldDoc) => {
+    onUpdate: async (newDoc, oldDoc) => {
       if (newDoc.image !== oldDoc.image) {
         const profile = await ctx.orm.query.profiles.findFirst({ where: { userId: newDoc.id } });
         if (profile) await ctx.orm.update(profiles).set({ avatar: newDoc.image }).where(eq(profiles.id, profile.id));
       }
     },
-    onDelete: async (ctx, user) => {
+    onDelete: async (user) => {
       const profiles = await ctx.orm.query.profiles.findMany({ where: { userId: user.id }, limit: 1000 });
       for (const p of profiles) await ctx.orm.delete(profilesTable).where(eq(profilesTable.id, p.id));
     },
@@ -462,7 +441,7 @@ triggers: {
 ```ts
 triggers: {
   session: {
-    onCreate: async (ctx, session) => {
+    onCreate: async (session) => {
       if (!session.activeOrganizationId) {
         const user = await ctx.orm.query.user.findFirst({ where: { id: session.userId } });
         if (user?.lastActiveOrganizationId) {
@@ -475,11 +454,17 @@ triggers: {
 }
 ```
 
-### Export Trigger Functions
+### Trigger Runtime Exports
 
 ```ts
-export const { beforeCreate, beforeDelete, beforeUpdate, onCreate, onDelete, onUpdate } =
-  authClient.triggersApi();
+import {
+  beforeCreate,
+  beforeDelete,
+  beforeUpdate,
+  onCreate,
+  onDelete,
+  onUpdate,
+} from './generated';
 ```
 
 ### Type Safety
@@ -490,4 +475,4 @@ Triggers are typed from schema: `data` is `Infer<Schema['tables']['user']['valid
 
 ## Auth vs DB Triggers
 
-Auth triggers (`createClient({ triggers })`) handle auth lifecycle events. DB triggers (`convexTable('user', {...}, () => [...])`) handle database-level side effects (aggregates, cascades, counters). Use `context: withOrm` so both can access `ctx.orm`.
+Auth triggers (`defineAuth(...).triggers`) handle auth lifecycle events. DB triggers (`convexTable('user', {...}, () => [...])`) handle database-level side effects (aggregates, cascades, counters).

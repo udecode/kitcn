@@ -178,6 +178,7 @@ Create `.env.local` with your Convex URLs:
 Use the generated server contract from `convex/functions/generated.ts`.
 `convex/functions/generated.ts` is generated and is the canonical server contract.
 It includes `initCRPC` and ORM helpers when `relations` exists.
+For Better Auth setups, run codegen first, then define `convex/functions/auth.ts` with `defineAuth` imported from `./generated`; this file remains the canonical auth runtime contract (`authEnabled`, `getAuth`, CRUD/triggers, and `auth`).
 If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
 
 Now create the cRPC builder in `convex/lib/crpc.ts`:

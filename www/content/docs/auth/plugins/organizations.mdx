@@ -32,12 +32,12 @@ Ensure you have [Auth Server](/docs/auth/server) set up before adding organizati
 
 Add the organization plugin to your auth options:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {5-32}
+```ts title="convex/functions/auth.ts" showLineNumbers {3,7-33}
 import { organization } from 'better-auth/plugins';
 import type { ActionCtx } from './_generated/server';
+import { defineAuth } from './generated';
 
-export const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     // ... existing config
     plugins: [
       convex({ authConfig, jwks: process.env.JWKS }),
@@ -71,7 +71,7 @@ export const getAuthOptions = (ctx: GenericCtx) =>
         },
       }),
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ## 2. Client Configuration

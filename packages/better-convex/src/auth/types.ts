@@ -1,3 +1,1 @@
-import type { betterAuth } from 'better-auth';
-
-export type GetAuth = (ctx: any) => ReturnType<typeof betterAuth>;
+export type GetAuth<Ctx = unknown, Auth = unknown> = (ctx: Ctx) => Auth;

@@ -11,9 +11,9 @@ See [Better Auth Admin Plugin](https://www.better-auth.com/docs/plugins/admin) f
 ```ts
 // convex/functions/auth.ts
 import { admin } from 'better-auth/plugins';
+import { defineAuth } from './generated';
 
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     plugins: [
       admin({
         defaultRole: 'user',
@@ -23,7 +23,7 @@ const getAuthOptions = (ctx: GenericCtx) =>
         // bannedUserMessage: 'You have been banned',
       }),
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ### Admin Assignment via Environment
@@ -35,23 +35,23 @@ ADMIN=admin@domain.test,ops@domain.test
 
 ```ts
 // convex/functions/auth.ts
-export const authClient = createClient<DataModel, typeof schema>({
+import { defineAuth } from './generated';
+
+export default defineAuth((ctx) => ({
   triggers: {
     user: {
-      beforeCreate: async (_ctx, data) => {
+      beforeCreate: async (data) => {
         const env = getEnv();
         const adminEmails = env.ADMIN;
-
         const role =
           data.role !== 'admin' && adminEmails?.includes(data.email)
             ? 'admin'
             : data.role;
-
         return { ...data, role };
       },
     },
   },
-});
+}));
 ```
 
 ## Client Config

@@ -625,18 +625,26 @@ export const deleteManyHandler = async (
   });
 };
 
-export const createApi = <Schema extends SchemaDefinition<any, any>>(
+export const createApi = <
+  Schema extends SchemaDefinition<any, any>,
+  Ctx = unknown,
+  Auth = unknown,
+>(
   schema: Schema,
-  getAuth: GetAuth,
+  getAuth: GetAuth<Ctx, Auth>,
   options?: {
     internalMutation?: typeof internalMutationGeneric;
     context?: (ctx: any) => any | Promise<any>;
-    /** Skip input validation for smaller generated types. Since these are internal functions, validation is optional. */
-    skipValidation?: boolean;
+    /** Validate input validators against auth table schemas. Defaults to false for smaller generated types. */
+    validateInput?: boolean;
   }
 ) => {
-  const betterAuthSchema = getAuthTables(getAuth({} as any).options);
-  const { internalMutation, skipValidation, context } = options ?? {};
+  const { internalMutation, validateInput = false, context } = options ?? {};
+  let betterAuthSchema: ReturnType<typeof getAuthTables> | undefined;
+  const getBetterAuthSchema = () => {
+    betterAuthSchema ??= getAuthTables((getAuth({} as Ctx) as any).options);
+    return betterAuthSchema;
+  };
   const mutationBuilderBase = internalMutation ?? internalMutationGeneric;
   const mutationBuilder = context
     ? customMutation(
@@ -645,7 +653,7 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
       )
     : mutationBuilderBase;
 
-  // Generic validators for skipValidation mode (much smaller generated types)
+  // Generic validators for non-validated mode (much smaller generated types)
   const anyInput = v.object({
     data: v.any(),
     model: v.string(),
@@ -661,15 +669,17 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
   });
 
   // Typed validators (only auth tables)
-  const authTableNames = new Set(Object.keys(betterAuthSchema));
+  const authSchemaForValidation = validateInput
+    ? getBetterAuthSchema()
+    : ({} as ReturnType<typeof getAuthTables>);
+  const authTableNames = new Set(Object.keys(authSchemaForValidation));
   const authTables = Object.entries(schema.tables).filter(([name]) =>
     authTableNames.has(name)
   );
   const authTableKeys = authTables.map(([name]) => name);
 
-  const createInput = skipValidation
-    ? anyInput
-    : v.union(
+  const createInput = validateInput
+    ? v.union(
         ...authTables.map(([model, table]) => {
           const fields = partial((table as any).validator.fields);
           return v.object({
@@ -677,11 +687,11 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
             model: v.literal(model),
           });
         })
-      );
+      )
+    : anyInput;
 
-  const deleteInput = skipValidation
-    ? anyInputWithWhere
-    : v.union(
+  const deleteInput = validateInput
+    ? v.union(
         ...authTableKeys.map((tableName) =>
           v.object({
             model: v.literal(tableName),
@@ -692,15 +702,15 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
             ),
           })
         )
-      );
+      )
+    : anyInputWithWhere;
 
-  const modelValidator = skipValidation
-    ? v.string()
-    : v.union(...authTableKeys.map((model) => v.literal(model)));
+  const modelValidator = validateInput
+    ? v.union(...authTableKeys.map((model) => v.literal(model)))
+    : v.string();
 
-  const updateInput = skipValidation
-    ? anyInputWithUpdate
-    : v.union(
+  const updateInput = validateInput
+    ? v.union(
         ...authTables.map(
           ([tableName, table]: [string, Schema['tables'][string]]) => {
             const fields = partial(table.validator.fields);
@@ -711,7 +721,8 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
             });
           }
         )
-      );
+      )
+    : anyInputWithUpdate;
 
   return {
     create: mutationBuilder({
@@ -722,7 +733,7 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         onCreateHandle: v.optional(v.string()),
       },
       handler: async (ctx, args) =>
-        createHandler(ctx, args, schema, betterAuthSchema),
+        createHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     deleteMany: mutationBuilder({
       args: {
@@ -732,7 +743,7 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         onDeleteHandle: v.optional(v.string()),
       },
       handler: async (ctx, args) =>
-        deleteManyHandler(ctx, args, schema, betterAuthSchema),
+        deleteManyHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     deleteOne: mutationBuilder({
       args: {
@@ -741,7 +752,7 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         onDeleteHandle: v.optional(v.string()),
       },
       handler: async (ctx, args) =>
-        deleteOneHandler(ctx, args, schema, betterAuthSchema),
+        deleteOneHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     findMany: internalQueryGeneric({
       args: {
@@ -759,7 +770,7 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         join: v.optional(v.any()),
       },
       handler: async (ctx, args) =>
-        findManyHandler(ctx, args, schema, betterAuthSchema),
+        findManyHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     findOne: internalQueryGeneric({
       args: {
@@ -769,7 +780,7 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         join: v.optional(v.any()),
       },
       handler: async (ctx, args) =>
-        findOneHandler(ctx, args, schema, betterAuthSchema),
+        findOneHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     updateMany: mutationBuilder({
       args: {
@@ -779,7 +790,7 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         onUpdateHandle: v.optional(v.string()),
       },
       handler: async (ctx, args) =>
-        updateManyHandler(ctx, args, schema, betterAuthSchema),
+        updateManyHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     updateOne: mutationBuilder({
       args: {
@@ -788,22 +799,26 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         onUpdateHandle: v.optional(v.string()),
       },
       handler: async (ctx, args) =>
-        updateOneHandler(ctx, args, schema, betterAuthSchema),
+        updateOneHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     getLatestJwks: internalActionGeneric({
       args: {},
       handler: async (ctx) => {
-        const auth = getAuth(ctx);
+        const auth = getAuth(ctx as Ctx) as {
+          api: { getLatestJwks: () => unknown };
+        };
 
-        return (auth.api as any).getLatestJwks();
+        return auth.api.getLatestJwks();
       },
     }),
     rotateKeys: internalActionGeneric({
       args: {},
       handler: async (ctx) => {
-        const auth = getAuth(ctx);
+        const auth = getAuth(ctx as Ctx) as {
+          api: { rotateKeys: () => unknown };
+        };
 
-        return (auth.api as any).rotateKeys();
+        return auth.api.rotateKeys();
       },
     }),
   };

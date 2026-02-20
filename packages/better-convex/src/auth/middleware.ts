@@ -27,7 +27,10 @@ export interface AuthMiddlewareOptions {
  * ```
  */
 export function authMiddleware(
-  getAuth: GetAuth,
+  getAuth: GetAuth<
+    unknown,
+    { handler: (request: Request) => Promise<Response> }
+  >,
   opts: AuthMiddlewareOptions = {}
 ): MiddlewareHandler {
   const basePath = opts.basePath ?? '/api/auth';

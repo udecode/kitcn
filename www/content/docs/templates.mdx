@@ -256,7 +256,7 @@ import type { Auth } from 'convex/server';
 
 import { api } from '../functions/_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { getAuth } from '../functions/auth';
+import { getAuth } from '../functions/generated';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
@@ -487,40 +487,17 @@ Optional - only needed if using Better Auth for authentication.
 
 ### auth.ts
 
-Better Auth client setup with Convex adapter.
+Better Auth options and optional trigger configuration.
 
 ```ts title="convex/functions/auth.ts" showLineNumbers
-import { type BetterAuthOptions, betterAuth } from 'better-auth';
 import { admin } from 'better-auth/plugins';
-import {
-  type AuthFunctions,
-  convex,
-  createApi,
-  createClient,
-} from 'better-convex/auth';
-
-import { type GenericCtx, type MutationCtx, withOrm } from './generated';
-import { internal } from './_generated/api';
-import type { DataModel } from './_generated/dataModel';
+import { convex } from 'better-convex/auth';
 import authConfig from './auth.config';
-import schema from './schema';
+import { defineAuth } from './generated';
 
-const authFunctions: AuthFunctions = internal.auth;
-
-export const authClient = createClient<
-  DataModel,
-  typeof schema,
-  MutationCtx
->({
-  authFunctions,
-  schema,
-  context: withOrm,
-});
-
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => {
+  return {
     baseURL: process.env.SITE_URL!,
-    database: authClient.adapter(ctx, getAuthOptions),
     plugins: [
       admin(),
       convex({
@@ -533,37 +510,14 @@ const getAuthOptions = (ctx: GenericCtx) =>
       updateAge: 60 * 60 * 24 * 15,
     },
     trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
-  }) satisfies BetterAuthOptions;
-
-export const getAuth = (ctx: GenericCtx) => betterAuth(getAuthOptions(ctx));
-
-export const {
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
-} = authClient.triggersApi();
-
-export const {
-  create,
-  deleteMany,
-  deleteOne,
-  findMany,
-  findOne,
-  updateMany,
-  updateOne,
-  getLatestJwks,
-  rotateKeys,
-} = createApi(schema, getAuth, {
-  context: withOrm,
-  skipValidation: true,
+    triggers: {
+      // optional Better Auth trigger hooks
+    },
+  };
 });
-
-// biome-ignore lint/suspicious/noExplicitAny: Required for CLI
-export const auth = betterAuth(getAuthOptions({} as any));
 ```
+
+Run `better-convex dev` / `better-convex codegen` first, then create `auth.ts` and re-run codegen to enable runtime auth exports from `convex/functions/generated.ts`.
 
 
 See [Auth Server documentation](/docs/auth/server) for detailed configuration.
@@ -635,7 +589,7 @@ HTTP routes for Better Auth.
     import { cors } from 'hono/cors';
     import { router } from '../lib/crpc';
     // Import your routers from convex/routers/
-    import { getAuth } from './auth';
+    import { getAuth } from './generated';
 
     const app = new Hono();
 
@@ -666,7 +620,7 @@ HTTP routes for Better Auth.
     import '../lib/http-polyfills';
     import { registerRoutes } from 'better-convex/auth';
     import { httpRouter } from 'convex/server';
-    import { getAuth } from './auth';
+    import { getAuth } from './generated';
 
     const http = httpRouter();
 
@@ -733,7 +687,7 @@ Session user type for auth context. Customize based on your user table fields.
 ```ts title="convex/shared/auth-shared.ts" showLineNumbers {3-9}
 import type { Doc } from '../functions/_generated/dataModel';
 // biome-ignore lint/style/noRestrictedImports: types
-import type { getAuth } from '../functions/auth';
+import type { getAuth } from '../functions/generated';
 import type { Select } from './api';
 
 export type Auth = ReturnType<typeof getAuth>;
