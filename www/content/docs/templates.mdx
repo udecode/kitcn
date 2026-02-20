@@ -231,37 +231,18 @@ export const relations = defineRelations(tables);
 export default schema;
 ```
 
-### orm.ts
+### generated.ts (generated)
 
-Attach the ORM to your context as `ctx.orm` (once).
+Do not create `convex/lib/orm.ts`.
+`convex/functions/generated.ts` is generated and is the canonical server contract.
+It includes `initCRPC` and ORM helpers when `relations` exists.
+If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
 
-```ts title="convex/lib/orm.ts" showLineNumbers {1-3,5-10}
-import { createOrm, type GenericOrmCtx } from 'better-convex/orm';
-
-import type { MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { relations } from '../functions/schema';
-
-const orm = createOrm({ schema: relations });
-
-export type OrmCtx<Ctx extends QueryCtx | MutationCtx = QueryCtx> =
-  GenericOrmCtx<Ctx, typeof relations>;
-
-export type OrmQueryCtx = OrmCtx<QueryCtx>;
-export type OrmMutationCtx = OrmCtx<MutationCtx>;
-
-export function withOrm<Ctx extends QueryCtx | MutationCtx>(ctx: Ctx) {
-  return orm.with(ctx) as OrmCtx<Ctx>;
-}
+```ts title="convex/lib/crpc.ts"
+import { initCRPC, withOrm } from '../functions/generated';
 ```
 
 Recommended default for ORM + cRPC: declare `createdAt: timestamp().notNull().defaultNow()` on tables where you want Date values.
-
-Native (number timestamp) mode:
-
-```ts title="convex/lib/orm.ts"
-const orm = createOrm({ schema: relations });
-```
-
 In native mode (no explicit `createdAt` column), system `createdAt` remains `number`.
 
 ### crpc.ts
@@ -270,17 +251,16 @@ The cRPC builder with auth middleware and procedure variants.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
 import { getHeaders } from 'better-convex/auth';
-import { CRPCError, initCRPC } from 'better-convex/server';
+import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
 
 import { api } from '../functions/_generated/api';
-import type { DataModel } from '../functions/_generated/dataModel';
 import type { ActionCtx, MutationCtx, QueryCtx } from '../functions/_generated/server';
 import { getAuth } from '../functions/auth';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
-import { type OrmCtx, withOrm } from './orm';
+import { initCRPC, type OrmCtx } from '../functions/generated';
 import { rateLimitGuard } from './rate-limiter';
 
 /** Context with optional auth - user/userId may be null */
@@ -305,20 +285,13 @@ export type AuthActionCtx = ActionCtx & {
   userId: string;
 };
 
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-  rateLimit?: string;
-  dev?: boolean;
-};
-
 const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .meta<Meta>()
+  .meta<{
+    auth?: 'optional' | 'required';
+    role?: 'admin';
+    rateLimit?: string;
+    dev?: boolean;
+  }>()
   .create();
 
 const devMiddleware = c.middleware<object>(({ meta, next, ctx }) => {
@@ -526,21 +499,18 @@ import {
   createClient,
 } from 'better-convex/auth';
 
-import { type OrmMutationCtx, withOrm } from '../lib/orm';
+import { type GenericCtx, type MutationCtx, withOrm } from './generated';
 import { internal } from './_generated/api';
 import type { DataModel } from './_generated/dataModel';
-import type { ActionCtx, MutationCtx, QueryCtx } from './_generated/server';
 import authConfig from './auth.config';
 import schema from './schema';
-
-type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
 const authFunctions: AuthFunctions = internal.auth;
 
 export const authClient = createClient<
   DataModel,
   typeof schema,
-  OrmMutationCtx
+  MutationCtx
 >({
   authFunctions,
   schema,

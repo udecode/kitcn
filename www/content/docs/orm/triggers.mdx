@@ -81,24 +81,12 @@ Triggers are schema-level. There is no `.create({ triggers })` wiring step.
 
 ## Wiring with cRPC
 
-Hooks run through wrapped mutation contexts. Keep `withOrm(ctx)` in mutation context setup:
-
-```ts title="convex/lib/orm.ts"
-const orm = createOrm({ schema: relations });
-
-export function withOrm<Ctx extends QueryCtx | MutationCtx>(ctx: Ctx) {
-  return orm.with(ctx) as OrmCtx<Ctx>;
-}
-```
+Hooks run through wrapped mutation contexts. Use generated `initCRPC` from `convex/functions/generated.ts`:
 
 ```ts title="convex/lib/crpc.ts"
-const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .create();
+import { initCRPC } from '../functions/generated';
+
+const c = initCRPC.create();
 ```
 
 ## Trigger Types

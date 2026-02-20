@@ -2,7 +2,7 @@ import { eq, unsetToken } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authMutation, authQuery, optionalAuthQuery } from '../lib/crpc';
-import type { OrmQueryCtx } from '../lib/orm';
+import type { QueryCtx } from './generated';
 import { todosTable, todoTagsTable } from './schema';
 
 // Schema for todo list items
@@ -48,7 +48,7 @@ function emptyPaginatedResult<T>(cursor: string | null): {
 }
 
 async function validateTagIds(
-  ctx: OrmQueryCtx,
+  ctx: QueryCtx,
   userId: string,
   tagIds: string[]
 ): Promise<string[]> {
@@ -70,7 +70,7 @@ async function validateTagIds(
 }
 
 async function assertProjectAccess(
-  ctx: OrmQueryCtx,
+  ctx: QueryCtx,
   projectId: string,
   userId: string
 ) {

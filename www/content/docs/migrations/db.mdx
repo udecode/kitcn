@@ -81,21 +81,11 @@ This mirrors native Convex indexing discipline: index the fields you filter and 
 
 ### Attach ORM to context once
 
-```ts title="convex/lib/orm.ts" showLineNumbers {2-3,6-9}
-import type { GenericDatabaseReader, GenericDatabaseWriter } from 'convex/server';
-import { createOrm } from 'better-convex/orm';
-import { relations } from '../schema';
+`better-convex dev` / `better-convex codegen` generates `convex/functions/generated.ts`:
 
-const orm = createOrm({ schema: relations });
+```ts title="convex/lib/crpc.ts" showLineNumbers {1,5-6}
+import { withOrm } from '../functions/generated';
 
-export const withOrm = <Ctx extends {
-  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>;
-}>(ctx: Ctx) => {
-  return { ...ctx, orm: orm.db(ctx) };
-};
-```
-
-```ts title="convex/lib/crpc.ts" showLineNumbers {3-4}
 const c = initCRPC
   .dataModel<DataModel>()
   .context({

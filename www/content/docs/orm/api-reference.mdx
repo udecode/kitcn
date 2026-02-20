@@ -264,11 +264,11 @@ For async mutation batching, pass scheduler function refs and export generated h
 ```ts showLineNumbers
 import { createOrm } from 'better-convex/orm';
 import { internal } from './_generated/api';
-import { internalMutation } from './functions';
+import { internalMutation } from './_generated/server';
 
 const orm = createOrm({
   schema: relations,
-  ormFunctions: internal.orm,
+  ormFunctions: internal.generated,
   internalMutation,
 });
 

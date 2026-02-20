@@ -97,10 +97,9 @@ export default defineSchema(tables, { strict: false });
 
 ```ts
 // convex/lib/crpc.ts
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-};
+const c = initCRPC
+  .meta<{ auth?: 'optional' | 'required'; role?: 'admin' }>()
+  .create();
 
 const roleMiddleware = c.middleware<object>(({ ctx, meta, next }) => {
   const user = (ctx as { user?: { role?: string | null } }).user;

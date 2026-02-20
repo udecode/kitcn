@@ -295,13 +295,11 @@ If you're coming from vanilla Convex, here's what changes.
     ```ts showLineNumbers
     import { query } from 'convex/server';
     import { v } from 'convex/values';
-    import { orm } from '../lib/orm';
 
     export const getById = query({
       args: { id: v.id('user') },
       handler: async (ctx, args) => {
-        const db = orm.db(ctx);
-        return db.query.user.findFirst({ where: { id: args.id } });
+        return ctx.db.get(args.id);
       },
     });
     ```

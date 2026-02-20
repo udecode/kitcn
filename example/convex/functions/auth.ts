@@ -13,23 +13,16 @@ import { eq } from 'better-convex/orm';
 import { requireActionCtx } from 'better-convex/server';
 import { getEnv } from '../lib/get-env';
 import { createPersonalOrganization } from '../lib/organization-helpers';
-import { type OrmMutationCtx, withOrm } from '../lib/orm';
 import { ac, roles } from '../shared/auth-shared';
 import { internal } from './_generated/api';
 import type { DataModel } from './_generated/dataModel';
-import type { ActionCtx, MutationCtx, QueryCtx } from './_generated/server';
 import authConfig from './auth.config';
+import { type GenericCtx, type MutationCtx, withOrm } from './generated';
 import schema, { sessionTable } from './schema';
-
-type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
 const authFunctions: AuthFunctions = internal.auth;
 
-export const authClient = createClient<
-  DataModel,
-  typeof schema,
-  OrmMutationCtx
->({
+export const authClient = createClient<DataModel, typeof schema, MutationCtx>({
   authFunctions,
   schema,
   context: withOrm,

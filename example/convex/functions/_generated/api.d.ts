@@ -990,6 +990,10 @@ export declare const internal: {
       string
     >;
   };
+  generated: {
+    scheduledDelete: FunctionReference<"mutation", "internal", any, any>;
+    scheduledMutationBatch: FunctionReference<"mutation", "internal", any, any>;
+  };
   init: {
     default: FunctionReference<"mutation", "internal", {}, null>;
   };

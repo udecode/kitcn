@@ -30,7 +30,6 @@ Use this workflow when release docs must match current changeset content.
 
 4. Build checklists in **both** places:
    - `task_plan.md` (execution checklist; required)
-   - `.changeset/doc-sync-checklist.md` (release artifact checklist)
    - Include every file in:
      - `www/**/*.md`
      - `www/**/*.mdx`
@@ -55,26 +54,28 @@ Use this workflow when release docs must match current changeset content.
 
 1. Do not summarize file coverage in `task_plan.md` (for example, "56 files scanned").  
    You must list each file explicitly with its own checkbox.
-2. File counts in `task_plan.md` checklist and `.changeset/doc-sync-checklist.md` must match filesystem enumeration exactly.
-3. Every processed file must be marked:
+2. Every processed file must be marked:
    - `updated`, or
    - `no change needed`
-4. A run is incomplete if even one file remains unchecked in either checklist.
-5. Any changed `/example` file without a mapped doc check or `no doc impact` note is a hard failure.
-6. Do not close the run until `/example` diff, changeset bullets, and updated docs are all cross-referenced.
+3. A run is incomplete if even one file remains unchecked in either checklist.
+4. Any changed `/example` file without a mapped doc check or `no doc impact` note is a hard failure.
+5. Do not close the run until `/example` diff, changeset bullets, and updated docs are all cross-referenced.
 
 ## task_plan.md checklist template (required)
 
 ```md
 ### Phase: Doc Sync Checklist (www)
+
 - [ ] `www/content/docs/a.mdx` — pending
 - [ ] `www/content/docs/b.mdx` — pending
 
 ### Phase: Doc Sync Checklist (skills/convex)
+
 - [ ] `skills/convex/SKILL.md` — pending
 - [ ] `skills/convex/references/setup.md` — pending
 
 ### Phase: /example-to-doc Crosswalk (required)
+
 - [ ] `example/convex/shared/api.ts` -> `www/content/docs/cli.mdx`, `www/content/docs/react/infer-types.mdx` — pending
 - [ ] `example/src/lib/convex/crpc.tsx` -> `www/content/docs/react/index.mdx` — pending
 - [ ] `example/src/lib/convex/rsc.tsx` -> `www/content/docs/nextjs/index.mdx`, `www/content/docs/server/server-side-calls.mdx` — pending
@@ -89,16 +90,20 @@ Use this workflow when release docs must match current changeset content.
 # Doc Sync Checklist
 
 ## Changesets
+
 - [x] `.changeset/your-file.md`
 
 ## www docs
+
 - [ ] `www/path/to/doc.mdx` — pending
 
 ## skills/convex docs
+
 - [ ] `skills/convex/SKILL.md` — pending
 - [ ] `skills/convex/references/setup.md` — pending
 
 ## Synced
+
 - [x] `www/path/to/doc.mdx` — updated for `@convex/api` migration
 - [x] `skills/convex/references/setup.md` — no change needed
 ```

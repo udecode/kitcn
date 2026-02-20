@@ -371,10 +371,11 @@ export type OrmTriggerLike<
   TDoc = Record<string, unknown>,
   TCtx = Record<string, unknown>,
 > = {
-  bivarianceHack: (
+  // Method signature (not property function type) is required for true bivariance.
+  bivarianceHack(
     ctx: TCtx,
     change: OrmLifecycleChange<TDoc>
-  ) => Promise<void> | void;
+  ): Promise<void> | void;
 }['bivarianceHack'];
 
 export class ConvexDeletionBuilder {

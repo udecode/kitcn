@@ -175,41 +175,18 @@ Create `.env.local` with your Convex URLs:
 
 ## 3. Create ORM + cRPC Builder
 
-First, attach the ORM to your context. Create `convex/lib/orm.ts`:
-
-```ts title="convex/lib/orm.ts" showLineNumbers {1-3,5-6,8-11}
-import { createOrm } from 'better-convex/orm';
-import type { MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { relations } from '../functions/schema';
-
-export const orm = createOrm({ schema: relations });
-
-export const withOrm = <Ctx extends QueryCtx | MutationCtx>(ctx: Ctx) => ({
-  ...ctx,
-  orm: orm.db(ctx),
-});
-```
+Use the generated server contract from `convex/functions/generated.ts`.
+`convex/functions/generated.ts` is generated and is the canonical server contract.
+It includes `initCRPC` and ORM helpers when `relations` exists.
+If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
 
 Now create the cRPC builder in `convex/lib/crpc.ts`:
 
-```ts title="convex/lib/crpc.ts" showLineNumbers {1,10-12,15-27,29-30}
-import { initCRPC } from 'better-convex/server';
-import type {
-  ActionCtx,
-  MutationCtx,
-  QueryCtx,
-} from '../functions/_generated/server';
-import type { DataModel } from '../functions/_generated/dataModel';
-import { withOrm } from './orm';
+```ts title="convex/lib/crpc.ts" showLineNumbers
+import { initCRPC } from '../functions/generated';
 
 
-const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .create();
+const c = initCRPC.create();
 
 export const publicQuery = c.query;
 export const publicMutation = c.mutation;

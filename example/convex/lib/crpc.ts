@@ -30,20 +30,19 @@
  */
 
 import { getHeaders } from 'better-convex/auth';
-import { CRPCError, initCRPC } from 'better-convex/server';
+import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
 import { api } from '../functions/_generated/api';
-import type { DataModel } from '../functions/_generated/dataModel';
 import type {
   ActionCtx,
   MutationCtx,
   QueryCtx,
 } from '../functions/_generated/server';
 import { getAuth } from '../functions/auth';
+import { initCRPC, type OrmCtx } from '../functions/generated';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
-import { type OrmCtx, withOrm } from './orm';
 import { rateLimitGuard } from './rate-limiter';
 
 // =============================================================================
@@ -76,21 +75,14 @@ export type AuthActionCtx = ActionCtx & {
 // Project-Specific Setup
 // =============================================================================
 
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-  rateLimit?: string;
-  dev?: boolean;
-};
-
 // Initialize CRPC with tRPC-style builder chain
 const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .meta<Meta>()
+  .meta<{
+    auth?: 'optional' | 'required';
+    role?: 'admin';
+    rateLimit?: string;
+    dev?: boolean;
+  }>()
   .create();
 
 // =============================================================================

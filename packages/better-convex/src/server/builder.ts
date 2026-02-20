@@ -305,6 +305,155 @@ async function executeMiddlewares(
   };
 }
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  !!value &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  !(value instanceof Date);
+
+const toConvexSafeValue = (value: unknown): unknown => {
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (Array.isArray(value)) {
+    let serialized: unknown[] | undefined;
+    for (let index = 0; index < value.length; index += 1) {
+      const nested = value[index];
+      const encoded = toConvexSafeValue(nested);
+      const normalized = encoded === undefined ? null : encoded;
+      if (normalized !== nested) {
+        if (!serialized) {
+          serialized = value.slice();
+        }
+        serialized[index] = normalized;
+      }
+    }
+    return serialized ?? value;
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  let serialized: Record<string, unknown> | undefined;
+  for (const key in value) {
+    if (!Object.hasOwn(value, key)) {
+      continue;
+    }
+
+    const nested = value[key];
+    const encoded = toConvexSafeValue(nested);
+
+    if (encoded === undefined) {
+      if (!serialized) {
+        serialized = { ...value };
+      }
+      delete serialized[key];
+      continue;
+    }
+
+    if (encoded !== nested) {
+      if (!serialized) {
+        serialized = { ...value };
+      }
+      serialized[key] = encoded;
+    }
+  }
+
+  return serialized ?? value;
+};
+
+const wrapTwoArgRunner = (
+  runner: unknown,
+  owner: unknown
+): ((functionReference: unknown, args: unknown) => unknown) | undefined => {
+  if (typeof runner !== 'function') {
+    return;
+  }
+
+  return (functionReference: unknown, args: unknown) =>
+    Reflect.apply(runner, owner, [functionReference, toConvexSafeValue(args)]);
+};
+
+const wrapSchedulerRunner = (
+  runner: unknown,
+  owner: unknown
+):
+  | ((first: unknown, functionReference: unknown, args: unknown) => unknown)
+  | undefined => {
+  if (typeof runner !== 'function') {
+    return;
+  }
+
+  return (first: unknown, functionReference: unknown, args: unknown) =>
+    Reflect.apply(runner, owner, [
+      first,
+      functionReference,
+      toConvexSafeValue(args),
+    ]);
+};
+
+const withConvexSafeRunners = <TCtx>(ctx: TCtx): TCtx => {
+  if (!ctx || typeof ctx !== 'object') {
+    return ctx;
+  }
+
+  const contextObject = ctx as Record<string, unknown>;
+  let changed = false;
+  const wrappedContext: Record<string, unknown> = { ...contextObject };
+
+  const runMutation = wrapTwoArgRunner(
+    contextObject.runMutation,
+    contextObject
+  );
+  if (runMutation) {
+    wrappedContext.runMutation = runMutation;
+    changed = true;
+  }
+
+  const runQuery = wrapTwoArgRunner(contextObject.runQuery, contextObject);
+  if (runQuery) {
+    wrappedContext.runQuery = runQuery;
+    changed = true;
+  }
+
+  const runAction = wrapTwoArgRunner(contextObject.runAction, contextObject);
+  if (runAction) {
+    wrappedContext.runAction = runAction;
+    changed = true;
+  }
+
+  const scheduler = contextObject.scheduler;
+  if (scheduler && typeof scheduler === 'object') {
+    const schedulerObject = scheduler as Record<string, unknown>;
+    let schedulerChanged = false;
+    const wrappedScheduler: Record<string, unknown> = { ...schedulerObject };
+
+    const runAfter = wrapSchedulerRunner(
+      schedulerObject.runAfter,
+      schedulerObject
+    );
+    if (runAfter) {
+      wrappedScheduler.runAfter = runAfter;
+      schedulerChanged = true;
+    }
+
+    const runAt = wrapSchedulerRunner(schedulerObject.runAt, schedulerObject);
+    if (runAt) {
+      wrappedScheduler.runAt = runAt;
+      schedulerChanged = true;
+    }
+
+    if (schedulerChanged) {
+      wrappedContext.scheduler = wrappedScheduler;
+      changed = true;
+    }
+  }
+
+  return (changed ? wrappedContext : contextObject) as TCtx;
+};
+
 // =============================================================================
 // Procedure Builder
 // =============================================================================
@@ -568,7 +717,9 @@ export class ProcedureBuilder<
     // Use customCtx for initial context transformation only
     const customFunction = customFn(
       baseFunction,
-      customCtx(async (_ctx) => functionConfig.createContext(_ctx))
+      customCtx(async (_ctx) =>
+        withConvexSafeRunners(await functionConfig.createContext(_ctx))
+      )
     );
     const returnsSchema = resolveConvexReturnsSchema(outputSchema);
     const typedReturnsSchema = returnsSchema as

@@ -57,13 +57,10 @@ import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { admin } from 'better-auth/plugins';
 import { convex, createClient, createApi, type AuthFunctions } from 'better-convex/auth';
 import { internal } from './_generated/api';
-import type { ActionCtx, MutationCtx, QueryCtx } from './_generated/server';
 import type { DataModel } from './_generated/dataModel';
+import { type GenericCtx, withOrm } from './generated';
 import schema from './schema';
 import authConfig from './auth.config';
-import { withOrm } from '../lib/orm';
-
-type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 const authFunctions: AuthFunctions = internal.auth;
 
 // Create client with Convex adapter and auth triggers

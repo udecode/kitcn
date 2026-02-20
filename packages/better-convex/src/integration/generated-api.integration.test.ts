@@ -38,6 +38,8 @@ describe('integration/generated-api', () => {
 
       const { outputFile } = getConvexConfig();
       const generated = fs.readFileSync(outputFile, 'utf-8');
+      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
 
       expect(generated).toContain('export const api = {');
       expect(generated).toContain('export type Api = typeof api;');
@@ -47,25 +49,41 @@ describe('integration/generated-api', () => {
       expect(generated).toContain(
         'export type ApiOutputs = inferApiOutputs<Api>;'
       );
-      expect(generated).toContain(
+      expect(generated).not.toContain(
         'import type { ActionCtx, MutationCtx, QueryCtx }'
       );
-      expect(generated).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
-      );
-      expect(generated).toContain('export type OrmCtx<');
-      expect(generated).toContain(
-        'export type OrmQueryCtx = OrmCtx<QueryCtx>;'
-      );
-      expect(generated).toContain(
-        'export type OrmMutationCtx = OrmCtx<MutationCtx>;'
-      );
+      expect(generated).not.toContain('export type GenericCtx =');
+      expect(generated).not.toContain('export type OrmCtx<');
+      expect(generated).not.toContain('export type OrmQueryCtx');
+      expect(generated).not.toContain('export type OrmMutationCtx');
       expect(generated).toContain(
         'export type TableName = keyof typeof tables;'
       );
       expect(generated).toContain('export type Select<T extends TableName>');
       expect(generated).toContain('export type Insert<T extends TableName>');
       expect(generated).not.toContain('WithHttpRouter');
+      expect(generatedServer).toContain(
+        'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
+      );
+      expect(generatedServer).toContain('export const orm = createOrm({');
+      expect(generatedServer).toContain(
+        'import { initCRPC as baseInitCRPC } from "better-convex/server";'
+      );
+      expect(generatedServer).toContain(
+        'export type MutationCtx = OrmCtx<ServerMutationCtx>;'
+      );
+      expect(generatedServer).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+      );
+      expect(generatedServer).toContain(
+        'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
+      );
+      expect(generatedServer).toContain(
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
+      );
+      expect(generatedServer).toContain(
+        'export const { scheduledMutationBatch, scheduledDelete } = orm.api();'
+      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -161,14 +179,29 @@ describe('integration/generated-api', () => {
       await generateMeta(undefined, { silent: true });
       const { outputFile } = getConvexConfig();
       const generatedSource = fs.readFileSync(outputFile, 'utf-8');
+      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
       expect(generatedSource).toContain(
         'http: undefined as unknown as typeof httpRouter,'
       );
       expect(generatedSource).toContain('export type Api = typeof api;');
-      expect(generatedSource).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
-      );
+      expect(generatedSource).not.toContain('export type GenericCtx =');
       expect(generatedSource).not.toContain('WithHttpRouter');
+      expect(generatedServer).toContain(
+        'export type QueryCtx = ServerQueryCtx;'
+      );
+      expect(generatedServer).toContain(
+        'export type MutationCtx = ServerMutationCtx;'
+      );
+      expect(generatedServer).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+      );
+      expect(generatedServer).toContain(
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+      );
+      expect(generatedServer).not.toContain('createOrm');
+      expect(generatedServer).not.toContain('withOrm');
+      expect(generatedServer).not.toContain('export type OrmCtx<');
       const generated = await import(pathToFileURL(outputFile).href);
       const api = generated.api as any;
 

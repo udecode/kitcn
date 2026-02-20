@@ -60,20 +60,18 @@ export const api = {
 
 ## Define Meta Type
 
-Let's start by defining your meta type. Chain `.meta<Meta>()` during [initialization](/docs/server/setup):
+Let's start by defining your meta type. Chain `.meta<{ ... }>()` during [initialization](/docs/server/setup):
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {3-7,11}
 import { initCRPC } from 'better-convex/server';
 
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-  rateLimit?: string;
-};
-
 const c = initCRPC
   .dataModel<DataModel>()
-  .meta<Meta>()
+  .meta<{
+    auth?: 'optional' | 'required';
+    role?: 'admin';
+    rateLimit?: string;
+  }>()
   .create();
 ```
 
@@ -132,7 +130,11 @@ You can set default metadata values in `create()`. All procedures will start wit
 ```ts title="convex/lib/crpc.ts" showLineNumbers {4}
 const c = initCRPC
   .dataModel<DataModel>()
-  .meta<Meta>()
+  .meta<{
+    auth?: 'optional' | 'required';
+    role?: 'admin';
+    rateLimit?: string;
+  }>()
   .create({
     defaultMeta: { auth: 'optional' },
   });
@@ -183,9 +185,10 @@ The `auth` metadata controls both server and client behavior:
 Use `auth` metadata to distinguish between optional and required authentication:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {2,8-9}
-type Meta = {
-  auth?: 'optional' | 'required';
-};
+const c = initCRPC
+  .dataModel<DataModel>()
+  .meta<{ auth?: 'optional' | 'required' }>()
+  .create();
 
 export const optionalAuthQuery = c.query
   .meta({ auth: 'optional' })
@@ -208,9 +211,10 @@ export const authQuery = c.query
 Add role checks that run after authentication:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {2,5-11,14-15}
-type Meta = {
-  role?: 'admin';
-};
+const c = initCRPC
+  .dataModel<DataModel>()
+  .meta<{ role?: 'admin' }>()
+  .create();
 
 const roleMiddleware = c.middleware(({ ctx, meta, next }) => {
   if (meta.role === 'admin' && !ctx.user?.isAdmin) {
@@ -238,9 +242,10 @@ export const list = adminQuery
 Apply different rate limits based on metadata:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {2,5-12,15-16}
-type Meta = {
-  rateLimit?: string;
-};
+const c = initCRPC
+  .dataModel<DataModel>()
+  .meta<{ rateLimit?: string }>()
+  .create();
 
 const rateLimitMiddleware = c.middleware(async ({ ctx, meta, next }) => {
   if (meta.rateLimit) {
@@ -263,9 +268,10 @@ export const createSession = authMutation
 Restrict certain procedures to development only:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {2,5-12,15}
-type Meta = {
-  dev?: boolean;
-};
+const c = initCRPC
+  .dataModel<DataModel>()
+  .meta<{ dev?: boolean }>()
+  .create();
 
 const devMiddleware = c.middleware(({ meta, next, ctx }) => {
   if (meta.dev && process.env.NODE_ENV === 'production') {
@@ -298,11 +304,9 @@ If you're coming from vanilla Convex, here's what changes.
   </CompareItem>
   <CompareItem title="After (cRPC)">
     ```ts showLineNumbers {1,5,8-9}
-    type Meta = { role?: 'admin' };
-
     const c = initCRPC
       .dataModel<DataModel>()
-      .meta<Meta>()
+      .meta<{ role?: 'admin' }>()
       .create();
 
     export const adminQuery = authQuery

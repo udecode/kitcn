@@ -203,7 +203,7 @@ Schema rules that matter:
 import { getHeaders } from "better-convex/auth";
 import { CRPCError, initCRPC } from "better-convex/server";
 import { getAuth } from "../functions/auth";
-import { withOrm } from "./orm";
+import { withOrm } from "../functions/generated";
 
 const c = initCRPC
   .dataModel<DataModel>()

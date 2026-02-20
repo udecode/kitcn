@@ -161,6 +161,11 @@ describe('cli/codegen', () => {
         path.join(dir, 'convex', '_private.ts'),
         `export const shouldNotAppear = { _crpcMeta: { type: 'query' } };`
       );
+      // Excluded generated server file (should never be parsed as cRPC module).
+      writeFile(
+        path.join(dir, 'convex', 'generated.ts'),
+        `export const shouldBeIgnored = { _crpcMeta: { type: 'query' } };`
+      );
       writeFile(
         path.join(dir, 'convex', '_generated', 'api.ts'),
         `export const shouldNotAppear = { _crpcMeta: { type: 'query' } };`
@@ -217,6 +222,9 @@ describe('cli/codegen', () => {
       const { outputFile } = getConvexConfig();
       expect(fs.existsSync(outputFile)).toBe(true);
       const generated = fs.readFileSync(outputFile, 'utf-8');
+      const serverGeneratedFile = path.join(dir, 'convex', 'generated.ts');
+      expect(fs.existsSync(serverGeneratedFile)).toBe(true);
+      const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
       expect(generated).toContain(
         'import { createApiLeaf } from "better-convex/server";'
       );
@@ -224,14 +232,11 @@ describe('cli/codegen', () => {
         'import type { inferApiInputs, inferApiOutputs } from "better-convex/server";'
       );
       expect(generated).toContain(
-        'import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";'
-      );
-      expect(generated).toContain(
-        'import type { InferInsertModel, InferSelectModel, GenericOrmCtx } from "better-convex/orm";'
+        'import type { InferInsertModel, InferSelectModel } from "better-convex/orm";'
       );
       expect(generated).toContain('import type { httpRouter } from "../http";');
       expect(generated).toContain('import type { tables } from "../schema";');
-      expect(generated).toContain(
+      expect(generated).not.toContain(
         'import type { relations } from "../schema";'
       );
       expect(generated).toContain(
@@ -244,18 +249,10 @@ describe('cli/codegen', () => {
       expect(generated).toContain(
         'export type ApiOutputs = inferApiOutputs<Api>;'
       );
-      expect(generated).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
-      );
-      expect(generated).toContain(
-        'export type OrmCtx<Ctx extends QueryCtx | MutationCtx = QueryCtx> = GenericOrmCtx<Ctx, typeof relations>;'
-      );
-      expect(generated).toContain(
-        'export type OrmQueryCtx = OrmCtx<QueryCtx>;'
-      );
-      expect(generated).toContain(
-        'export type OrmMutationCtx = OrmCtx<MutationCtx>;'
-      );
+      expect(generated).not.toContain('export type GenericCtx =');
+      expect(generated).not.toContain('export type OrmCtx<');
+      expect(generated).not.toContain('export type OrmQueryCtx');
+      expect(generated).not.toContain('export type OrmMutationCtx');
       expect(generated).toContain(
         'export type TableName = keyof typeof tables;'
       );
@@ -269,6 +266,33 @@ describe('cli/codegen', () => {
       expect(generated).not.toContain('ApiFunctionEntry');
       expect(generated).not.toContain('ApiFunctionLeafMeta');
       expect(generated).not.toContain('ApiFunctionRefFromExport');
+      expect(generated).not.toContain('shouldBeIgnored');
+
+      expect(serverGenerated).toContain(
+        'import { createOrm, type GenericOrmCtx, type OrmFunctions } from "better-convex/orm";'
+      );
+      expect(serverGenerated).toContain(
+        'import { initCRPC as baseInitCRPC } from "better-convex/server";'
+      );
+      expect(serverGenerated).toContain('export const orm = createOrm({');
+      expect(serverGenerated).toContain(
+        'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
+      );
+      expect(serverGenerated).toContain(
+        'export type MutationCtx = OrmCtx<ServerMutationCtx>;'
+      );
+      expect(serverGenerated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
+      );
+      expect(serverGenerated).toContain(
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
+      );
+      expect(serverGenerated).toContain(
+        'export const { scheduledMutationBatch, scheduledDelete } = orm.api();'
+      );
 
       const module = await import(pathToFileURL(outputFile).href);
       expect(module).toHaveProperty('api');
@@ -374,11 +398,10 @@ describe('cli/codegen', () => {
 
       const { outputFile } = getConvexConfig();
       const generated = fs.readFileSync(outputFile, 'utf-8');
+      const serverGeneratedFile = path.join(dir, 'convex', 'generated.ts');
+      const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
       expect(generated).toContain(
         'import type { inferApiInputs, inferApiOutputs } from "better-convex/server";'
-      );
-      expect(generated).toContain(
-        'import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";'
       );
       expect(generated).not.toContain('WithHttpRouter');
       expect(generated).toContain('export type Api = typeof api;');
@@ -388,9 +411,7 @@ describe('cli/codegen', () => {
       expect(generated).toContain(
         'export type ApiOutputs = inferApiOutputs<Api>;'
       );
-      expect(generated).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
-      );
+      expect(generated).not.toContain('export type GenericCtx =');
       expect(generated).not.toContain('GenericOrmCtx');
       expect(generated).not.toContain('export type OrmCtx<');
       expect(generated).not.toContain('export type OrmQueryCtx');
@@ -400,6 +421,22 @@ describe('cli/codegen', () => {
       expect(generated).not.toContain('TableName');
       expect(generated).not.toContain('export type Select<');
       expect(generated).not.toContain('export type Insert<');
+      expect(serverGenerated).toContain(
+        'export type QueryCtx = ServerQueryCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type MutationCtx = ServerMutationCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+      );
+      expect(serverGenerated).not.toContain('createOrm');
+      expect(serverGenerated).not.toContain('withOrm');
+      expect(serverGenerated).not.toContain('scheduledMutationBatch');
+      expect(serverGenerated).not.toContain('export type OrmCtx<');
     } finally {
       process.chdir(oldCwd);
     }
@@ -472,9 +509,9 @@ describe('cli/codegen', () => {
 
       const { outputFile } = getConvexConfig();
       const generated = fs.readFileSync(outputFile, 'utf-8');
-      expect(generated).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
-      );
+      const serverGeneratedFile = path.join(dir, 'convex', 'generated.ts');
+      const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
+      expect(generated).not.toContain('export type GenericCtx =');
       expect(generated).toContain(
         'export type TableName = keyof typeof tables;'
       );
@@ -490,6 +527,22 @@ describe('cli/codegen', () => {
       expect(generated).not.toContain('export type OrmCtx<');
       expect(generated).not.toContain('export type OrmQueryCtx');
       expect(generated).not.toContain('export type OrmMutationCtx');
+      expect(serverGenerated).toContain(
+        'export type QueryCtx = ServerQueryCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type MutationCtx = ServerMutationCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+      );
+      expect(serverGenerated).not.toContain('createOrm');
+      expect(serverGenerated).not.toContain('withOrm');
+      expect(serverGenerated).not.toContain('scheduledMutationBatch');
+      expect(serverGenerated).not.toContain('export type OrmCtx<');
     } finally {
       process.chdir(oldCwd);
     }

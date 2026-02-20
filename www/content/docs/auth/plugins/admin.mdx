@@ -129,11 +129,9 @@ export default defineSchema(tables, { strict: false });
 Add role middleware to your cRPC setup:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {1-4,7-14,16-24}
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-  // ...
-};
+const c = initCRPC
+  .meta<{ auth?: 'optional' | 'required'; role?: 'admin' }>()
+  .create();
 
 /** Role middleware - checks admin role from meta after auth middleware */
 const roleMiddleware = c.middleware<object>(({ ctx, meta, next }) => {

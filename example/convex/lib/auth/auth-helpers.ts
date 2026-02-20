@@ -2,13 +2,13 @@ import { getSession } from 'better-convex/auth';
 import { CRPCError } from 'better-convex/server';
 
 import { internal } from '../../functions/_generated/api';
+import type { MutationCtx, QueryCtx } from '../../functions/generated';
 import { accountTable, userTable } from '../../functions/schema';
 import type { SessionUser } from '../../shared/auth-shared';
 import { productToPlan } from '../../shared/polar-shared';
 import type { AuthCtx } from '../crpc';
-import type { OrmMutationCtx, OrmQueryCtx } from '../orm';
 
-const getSessionData = async (ctx: OrmQueryCtx) => {
+const getSessionData = async (ctx: QueryCtx) => {
   const session = await getSession(ctx);
 
   if (!session) {
@@ -71,7 +71,7 @@ const getSessionData = async (ctx: OrmQueryCtx) => {
 
 // Query to fetch user data for session/auth checks
 export const getSessionUser = async (
-  ctx: OrmQueryCtx
+  ctx: QueryCtx
 ): Promise<SessionUser | null> => {
   const data = await getSessionData(ctx);
   if (!data) {
@@ -95,7 +95,7 @@ export const getSessionUser = async (
 };
 
 export const createUser = async (
-  ctx: OrmMutationCtx,
+  ctx: MutationCtx,
   args: {
     email: string;
     name: string;

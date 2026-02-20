@@ -77,16 +77,12 @@ const secrets = convexTable('secrets', {
 
 Before policies can run, you need to wire up the ORM with RLS enabled. Do this once in your context layer so every handler gets a policy-aware `ctx.orm`.
 
-```ts title="convex/lib/orm.ts" showLineNumbers {5}
+```ts title="convex/lib/crpc.ts" showLineNumbers {2,5}
 import type { GenericDatabaseWriter } from 'convex/server';
-import { createOrm } from 'better-convex/orm';
-import { relations } from '../schema';
-
-const orm = createOrm({ schema: relations });
+import { orm } from '../functions/generated';
 
 export const withOrm = <Ctx extends { db: GenericDatabaseWriter<any> }>(ctx: Ctx) => {
-  const ormDb = orm.db(ctx, { rls: { ctx } });
-  return { ...ctx, orm: ormDb };
+  return orm.with(ctx, { rls: { ctx } });
 };
 ```
 

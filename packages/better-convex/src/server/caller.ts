@@ -89,7 +89,7 @@ export type ServerCaller<TApi> = {
       ? never
       : K extends 'http'
         ? never
-      : K
+        : K
     : K]: ServerCallerFn<TApi, K>;
 };
 

@@ -223,12 +223,9 @@ This is the main migration. We'll replace the component-based client with direct
     import { createApi, createClient, type AuthFunctions } from "better-convex/auth";
     import { internal } from "./_generated/api";
     import type { DataModel } from "./_generated/dataModel";
-    import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
-    import { withOrm } from "../lib/orm";
+    import { type GenericCtx, withOrm } from "./generated";
     import authConfig from "./auth.config";
     import schema from "./schema";
-
-    type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
     // Reference internal auth functions (generated after first `npx convex dev`)
     const authFunctions: AuthFunctions = internal.auth;

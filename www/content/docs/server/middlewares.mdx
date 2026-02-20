@@ -127,15 +127,13 @@ Sometimes different procedures need different behavior from the same middleware.
 First, define your meta type when initializing cRPC:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {1-5,9}
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-  rateLimit?: string;
-};
-
 const c = initCRPC
   .dataModel<DataModel>()
-  .meta<Meta>()
+  .meta<{
+    auth?: 'optional' | 'required';
+    role?: 'admin';
+    rateLimit?: string;
+  }>()
   .create();
 ```
 

@@ -6,8 +6,8 @@ import { createApiLeaf } from "better-convex/server";
 import type { inferApiInputs, inferApiOutputs } from "better-convex/server";
 import { api as convexApi } from "../functions/_generated/api.js";
 
-import type { httpRouter } from "../functions/http";
 import type { InferInsertModel, InferSelectModel } from "better-convex/orm";
+import type { httpRouter } from "../functions/http";
 import type { tables } from "../functions/schema";
 
 export const api = {
@@ -127,6 +127,7 @@ export const api = {
 export type Api = typeof api;
 export type ApiInputs = inferApiInputs<Api>;
 export type ApiOutputs = inferApiOutputs<Api>;
+
 export type TableName = keyof typeof tables;
 export type Select<T extends TableName> = InferSelectModel<(typeof tables)[T]>;
 export type Insert<T extends TableName> = InferInsertModel<(typeof tables)[T]>;

@@ -1,8 +1,8 @@
 import { eq } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
+import type { MutationCtx } from '../functions/generated';
 import { memberTable, organizationTable, userTable } from '../functions/schema';
 import type { AuthCtx } from './crpc';
-import type { OrmMutationCtx } from './orm';
 
 export const listUserOrganizations = async (ctx: AuthCtx, userId: string) => {
   const memberships = await ctx.orm.query.member.findMany({
@@ -28,7 +28,7 @@ export const listUserOrganizations = async (ctx: AuthCtx, userId: string) => {
 };
 
 export const createPersonalOrganization = async (
-  ctx: OrmMutationCtx,
+  ctx: MutationCtx,
   args: {
     email: string;
     image: string | null;

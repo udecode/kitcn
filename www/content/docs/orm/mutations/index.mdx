@@ -193,15 +193,15 @@ You can enable async mode in three ways:
 
 Async execution requires wiring `ormFunctions` and `scheduledMutationBatch` into your ORM setup. Here's how to extend the module from [Quickstart](/docs/quickstart#orm-setup):
 
-```ts showLineNumbers title="convex/lib/orm.ts" {4,9}
+```ts showLineNumbers title="convex/functions/generated.ts" {4,12}
 import { createOrm } from 'better-convex/orm';
-import { internal } from '../_generated/api';
-import { internalMutation } from '../functions';
-import { relations } from '../schema';
+import { internal } from './_generated/api';
+import { internalMutation } from './_generated/server';
+import { relations } from './schema';
 
 export const orm = createOrm({
   schema: relations,
-  ormFunctions: internal.orm,
+  ormFunctions: internal.generated,
   internalMutation,
 });
 

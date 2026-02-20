@@ -7,8 +7,8 @@ import {
   privateMutation,
   publicQuery,
 } from '../lib/crpc';
-import type { OrmQueryCtx } from '../lib/orm';
 import { aggregateRepliesByParent } from './aggregates';
+import type { QueryCtx } from './generated';
 import { todoCommentsTable } from './schema';
 
 // Schema for comment list items
@@ -635,7 +635,7 @@ export const cleanupOrphanedComments = privateMutation
 
 // Get comment depth in thread
 async function getCommentDepth(
-  ctx: OrmQueryCtx,
+  ctx: QueryCtx,
   commentId: string
 ): Promise<number> {
   let depth = 0;

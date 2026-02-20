@@ -76,9 +76,7 @@ import { convex, createClient, createApi, type AuthFunctions } from 'better-conv
 import { internal } from './_generated/api';
 import schema from './schema';
 import authConfig from './auth.config';
-import { withOrm } from '../lib/orm';
-
-type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
+import { type GenericCtx, withOrm } from './generated';
 const authFunctions: AuthFunctions = internal.auth;
 
 // Client with triggers

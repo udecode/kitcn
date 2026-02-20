@@ -50,7 +50,7 @@ Pass triggers to `createClient`:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {1-2,6-20}
 import { createClient } from 'better-convex/auth';
-import { withOrm } from '../lib/orm';
+import { withOrm } from './generated';
 
 export const authClient = createClient({
   authFunctions: internal.auth,
