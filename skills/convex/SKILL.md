@@ -732,8 +732,7 @@ Before calling a feature done:
 - `references/setup/doc-guidelines.md`: skill/docs sync contract
 
 **Features (per session, self-contained):**
-- `references/features/orm.md`: full ORM API, constraints, RLS, advanced mutations
-- `references/features/filters.md`: advanced filtering/search/composition/pagination modes
+- `references/features/orm.md`: full ORM API, constraints, RLS, advanced mutations, filtering/search/composition/pagination
 - `references/features/react.md`: full client, RSC, hydration, error handling matrix
 - `references/features/http.md`: typed REST routes, webhooks, streaming
 - `references/features/scheduling.md`: cron + delayed job patterns

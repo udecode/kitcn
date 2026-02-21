@@ -473,6 +473,137 @@ const relations = defineRelations({ users, posts }, (r) => ({
 `where` in a relation definition can only reference **columns on the target (to) table**. In the ORM, it's applied after fetching candidate rows, so keep `many()` relations intentionally sized.
 </Callout>
 
+### Polymorphic Associations
+
+Start with a non-strict pattern when you only need relation loading parity.
+Add strict constraints only when you need database-level guarantees.
+
+#### Step 1: Non-Strict (Parity-First)
+
+Use one nullable FK per target plus a discriminator. This gives polymorphic-style relation loading and filtered aliases, without strict one-of enforcement.
+
+```ts title="convex/schema.ts" showLineNumbers
+import { convexTable, defineRelations, id, text } from 'better-convex/orm';
+
+const posts = convexTable('posts', {
+  title: text().notNull(),
+});
+
+const videos = convexTable('videos', {
+  title: text().notNull(),
+});
+
+const comments = convexTable('comments', {
+  body: text().notNull(),
+  targetType: text().notNull(), // 'post' | 'video'
+  postId: id('posts'),
+  videoId: id('videos'),
+});
+
+export const relations = defineRelations({ posts, videos, comments }, (r) => ({
+  posts: {
+    comments: r.many.comments({
+      from: r.posts.id,
+      to: r.comments.postId,
+      where: { targetType: 'post' },
+      alias: 'post-comments',
+    }),
+  },
+  videos: {
+    comments: r.many.comments({
+      from: r.videos.id,
+      to: r.comments.videoId,
+      where: { targetType: 'video' },
+      alias: 'video-comments',
+    }),
+  },
+}));
+```
+
+#### Step 2: Strict (Schema-Enforced)
+
+Add FK references, indexes, and `check(...)` constraints when a row must point to exactly one target and match the discriminator.
+
+```ts title="convex/schema.ts" showLineNumbers
+import {
+  and,
+  check,
+  convexTable,
+  defineRelations,
+  eq,
+  id,
+  index,
+  isNotNull,
+  isNull,
+  or,
+  text,
+} from 'better-convex/orm';
+
+// posts, videos unchanged from Step 1
+
+const comments = convexTable(
+  'comments',
+  {
+    body: text().notNull(),
+    targetType: text().notNull(), // 'post' | 'video'
+    postId: id('posts').references(() => posts.id),
+    videoId: id('videos').references(() => videos.id),
+  },
+  (t) => [
+    index('by_post').on(t.postId),
+    index('by_video').on(t.videoId),
+    check(
+      'exactly_one_target',
+      or(
+        and(isNotNull(t.postId), isNull(t.videoId)),
+        and(isNull(t.postId), isNotNull(t.videoId))
+      )
+    ),
+    check(
+      'target_type_matches_id',
+      or(
+        and(eq(t.targetType, 'post'), isNotNull(t.postId), isNull(t.videoId)),
+        and(eq(t.targetType, 'video'), isNotNull(t.videoId), isNull(t.postId))
+      )
+    ),
+  ]
+);
+
+export const relations = defineRelations({ posts, videos, comments }, (r) => ({
+  posts: {
+    comments: r.many.comments({
+      from: r.posts.id,
+      to: r.comments.postId,
+      where: { targetType: 'post' }, // optional filtered alias
+      alias: 'post-comments',
+    }),
+  },
+  videos: {
+    comments: r.many.comments({
+      from: r.videos.id,
+      to: r.comments.videoId,
+      where: { targetType: 'video' }, // optional filtered alias
+      alias: 'video-comments',
+    }),
+  },
+  comments: {
+    post: r.one.posts({
+      from: r.comments.postId,
+      to: r.posts.id,
+    }),
+    video: r.one.videos({
+      from: r.comments.videoId,
+      to: r.videos.id,
+    }),
+  },
+}));
+```
+
+<Callout icon={<InfoIcon />}>
+Drizzle parity includes polymorphic-style relation filtering via relation `where`.
+True polymorphic FK integrity is app/schema-level (Step 2), not a single built-in polymorphic FK primitive.
+</Callout>
+
 ## Indexing For Relation Loading
 
 The ORM will use indexes when loading relations and will throw (unless `allowFullScan`) if the needed index is missing.

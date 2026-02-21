@@ -54,13 +54,14 @@ Use non-overlapping placement.
 
 | Destination | Role | Must Contain | Must Not Contain |
 | --- | --- | --- | --- |
-| `references/setup.md` | One-time bootstrap | install/bootstrap/env/config/initial wiring/framework setup | daily feature patterns and long advanced deep-dives |
+| `references/setup/` | One-time bootstrap (loaded once per project) | install/bootstrap/env/config/initial wiring/framework setup | daily feature patterns and long advanced deep-dives |
 | `SKILL.md` | Always-loaded core | generic everyday E2E feature implementation path; usable alone for standard feature delivery | setup/install workflows and advanced niche overload |
-| `references/*.md` | Resources (on-demand) | advanced/special cases, plugin depth, long snippets, niche troubleshooting, long-form API detail | setup bootstrap and generic core flow duplication |
+| `references/features/` | Features (on-demand, self-contained) | advanced/special cases, plugin depth, long snippets, niche troubleshooting, long-form API detail | setup bootstrap and generic core flow duplication |
 
 Definition:
 
-- `resources` == `skills/convex/references/*.md`
+- setup == `skills/convex/references/setup/*.md`
+- features == `skills/convex/references/features/*.md`
 
 ## 5. WWW Sync Workflow (phase-by-phase)
 
@@ -80,9 +81,9 @@ Follow this exact sequence.
 
 1. One canonical home per topic.
 2. Do not duplicate large blocks across setup/core/resources.
-3. References should link back to core/setup when repeating context.
-4. `SKILL.md` should point to resources for advanced branches, not embed full deep-dives.
-5. `setup.md` should not be copied into feature references; link instead.
+3. Feature references should link back to core/setup when repeating context.
+4. `SKILL.md` should point to feature references for advanced branches, not embed full deep-dives.
+5. `references/setup/` content should not be copied into feature references; link instead.
 
 ## 7. Required Coverage + Traceability Artifacts
 
@@ -90,7 +91,7 @@ Each sync update must include:
 
 1. Source coverage matrix: source page -> destination file/section.
 2. Parity-drop rationale list (inline checklist in PR/update notes is acceptable).
-3. Explicit confirmation that resources were treated as `references/*.md`.
+3. Explicit confirmation that features were treated as `references/features/*.md`.
 
 Minimum acceptance statement per sync:
 
