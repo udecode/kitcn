@@ -1,5 +1,11 @@
 # better-convex
 
+## 0.6.2
+
+### Patch Changes
+
+- [#86](https://github.com/udecode/better-convex/pull/86) [`49098fa`](https://github.com/udecode/better-convex/commit/49098fa5919b4a9c4a3e73b989ab55d897df02c3) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix Better Auth HTTP adapter error handling to preserve auth error status/code instead of surfacing unexpected 500s.
+
 ## 0.6.1
 
 ### Patch Changes
