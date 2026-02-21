@@ -531,7 +531,7 @@ import { aggregatePostLikes } from "./aggregates";
 
 ### Auth triggers vs DB triggers
 
-Auth triggers (`triggers: { user, session }` in `createClient`) are separate from DB triggers. For DB-level side effects, use schema triggers with `withOrm` in auth setup.
+Auth triggers (`triggers: { user, session }` in `defineAuth`) are separate from DB triggers. For DB-level side effects, use schema triggers. When your schema exports `relations`, generated runtime automatically wires ORM context for auth handlers.
 
 ## Complete Schema Template
 

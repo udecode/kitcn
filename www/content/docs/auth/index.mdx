@@ -24,11 +24,11 @@ Let's understand the key concepts.
 
 ## Key Concepts
 
-### Local vs Component Installation
+### Local vs Legacy Component Installation
 
 | Approach | Schema Location | Database Access |
 |----------|-----------------|-----------------|
-| Component (`@convex-dev/better-auth`) | Component schema | Via `ctx.runQuery`/`ctx.runMutation` |
+| Legacy component adapter | Component schema | Via `ctx.runQuery`/`ctx.runMutation` |
 | **Local** (`better-convex/auth`) | Your app schema | ORM (`ctx.orm`) |
 
 better-convex uses the **local approach**:

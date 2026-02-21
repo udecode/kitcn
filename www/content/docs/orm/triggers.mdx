@@ -305,7 +305,7 @@ export const userTable = convexTable('user', {/* ... */}, () => [
 
 ## Runtime Requirements
 
-1. Triggers run for ORM-wrapped mutation contexts (`withOrm(ctx)`).
+1. Triggers run for ORM-wrapped mutation contexts (`ctx.orm`).
 2. Errors thrown by triggers roll back the mutation.
 3. Expensive work should be deferred (`ctx.scheduler.runAfter`) when possible.
 4. Add indexes for trigger query paths.

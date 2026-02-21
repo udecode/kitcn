@@ -69,10 +69,6 @@ export default defineAuth((ctx) => ({
 }));
 ```
 
-<Callout icon={<InfoIcon />}>
-When your schema exports `relations`, generated runtime wires auth through `withOrm`, so closure `ctx` can use `ctx.orm` and `ctx.scheduler`.
-</Callout>
-
 ## User Triggers
 
 ### beforeCreate
@@ -215,53 +211,6 @@ triggers: {
             .where(eq(session.id, sessionDoc.id));
         }
       }
-    },
-  },
-}
-```
-
-## Trigger Runtime Exports
-
-You do not export trigger handlers manually from `auth.ts`.
-Run `better-convex dev` / `better-convex codegen` and use generated runtime exports from `convex/functions/generated.ts`:
-
-```ts title="convex/functions/generated.ts" showLineNumbers
-export const {
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
-} = authRuntime;
-```
-
-## Type Safety
-
-Triggers are fully typed based on your schema:
-
-```ts showLineNumbers {3-6,9-12,15-18}
-triggers: {
-  user: {
-    // `data` is typed as Infer<Schema['tables']['user']['validator']>
-    beforeCreate: async (data) => {
-      data.email; // string
-      data.name;  // string | null
-      return data;
-    },
-
-    // `doc` includes id and system fields
-    onCreate: async (doc) => {
-      doc.id;           // Id<'user'>
-      doc._creationTime; // number
-      doc.email;         // string
-    },
-
-    // `update` is Partial of the validator
-    beforeUpdate: async (doc, update) => {
-      update.name;  // string | null | undefined
-      update.email; // string | undefined
-      return update;
     },
   },
 }

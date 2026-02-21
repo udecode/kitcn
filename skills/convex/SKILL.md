@@ -201,16 +201,11 @@ Schema rules that matter:
 ```ts
 // convex/lib/crpc.ts (shape reference only)
 import { getHeaders } from "better-convex/auth";
-import { CRPCError, initCRPC } from "better-convex/server";
+import { CRPCError } from "better-convex/server";
 import { getAuth } from "../functions/auth";
-import { withOrm } from "../functions/generated";
+import { initCRPC } from "../functions/generated";
 
 const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
   .meta<{
     auth?: "optional" | "required";
     role?: "admin";

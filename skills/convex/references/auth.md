@@ -67,7 +67,15 @@ export default {
 } satisfies AuthConfig;
 ```
 
-### 2. Define Auth Contract
+### 2. Generate Runtime
+
+Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
+
+```bash
+npx better-convex dev
+```
+
+### 3. Define Auth Contract
 
 ```ts
 // convex/functions/auth.ts
@@ -102,10 +110,9 @@ export default defineAuth((ctx) => ({
 }));
 ```
 
-Run `better-convex dev` / `better-convex codegen` first, then define `auth.ts`, then rerun codegen.  
 Use runtime exports (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `auth`) from `convex/functions/generated.ts`.
 
-### 3. Schema (ORM API)
+### 4. Schema (ORM API)
 
 Generate with CLI or define manually:
 
@@ -171,12 +178,12 @@ export const jwks = convexTable('jwks', {
 });
 ```
 
-### 4. Auth HTTP Runtime
+### 5. Auth HTTP Runtime
 
 Import auth route helpers from `better-convex/auth/http`.
 That entrypoint auto-installs the Convex-safe `MessageChannel` polyfill.
 
-### 5. HTTP Routes
+### 6. HTTP Routes
 
 Three options — cRPC (recommended), plain Convex, or Hono:
 
@@ -199,7 +206,7 @@ app.use(authMiddleware(getAuth));
 export default createHttpRouter(app, httpRouter);
 ```
 
-### 6. Environment Variables
+### 7. Environment Variables
 
 ```bash
 # convex/.env
@@ -216,7 +223,7 @@ JWKS=...
 2. Auto-generates `BETTER_AUTH_SECRET` + `JWKS` when missing.
 
 Prerequisite:
-1. Run `npx better-convex dev` (or `npx convex dev`) first so deployment connection is active.
+1. Run `npx better-convex dev` first so deployment connection is active.
 2. If no deployment is active, sync may run against anonymous context and fail to write env vars.
 
 Key rotation: `npx convex run auth:rotateKeys | npx convex env set JWKS` (invalidates all tokens).

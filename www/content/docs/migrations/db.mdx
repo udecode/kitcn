@@ -79,23 +79,23 @@ export default defineSchema({ users, posts });
 
 This mirrors native Convex indexing discipline: index the fields you filter and sort by.
 
-### Attach ORM to context once
+### Generate Runtime
 
-`better-convex dev` / `better-convex codegen` generates `convex/functions/generated.ts`:
+Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
 
-```ts title="convex/lib/crpc.ts" showLineNumbers {1,5-6}
-import { withOrm } from '../functions/generated';
-
-const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .create();
+```bash
+npx better-convex dev
 ```
 
-Done once, every handler can read through `ctx.orm`.
+### Attach ORM to context once
+
+`convex/functions/generated.ts` exports `initCRPC` pre-wired with ORM context:
+
+```ts title="convex/lib/crpc.ts" showLineNumbers {1}
+import { initCRPC } from '../functions/generated';
+```
+
+Every handler can now read through `ctx.orm`.
 
 Use `createdAt: timestamp().notNull().defaultNow()` on tables where your ORM rows should expose `createdAt: Date`. Without an explicit column, system `createdAt` stays `number`.
 

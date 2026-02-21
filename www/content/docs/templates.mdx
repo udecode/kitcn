@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, you'll find production-ready templates for every layer of a Better Convex application. Copy the files you need and customize them for your project.
+Copy-paste production files for your project.
 
 ## Overview
 
@@ -22,11 +22,9 @@ In this guide, you'll find production-ready templates for every layer of a Bette
 | **Database Utilities** | ORM, triggers, rate limiting |
 | **Dev Scripts** | Reset, init, package.json scripts |
 
-Pick only the features you need. Let's start with the project structure.
-
 ## Project Structure
 
-Monolithic structure with two apps in one repo (simpler HMR than monorepo):
+Monolithic layout — two apps in one repo (simpler HMR than monorepo):
 
 ```plaintext showLineNumbers {1-2,3-6}
 ├── src/              # Next.js app (React client)
@@ -48,8 +46,6 @@ Monolithic structure with two apps in one repo (simpler HMR than monorepo):
 
 ## Environment Variables
 
-Required environment variables for better-convex:
-
 <Tabs groupId="env" items={["Local", "Cloud"]} persist>
   <Tab value="Local">
     ```bash title=".env.local" showLineNumbers {2,5,8}
@@ -63,9 +59,7 @@ Required environment variables for better-convex:
     NEXT_PUBLIC_SITE_URL=http://localhost:3000
     ```
 
-    <Callout icon={<InfoIcon />}>
-    Port 3210 is for WebSocket connections, port 3211 is for HTTP actions (auth routes).
-    </Callout>
+    Port 3210 = WebSocket, port 3211 = HTTP actions (auth routes).
   </Tab>
   <Tab value="Cloud">
     ```bash title=".env.local" showLineNumbers {3,6,9}
@@ -86,8 +80,6 @@ Required environment variables for better-convex:
 ## TypeScript Config
 
 ### tsconfig.json
-
-Root TypeScript configuration with path aliases for `@convex/*` imports.
 
 ```json title="tsconfig.json" showLineNumbers {3-4,19-22}
 {
@@ -131,11 +123,9 @@ Root TypeScript configuration with path aliases for `@convex/*` imports.
 
 ## Server
 
-Required files for any better-convex project.
-
 ### schema.ts
 
-Database schema definition. This example shows Better Auth tables with the admin plugin.
+Better Auth tables with admin plugin:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-96}
 import {
@@ -231,23 +221,7 @@ export const relations = defineRelations(tables);
 export default schema;
 ```
 
-### generated.ts (generated)
-
-Do not create `convex/lib/orm.ts`.
-`convex/functions/generated.ts` is generated and is the canonical server contract.
-It includes `initCRPC` and ORM helpers when `relations` exists.
-If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
-
-```ts title="convex/lib/crpc.ts"
-import { initCRPC, withOrm } from '../functions/generated';
-```
-
-Recommended default for ORM + cRPC: declare `createdAt: timestamp().notNull().defaultNow()` on tables where you want Date values.
-In native mode (no explicit `createdAt` column), system `createdAt` remains `number`.
-
 ### crpc.ts
-
-The cRPC builder with auth middleware and procedure variants.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
 import { getHeaders } from 'better-convex/auth';
@@ -483,11 +457,7 @@ export const router = c.router;
 
 ## Better Auth
 
-Optional - only needed if using Better Auth for authentication.
-
 ### auth.ts
-
-Better Auth options and optional trigger configuration.
 
 ```ts title="convex/functions/auth.ts" showLineNumbers
 import { admin } from 'better-auth/plugins';
@@ -517,14 +487,12 @@ export default defineAuth((ctx) => {
 });
 ```
 
-Run `better-convex dev` / `better-convex codegen` first, then create `auth.ts` and re-run codegen to enable runtime auth exports from `convex/functions/generated.ts`.
+Run `better-convex dev` first, then create `auth.ts` — runtime auth exports in `convex/functions/generated.ts` will regenerate automatically.
 
 
 See [Auth Server documentation](/docs/auth/server) for detailed configuration.
 
 ### auth.config.ts
-
-Auth configuration provider for Convex.
 
 ```ts title="convex/functions/auth.config.ts" showLineNumbers {5-6}
 import { getAuthConfigProvider } from 'better-convex/auth/config';
@@ -536,8 +504,6 @@ export default {
 ```
 
 ### http.ts
-
-HTTP routes for Better Auth.
 
 <Tabs groupId="templates-http" items={["cRPC", "Convex"]} persist>
   <Tab value="cRPC">
@@ -597,8 +563,6 @@ See [HTTP Router documentation](/docs/server/http) for route examples.
 
 ### user.ts
 
-User queries including `getSessionUser` for auth state caching.
-
 ```ts title="convex/functions/user.ts" showLineNumbers {6-17,18-29}
 import { z } from 'zod';
 import { optionalAuthQuery, publicQuery } from '../lib/crpc';
@@ -640,8 +604,6 @@ export const getIsAuthenticated = publicQuery
 
 ### auth-shared.ts
 
-Session user type for auth context. Customize based on your user table fields.
-
 ```ts title="convex/shared/auth-shared.ts" showLineNumbers {3-9}
 import type { Doc } from '../functions/_generated/dataModel';
 // biome-ignore lint/style/noRestrictedImports: types
@@ -660,8 +622,6 @@ export type SessionUser = Select<'user'> & {
 ```
 
 ### auth-client.ts
-
-Better Auth client for React with plugins.
 
 ```ts title="src/lib/convex/auth-client.ts" showLineNumbers {10-16,21-27}
 import type { Auth } from '@convex/auth-shared';
@@ -693,11 +653,7 @@ export const {
 
 ## React Client
 
-Optional - needed for React apps using TanStack Query integration.
-
 ### convex-provider.tsx
-
-Convex provider with TanStack Query integration.
 
 ```tsx title="src/lib/convex/convex-provider.tsx" showLineNumbers
 'use client';
@@ -771,8 +727,6 @@ function QueryClientProvider({ children }: { children: ReactNode }) {
 ```
 
 ### query-client.ts
-
-QueryClient configuration with hydration and error handling.
 
 ```ts title="src/lib/convex/query-client.ts" showLineNumbers
 import {
@@ -853,8 +807,6 @@ export function createQueryClient() {
 
 ### crpc.tsx
 
-CRPC context provider for React with HTTP router support.
-
 ```tsx title="src/lib/convex/crpc.tsx" showLineNumbers {7-10}
 import { api } from '@convex/api';
 import { createCRPCContext } from 'better-convex/react';
@@ -869,11 +821,7 @@ export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
 
 ## Next.js RSC
 
-Optional - needed for React Server Components prefetching.
-
 ### server.ts
-
-Server-side utilities for Next.js RSC.
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {5-9}
 import { api } from '@convex/api';
@@ -886,8 +834,6 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 ```
 
 ### rsc.tsx
-
-React Server Components utilities with prefetching.
 
 ```tsx title="src/lib/convex/rsc.tsx" showLineNumbers
 import 'server-only';
@@ -965,11 +911,7 @@ export function HydrateClient({ children }: { children: React.ReactNode }) {
 
 ## Database Utilities
 
-Optional utilities for triggers and rate limiting.
-
 ### schema triggers
-
-Define side effects directly in `convex/functions/schema.ts`.
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,6-7}
 import { convexTable, onChange } from 'better-convex/orm';
@@ -986,8 +928,6 @@ export const postsTable = convexTable('posts', {/* columns */}, () => [
 See [Triggers documentation](/docs/orm/triggers) for patterns.
 
 ### rate-limiter.ts
-
-Rate limiting configuration with tiered access.
 
 ```ts title="convex/lib/rate-limiter.ts" showLineNumbers
 import { MINUTE, RateLimiter } from '@convex-dev/rate-limiter';
@@ -1062,11 +1002,7 @@ See [Rate Limiting documentation](/docs/server/advanced/rate-limiting) for setup
 
 ## Dev Scripts
 
-Optional scripts for development workflow.
-
 ### reset.ts
-
-Development-only database reset.
 
 ```ts title="convex/functions/reset.ts" showLineNumbers
 /** biome-ignore-all lint/suspicious/noExplicitAny: dev */
@@ -1161,8 +1097,6 @@ export const deletePage = privateMutation
 
 ### init.ts
 
-Development initialization that runs on `convex dev --run init`.
-
 ```ts title="convex/functions/init.ts" showLineNumbers {8-18}
 import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
@@ -1213,8 +1147,6 @@ export default privateMutation
 
 ### package.json scripts
 
-Common scripts for development workflow:
-
 ```json title="package.json" showLineNumbers {3-7}
 {
   "scripts": {
@@ -1239,7 +1171,7 @@ Common scripts for development workflow:
 
 ## Biome
 
-Import boundary enforcement with [Ultracite](https://github.com/12peanuts/ultracite):
+Import boundaries with [Ultracite](https://github.com/12peanuts/ultracite):
 
 ```jsonc title="biome.jsonc" showLineNumbers
 {

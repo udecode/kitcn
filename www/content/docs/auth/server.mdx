@@ -48,9 +48,19 @@ export default {
 } satisfies AuthConfig;
 ```
 
-## 2. Define Auth Contract
+## 2. Generate Runtime
 
-Now define `auth.ts` as a single default export. `better-convex` codegen will generate the runtime (`getAuth`, CRUD handlers, trigger handlers, and static `auth`) in `convex/functions/generated.ts`.
+Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
+
+```bash
+npx better-convex dev
+```
+
+## 3. Define Auth Contract
+
+Now we'll create the heart of your auth setup: the auth contract. This is a single file that defines everything about your authentication — plugins, session settings, trusted origins, and user triggers. You export it as a default export using `defineAuth`, and `better-convex` codegen takes care of the rest.
+
+Here's what a typical auth contract looks like:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {3,6-11,13-22}
 import { admin } from 'better-auth/plugins';
@@ -94,11 +104,15 @@ export default defineAuth((ctx) => {
 });
 ```
 
-<Callout icon={<InfoIcon />}>
-Run `better-convex dev` or `better-convex codegen` first, then create `auth.ts` using `defineAuth` from `./generated`, then re-run codegen. Runtime exports live in `convex/functions/generated.ts` and include `authEnabled` for setup checks.
-</Callout>
+Let's break down what's happening here:
 
-## 3. Update Schema
+- **`convex()` plugin** — connects Better Auth to your Convex database using the auth config and static JWKS from Step 1.
+- **`admin()` plugin** — adds admin capabilities like user banning and role management.
+- **`session`** — controls how long sessions last and how often they refresh.
+- **`trustedOrigins`** — restricts which origins can make auth requests, preventing CSRF attacks.
+- **`triggers`** — hooks that run during auth lifecycle events.
+
+## 4. Update Schema
 
 Your database needs tables for users, sessions, accounts, and more. You have two options: generate them automatically or define them manually.
 
@@ -223,7 +237,7 @@ Add custom indexes as needed:
 user: authSchema.user.index('username', ['username']),
 ```
 
-## 4. HTTP Routes
+## 5. HTTP Routes
 
 Now we'll expose Better Auth's endpoints via HTTP.
 
@@ -313,7 +327,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
 See [HTTP Router](/docs/server/http) for route examples, webhooks, and streaming.
 </Callout>
 
-## 5. Sync Environment Variables
+## 6. Sync Environment Variables
 
 Finally, we need to set up environment variables. Create `convex/.env`:
 
@@ -323,7 +337,7 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
-With Convex dev server running (`npx convex dev`), sync to Convex in another terminal:
+With `better-convex dev` running, sync to Convex:
 
 ```bash
 npx better-convex env sync --auth
@@ -331,7 +345,7 @@ npx better-convex env sync --auth
 
 This syncs `convex/.env` values to the active deployment.
 The `--auth` flag auto-generates `BETTER_AUTH_SECRET` and `JWKS` if they don't exist.
-If no deployment is active, start `npx better-convex dev` (or `npx convex dev`) first, then retry.
+If no deployment is active, start `npx better-convex dev` first, then retry.
 See [CLI Reference](/docs/cli#env) for more options.
 
 That's it for the basic setup! Your auth is now configured. To rotate keys later (this invalidates all tokens):
@@ -396,7 +410,7 @@ export const userTable = convexTable('user', {/* ... */}, () => [
 ]);
 ```
 
-Use `context: withOrm` in auth setup so auth handlers can call `ctx.orm` directly.
+When your schema exports `relations`, generated runtime automatically wires ORM context so auth handlers can use `ctx.orm` directly.
 
 ## Environment Variables
 
