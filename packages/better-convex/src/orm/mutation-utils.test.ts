@@ -173,6 +173,42 @@ describe('mutation-utils', () => {
     );
   });
 
+  test('toConvexFilter inArray empty array compiles to never-match guard', () => {
+    const filter = toConvexFilter({
+      type: 'binary',
+      operator: 'inArray',
+      operands: [{ __brand: 'FieldReference', fieldName: 'status' }, []],
+      accept<R>(visitor: any): R {
+        return visitor.visitBinary(this as any);
+      },
+    } as any);
+
+    const calls: { eq: unknown[][]; field: unknown[][] } = {
+      eq: [],
+      field: [],
+    };
+    const q = {
+      eq: (a: unknown, b: unknown) => {
+        calls.eq.push([a, b]);
+        return { kind: 'eq', a, b };
+      },
+      field: (name: string) => {
+        calls.field.push([name]);
+        return { kind: 'field', name };
+      },
+    };
+
+    expect(filter(q)).toEqual({
+      kind: 'eq',
+      a: { kind: 'field', name: '_id' },
+      b: '__better_convex_never__',
+    });
+    expect(calls.field).toEqual([['_id']]);
+    expect(calls.eq).toEqual([
+      [{ kind: 'field', name: '_id' }, '__better_convex_never__'],
+    ]);
+  });
+
   test('takeRowsWithinByteBudget enforces limits and detects truncation', () => {
     expect(() => takeRowsWithinByteBudget([], 0)).toThrow(/positive integer/i);
 

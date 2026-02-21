@@ -1559,7 +1559,7 @@ const convexTableInternal: ConvexTableFnInternal = (
     writable: false,
   });
 
-  applyExtraConfig(rawTable, extraConfig?.(rawTable[Columns] as any));
+  applyExtraConfig(rawTable, extraConfig?.(table));
 
   return table as any;
 };
