@@ -7,19 +7,59 @@ description: Use when writing changesets for releases
 
 Always mirror @packages/better-convex/CHANGELOG.md tone and structure.
 
-Versioning rule (still v0):
+## 1) Versioning (project is still v0)
 
 - Breaking change => `minor`
 - Non-breaking change => `patch`
+- If a release has both breaking and non-breaking work, use `minor`.
 
-Formatting rules:
+## 2) Required body structure
 
-- Write changeset body as concise bullet points
-- Start bullets with clear user-facing action verbs: `Add`, `Support`, `Fix`, `Improve`, `Deprecate`, `Remove`, `Drop`.
-- Mention migration/upgrade action only when needed.
+- Split the body into explicit sections:
+  - `## Breaking changes`
+  - `## Features`
+  - `## Patches`
+- Omit empty sections, but never mix categories in one section.
+- Keep bullets concise and user-facing.
 
-User-focused, not technical:
+## 3) Migration snippets (required for breaking changes)
 
-- Describe what users can DO now, not implementation details
-- NO internal function names, file paths, or algorithms
-- Include before/after behavior only if it improves clarity
+- Every breaking change must include a short `Before/After` code snippet immediately under that section.
+- Include changed imports, renamed exports, or changed call signatures.
+- If a symbol is renamed, include a dedicated rename snippet.
+
+## 4) Bullet quality rules
+
+- Start bullets with action verbs: `Add`, `Support`, `Fix`, `Improve`, `Deprecate`, `Remove`, `Drop`.
+- Describe what users can do now, not internals.
+- Do not mention file paths, private implementation details, or algorithm notes.
+- Keep each bullet to one concrete outcome.
+
+## 5) Copy-paste template
+
+````md
+---
+"better-convex": minor
+---
+
+## Breaking changes
+
+- Drop ...
+
+```ts
+// Before
+...
+
+// After
+...
+```
+
+## Features
+
+- Add ...
+
+## Patches
+
+- Improve ...
+```
+````
