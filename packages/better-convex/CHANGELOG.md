@@ -1,5 +1,11 @@
 # better-convex
 
+## 0.6.3
+
+### Patch Changes
+
+- [#88](https://github.com/udecode/better-convex/pull/88) [`207d62f`](https://github.com/udecode/better-convex/commit/207d62f19912ccf355ff4c5e9ec5fee56ecf58cb) Thanks [@zbeyens](https://github.com/zbeyens)! - ORM/RLS update: async policy callbacks, safe empty `inArray([])` handling in query + mutation paths, and runtime+types support for system fields (`t.id`) in `extraConfig` callbacks.
+
 ## 0.6.2
 
 ### Patch Changes
