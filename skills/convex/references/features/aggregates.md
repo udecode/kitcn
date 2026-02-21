@@ -1,5 +1,7 @@
 # Aggregates
 
+> Prerequisites: `setup/server.md`
+
 Canonical runtime rules:
 
 - Use aggregate components for counters/rankings

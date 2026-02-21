@@ -2,7 +2,7 @@
 
 Polar payment/subscription integration via Better Auth plugin. Webhook-driven subscription truth, `ctx.orm` for billing state, feature gating by active subscription.
 
-Prerequisite setup baseline: `./setup.md`.
+Prerequisites: `setup/auth.md`, `setup/server.md`.
 
 See [Better Auth Polar Plugin](https://www.better-auth.com/docs/plugins/polar) for full API reference.
 

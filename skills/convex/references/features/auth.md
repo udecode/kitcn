@@ -1,5 +1,7 @@
 # Auth Core Reference
 
+> Prerequisites: `setup/auth.md`
+
 Covers Better Auth integration with Convex: server setup, client hooks, triggers, and auth flow. Assumes Better Auth baseline knowledge.
 
 ## Key Concepts
@@ -57,7 +59,7 @@ Client auto-refreshes expired JWTs with 60s leeway.
 
 ## Server Setup
 
-Bootstrap wiring (first-time auth setup): setup.md Section 6. Below is the reference for auth patterns.
+Below is the reference for auth patterns.
 
 ### 1. Auth Config
 
@@ -116,7 +118,7 @@ Use runtime exports (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `au
 
 ### 4. Schema (ORM API)
 
-Full schema with auth tables → setup.md Section 5.1. Generate with CLI or define manually:
+Generate with CLI or define manually:
 
 ```bash
 npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts

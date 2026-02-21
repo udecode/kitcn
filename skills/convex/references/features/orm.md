@@ -1,6 +1,6 @@
 # ORM Reference
 
-Complete ORM API for feature work. Setup: `./setup.md`. Filters/search/pagination: `./filters.md`.
+Complete ORM API for feature work. Prerequisites: `setup/server.md`. Filters/search/pagination: `./filters.md`.
 
 ## Core Rules
 
@@ -396,7 +396,7 @@ await ctx.orm.delete(user).where(eq(user.role, "inactive")).executeAsync();
 defineSchema(relations, { defaults: { mutationExecutionMode: "async" } });
 ```
 
-Async requires wiring `ormFunctions` + `scheduledMutationBatch` in ORM setup. See setup.md.
+Async requires wiring `ormFunctions` + `scheduledMutationBatch` in ORM setup. See `setup/server.md`.
 
 ## RLS (Row-Level Security)
 

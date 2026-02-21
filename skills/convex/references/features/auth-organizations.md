@@ -2,7 +2,7 @@
 
 Multi-tenant organization features via Better Auth plugin. Organizations, members, invitations, teams, RBAC, lifecycle hooks.
 
-Prerequisite setup baseline: `./setup.md`.
+Prerequisites: `setup/auth.md`, `setup/server.md`.
 
 See [Better Auth Organization Plugin](https://www.better-auth.com/docs/plugins/organization) for full API reference.
 

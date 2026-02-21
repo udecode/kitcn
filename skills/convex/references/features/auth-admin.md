@@ -2,7 +2,7 @@
 
 Role-based admin features: middleware, user management, banning, impersonation, custom permissions.
 
-Prerequisite setup baseline: `./setup.md`.
+Prerequisites: `setup/auth.md`, `setup/server.md`.
 
 See [Better Auth Admin Plugin](https://www.better-auth.com/docs/plugins/admin) for full API reference.
 

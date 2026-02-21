@@ -7,8 +7,8 @@ description: ALWAYS use this skill when working with convex or better-convex. Co
 
 Use this file first for everyday feature delivery in an already configured better-convex app.
 
-- If setup/bootstrap/env/auth wiring or project structure mirroring is missing, use `references/setup.md`.
-- If the task is advanced or niche, load only the specific reference listed at the end.
+- If setup/bootstrap/env/auth wiring or project structure mirroring is missing, use `references/setup/index.md` (then the relevant setup file).
+- If the task is advanced or niche, load only the specific feature reference listed at the end.
 
 ## Scope
 
@@ -66,13 +66,14 @@ Only remember these non-parity deltas:
 
 This skill is directory-scoped. Do not depend on reading files outside `skills/convex/**`.
 
-Use `references/setup.md` when the task needs:
+Use `references/setup/` when the task needs:
 
-1. Project/file structure setup.
-2. Canonical template mirroring.
-3. Scaffolding that should match the canonical template structure documented in `references/setup.md`.
+1. Project/file structure setup → `setup/index.md` + `setup/server.md`
+2. Auth bootstrap → `setup/auth.md`
+3. Client/provider wiring → `setup/react.md`
+4. Framework-specific setup → `setup/next.md` or `setup/start.md`
 
-For full template-level recreation: start with `references/setup.md`, then load only selected deep refs (`auth-admin.md`, `auth-organizations.md`, `aggregates.md`, `http.md`, `scheduling.md`, `testing.md`).
+For full template-level recreation: start with `setup/index.md`, then load relevant setup files, then load selected feature refs.
 
 ## First-Pass Feature Intake (Do This Before Edits)
 
@@ -537,7 +538,7 @@ Preconditions (must be true before writing/using `useCRPC()` code paths):
 
 1. Generated imports exist (`@convex/api`) from setup bootstrap.
 2. Provider chain is mounted (`CRPCProvider` inside QueryClient + Convex provider flow).
-3. If bootstrap/provider prerequisites are missing, stop feature work and complete `references/setup.md` (Sections 5.5, 7.4, 8.A.4) first.
+3. If bootstrap/provider prerequisites are missing, stop feature work and complete `references/setup/` first.
 4. Backend state is project-local in `.convex/` (per worktree/clone), so debug state in the current repo instead of `~/.convex`.
 
 `useCRPC()` pattern:
@@ -556,7 +557,7 @@ const createProject = useMutation(crpc.project.createProject.mutationOptions());
 If generated API import is missing (`@convex/api`):
 
 1. Stop feature coding and finish bootstrap first.
-2. Follow `references/setup.md` Section 5.5 for exact setup/bootstrap commands and recovery steps.
+2. Follow `references/setup/server.md` Section 5.5 for exact setup/bootstrap commands and recovery steps.
 3. Continue only after generated artifacts exist.
 
 Key client defaults/deltas:
@@ -716,20 +717,28 @@ Before calling a feature done:
 | Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                  |
 | Aggregates disabled but helper/config still present | Remove aggregate helper + schema hooks + app config together                              |
 | Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                              |
-| Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup.md` |
+| Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup/` |
 | Relaxing lint rules to pass checks                  | Keep baseline lint config; fix code-level warnings/errors instead                         |
 
 ## Reference Escalation Map (Load Only If Needed)
 
-- `references/setup.md`: setup/bootstrap/env/framework wiring
-- `references/orm.md`: full ORM API, constraints, RLS, advanced mutations
-- `references/filters.md`: advanced filtering/search/composition/pagination modes
-- `references/react.md`: full client, RSC, hydration, error handling matrix
-- `references/http.md`: typed REST routes, webhooks, streaming
-- `references/scheduling.md`: cron + delayed job patterns
-- `references/testing.md`: deeper testing scenarios
-- `references/aggregates.md`: aggregate component patterns
-- `references/auth.md`: full Better Auth core flow
-- `references/auth-admin.md`: admin plugin details
-- `references/auth-organizations.md`: org/multi-tenant plugin details
-- `references/doc-guidelines.md`: skill/docs sync contract
+**Setup (once per project):**
+- `references/setup/index.md`: bootstrap, env, decision intake, gates, checklist, troubleshooting
+- `references/setup/server.md`: core backend (schema, ORM, cRPC) + optional module gates
+- `references/setup/auth.md`: auth core bootstrap + plugin setup
+- `references/setup/react.md`: client core (QueryClient, provider, cRPC context)
+- `references/setup/next.md`: Next.js App Router setup
+- `references/setup/start.md`: TanStack Start setup
+- `references/setup/doc-guidelines.md`: skill/docs sync contract
+
+**Features (per session, self-contained):**
+- `references/features/orm.md`: full ORM API, constraints, RLS, advanced mutations
+- `references/features/filters.md`: advanced filtering/search/composition/pagination modes
+- `references/features/react.md`: full client, RSC, hydration, error handling matrix
+- `references/features/http.md`: typed REST routes, webhooks, streaming
+- `references/features/scheduling.md`: cron + delayed job patterns
+- `references/features/testing.md`: deeper testing scenarios
+- `references/features/aggregates.md`: aggregate component patterns
+- `references/features/auth.md`: full Better Auth core flow
+- `references/features/auth-admin.md`: admin plugin details
+- `references/features/auth-organizations.md`: org/multi-tenant plugin details

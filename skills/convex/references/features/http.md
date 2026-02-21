@@ -2,7 +2,7 @@
 
 Typed REST APIs with cRPC HTTP router, Hono integration, webhooks, streaming, and client integration. Route builder basics → SKILL.md Section 9.
 
-Prerequisite setup baseline: `./setup.md`.
+Prerequisites: `setup/server.md`.
 
 ## Quick Reference
 

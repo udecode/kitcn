@@ -1,5 +1,7 @@
 # React & RSC Reference
 
+> Prerequisites: `setup/react.md`, `setup/next.md`
+
 Covers all better-convex React client, TanStack Query integration, and Next.js RSC patterns. Assumes TanStack Query baseline knowledge.
 
 ## Setup
@@ -76,12 +78,73 @@ export function createQueryClient() {
 
 ### Provider Hierarchy
 
-→ Full provider code (with/without auth): setup.md Section 7.4.
+**Without auth:**
+```tsx
+// src/lib/convex/convex-provider.tsx
+'use client';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ConvexProvider, ConvexReactClient, getQueryClientSingleton, getConvexQueryClientSingleton } from 'better-convex/react';
+import { CRPCProvider } from '@/lib/convex/crpc';
+import { createQueryClient } from '@/lib/convex/query-client';
 
-Key points:
-- Without auth: `ConvexProvider` → `QueryProvider` → `CRPCProvider`
-- With auth: swap `ConvexProvider` for `ConvexAuthProvider`, pass `authStore` to singleton
-- `CRPCProvider` must be nested inside `QueryClientProvider`
+const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+export function BetterConvexProvider({ children }) {
+  return (
+    <ConvexProvider client={convex}>
+      <QueryProvider>{children}</QueryProvider>
+    </ConvexProvider>
+  );
+}
+
+function QueryProvider({ children }) {
+  const queryClient = getQueryClientSingleton(createQueryClient);
+  const convexQueryClient = getConvexQueryClientSingleton({ convex, queryClient });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
+        {children}
+      </CRPCProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+**With auth** — swap `ConvexProvider` for `ConvexAuthProvider`:
+```tsx
+import { ConvexAuthProvider } from 'better-convex/auth/client';
+import { ConvexReactClient, getConvexQueryClientSingleton, getQueryClientSingleton, useAuthStore } from 'better-convex/react';
+
+const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+export function BetterConvexProvider({ children, token }: { children: ReactNode; token?: string }) {
+  const router = useRouter();
+  return (
+    <ConvexAuthProvider
+      authClient={authClient}
+      client={convex}
+      initialToken={token}
+      onMutationUnauthorized={() => router.push('/login')}
+      onQueryUnauthorized={() => router.push('/login')}
+    >
+      <QueryProvider>{children}</QueryProvider>
+    </ConvexAuthProvider>
+  );
+}
+
+function QueryProvider({ children }) {
+  const authStore = useAuthStore(); // pass to singleton
+  const queryClient = getQueryClientSingleton(createQueryClient);
+  const convexQueryClient = getConvexQueryClientSingleton({ authStore, convex, queryClient });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
+        {children}
+      </CRPCProvider>
+    </QueryClientProvider>
+  );
+}
+```
 
 ### Singleton Helpers
 
