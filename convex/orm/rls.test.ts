@@ -33,7 +33,10 @@ const secrets = convexTable(
     index('by_owner').on(t.ownerId),
     rlsPolicy('secrets_read', {
       for: 'select',
-      using: (ctx) => eq(t.ownerId, ctx.viewerId),
+      using: async (ctx, table) => {
+        void table.id;
+        return eq(t.ownerId, await Promise.resolve(ctx.viewerId));
+      },
     }),
     rlsPolicy('secrets_insert', {
       for: 'insert',

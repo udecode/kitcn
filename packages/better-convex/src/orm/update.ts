@@ -528,16 +528,18 @@ export class ConvexUpdateBuilder<
       );
     }
 
-    const updates = rows.map((row) => {
-      const updatedRow = { ...(row as any), ...(effectiveSet as any) };
-      const decision = evaluateUpdateDecision({
-        table: this.table,
-        existingRow: row as Record<string, unknown>,
-        updatedRow,
-        rls,
-      });
-      return { row, updatedRow, decision };
-    });
+    const updates = await Promise.all(
+      rows.map(async (row) => {
+        const updatedRow = { ...(row as any), ...(effectiveSet as any) };
+        const decision = await evaluateUpdateDecision({
+          table: this.table,
+          existingRow: row as Record<string, unknown>,
+          updatedRow,
+          rls,
+        });
+        return { row, updatedRow, decision };
+      })
+    );
 
     const blocked = updates.find(
       ({ decision }) => decision.usingAllowed && !decision.withCheckAllowed

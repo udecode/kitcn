@@ -810,10 +810,24 @@ describe('M4 Where Filtering - Array Operators', () => {
     expect(result[0].name).toBe('Alice');
   });
 
-  test('should throw error for inArray with empty array', () => {
-    expect(() =>
-      inArray({ __brand: 'FieldReference', fieldName: 'status' } as any, [])
-    ).toThrow('inArray requires a non-empty array');
+  test('should return zero rows for inArray with empty array', async ({
+    ctx,
+  }) => {
+    const db = ctx.orm;
+
+    await ctx.db.insert('users', {
+      name: 'Alice',
+      email: 'alice@example.com',
+      age: 25,
+      status: 'active',
+      deletedAt: null,
+    });
+
+    const result = await db.query.users.findMany({
+      where: { status: { in: [] } },
+    });
+
+    expect(result).toHaveLength(0);
   });
 
   test('should throw error for notInArray with empty array', () => {

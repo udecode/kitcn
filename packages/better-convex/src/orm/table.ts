@@ -17,6 +17,7 @@ import {
   createSystemFields,
   type SystemFieldAliases,
   type SystemFields,
+  type SystemFieldsWithAliases,
 } from './builders/system-fields';
 import type {
   ConvexCheckBuilder,
@@ -116,6 +117,14 @@ type ColumnsWithTableName<TColumns, TName extends string> = {
       }
     : TColumns[K];
 };
+
+type ColumnsWithSystemFields<
+  TColumns,
+  TName extends string,
+> = ColumnsWithTableName<TColumns, TName> &
+  (TColumns extends Record<string, unknown>
+    ? SystemFieldsWithAliases<TName, TColumns>
+    : SystemFieldsWithAliases<TName>);
 
 export type ConvexTableExtraConfigValue =
   | ConvexIndexBuilder
@@ -1495,7 +1504,7 @@ type ConvexTableFnInternal = <
 >(
   name: TName,
   columns: TColumns,
-  extraConfig?: (self: ColumnsWithTableName<TColumns, TName>) => TExtraConfig
+  extraConfig?: (self: ColumnsWithSystemFields<TColumns, TName>) => TExtraConfig
 ) => ConvexTableWithColumns<
   {
     name: TName;

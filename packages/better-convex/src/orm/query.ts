@@ -324,12 +324,12 @@ export class GelRelationalQuery<
     return first as TResult;
   }
 
-  private _applyRlsSelectFilter(
+  private async _applyRlsSelectFilter(
     rows: any[],
     tableConfig?: TableRelationalConfig
-  ): any[] {
+  ): Promise<any[]> {
     if (!rows.length || !tableConfig) return rows;
-    return filterSelectRows({
+    return await filterSelectRows({
       table: tableConfig.table as any,
       rows,
       rls: this.rls,
@@ -2309,7 +2309,7 @@ export class GelRelationalQuery<
       });
 
       let rows = fetched.filter((row): row is any => !!row);
-      rows = this._applyRlsSelectFilter(rows, this.tableConfig);
+      rows = await this._applyRlsSelectFilter(rows, this.tableConfig);
 
       if (orderSpecs.length > 0 && rows.length > 1) {
         rows.sort((a, b) => this._compareByOrderSpecs(a, b, orderSpecs));
@@ -2354,7 +2354,7 @@ export class GelRelationalQuery<
         } as any
       );
 
-      let rows = this._applyRlsSelectFilter(page.page, this.tableConfig);
+      let rows = await this._applyRlsSelectFilter(page.page, this.tableConfig);
 
       if (whereFilter) {
         rows = await this._applyRelationsFilterToRows(
@@ -2434,7 +2434,10 @@ export class GelRelationalQuery<
         });
 
         const selectedPage = await this._finalizeRows(
-          this._applyRlsSelectFilter(paginationResult.page, this.tableConfig)
+          await this._applyRlsSelectFilter(
+            paginationResult.page,
+            this.tableConfig
+          )
         );
         return {
           page: selectedPage,
@@ -2460,7 +2463,7 @@ export class GelRelationalQuery<
         rows = rows.slice(offset);
       }
 
-      rows = this._applyRlsSelectFilter(rows, this.tableConfig);
+      rows = await this._applyRlsSelectFilter(rows, this.tableConfig);
       const selectedRows = await this._finalizeRows(rows);
       return this._returnSelectedRows(selectedRows);
     }
@@ -2552,7 +2555,7 @@ export class GelRelationalQuery<
           return score === undefined ? row : { ...row, _score: score };
         });
       }
-      rows = this._applyRlsSelectFilter(rows, this.tableConfig);
+      rows = await this._applyRlsSelectFilter(rows, this.tableConfig);
 
       const selectedRows = await this._finalizeRows(rows);
       return this._returnSelectedRows(selectedRows);
@@ -2633,7 +2636,7 @@ export class GelRelationalQuery<
         } as any);
 
         let pageRows = paginationResult.page;
-        pageRows = this._applyRlsSelectFilter(pageRows, this.tableConfig);
+        pageRows = await this._applyRlsSelectFilter(pageRows, this.tableConfig);
 
         if (whereFilter) {
           pageRows = await this._applyRelationsFilterToRows(
@@ -2672,7 +2675,7 @@ export class GelRelationalQuery<
         rows = rows.slice(offset);
       }
 
-      rows = this._applyRlsSelectFilter(rows, this.tableConfig);
+      rows = await this._applyRlsSelectFilter(rows, this.tableConfig);
 
       if (whereFilter) {
         rows = await this._applyRelationsFilterToRows(
@@ -2842,7 +2845,7 @@ export class GelRelationalQuery<
 
         let pageRows = paginationResult.page;
 
-        pageRows = this._applyRlsSelectFilter(pageRows, this.tableConfig);
+        pageRows = await this._applyRlsSelectFilter(pageRows, this.tableConfig);
 
         if (whereFilter) {
           pageRows = await this._applyRelationsFilterToRows(
@@ -2913,7 +2916,7 @@ export class GelRelationalQuery<
         rows = rows.slice(offset);
       }
 
-      rows = this._applyRlsSelectFilter(rows, this.tableConfig);
+      rows = await this._applyRlsSelectFilter(rows, this.tableConfig);
 
       if (whereFilter) {
         rows = await this._applyRelationsFilterToRows(
@@ -3021,7 +3024,7 @@ export class GelRelationalQuery<
         );
       }
 
-      rows = this._applyRlsSelectFilter(rows, this.tableConfig);
+      rows = await this._applyRlsSelectFilter(rows, this.tableConfig);
 
       if (whereFilter) {
         rows = await this._applyRelationsFilterToRows(
@@ -3151,7 +3154,10 @@ export class GelRelationalQuery<
 
           let pageRows = paginationResult.page;
 
-          pageRows = this._applyRlsSelectFilter(pageRows, this.tableConfig);
+          pageRows = await this._applyRlsSelectFilter(
+            pageRows,
+            this.tableConfig
+          );
 
           if (whereFilter) {
             pageRows = await this._applyRelationsFilterToRows(
@@ -3262,7 +3268,10 @@ export class GelRelationalQuery<
 
           let pageRows = paginationResult.page;
 
-          pageRows = this._applyRlsSelectFilter(pageRows, this.tableConfig);
+          pageRows = await this._applyRlsSelectFilter(
+            pageRows,
+            this.tableConfig
+          );
 
           if (whereFilter) {
             pageRows = await this._applyRelationsFilterToRows(
@@ -3370,7 +3379,7 @@ export class GelRelationalQuery<
 
       let pageRows = paginationResult.page;
 
-      pageRows = this._applyRlsSelectFilter(pageRows, this.tableConfig);
+      pageRows = await this._applyRlsSelectFilter(pageRows, this.tableConfig);
 
       if (whereFilter) {
         pageRows = await this._applyRelationsFilterToRows(
@@ -3467,7 +3476,7 @@ export class GelRelationalQuery<
       );
     }
 
-    rows = this._applyRlsSelectFilter(rows, this.tableConfig);
+    rows = await this._applyRlsSelectFilter(rows, this.tableConfig);
 
     if (whereFilter) {
       rows = await this._applyRelationsFilterToRows(
@@ -3768,6 +3777,9 @@ export class GelRelationalQuery<
             // inArray: field must be in the provided array
             const values = normalizedValue as any[];
             return (q: any) => {
+              if (values.length === 0) {
+                return q.eq(q.field('_id'), '__better_convex_never__');
+              }
               // Convert to OR of eq operations
               const conditions = values.map((v) => q.eq(q.field(fieldName), v));
               return conditions.reduce((acc, cond) => q.or(acc, cond));
@@ -4150,7 +4162,7 @@ export class GelRelationalQuery<
       (value): value is any => !!value
     );
 
-    targets = this._applyRlsSelectFilter(targets, targetTableConfig);
+    targets = await this._applyRlsSelectFilter(targets, targetTableConfig);
 
     if (relationDefinition?.where) {
       targets = targets.filter((target) =>
@@ -4499,7 +4511,7 @@ export class GelRelationalQuery<
       targets = targetGroups.flat();
     }
 
-    targets = this._applyRlsSelectFilter(targets, targetTableConfig);
+    targets = await this._applyRlsSelectFilter(targets, targetTableConfig);
 
     if (relationDefinition?.where) {
       targets = targets.filter((target) =>

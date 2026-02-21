@@ -14,7 +14,10 @@ export type RlsPolicyToOption =
 
 type PolicyExpression<TCtx, TTable> =
   | FilterExpression<boolean>
-  | ((ctx: TCtx, table: TTable) => FilterExpression<boolean>);
+  | ((
+      ctx: TCtx,
+      table: TTable
+    ) => FilterExpression<boolean> | Promise<FilterExpression<boolean>>);
 
 export interface RlsPolicyConfig<
   TCtx = any,

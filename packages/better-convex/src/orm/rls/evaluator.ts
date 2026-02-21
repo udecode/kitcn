@@ -71,12 +71,12 @@ function roleMatches(policy: RlsPolicy, rls?: RlsContext): boolean {
   return targetRoles.some((role) => roles.includes(role));
 }
 
-function resolveExpression(
+async function resolveExpression(
   policy: RlsPolicy,
   checkType: PolicyCheckType,
   ctx: unknown,
   table: ConvexTable<any>
-): FilterExpression<boolean> | undefined {
+): Promise<FilterExpression<boolean> | undefined> {
   const candidate =
     checkType === 'withCheck'
       ? (policy.withCheck ?? policy.using)
@@ -84,18 +84,18 @@ function resolveExpression(
 
   if (!candidate) return;
   if (typeof candidate === 'function') {
-    return candidate(ctx as any, table as any);
+    return await candidate(ctx as any, table as any);
   }
   return candidate as FilterExpression<boolean>;
 }
 
-function evaluatePolicySet({
+async function evaluatePolicySet({
   table,
   operation,
   checkType,
   row,
   rls,
-}: EvaluatePolicyInput): boolean {
+}: EvaluatePolicyInput): Promise<boolean> {
   if (!isRlsEnabled(table)) return true;
   if (rls?.mode === 'skip') return true;
 
@@ -116,30 +116,34 @@ function evaluatePolicySet({
     return false;
   }
 
-  const permissivePasses = permissive.some((policy) => {
-    const expression = resolveExpression(policy, checkType, ctx, table);
-    if (!expression) return true;
-    return evaluateFilter(row, expression);
-  });
-
+  let permissivePasses = false;
+  for (const policy of permissive) {
+    const expression = await resolveExpression(policy, checkType, ctx, table);
+    if (!expression || evaluateFilter(row, expression)) {
+      permissivePasses = true;
+      break;
+    }
+  }
   if (!permissivePasses) return false;
 
   const restrictive = policies.filter(
     (policy) => (policy.as ?? 'permissive') === 'restrictive'
   );
 
-  return restrictive.every((policy) => {
-    const expression = resolveExpression(policy, checkType, ctx, table);
-    if (!expression) return true;
-    return evaluateFilter(row, expression);
-  });
+  for (const policy of restrictive) {
+    const expression = await resolveExpression(policy, checkType, ctx, table);
+    if (!expression) continue;
+    if (!evaluateFilter(row, expression)) return false;
+  }
+
+  return true;
 }
 
-export function canSelectRow(options: {
+export async function canSelectRow(options: {
   table: ConvexTable<any>;
   row: Record<string, unknown>;
   rls?: RlsContext;
-}): boolean {
+}): Promise<boolean> {
   return evaluatePolicySet({
     table: options.table,
     operation: 'select',
@@ -149,11 +153,11 @@ export function canSelectRow(options: {
   });
 }
 
-export function canInsertRow(options: {
+export async function canInsertRow(options: {
   table: ConvexTable<any>;
   row: Record<string, unknown>;
   rls?: RlsContext;
-}): boolean {
+}): Promise<boolean> {
   return evaluatePolicySet({
     table: options.table,
     operation: 'insert',
@@ -163,11 +167,11 @@ export function canInsertRow(options: {
   });
 }
 
-export function canDeleteRow(options: {
+export async function canDeleteRow(options: {
   table: ConvexTable<any>;
   row: Record<string, unknown>;
   rls?: RlsContext;
-}): boolean {
+}): Promise<boolean> {
   return evaluatePolicySet({
     table: options.table,
     operation: 'delete',
@@ -177,27 +181,27 @@ export function canDeleteRow(options: {
   });
 }
 
-export function canUpdateRow(options: {
+export async function canUpdateRow(options: {
   table: ConvexTable<any>;
   existingRow: Record<string, unknown>;
   updatedRow: Record<string, unknown>;
   rls?: RlsContext;
-}): boolean {
-  const decision = evaluateUpdateDecision(options);
+}): Promise<boolean> {
+  const decision = await evaluateUpdateDecision(options);
   return decision.allowed;
 }
 
-export function evaluateUpdateDecision(options: {
+export async function evaluateUpdateDecision(options: {
   table: ConvexTable<any>;
   existingRow: Record<string, unknown>;
   updatedRow: Record<string, unknown>;
   rls?: RlsContext;
-}): {
+}): Promise<{
   allowed: boolean;
   usingAllowed: boolean;
   withCheckAllowed: boolean;
-} {
-  const usingAllowed = evaluatePolicySet({
+}> {
+  const usingAllowed = await evaluatePolicySet({
     table: options.table,
     operation: 'update',
     checkType: 'using',
@@ -205,7 +209,7 @@ export function evaluateUpdateDecision(options: {
     rls: options.rls,
   });
 
-  const withCheckAllowed = evaluatePolicySet({
+  const withCheckAllowed = await evaluatePolicySet({
     table: options.table,
     operation: 'update',
     checkType: 'withCheck',
@@ -220,15 +224,19 @@ export function evaluateUpdateDecision(options: {
   };
 }
 
-export function filterSelectRows(options: {
+export async function filterSelectRows(options: {
   table: ConvexTable<any>;
   rows: Record<string, unknown>[];
   rls?: RlsContext;
-}): Record<string, unknown>[] {
+}): Promise<Record<string, unknown>[]> {
   if (!isRlsEnabled(options.table)) return options.rows;
   if (options.rls?.mode === 'skip') return options.rows;
 
-  return options.rows.filter((row) =>
-    canSelectRow({ table: options.table, row, rls: options.rls })
-  );
+  const rows: Record<string, unknown>[] = [];
+  for (const row of options.rows) {
+    if (await canSelectRow({ table: options.table, row, rls: options.rls })) {
+      rows.push(row);
+    }
+  }
+  return rows;
 }
