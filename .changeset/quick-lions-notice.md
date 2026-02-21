@@ -2,4 +2,4 @@
 "better-convex": patch
 ---
 
-Fix mutation inArray([]) runtime filter guard and ensure extraConfig gets system fields at runtime.
+ORM/RLS update: async policy callbacks, safe empty `inArray([])` handling in query + mutation paths, and runtime+types support for system fields (`t.id`) in `extraConfig` callbacks.
