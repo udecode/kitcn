@@ -13,9 +13,10 @@
   "type": "module",
   "exports": {
     "./auth": "./dist/auth/index.js",
-    "./auth-client": "./dist/auth-client/index.js",
-    "./auth-config": "./dist/auth-config/index.js",
-    "./auth-nextjs": "./dist/auth-nextjs/index.js",
+    "./auth/client": "./dist/auth/client/index.js",
+    "./auth/config": "./dist/auth/config/index.js",
+    "./auth/http": "./dist/auth/http/index.js",
+    "./auth/nextjs": "./dist/auth/nextjs/index.js",
     "./crpc": "./dist/crpc/index.js",
     "./orm": "./dist/orm/index.js",
     "./react": "./dist/react/index.js",

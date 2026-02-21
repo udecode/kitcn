@@ -10,6 +10,13 @@
 - Drop manual auth runtime exports from `convex/functions/auth.ts`; import runtime handlers (`getAuth`, CRUD, trigger handlers, `auth`) from `convex/functions/generated.ts`.
 - Drop trigger `ctx` as the first callback parameter and use doc-first signatures (`beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)`, etc.).
 - Rename `createApi` option `skipValidation` to `validateInput`; default is now `validateInput: false`.
+- Rename auth package entrypoints from hyphenated to namespaced paths:
+  - `better-convex/auth-client` -> `better-convex/auth/client`
+  - `better-convex/auth-config` -> `better-convex/auth/config`
+  - `better-convex/auth-nextjs` -> `better-convex/auth/nextjs`
+- Move HTTP auth helpers to `better-convex/auth/http`:
+  - `authMiddleware` and `registerRoutes` now import from `better-convex/auth/http` (not `better-convex/auth`).
+  - `better-convex/auth/http` auto-installs the Convex-safe `MessageChannel` polyfill. You can remove your own `http-polyfills.ts` file.
 
 ```ts
 // Before
@@ -38,6 +45,27 @@ createApi(schema, getAuth, { skipValidation: true });
 import { getAuth } from "./generated";
 createApi(schema, getAuth); // validateInput defaults to false
 createApi(schema, getAuth, { validateInput: true });
+```
+
+```ts
+// Before
+import { convexClient } from "better-convex/auth-client";
+import { getAuthConfigProvider } from "better-convex/auth-config";
+import { convexBetterAuth } from "better-convex/auth-nextjs";
+
+// After
+import { convexClient } from "better-convex/auth/client";
+import { getAuthConfigProvider } from "better-convex/auth/config";
+import { convexBetterAuth } from "better-convex/auth/nextjs";
+```
+
+```ts
+// Before
+import "../lib/http-polyfills";
+import { authMiddleware, registerRoutes } from "better-convex/auth";
+
+// After
+import { authMiddleware, registerRoutes } from "better-convex/auth/http";
 ```
 
 ### Generated Server Contract
@@ -98,14 +126,22 @@ const c = initCRPC
     query: (ctx) => withOrm(ctx),
     mutation: (ctx) => withOrm(ctx),
   })
-  .meta<{ auth?: "optional" | "required"; role?: "admin"; rateLimit?: string }>()
+  .meta<{
+    auth?: "optional" | "required";
+    role?: "admin";
+    rateLimit?: string;
+  }>()
   .create();
 
 // After
 import { initCRPC } from "../functions/generated";
 
 const c = initCRPC
-  .meta<{ auth?: "optional" | "required"; role?: "admin"; rateLimit?: string }>()
+  .meta<{
+    auth?: "optional" | "required";
+    role?: "admin";
+    rateLimit?: string;
+  }>()
   .create();
 ```
 

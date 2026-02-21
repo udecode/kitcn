@@ -1,5 +1,4 @@
-// import '../lib/http-polyfills';
-import { authMiddleware } from 'better-convex/auth';
+import { authMiddleware } from 'better-convex/auth/http';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';

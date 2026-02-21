@@ -366,7 +366,7 @@ So now we have access to the token in the `beforeLoad` function, and we can get 
 ```tsx title="src/lib/convex/convex-provider.tsx"
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { ConvexAuthProvider } from "better-convex/auth-client";
+import { ConvexAuthProvider } from "better-convex/auth/client";
 import { CRPCProvider } from "@/lib/convex/crpc";
 import { authClient } from "./auth/auth-client";
 

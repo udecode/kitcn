@@ -11,6 +11,4 @@ export { createClient } from './create-client';
 export * from './define-auth';
 export * from './generated-contract';
 export * from './helpers';
-export * from './middleware';
-export * from './registerRoutes';
 export * from './types';

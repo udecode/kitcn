@@ -1,7 +1,7 @@
 'use client';
 
 import { QueryClientProvider as TanstackQueryClientProvider } from '@tanstack/react-query';
-import { ConvexAuthProvider } from 'better-convex/auth-client';
+import { ConvexAuthProvider } from 'better-convex/auth/client';
 import {
   ConvexReactClient,
   getConvexQueryClientSingleton,

@@ -16,7 +16,7 @@ export interface AuthMiddlewareOptions {
  * ```ts
  * import { Hono } from 'hono';
  * import { cors } from 'hono/cors';
- * import { authMiddleware } from 'better-convex/auth';
+ * import { authMiddleware } from 'better-convex/auth/http';
  * import { createHttpRouter } from 'better-convex/server';
  *
  * const app = new Hono();

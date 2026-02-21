@@ -50,10 +50,11 @@ export const router = c.router;
 
 ### HTTP Registration with Hono
 
+Use `better-convex/auth/http` for auth route helpers; it auto-installs the Convex-safe `MessageChannel` polyfill.
+
 ```ts
 // convex/functions/http.ts
-import '../lib/http-polyfills';
-import { authMiddleware } from 'better-convex/auth';
+import { authMiddleware } from 'better-convex/auth/http';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';

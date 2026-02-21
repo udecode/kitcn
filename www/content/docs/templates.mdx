@@ -527,53 +527,13 @@ See [Auth Server documentation](/docs/auth/server) for detailed configuration.
 Auth configuration provider for Convex.
 
 ```ts title="convex/functions/auth.config.ts" showLineNumbers {5-6}
-import { getAuthConfigProvider } from 'better-convex/auth-config';
+import { getAuthConfigProvider } from 'better-convex/auth/config';
 import type { AuthConfig } from 'convex/server';
 
 export default {
   providers: [getAuthConfigProvider({ jwks: process.env.JWKS })],
 } satisfies AuthConfig;
 ```
-
-### http-polyfills.ts
-
-Convex's runtime environment doesn't include `MessageChannel`, which Better Auth's HTTP handling requires.
-
-```ts title="convex/lib/http-polyfills.ts" showLineNumbers
-// polyfill MessageChannel without using node:events
-if (typeof MessageChannel === 'undefined') {
-  class MockMessagePort {
-    onmessage: ((ev: MessageEvent) => void) | undefined;
-    onmessageerror: ((ev: MessageEvent) => void) | undefined;
-
-    addEventListener() {}
-    close() {}
-
-    dispatchEvent(_event: Event): boolean {
-      return false;
-    }
-
-    postMessage(_message: unknown, _transfer: Transferable[] = []) {}
-    removeEventListener() {}
-    start() {}
-  }
-
-  class MockMessageChannel {
-    port1: MockMessagePort;
-    port2: MockMessagePort;
-
-    constructor() {
-      this.port1 = new MockMessagePort();
-      this.port2 = new MockMessagePort();
-    }
-  }
-
-  globalThis.MessageChannel =
-    MockMessageChannel as unknown as typeof MessageChannel;
-}
-```
-
-Import this at the top of your HTTP file (before other imports).
 
 ### http.ts
 
@@ -582,8 +542,7 @@ HTTP routes for Better Auth.
 <Tabs groupId="templates-http" items={["cRPC", "Convex"]} persist>
   <Tab value="cRPC">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-6,10-19,22,25-27}
-    import '../lib/http-polyfills';
-    import { authMiddleware } from 'better-convex/auth';
+    import { authMiddleware } from 'better-convex/auth/http';
     import { createHttpRouter } from 'better-convex/server';
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
@@ -617,8 +576,7 @@ HTTP routes for Better Auth.
   </Tab>
   <Tab value="Convex">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
-    import '../lib/http-polyfills';
-    import { registerRoutes } from 'better-convex/auth';
+    import { registerRoutes } from 'better-convex/auth/http';
     import { httpRouter } from 'convex/server';
     import { getAuth } from './generated';
 
@@ -709,7 +667,7 @@ Better Auth client for React with plugins.
 import type { Auth } from '@convex/auth-shared';
 import { adminClient, inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'better-convex/auth-client';
+import { convexClient } from 'better-convex/auth/client';
 import { createAuthMutations } from 'better-convex/react';
 
 export const authClient = createAuthClient({
@@ -745,7 +703,7 @@ Convex provider with TanStack Query integration.
 'use client';
 
 import { QueryClientProvider as TanstackQueryClientProvider } from '@tanstack/react-query';
-import { ConvexAuthProvider } from 'better-convex/auth-client';
+import { ConvexAuthProvider } from 'better-convex/auth/client';
 import {
   ConvexReactClient,
   getConvexQueryClientSingleton,
@@ -919,7 +877,7 @@ Server-side utilities for Next.js RSC.
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {5-9}
 import { api } from '@convex/api';
-import { convexBetterAuth } from 'better-convex/auth-nextjs';
+import { convexBetterAuth } from 'better-convex/auth/nextjs';
 
 export const { createContext, createCaller, handler } = convexBetterAuth({
   api,

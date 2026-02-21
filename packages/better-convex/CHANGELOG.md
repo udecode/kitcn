@@ -73,7 +73,7 @@
   const userId: string = ctx.userId;
   ```
 
-  - `getAuthConfigProvider` should be imported from `better-convex/auth-config`.
+  - `getAuthConfigProvider` should be imported from `better-convex/auth/config`.
     (instead of legacy `@convex-dev/better-auth/auth-config`, or old `better-convex/auth` docs)
 
   ```ts
@@ -81,7 +81,7 @@
   import { getAuthConfigProvider } from "@convex-dev/better-auth/auth-config";
 
   // After
-  import { getAuthConfigProvider } from "better-convex/auth-config";
+  import { getAuthConfigProvider } from "better-convex/auth/config";
   ```
 
   - Remove legacy app deps: `@convex-dev/better-auth`, `convex-ents`, and `convex-helpers`.
@@ -164,8 +164,8 @@
 
   ## Patched
   - Updated template and docs to use:
-    - `better-convex/auth-client` (`convexClient`)
-    - `better-convex/auth-config` (`getAuthConfigProvider`)
+    - `better-convex/auth/client` (`convexClient`)
+    - `better-convex/auth/config` (`getAuthConfigProvider`)
   - Example app migration now reflects the current user-facing API (`ctx.orm`, `getAuth(ctx)`, simpler `initCRPC.create()`).
   - cRPC/server error handling now normalizes known causes into deterministic CRPC errors:
     - `OrmNotFoundError` -> `NOT_FOUND`
@@ -182,7 +182,7 @@
   import { convexClient } from "@convex-dev/better-auth/client/plugins";
 
   // After
-  import { convexClient } from "better-convex/auth-client";
+  import { convexClient } from "better-convex/auth/client";
   ```
 
   ```ts
@@ -448,7 +448,7 @@
   Before:
 
   ```ts
-  import { registerRoutes } from "better-convex/auth";
+  import { registerRoutes } from "better-convex/auth/http";
   import { registerCRPCRoutes } from "better-convex/server";
   import { httpRouter } from "convex/server";
 
@@ -475,7 +475,7 @@
   After:
 
   ```ts
-  import { authMiddleware } from "better-convex/auth";
+  import { authMiddleware } from "better-convex/auth/http";
   import { createHttpRouter } from "better-convex/server";
   import { Hono } from "hono";
   import { cors } from "hono/cors";

@@ -61,7 +61,7 @@ Client auto-refreshes expired JWTs with 60s leeway.
 
 ```ts
 // convex/functions/auth.config.ts
-import { getAuthConfigProvider } from 'better-convex/auth-config';
+import { getAuthConfigProvider } from 'better-convex/auth/config';
 export default {
   providers: [getAuthConfigProvider({ jwks: process.env.JWKS })],
 } satisfies AuthConfig;
@@ -171,22 +171,10 @@ export const jwks = convexTable('jwks', {
 });
 ```
 
-### 4. Polyfills (Conditional)
+### 4. Auth HTTP Runtime
 
-```ts
-// convex/lib/http-polyfills.ts — import at top of http.ts before other imports
-if (typeof MessageChannel === 'undefined') {
-  class MockMessagePort {
-    onmessage; onmessageerror;
-    addEventListener() {} close() {} dispatchEvent() { return false; }
-    postMessage() {} removeEventListener() {} start() {}
-  }
-  class MockMessageChannel {
-    port1 = new MockMessagePort(); port2 = new MockMessagePort();
-  }
-  globalThis.MessageChannel = MockMessageChannel as unknown as typeof MessageChannel;
-}
-```
+Import auth route helpers from `better-convex/auth/http`.
+That entrypoint auto-installs the Convex-safe `MessageChannel` polyfill.
 
 ### 5. HTTP Routes
 
@@ -194,8 +182,7 @@ Three options — cRPC (recommended), plain Convex, or Hono:
 
 ```ts
 // convex/functions/http.ts — cRPC option
-import '../lib/http-polyfills';
-import { authMiddleware } from 'better-convex/auth';
+import { authMiddleware } from 'better-convex/auth/http';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -285,7 +272,7 @@ Default `definePayload` includes all user fields except `id` and `image`, plus `
 // src/lib/convex/auth-client.ts
 import { inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'better-convex/auth-client';
+import { convexClient } from 'better-convex/auth/client';
 import { createAuthMutations } from 'better-convex/react';
 import type { Auth } from '@convex/auth-shared';
 

@@ -75,7 +75,7 @@ First, create a caller factory for Better Auth:
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {3,5-9}
 import { api } from '@convex/api';
-import { convexBetterAuth } from 'better-convex/auth-nextjs';
+import { convexBetterAuth } from 'better-convex/auth/nextjs';
 
 export const { createContext, createCaller, handler } = convexBetterAuth({
   api,
@@ -112,10 +112,10 @@ Set up the client provider with Better Auth. The `initialToken` prop enables aut
 'use client';
 
 import { ConvexReactClient } from 'convex/react';
-import { ConvexAuthProvider } from 'better-convex/auth-client';
+import { ConvexAuthProvider } from 'better-convex/auth/client';
 import { inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'better-convex/auth-client';
+import { convexClient } from 'better-convex/auth/client';
 
 import type { Auth } from '@convex/auth-shared';
 

@@ -344,8 +344,7 @@ bun add hono
 ```
 
 ```ts title="convex/functions/http.ts" showLineNumbers {1-6,8-18,20-24}
-import '../lib/http-polyfills';
-import { authMiddleware } from 'better-convex/auth';
+import { authMiddleware } from 'better-convex/auth/http';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';

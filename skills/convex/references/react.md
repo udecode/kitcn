@@ -110,7 +110,7 @@ function QueryProvider({ children }) {
 
 **With auth** — swap `ConvexProvider` for `ConvexAuthProvider`:
 ```tsx
-import { ConvexAuthProvider } from 'better-convex/auth-client';
+import { ConvexAuthProvider } from 'better-convex/auth/client';
 import { ConvexReactClient, getConvexQueryClientSingleton, getQueryClientSingleton, useAuthStore } from 'better-convex/react';
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -502,7 +502,7 @@ type OrgMember = ApiOutputs['organization']['members']['list'][number]; // array
 ```ts
 // src/lib/convex/server.ts
 import { api } from '@convex/api';
-import { convexBetterAuth } from 'better-convex/auth-nextjs';
+import { convexBetterAuth } from 'better-convex/auth/nextjs';
 
 export const { createContext, createCaller, handler } = convexBetterAuth({
   api,

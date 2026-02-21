@@ -40,7 +40,7 @@ Pin `better-auth` to avoid breaking changes. Check [Better Auth releases](https:
 Next, we'll create the auth configuration file. This tells Convex how to validate JWTs using Static JWKS:
 
 ```ts title="convex/functions/auth.config.ts" showLineNumbers {4-6}
-import { getAuthConfigProvider } from 'better-convex/auth-config';
+import { getAuthConfigProvider } from 'better-convex/auth/config';
 import type { AuthConfig } from 'convex/server';
 
 export default {
@@ -223,47 +223,7 @@ Add custom indexes as needed:
 user: authSchema.user.index('username', ['username']),
 ```
 
-## 4. Polyfills (Required)
-
-Convex's runtime environment doesn't include `MessageChannel`, which Better Auth's HTTP handling requires. Create this polyfill file:
-
-```ts title="convex/lib/http-polyfills.ts" showLineNumbers
-// polyfill MessageChannel without using node:events
-if (typeof MessageChannel === 'undefined') {
-  class MockMessagePort {
-    onmessage: ((ev: MessageEvent) => void) | undefined;
-    onmessageerror: ((ev: MessageEvent) => void) | undefined;
-
-    addEventListener() {}
-    close() {}
-
-    dispatchEvent(_event: Event): boolean {
-      return false;
-    }
-
-    postMessage(_message: unknown, _transfer: Transferable[] = []) {}
-    removeEventListener() {}
-    start() {}
-  }
-
-  class MockMessageChannel {
-    port1: MockMessagePort;
-    port2: MockMessagePort;
-
-    constructor() {
-      this.port1 = new MockMessagePort();
-      this.port2 = new MockMessagePort();
-    }
-  }
-
-  globalThis.MessageChannel =
-    MockMessageChannel as unknown as typeof MessageChannel;
-}
-```
-
-Import this at the top of your HTTP file (before other imports).
-
-## 5. HTTP Routes
+## 4. HTTP Routes
 
 Now we'll expose Better Auth's endpoints via HTTP.
 
@@ -273,8 +233,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
 <Tabs groupId="router" items={["cRPC", "Convex", "Hono", ]} persist>
 <Tab value="cRPC">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-5,9-18,21}
-    import '../lib/http-polyfills';
-    import { authMiddleware } from 'better-convex/auth';
+    import { authMiddleware } from 'better-convex/auth/http';
     import { createHttpRouter } from 'better-convex/server';
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
@@ -306,8 +265,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
   </Tab>
   <Tab value="Convex">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
-    import '../lib/http-polyfills';
-    import { registerRoutes } from 'better-convex/auth';
+    import { registerRoutes } from 'better-convex/auth/http';
     import { httpRouter } from 'convex/server';
     import { getAuth } from './generated';
 
@@ -324,8 +282,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
   </Tab>
   <Tab value="Hono">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-4,8-17,20}
-    import '../lib/http-polyfills';
-    import { authMiddleware } from 'better-convex/auth';
+    import { authMiddleware } from 'better-convex/auth/http';
     import { HttpRouterWithHono } from 'better-convex/server';
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
@@ -356,7 +313,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
 See [HTTP Router](/docs/server/http) for route examples, webhooks, and streaming.
 </Callout>
 
-## 6. Sync Environment Variables
+## 5. Sync Environment Variables
 
 Finally, we need to set up environment variables. Create `convex/.env`:
 

@@ -555,7 +555,7 @@ bun add better-auth@1.4.9 better-convex hono
 **Create:** `convex/functions/auth.config.ts`
 
 ```ts
-import { getAuthConfigProvider } from "better-convex/auth-config";
+import { getAuthConfigProvider } from "better-convex/auth/config";
 import type { AuthConfig } from "convex/server";
 
 export default {
@@ -734,42 +734,10 @@ Otherwise add these tables:
 
 Keep all auth reads/writes on ORM table definitions in `convex/functions/schema.ts`.
 
-### 6.5 Conditional polyfill for auth HTTP runtime
+### 6.5 Register auth HTTP routes
 
-**Create:** `convex/lib/http-polyfills.ts`
-
-```ts
-if (typeof MessageChannel === "undefined") {
-  class MockMessagePort {
-    onmessage: ((ev: MessageEvent) => void) | undefined;
-    onmessageerror: ((ev: MessageEvent) => void) | undefined;
-
-    addEventListener() {}
-    close() {}
-    dispatchEvent(_event: Event): boolean {
-      return false;
-    }
-    postMessage(_message: unknown, _transfer: Transferable[] = []) {}
-    removeEventListener() {}
-    start() {}
-  }
-
-  class MockMessageChannel {
-    port1: MockMessagePort;
-    port2: MockMessagePort;
-
-    constructor() {
-      this.port1 = new MockMessagePort();
-      this.port2 = new MockMessagePort();
-    }
-  }
-
-  globalThis.MessageChannel =
-    MockMessageChannel as unknown as typeof MessageChannel;
-}
-```
-
-### 6.6 Register auth HTTP routes
+Use `better-convex/auth/http` for `authMiddleware` or `registerRoutes`.
+It auto-installs the Convex-safe `MessageChannel` polyfill, so no manual `http-polyfills.ts` file is needed.
 
 **Create:** `convex/functions/http.ts`
 
@@ -782,9 +750,8 @@ Bootstrap note:
 cRPC + Hono route shape:
 
 ```ts
-import "../lib/http-polyfills";
 
-import { authMiddleware } from "better-convex/auth";
+import { authMiddleware } from "better-convex/auth/http";
 import { createHttpRouter } from "better-convex/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -813,7 +780,7 @@ export const httpRouter = router({
 export default createHttpRouter(app, httpRouter);
 ```
 
-### 6.7 Sync env and JWKS
+### 6.6 Sync env and JWKS
 
 **Create:** `convex/.env`
 
@@ -837,7 +804,7 @@ Rotate later:
 bunx convex run auth:rotateKeys | bunx convex env set JWKS
 ```
 
-### 6.8 Production bootstrap notes
+### 6.7 Production bootstrap notes
 
 First prod deploy requires JWKS initialization:
 
@@ -1035,7 +1002,7 @@ Prerequisite:
 import type { Auth } from "@convex/auth-shared";
 import { adminClient, inferAdditionalFields } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
-import { convexClient } from "better-convex/auth-client";
+import { convexClient } from "better-convex/auth/client";
 import { createAuthMutations } from "better-convex/react";
 
 export const authClient = createAuthClient({
@@ -1137,7 +1104,7 @@ Hard rule:
 "use client";
 
 import { QueryClientProvider as TanstackQueryClientProvider } from "@tanstack/react-query";
-import { ConvexAuthProvider } from "better-convex/auth-client";
+import { ConvexAuthProvider } from "better-convex/auth/client";
 import {
   ConvexReactClient,
   getConvexQueryClientSingleton,
@@ -1206,7 +1173,7 @@ Provider mount checklist:
 
 ```ts
 import { api } from "@convex/api";
-import { convexBetterAuth } from "better-convex/auth-nextjs";
+import { convexBetterAuth } from "better-convex/auth/nextjs";
 
 export const { createContext, createCaller, handler } = convexBetterAuth({
   api,
@@ -1857,7 +1824,7 @@ Then sanity-check auth runtime paths:
 4. `schema.ts` + `relations` + generated `initCRPC` wiring are in place.
 5. `crpc.ts` builders exported and app procedures use `ctx.orm`.
 6. `better-convex dev` runs and generates `_generated` + `api.ts`.
-7. If auth enabled: `auth.config.ts`, `auth.ts`, `http-polyfills.ts`, `http.ts`, env sync complete.
+7. If auth enabled: `auth.config.ts`, `auth.ts`, `http.ts`, env sync complete.
 8. Client `CRPCProvider` + QueryClient + Convex provider are mounted.
 9. Framework branch is complete (Next.js or TanStack Start).
 10. If using typed envs: `convex/lib/get-env.ts` exists and Convex code reads through `getEnv()`.
@@ -1883,13 +1850,13 @@ Then sanity-check auth runtime paths:
 | `Local backend isn't running` during manual `better-convex codegen`                   | Convex local deployment not active                                                              | Prefer `bunx better-convex dev` (it already codegens); use manual `codegen` only as fallback with active backend                                                                            |
 | HTTP calls fail but queries work                                                      | `.site` URL missing or wrong                                                                    | Set `NEXT_PUBLIC_CONVEX_SITE_URL` correctly                                                                                                                                                 |
 | Auth works locally but fails in prod                                                  | JWKS not synced                                                                                 | Run `bunx better-convex env sync --auth --prod`                                                                                                                                             |
-| Sign-in fails on `/auth` (loop, no session, or immediate sign-out)                    | Auth route/env/provider wiring mismatch                                                         | Recheck Sections 6.6-6.8 (`authMiddleware`, route registration, env sync), verify provider credentials/URLs, then rerun Section 11.3                                                        |
+| Sign-in fails on `/auth` (loop, no session, or immediate sign-out)                    | Auth route/env/provider wiring mismatch                                                         | Recheck Sections 6.5-6.7 (`authMiddleware`, route registration, env sync), verify provider credentials/URLs, then rerun Section 11.3                                                        |
 | `UNAUTHORIZED` on protected procedures                                                | auth middleware not attaching `userId`                                                          | Ensure `getAuth(ctx)` + `getHeaders(ctx)` session lookup is in middleware                                                                                                                   |
 | `ctx.orm` missing in handlers                                                         | Generated `initCRPC` not used (or manual ORM context not wired)                                | Use `initCRPC` from `../functions/generated`; if manual, ensure `query` + `mutation` both use `withOrm(ctx)`                                                                                |
 | `Property 'insert'/'update' does not exist on type 'OrmReader'`                       | ORM context wrapper used reader-only shape                                                      | Use `orm.with(ctx)` in `withOrm` helper (Section 5.2)                                                                                                                                       |
 | `useCRPC must be used within CRPCProvider`                                            | Provider chain not mounted around route tree                                                    | Wrap app with `BetterConvexProvider` and verify `CRPCProvider` is inside QueryClientProvider (Section 7.4 / 8.A.4)                                                                          |
 | Route auth cookies not set                                                            | Missing CORS auth headers                                                                       | Add `Better-Auth-Cookie` allow/expose headers + credentials                                                                                                                                 |
-| TanStack Start auth helper import errors                                              | Using `better-convex/auth-nextjs` in Start app                                                  | Use TanStack Start exception with `@convex-dev/better-auth/*` helpers                                                                                                                       |
+| TanStack Start auth helper import errors                                              | Using `better-convex/auth/nextjs` in Start app                                                  | Use TanStack Start exception with `@convex-dev/better-auth/*` helpers                                                                                                                       |
 | `Returned promise will never resolve` from internal function                          | Trigger path is recursively querying/updating related rows or stale component wiring still runs | Isolate failing write with logs, disable/move trigger-side sync into explicit mutation helper, rerun `bunx better-convex dev --once --typecheck disable`, then retry bootstrap smoke checks |
 | Better Auth secret mismatch/warnings in setup flows                                   | `BETTER_AUTH_SECRET` manually set inconsistently or low entropy                                 | Generate and sync via `bunx better-convex env sync --auth`; avoid manual secret setting unless explicitly needed                                                                            |
 | `Invalid orderBy value. Use a column or asc()/desc()`                                 | Wrong `orderBy` shape (`[{ field, direction }]`)                                                | Use object form only, e.g. `orderBy: { updatedAt: "desc" }`                                                                                                                                 |

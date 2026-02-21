@@ -29,7 +29,7 @@ Create an auth client with mutation hooks:
 ```ts title="src/lib/convex/auth-client.ts" showLineNumbers {4,8-9,12-16}
 import { inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'better-convex/auth-client';
+import { convexClient } from 'better-convex/auth/client';
 import { createAuthMutations } from 'better-convex/react';
 
 import type { Auth } from '@convex/auth-shared';
@@ -397,7 +397,7 @@ function App() {
 Configure auth callbacks in the provider:
 
 ```tsx title="src/app.tsx" showLineNumbers {1,5-14}
-import { ConvexAuthProvider } from 'better-convex/auth-client';
+import { ConvexAuthProvider } from 'better-convex/auth/client';
 
 function App() {
   return (

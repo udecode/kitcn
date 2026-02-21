@@ -331,7 +331,7 @@ export function ConvexClientProvider({
 "use client";
 
 import { ConvexReactClient } from "convex/react";
-import { ConvexAuthProvider } from "better-convex/auth-client";
+import { ConvexAuthProvider } from "better-convex/auth/client";
 import { authClient } from "@/lib/convex/auth-client";
 import { useRouter } from "next/navigation";
 

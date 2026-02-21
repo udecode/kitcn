@@ -12,10 +12,10 @@ const babelPlugin = pluginBabel({
 });
 
 export default defineConfig([
-  // Client builds (auth-client, react) - need "use client" directive
+  // Client builds (auth/client, react) - need "use client" directive
   {
     entry: {
-      'auth-client/index': 'src/auth-client/index.ts',
+      'auth/client/index': 'src/auth-client/index.ts',
       'react/index': 'src/react/index.ts',
     },
     platform: 'neutral',
@@ -30,9 +30,10 @@ export default defineConfig([
   // Server-safe builds (crpc, rsc, server, orm) - no "use client"
   {
     entry: {
-      'auth-config/index': 'src/auth-config/index.ts',
+      'auth/config/index': 'src/auth-config/index.ts',
+      'auth/http/index': 'src/auth-http/index.ts',
       'auth/index': 'src/auth/index.ts',
-      'auth-nextjs/index': 'src/auth-nextjs/index.ts',
+      'auth/nextjs/index': 'src/auth-nextjs/index.ts',
       'crpc/index': 'src/crpc/index.ts',
       'rsc/index': 'src/rsc/index.ts',
       'server/index': 'src/server/index.ts',
