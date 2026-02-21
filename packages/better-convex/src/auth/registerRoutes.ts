@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/suspicious/noConsole: lib */
 import { type HttpRouter, httpActionGeneric } from 'convex/server';
 import { corsRouter } from '../internal/upstream/server/cors';
+import { toAuthErrorResponse } from './error-response';
 
 import type { GetAuth } from './types';
 
@@ -28,7 +29,16 @@ export const registerRoutes = (
     }
 
     const auth = getAuth(ctx as any);
-    const response = await auth.handler(request);
+    let response: Response;
+    try {
+      response = await auth.handler(request);
+    } catch (error) {
+      const errorResponse = toAuthErrorResponse(error);
+      if (errorResponse) {
+        return errorResponse;
+      }
+      throw error;
+    }
 
     if (opts?.verbose) {
       console.log('response headers', response.headers);

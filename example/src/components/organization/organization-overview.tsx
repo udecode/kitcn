@@ -3,6 +3,7 @@
 import type { ApiInputs } from '@convex/types';
 import { skipToken, useMutation, useQuery } from '@tanstack/react-query';
 import {
+  Ban,
   Calendar,
   CreditCard,
   Crown,
@@ -85,6 +86,20 @@ export function OrganizationOverview({
       },
     })
   );
+
+  const forbiddenOrgApi = useMutation({
+    mutationFn: async () => {
+      const response = await authClient.organization.listMembers({
+        query: { organizationId: 'forbidden-organization-id' },
+        fetchOptions: {
+          throw: false,
+        },
+      });
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+    },
+  });
 
   if (!organization) {
     return null;
@@ -308,6 +323,18 @@ export function OrganizationOverview({
               >
                 <UserCheck className="h-4 w-4" />
                 Manage Members
+              </Button>
+              <Button
+                className="justify-start"
+                disabled={forbiddenOrgApi.isPending}
+                onClick={() => forbiddenOrgApi.mutate()}
+                size="sm"
+                variant="secondary"
+              >
+                <Ban className="h-4 w-4" />
+                {forbiddenOrgApi.isPending
+                  ? 'Triggering error...'
+                  : 'Trigger Forbidden Org API'}
               </Button>
               <Button
                 className="justify-start"

@@ -53,6 +53,41 @@ describe('authMiddleware', () => {
     expect(await (response as Response).text()).toBe('auth-ok');
   });
 
+  test('maps APIError-like auth.handler throws to HTTP responses', async () => {
+    const middleware = authMiddleware(
+      (() => ({
+        handler: async () => {
+          throw Object.assign(new Error('invalid token'), {
+            body: { code: 'INVALID_TOKEN', message: 'Invalid token' },
+            headers: { 'x-auth-error': '1' },
+            name: 'APIError',
+            status: 'UNAUTHORIZED',
+            statusCode: 401,
+          });
+        },
+      })) as any,
+      { basePath: '/auth' }
+    );
+
+    const c = {
+      env: {},
+      req: {
+        path: '/auth/session',
+        raw: new Request('https://app.example/auth/session'),
+      },
+    } as any;
+
+    const response = await middleware(c, async () => {});
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).status).toBe(401);
+    expect((response as Response).headers.get('x-auth-error')).toBe('1');
+    await expect((response as Response).json()).resolves.toEqual({
+      code: 'INVALID_TOKEN',
+      message: 'Invalid token',
+    });
+  });
+
   test('calls next for non-auth routes', async () => {
     const middleware = authMiddleware(() => {
       throw new Error('should not create auth outside auth paths');

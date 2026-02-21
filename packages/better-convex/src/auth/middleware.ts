@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/suspicious/noConsole: auth debug logs */
 import type { Context, MiddlewareHandler } from 'hono';
+import { toAuthErrorResponse } from './error-response';
 import type { GetAuth } from './types';
 
 export interface AuthMiddlewareOptions {
@@ -47,7 +48,16 @@ export function authMiddleware(
       }
 
       const auth = getAuth(c.env as any);
-      const response = await auth.handler(c.req.raw);
+      let response: Response;
+      try {
+        response = await auth.handler(c.req.raw);
+      } catch (error) {
+        const errorResponse = toAuthErrorResponse(error);
+        if (errorResponse) {
+          return errorResponse;
+        }
+        throw error;
+      }
 
       if (opts.verbose) {
         console.log('response headers', response.headers);

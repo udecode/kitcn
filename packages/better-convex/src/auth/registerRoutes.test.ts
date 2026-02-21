@@ -81,6 +81,40 @@ describe('registerRoutes', () => {
     }
   });
 
+  test('maps APIError-like auth.handler throws to HTTP responses', async () => {
+    const http = httpRouter();
+    const getAuth = () => ({
+      handler: async () => {
+        throw Object.assign(new Error('unauthorized'), {
+          body: { code: 'INVALID_TOKEN', message: 'Invalid token' },
+          headers: { 'x-auth-error': '1' },
+          name: 'APIError',
+          status: 'UNAUTHORIZED',
+          statusCode: 401,
+        });
+      },
+      options: { basePath: '/api/auth' },
+      $context: Promise.resolve({ options: { trustedOrigins: [] } }),
+    });
+
+    registerRoutes(http as any, getAuth as any, { cors: false });
+
+    const authGet = http.lookup('/api/auth/session', 'GET')!;
+    const authRes = await unwrapInvoke(
+      authGet[0],
+      new UndiciRequest('https://example.convex.site/api/auth/session', {
+        method: 'GET',
+      }) as any
+    );
+
+    expect(authRes.status).toBe(401);
+    expect(authRes.headers.get('x-auth-error')).toBe('1');
+    await expect(authRes.json()).resolves.toEqual({
+      code: 'INVALID_TOKEN',
+      message: 'Invalid token',
+    });
+  });
+
   test('does not re-register the well-known redirect if already present', () => {
     const http = httpRouter();
     const wellKnownHandler = {
