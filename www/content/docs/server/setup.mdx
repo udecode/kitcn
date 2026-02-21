@@ -294,37 +294,6 @@ If you're coming from vanilla Convex, here's what changes.
 
 ### What's new
 
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```ts title="convex/functions/user.ts" showLineNumbers
-    import { query } from 'convex/server';
-    import { v } from 'convex/values';
-
-    export const list = query({
-      args: { limit: v.number() },
-      handler: async (ctx, args) => {
-        return ctx.db
-          .query('user')
-          .order('desc')
-          .take(args.limit);
-      },
-    });
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```ts title="convex/functions/user.ts" showLineNumbers {4-7}
-    import { publicQuery } from '../lib/crpc';
-    import { z } from 'zod';
-
-    export const list = publicQuery
-      .input(z.object({ limit: z.number() }))
-      .query(async ({ ctx, input }) => {
-        return ctx.orm.query.user.findMany({ limit: input.limit });
-      });
-    ```
-  </CompareItem>
-</Compare>
-
 Key differences:
 - Fluent builder API instead of object config
 - Zod validation instead of `v` validators

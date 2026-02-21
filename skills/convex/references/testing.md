@@ -3,13 +3,7 @@
 Use this for testing your app features built on better-convex.
 This intentionally excludes internal package parity harnesses and deep type-matrix maintenance.
 
-## What To Test
-
-1. Auth behavior: unauthenticated, authorized, forbidden.
-2. Business behavior: happy path + key failures (`NOT_FOUND`, conflicts).
-3. Data side effects: trigger-driven updates, counters, denormalized fields.
-4. Scheduling behavior: queued jobs run and produce expected writes.
-5. API contracts: response shape at procedure boundary.
+What to test + practical checklist → SKILL.md Section 11.
 
 ## Minimal Runtime Harness
 
@@ -211,10 +205,4 @@ Drop:
 - package-internal generic/type torture suites
 - duplicate runtime snippets with same intent
 
-## Practical Test Checklist
-
-1. One happy path per mutation/query.
-2. One auth failure path for protected procedures.
-3. One ownership/rule failure where relevant.
-4. One side-effect assertion for each trigger-backed feature.
-5. One scheduler test if feature uses delayed/batch behavior.
+→ Practical test checklist: SKILL.md Section 11 (items 1–7).

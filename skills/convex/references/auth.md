@@ -57,6 +57,8 @@ Client auto-refreshes expired JWTs with 60s leeway.
 
 ## Server Setup
 
+Bootstrap wiring (first-time auth setup): setup.md Section 6. Below is the reference for auth patterns.
+
 ### 1. Auth Config
 
 ```ts
@@ -114,13 +116,13 @@ Use runtime exports (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `au
 
 ### 4. Schema (ORM API)
 
-Generate with CLI or define manually:
+Full schema with auth tables → setup.md Section 5.1. Generate with CLI or define manually:
 
 ```bash
 npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
 ```
 
-Manual template:
+Manual template (auth-specific tables):
 ```ts
 import { boolean, convexTable, defineSchema, id, index, integer, text, timestamp } from 'better-convex/orm';
 

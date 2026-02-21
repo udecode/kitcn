@@ -91,21 +91,9 @@ Let's explore the different types of aggregates you can create.
 
 ### Count by Namespace
 
-Count items grouped by a key:
+Count items grouped by a key. Using the `aggregatePostLikes` from [Setup](#setup):
 
-```ts showLineNumbers {3-5,8-9,13-16}
-// Likes per post
-export const aggregatePostLikes = new TableAggregate<{
-  DataModel: DataModel;
-  Key: null;
-  Namespace: string;      // postId
-  TableName: 'postLikes';
-}>(components.aggregatePostLikes, {
-  namespace: (doc) => doc.postId,
-  sortKey: () => null,
-});
-
-// Usage
+```ts showLineNumbers {1-4}
 const likeCount = await aggregatePostLikes.count(ctx, {
   namespace: postId,
   bounds: {},
@@ -457,33 +445,11 @@ export const repairAggregate = privateMutation
 
 ## Common Use Cases
 
-Let's look at battle-tested patterns you can copy into your project.
+Here are common use case patterns.
 
 ### Star/Like Counts
 
-```ts showLineNumbers {2-7,10-11,14-17}
-// Define aggregate
-export const aggregatePostLikes = new TableAggregate<{
-  DataModel: DataModel;
-  Key: null;
-  Namespace: string;
-  TableName: 'postLikes';
-}>(components.aggregatePostLikes, {
-  namespace: (doc) => doc.postId,
-  sortKey: () => null,
-});
-
-// Register trigger in schema
-export const postLikesTable = convexTable('postLikes', {/* ... */}, () => [
-  aggregatePostLikes.trigger(),
-]);
-
-// Query count
-const likeCount = await aggregatePostLikes.count(ctx, {
-  namespace: postId,
-  bounds: {},
-});
-```
+Combines [Count by Namespace](#count-by-namespace) definition + [Trigger Integration](#trigger-integration) + [Get Count](#get-count) usage. See those sections for the full `aggregatePostLikes` pattern.
 
 ### Admin Dashboard Stats
 
@@ -519,15 +485,7 @@ Here are key practices to follow when using aggregates.
 
 ### Always Use Triggers
 
-```ts showLineNumbers {1-3,5-7}
-// ✅ BEST: Triggers handle everything
-scoresAggregate.trigger();
-await ctx.orm.insert(scores).values(data); // Done!
-
-// ❌ AVOID: Manual updates are error-prone
-const [row] = await ctx.orm.insert(scores).values(data).returning();
-await aggregate.insert(ctx, row); // Easy to forget!
-```
+See [Always Use Triggers](#always-use-triggers) at the top of this page.
 
 ### Choose Keys for Query Patterns
 
@@ -594,23 +552,7 @@ const allCount = await aggregate.count(ctx);
 
 ## Configuration Reference
 
-Each aggregate needs a component in `convex.config.ts`:
-
-```ts title="convex/functions/convex.config.ts" showLineNumbers {1,5-10}
-import aggregate from '@convex-dev/aggregate/convex.config';
-import { defineApp } from 'convex/server';
-
-const app = defineApp();
-
-// One per aggregate
-app.use(aggregate, { name: 'aggregatePostLikes' });
-app.use(aggregate, { name: 'aggregateFollowers' });
-app.use(aggregate, { name: 'aggregateFollowing' });
-app.use(aggregate, { name: 'aggregateTotalUsers' });
-app.use(aggregate, { name: 'aggregateTotalPosts' });
-
-export default app;
-```
+Each aggregate needs a component in `convex.config.ts` — see the [Installation](#installation) section. Add one `app.use(aggregate, { name: '...' })` call per aggregate.
 
 ## Advanced
 

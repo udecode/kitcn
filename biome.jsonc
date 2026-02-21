@@ -5,6 +5,7 @@
     "includes": [
       "!!tmp",
       "!**/_generated",
+      "!**/convex/functions/generated.ts",
       "!**/convex/shared/api.ts",
       "!!**/convex.json",
       "!!packages/better-convex/src/internal/upstream/server/zod4.ts"

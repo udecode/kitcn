@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll master middleware - the secret sauce for reusable backend logic. You'll learn to check authentication, transform context, log requests, and chain multiple middleware together.
+In this guide, we'll master middleware for reusable backend logic. You'll learn to check authentication, transform context, log requests, and chain multiple middleware together.
 
 ## Overview
 
@@ -77,29 +77,9 @@ Here's the basic pattern:
 
 ## Context Extension
 
-Middleware can add or transform context properties. The new context is fully type-safe - TypeScript knows exactly what's available:
+Middleware can add or transform context properties. The new context is fully type-safe - TypeScript knows exactly what's available.
 
-```ts title="convex/lib/crpc.ts" showLineNumbers {5-10}
-export const authQuery = c.query.use(async ({ ctx, next }) => {
-  const user = await getSessionUser(ctx);
-  if (!user) throw new CRPCError({ code: 'UNAUTHORIZED' });
-
-  // Add user and userId to context
-  return next({
-    ctx: {
-      ...ctx,
-      user,
-      userId: user.id,
-    },
-  });
-});
-
-// In procedures, ctx.user is non-null and typed!
-export const profile = authQuery
-  .query(async ({ ctx }) => {
-    return ctx.user; // Type: User, not User | null
-  });
-```
+The `authQuery` [above](#authorization) demonstrates this: it calls `next({ ctx: { ...ctx, user, userId: user.id } })`, and downstream handlers see `ctx.user` typed as `User` (not `User | null`).
 
 ## Input Access
 
@@ -260,7 +240,7 @@ const adminMiddleware = authMiddleware.pipe(({ ctx, next }) => {
 
 ## Common Patterns
 
-Here are battle-tested middleware patterns you can copy into your project.
+Here are common middleware patterns.
 
 ### Auth Required
 
@@ -340,14 +320,7 @@ export const publicMutation = c.mutation
 
 ### Logging
 
-```ts showLineNumbers {2-5}
-const logMiddleware = c.middleware(async ({ ctx, next }) => {
-  const start = Date.now();
-  const result = await next({ ctx });
-  console.log(`Duration: ${Date.now() - start}ms`);
-  return result;
-});
-```
+See `logMiddleware` in [Reusable Middleware](#reusable-middleware) above.
 
 ## Migrate from Convex
 

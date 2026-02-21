@@ -141,19 +141,7 @@ Compound indexes follow Convex prefix rules for index compilation. For an index 
 
 Drizzle exposes `exists(query)` and `notExists(query)` as SQL subquery operators. The ORM does not support SQL subqueries at runtime, so these operators are unavailable.
 
-Use relation filters to model existence checks instead:
-
-```ts showLineNumbers {3,8}
-// Users with at least one post
-const withPosts = await db.query.users.findMany({
-  where: { posts: true },
-});
-
-// Users with no posts
-const withoutPosts = await db.query.users.findMany({
-  where: { NOT: { posts: true } },
-});
-```
+Use [relation filters](#relation-filters) to model existence checks instead.
 
 ### Aggregations (`count`, `sum`, `avg`, `max`, `min`)
 

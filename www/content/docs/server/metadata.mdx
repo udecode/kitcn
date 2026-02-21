@@ -167,7 +167,7 @@ This makes it easy to build procedure variants with progressively more configura
 
 ## Common Patterns
 
-Here are battle-tested metadata patterns you can copy into your project.
+Here are common metadata patterns.
 
 ### Auth Level
 
@@ -208,24 +208,9 @@ export const authQuery = c.query
 
 ### Role-Based Access
 
-Add role checks that run after authentication:
+Using the `roleMiddleware` from [Access in Middleware](#access-in-middleware), build an admin procedure variant:
 
-```ts title="convex/lib/crpc.ts" showLineNumbers {2,5-11,14-15}
-const c = initCRPC
-  .dataModel<DataModel>()
-  .meta<{ role?: 'admin' }>()
-  .create();
-
-const roleMiddleware = c.middleware(({ ctx, meta, next }) => {
-  if (meta.role === 'admin' && !ctx.user?.isAdmin) {
-    throw new CRPCError({
-      code: 'FORBIDDEN',
-      message: 'Admin access required',
-    });
-  }
-  return next({ ctx });
-});
-
+```ts title="convex/lib/crpc.ts" showLineNumbers {1-2,5-7}
 export const adminQuery = authQuery
   .meta({ role: 'admin' })
   .use(roleMiddleware);

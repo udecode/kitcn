@@ -143,23 +143,7 @@ export const router = c.router;
 
 ### GET Endpoints
 
-Use `.get()` with `.query()` for read operations. GET endpoints cannot have a request body.
-
-```ts title="convex/routers/health.ts" showLineNumbers
-import { z } from 'zod';
-import { publicRoute } from '../lib/crpc';
-
-export const health = publicRoute
-  .get('/api/health')
-  .output(z.object({
-    status: z.string(),
-    timestamp: z.number(),
-  }))
-  .query(async () => ({
-    status: 'ok',
-    timestamp: Date.now(),
-  }));
-```
+Use `.get()` with `.query()` for read operations. GET endpoints cannot have a request body — see the [health check example above](#anatomy).
 
 ### Search Parameters
 

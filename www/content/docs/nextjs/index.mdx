@@ -300,57 +300,14 @@ const queryClient = new QueryClient({
 
 ## Helpers
 
-Let's explore each helper function.
+The RSC Setup above exports these helpers (see code above for implementations):
 
-### caller
-
-Direct server calls - **not cached, not hydrated to client**. Use for server-only logic:
-
-```ts showLineNumbers {1,4}
-export const caller = createCaller(createRSCContext);
-
-// Usage in RSC
-const posts = await caller.posts.list({});
-```
-
-### prefetch
-
-Fire-and-forget prefetch. Data fetched in background and hydrated to client:
-
-```ts showLineNumbers {1-4}
-export function prefetch<T extends { queryKey: readonly unknown[] }>(
-  queryOptions: T
-): void {
-  void getQueryClient().prefetchQuery(queryOptions);
-}
-```
-
-### HydrateClient
-
-Wrapper that dehydrates prefetched queries for client hydration:
-
-```tsx showLineNumbers {1-6}
-export function HydrateClient({ children }: { children: React.ReactNode }) {
-  const queryClient = getQueryClient();
-  const dehydratedState = dehydrate(queryClient);
-
-  return (
-    <HydrationBoundary state={dehydratedState}>{children}</HydrationBoundary>
-  );
-}
-```
-
-### preloadQuery
-
-Awaited fetch that returns data on the server. Equivalent to Convex's `preloadQuery`:
-
-```ts showLineNumbers {1-4}
-export function preloadQuery<TData>(
-  options: FetchQueryOptions<TData>
-): Promise<TData> {
-  return getQueryClient().fetchQuery(options);
-}
-```
+| Helper | Description |
+|--------|-------------|
+| `caller` | Direct server calls - **not cached, not hydrated to client**. Use for server-only logic. |
+| `prefetch` | Fire-and-forget prefetch. Data fetched in background and hydrated to client. |
+| `HydrateClient` | Wrapper that dehydrates prefetched queries for client hydration. |
+| `preloadQuery` | Awaited fetch that returns data on the server. Equivalent to Convex's `preloadQuery`. |
 
 ## Next Steps
 

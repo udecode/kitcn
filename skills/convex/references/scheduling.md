@@ -1,6 +1,6 @@
 # Scheduling
 
-Cron jobs and scheduled functions for background processing in Convex.
+Cron jobs and scheduled functions for background processing in Convex. Basics → SKILL.md Section 10. This file adds cron expressions, handler templates, job status API, error handling detail.
 
 ## Overview
 
