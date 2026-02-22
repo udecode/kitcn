@@ -684,30 +684,19 @@ export const collectMutationRowsBounded = async (
     maxRows: number;
   }
 ): Promise<Record<string, unknown>[]> => {
-  let cursor: string | null = null;
-  const rows: Record<string, unknown>[] = [];
+  const rows = (await buildQuery().take(options.maxRows + 1)) as Record<
+    string,
+    unknown
+  >[];
 
-  while (true) {
-    const page: {
-      page: Record<string, unknown>[];
-      continueCursor: string | null;
-      isDone: boolean;
-    } = await buildQuery().paginate({
-      cursor,
-      numItems: options.batchSize,
-    });
-    rows.push(...(page.page as Record<string, unknown>[]));
-    if (rows.length > options.maxRows) {
-      throw new Error(
-        `${options.operation} matched more than ${options.maxRows} rows on "${options.tableName}". ` +
-          'Narrow the filter or increase defineSchema(..., { defaults: { mutationMaxRows } }).'
-      );
-    }
-    if (page.isDone) {
-      return rows;
-    }
-    cursor = page.continueCursor;
+  if (rows.length > options.maxRows) {
+    throw new Error(
+      `${options.operation} matched more than ${options.maxRows} rows on "${options.tableName}". ` +
+        'Narrow the filter or increase defineSchema(..., { defaults: { mutationMaxRows } }).'
+    );
   }
+
+  return rows;
 };
 
 type ForeignKeyDefinition = {
@@ -1167,6 +1156,24 @@ async function collectReferencingRows(
   );
 }
 
+async function collectAsyncCascadeRowsBounded(
+  buildQuery: () => any,
+  batchSize: number,
+  maxBytesPerBatch: number
+): Promise<{ rows: Record<string, unknown>[]; needsContinuation: boolean }> {
+  const rows = (await buildQuery().take(batchSize + 1)) as Record<
+    string,
+    unknown
+  >[];
+  const hasMoreRows = rows.length > batchSize;
+  const batchRows = hasMoreRows ? rows.slice(0, batchSize) : rows;
+  const bounded = takeRowsWithinByteBudget(batchRows, maxBytesPerBatch);
+  return {
+    rows: bounded.rows,
+    needsContinuation: hasMoreRows || bounded.hitLimit,
+  };
+}
+
 async function hasReferencingRow(
   db: GenericDatabaseWriter<any>,
   foreignKey: IncomingForeignKeyDefinition,
@@ -1286,22 +1293,17 @@ export async function applyIncomingForeignKeyActionsOnDelete(
     if (options.executionMode === 'async') {
       const asyncBatchSize =
         action === 'cascade' ? options.batchSize : options.leafBatchSize;
-      const page: {
-        page: Record<string, unknown>[];
-        continueCursor: string | null;
-        isDone: boolean;
-      } = await db
-        .query(foreignKey.sourceTableName)
-        .withIndex(indexName, (q: any) =>
-          buildIndexPredicate(q, foreignKey.sourceColumns, targetValues)
-        )
-        .paginate({ cursor: null, numItems: asyncBatchSize });
-      const bounded = takeRowsWithinByteBudget(
-        page.page as Record<string, unknown>[],
+      const { rows, needsContinuation } = await collectAsyncCascadeRowsBounded(
+        () =>
+          db
+            .query(foreignKey.sourceTableName)
+            .withIndex(indexName, (q: any) =>
+              buildIndexPredicate(q, foreignKey.sourceColumns, targetValues)
+            ),
+        asyncBatchSize,
         options.maxBytesPerBatch
       );
-      referencingRows = bounded.rows;
-      const needsContinuation = bounded.hitLimit || !page.isDone;
+      referencingRows = rows;
       if (needsContinuation) {
         if (!options.scheduler || !options.scheduledMutationBatch) {
           throw new Error(
@@ -1487,22 +1489,17 @@ export async function applyIncomingForeignKeyActionsOnUpdate(
     let referencingRows: Record<string, unknown>[];
     if (options.executionMode === 'async') {
       const asyncBatchSize = options.leafBatchSize;
-      const page: {
-        page: Record<string, unknown>[];
-        continueCursor: string | null;
-        isDone: boolean;
-      } = await db
-        .query(foreignKey.sourceTableName)
-        .withIndex(indexName, (q: any) =>
-          buildIndexPredicate(q, foreignKey.sourceColumns, oldValues)
-        )
-        .paginate({ cursor: null, numItems: asyncBatchSize });
-      const bounded = takeRowsWithinByteBudget(
-        page.page as Record<string, unknown>[],
+      const { rows, needsContinuation } = await collectAsyncCascadeRowsBounded(
+        () =>
+          db
+            .query(foreignKey.sourceTableName)
+            .withIndex(indexName, (q: any) =>
+              buildIndexPredicate(q, foreignKey.sourceColumns, oldValues)
+            ),
+        asyncBatchSize,
         options.maxBytesPerBatch
       );
-      referencingRows = bounded.rows;
-      const needsContinuation = bounded.hitLimit || !page.isDone;
+      referencingRows = rows;
       if (needsContinuation) {
         if (!options.scheduler || !options.scheduledMutationBatch) {
           throw new Error(

@@ -1,8 +1,11 @@
 import { getSession } from 'better-convex/auth';
 import { CRPCError } from 'better-convex/server';
 
-import { internal } from '../../functions/_generated/api';
-import type { MutationCtx, QueryCtx } from '../../functions/generated';
+import {
+  createHandler,
+  type MutationCtx,
+  type QueryCtx,
+} from '../../functions/generated';
 import { accountTable, userTable } from '../../functions/schema';
 import type { SessionUser } from '../../shared/auth-shared';
 import { productToPlan } from '../../shared/polar-shared';
@@ -108,25 +111,25 @@ export const createUser = async (
 ) => {
   // WARNING: This bypasses Better Auth hooks including:
   const now = new Date();
+  const handler = createHandler(ctx);
 
-  const beforeCreateData = await ctx.runMutation(
-    internal.generated.beforeCreate,
-    {
-      data: {
-        bio: args.bio,
-        createdAt: now,
-        email: args.email,
-        emailVerified: false,
-        github: args.github,
-        image: args.image,
-        location: args.location,
-        name: args.name,
-        role: args.role ?? 'user',
-        updatedAt: now,
-      },
-      model: 'user',
-    }
-  );
+  const beforeCreateData = await handler.generated.beforeCreate({
+    data: {
+      bio: args.bio,
+      createdAt: now,
+      email: args.email,
+      emailVerified: false,
+      github: args.github,
+      image: args.image,
+      location: args.location,
+      name: args.name,
+      role: args.role ?? 'user',
+      updatedAt: now,
+    },
+    model: 'user',
+  });
+
+  console.log('beforeCreateData', beforeCreateData);
 
   const [{ id: userId }] = await ctx.orm
     .insert(userTable)
@@ -137,7 +140,7 @@ export const createUser = async (
     where: { id: { eq: userId } },
   });
 
-  await ctx.runMutation(internal.generated.onCreate, {
+  await handler.generated.onCreate({
     doc: user,
     model: 'user',
   });

@@ -26,14 +26,22 @@ const assertDevOnly = () => {
 
 export const reset = privateAction.output(z.null()).action(async ({ ctx }) => {
   assertDevOnly();
+  const tableNames = Object.keys(schema.tables);
+  console.log('Reset started', {
+    excludedTables: Array.from(excludedTables),
+    totalTables: tableNames.length,
+  });
+
   // Delete all Polar customers first (comprehensive cleanup)
   await deletePolarCustomers();
 
-  for (const tableName of Object.keys(schema.tables)) {
+  for (const tableName of tableNames) {
     if (excludedTables.has(tableName as TableNames)) {
+      console.log('Skipping excluded table', { tableName });
       continue;
     }
 
+    console.log('Scheduling first delete page', { tableName });
     await ctx.scheduler.runAfter(0, internal.reset.deletePage, {
       cursor: null,
       tableName,
@@ -53,6 +61,11 @@ export const deletePage = privateMutation
   .output(z.null())
   .mutation(async ({ ctx, input }) => {
     assertDevOnly();
+    console.log('Running delete page', {
+      cursor: input.cursor,
+      tableName: input.tableName,
+    });
+
     const table = (tables as Record<string, any>)[input.tableName];
     if (!table) {
       throw new CRPCError({
@@ -74,15 +87,37 @@ export const deletePage = privateMutation
       limit: DELETE_BATCH_SIZE,
     });
 
+    let deletedCount = 0;
+    let failedCount = 0;
+
     for (const row of results.page) {
       try {
         await ctx.orm.delete(table).where(eq(table.id, (row as any).id));
-      } catch {
+        deletedCount++;
+      } catch (error) {
+        failedCount++;
+        console.error('Failed to delete row during reset', {
+          error: error instanceof Error ? error.message : String(error),
+          rowId: (row as any).id,
+          tableName: input.tableName,
+        });
         // Document might have been deleted by a trigger or concurrent process
       }
     }
 
+    console.log('Delete page complete', {
+      deletedCount,
+      failedCount,
+      hasMore: !results.isDone,
+      pageSize: results.page.length,
+      tableName: input.tableName,
+    });
+
     if (!results.isDone) {
+      console.log('Scheduling next delete page', {
+        nextCursor: results.continueCursor,
+        tableName: input.tableName,
+      });
       await ctx.scheduler.runAfter(0, internal.reset.deletePage, {
         cursor: results.continueCursor,
         tableName: input.tableName,

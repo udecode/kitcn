@@ -757,6 +757,15 @@ describe('cli/codegen', () => {
       expect(generatedServer).toContain('auth: authDefinition,');
       expect(generatedServer).toContain('context: withOrm,');
       expect(generatedServer).toContain('authEnabled,');
+      expect(generatedServer).toContain(
+        '"generated.beforeCreate": ["mutation", typedProcedureResolver('
+      );
+      expect(generatedServer).toContain(
+        '"generated.onCreate": ["mutation", typedProcedureResolver('
+      );
+      expect(generatedServer).toContain(
+        '"generated.findOne": ["query", typedProcedureResolver('
+      );
       expect(generatedServer).not.toContain('createDisabledAuthRuntime');
       expect(generatedServer).not.toContain(
         'const authFunctions: AuthFunctions'

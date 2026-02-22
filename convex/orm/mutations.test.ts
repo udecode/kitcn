@@ -526,6 +526,181 @@ describe('M7 Mutations', () => {
     });
   });
 
+  it('should delete with two cascade edges without triggering multi-paginate failures', async () => {
+    const cascadeParent = convexTable(
+      'cascade_parent_delete',
+      {
+        slug: text().notNull(),
+      },
+      (t) => [index('by_slug').on(t.slug)]
+    );
+    const cascadeChildA = convexTable(
+      'cascade_child_delete_a',
+      {
+        label: text().notNull(),
+        parentSlug: text()
+          .references(() => cascadeParent.slug, { onDelete: 'cascade' })
+          .notNull(),
+      },
+      (t) => [index('by_parentSlug').on(t.parentSlug)]
+    );
+    const cascadeChildB = convexTable(
+      'cascade_child_delete_b',
+      {
+        label: text().notNull(),
+        parentSlug: text()
+          .references(() => cascadeParent.slug, { onDelete: 'cascade' })
+          .notNull(),
+      },
+      (t) => [index('by_parentSlug').on(t.parentSlug)]
+    );
+    const tables = {
+      cascade_child_delete_a: cascadeChildA,
+      cascade_child_delete_b: cascadeChildB,
+      cascade_parent_delete: cascadeParent,
+    };
+    const cascadeSchema = defineSchema(tables);
+    const cascadeRelations = defineRelations(tables);
+
+    await withOrmCtx(cascadeSchema, cascadeRelations, async (ctx) => {
+      await ctx.db.insert('cascade_parent_delete', { slug: 'p1' });
+      await ctx.db.insert('cascade_parent_delete', { slug: 'p2' });
+
+      await ctx.db.insert('cascade_child_delete_a', {
+        label: 'a-p1',
+        parentSlug: 'p1',
+      });
+      await ctx.db.insert('cascade_child_delete_a', {
+        label: 'a-p2',
+        parentSlug: 'p2',
+      });
+      await ctx.db.insert('cascade_child_delete_b', {
+        label: 'b-p1',
+        parentSlug: 'p1',
+      });
+      await ctx.db.insert('cascade_child_delete_b', {
+        label: 'b-p2',
+        parentSlug: 'p2',
+      });
+
+      await ctx.orm
+        .delete(cascadeParent)
+        .where(eq(cascadeParent.slug, 'p1'))
+        .execute();
+
+      const remainingParentP1 = await ctx.db
+        .query('cascade_parent_delete')
+        .withIndex('by_slug', (q) => q.eq('slug', 'p1'))
+        .collect();
+      const remainingChildAP1 = await ctx.db
+        .query('cascade_child_delete_a')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p1'))
+        .collect();
+      const remainingChildBP1 = await ctx.db
+        .query('cascade_child_delete_b')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p1'))
+        .collect();
+      const remainingChildAP2 = await ctx.db
+        .query('cascade_child_delete_a')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p2'))
+        .collect();
+      const remainingChildBP2 = await ctx.db
+        .query('cascade_child_delete_b')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p2'))
+        .collect();
+
+      expect(remainingParentP1).toHaveLength(0);
+      expect(remainingChildAP1).toHaveLength(0);
+      expect(remainingChildBP1).toHaveLength(0);
+      expect(remainingChildAP2).toHaveLength(1);
+      expect(remainingChildBP2).toHaveLength(1);
+    });
+  });
+
+  it('should update with two cascade edges without triggering multi-paginate failures', async () => {
+    const cascadeParent = convexTable(
+      'cascade_parent_update',
+      {
+        slug: text().notNull(),
+      },
+      (t) => [index('by_slug').on(t.slug)]
+    );
+    const cascadeChildA = convexTable(
+      'cascade_child_update_a',
+      {
+        label: text().notNull(),
+        parentSlug: text()
+          .references(() => cascadeParent.slug, {
+            onDelete: 'cascade',
+            onUpdate: 'cascade',
+          })
+          .notNull(),
+      },
+      (t) => [index('by_parentSlug').on(t.parentSlug)]
+    );
+    const cascadeChildB = convexTable(
+      'cascade_child_update_b',
+      {
+        label: text().notNull(),
+        parentSlug: text()
+          .references(() => cascadeParent.slug, {
+            onDelete: 'cascade',
+            onUpdate: 'cascade',
+          })
+          .notNull(),
+      },
+      (t) => [index('by_parentSlug').on(t.parentSlug)]
+    );
+    const tables = {
+      cascade_child_update_a: cascadeChildA,
+      cascade_child_update_b: cascadeChildB,
+      cascade_parent_update: cascadeParent,
+    };
+    const cascadeSchema = defineSchema(tables);
+    const cascadeRelations = defineRelations(tables);
+
+    await withOrmCtx(cascadeSchema, cascadeRelations, async (ctx) => {
+      await ctx.db.insert('cascade_parent_update', { slug: 'p1' });
+
+      await ctx.db.insert('cascade_child_update_a', {
+        label: 'a-p1',
+        parentSlug: 'p1',
+      });
+      await ctx.db.insert('cascade_child_update_b', {
+        label: 'b-p1',
+        parentSlug: 'p1',
+      });
+
+      await ctx.orm
+        .update(cascadeParent)
+        .set({ slug: 'p2' })
+        .where(eq(cascadeParent.slug, 'p1'))
+        .execute();
+
+      const oldChildAP1 = await ctx.db
+        .query('cascade_child_update_a')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p1'))
+        .collect();
+      const oldChildBP1 = await ctx.db
+        .query('cascade_child_update_b')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p1'))
+        .collect();
+      const newChildAP2 = await ctx.db
+        .query('cascade_child_update_a')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p2'))
+        .collect();
+      const newChildBP2 = await ctx.db
+        .query('cascade_child_update_b')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p2'))
+        .collect();
+
+      expect(oldChildAP1).toHaveLength(0);
+      expect(oldChildBP1).toHaveLength(0);
+      expect(newChildAP2).toHaveLength(1);
+      expect(newChildBP2).toHaveLength(1);
+    });
+  });
+
   it('should reject paginated update/delete for multi-probe filters', async ({
     ctx,
   }) => {

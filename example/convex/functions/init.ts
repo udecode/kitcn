@@ -13,9 +13,13 @@ export default privateMutation
   .meta({ dev: true })
   .output(z.null())
   .mutation(async ({ ctx }) => {
+    console.log('Initializing database');
+
     // Initialize admin user if configured
     const env = getEnv();
     const adminEmails = env.ADMIN;
+
+    console.log('Admin emails', adminEmails);
 
     if (!adminEmails || adminEmails.length === 0) {
       return null;
@@ -29,11 +33,13 @@ export default privateMutation
         where: { email: adminEmail },
       });
 
+      console.log('Existing user', existingUser);
+
       if (existingUser) {
         isFirstInit = false;
       } else {
         // Better Auth will link to this when they sign in
-        const _userId = await createUser(ctx, {
+        await createUser(ctx, {
           email: adminEmail,
           name: 'Admin',
           role: 'admin',

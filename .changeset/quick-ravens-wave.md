@@ -71,7 +71,7 @@ import { authMiddleware, registerRoutes } from "better-convex/auth/http";
 ### Features
 
 - Add `defineAuth` helpers to unify codegen and non-codegen auth setup.
-- Add always-generated Better Auth runtime contract in `convex/functions/generated.ts` (`authEnabled`, `getAuth`, `authClient`, CRUD/JWKS handlers, trigger handlers, static `auth`).
+- Add always-generated Better Auth runtime contract in `convex/functions/generated.ts`.
 - Add generated `defineAuth` export in `convex/functions/generated.ts` for inference-first `auth.ts` authoring.
 
 ## Codegen
@@ -149,7 +149,30 @@ export default createHttpRouter(app, httpRouter);
 - Add generated `initCRPC` in `convex/functions/generated.ts`:
   - With `relations`: prewired `.dataModel<DataModel>().context({ query, mutation })`.
   - Without `relations`: `.dataModel<DataModel>()` only.
+- Add generated `createCaller(ctx)` for type-safe in-process procedure composition. Replace manual `ctx.runQuery`/`ctx.runMutation` with `createCaller(ctx).x.y(args)`.
+  - Auto-generate procedure registry from all cRPC exports (public + internal).
+  - `QueryCtx`/`MutationCtx`: invoke handlers directly (same transaction).
+  - `ActionCtx`: dispatch via `ctx.runQuery`/`ctx.runMutation` automatically.
+  - Enforce call matrix: query ctx → queries only, mutation ctx → queries + mutations, action ctx → queries + mutations (not actions).
+- Add generated `createHandler(ctx)` for internal composition that bypasses input validation, middleware, and output validation.
 - Keep manual `initCRPC` setup from `better-convex/server` supported for apps not using codegen.
+
+```ts
+// Before — manual runQuery/runMutation with function references
+import { api, internal } from "./_generated/api";
+
+const result = await ctx.runQuery(api.todos.list, { limit: 10 });
+await ctx.runMutation(internal.todoInternal.create, { userId, ...input });
+const user = await ctx.runQuery(api.user.getSessionUser);
+
+// After — type-safe createCaller with autocomplete
+import { createCaller } from "./generated";
+
+const caller = createCaller(ctx);
+const result = await caller.todos.list({ limit: 10 });
+await caller.todoInternal.create({ userId, ...input });
+const user = await caller.user.getSessionUser();
+```
 
 ### Patches
 

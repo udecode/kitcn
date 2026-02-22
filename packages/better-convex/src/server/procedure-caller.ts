@@ -339,12 +339,17 @@ async function executeProcedure(
   input: unknown
 ) {
   if (mode === 'handler') {
-    if (typeof procedure.__betterConvexRawHandler !== 'function') {
-      throw new Error(
-        `[better-convex] Resolved procedure does not expose a raw handler: "${pathString}".`
-      );
+    if (typeof procedure.__betterConvexRawHandler === 'function') {
+      return procedure.__betterConvexRawHandler({ ctx, input });
     }
-    return procedure.__betterConvexRawHandler({ ctx, input });
+
+    if (typeof procedure._handler === 'function') {
+      return procedure._handler(ctx, input);
+    }
+
+    throw new Error(
+      `[better-convex] Resolved procedure does not expose a raw handler: "${pathString}".`
+    );
   }
 
   const result = await procedure._handler?.(ctx, input);

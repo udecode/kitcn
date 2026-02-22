@@ -118,6 +118,77 @@ const createLazyAuthProxy = <Auth extends ReturnType<typeof betterAuth>>(
     },
   });
 
+type ProcedureType = 'query' | 'mutation' | 'action';
+
+type ProcedureExportLike = {
+  _handler?: (ctx: unknown, input: unknown) => unknown;
+  _crpcMeta?: {
+    type?: ProcedureType;
+    internal?: boolean;
+  };
+  __betterConvexRawHandler?: (opts: {
+    ctx: unknown;
+    input: unknown;
+  }) => unknown;
+};
+
+const AUTH_RUNTIME_PROCEDURE_TYPES = {
+  beforeCreate: 'mutation',
+  beforeDelete: 'mutation',
+  beforeUpdate: 'mutation',
+  create: 'mutation',
+  deleteMany: 'mutation',
+  deleteOne: 'mutation',
+  findMany: 'query',
+  findOne: 'query',
+  getLatestJwks: 'action',
+  onCreate: 'mutation',
+  onDelete: 'mutation',
+  onUpdate: 'mutation',
+  rotateKeys: 'action',
+  updateMany: 'mutation',
+  updateOne: 'mutation',
+} as const satisfies Record<string, ProcedureType>;
+
+const decorateProcedureExport = (
+  value: unknown,
+  procedureType: ProcedureType
+) => {
+  if (
+    value === null ||
+    (typeof value !== 'object' && typeof value !== 'function')
+  ) {
+    return;
+  }
+
+  const procedure = value as ProcedureExportLike;
+  if (typeof procedure._handler !== 'function') {
+    return;
+  }
+
+  procedure._crpcMeta = {
+    ...(procedure._crpcMeta ?? {}),
+    internal: true,
+    type: procedureType,
+  };
+
+  if (typeof procedure.__betterConvexRawHandler !== 'function') {
+    procedure.__betterConvexRawHandler = ({ ctx, input }) =>
+      procedure._handler?.(ctx, input);
+  }
+};
+
+const decorateAuthRuntimeProcedures = <T extends Record<string, unknown>>(
+  exportsObject: T
+): T => {
+  for (const [name, procedureType] of Object.entries(
+    AUTH_RUNTIME_PROCEDURE_TYPES
+  )) {
+    decorateProcedureExport(exportsObject[name], procedureType);
+  }
+  return exportsObject;
+};
+
 export const createAuthRuntime = <
   DataModel extends GenericDataModel,
   Schema extends SchemaDefinition<GenericSchema, true>,
@@ -172,6 +243,8 @@ export const createAuthRuntime = <
     config.context ? { context: config.context } : undefined
   );
   const triggerApi = authClient.triggersApi();
+  const decoratedAuthApi = decorateAuthRuntimeProcedures(authApi);
+  const decoratedTriggerApi = decorateAuthRuntimeProcedures(triggerApi);
   let staticAuth: ReturnType<typeof betterAuth> | undefined;
   const getStaticAuth = () => {
     staticAuth ??= betterAuth(resolveAuthOptions({} as GenericCtx));
@@ -183,8 +256,8 @@ export const createAuthRuntime = <
     authClient,
     getAuth,
     auth: createLazyAuthProxy(getStaticAuth),
-    ...authApi,
-    ...triggerApi,
+    ...decoratedAuthApi,
+    ...decoratedTriggerApi,
   };
 };
 

@@ -52,6 +52,27 @@ type ProcedureRegistryEntry = ProcedureMeta & {
   moduleName: string;
 };
 
+const AUTH_RUNTIME_PROCEDURES: readonly Omit<
+  ProcedureRegistryEntry,
+  'moduleName'
+>[] = [
+  { exportName: 'beforeCreate', internal: true, type: 'mutation' },
+  { exportName: 'beforeDelete', internal: true, type: 'mutation' },
+  { exportName: 'beforeUpdate', internal: true, type: 'mutation' },
+  { exportName: 'create', internal: true, type: 'mutation' },
+  { exportName: 'deleteMany', internal: true, type: 'mutation' },
+  { exportName: 'deleteOne', internal: true, type: 'mutation' },
+  { exportName: 'findMany', internal: true, type: 'query' },
+  { exportName: 'findOne', internal: true, type: 'query' },
+  { exportName: 'getLatestJwks', internal: true, type: 'action' },
+  { exportName: 'onCreate', internal: true, type: 'mutation' },
+  { exportName: 'onDelete', internal: true, type: 'mutation' },
+  { exportName: 'onUpdate', internal: true, type: 'mutation' },
+  { exportName: 'rotateKeys', internal: true, type: 'action' },
+  { exportName: 'updateMany', internal: true, type: 'mutation' },
+  { exportName: 'updateOne', internal: true, type: 'mutation' },
+];
+
 function listFilesRecursive(cwd: string, relDir = ''): string[] {
   const absDir = path.join(cwd, relDir);
   const entries = fs.readdirSync(absDir, { withFileTypes: true });
@@ -283,7 +304,8 @@ export const {
   const procedureRegistryLines = emitProcedureRegistryEntries(
     procedureEntries,
     outputFile,
-    functionsDir
+    functionsDir,
+    moduleNamespace
   );
   const procedureRegistryBody =
     procedureRegistryLines.length > 0
@@ -615,7 +637,8 @@ function emitApiObject(
 function emitProcedureRegistryEntries(
   entries: ProcedureRegistryEntry[],
   outputFile: string,
-  functionsDir: string
+  functionsDir: string,
+  currentModuleName: string
 ): string[] {
   return entries
     .map((entry) => {
@@ -631,9 +654,42 @@ function emitProcedureRegistryEntries(
         entry.internal ? 'internal' : 'api',
         [...entry.moduleName.split('/'), entry.exportName]
       );
-      return `  ${JSON.stringify(pathKey)}: [${JSON.stringify(entry.type)}, typedProcedureResolver(${functionRefAccess}, () => (require(${JSON.stringify(moduleImportPath)}) as Record<string, unknown>)[${JSON.stringify(entry.exportName)}])],`;
+      const useDirectExportResolver =
+        entry.moduleName === currentModuleName &&
+        VALID_IDENTIFIER_RE.test(entry.exportName);
+      const resolver = useDirectExportResolver
+        ? entry.exportName
+        : `(require(${JSON.stringify(moduleImportPath)}) as Record<string, unknown>)[${JSON.stringify(entry.exportName)}]`;
+      return `  ${JSON.stringify(pathKey)}: [${JSON.stringify(entry.type)}, typedProcedureResolver(${functionRefAccess}, () => ${resolver})],`;
     })
     .sort((a, b) => a.localeCompare(b));
+}
+
+function buildAuthRuntimeProcedureEntries(
+  moduleName: string
+): ProcedureRegistryEntry[] {
+  return AUTH_RUNTIME_PROCEDURES.map((entry) => ({
+    ...entry,
+    moduleName,
+  }));
+}
+
+function dedupeProcedureEntries(
+  entries: ProcedureRegistryEntry[]
+): ProcedureRegistryEntry[] {
+  const seen = new Set<string>();
+  const deduped: ProcedureRegistryEntry[] = [];
+
+  for (const entry of entries) {
+    const key = `${entry.moduleName}.${entry.exportName}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(entry);
+  }
+
+  return deduped;
 }
 
 export function getConvexConfig(outputDir?: string): {
@@ -894,6 +950,14 @@ export async function generateMeta(
   const hasAuthFile = fs.existsSync(authFilePath);
   const hasAuthDefaultExport = hasDefaultExport(authFilePath);
   const authContract = { hasAuthFile, hasAuthDefaultExport };
+  const serverOutputFile = getGeneratedServerOutputFile(functionsDir);
+  const generatedModuleName = path.basename(serverOutputFile, '.ts');
+  const mergedProcedureEntries = dedupeProcedureEntries([
+    ...procedureEntries,
+    ...(hasAuthDefaultExport
+      ? buildAuthRuntimeProcedureEntries(generatedModuleName)
+      : []),
+  ]);
 
   const apiTree = createApiTree(meta);
   const hasRootHttpNamespace =
@@ -968,13 +1032,12 @@ export type ApiOutputs = inferApiOutputs<Api>;
 ${optionalTypeExports}
 `;
 
-  const serverOutputFile = getGeneratedServerOutputFile(functionsDir);
   const serverOutput = emitGeneratedServerFile(
     serverOutputFile,
     functionsDir,
     hasRelationsExport,
     authContract,
-    procedureEntries
+    mergedProcedureEntries
   );
 
   // Ensure output directory exists

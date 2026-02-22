@@ -1345,6 +1345,13 @@ generatedQueryHandler.projects.create;
 generatedMutationHandler.projects.list;
 generatedMutationHandler.projects.create;
 generatedMutationHandler.organization.listUserOrganizations;
+generatedMutationHandler.generated.beforeCreate;
+generatedMutationHandler.generated.onCreate;
+generatedMutationHandler.generated.findOne;
+generatedMutationHandler.generated.updateOne;
+// @ts-expect-error query handler excludes generated mutations
+generatedQueryHandler.generated.beforeCreate;
+generatedQueryHandler.generated.findOne;
 
 type _generatedQueryCallerListInput = Parameters<
   typeof generatedQueryCaller.projects.list

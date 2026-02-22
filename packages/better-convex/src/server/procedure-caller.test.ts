@@ -471,4 +471,50 @@ describe('server/procedure-caller', () => {
       /action context is not supported/i
     );
   });
+
+  test('generated handler can call internal-style procedures from generated namespace', async () => {
+    const beforeCreateProcedure = {
+      _crpcMeta: { type: 'mutation' as const, internal: true },
+      _handler: mock(
+        async (
+          _ctx: MutationCtx,
+          input: { data: { email: string }; model: string }
+        ) => ({
+          ...input.data,
+          model: input.model,
+          tagged: true,
+        })
+      ),
+    };
+
+    const procedureRegistry = {
+      'generated.beforeCreate': ['mutation', async () => beforeCreateProcedure],
+    } as const;
+
+    const createHandler = createGenericHandlerFactory<
+      QueryCtx,
+      MutationCtx,
+      typeof procedureRegistry
+    >(procedureRegistry);
+
+    const mutationHandler = createHandler(mutationCtx);
+    await expect(
+      mutationHandler.generated.beforeCreate({
+        data: { email: 'a@b.com' },
+        model: 'user',
+      })
+    ).resolves.toEqual({
+      email: 'a@b.com',
+      model: 'user',
+      tagged: true,
+    });
+
+    const queryHandler = createHandler(queryCtx) as any;
+    await expect(
+      queryHandler.generated.beforeCreate({
+        data: { email: 'a@b.com' },
+        model: 'user',
+      })
+    ).rejects.toThrow(/cannot call mutation procedures from query context/i);
+  });
 });
