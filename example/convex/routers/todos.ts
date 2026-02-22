@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { api, internal } from '../functions/_generated/api';
+import { createCaller } from '../functions/generated';
 import { authRoute, publicRoute, router } from '../lib/crpc';
 
 const todoOutput = z.object({
@@ -17,7 +17,8 @@ export const todosRouter = router({
     .searchParams(z.object({ limit: z.coerce.number().optional() }))
     .output(z.array(todoOutput))
     .query(async ({ ctx, searchParams }) => {
-      const result = await ctx.runQuery(api.todos.list, {
+      const caller = createCaller(ctx);
+      const result = await caller.todos.list({
         limit: searchParams.limit ?? 10,
       });
       const todos = result.page;
@@ -36,7 +37,8 @@ export const todosRouter = router({
     .params(z.object({ id: z.string() }))
     .output(todoOutput.nullable())
     .query(async ({ ctx, params }) => {
-      const todo = await ctx.runQuery(api.todos.get, { id: params.id });
+      const caller = createCaller(ctx);
+      const todo = await caller.todos.get({ id: params.id });
       if (!todo) return null;
       return {
         id: todo.id,
@@ -58,7 +60,8 @@ export const todosRouter = router({
     )
     .output(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const id = await ctx.runMutation(internal.todoInternal.create, {
+      const caller = createCaller(ctx);
+      const id = await caller.todoInternal.create({
         userId: ctx.userId,
         ...input,
       });
@@ -78,7 +81,8 @@ export const todosRouter = router({
     )
     .output(z.object({ success: z.boolean() }))
     .mutation(async ({ ctx, params, input }) => {
-      await ctx.runMutation(internal.todoInternal.update, {
+      const caller = createCaller(ctx);
+      await caller.todoInternal.update({
         userId: ctx.userId,
         id: params.id,
         ...input,
@@ -92,7 +96,8 @@ export const todosRouter = router({
     .params(z.object({ id: z.string() }))
     .output(z.object({ success: z.boolean() }))
     .mutation(async ({ ctx, params }) => {
-      await ctx.runMutation(internal.todoInternal.deleteTodo, {
+      const caller = createCaller(ctx);
+      await caller.todoInternal.deleteTodo({
         userId: ctx.userId,
         id: params.id,
       });
@@ -104,7 +109,8 @@ export const todosRouter = router({
     .get('/api/todos/export/:format')
     .params(z.object({ format: z.enum(['json', 'csv']) }))
     .query(async ({ ctx, params, c }) => {
-      const result = await ctx.runQuery(api.todos.list, { limit: 100 });
+      const caller = createCaller(ctx);
+      const result = await caller.todos.list({ limit: 100 });
       const todos = result.page;
 
       c.header(

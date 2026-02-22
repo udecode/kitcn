@@ -12,7 +12,13 @@ import {
 } from "better-convex/auth";
 import { createOrm, type GenericOrmCtx, type OrmFunctions } from 'better-convex/orm';
 import { initCRPC as baseInitCRPC } from 'better-convex/server';
-import { internal } from './_generated/api.js';
+import {
+  createGenericCallerFactory,
+  createGenericHandlerFactory,
+  typedProcedureResolver,
+  type ProcedureCallerFromRegistry,
+} from 'better-convex/server';
+import { api, internal } from './_generated/api.js';
 import type { DataModel } from './_generated/dataModel';
 import type {
   ActionCtx as ServerActionCtx,
@@ -34,7 +40,8 @@ export const orm = createOrm({
 export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof relations>;
 export type QueryCtx = OrmCtx<ServerQueryCtx>;
 export type MutationCtx = OrmCtx<ServerMutationCtx>;
-export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;
+export type ActionCtx = ServerActionCtx;
+export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
 export function withOrm<Ctx extends ServerQueryCtx | ServerMutationCtx>(ctx: Ctx) {
   return orm.with(ctx) as OrmCtx<Ctx>;
@@ -44,6 +51,139 @@ export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({
   query: (ctx) => withOrm(ctx),
   mutation: (ctx) => withOrm(ctx),
 });
+
+const procedureRegistry = {
+  "admin.checkUserAdminStatus": ["query", typedProcedureResolver(api["admin"]["checkUserAdminStatus"], () => (require("./admin") as Record<string, unknown>)["checkUserAdminStatus"])],
+  "admin.getAllUsers": ["query", typedProcedureResolver(api["admin"]["getAllUsers"], () => (require("./admin") as Record<string, unknown>)["getAllUsers"])],
+  "admin.getDashboardStats": ["query", typedProcedureResolver(api["admin"]["getDashboardStats"], () => (require("./admin") as Record<string, unknown>)["getDashboardStats"])],
+  "admin.grantAdminByEmail": ["mutation", typedProcedureResolver(api["admin"]["grantAdminByEmail"], () => (require("./admin") as Record<string, unknown>)["grantAdminByEmail"])],
+  "admin.updateUserRole": ["mutation", typedProcedureResolver(api["admin"]["updateUserRole"], () => (require("./admin") as Record<string, unknown>)["updateUserRole"])],
+  "init.default": ["mutation", typedProcedureResolver(internal["init"]["default"], () => (require("./init") as Record<string, unknown>)["default"])],
+  "items.queries.get": ["query", typedProcedureResolver(api["items"]["queries"]["get"], () => (require("./items/queries") as Record<string, unknown>)["get"])],
+  "items.queries.list": ["query", typedProcedureResolver(api["items"]["queries"]["list"], () => (require("./items/queries") as Record<string, unknown>)["list"])],
+  "organization.acceptInvitation": ["mutation", typedProcedureResolver(api["organization"]["acceptInvitation"], () => (require("./organization") as Record<string, unknown>)["acceptInvitation"])],
+  "organization.addMember": ["mutation", typedProcedureResolver(api["organization"]["addMember"], () => (require("./organization") as Record<string, unknown>)["addMember"])],
+  "organization.cancelInvitation": ["mutation", typedProcedureResolver(api["organization"]["cancelInvitation"], () => (require("./organization") as Record<string, unknown>)["cancelInvitation"])],
+  "organization.checkSlug": ["query", typedProcedureResolver(api["organization"]["checkSlug"], () => (require("./organization") as Record<string, unknown>)["checkSlug"])],
+  "organization.createOrganization": ["mutation", typedProcedureResolver(api["organization"]["createOrganization"], () => (require("./organization") as Record<string, unknown>)["createOrganization"])],
+  "organization.createPersonalOrganization": ["mutation", typedProcedureResolver(internal["organization"]["createPersonalOrganization"], () => (require("./organization") as Record<string, unknown>)["createPersonalOrganization"])],
+  "organization.deleteOrganization": ["mutation", typedProcedureResolver(api["organization"]["deleteOrganization"], () => (require("./organization") as Record<string, unknown>)["deleteOrganization"])],
+  "organization.getActiveMember": ["query", typedProcedureResolver(api["organization"]["getActiveMember"], () => (require("./organization") as Record<string, unknown>)["getActiveMember"])],
+  "organization.getOrganization": ["query", typedProcedureResolver(api["organization"]["getOrganization"], () => (require("./organization") as Record<string, unknown>)["getOrganization"])],
+  "organization.getOrganizationOverview": ["query", typedProcedureResolver(api["organization"]["getOrganizationOverview"], () => (require("./organization") as Record<string, unknown>)["getOrganizationOverview"])],
+  "organization.inviteMember": ["mutation", typedProcedureResolver(api["organization"]["inviteMember"], () => (require("./organization") as Record<string, unknown>)["inviteMember"])],
+  "organization.leaveOrganization": ["mutation", typedProcedureResolver(api["organization"]["leaveOrganization"], () => (require("./organization") as Record<string, unknown>)["leaveOrganization"])],
+  "organization.listMembers": ["query", typedProcedureResolver(api["organization"]["listMembers"], () => (require("./organization") as Record<string, unknown>)["listMembers"])],
+  "organization.listOrganizations": ["query", typedProcedureResolver(api["organization"]["listOrganizations"], () => (require("./organization") as Record<string, unknown>)["listOrganizations"])],
+  "organization.listPendingInvitations": ["query", typedProcedureResolver(api["organization"]["listPendingInvitations"], () => (require("./organization") as Record<string, unknown>)["listPendingInvitations"])],
+  "organization.listUserInvitations": ["query", typedProcedureResolver(api["organization"]["listUserInvitations"], () => (require("./organization") as Record<string, unknown>)["listUserInvitations"])],
+  "organization.listUserOrganizations": ["query", typedProcedureResolver(api["organization"]["listUserOrganizations"], () => (require("./organization") as Record<string, unknown>)["listUserOrganizations"])],
+  "organization.rejectInvitation": ["mutation", typedProcedureResolver(api["organization"]["rejectInvitation"], () => (require("./organization") as Record<string, unknown>)["rejectInvitation"])],
+  "organization.removeMember": ["mutation", typedProcedureResolver(api["organization"]["removeMember"], () => (require("./organization") as Record<string, unknown>)["removeMember"])],
+  "organization.setActiveOrganization": ["mutation", typedProcedureResolver(api["organization"]["setActiveOrganization"], () => (require("./organization") as Record<string, unknown>)["setActiveOrganization"])],
+  "organization.updateMemberRole": ["mutation", typedProcedureResolver(api["organization"]["updateMemberRole"], () => (require("./organization") as Record<string, unknown>)["updateMemberRole"])],
+  "organization.updateOrganization": ["mutation", typedProcedureResolver(api["organization"]["updateOrganization"], () => (require("./organization") as Record<string, unknown>)["updateOrganization"])],
+  "polarCustomer.createCustomer": ["action", typedProcedureResolver(internal["polarCustomer"]["createCustomer"], () => (require("./polarCustomer") as Record<string, unknown>)["createCustomer"])],
+  "polarCustomer.updateUserPolarCustomerId": ["mutation", typedProcedureResolver(internal["polarCustomer"]["updateUserPolarCustomerId"], () => (require("./polarCustomer") as Record<string, unknown>)["updateUserPolarCustomerId"])],
+  "polarSubscription.cancelSubscription": ["action", typedProcedureResolver(api["polarSubscription"]["cancelSubscription"], () => (require("./polarSubscription") as Record<string, unknown>)["cancelSubscription"])],
+  "polarSubscription.createSubscription": ["mutation", typedProcedureResolver(internal["polarSubscription"]["createSubscription"], () => (require("./polarSubscription") as Record<string, unknown>)["createSubscription"])],
+  "polarSubscription.getActiveSubscription": ["query", typedProcedureResolver(internal["polarSubscription"]["getActiveSubscription"], () => (require("./polarSubscription") as Record<string, unknown>)["getActiveSubscription"])],
+  "polarSubscription.getOrganizationSubscription": ["query", typedProcedureResolver(api["polarSubscription"]["getOrganizationSubscription"], () => (require("./polarSubscription") as Record<string, unknown>)["getOrganizationSubscription"])],
+  "polarSubscription.resumeSubscription": ["action", typedProcedureResolver(api["polarSubscription"]["resumeSubscription"], () => (require("./polarSubscription") as Record<string, unknown>)["resumeSubscription"])],
+  "polarSubscription.updateSubscription": ["mutation", typedProcedureResolver(internal["polarSubscription"]["updateSubscription"], () => (require("./polarSubscription") as Record<string, unknown>)["updateSubscription"])],
+  "projects.addMember": ["mutation", typedProcedureResolver(api["projects"]["addMember"], () => (require("./projects") as Record<string, unknown>)["addMember"])],
+  "projects.archive": ["mutation", typedProcedureResolver(api["projects"]["archive"], () => (require("./projects") as Record<string, unknown>)["archive"])],
+  "projects.create": ["mutation", typedProcedureResolver(api["projects"]["create"], () => (require("./projects") as Record<string, unknown>)["create"])],
+  "projects.get": ["query", typedProcedureResolver(api["projects"]["get"], () => (require("./projects") as Record<string, unknown>)["get"])],
+  "projects.leave": ["mutation", typedProcedureResolver(api["projects"]["leave"], () => (require("./projects") as Record<string, unknown>)["leave"])],
+  "projects.list": ["query", typedProcedureResolver(api["projects"]["list"], () => (require("./projects") as Record<string, unknown>)["list"])],
+  "projects.listForDropdown": ["query", typedProcedureResolver(api["projects"]["listForDropdown"], () => (require("./projects") as Record<string, unknown>)["listForDropdown"])],
+  "projects.removeMember": ["mutation", typedProcedureResolver(api["projects"]["removeMember"], () => (require("./projects") as Record<string, unknown>)["removeMember"])],
+  "projects.restore": ["mutation", typedProcedureResolver(api["projects"]["restore"], () => (require("./projects") as Record<string, unknown>)["restore"])],
+  "projects.transfer": ["mutation", typedProcedureResolver(api["projects"]["transfer"], () => (require("./projects") as Record<string, unknown>)["transfer"])],
+  "projects.update": ["mutation", typedProcedureResolver(api["projects"]["update"], () => (require("./projects") as Record<string, unknown>)["update"])],
+  "public.hello": ["query", typedProcedureResolver(api["public"]["hello"], () => (require("./public") as Record<string, unknown>)["hello"])],
+  "reset.deletePage": ["mutation", typedProcedureResolver(internal["reset"]["deletePage"], () => (require("./reset") as Record<string, unknown>)["deletePage"])],
+  "reset.getAdminUsers": ["query", typedProcedureResolver(internal["reset"]["getAdminUsers"], () => (require("./reset") as Record<string, unknown>)["getAdminUsers"])],
+  "reset.reset": ["action", typedProcedureResolver(internal["reset"]["reset"], () => (require("./reset") as Record<string, unknown>)["reset"])],
+  "seed.cleanupSeedData": ["mutation", typedProcedureResolver(internal["seed"]["cleanupSeedData"], () => (require("./seed") as Record<string, unknown>)["cleanupSeedData"])],
+  "seed.generateSamples": ["action", typedProcedureResolver(api["seed"]["generateSamples"], () => (require("./seed") as Record<string, unknown>)["generateSamples"])],
+  "seed.generateSamplesBatch": ["mutation", typedProcedureResolver(internal["seed"]["generateSamplesBatch"], () => (require("./seed") as Record<string, unknown>)["generateSamplesBatch"])],
+  "seed.seed": ["mutation", typedProcedureResolver(internal["seed"]["seed"], () => (require("./seed") as Record<string, unknown>)["seed"])],
+  "seed.seedUsers": ["mutation", typedProcedureResolver(internal["seed"]["seedUsers"], () => (require("./seed") as Record<string, unknown>)["seedUsers"])],
+  "tags.create": ["mutation", typedProcedureResolver(api["tags"]["create"], () => (require("./tags") as Record<string, unknown>)["create"])],
+  "tags.deleteTag": ["mutation", typedProcedureResolver(api["tags"]["deleteTag"], () => (require("./tags") as Record<string, unknown>)["deleteTag"])],
+  "tags.list": ["query", typedProcedureResolver(api["tags"]["list"], () => (require("./tags") as Record<string, unknown>)["list"])],
+  "tags.merge": ["mutation", typedProcedureResolver(api["tags"]["merge"], () => (require("./tags") as Record<string, unknown>)["merge"])],
+  "tags.popular": ["query", typedProcedureResolver(api["tags"]["popular"], () => (require("./tags") as Record<string, unknown>)["popular"])],
+  "tags.update": ["mutation", typedProcedureResolver(api["tags"]["update"], () => (require("./tags") as Record<string, unknown>)["update"])],
+  "todoComments.addComment": ["mutation", typedProcedureResolver(api["todoComments"]["addComment"], () => (require("./todoComments") as Record<string, unknown>)["addComment"])],
+  "todoComments.cleanupOrphanedComments": ["mutation", typedProcedureResolver(internal["todoComments"]["cleanupOrphanedComments"], () => (require("./todoComments") as Record<string, unknown>)["cleanupOrphanedComments"])],
+  "todoComments.deleteComment": ["mutation", typedProcedureResolver(api["todoComments"]["deleteComment"], () => (require("./todoComments") as Record<string, unknown>)["deleteComment"])],
+  "todoComments.getCommentThread": ["query", typedProcedureResolver(api["todoComments"]["getCommentThread"], () => (require("./todoComments") as Record<string, unknown>)["getCommentThread"])],
+  "todoComments.getTodoComments": ["query", typedProcedureResolver(api["todoComments"]["getTodoComments"], () => (require("./todoComments") as Record<string, unknown>)["getTodoComments"])],
+  "todoComments.getUserComments": ["query", typedProcedureResolver(api["todoComments"]["getUserComments"], () => (require("./todoComments") as Record<string, unknown>)["getUserComments"])],
+  "todoComments.updateComment": ["mutation", typedProcedureResolver(api["todoComments"]["updateComment"], () => (require("./todoComments") as Record<string, unknown>)["updateComment"])],
+  "todoInternal.archiveOldCompletedTodos": ["mutation", typedProcedureResolver(internal["todoInternal"]["archiveOldCompletedTodos"], () => (require("./todoInternal") as Record<string, unknown>)["archiveOldCompletedTodos"])],
+  "todoInternal.create": ["mutation", typedProcedureResolver(internal["todoInternal"]["create"], () => (require("./todoInternal") as Record<string, unknown>)["create"])],
+  "todoInternal.deleteTodo": ["mutation", typedProcedureResolver(internal["todoInternal"]["deleteTodo"], () => (require("./todoInternal") as Record<string, unknown>)["deleteTodo"])],
+  "todoInternal.generateWeeklyReport": ["action", typedProcedureResolver(internal["todoInternal"]["generateWeeklyReport"], () => (require("./todoInternal") as Record<string, unknown>)["generateWeeklyReport"])],
+  "todoInternal.getSystemStats": ["query", typedProcedureResolver(internal["todoInternal"]["getSystemStats"], () => (require("./todoInternal") as Record<string, unknown>)["getSystemStats"])],
+  "todoInternal.getUsersWithOverdueTodos": ["query", typedProcedureResolver(internal["todoInternal"]["getUsersWithOverdueTodos"], () => (require("./todoInternal") as Record<string, unknown>)["getUsersWithOverdueTodos"])],
+  "todoInternal.getUserWeeklyActivity": ["query", typedProcedureResolver(internal["todoInternal"]["getUserWeeklyActivity"], () => (require("./todoInternal") as Record<string, unknown>)["getUserWeeklyActivity"])],
+  "todoInternal.processDailySummaries": ["action", typedProcedureResolver(internal["todoInternal"]["processDailySummaries"], () => (require("./todoInternal") as Record<string, unknown>)["processDailySummaries"])],
+  "todoInternal.recalculateUserStats": ["mutation", typedProcedureResolver(internal["todoInternal"]["recalculateUserStats"], () => (require("./todoInternal") as Record<string, unknown>)["recalculateUserStats"])],
+  "todoInternal.update": ["mutation", typedProcedureResolver(internal["todoInternal"]["update"], () => (require("./todoInternal") as Record<string, unknown>)["update"])],
+  "todoInternal.updateOverduePriorities": ["mutation", typedProcedureResolver(internal["todoInternal"]["updateOverduePriorities"], () => (require("./todoInternal") as Record<string, unknown>)["updateOverduePriorities"])],
+  "todos.bulkDelete": ["mutation", typedProcedureResolver(api["todos"]["bulkDelete"], () => (require("./todos") as Record<string, unknown>)["bulkDelete"])],
+  "todos.create": ["mutation", typedProcedureResolver(api["todos"]["create"], () => (require("./todos") as Record<string, unknown>)["create"])],
+  "todos.deleteTodo": ["mutation", typedProcedureResolver(api["todos"]["deleteTodo"], () => (require("./todos") as Record<string, unknown>)["deleteTodo"])],
+  "todos.get": ["query", typedProcedureResolver(api["todos"]["get"], () => (require("./todos") as Record<string, unknown>)["get"])],
+  "todos.list": ["query", typedProcedureResolver(api["todos"]["list"], () => (require("./todos") as Record<string, unknown>)["list"])],
+  "todos.restore": ["mutation", typedProcedureResolver(api["todos"]["restore"], () => (require("./todos") as Record<string, unknown>)["restore"])],
+  "todos.search": ["query", typedProcedureResolver(api["todos"]["search"], () => (require("./todos") as Record<string, unknown>)["search"])],
+  "todos.toggleComplete": ["mutation", typedProcedureResolver(api["todos"]["toggleComplete"], () => (require("./todos") as Record<string, unknown>)["toggleComplete"])],
+  "todos.update": ["mutation", typedProcedureResolver(api["todos"]["update"], () => (require("./todos") as Record<string, unknown>)["update"])],
+  "user.getCurrentUser": ["query", typedProcedureResolver(api["user"]["getCurrentUser"], () => (require("./user") as Record<string, unknown>)["getCurrentUser"])],
+  "user.getIsAuthenticated": ["query", typedProcedureResolver(api["user"]["getIsAuthenticated"], () => (require("./user") as Record<string, unknown>)["getIsAuthenticated"])],
+  "user.getSessionUser": ["query", typedProcedureResolver(api["user"]["getSessionUser"], () => (require("./user") as Record<string, unknown>)["getSessionUser"])],
+  "user.updateSettings": ["mutation", typedProcedureResolver(api["user"]["updateSettings"], () => (require("./user") as Record<string, unknown>)["updateSettings"])],
+} as const;
+
+export type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;
+export type ProcedureHandlerContext = QueryCtx | MutationCtx;
+export type GeneratedProcedureCaller<
+  TCtx extends ProcedureCallerContext = ProcedureCallerContext,
+> = TCtx extends MutationCtx
+  ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'>
+  : TCtx extends ActionCtx
+    ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'>
+    : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
+
+const createCallerFromRegistry = createGenericCallerFactory<
+  QueryCtx,
+  MutationCtx,
+  typeof procedureRegistry,
+  ActionCtx
+>(procedureRegistry);
+const createHandlerFromRegistry = createGenericHandlerFactory<
+  QueryCtx,
+  MutationCtx,
+  typeof procedureRegistry
+>(procedureRegistry);
+
+export function createCaller<TCtx extends ProcedureCallerContext>(
+  ctx: TCtx
+): GeneratedProcedureCaller<TCtx> {
+  return createCallerFromRegistry(ctx) as GeneratedProcedureCaller<TCtx>;
+}
+
+export function createHandler<TCtx extends ProcedureHandlerContext>(
+  ctx: TCtx
+): GeneratedProcedureCaller<TCtx> {
+  return createHandlerFromRegistry(ctx) as GeneratedProcedureCaller<TCtx>;
+}
+
 
 export const { scheduledMutationBatch, scheduledDelete } = orm.api();
 export function defineAuth<

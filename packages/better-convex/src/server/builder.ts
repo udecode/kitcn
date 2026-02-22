@@ -784,6 +784,11 @@ export class ProcedureBuilder<
       internal: isInternal ?? false,
       ...meta,
     };
+    (fn as any).__betterConvexTransformer = functionConfig.transformer;
+    (fn as any).__betterConvexRawHandler = (opts: {
+      ctx: unknown;
+      input: unknown;
+    }) => handler(opts);
 
     return fn;
   }

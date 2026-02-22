@@ -100,6 +100,42 @@ If you customize `transformer`, use the same transformer in:
 
 `Date` support stays always on; custom transformer is additive only.
 
+## `createCallerFactory` vs `createCaller(ctx)`
+
+There are two caller APIs now:
+
+| API | Location | Primary use | Transport |
+|-----|----------|-------------|-----------|
+| `createCallerFactory` | `better-convex/server` | External/server HTTP-style calls with token management | Convex fetch APIs |
+| `createCaller(ctx)` | `convex/functions/generated.ts` | In-process composition inside Convex handlers | Direct `_handler` (query/mutation) or automatic `runQuery`/`runMutation` (action) |
+
+Use generated `createCaller(ctx)` when you are already inside a Convex handler and want cRPC composition without manually choosing `runQuery` vs `runMutation`.
+
+```ts title="convex/functions/teams.ts" showLineNumbers
+import { z } from 'zod';
+import { privateQuery } from '../lib/crpc';
+import { createCaller } from './generated';
+
+export const getTeamAndOwner = privateQuery
+  .input(z.object({ teamId: z.string() }))
+  .query(async ({ ctx, input }) => {
+    const caller = createCaller(ctx);
+    const team = await caller.teams.getTeam({ teamId: input.teamId });
+    const owner = await caller.user.getById({ id: team.ownerId });
+    return { team, owner };
+  });
+```
+
+Call matrix for `createCaller(ctx)`:
+
+| Caller context | Query procedures | Mutation procedures | Action procedures |
+|----------------|------------------|---------------------|-------------------|
+| `QueryCtx` | ✅ | ❌ | ❌ |
+| `MutationCtx` | ✅ | ✅ | ❌ |
+| `ActionCtx` | ✅ | ✅ | ❌ |
+
+In actions, each `createCaller(ctx)` call still runs through `ctx.runQuery`/`ctx.runMutation`, so calls are not one shared transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
+
 ## Usage
 
 Create context from headers, then use `ctx.caller`.

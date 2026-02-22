@@ -3,12 +3,10 @@ import { convex } from 'better-convex/auth';
 import { eq } from 'better-convex/orm';
 import { requireActionCtx } from 'better-convex/server';
 import { getEnv } from '../lib/get-env';
-import { createPersonalOrganization } from '../lib/organization-helpers';
 import { ac, roles } from '../shared/auth-shared';
 import { internal } from './_generated/api';
 import authConfig from './auth.config';
-import type { MutationCtx } from './generated';
-import { defineAuth } from './generated';
+import { createCaller, defineAuth, type MutationCtx } from './generated';
 import { sessionTable } from './schema';
 
 export default defineAuth((ctx) => {
@@ -178,8 +176,8 @@ export default defineAuth((ctx) => {
         },
         onCreate: async (user) => {
           // Create personal organization for the new user.
-          await createPersonalOrganization(mutationCtx, {
-            email: user.email,
+          const caller = createCaller(mutationCtx);
+          await caller.organization.createPersonalOrganization({
             image: user.image || null,
             name: user.name,
             userId: user._id,

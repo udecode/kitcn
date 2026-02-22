@@ -17,6 +17,13 @@ import type { ServerCaller } from '../server/caller';
 import type { CRPCHttpRouter } from '../server/http-router';
 import type { HttpProcedure } from '../server/http-types';
 import type { inferApiInputs, inferApiOutputs } from '../server/infer';
+import {
+  createGenericCallerFactory,
+  createProcedureCallerFactory,
+  createProcedureHandlerFactory,
+  defineProcedure,
+  typedProcedureResolver,
+} from '../server/procedure-caller';
 import type { UnsetMarker } from '../server/types';
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -402,3 +409,216 @@ runMutation(generatedLikeApi.todos.create, { title: 'x', dueDate: 123 });
 
 const generatedRscProxy = createServerCRPCProxy({ api: generatedLikeApi });
 generatedRscProxy.todos.get.queryOptions({ id: 'todo_1' });
+
+// ============================================================================
+// In-process createCaller(ctx) typing (query/mutation matrix)
+// ============================================================================
+
+type GeneratedCallerQueryCtx = {
+  db: unknown;
+};
+
+type GeneratedCallerMutationCtx = {
+  db: unknown;
+  runMutation: (ref: unknown, args: unknown) => Promise<unknown>;
+};
+
+type GeneratedCallerActionCtx = {
+  runQuery: (ref: unknown, args: unknown) => Promise<unknown>;
+  runMutation: (ref: unknown, args: unknown) => Promise<unknown>;
+};
+
+const generatedCallerProcedures = {
+  organization: {
+    get: defineProcedure<
+      'query',
+      {
+        _handler: (
+          ctx: GeneratedCallerQueryCtx | GeneratedCallerMutationCtx,
+          input: { slug: string }
+        ) => Promise<{ id: string; slug: string }>;
+      }
+    >('query'),
+    list: defineProcedure<
+      'query',
+      {
+        _handler: (
+          ctx: GeneratedCallerQueryCtx | GeneratedCallerMutationCtx,
+          input: Record<string, never>
+        ) => Promise<Array<{ id: string }>>;
+      }
+    >('query'),
+    update: defineProcedure<
+      'mutation',
+      {
+        _handler: (
+          ctx: GeneratedCallerMutationCtx,
+          input: { id: string; name: string }
+        ) => Promise<{ ok: true }>;
+      }
+    >('mutation'),
+  },
+  jobs: {
+    reindex: defineProcedure<
+      'action',
+      {
+        _handler: (
+          ctx: GeneratedCallerMutationCtx,
+          input: { force: boolean }
+        ) => Promise<{ started: boolean }>;
+      }
+    >('action'),
+  },
+} as const;
+
+const generatedCallerRuntimeMap = {
+  'organization.get': {
+    _crpcMeta: { type: 'query' as const },
+    _handler: async (
+      _ctx: GeneratedCallerQueryCtx | GeneratedCallerMutationCtx,
+      input: { slug: string }
+    ) => ({ id: 'org_1', slug: input.slug }),
+  },
+  'organization.list': {
+    _crpcMeta: { type: 'query' as const },
+    _handler: async () => [{ id: 'org_1' }],
+  },
+  'organization.update': {
+    _crpcMeta: { type: 'mutation' as const },
+    _handler: async (_ctx: GeneratedCallerMutationCtx) => ({
+      ok: true as const,
+    }),
+  },
+  'jobs.reindex': {
+    _crpcMeta: { type: 'action' as const },
+    _handler: async () => ({ started: true }),
+  },
+} as const;
+
+const createGeneratedCaller = createProcedureCallerFactory<
+  GeneratedCallerQueryCtx,
+  GeneratedCallerMutationCtx,
+  typeof generatedCallerProcedures
+>({
+  api: generatedCallerProcedures,
+  resolver: (path) =>
+    generatedCallerRuntimeMap[
+      path.join('.') as keyof typeof generatedCallerRuntimeMap
+    ],
+});
+
+declare const generatedQueryCtx: GeneratedCallerQueryCtx;
+declare const generatedMutationCtx: GeneratedCallerMutationCtx;
+declare const generatedActionCtx: GeneratedCallerActionCtx;
+
+const generatedQueryCaller = createGeneratedCaller(generatedQueryCtx);
+generatedQueryCaller.organization.get({ slug: 'acme' });
+generatedQueryCaller.organization.list();
+generatedQueryCaller.organization.list({});
+// @ts-expect-error query caller excludes mutation procedures
+generatedQueryCaller.organization.update({ id: 'org_1', name: 'Renamed' });
+// @ts-expect-error query caller excludes action procedures
+generatedQueryCaller.jobs.reindex({ force: true });
+
+const generatedMutationCaller = createGeneratedCaller(generatedMutationCtx);
+generatedMutationCaller.organization.get({ slug: 'acme' });
+generatedMutationCaller.organization.update({ id: 'org_1', name: 'Renamed' });
+// @ts-expect-error mutation caller excludes action procedures
+generatedMutationCaller.jobs.reindex({ force: true });
+
+// @ts-expect-error createProcedureCallerFactory remains query/mutation only
+createGeneratedCaller(generatedActionCtx);
+
+const createGeneratedHandler = createProcedureHandlerFactory<
+  GeneratedCallerQueryCtx,
+  GeneratedCallerMutationCtx,
+  typeof generatedCallerProcedures
+>({
+  api: generatedCallerProcedures,
+  resolver: (path) =>
+    generatedCallerRuntimeMap[
+      path.join('.') as keyof typeof generatedCallerRuntimeMap
+    ],
+});
+
+const generatedQueryHandler = createGeneratedHandler(generatedQueryCtx);
+generatedQueryHandler.organization.get({ slug: 'acme' });
+generatedQueryHandler.organization.list();
+generatedQueryHandler.organization.list({});
+// @ts-expect-error query handler excludes mutation procedures
+generatedQueryHandler.organization.update({ id: 'org_1', name: 'Renamed' });
+// @ts-expect-error query handler excludes action procedures
+generatedQueryHandler.jobs.reindex({ force: true });
+
+const generatedMutationHandler = createGeneratedHandler(generatedMutationCtx);
+generatedMutationHandler.organization.get({ slug: 'acme' });
+generatedMutationHandler.organization.update({ id: 'org_1', name: 'Renamed' });
+// @ts-expect-error mutation handler excludes action procedures
+generatedMutationHandler.jobs.reindex({ force: true });
+
+type GeneratedQueryCallerGetOutput = Awaited<
+  ReturnType<typeof generatedQueryCaller.organization.get>
+>;
+type _generatedQueryCallerGetOutput = Expect<
+  Equal<GeneratedQueryCallerGetOutput, { id: string; slug: string }>
+>;
+
+type GeneratedMutationCallerUpdateOutput = Awaited<
+  ReturnType<typeof generatedMutationCaller.organization.update>
+>;
+type _generatedMutationCallerUpdateOutput = Expect<
+  Equal<GeneratedMutationCallerUpdateOutput, { ok: true }>
+>;
+
+const generatedRegistryQueryRef = makeFunctionReference<
+  'query',
+  { slug: string },
+  { id: string; slug: string }
+>('organization:get');
+const generatedRegistryMutationRef = makeFunctionReference<
+  'mutation',
+  { id: string; name: string },
+  { ok: true }
+>('organization:update');
+const generatedRegistryActionRef = makeFunctionReference<
+  'action',
+  { force: boolean },
+  { started: boolean }
+>('jobs:reindex');
+
+const generatedRegistry = {
+  'organization.get': [
+    'query',
+    typedProcedureResolver(
+      generatedRegistryQueryRef,
+      async () => generatedCallerRuntimeMap['organization.get']
+    ),
+  ],
+  'organization.update': [
+    'mutation',
+    typedProcedureResolver(
+      generatedRegistryMutationRef,
+      async () => generatedCallerRuntimeMap['organization.update']
+    ),
+  ],
+  'jobs.reindex': [
+    'action',
+    typedProcedureResolver(
+      generatedRegistryActionRef,
+      async () => generatedCallerRuntimeMap['jobs.reindex']
+    ),
+  ],
+} as const;
+
+const createGeneratedRegistryCaller = createGenericCallerFactory<
+  GeneratedCallerQueryCtx,
+  GeneratedCallerMutationCtx,
+  typeof generatedRegistry,
+  GeneratedCallerActionCtx
+>(generatedRegistry);
+
+const generatedActionCaller = createGeneratedRegistryCaller(generatedActionCtx);
+generatedActionCaller.organization.get({ slug: 'acme' });
+generatedActionCaller.organization.update({ id: 'org_1', name: 'Renamed' });
+// @ts-expect-error action caller excludes action procedures
+generatedActionCaller.jobs.reindex({ force: true });

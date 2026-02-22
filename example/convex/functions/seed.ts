@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { authAction, privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
-import { internal } from './_generated/api';
+import { createCaller, createHandler } from './generated';
 import {
   projectsTable,
   tagsTable,
@@ -55,11 +55,13 @@ const getUsersData = () => [
 export const seed = privateMutation
   .output(z.null())
   .mutation(async ({ ctx }) => {
+    const caller = createHandler(ctx);
+
     // Step 1: Clean up existing seed data
-    await ctx.runMutation(internal.seed.cleanupSeedData, {});
+    await caller.seed.cleanupSeedData();
 
     // Step 2: Seed users
-    await ctx.runMutation(internal.seed.seedUsers, {});
+    await caller.seed.seedUsers();
 
     return null;
   });
@@ -132,6 +134,7 @@ export const generateSamples = authAction
     })
   )
   .action(async ({ ctx, input }) => {
+    const caller = createCaller(ctx);
     let totalCreated = 0;
     let totalTodosCreated = 0;
 
@@ -143,14 +146,11 @@ export const generateSamples = authAction
       const batchCount = Math.min(batchSize, input.count - i * batchSize);
 
       // Create projects in this batch using internal mutation
-      const batchResult = await ctx.runMutation(
-        internal.seed.generateSamplesBatch,
-        {
-          count: batchCount,
-          userId: ctx.user.id,
-          batchIndex: i,
-        }
-      );
+      const batchResult = await caller.seed.generateSamplesBatch({
+        count: batchCount,
+        userId: ctx.user.id,
+        batchIndex: i,
+      });
 
       totalCreated += batchResult.created;
       totalTodosCreated += batchResult.todosCreated;

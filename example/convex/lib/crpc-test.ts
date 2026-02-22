@@ -9,6 +9,13 @@
 
 /* biome-ignore-all lint: type test file with intentional expressions */
 import { z } from 'zod';
+import {
+  type ActionCtx,
+  createCaller,
+  createHandler,
+  type MutationCtx,
+  type QueryCtx,
+} from '../functions/generated';
 import type { SessionUser } from '../shared/auth-shared';
 import {
   authMutation,
@@ -1306,3 +1313,42 @@ export const error_middleware_chained_forward_ref = publicQuery
     return next({ ctx: { ...ctx, secondProp: 42 } });
   })
   .query(async () => null);
+
+// ============================================================================
+// Section 23: generated.ts createCaller(ctx) matrix typing
+// ============================================================================
+
+const generatedQueryCaller = createCaller({} as QueryCtx);
+const generatedMutationCaller = createCaller({} as MutationCtx);
+const generatedActionCaller = createCaller({} as ActionCtx);
+const generatedQueryHandler = createHandler({} as QueryCtx);
+const generatedMutationHandler = createHandler({} as MutationCtx);
+
+generatedQueryCaller.projects.list;
+generatedQueryCaller.organization.listUserOrganizations;
+// @ts-expect-error query caller excludes mutations
+generatedQueryCaller.projects.create;
+
+generatedMutationCaller.projects.list;
+generatedMutationCaller.projects.create;
+generatedMutationCaller.organization.listUserOrganizations;
+generatedActionCaller.projects.list;
+generatedActionCaller.projects.create;
+generatedActionCaller.organization.listUserOrganizations;
+// @ts-expect-error action caller excludes actions
+generatedActionCaller.seed.generateSamples;
+generatedQueryHandler.projects.list;
+generatedQueryHandler.organization.listUserOrganizations;
+// @ts-expect-error query handler excludes mutations
+generatedQueryHandler.projects.create;
+
+generatedMutationHandler.projects.list;
+generatedMutationHandler.projects.create;
+generatedMutationHandler.organization.listUserOrganizations;
+
+type _generatedQueryCallerListInput = Parameters<
+  typeof generatedQueryCaller.projects.list
+>[0];
+type _generatedMutationCallerCreateInput = Parameters<
+  typeof generatedMutationCaller.projects.create
+>[0];

@@ -2,16 +2,115 @@ import { eq } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { hasPermission } from '../lib/auth/auth-helpers';
-import { type AuthCtx, authMutation, authQuery } from '../lib/crpc';
-import { listUserOrganizations } from '../lib/organization-helpers';
+import {
+  type AuthCtx,
+  authMutation,
+  authQuery,
+  privateMutation,
+} from '../lib/crpc';
 import type { MutationCtx } from './_generated/server';
-import { invitationTable } from './schema';
+import { createHandler } from './generated';
+import {
+  invitationTable,
+  memberTable,
+  organizationTable,
+  userTable,
+} from './schema';
 
 // Maximum members per organization (including pending invitations)
 const MEMBER_LIMIT = 5;
 // Default limit for listing operations to prevent unbounded queries
 const DEFAULT_LIST_LIMIT = 100;
 const DEFAULT_PLAN = 'free';
+
+export const createPersonalOrganization = privateMutation
+  .input(
+    z.object({
+      image: z.string().nullish(),
+      name: z.string(),
+      userId: z.string(),
+    })
+  )
+  .output(z.object({ id: z.string(), slug: z.string() }).nullable())
+  .mutation(async ({ ctx, input }) => {
+    const user = await ctx.orm.query.user.findFirstOrThrow({
+      where: { id: input.userId },
+    });
+
+    if (user.personalOrganizationId) {
+      return null;
+    }
+
+    const slug = `personal-${input.userId.slice(-8)}`;
+
+    const [org] = await ctx.orm
+      .insert(organizationTable)
+      .values({
+        logo: input.image ?? null,
+        monthlyCredits: 0,
+        name: `${input.name}'s Organization`,
+        slug,
+        createdAt: new Date(),
+      })
+      .returning();
+    const orgId = org.id;
+
+    await ctx.orm.insert(memberTable).values({
+      createdAt: new Date(),
+      role: 'owner',
+      organizationId: orgId,
+      userId: input.userId,
+    });
+
+    await ctx.orm
+      .update(userTable)
+      .set({
+        lastActiveOrganizationId: orgId,
+        personalOrganizationId: orgId,
+      })
+      .where(eq(userTable.id, input.userId));
+
+    return {
+      id: orgId,
+      slug,
+    };
+  });
+
+export const listUserOrganizations = authQuery
+  .output(
+    z.array(
+      z.object({
+        createdAt: z.date(),
+        id: z.string(),
+        logo: z.string().nullish(),
+        name: z.string(),
+        role: z.string(),
+        slug: z.string(),
+      })
+    )
+  )
+  .query(async ({ ctx }) => {
+    const memberships = await ctx.orm.query.member.findMany({
+      where: { userId: { eq: ctx.userId } },
+      orderBy: { createdAt: 'asc' },
+      with: { organization: true },
+    });
+
+    if (!memberships.length) {
+      return [];
+    }
+
+    return memberships.map((membership) => {
+      const organization = membership.organization;
+      if (!organization) {
+        throw new CRPCError({
+          code: 'NOT_FOUND',
+          message: 'Membership organization not found',
+        });
+      }
+      return { ...organization, role: membership.role || 'member' };
+    });
+  });
 
 // List all organizations for current user (excluding active organization)
 export const listOrganizations = authQuery
@@ -32,8 +131,8 @@ export const listOrganizations = authQuery
     })
   )
   .query(async ({ ctx }) => {
-    // Get all organizations for user using helper
-    const orgs = await listUserOrganizations(ctx, ctx.userId);
+    const handler = createHandler(ctx);
+    const orgs = await handler.organization.listUserOrganizations();
 
     if (!orgs || orgs.length === 0) {
       return {

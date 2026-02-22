@@ -280,6 +280,9 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         "import { initCRPC as baseInitCRPC } from 'better-convex/server';"
       );
+      expect(serverGenerated).toContain(
+        "import {\n  createGenericCallerFactory,\n  createGenericHandlerFactory,\n  typedProcedureResolver,\n  type ProcedureCallerFromRegistry,\n} from 'better-convex/server';"
+      );
       expect(serverGenerated).toContain('export const orm = createOrm({');
       expect(serverGenerated).toContain(
         'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
@@ -288,7 +291,10 @@ describe('cli/codegen', () => {
         'export type MutationCtx = OrmCtx<ServerMutationCtx>;'
       );
       expect(serverGenerated).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+        'export type ActionCtx = ServerActionCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
       expect(serverGenerated).toContain(
         'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
@@ -296,6 +302,29 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
+      );
+      expect(serverGenerated).toContain('const procedureRegistry = {');
+      expect(serverGenerated).not.toContain('createRequire');
+      expect(serverGenerated).toContain(
+        '"items.queries.internalOnly": ["query", typedProcedureResolver(internal["items"]["queries"]["internalOnly"], () => (require("./items/queries") as Record<string, unknown>)["internalOnly"])],'
+      );
+      expect(serverGenerated).toContain(
+        'export function createCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(serverGenerated).toContain(
+        'const createCallerFromRegistry = createGenericCallerFactory<'
+      );
+      expect(serverGenerated).toContain(
+        'export type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type ProcedureHandlerContext = QueryCtx | MutationCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'const createHandlerFromRegistry = createGenericHandlerFactory<'
+      );
+      expect(serverGenerated).toContain(
+        'export function createHandler<TCtx extends ProcedureHandlerContext>('
       );
       expect(serverGenerated).toContain(
         'export const { scheduledMutationBatch, scheduledDelete } = orm.api();'
@@ -435,11 +464,25 @@ describe('cli/codegen', () => {
         'export type MutationCtx = ServerMutationCtx;'
       );
       expect(serverGenerated).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+        'export type ActionCtx = ServerActionCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
       expect(serverGenerated).toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+      );
+      expect(serverGenerated).toContain('const procedureRegistry = {');
+      expect(serverGenerated).not.toContain('createRequire');
+      expect(serverGenerated).toContain(
+        '"todos.list": ["query", typedProcedureResolver(api["todos"]["list"], () => (require("./todos") as Record<string, unknown>)["list"])],'
+      );
+      expect(serverGenerated).toContain(
+        'const createHandlerFromRegistry = createGenericHandlerFactory<'
+      );
+      expect(serverGenerated).toContain(
+        'export function createHandler<TCtx extends ProcedureHandlerContext>('
       );
       expect(serverGenerated).not.toContain('createOrm');
       expect(serverGenerated).not.toContain('withOrm');
@@ -542,7 +585,10 @@ describe('cli/codegen', () => {
         'export type MutationCtx = ServerMutationCtx;'
       );
       expect(serverGenerated).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+        'export type ActionCtx = ServerActionCtx;'
+      );
+      expect(serverGenerated).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
       expect(serverGenerated).toContain('export function defineAuth<');
       expect(serverGenerated).toContain(

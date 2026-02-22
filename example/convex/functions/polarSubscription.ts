@@ -10,7 +10,7 @@ import {
   privateQuery,
 } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
-import { internal } from './_generated/api';
+import { createCaller } from './generated';
 import { subscriptionsTable } from './schema';
 
 const subscriptionSchema = z.object({
@@ -172,11 +172,11 @@ export const cancelSubscription = authAction
   .output(z.object({ message: z.string(), success: z.boolean() }))
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
+    const caller = createCaller(ctx);
 
-    const subscription = await ctx.runQuery(
-      internal.polarSubscription.getActiveSubscription,
-      { userId: ctx.userId! }
-    );
+    const subscription = await caller.polarSubscription.getActiveSubscription({
+      userId: ctx.userId!,
+    });
 
     if (!subscription) {
       throw new CRPCError({
@@ -198,11 +198,11 @@ export const resumeSubscription = authAction
   .output(z.object({ message: z.string(), success: z.boolean() }))
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
+    const caller = createCaller(ctx);
 
-    const subscription = await ctx.runQuery(
-      internal.polarSubscription.getActiveSubscription,
-      { userId: ctx.userId! }
-    );
+    const subscription = await caller.polarSubscription.getActiveSubscription({
+      userId: ctx.userId!,
+    });
 
     if (!subscription) {
       throw new CRPCError({

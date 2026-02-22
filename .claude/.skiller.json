@@ -11,8 +11,8 @@
       {
         "sourceType": "claude",
         "sourceKind": "command",
-        "sourceRelPath": ".claude/commands/clean.md",
-        "destRelPath": "clean"
+        "sourceRelPath": ".claude/commands/clean-docs.md",
+        "destRelPath": "clean-docs"
       },
       {
         "sourceType": "claude",
@@ -55,6 +55,12 @@
         "sourceKind": "command",
         "sourceRelPath": ".claude/commands/simulate.md",
         "destRelPath": "simulate"
+      },
+      {
+        "sourceType": "claude",
+        "sourceKind": "command",
+        "sourceRelPath": ".claude/commands/sync-skill.md",
+        "destRelPath": "sync-skill"
       },
       {
         "sourceType": "claude",

@@ -1,8 +1,8 @@
 import { eq } from 'better-convex/orm';
 import { z } from 'zod';
 import { privateAction, privateMutation, privateQuery } from '../lib/crpc';
-import { internal } from './_generated/api';
 import { aggregateTodosByStatus, aggregateTodosByUser } from './aggregates';
+import { createCaller } from './generated';
 import { todosTable } from './schema';
 
 // ============================================
@@ -468,14 +468,13 @@ export const processDailySummaries = privateAction
     })
   )
   .action(async ({ ctx }) => {
+    const caller = createCaller(ctx);
+
     // Get users with overdue todos
-    const usersToNotify = await ctx.runQuery(
-      internal.todoInternal.getUsersWithOverdueTodos,
-      {
-        hoursOverdue: 24,
-        limit: 100,
-      }
-    );
+    const usersToNotify = await caller.todoInternal.getUsersWithOverdueTodos({
+      hoursOverdue: 24,
+      limit: 100,
+    });
 
     let sent = 0;
     let failed = 0;
@@ -516,15 +515,13 @@ export const generateWeeklyReport = privateAction
   .action(async ({ ctx, input }) => {
     const now = Date.now();
     const weekStart = now - 7 * 24 * 60 * 60 * 1000;
+    const caller = createCaller(ctx);
 
     // Get user's todos from the past week
-    const weekTodos = await ctx.runQuery(
-      internal.todoInternal.getUserWeeklyActivity,
-      {
-        userId: input.userId,
-        weekStart,
-      }
-    );
+    const weekTodos = await caller.todoInternal.getUserWeeklyActivity({
+      userId: input.userId,
+      weekStart,
+    });
 
     // Calculate stats
     const todosCreated = weekTodos.created.length;

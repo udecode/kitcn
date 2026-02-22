@@ -2,9 +2,9 @@
 "better-convex": minor
 ---
 
-## Breaking changes
+## Auth
 
-### Auth
+### Breaking changes
 
 - Replace split auth exports (`getAuthOptions` + `authTriggers`) with one default `defineAuth((ctx) => ({ ...options, triggers }))` contract in `convex/functions/auth.ts`.
 - Drop manual auth runtime exports from `convex/functions/auth.ts`; import runtime handlers (`getAuth`, CRUD, trigger handlers, `auth`) from `convex/functions/generated.ts`.
@@ -68,11 +68,21 @@ import { authMiddleware, registerRoutes } from "better-convex/auth";
 import { authMiddleware, registerRoutes } from "better-convex/auth/http";
 ```
 
-### Generated Server Contract
+### Features
+
+- Add `defineAuth` helpers to unify codegen and non-codegen auth setup.
+- Add always-generated Better Auth runtime contract in `convex/functions/generated.ts` (`authEnabled`, `getAuth`, `authClient`, CRUD/JWKS handlers, trigger handlers, static `auth`).
+- Add generated `defineAuth` export in `convex/functions/generated.ts` for inference-first `auth.ts` authoring.
+
+## Codegen
+
+### Breaking changes
 
 - Drop manual `convex/lib/orm.ts` server wiring and import `orm`/`withOrm` from `convex/functions/generated.ts`.
 - Drop `OrmQueryCtx`/`OrmMutationCtx` primary usage and import wrapped `QueryCtx`/`MutationCtx` from `convex/functions/generated.ts`.
 - Drop generated internal auth calls from `internal.auth.*`; use `internal.generated.*`.
+- In codegen flows, drop manual `initCRPC.dataModel().context(...)` bootstrap and import generated `initCRPC`.
+- Require `export const httpRouter = router(...)` in `convex/functions/http.ts` so codegen can include typed HTTP routes in generated API output.
 
 ```ts
 // Before
@@ -84,34 +94,6 @@ await ctx.runMutation(internal.auth.beforeCreate, args);
 import type { QueryCtx, MutationCtx } from "../functions/generated";
 import { withOrm } from "../functions/generated";
 await ctx.runMutation(internal.generated.beforeCreate, args);
-```
-
-### API Types + cRPC Setup
-
-- Drop separate `meta` arguments in context/proxy/caller/auth setup APIs; pass only `api`.
-- Drop the `@convex/types` workflow and use generated `@convex/api` types.
-- Drop manual codegen outputs `convex/shared/meta.ts` and `convex/shared/types.ts` in favor of generated `convex/shared/api.ts`.
-- In codegen flows, drop manual `initCRPC.dataModel().context(...)` bootstrap and import generated `initCRPC`.
-- Require `export const httpRouter = router(...)` in `convex/functions/http.ts` so codegen can include typed HTTP routes in generated API output.
-
-```ts
-// Before
-import type { Api, ApiInputs, ApiOutputs } from "@convex/types";
-createCRPCContext({ api, meta, convexSiteUrl });
-createServerCRPCProxy({ api, meta });
-
-// After
-import type { Api, ApiInputs, ApiOutputs } from "@convex/api";
-createCRPCContext({ api, convexSiteUrl });
-createServerCRPCProxy({ api });
-```
-
-```ts
-// Before
-import type { Select, Insert } from "./shared/types";
-
-// After
-import type { Select, Insert } from "@convex/api";
 ```
 
 ```ts
@@ -161,27 +143,54 @@ export const httpRouter = router({
 export default createHttpRouter(app, httpRouter);
 ```
 
-### Dependency
+### Features
 
-- Bump Convex minimum peer dependency to `>=1.32`.
-
-## Features
-
-- Add a single generated `@convex/api` surface that exports `api`, `Api`, `ApiInputs`, and `ApiOutputs` for client typing.
-- Add optional generated table helpers (`TableName`, `Select`, `Insert`) when schema exports `tables`.
 - Add generated `convex/functions/generated.ts` with server ORM exports (`orm`, `withOrm`, `scheduledMutationBatch`, `scheduledDelete`) and wrapped ctx exports (`OrmCtx`, `QueryCtx`, `MutationCtx`, `GenericCtx`).
 - Add generated `initCRPC` in `convex/functions/generated.ts`:
   - With `relations`: prewired `.dataModel<DataModel>().context({ query, mutation })`.
   - Without `relations`: `.dataModel<DataModel>()` only.
-- Add always-generated Better Auth runtime contract in `convex/functions/generated.ts` (`authEnabled`, `getAuth`, `authClient`, CRUD/JWKS handlers, trigger handlers, static `auth`).
-- Add generated `defineAuth` export in `convex/functions/generated.ts` for inference-first `auth.ts` authoring.
-- Add `defineAuth`, `createAuthRuntime`, and `createDisabledAuthRuntime` helpers to unify codegen and non-codegen auth setup.
 - Keep manual `initCRPC` setup from `better-convex/server` supported for apps not using codegen.
 
-## Patches
+### Patches
+
+- Add generated internal API refs for async ORM workers and generated auth handlers under `internal.generated`.
+
+## API Types
+
+### Breaking changes
+
+- Drop separate `meta` arguments in context/proxy/caller/auth setup APIs; pass only `api`.
+- Drop the `@convex/types` workflow and use generated `@convex/api` types.
+- Drop manual codegen outputs `convex/shared/meta.ts` and `convex/shared/types.ts` in favor of generated `convex/shared/api.ts`.
+
+```ts
+// Before
+import type { Api, ApiInputs, ApiOutputs } from "@convex/types";
+createCRPCContext({ api, meta, convexSiteUrl });
+createServerCRPCProxy({ api, meta });
+
+// After
+import type { Api, ApiInputs, ApiOutputs } from "@convex/api";
+createCRPCContext({ api, convexSiteUrl });
+createServerCRPCProxy({ api });
+```
+
+```ts
+// Before
+import type { Select, Insert } from "./shared/types";
+
+// After
+import type { Select, Insert } from "@convex/api";
+```
+
+### Features
+
+- Add a single generated `@convex/api` surface that exports `api`, `Api`, `ApiInputs`, and `ApiOutputs` for client typing.
+- Add optional generated table helpers (`TableName`, `Select`, `Insert`) when schema exports `tables`.
+
+### Patches
 
 - Add Date-safe API inference from cRPC exports so `z.date()` fields stay typed as `Date` in generated API input/output types.
-- Add generated internal API refs for async ORM workers and generated auth handlers under `internal.generated`.
 - Improve generated `Api` typing so HTTP router types are embedded in `typeof api`, reducing manual `<Api>` generics in common setup calls.
 - Build function metadata from the generated `api` object at runtime, eliminating separate `meta` plumbing in cRPC React/RSC/server helpers.
 - Filter internal/private namespaces from generated client/caller type surfaces (e.g. `_http`, `_generated`-style keys).
@@ -206,3 +215,9 @@ export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
 
 export const crpc = createServerCRPCProxy({ api });
 ```
+
+## Dependency
+
+### Breaking changes
+
+- Bump Convex minimum peer dependency to `>=1.32`.

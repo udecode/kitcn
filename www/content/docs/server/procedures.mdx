@@ -170,6 +170,41 @@ export const sendWelcomeEmail = publicAction
   });
 ```
 
+## In-Process Procedure Composition
+
+Use generated `createCaller(ctx)` when one procedure needs to call other cRPC procedures.
+
+```ts title="convex/functions/teams.ts" showLineNumbers
+import { z } from 'zod';
+import { privateQuery } from '../lib/crpc';
+import { createCaller } from './generated';
+
+export const getProjectAndOwner = privateQuery
+  .input(z.object({ projectId: z.string() }))
+  .query(async ({ ctx, input }) => {
+    const caller = createCaller(ctx);
+    const project = await caller.projects.get({ projectId: input.projectId });
+    const owner = await caller.user.getById({ id: project.ownerId });
+    return { project, owner };
+  });
+```
+
+`createCaller(ctx)` behavior depends on context:
+- `QueryCtx` / `MutationCtx`: invokes procedure handlers directly (`_handler`) and does **not** use `ctx.runQuery` / `ctx.runMutation`.
+- `ActionCtx`: dispatches automatically via `ctx.runQuery` / `ctx.runMutation`.
+
+### Allowed Call Matrix
+
+| Caller context | Query procedures | Mutation procedures | Action procedures |
+|----------------|------------------|---------------------|-------------------|
+| `QueryCtx` | ✅ | ❌ | ❌ |
+| `MutationCtx` | ✅ | ✅ | ❌ |
+| `ActionCtx` | ✅ | ✅ | ❌ |
+
+`ActionCtx` calls are still separate Convex query/mutation transactions. Prefer a single aggregated internal query/mutation when consistency matters.
+
+`createHandler(ctx)` remains query/mutation-only and bypasses input/middleware/output validation.
+
 ### Paginated Queries
 
 For large datasets, use `.paginated()` for cursor-based pagination. It automatically adds `cursor` and `limit` to your input, and wraps output with pagination metadata.

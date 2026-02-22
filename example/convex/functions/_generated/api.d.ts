@@ -256,6 +256,19 @@ export declare const api: {
         role: string;
       }>
     >;
+    listUserOrganizations: FunctionReference<
+      "query",
+      "public",
+      {},
+      Array<{
+        createdAt: any;
+        id: string;
+        logo?: string | null;
+        name: string;
+        role: string;
+        slug: string;
+      }>
+    >;
     rejectInvitation: FunctionReference<
       "mutation",
       "public",
@@ -994,6 +1007,14 @@ export declare const internal: {
   };
   init: {
     default: FunctionReference<"mutation", "internal", {}, null>;
+  };
+  organization: {
+    createPersonalOrganization: FunctionReference<
+      "mutation",
+      "internal",
+      { image?: string | null; name: string; userId: string },
+      { id: string; slug: string } | null
+    >;
   };
   polarCustomer: {
     createCustomer: FunctionReference<

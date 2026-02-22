@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
-import { internal } from './_generated/api';
+import { createCaller } from './generated';
 
 /**
  * Initialize the database on startup. This function runs automatically when
@@ -43,7 +43,8 @@ export default privateMutation
 
     if (isFirstInit && getEnv().DEPLOY_ENV === 'development') {
       // Run the seed function
-      await ctx.runMutation(internal.seed.seed, {});
+      const caller = createCaller(ctx);
+      await caller.seed.seed();
     }
 
     return null;

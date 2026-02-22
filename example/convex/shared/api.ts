@@ -40,6 +40,7 @@ export const api = {
     listOrganizations: createApiLeaf<"query", typeof import("../functions/organization").listOrganizations>(convexApi["organization"]["listOrganizations"], { auth: "required", type: "query" }),
     listPendingInvitations: createApiLeaf<"query", typeof import("../functions/organization").listPendingInvitations>(convexApi["organization"]["listPendingInvitations"], { auth: "required", type: "query" }),
     listUserInvitations: createApiLeaf<"query", typeof import("../functions/organization").listUserInvitations>(convexApi["organization"]["listUserInvitations"], { auth: "required", type: "query" }),
+    listUserOrganizations: createApiLeaf<"query", typeof import("../functions/organization").listUserOrganizations>(convexApi["organization"]["listUserOrganizations"], { auth: "required", type: "query" }),
     rejectInvitation: createApiLeaf<"mutation", typeof import("../functions/organization").rejectInvitation>(convexApi["organization"]["rejectInvitation"], { auth: "required", rateLimit: "organization/rejectInvite", type: "mutation" }),
     removeMember: createApiLeaf<"mutation", typeof import("../functions/organization").removeMember>(convexApi["organization"]["removeMember"], { auth: "required", rateLimit: "organization/removeMember", type: "mutation" }),
     setActiveOrganization: createApiLeaf<"mutation", typeof import("../functions/organization").setActiveOrganization>(convexApi["organization"]["setActiveOrganization"], { auth: "required", rateLimit: "organization/setActive", type: "mutation" }),

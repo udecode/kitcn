@@ -32,13 +32,17 @@
 import { getHeaders } from 'better-convex/auth';
 import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
-import { api } from '../functions/_generated/api';
 import type {
   ActionCtx,
   MutationCtx,
   QueryCtx,
 } from '../functions/_generated/server';
-import { getAuth, initCRPC, type OrmCtx } from '../functions/generated';
+import {
+  createCaller,
+  getAuth,
+  initCRPC,
+  type OrmCtx,
+} from '../functions/generated';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
@@ -262,7 +266,8 @@ export const authAction = c.action
   .meta({ auth: 'required' })
   .use(devMiddleware)
   .use(async ({ ctx, next }) => {
-    const user = requireAuth(await ctx.runQuery(api.user.getSessionUser));
+    const caller = createCaller(ctx);
+    const user = requireAuth(await caller.user.getSessionUser());
 
     return next({ ctx: { ...ctx, user, userId: user.id } });
   });

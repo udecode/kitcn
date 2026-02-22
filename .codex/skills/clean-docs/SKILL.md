@@ -1,6 +1,6 @@
 ---
 description: Clean all docs following style guide — remove redundancy, DRY, fix ordering
-name: clean
+name: clean-docs
 ---
 
 Use `planning-with-files` skill with reset. The task:

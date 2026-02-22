@@ -10,6 +10,12 @@ describe('server public exports', () => {
 
     expect(typeof server.createHttpRouter).toBe('function');
     expect(typeof server.createServerCaller).toBe('function');
+    expect(typeof server.createProcedureCallerFactory).toBe('function');
+    expect(typeof server.createProcedureHandlerFactory).toBe('function');
+    expect(typeof server.createGenericCallerFactory).toBe('function');
+    expect(typeof server.createGenericHandlerFactory).toBe('function');
+    expect(typeof server.typedProcedureResolver).toBe('function');
+    expect(typeof server.defineProcedure).toBe('function');
     expect(typeof server.createLazyCaller).toBe('function');
     expect(typeof server.createEnv).toBe('function');
     expect(typeof server.requireActionCtx).toBe('function');

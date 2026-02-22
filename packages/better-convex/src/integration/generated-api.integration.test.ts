@@ -73,7 +73,10 @@ describe('integration/generated-api', () => {
         'export type MutationCtx = OrmCtx<ServerMutationCtx>;'
       );
       expect(generatedServer).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+        'export type ActionCtx = ServerActionCtx;'
+      );
+      expect(generatedServer).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
       expect(generatedServer).toContain(
         'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
@@ -195,7 +198,10 @@ describe('integration/generated-api', () => {
         'export type MutationCtx = ServerMutationCtx;'
       );
       expect(generatedServer).toContain(
-        'export type GenericCtx = QueryCtx | MutationCtx | ServerActionCtx;'
+        'export type ActionCtx = ServerActionCtx;'
+      );
+      expect(generatedServer).toContain(
+        'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
       expect(generatedServer).toContain('export function defineAuth<');
       expect(generatedServer).toContain(
