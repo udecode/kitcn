@@ -242,12 +242,18 @@ export class ConvexDeleteBuilder<
       maxBytesPerBatch,
       scheduleCallCap,
     } = getMutationCollectionLimits(ormContext);
-    const resolvedMode = getMutationExecutionMode(
-      ormContext,
-      config?.mode ?? this.executionModeOverride
-    );
+    const modeOverride = config?.mode ?? this.executionModeOverride;
+    const requestedModeIsExplicit = modeOverride !== undefined;
+    let resolvedMode = getMutationExecutionMode(ormContext, modeOverride);
     const delayMs = getMutationAsyncDelayMs(ormContext, config?.delayMs);
     const { deleteMode, scheduledDelayMs } = this.resolveDeleteModeAndDelay();
+    if (
+      !requestedModeIsExplicit &&
+      resolvedMode === 'async' &&
+      deleteMode === 'scheduled'
+    ) {
+      resolvedMode = 'sync';
+    }
 
     if (!isPaginated && resolvedMode === 'async') {
       if (deleteMode === 'scheduled') {

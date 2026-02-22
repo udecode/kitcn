@@ -21,7 +21,11 @@ import type {
 import { ConvexDeleteBuilder } from './delete';
 import type { EdgeMetadata } from './extractRelationsConfig';
 import { ConvexInsertBuilder } from './insert';
-import { buildForeignKeyGraph, type OrmContextValue } from './mutation-utils';
+import {
+  buildForeignKeyGraph,
+  type OrmContextValue,
+  resolveOrmRuntimeDefaults,
+} from './mutation-utils';
 import { RelationalQueryBuilder } from './query-builder';
 import type { TablesRelationalConfig } from './relations';
 import type { RlsContext } from './rls/types';
@@ -142,6 +146,10 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
   const strict = schemaOptions?.strict ?? true;
   const defaults = schemaOptions?.defaults;
   const buildDatabase = (rls: RlsContext | undefined) => {
+    const resolvedDefaults = resolveOrmRuntimeDefaults(defaults, {
+      scheduler: options?.scheduler,
+      scheduledMutationBatch: options?.scheduledMutationBatch,
+    });
     const ormContext: OrmContextValue = {
       foreignKeyGraph: buildForeignKeyGraph(schema),
       scheduler: options?.scheduler,
@@ -150,6 +158,7 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
       rls,
       strict,
       defaults,
+      resolvedDefaults,
     };
 
     // Preserve the original `ctx.db` behavior without mutating it.

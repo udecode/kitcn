@@ -461,8 +461,8 @@ Vector search in native Convex is action-only. The migration keeps that shape: r
   <CompareItem title="After (ORM + cRPC)">
     ```ts title="convex/functions/posts.ts" showLineNumbers {2-7,16-28}
     import { z } from 'zod';
-    import { internal } from './_generated/api';
     import { publicAction, privateQuery } from '../lib/crpc';
+    import { createCaller } from './generated';
 
     export const fetchByIds = privateQuery
       .input(z.object({ ids: z.array(z.string()) }))
@@ -483,7 +483,8 @@ Vector search in native Convex is action-only. The migration keeps that shape: r
           filter: (q) => q.eq('type', 'news'),
         });
 
-        const rows = await ctx.runQuery(internal.posts.fetchByIds, {
+        const caller = createCaller(ctx);
+        const rows = await caller.posts.fetchByIds({
           ids: hits.map((h) => h.id),
         });
 

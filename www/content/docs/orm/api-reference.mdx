@@ -547,9 +547,9 @@ await db
 **Full-scan guardrail**
 - `update()` without `where()` throws unless you call `.allowFullScan()`.
 - Non‑`id` filters require `.allowFullScan()` only when no index is available.
-- Matched rows are capped by `mutationMaxRows` (default `1000`), collected in `mutationBatchSize` pages (default `100`).
-- Async fan-out uses `mutationLeafBatchSize` (default `900`) for non-recursive FK actions.
-- Async fan-out enforces `mutationMaxBytesPerBatch` (default `2_097_152` measured bytes) and `mutationScheduleCallCap` (default `100`).
+- Matched rows are capped by `mutationMaxRows` (default `10000`), collected in `mutationBatchSize` pages (default `400`).
+- Async fan-out uses `mutationLeafBatchSize` (default `1600`) for non-recursive FK actions.
+- Async fan-out enforces `mutationMaxBytesPerBatch` (default `2_097_152` measured bytes) and `mutationScheduleCallCap` (default `800`).
 - Override defaults via `defineSchema(..., { defaults: { mutationMaxRows, mutationBatchSize, mutationLeafBatchSize, mutationMaxBytesPerBatch, mutationScheduleCallCap, mutationExecutionMode, mutationAsyncDelayMs } })`.
 - For large workloads, use `.paginate({ cursor, limit })` to execute one batch per mutation call.
 - Use `execute({ mode: 'async', batchSize?, delayMs? })` (or `.executeAsync(...)`) to run the first batch inline and schedule continuation.
@@ -576,9 +576,9 @@ await db.delete(users).where(eq(users.id, userId));
 **Full-scan guardrail**
 - `delete()` without `where()` throws unless you call `.allowFullScan()`.
 - Non‑`id` filters require `.allowFullScan()` only when no index is available.
-- Matched rows are capped by `mutationMaxRows` (default `1000`), collected in `mutationBatchSize` pages (default `100`).
-- Async fan-out uses `mutationLeafBatchSize` (default `900`) for non-recursive FK actions.
-- Async fan-out enforces `mutationMaxBytesPerBatch` (default `2_097_152` measured bytes) and `mutationScheduleCallCap` (default `100`).
+- Matched rows are capped by `mutationMaxRows` (default `10000`), collected in `mutationBatchSize` pages (default `400`).
+- Async fan-out uses `mutationLeafBatchSize` (default `1600`) for non-recursive FK actions.
+- Async fan-out enforces `mutationMaxBytesPerBatch` (default `2_097_152` measured bytes) and `mutationScheduleCallCap` (default `800`).
 - Override defaults via `defineSchema(..., { defaults: { mutationMaxRows, mutationBatchSize, mutationLeafBatchSize, mutationMaxBytesPerBatch, mutationScheduleCallCap, mutationExecutionMode, mutationAsyncDelayMs } })`.
 - For large workloads, use `.paginate({ cursor, limit })` to execute one batch per mutation call.
 - Use `execute({ mode: 'async', batchSize?, delayMs? })` (or `.executeAsync(...)`) to run the first batch inline and schedule continuation.

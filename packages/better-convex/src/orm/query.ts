@@ -54,6 +54,7 @@ import {
   getIndexes,
 } from './index-utils';
 import {
+  getOrmContext,
   hydrateDateFieldsForRead,
   normalizeTemporalComparableValue,
 } from './mutation-utils';
@@ -418,7 +419,10 @@ export class GelRelationalQuery<
 
   private _resolveNonPaginatedLimit(config: any): number | undefined {
     const explicitLimit = config.limit;
-    const defaultLimit = this.tableConfig.defaults?.defaultLimit;
+    const contextDefaultLimit = getOrmContext(this.db as any)?.resolvedDefaults
+      ?.defaultLimit;
+    const defaultLimit =
+      contextDefaultLimit ?? this.tableConfig.defaults?.defaultLimit;
     const resolvedLimit = explicitLimit ?? defaultLimit;
 
     if (resolvedLimit === undefined) {
@@ -3901,7 +3905,9 @@ export class GelRelationalQuery<
   }
 
   private _getRelationFanOutKeyCap(tableConfig: TableRelationalConfig): number {
-    const value = tableConfig.defaults?.relationFanOutMaxKeys;
+    const contextCap = getOrmContext(this.db as any)?.resolvedDefaults
+      ?.relationFanOutMaxKeys;
+    const value = contextCap ?? tableConfig.defaults?.relationFanOutMaxKeys;
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return DEFAULT_RELATION_FAN_OUT_MAX_KEYS;
     }
@@ -4328,7 +4334,9 @@ export class GelRelationalQuery<
         ? (relationConfig as any).limit
         : undefined;
     const effectivePerParentLimit =
-      perParentLimit ?? tableConfig.defaults?.defaultLimit;
+      perParentLimit ??
+      getOrmContext(this.db as any)?.resolvedDefaults?.defaultLimit ??
+      tableConfig.defaults?.defaultLimit;
     if (
       effectivePerParentLimit !== undefined &&
       (!Number.isInteger(effectivePerParentLimit) ||

@@ -434,6 +434,7 @@ import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authAction, privateMutation, privateQuery } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
+import { createCaller } from './generated';
 import { internal } from './_generated/api';
 
 // Create subscription (called from webhook)
@@ -482,10 +483,10 @@ export const cancelSubscription = authAction
   .output(z.object({ success: z.boolean() }))
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
-    const subscription = await ctx.runQuery(
-      internal.polarSubscription.getActiveSubscription,
-      { userId: ctx.userId! }
-    );
+
+    const caller = createCaller(ctx);
+    const subscription = await caller.polarSubscription.getActiveSubscription({ userId: ctx.userId! });
+
     if (!subscription) {
       throw new CRPCError({ code: 'PRECONDITION_FAILED', message: 'No active subscription found' });
     }
@@ -501,10 +502,10 @@ export const resumeSubscription = authAction
   .output(z.object({ success: z.boolean() }))
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
-    const subscription = await ctx.runQuery(
-      internal.polarSubscription.getActiveSubscription,
-      { userId: ctx.userId! }
-    );
+
+    const caller = createCaller(ctx);
+    const subscription = await caller.polarSubscription.getActiveSubscription({ userId: ctx.userId! });
+
     if (!subscription) {
       throw new CRPCError({ code: 'PRECONDITION_FAILED', message: 'No active subscription found' });
     }

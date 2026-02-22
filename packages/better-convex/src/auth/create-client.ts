@@ -48,6 +48,29 @@ export type TriggerResolver<
   | Triggers<DataModel, Schema>
   | ((ctx: TriggerCtx) => Triggers<DataModel, Schema> | undefined);
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const withBothIdFields = <T>(value: T): T => {
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const existingUnderscoreId = value._id as string | undefined;
+  const existingId = value.id as string | undefined;
+  const id = existingUnderscoreId ?? existingId;
+
+  if (!id) {
+    return value;
+  }
+
+  return {
+    ...value,
+    _id: existingUnderscoreId ?? id,
+    id: existingId ?? id,
+  } as T;
+};
+
 export const createClient = <
   DataModel extends GenericDataModel,
   Schema extends SchemaDefinition<GenericSchema, true>,
@@ -120,11 +143,11 @@ export const createClient = <
         },
         handler: async (ctx, args) => {
           const triggerCtx = await resolveTriggerCtx(ctx);
+          const doc = withBothIdFields(args.doc);
 
           return (
-            (await getTriggers(args.model, triggerCtx)?.beforeDelete?.(
-              args.doc
-            )) ?? args.doc
+            (await getTriggers(args.model, triggerCtx)?.beforeDelete?.(doc)) ??
+            doc
           );
         },
       }),
@@ -136,10 +159,11 @@ export const createClient = <
         },
         handler: async (ctx, args) => {
           const triggerCtx = await resolveTriggerCtx(ctx);
+          const doc = withBothIdFields(args.doc);
 
           return (
             (await getTriggers(args.model, triggerCtx)?.beforeUpdate?.(
-              args.doc,
+              doc,
               args.update
             )) ?? args.update
           );
@@ -152,7 +176,8 @@ export const createClient = <
         },
         handler: async (ctx, args) => {
           const triggerCtx = await resolveTriggerCtx(ctx);
-          await getTriggers(args.model, triggerCtx)?.onCreate?.(args.doc);
+          const doc = withBothIdFields(args.doc);
+          await getTriggers(args.model, triggerCtx)?.onCreate?.(doc);
         },
       }),
       onDelete: mutationBuilder({
@@ -162,7 +187,8 @@ export const createClient = <
         },
         handler: async (ctx, args) => {
           const triggerCtx = await resolveTriggerCtx(ctx);
-          await getTriggers(args.model, triggerCtx)?.onDelete?.(args.doc);
+          const doc = withBothIdFields(args.doc);
+          await getTriggers(args.model, triggerCtx)?.onDelete?.(doc);
         },
       }),
       onUpdate: mutationBuilder({
@@ -173,10 +199,9 @@ export const createClient = <
         },
         handler: async (ctx, args) => {
           const triggerCtx = await resolveTriggerCtx(ctx);
-          await getTriggers(args.model, triggerCtx)?.onUpdate?.(
-            args.newDoc,
-            args.oldDoc
-          );
+          const newDoc = withBothIdFields(args.newDoc);
+          const oldDoc = withBothIdFields(args.oldDoc);
+          await getTriggers(args.model, triggerCtx)?.onUpdate?.(newDoc, oldDoc);
         },
       }),
     };

@@ -88,9 +88,9 @@ For more on `allowFullScan` and index compilation, see [Querying Data](/docs/orm
 
 The ORM enforces runtime limits on how many rows a single mutation can touch. The key defaults are:
 
-- `mutationBatchSize`: `100` (page size for collecting matched rows)
-- `mutationMaxRows`: `1000` (sync-mode hard cap)
-- `mutationLeafBatchSize`: `900` (async FK fan-out batch size)
+- `mutationBatchSize`: `400` (page size for collecting matched rows)
+- `mutationMaxRows`: `10000` (sync-mode hard cap)
+- `mutationLeafBatchSize`: `1600` (async FK fan-out batch size)
 
 You can customize these in your schema definition. For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
 

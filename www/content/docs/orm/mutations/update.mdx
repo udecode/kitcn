@@ -53,9 +53,9 @@ const ids = await ctx.orm
 
 The ORM collects matching rows in bounded pages before applying writes. The key defaults are:
 
-- `mutationBatchSize`: `100`
-- `mutationMaxRows`: `1000`
-- `mutationLeafBatchSize`: `900` (async FK fan-out)
+- `mutationBatchSize`: `400`
+- `mutationMaxRows`: `10000`
+- `mutationLeafBatchSize`: `1600` (async FK fan-out)
 
 If matched rows exceed `mutationMaxRows`, the update throws. You can customize these values in your schema:
 
@@ -133,7 +133,7 @@ Key behaviors to keep in mind:
 - `execute()` in async mode returns the same shape as sync mode (with `.returning()`, you get rows from the first batch only)
 - Remaining batches are scheduled asynchronously
 - Async APIs (`execute({ mode: 'async' })` / `executeAsync()`) cannot be combined with `.paginate()`
-- `batchSize` resolves as: per-call `batchSize` > `defaults.mutationBatchSize` > `100`
+- `batchSize` resolves as: per-call `batchSize` > `defaults.mutationBatchSize` > `400`
 - `delayMs` resolves as: per-call `delayMs` > `defaults.mutationAsyncDelayMs` > `0`
 - Async FK update fan-out (`onUpdate: 'cascade'`, `set null`, `set default`) uses `mutationLeafBatchSize`
 

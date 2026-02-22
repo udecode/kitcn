@@ -172,9 +172,9 @@ export const sendWelcomeEmail = publicAction
 
 ## In-Process Procedure Composition
 
-Use generated `createCaller(ctx)` when one procedure needs to call other cRPC procedures.
+When one procedure needs to call another, use `createCaller(ctx)` from `convex/functions/generated.ts`. This gives you a type-safe proxy with full autocomplete — no more manually choosing between `ctx.runQuery` and `ctx.runMutation`.
 
-```ts title="convex/functions/teams.ts" showLineNumbers
+```ts title="convex/functions/teams.ts" showLineNumbers {3,7-9}
 import { z } from 'zod';
 import { privateQuery } from '../lib/crpc';
 import { createCaller } from './generated';
@@ -189,9 +189,12 @@ export const getProjectAndOwner = privateQuery
   });
 ```
 
-`createCaller(ctx)` behavior depends on context:
-- `QueryCtx` / `MutationCtx`: invokes procedure handlers directly (`_handler`) and does **not** use `ctx.runQuery` / `ctx.runMutation`.
-- `ActionCtx`: dispatches automatically via `ctx.runQuery` / `ctx.runMutation`.
+### How It Works
+
+`createCaller(ctx)` detects your context type and dispatches accordingly:
+
+- **`QueryCtx` / `MutationCtx`**: invokes the procedure handler directly — same transaction, no extra overhead.
+- **`ActionCtx`**: dispatches via `ctx.runQuery` / `ctx.runMutation` automatically (separate transactions).
 
 ### Allowed Call Matrix
 
@@ -201,9 +204,28 @@ export const getProjectAndOwner = privateQuery
 | `MutationCtx` | ✅ | ✅ | ❌ |
 | `ActionCtx` | ✅ | ✅ | ❌ |
 
-`ActionCtx` calls are still separate Convex query/mutation transactions. Prefer a single aggregated internal query/mutation when consistency matters.
+<Callout icon={<InfoIcon />}>
+  **Note:** In actions, each `createCaller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
+</Callout>
 
-`createHandler(ctx)` remains query/mutation-only and bypasses input/middleware/output validation.
+### `createHandler(ctx)`
+
+For internal composition where the caller already validated inputs, use `createHandler(ctx)`. It bypasses input validation, middleware, and output validation — calling the raw handler directly.
+
+```ts title="convex/functions/organization.ts" showLineNumbers {3,7-8}
+import { z } from 'zod';
+import { authQuery } from '../lib/crpc';
+import { createHandler } from './generated';
+
+export const listOrganizations = authQuery
+  .query(async ({ ctx }) => {
+    const handler = createHandler(ctx);
+    const orgs = await handler.organization.listUserOrganizations();
+    return orgs;
+  });
+```
+
+`createHandler(ctx)` is query/mutation-only (no action context support).
 
 ### Paginated Queries
 

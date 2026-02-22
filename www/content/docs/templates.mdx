@@ -228,13 +228,11 @@ import { getHeaders } from 'better-convex/auth';
 import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
 
-import { api } from '../functions/_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { getAuth } from '../functions/generated';
+import { createCaller, getAuth, initCRPC, type OrmCtx } from '../functions/generated';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
-import { initCRPC, type OrmCtx } from '../functions/generated';
 import { rateLimitGuard } from './rate-limiter';
 
 /** Context with optional auth - user/userId may be null */
@@ -405,7 +403,8 @@ export const authAction = c.action
   .meta({ auth: 'required' })
   .use(devMiddleware)
   .use(async ({ ctx, next }) => {
-    const user = requireAuth(await ctx.runQuery(api.user.getSessionUser));
+    const caller = createCaller(ctx);
+    const user = requireAuth(await caller.user.getSessionUser());
 
     return next({ ctx: { ...ctx, user, userId: user.id } });
   });
@@ -1102,7 +1101,7 @@ import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
-import { internal } from './_generated/api';
+import { createCaller } from './generated';
 
 /**
  * Initialize the database on startup. This runs with: convex dev --run init
@@ -1138,7 +1137,8 @@ export default privateMutation
     }
 
     if (isFirstInit && getEnv().DEPLOY_ENV === 'development') {
-      await ctx.runMutation(internal.seed.seed, {});
+      const caller = createCaller(ctx);
+      await caller.seed.seed({});
     }
 
     return null;

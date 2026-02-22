@@ -317,10 +317,10 @@ const posts = convexTable(
 - Search mode supports base-table object `where`, but not predicate `where` or relation-based `where`
 - Vector mode (`findMany({ vectorSearch })`) does not support `cursor`, `limit`, `maxScan`, `where`, `orderBy`, `.withIndex(...)`, or `offset`
 - Update/delete without `where()` throws unless `allowFullScan`
-- Update/delete matched rows are capped by `mutationMaxRows` (default `1000`) and collected in `mutationBatchSize` pages (default `100`)
-- Async FK fan-out uses `mutationLeafBatchSize` for non-recursive actions (default `900`)
+- Update/delete matched rows are capped by `mutationMaxRows` (default `10000`) and collected in `mutationBatchSize` pages (default `400`)
+- Async FK fan-out uses `mutationLeafBatchSize` for non-recursive actions (default `1600`)
 - Async FK fan-out enforces measured-byte budget `mutationMaxBytesPerBatch` (default `2_097_152`)
-- Async FK fan-out enforces schedule-call cap `mutationScheduleCallCap` (default `100`)
+- Async FK fan-out enforces schedule-call cap `mutationScheduleCallCap` (default `800`)
 - For large update/delete workloads, use builder-level `paginate({ cursor, limit })` to process one mutation page at a time
 - Async execution (`execute({ mode: 'async', batchSize?, delayMs? })` or `.executeAsync(...)`) runs the first update/delete batch inline and schedules remaining batches
 - Async execution also applies to FK/cascade fan-out paths; large fan-out is paged and continued via scheduler instead of volume-fail-fast
@@ -335,9 +335,9 @@ const posts = convexTable(
 **Default policy**
 - Query sizing has no implicit fallback (no hidden row default unless you set `defaults.defaultLimit`).
 - Relation fan-out guardrails default to `relationFanOutMaxKeys=1000`.
-- Mutation safety has built-in guardrail defaults (`mutationBatchSize=100`, `mutationMaxRows=1000`).
-- Async fan-out defaults: `mutationLeafBatchSize=900`, `mutationMaxBytesPerBatch=2_097_152`, `mutationScheduleCallCap=100`.
-- Non-paginated mutation mode defaults to sync (`defaults.mutationExecutionMode='sync'`) unless configured otherwise.
+- Mutation safety has built-in guardrail defaults (`mutationBatchSize=400`, `mutationMaxRows=10000`).
+- Async fan-out defaults: `mutationLeafBatchSize=1600`, `mutationMaxBytesPerBatch=2_097_152`, `mutationScheduleCallCap=800`.
+- Non-paginated mutation mode defaults to async when scheduling is wired (`scheduler` + `scheduledMutationBatch`), otherwise sync; you can always override with `defaults.mutationExecutionMode`.
 
 <Callout icon={<AlertTriangle />}>
 **Uniqueness under concurrency**: runtime uniqueness checks are best‑effort within a mutation. Concurrent mutations can still race (including 1:1 relations).

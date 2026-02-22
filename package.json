@@ -23,6 +23,9 @@
     "test": "bun run test:bun && bun run test:vitest",
     "test:bun": "bun test",
     "test:coverage": "bun tooling/coverage-check.ts",
+    "test:limits:stress": "CONVEX_LIMIT_STRESS=1 vitest run convex/orm/limits.stress.test.ts",
+    "test:limits:stress:coverage": "CONVEX_LIMIT_STRESS=1 vitest run convex/orm/limits.stress.test.ts --coverage --coverage.reporter=text",
+    "test:limits:tune": "CONVEX_LIMIT_TUNE=1 vitest run convex/orm/limits.defaults-tuning.test.ts",
     "test:vitest": "vitest run",
     "typecheck": "turbo typecheck",
     "typecheck:watch": "tsc --noEmit --watch"

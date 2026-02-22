@@ -147,9 +147,14 @@ const ormDelete = async (ctx: any, table: any, id: GenericId<string>) => {
   await ctx.orm.delete(table).where(eq(table._id, id));
 };
 
-const withBothIdFields = <T extends Record<string, unknown>>(doc: T): T => {
-  const existingUnderscoreId = doc._id as GenericId<string> | undefined;
-  const existingId = doc.id as GenericId<string> | undefined;
+const withBothIdFields = <T>(doc: T): T => {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+    return doc;
+  }
+
+  const record = doc as Record<string, unknown>;
+  const existingUnderscoreId = record._id as GenericId<string> | undefined;
+  const existingId = record.id as GenericId<string> | undefined;
   const id = existingUnderscoreId ?? existingId;
 
   if (!id) {
@@ -157,7 +162,7 @@ const withBothIdFields = <T extends Record<string, unknown>>(doc: T): T => {
   }
 
   return {
-    ...doc,
+    ...record,
     _id: existingUnderscoreId ?? id,
     id: existingId ?? id,
   } as T;
@@ -269,7 +274,7 @@ export const createHandler = async (
     throw new Error(`Failed to create ${args.input.model}`);
   }
 
-  const normalizedDoc = ormTable ? withBothIdFields(doc) : doc;
+  const normalizedDoc = withBothIdFields(doc);
   const result = await selectFields(normalizedDoc, args.select);
 
   if (args.onCreateHandle) {
@@ -333,6 +338,7 @@ export const updateOneHandler = async (
   if (!doc) {
     throw new Error(`Failed to update ${args.input.model}`);
   }
+  const normalizedDoc = withBothIdFields(doc);
 
   let update = args.input.update;
 
@@ -340,7 +346,7 @@ export const updateOneHandler = async (
     const transformedUpdate = await ctx.runMutation(
       args.beforeUpdateHandle as FunctionHandle<'mutation'>,
       serializeDatesForConvex({
-        doc,
+        doc: normalizedDoc,
         model: args.input.model,
         update,
       })
@@ -357,7 +363,7 @@ export const updateOneHandler = async (
     betterAuthSchema,
     args.input.model,
     update,
-    doc
+    normalizedDoc
   );
   const ormTable = resolveOrmTable(
     ctx,
@@ -369,20 +375,21 @@ export const updateOneHandler = async (
     ? await ormUpdate(
         ctx,
         ormTable.table,
-        doc._id as GenericId<string>,
+        (normalizedDoc as any)._id as GenericId<string>,
         update as Record<string, unknown>
       )
     : await (async () => {
-        await ctx.db.patch(doc._id as GenericId<string>, update as any);
-        return ctx.db.get(doc._id as GenericId<string>);
+        await ctx.db.patch(
+          (normalizedDoc as any)._id as GenericId<string>,
+          update as any
+        );
+        return ctx.db.get((normalizedDoc as any)._id as GenericId<string>);
       })();
 
   if (!updatedDoc) {
     throw new Error(`Failed to update ${args.input.model}`);
   }
-  const normalizedUpdatedDoc = ormTable
-    ? withBothIdFields(updatedDoc)
-    : updatedDoc;
+  const normalizedUpdatedDoc = withBothIdFields(updatedDoc);
 
   if (args.onUpdateHandle) {
     const hookNewDoc = normalizedUpdatedDoc;
@@ -391,7 +398,7 @@ export const updateOneHandler = async (
       serializeDatesForConvex({
         model: args.input.model,
         newDoc: hookNewDoc,
-        oldDoc: doc,
+        oldDoc: normalizedDoc,
       })
     );
   }
@@ -440,13 +447,14 @@ export const updateManyHandler = async (
     }
 
     await asyncMap(page, async (doc: any) => {
+      const normalizedDoc = withBothIdFields(doc);
       let update = args.input.update;
 
       if (args.beforeUpdateHandle) {
         const transformedUpdate = await ctx.runMutation(
           args.beforeUpdateHandle as FunctionHandle<'mutation'>,
           serializeDatesForConvex({
-            doc,
+            doc: normalizedDoc,
             model: args.input.model,
             update,
           })
@@ -463,28 +471,31 @@ export const updateManyHandler = async (
         betterAuthSchema,
         args.input.model,
         update ?? {},
-        doc
+        normalizedDoc
       );
       const newDoc = ormTable
         ? await ormUpdate(
             ctx,
             ormTable.table,
-            doc._id as GenericId<string>,
+            (normalizedDoc as any)._id as GenericId<string>,
             (update ?? {}) as Record<string, unknown>
           )
         : await (async () => {
-            await ctx.db.patch(doc._id as GenericId<string>, update as any);
-            return ctx.db.get(doc._id as GenericId<string>);
+            await ctx.db.patch(
+              (normalizedDoc as any)._id as GenericId<string>,
+              update as any
+            );
+            return ctx.db.get((normalizedDoc as any)._id as GenericId<string>);
           })();
 
       if (args.onUpdateHandle) {
-        const hookNewDoc = ormTable ? withBothIdFields(newDoc) : newDoc;
+        const hookNewDoc = withBothIdFields(newDoc);
         await ctx.runMutation(
           args.onUpdateHandle as FunctionHandle<'mutation'>,
           serializeDatesForConvex({
             model: args.input.model,
             newDoc: hookNewDoc,
-            oldDoc: doc,
+            oldDoc: normalizedDoc,
           })
         );
       }
@@ -494,7 +505,7 @@ export const updateManyHandler = async (
   return toConvexSafe({
     ...result,
     count: page.length,
-    ids: page.map((doc: any) => doc._id),
+    ids: page.map((doc: any) => (withBothIdFields(doc) as any)._id),
   });
 };
 
@@ -517,20 +528,21 @@ export const deleteOneHandler = async (
   if (!doc) {
     return;
   }
+  const normalizedDoc = withBothIdFields(doc);
 
-  let hookDoc = doc;
+  let hookDoc = normalizedDoc;
 
   if (!args.skipBeforeHooks && args.beforeDeleteHandle) {
     const transformedDoc = await ctx.runMutation(
       args.beforeDeleteHandle as FunctionHandle<'mutation'>,
       serializeDatesForConvex({
-        doc,
+        doc: normalizedDoc,
         model: args.input.model,
       })
     );
 
     if (transformedDoc !== undefined) {
-      hookDoc = transformedDoc;
+      hookDoc = withBothIdFields(transformedDoc);
     }
   }
 
@@ -541,9 +553,13 @@ export const deleteOneHandler = async (
     args.input.model
   );
   if (ormTable) {
-    await ormDelete(ctx, ormTable.table, doc._id as GenericId<string>);
+    await ormDelete(
+      ctx,
+      ormTable.table,
+      (normalizedDoc as any)._id as GenericId<string>
+    );
   } else {
-    await ctx.db.delete(doc._id as GenericId<string>);
+    await ctx.db.delete((normalizedDoc as any)._id as GenericId<string>);
   }
 
   if (args.onDeleteHandle) {
@@ -556,7 +572,7 @@ export const deleteOneHandler = async (
     );
   }
 
-  return toConvexSafe(hookDoc);
+  return toConvexSafe(withBothIdFields(hookDoc));
 };
 
 export const deleteManyHandler = async (
@@ -585,26 +601,31 @@ export const deleteManyHandler = async (
     args.input.model
   );
   await asyncMap(page, async (doc: any) => {
-    let hookDoc = doc;
+    const normalizedDoc = withBothIdFields(doc);
+    let hookDoc = normalizedDoc;
 
     if (!args.skipBeforeHooks && args.beforeDeleteHandle) {
       const transformedDoc = await ctx.runMutation(
         args.beforeDeleteHandle as FunctionHandle<'mutation'>,
         serializeDatesForConvex({
-          doc,
+          doc: normalizedDoc,
           model: args.input.model,
         })
       );
 
       if (transformedDoc !== undefined) {
-        hookDoc = transformedDoc;
+        hookDoc = withBothIdFields(transformedDoc);
       }
     }
 
     if (ormTable) {
-      await ormDelete(ctx, ormTable.table, doc._id as GenericId<string>);
+      await ormDelete(
+        ctx,
+        ormTable.table,
+        (normalizedDoc as any)._id as GenericId<string>
+      );
     } else {
-      await ctx.db.delete(doc._id as GenericId<string>);
+      await ctx.db.delete((normalizedDoc as any)._id as GenericId<string>);
     }
 
     if (args.onDeleteHandle) {
@@ -621,7 +642,7 @@ export const deleteManyHandler = async (
   return toConvexSafe({
     ...result,
     count: page.length,
-    ids: page.map((doc: any) => doc._id),
+    ids: page.map((doc: any) => (withBothIdFields(doc) as any)._id),
   });
 };
 

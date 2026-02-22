@@ -72,7 +72,11 @@ describe('createClient', () => {
     );
 
     expect(beforeCreate).toEqual({ email: 'a@b.com', tagged: true });
-    expect(beforeDelete).toEqual({ _id: 'u1', deletedByHook: true });
+    expect(beforeDelete).toEqual({
+      _id: 'u1',
+      deletedByHook: true,
+      id: 'u1',
+    });
     expect(beforeUpdate).toEqual({ name: 'new', updatedByHook: true });
   });
 
@@ -105,8 +109,61 @@ describe('createClient', () => {
     );
 
     expect(beforeCreate).toEqual({ email: 'a@b.com' });
-    expect(beforeDelete).toEqual({ _id: 'u1' });
+    expect(beforeDelete).toEqual({ _id: 'u1', id: 'u1' });
     expect(beforeUpdate).toEqual({ name: 'new' });
+  });
+
+  test('normalizes trigger docs to include both id and _id', async () => {
+    const onCreate = mock(async (_doc: any) => undefined);
+    const onDelete = mock(async (_doc: any) => undefined);
+    const onUpdate = mock(async (_newDoc: any, _oldDoc: any) => undefined);
+    const internalMutation = ((config: any) => config) as any;
+
+    const client = createClient({
+      authFunctions,
+      internalMutation,
+      schema: {} as any,
+      triggers: {
+        user: {
+          beforeDelete: async (doc: any) => doc,
+          beforeUpdate: async (_doc: any, update: any) => update,
+          onCreate,
+          onDelete,
+          onUpdate,
+        },
+      } as any,
+    });
+    const api = client.triggersApi() as any;
+
+    await expect(
+      api.beforeDelete.handler({}, { doc: { id: 'u1' }, model: 'user' })
+    ).resolves.toEqual({ _id: 'u1', id: 'u1' });
+
+    await api.beforeUpdate.handler(
+      {},
+      {
+        doc: { id: 'u2' },
+        model: 'user',
+        update: { name: 'updated' },
+      }
+    );
+    await api.onCreate.handler({}, { doc: { id: 'u3' }, model: 'user' });
+    await api.onDelete.handler({}, { doc: { _id: 'u4' }, model: 'user' });
+    await api.onUpdate.handler(
+      {},
+      {
+        model: 'user',
+        newDoc: { id: 'u5' },
+        oldDoc: { _id: 'u6' },
+      }
+    );
+
+    expect(onCreate).toHaveBeenCalledWith({ _id: 'u3', id: 'u3' });
+    expect(onDelete).toHaveBeenCalledWith({ _id: 'u4', id: 'u4' });
+    expect(onUpdate).toHaveBeenCalledWith(
+      { _id: 'u5', id: 'u5' },
+      { _id: 'u6', id: 'u6' }
+    );
   });
 
   test('applies context before executing trigger callbacks', async () => {

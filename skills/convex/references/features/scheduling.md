@@ -68,7 +68,7 @@ Format: `minute hour day-of-month month day-of-week`. Runs in **UTC**. Minimum i
 // convex/functions/crons.ts
 import { z } from 'zod';
 import { privateMutation, privateAction } from '../lib/crpc';
-import { internal } from './_generated/api';
+import { createCaller } from './generated';
 
 export const cleanupStaleData = privateMutation
   .input(z.object({}))
@@ -89,8 +89,9 @@ export const generateDailyReport = privateAction
   .input(z.object({}))
   .output(z.null())
   .action(async ({ ctx }) => {
-    const stats = await ctx.runQuery(internal.analytics.getDailyStats, {});
-    await ctx.runMutation(internal.reports.create, { type: 'daily', data: stats });
+    const caller = createCaller(ctx);
+    const stats = await caller.analytics.getDailyStats({});
+    await caller.reports.create({ type: 'daily', data: stats });
     return null;
   });
 ```

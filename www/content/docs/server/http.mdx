@@ -152,6 +152,7 @@ Use `.searchParams()` for query string validation. Values come as strings, so us
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-8,11}
 import { z } from 'zod';
 import { publicRoute } from '../lib/crpc';
+import { createCaller } from '../functions/generated';
 
 export const list = publicRoute
   .get('/api/todos')
@@ -161,8 +162,8 @@ export const list = publicRoute
   }))
   .output(z.array(todoSchema))
   .query(async ({ ctx, searchParams }) => {
-    // searchParams.limit and searchParams.offset are typed as numbers
-    return ctx.runQuery(api.todos.list, {
+    const caller = createCaller(ctx);
+    return caller.todos.list({
       limit: searchParams.limit,
       offset: searchParams.offset,
     });
@@ -180,14 +181,15 @@ Use `.params()` for URL path parameters. Define placeholders with `:paramName` i
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-6,9}
 import { z } from 'zod';
 import { publicRoute } from '../lib/crpc';
+import { createCaller } from '../functions/generated';
 
 export const get = publicRoute
   .get('/api/todos/:id')
   .params(z.object({ id: z.string() }))
   .output(todoSchema.nullable())
   .query(async ({ ctx, params }) => {
-    // params.id is typed as Id<'todos'>
-    return ctx.runQuery(api.todos.get, { id: params.id });
+    const caller = createCaller(ctx);
+    return caller.todos.get({ id: params.id });
   });
 ```
 
@@ -198,6 +200,7 @@ Use `.post()` with `.input()` and `.mutation()` for create operations.
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-9,12-16}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
+import { createCaller } from '../functions/generated';
 
 export const create = authRoute
   .post('/api/todos')
@@ -207,9 +210,9 @@ export const create = authRoute
   }))
   .output(z.object({ id: z.string() }))
   .mutation(async ({ ctx, input }) => {
-    // input.title and input.description are validated
-    const id = await ctx.runMutation(internal.todos.create, {
-      userId: ctx.userId,  // From auth middleware
+    const caller = createCaller(ctx);
+    const id = await caller.todoInternal.create({
+      userId: ctx.userId,
       ...input,
     });
     return { id };
@@ -223,6 +226,7 @@ Use `.patch()` for partial updates. Combine `.params()` for the resource ID and 
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-11,14-18}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
+import { createCaller } from '../functions/generated';
 
 export const update = authRoute
   .patch('/api/todos/:id')
@@ -233,8 +237,8 @@ export const update = authRoute
   }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, params, input }) => {
-    // params.id is the resource, input contains update fields
-    await ctx.runMutation(internal.todos.update, {
+    const caller = createCaller(ctx);
+    await caller.todoInternal.update({
       id: params.id,
       ...input,
     });
@@ -249,13 +253,15 @@ Use `.delete()` for resource deletion. Typically only needs `.params()` for the 
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-8,11-13}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
+import { createCaller } from '../functions/generated';
 
 export const deleteTodo = authRoute
   .delete('/api/todos/:id')
   .params(z.object({ id: z.string() }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, params }) => {
-    await ctx.runMutation(internal.todos.delete, { id: params.id });
+    const caller = createCaller(ctx);
+    await caller.todoInternal.deleteTodo({ id: params.id });
     return { success: true };
   });
 ```
@@ -419,7 +425,8 @@ export const get = publicRoute
   .params(z.object({ id: z.string() }))
   .output(todoSchema)
   .query(async ({ ctx, params }) => {
-    const todo = await ctx.runQuery(api.todos.get, { id: params.id });
+    const caller = createCaller(ctx);
+    const todo = await caller.todos.get({ id: params.id });
 
     if (!todo) {
       throw new CRPCError({
@@ -472,7 +479,8 @@ export const download = authRoute
   .get('/api/todos/export/:format')
   .params(z.object({ format: z.enum(['json', 'csv']) }))
   .query(async ({ ctx, params, c }) => {
-    const todos = await ctx.runQuery(api.todos.list, { limit: 100 });
+    const caller = createCaller(ctx);
+    const todos = await caller.todos.list({ limit: 100 });
 
     c.header('Content-Disposition', `attachment; filename="todos.${params.format}"`);
     c.header('Cache-Control', 'no-cache');
@@ -525,7 +533,8 @@ export const events = publicRoute
 
     return streamText(c, async (stream) => {
       for (let i = 0; i < 10; i++) {
-        const data = await ctx.runQuery(internal.data.getChunk, { index: i });
+        const caller = createCaller(ctx);
+        const data = await caller.data.getChunk({ index: i });
         await stream.write(`data: ${JSON.stringify(data)}\n\n`);
         await stream.sleep(1000);
       }

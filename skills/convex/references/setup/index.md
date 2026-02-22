@@ -304,7 +304,7 @@ import { z } from "zod";
 import { createUser } from "../lib/auth/auth-helpers";
 import { privateMutation } from "../lib/crpc";
 import { getEnv } from "../lib/get-env";
-import { internal } from "./_generated/api";
+import { createHandler } from "./generated";
 
 export default privateMutation
   .meta({ dev: true })
@@ -337,7 +337,8 @@ export default privateMutation
     }
 
     if (isFirstInit && getEnv().DEPLOY_ENV === "development") {
-      await ctx.runMutation(internal.seed.seed, {});
+      const handler = createHandler(ctx);
+      await handler.seed.seed({});
     }
 
     return null;

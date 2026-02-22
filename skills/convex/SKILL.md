@@ -33,6 +33,7 @@ Out of scope:
 4. Use `CRPCError` for expected failures.
 5. Prefer schema triggers for cross-row invariants, but move invariant maintenance to explicit mutation helpers if trigger execution is unstable (for example init/seed hangs or recursive write paths).
 6. Keep auth/rate-limit checks server-side.
+7. **Inter-procedure calls**: `createHandler(ctx)` in queries/mutations (zero overhead) unless validation is relevant, `createCaller(ctx)` in actions/HTTP routes. Never `ctx.runQuery`/`ctx.runMutation` directly.
 
 ## Shortcut Mode (tRPC + Drizzle Mental Model)
 
@@ -61,6 +62,15 @@ Only remember these non-parity deltas:
 16. In RSC, `prefetch` hydrates client, `caller` is server-only and not hydrated, `preloadQuery` hydrates but can cause stale split ownership if also rendered client-side.
 17. Better Auth Next.js shortcut is `convexBetterAuth(...)`; generic server-only shortcut is `createCallerFactory(...)`.
 18. Use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out.
+19. **NEVER** use `ctx.runQuery`/`ctx.runMutation` directly. Use `createHandler(ctx)` or `createCaller(ctx)` from `convex/functions/generated.ts` instead.
+20. **`createHandler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only.
+21. **`createCaller(ctx)`** — use in actions and HTTP routes (where `createHandler` is unavailable). Goes through validation + middleware. ActionCtx dispatches via `ctx.runQuery`/`ctx.runMutation` under the hood (separate transactions).
+22. API types (`Api`, `ApiInputs`, `ApiOutputs`, `Select`, `Insert`, `TableName`) import from `@convex/api` — no manual `inferApiInputs<typeof api>`.
+23. HTTP router must export as `httpRouter` (not `appRouter`) for codegen.
+24. All server wiring imports (`getAuth`, `initCRPC`, `withOrm`, `createCaller`, `createHandler`, `defineAuth`, `QueryCtx`, `MutationCtx`, `OrmCtx`) come from `convex/functions/generated.ts`. No manual `convex/lib/orm.ts`.
+25. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
+26. Internal auth functions at `internal.generated.*` (not `internal.auth.*`).
+27. Async mutation batching: `execute({ mode: "async", batchSize, delayMs })` for large update/delete. Schema config: `mutationExecutionMode: 'async'`, `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
 
 ## Directory Boundary (Important)
 
@@ -203,8 +213,7 @@ Schema rules that matter:
 // convex/lib/crpc.ts (shape reference only)
 import { getHeaders } from "better-convex/auth";
 import { CRPCError } from "better-convex/server";
-import { getAuth } from "../functions/auth";
-import { initCRPC } from "../functions/generated";
+import { createCaller, getAuth, initCRPC } from "../functions/generated";
 
 const c = initCRPC
   .meta<{
@@ -372,6 +381,49 @@ Procedure rules that matter:
 6. Use `.output(z.null())` (not `z.void()`) for no-value mutations.
 7. Stack `.input(...)` for reusable procedure composition when needed.
 8. Use `.paginated(...)` for infinite-query endpoints instead of hand-rolling pagination output.
+
+### 3b) Inter-Procedure Composition
+
+When one procedure calls another, use `createHandler(ctx)` (queries/mutations) or `createCaller(ctx)` (actions/HTTP). Never `ctx.runQuery`/`ctx.runMutation` directly.
+
+```ts
+import { createHandler, createCaller } from "./generated";
+
+// Query/mutation → createHandler (zero overhead, bypasses validation)
+export const listOrganizations = authQuery
+  .query(async ({ ctx }) => {
+    const handler = createHandler(ctx);
+    const orgs = await handler.organization.listUserOrganizations();
+    return orgs;
+  });
+
+// Mutation → createHandler for sub-procedure calls
+export const seed = privateMutation
+  .output(z.null())
+  .mutation(async ({ ctx }) => {
+    const handler = createHandler(ctx);
+    await handler.seed.cleanupSeedData();
+    await handler.seed.seedUsers();
+    return null;
+  });
+
+// Action → createCaller (createHandler unavailable)
+export const generateReport = privateAction
+  .output(z.null())
+  .action(async ({ ctx }) => {
+    const caller = createCaller(ctx);
+    const stats = await caller.analytics.getDailyStats({});
+    await caller.reports.create({ type: "daily", data: stats });
+    return null;
+  });
+```
+
+| Context | Use | Why |
+|---------|-----|-----|
+| `QueryCtx` | `createHandler(ctx)` | Zero overhead, direct handler call |
+| `MutationCtx` | `createHandler(ctx)` | Zero overhead, same transaction |
+| `ActionCtx` | `createCaller(ctx)` | `createHandler` unavailable; dispatches via `ctx.runQuery`/`ctx.runMutation` (separate transactions) |
+| HTTP routes | `createCaller(ctx)` | Action-like context |
 
 ### 4) Query Modes (Use The Right One)
 
@@ -598,13 +650,16 @@ Hydration rule:
 
 ```ts
 // router endpoint example
+import { createCaller } from "../functions/generated";
+
 export const createTaskRoute = authRoute
   .post("/api/projects/:projectId/tasks")
   .params(z.object({ projectId: z.string() }))
   .input(z.object({ title: z.string().min(1) }))
   .output(z.object({ id: z.string() }))
   .mutation(async ({ ctx, params, input }) => {
-    const id = await ctx.runMutation(internal.task.createFromHttp, {
+    const caller = createCaller(ctx);
+    const id = await caller.task.createFromHttp({
       projectId: params.projectId,
       title: input.title,
       userId: ctx.userId,
@@ -702,27 +757,30 @@ Before calling a feature done:
 
 ## Common Mistakes (And Fixes)
 
-| Mistake                                             | Correct pattern                                                                           |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Raw Convex handler for new feature procedures       | cRPC builders (`publicQuery`, `authMutation`, etc.)                                       |
-| Write-time side effects duplicated across mutations | Schema trigger, or one centralized mutation-side sync helper when trigger path is unsafe  |
-| Missing bounds on list/search                       | Add `limit` + cursor/pagination                                                           |
-| `orderBy` written as array objects                  | Use object form: `orderBy: { updatedAt: "desc" }`                                         |
-| Using `ctx.db` for policy-sensitive reads           | Use `ctx.orm` (RLS/constraints path)                                                      |
-| Throwing generic `Error` for expected outcomes      | Throw `CRPCError` with explicit code                                                      |
-| Infinite list with TanStack native hook directly    | Use `useInfiniteQuery` from `better-convex/react`                                         |
-| Primitive root input (`z.string()`)                 | Use root `z.object(...)` input schema                                                     |
-| Returning nothing with `z.void()`                   | Use `.output(z.null())` or omit explicit output                                           |
-| Manual pagination wrappers for infinite endpoints   | Use `.paginated({ limit, item })`                                                         |
-| Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                  |
-| Aggregates disabled but helper/config still present | Remove aggregate helper + schema hooks + app config together                              |
-| Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                              |
-| Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup/` |
-| Relaxing lint rules to pass checks                  | Keep baseline lint config; fix code-level warnings/errors instead                         |
+| Mistake                                             | Correct pattern                                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Raw Convex handler for new feature procedures       | cRPC builders (`publicQuery`, `authMutation`, etc.)                                      |
+| Write-time side effects duplicated across mutations | Schema trigger, or one centralized mutation-side sync helper when trigger path is unsafe |
+| Missing bounds on list/search                       | Add `limit` + cursor/pagination                                                          |
+| `orderBy` written as array objects                  | Use object form: `orderBy: { updatedAt: "desc" }`                                        |
+| Using `ctx.db` for policy-sensitive reads           | Use `ctx.orm` (RLS/constraints path)                                                     |
+| Throwing generic `Error` for expected outcomes      | Throw `CRPCError` with explicit code                                                     |
+| Infinite list with TanStack native hook directly    | Use `useInfiniteQuery` from `better-convex/react`                                        |
+| Primitive root input (`z.string()`)                 | Use root `z.object(...)` input schema                                                    |
+| Returning nothing with `z.void()`                   | Use `.output(z.null())` or omit explicit output                                          |
+| Manual pagination wrappers for infinite endpoints   | Use `.paginated({ limit, item })`                                                        |
+| Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                 |
+| Aggregates disabled but helper/config still present | Remove aggregate helper + schema hooks + app config together                             |
+| Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                             |
+| Using `ctx.runQuery`/`ctx.runMutation` directly     | Use `createHandler(ctx)` in queries/mutations, `createCaller(ctx)` in actions/HTTP       |
+| Using `createCaller` in query/mutation context      | Use `createHandler(ctx)` — zero overhead, bypasses redundant validation                  |
+| Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup/`  |
+| Relaxing lint rules to pass checks                  | Keep baseline lint config; fix code-level warnings/errors instead                        |
 
 ## Reference Escalation Map (Load Only If Needed)
 
 **Setup (once per project):**
+
 - `references/setup/index.md`: bootstrap, env, decision intake, gates, checklist, troubleshooting
 - `references/setup/server.md`: core backend (schema, ORM, cRPC) + optional module gates
 - `references/setup/auth.md`: auth core bootstrap + plugin setup
@@ -732,6 +790,7 @@ Before calling a feature done:
 - `references/setup/doc-guidelines.md`: skill/docs sync contract
 
 **Features (per session, self-contained):**
+
 - `references/features/orm.md`: full ORM API, constraints, RLS, advanced mutations, filtering/search/composition/pagination
 - `references/features/react.md`: full client, RSC, hydration, error handling matrix
 - `references/features/http.md`: typed REST routes, webhooks, streaming

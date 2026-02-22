@@ -848,6 +848,43 @@ describe('auth/create-api createApi()', () => {
       expect(dbDelete).toHaveBeenCalledTimes(1);
     });
 
+    test('create normalizes non-ORM docs for onCreate hooks', async () => {
+      const api = createApi(schema, getAuth as any);
+      const runMutation = mock(async () => undefined);
+
+      const ctx = {
+        db: {
+          insert: mock(async () => 'user-1'),
+          get: async (id: string) => ({
+            _id: id,
+            email: 'c@site.com',
+            name: 'carol',
+          }),
+          patch: mock(async () => undefined),
+          delete: mock(async () => undefined),
+        },
+        runMutation,
+      };
+
+      await (api.create as any)._handler(ctx, {
+        input: {
+          model: 'user',
+          data: { email: 'c@site.com', name: 'carol' },
+        },
+        onCreateHandle: 'on-create',
+      });
+
+      expect(runMutation).toHaveBeenCalledWith('on-create', {
+        doc: {
+          _id: 'user-1',
+          email: 'c@site.com',
+          id: 'user-1',
+          name: 'carol',
+        },
+        model: 'user',
+      });
+    });
+
     test('ORM update maps undefined fields to unsetToken', async () => {
       const api = createApi(schema, getAuth as any);
       const { ctx, spies, store } = createOrmCtx({

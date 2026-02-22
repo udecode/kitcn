@@ -153,14 +153,14 @@ You can set global runtime guardrails via the `defaults` option. These control l
 export default defineSchema({ users, posts }, {
   strict: true,
   defaults: {
-    defaultLimit: 100,             // non-paginated findMany() fallback
+    defaultLimit: 1000,            // non-paginated findMany() fallback
     relationFanOutMaxKeys: 1000,   // max unique relation lookup keys per relation load
-    mutationBatchSize: 100,        // update/delete batch size
-    mutationLeafBatchSize: 900,    // async non-recursive FK fan-out batch size
-    mutationMaxRows: 1000,         // sync-mode hard cap
+    mutationBatchSize: 400,        // update/delete batch size
+    mutationLeafBatchSize: 1600,   // async non-recursive FK fan-out batch size
+    mutationMaxRows: 10000,        // sync-mode hard cap
     mutationMaxBytesPerBatch: 2_097_152, // async measured-byte budget
-    mutationScheduleCallCap: 100,  // async schedule calls allowed per mutation
-    mutationExecutionMode: 'sync', // or 'async'
+    mutationScheduleCallCap: 800,  // async schedule calls allowed per mutation
+    mutationExecutionMode: 'async', // or 'sync'
     mutationAsyncDelayMs: 0,       // scheduler delay between async batches
   },
 });
@@ -170,12 +170,12 @@ Here's what each option does:
 
 - `defaults.defaultLimit` -- used when `findMany()` is non-paginated and `limit` is omitted. No implicit built-in fallback is applied when this is unset.
 - `defaults.relationFanOutMaxKeys` -- maximum unique relation lookup keys allowed per relation-load step before fail-fast. Built-in fallback: `1000`.
-- `defaults.mutationBatchSize` -- page size used to collect rows for `update()`/`delete()`. Built-in fallback: `100`.
-- `defaults.mutationLeafBatchSize` -- async batch size for non-recursive FK fan-out actions (`set null`, `set default`, non-recursive update fan-out). Built-in fallback: `900`.
-- `defaults.mutationMaxRows` -- sync-mode hard cap for matched rows in `update()`/`delete()`. Built-in fallback: `1000`.
+- `defaults.mutationBatchSize` -- page size used to collect rows for `update()`/`delete()`. Built-in fallback: `400`.
+- `defaults.mutationLeafBatchSize` -- async batch size for non-recursive FK fan-out actions (`set null`, `set default`, non-recursive update fan-out). Built-in fallback: `1600`.
+- `defaults.mutationMaxRows` -- sync-mode hard cap for matched rows in `update()`/`delete()`. Built-in fallback: `10000`.
 - `defaults.mutationMaxBytesPerBatch` -- async measured-byte budget per continuation batch. Built-in fallback: `2_097_152` bytes.
-- `defaults.mutationScheduleCallCap` -- async schedule calls allowed from one mutation invocation before throwing. Built-in fallback: `100`.
-- `defaults.mutationExecutionMode` -- default execution mode for non-paginated `execute()` calls (`'sync'` or `'async'`). Built-in fallback: `'sync'`.
+- `defaults.mutationScheduleCallCap` -- async schedule calls allowed from one mutation invocation before throwing. Built-in fallback: `800`.
+- `defaults.mutationExecutionMode` -- default execution mode for non-paginated `execute()` calls (`'sync'` or `'async'`). `'async'` requires scheduling wiring (`scheduler` + `scheduledMutationBatch`); without wiring, default-mode execution falls back to `'sync'`. Built-in fallback is `'async'` when scheduling is wired, otherwise `'sync'`.
 - `defaults.mutationAsyncDelayMs` -- default scheduler delay used by async mutation continuation. Built-in fallback: `0`.
 
 <Callout icon={<InfoIcon />}>

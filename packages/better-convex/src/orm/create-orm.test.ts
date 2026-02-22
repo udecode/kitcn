@@ -22,5 +22,25 @@ describe('createOrm type adapters', () => {
 
     expect(db[OrmContext]).toBeDefined();
     expect(Object.hasOwn(db[OrmContext], 'types')).toBe(false);
+    expect(db[OrmContext].resolvedDefaults).toMatchObject({
+      relationFanOutMaxKeys: 1000,
+      mutationBatchSize: 400,
+      mutationLeafBatchSize: 1600,
+      mutationMaxRows: 10000,
+      mutationMaxBytesPerBatch: 2_097_152,
+      mutationScheduleCallCap: 800,
+      mutationExecutionMode: 'sync',
+      mutationAsyncDelayMs: 0,
+    });
+  });
+
+  test('resolves async mutation mode when scheduling is wired', () => {
+    const orm = createOrm({ schema });
+    const db = orm.db(
+      { db: createReader(), scheduler: {} as any },
+      { scheduledMutationBatch: {} as any }
+    ) as any;
+
+    expect(db[OrmContext].resolvedDefaults.mutationExecutionMode).toBe('async');
   });
 });

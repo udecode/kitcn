@@ -104,7 +104,7 @@ Now let's define the handler functions that cron jobs call:
 ```ts title="convex/functions/crons.ts" showLineNumbers {5-13,15-25}
 import { z } from 'zod';
 import { privateMutation, privateAction } from '../lib/crpc';
-import { internal } from './_generated/api';
+import { createCaller } from './generated';
 
 export const cleanupStaleData = privateMutation
   .input(z.object({}))
@@ -129,9 +129,10 @@ export const generateDailyReport = privateAction
   .input(z.object({}))
   .output(z.null())
   .action(async ({ ctx }) => {
-    const stats = await ctx.runQuery(internal.analytics.getDailyStats, {});
+    const caller = createCaller(ctx);
+    const stats = await caller.analytics.getDailyStats({});
 
-    await ctx.runMutation(internal.reports.create, {
+    await caller.reports.create({
       type: 'daily',
       data: stats,
     });

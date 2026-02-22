@@ -73,7 +73,7 @@ Use this workflow when release docs must match current changeset content.
 ### Phase: Doc Sync Checklist (skills/convex)
 
 - [ ] `skills/convex/SKILL.md` — pending
-- [ ] `skills/convex/references/setup.md` — pending
+- [ ] `skills/convex/references/setup/index.md` — pending
 
 ### Phase: /example-to-doc Crosswalk (required)
 
@@ -101,12 +101,12 @@ Use this workflow when release docs must match current changeset content.
 ## skills/convex docs
 
 - [ ] `skills/convex/SKILL.md` — pending
-- [ ] `skills/convex/references/setup.md` — pending
+- [ ] `skills/convex/references/setup/index.md` — pending
 
 ## Synced
 
 - [x] `www/path/to/doc.mdx` — updated for `@convex/api` migration
-- [x] `skills/convex/references/setup.md` — no change needed
+- [x] `skills/convex/references/setup/index.md` — no change needed
 ```
 
 ## Suggested commands

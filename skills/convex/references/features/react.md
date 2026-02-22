@@ -479,13 +479,7 @@ new QueryClient({
 ## Type Inference
 
 ```ts
-// convex/api.ts
-import type { inferApiInputs, inferApiOutputs } from 'better-convex/server';
-import type { api } from './_generated/api';
-
-export type Api = typeof api;
-export type ApiInputs = inferApiInputs<typeof api>;
-export type ApiOutputs = inferApiOutputs<typeof api>;
+import type { Api, ApiInputs, ApiOutputs } from '@convex/api';
 ```
 
 Bracket notation:

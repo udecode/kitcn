@@ -108,6 +108,15 @@ describe('createHandler', () => {
     expect(mutationCalls[1]).toMatchObject({
       handle: 'on-create-hook',
     });
+    expect(mutationCalls[1]?.args).toMatchObject({
+      doc: {
+        _id: 'user-1',
+        email: 'updated@site.com',
+        id: 'user-1',
+        name: 'alice',
+      },
+      model: 'users',
+    });
     expect(result).toEqual({ email: 'updated@site.com' });
   });
 
@@ -213,15 +222,25 @@ describe('updateOneHandler', () => {
       betterAuthSchema
     );
 
-    expect(updated).toMatchObject({ _id: 'user-1', name: 'bob' });
+    expect(updated).toMatchObject({ _id: 'user-1', id: 'user-1', name: 'bob' });
     expect(store.get('user-1')).toMatchObject({ _id: 'user-1', name: 'bob' });
 
     expect(mutationCalls[0]).toMatchObject({ handle: 'before-update' });
+    expect(mutationCalls[0]?.args).toMatchObject({
+      doc: {
+        _id: 'user-1',
+        email: 'a@b.com',
+        id: 'user-1',
+        name: 'alice',
+      },
+      model: 'users',
+      update: { name: 'ignored' },
+    });
     expect(mutationCalls[1]).toMatchObject({ handle: 'on-update' });
     expect(mutationCalls[1]?.args).toMatchObject({
       model: 'users',
       newDoc: updated,
-      oldDoc: { _id: 'user-1', email: 'a@b.com', name: 'alice' },
+      oldDoc: { _id: 'user-1', email: 'a@b.com', id: 'user-1', name: 'alice' },
     });
   });
 });
@@ -340,10 +359,27 @@ describe('deleteOneHandler', () => {
       betterAuthSchema
     );
 
-    expect(deleted).toMatchObject({ _id: 'user-1', name: 'transformed' });
+    expect(deleted).toMatchObject({
+      _id: 'user-1',
+      id: 'user-1',
+      name: 'transformed',
+    });
     expect(store.get('user-1')).toBeUndefined();
     expect(mutationCalls[0]).toMatchObject({ handle: 'before-delete' });
+    expect(mutationCalls[0]?.args).toMatchObject({
+      doc: { _id: 'user-1', email: 'a@b.com', id: 'user-1', name: 'alice' },
+      model: 'users',
+    });
     expect(mutationCalls[1]).toMatchObject({ handle: 'on-delete' });
+    expect(mutationCalls[1]?.args).toMatchObject({
+      doc: {
+        _id: 'user-1',
+        email: 'a@b.com',
+        id: 'user-1',
+        name: 'transformed',
+      },
+      model: 'users',
+    });
   });
 
   test('returns undefined when no document matches', async () => {

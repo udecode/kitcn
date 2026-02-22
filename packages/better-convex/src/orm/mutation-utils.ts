@@ -66,9 +66,22 @@ export type OrmContextValue = {
   rls?: RlsContext;
   strict?: boolean;
   defaults?: OrmRuntimeDefaults;
+  resolvedDefaults?: ResolvedOrmRuntimeDefaults;
 };
 
 export type MutationRunMode = 'sync' | 'async';
+
+export type ResolvedOrmRuntimeDefaults = {
+  defaultLimit?: number;
+  relationFanOutMaxKeys: number;
+  mutationBatchSize: number;
+  mutationLeafBatchSize: number;
+  mutationMaxRows: number;
+  mutationMaxBytesPerBatch: number;
+  mutationScheduleCallCap: number;
+  mutationExecutionMode: MutationRunMode;
+  mutationAsyncDelayMs: number;
+};
 
 const UNDEFINED_SENTINEL_KEY = '__betterConvexUndefined';
 const INTERNAL_ID_FIELD = '_id';
@@ -557,13 +570,43 @@ export const deserializeFilterExpression = (
   return createUnaryExpression(unary.operator, nested);
 };
 
-const DEFAULT_MUTATION_BATCH_SIZE = 100;
-const DEFAULT_MUTATION_LEAF_BATCH_SIZE = 900;
-const DEFAULT_MUTATION_MAX_ROWS = 1000;
+const DEFAULT_MUTATION_BATCH_SIZE = 400;
+const DEFAULT_MUTATION_LEAF_BATCH_SIZE = 1600;
+const DEFAULT_MUTATION_MAX_ROWS = 10_000;
 const DEFAULT_MUTATION_MAX_BYTES_PER_BATCH = 2_097_152;
-const DEFAULT_MUTATION_SCHEDULE_CALL_CAP = 100;
+const DEFAULT_MUTATION_SCHEDULE_CALL_CAP = 800;
 const DEFAULT_MUTATION_ASYNC_DELAY_MS = 0;
+const DEFAULT_RELATION_FAN_OUT_MAX_KEYS = 1000;
 const MEASURED_BYTE_SAFETY_MULTIPLIER = 2;
+
+export const resolveOrmRuntimeDefaults = (
+  defaults: OrmRuntimeDefaults | undefined,
+  runtime: {
+    scheduler?: Scheduler;
+    scheduledMutationBatch?: SchedulableFunctionReference;
+  } = {}
+): ResolvedOrmRuntimeDefaults => {
+  const inferredMode: MutationRunMode =
+    runtime.scheduler && runtime.scheduledMutationBatch ? 'async' : 'sync';
+  return {
+    defaultLimit: defaults?.defaultLimit,
+    relationFanOutMaxKeys:
+      defaults?.relationFanOutMaxKeys ?? DEFAULT_RELATION_FAN_OUT_MAX_KEYS,
+    mutationBatchSize:
+      defaults?.mutationBatchSize ?? DEFAULT_MUTATION_BATCH_SIZE,
+    mutationLeafBatchSize:
+      defaults?.mutationLeafBatchSize ?? DEFAULT_MUTATION_LEAF_BATCH_SIZE,
+    mutationMaxRows: defaults?.mutationMaxRows ?? DEFAULT_MUTATION_MAX_ROWS,
+    mutationMaxBytesPerBatch:
+      defaults?.mutationMaxBytesPerBatch ??
+      DEFAULT_MUTATION_MAX_BYTES_PER_BATCH,
+    mutationScheduleCallCap:
+      defaults?.mutationScheduleCallCap ?? DEFAULT_MUTATION_SCHEDULE_CALL_CAP,
+    mutationExecutionMode: defaults?.mutationExecutionMode ?? inferredMode,
+    mutationAsyncDelayMs:
+      defaults?.mutationAsyncDelayMs ?? DEFAULT_MUTATION_ASYNC_DELAY_MS,
+  };
+};
 
 export const estimateMeasuredMutationRowBytes = (
   row: Record<string, unknown>
@@ -604,19 +647,15 @@ export const getMutationCollectionLimits = (
   maxBytesPerBatch: number;
   scheduleCallCap: number;
 } => {
-  const batchSize =
-    context?.defaults?.mutationBatchSize ?? DEFAULT_MUTATION_BATCH_SIZE;
+  const defaults = context?.resolvedDefaults ?? context?.defaults;
+  const batchSize = defaults?.mutationBatchSize ?? DEFAULT_MUTATION_BATCH_SIZE;
   const leafBatchSize =
-    context?.defaults?.mutationLeafBatchSize ??
-    DEFAULT_MUTATION_LEAF_BATCH_SIZE;
-  const maxRows =
-    context?.defaults?.mutationMaxRows ?? DEFAULT_MUTATION_MAX_ROWS;
+    defaults?.mutationLeafBatchSize ?? DEFAULT_MUTATION_LEAF_BATCH_SIZE;
+  const maxRows = defaults?.mutationMaxRows ?? DEFAULT_MUTATION_MAX_ROWS;
   const maxBytesPerBatch =
-    context?.defaults?.mutationMaxBytesPerBatch ??
-    DEFAULT_MUTATION_MAX_BYTES_PER_BATCH;
+    defaults?.mutationMaxBytesPerBatch ?? DEFAULT_MUTATION_MAX_BYTES_PER_BATCH;
   const scheduleCallCap =
-    context?.defaults?.mutationScheduleCallCap ??
-    DEFAULT_MUTATION_SCHEDULE_CALL_CAP;
+    defaults?.mutationScheduleCallCap ?? DEFAULT_MUTATION_SCHEDULE_CALL_CAP;
 
   if (!Number.isInteger(batchSize) || batchSize < 1) {
     throw new Error('mutationBatchSize must be a positive integer.');
@@ -664,14 +703,35 @@ const consumeScheduleCall = (state: MutationScheduleState | undefined) => {
 export const getMutationExecutionMode = (
   context?: OrmContextValue,
   override?: MutationRunMode
-): MutationRunMode =>
-  override ?? context?.defaults?.mutationExecutionMode ?? 'sync';
+): MutationRunMode => {
+  const requestedMode =
+    override ??
+    context?.resolvedDefaults?.mutationExecutionMode ??
+    context?.defaults?.mutationExecutionMode;
+  if (requestedMode === 'sync') {
+    return 'sync';
+  }
+  if (requestedMode === 'async') {
+    if (override === 'async') {
+      return 'async';
+    }
+    if (context?.scheduler && context?.scheduledMutationBatch) {
+      return 'async';
+    }
+    return 'sync';
+  }
+  if (context?.scheduler && context?.scheduledMutationBatch) {
+    return 'async';
+  }
+  return 'sync';
+};
 
 export const getMutationAsyncDelayMs = (
   context?: OrmContextValue,
   override?: number
 ): number =>
   override ??
+  context?.resolvedDefaults?.mutationAsyncDelayMs ??
   context?.defaults?.mutationAsyncDelayMs ??
   DEFAULT_MUTATION_ASYNC_DELAY_MS;
 
