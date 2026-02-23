@@ -11,7 +11,7 @@ See [Better Auth Admin Plugin](https://www.better-auth.com/docs/plugins/admin) f
 ```ts
 // convex/functions/auth.ts
 import { admin } from 'better-auth/plugins';
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
     plugins: [
@@ -35,7 +35,7 @@ ADMIN=admin@domain.test,ops@domain.test
 
 ```ts
 // convex/functions/auth.ts
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
   triggers: {

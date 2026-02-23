@@ -1,8 +1,7 @@
-import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
-import { createCaller } from './generated';
+import { createSeedCaller } from './generated/seed.runtime';
 
 /**
  * Initialize the database on startup. This function runs automatically when
@@ -11,18 +10,14 @@ import { createCaller } from './generated';
  */
 export default privateMutation
   .meta({ dev: true })
-  .output(z.null())
-  .mutation(async ({ ctx }) => {
-    console.log('Initializing database');
 
+  .mutation(async ({ ctx }) => {
     // Initialize admin user if configured
     const env = getEnv();
     const adminEmails = env.ADMIN;
 
-    console.log('Admin emails', adminEmails);
-
     if (!adminEmails || adminEmails.length === 0) {
-      return null;
+      return;
     }
 
     let isFirstInit = true;
@@ -32,8 +27,6 @@ export default privateMutation
       const existingUser = await ctx.orm.query.user.findFirst({
         where: { email: adminEmail },
       });
-
-      console.log('Existing user', existingUser);
 
       if (existingUser) {
         isFirstInit = false;
@@ -49,9 +42,7 @@ export default privateMutation
 
     if (isFirstInit && getEnv().DEPLOY_ENV === 'development') {
       // Run the seed function
-      const caller = createCaller(ctx);
-      await caller.seed.seed();
+      const caller = createSeedCaller(ctx);
+      await caller.seed();
     }
-
-    return null;
   });

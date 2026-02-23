@@ -1,331 +1,216 @@
 ---
 title: Triggers
-description: Schema triggers for automatic side effects.
+description: Schema-level database hooks for insert/update/delete lifecycle.
 links:
   doc: https://github.com/get-convex/better-convex
 ---
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, you'll set up triggers that run automatically on insert/update/delete operations, wire them through your ORM context, and apply common patterns like aggregate maintenance, cascade updates, and data synchronization.
+Triggers are declared once in `schema.ts` and wired automatically when you export `triggers`.
 
 ## Overview
 
-Triggers are declared in `convexTable(..., extraConfig)` and run when a row changes:
+Use triggers for:
 
-| Feature | Description |
-|---------|-------------|
-| Aggregate maintenance | Keep counts and rankings in sync |
-| Cascade updates | Update related rows automatically |
-| Activity tracking | Record last activity, touch timestamps |
-| Data synchronization | Keep denormalized fields in sync |
-| Data validation | Reject invalid writes before commit |
+- payload normalization before writes
+- audit/event side effects after writes
+- aggregate updates via `change`
+- write cancellation based on business rules
 
-Triggers are schema-level and execute on:
-
-- insert
-- update
-- delete
-- change (all operations)
-
-## Trigger APIs
+Define them with:
 
 ```ts
-import { onInsert, onUpdate, onDelete, onChange } from 'better-convex/orm';
+import { defineTriggers } from "better-convex/orm";
 ```
 
-- `onInsert(handler)` runs for inserts only.
-- `onUpdate(handler)` runs for updates only.
-- `onDelete(handler)` runs for deletes only.
-- `onChange(handler)` runs for all operations.
-
-Each handler receives:
-
-- `ctx`: wrapped mutation context (`ctx.db`, `ctx.innerDb`, plus your context fields such as `ctx.orm`, `ctx.scheduler`)
-- `change`: `{ id, operation, oldDoc, newDoc }`
-
-## Setup in Schema
-
-Define triggers directly on table definitions, next to indexes and constraints.
+## API Shape
 
 ```ts title="convex/functions/schema.ts"
-import { convexTable, onChange, onDelete, onInsert, onUpdate } from 'better-convex/orm';
-
-export const userTable = convexTable(
-  'user',
-  {
-    name: text().notNull(),
-    email: text().notNull(),
+export const triggers = defineTriggers(relations, {
+  todos: {
+    create: {
+      before: async (data, ctx) => {
+        return { data: { ...data, title: data.title.trim() } };
+      },
+      after: async (doc, ctx) => {},
+    },
+    update: {
+      before: async (data, ctx) => {},
+      after: async (doc, ctx) => {},
+    },
+    delete: {
+      before: async (doc, ctx) => {},
+      after: async (doc, ctx) => {},
+    },
+    change: async (change, ctx) => {},
   },
-  (t) => [
-    index('email').on(t.email),
-    onInsert(async (_ctx, change) => {
-      console.log('user created', change.newDoc._id);
-    }),
-    onUpdate(async (_ctx, change) => {
-      console.log('user updated', change.oldDoc._id, change.newDoc._id);
-    }),
-    onDelete(async (_ctx, change) => {
-      console.log('user deleted', change.oldDoc._id);
-    }),
-    onChange(async (_ctx, change) => {
-      console.log('any user change', change.operation, change.id);
-    }),
-  ]
-);
-```
-
-<Callout icon={<InfoIcon />}>
-Triggers are schema-level. There is no `.create({ triggers })` wiring step.
-</Callout>
-
-## Wiring with cRPC
-
-Hooks run through wrapped mutation contexts. Use generated `initCRPC` from `convex/functions/generated.ts`:
-
-```ts title="convex/lib/crpc.ts"
-import { initCRPC } from '../functions/generated';
-
-const c = initCRPC.create();
-```
-
-## Trigger Types
-
-The `change` payload is operation-aware:
-
-```ts
-onChange(async (_ctx, change) => {
-  switch (change.operation) {
-    case 'insert':
-      // newDoc is present, oldDoc is null
-      break;
-    case 'update':
-      // both oldDoc and newDoc are present
-      break;
-    case 'delete':
-      // oldDoc is present, newDoc is null
-      break;
-  }
-
-  change.id; // always present
 });
 ```
 
-Reference shape:
+`change` runs for all operations and receives `{ id, operation, oldDoc, newDoc }`.
 
-```ts
-type OrmLifecycleChange<TDoc> = {
-  id: unknown;
-} & (
-  | { operation: 'insert'; oldDoc: null; newDoc: TDoc }
-  | { operation: 'update'; oldDoc: TDoc; newDoc: TDoc }
-  | { operation: 'delete'; oldDoc: TDoc; newDoc: null }
-);
+## Hook Signatures
+
+- `create.before(data, ctx)`
+- `create.after(doc, ctx)`
+- `update.before(data, ctx)`
+- `update.after(doc, ctx)`
+- `delete.before(doc, ctx)`
+- `delete.after(doc, ctx)`
+- `change(change, ctx)`
+
+Context (`ctx`) includes:
+
+- `ctx.db`: wrapped writer (triggers enabled)
+- `ctx.innerDb`: raw writer (bypasses trigger recursion)
+- `ctx.orm`: typed ORM writer
+- your custom context fields (`scheduler`, request ids, etc.)
+
+## Before Return Behavior
+
+`before` hooks support exactly:
+
+- `void`: continue unchanged
+- `{ data }`: shallow-merge into the write payload
+- `false`: cancel write and throw `TriggerCancelledError`
+
+`after` hooks always return `void`.
+
+## Setup In Schema
+
+```ts title="convex/functions/schema.ts"
+import {
+  convexTable,
+  defineRelations,
+  defineTriggers,
+  text,
+} from "better-convex/orm";
+
+export const userTable = convexTable("user", {
+  name: text().notNull(),
+  email: text().notNull(),
+});
+
+export const relations = defineRelations({ user: userTable }, () => ({
+  user: {},
+}));
+
+export const triggers = defineTriggers(relations, {
+  user: {
+    create: {
+      before: async (data) => ({
+        data: { ...data, email: data.email.toLowerCase() },
+      }),
+      after: async (doc, ctx) => {
+        await ctx.scheduler.runAfter(0, internal.user.sendWelcomeEmail, {
+          userId: doc._id,
+        });
+      },
+    },
+    change: async (change, ctx) => {
+      await ctx.orm.insert(auditLog).values({
+        table: "user",
+        operation: change.operation,
+        documentId: change.id,
+      });
+    },
+  },
+});
 ```
+
+<Callout icon={<InfoIcon />}>
+Trigger definitions are schema-level only. `convexTable(..., extraConfig)` no longer accepts trigger callbacks.
+</Callout>
 
 ## Aggregate Integration
 
-Trigger-style callbacks (including `TableAggregate.trigger()`) are accepted directly in table config.
+Compose aggregate handlers inside `change`:
+
+When aggregates are wrapped with `createAggregate(...)` from `better-convex/aggregate`, you can pass `aggregate.trigger` directly or call `aggregate.trigger(change, ctx)`.
 
 ```ts title="convex/functions/schema.ts"
-import { convexTable } from 'better-convex/orm';
-import { aggregatePostLikes } from './aggregates';
-
-export const postLikesTable = convexTable(
-  'postLikes',
-  {
-    postId: text().notNull(),
-    userId: text().notNull(),
+export const triggers = defineTriggers(relations, {
+  todos: {
+    change: aggregateTodosByUser.trigger,
   },
-  () => [aggregatePostLikes.trigger()]
-);
+  todoComments: {
+    change: async (change, ctx) => {
+      await aggregateTodosByUser.trigger(change, ctx);
+      await aggregateTodosByProject.trigger(change, ctx);
+    },
+  },
+});
 ```
 
-You can register multiple aggregate triggers on the same table:
-
-```ts
-() => [
-  aggregateFollowers.trigger(),
-  aggregateFollowing.trigger(),
-]
-```
+No array API is needed; compose effects directly in one function.
 
 ## Common Patterns
 
-### Audit Logging
+### Validation + Cancellation
 
 ```ts title="convex/functions/schema.ts"
-import { onChange } from 'better-convex/orm';
-
-export const teamsTable = convexTable('teams', {/* ... */}, () => [
-  onChange(async (ctx, change) => {
-    await ctx.orm.insert(auditLog).values({
-      table: 'teams',
-      operation: change.operation,
-      documentId: change.id,
-      oldDoc: change.oldDoc,
-      newDoc: change.newDoc,
-      timestamp: Date.now(),
-    });
-  }),
-]);
+export const triggers = defineTriggers(relations, {
+  users: {
+    create: {
+      before: async (data) => {
+        if (!data.email.includes("@")) return false;
+      },
+    },
+    update: {
+      before: async (data) => {
+        if (data.email && !data.email.includes("@")) return false;
+      },
+    },
+  },
+});
 ```
 
-### Authorization Rules
+### Payload Mutation
 
 ```ts title="convex/functions/schema.ts"
-import { onChange } from 'better-convex/orm';
-
-export const messagesTable = convexTable('messages', {/* ... */}, () => [
-  onChange(async (ctx, change) => {
-    const userId = await getAuthUserId(ctx);
-    const ownerId = change.oldDoc?.userId ?? change.newDoc?.userId;
-    if (ownerId !== userId) {
-      throw new Error(`User ${userId} cannot modify message owned by ${ownerId}`);
-    }
-  }),
-]);
+export const triggers = defineTriggers(relations, {
+  users: {
+    update: {
+      before: async (data) => ({
+        data: {
+          ...data,
+          updatedAt: Date.now(),
+        },
+      }),
+    },
+  },
+});
 ```
 
-### Activity Tracking
+### Change Auditing
 
 ```ts title="convex/functions/schema.ts"
-import { onChange } from 'better-convex/orm';
-
-export const postsTable = convexTable('posts', {/* ... */}, () => [
-  onChange(async (ctx, change) => {
-    if (change.operation === 'delete') return;
-    if (
-      change.operation === 'update' &&
-      change.oldDoc.updatedAt === change.newDoc.updatedAt
-    ) {
-      return;
-    }
-
-    await ctx.orm
-      .update(userActivity)
-      .set({ lastActivityAt: change.newDoc.updatedAt })
-      .where(eq(userActivity.userId, change.newDoc.authorId));
-  }),
-]);
+export const triggers = defineTriggers(relations, {
+  teams: {
+    change: async (change, ctx) => {
+      await ctx.orm.insert(auditLog).values({
+        table: "teams",
+        operation: change.operation,
+        documentId: change.id,
+        oldDoc: change.oldDoc,
+        newDoc: change.newDoc,
+      });
+    },
+  },
+});
 ```
 
-### Cascade Updates
+## Runtime Guarantees
 
-```ts title="convex/functions/schema.ts"
-import { onDelete } from 'better-convex/orm';
-
-export const organizationTable = convexTable('organization', {/* ... */}, () => [
-  onDelete(async (ctx, change) => {
-    // Index user.activeOrganizationId.
-    const usersWithThisOrg = await ctx.orm.query.user.findMany({
-      where: { activeOrganizationId: change.id },
-      limit: 1000,
-    });
-
-    for (const userRow of usersWithThisOrg) {
-      await ctx.orm
-        .update(user)
-        .set({ activeOrganizationId: null })
-        .where(eq(user.id, userRow.id));
-    }
-  }),
-]);
-```
-
-### Denormalized Data Sync
-
-```ts title="convex/functions/schema.ts"
-import { onChange } from 'better-convex/orm';
-
-export const postTagsTable = convexTable('postTag', {/* ... */}, () => [
-  onChange(async (ctx, change) => {
-    const postId =
-      change.operation === 'delete' ? change.oldDoc.postId : change.newDoc.postId;
-
-    if (
-      change.operation === 'update' &&
-      change.oldDoc.tagId === change.newDoc.tagId
-    ) {
-      return;
-    }
-
-    // Index postTag.postId.
-    const postTags = await ctx.orm.query.postTag.findMany({
-      where: { postId },
-      limit: 1000,
-    });
-
-    const tagIds = postTags.map((row) => row.tagId);
-    const tags = await Promise.all(
-      tagIds.map((id) => ctx.orm.query.tag.findFirst({ where: { id } }))
-    );
-    const tagNames = tags
-      .filter((tag) => tag !== null)
-      .map((tag) => tag!.name.toLowerCase())
-      .sort();
-
-    await ctx.orm.update(post).set({ tagNames }).where(eq(post.id, postId));
-  }),
-]);
-```
-
-### Data Validation
-
-```ts title="convex/functions/schema.ts"
-import { onInsert, onUpdate } from 'better-convex/orm';
-
-export const userTable = convexTable('user', {/* ... */}, () => [
-  onInsert(async (_ctx, change) => {
-    if (!change.newDoc.email.includes('@')) {
-      throw new Error(`Invalid email: ${change.newDoc.email}`);
-    }
-  }),
-  onUpdate(async (_ctx, change) => {
-    if (!change.newDoc.email.includes('@')) {
-      throw new Error(`Invalid email: ${change.newDoc.email}`);
-    }
-  }),
-]);
-```
-
-### Async Processing
-
-```ts title="convex/functions/schema.ts"
-import { onInsert } from 'better-convex/orm';
-
-export const userTable = convexTable('user', {/* ... */}, () => [
-  onInsert(async (ctx, change) => {
-    await ctx.scheduler.runAfter(0, internal.user.sendWelcomeEmail, {
-      userId: change.id,
-    });
-  }),
-]);
-```
-
-## Runtime Requirements
-
-1. Triggers run for ORM-wrapped mutation contexts (`ctx.orm`).
-2. Errors thrown by triggers roll back the mutation.
-3. Expensive work should be deferred (`ctx.scheduler.runAfter`) when possible.
-4. Add indexes for trigger query paths.
-
-## Better Auth Note
-
-Auth triggers (`triggers: { user, session }`) are separate from DB triggers.  
-For DB-level side effects, keep schema triggers; generated auth wiring in `convex/functions/generated.ts` handles ORM context when `relations` exists.
+1. Hooks run only for wrapped mutation contexts (`ctx.orm` / generated server context).
+2. Trigger errors fail the mutation.
+3. Recursive writes are queued deterministically.
+4. `ctx.innerDb` bypasses recursive dispatch.
 
 ## Best Practices
 
-1. Keep triggers idempotent where possible.
-2. Keep trigger logic table-local and deterministic.
-3. Avoid full-table scans inside triggers.
-4. Index every lookup path used in a trigger.
-5. Use `onInsert`/`onUpdate`/`onDelete` when possible, not always `onChange`.
-
-## Next Steps
-
-<Cards>
-  <Card title="Aggregates" href="/docs/server/advanced/aggregates" />
-  <Card title="Rate Limiting" href="/docs/server/advanced/rate-limiting" />
-</Cards>
+1. Keep hooks deterministic and table-local.
+2. Keep expensive work in `scheduler.runAfter`.
+3. Index every query path used inside hooks.
+4. Prefer `create/update/delete` for specific rules; use `change` for cross-operation logic.

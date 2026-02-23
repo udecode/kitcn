@@ -35,9 +35,6 @@ export const OrmContext = Symbol.for('better-convex:OrmContext');
 export const RlsPolicies = Symbol.for('better-convex:RlsPolicies');
 export const EnableRLS = Symbol.for('better-convex:EnableRLS');
 export const TableDeleteConfig = Symbol.for('better-convex:TableDeleteConfig');
-export const TableLifecycleHooks = Symbol.for(
-  'better-convex:TableLifecycleHooks'
-);
 export const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
 export const OrmSchemaDefinition = Symbol.for(
   'better-convex:OrmSchemaDefinition'

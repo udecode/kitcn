@@ -307,7 +307,7 @@ export const update = authMutation
       isPublic: z.boolean().optional(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -329,14 +329,12 @@ export const update = authMutation
         isPublic: input.isPublic,
       })
       .where(eq(projectsTable.id, input.projectId));
-
-    return null;
   });
 
 export const archive = authMutation
   .meta({ rateLimit: 'project/update' })
   .input(z.object({ projectId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -353,14 +351,12 @@ export const archive = authMutation
       .update(projectsTable)
       .set({ archived: true })
       .where(eq(projectsTable.id, input.projectId));
-
-    return null;
   });
 
 export const restore = authMutation
   .meta({ rateLimit: 'project/update' })
   .input(z.object({ projectId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -377,8 +373,6 @@ export const restore = authMutation
       .update(projectsTable)
       .set({ archived: false })
       .where(eq(projectsTable.id, input.projectId));
-
-    return null;
   });
 
 export const addMember = authMutation
@@ -389,7 +383,7 @@ export const addMember = authMutation
       userEmail: z.email(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -427,8 +421,6 @@ export const addMember = authMutation
       projectId: input.projectId,
       userId: userToAdd.id,
     });
-
-    return null;
   });
 
 export const removeMember = authMutation
@@ -439,7 +431,7 @@ export const removeMember = authMutation
       userId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -459,14 +451,12 @@ export const removeMember = authMutation
     await ctx.orm
       .delete(projectMembersTable)
       .where(eq(projectMembersTable.id, member.id));
-
-    return null;
   });
 
 export const leave = authMutation
   .meta({ rateLimit: 'project/member' })
   .input(z.object({ projectId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const member = await ctx.orm.query.projectMembers.findFirstOrThrow({
       where: { projectId: input.projectId, userId: ctx.userId },
@@ -475,8 +465,6 @@ export const leave = authMutation
     await ctx.orm
       .delete(projectMembersTable)
       .where(eq(projectMembersTable.id, member.id));
-
-    return null;
   });
 
 export const transfer = authMutation
@@ -487,7 +475,7 @@ export const transfer = authMutation
       newOwnerId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -530,8 +518,6 @@ export const transfer = authMutation
       .update(projectsTable)
       .set({ ownerId: input.newOwnerId })
       .where(eq(projectsTable.id, input.projectId));
-
-    return null;
   });
 
 export const listForDropdown = authQuery

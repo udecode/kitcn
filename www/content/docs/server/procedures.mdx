@@ -114,7 +114,8 @@ export const getById = publicQuery
 ```
 
 <Callout icon={<InfoIcon />}>
-  **Note:** `z.void()` is not supported by Convex. For mutations that don't return a value, use `.output(z.null())`. Convex returns `null` by default, so an explicit `return null` is not required.
+  **Note:** For mutations/actions that do not return data, omit `.output(...)`.
+  `void`/`undefined` responses are serialized by Convex as `null`.
 </Callout>
 
 Output validation is recommended when using [static code generation](https://docs.convex.dev/production/project-configuration#using-static-code-generation-beta).
@@ -159,7 +160,7 @@ export const remove = publicMutation
 
 ### Actions
 
-Use `.action()` for side effects and external API calls. Actions can call queries and mutations via `ctx.runQuery` and `ctx.runMutation`.
+Use `.action()` for side effects and external API calls. Actions can call queries and mutations via [callers](#in-process-procedure-composition).
 
 ```ts showLineNumbers {3-6}
 export const sendWelcomeEmail = publicAction
@@ -172,26 +173,30 @@ export const sendWelcomeEmail = publicAction
 
 ## In-Process Procedure Composition
 
-When one procedure needs to call another, use `createCaller(ctx)` from `convex/functions/generated.ts`. This gives you a type-safe proxy with full autocomplete — no more manually choosing between `ctx.runQuery` and `ctx.runMutation`.
+When one procedure needs to call another, use the module runtime factory from `convex/functions/generated/<module>.runtime.ts` (for example `createTeamsCaller(ctx)`). This gives you a type-safe proxy with full autocomplete — no more manually choosing between `ctx.runQuery` and `ctx.runMutation`.
+
+<Callout icon={<InfoIcon />}>
+  **Breaking change:** runtime modules now export module-named factories (`create<Module>Caller` / `create<Module>Handler`), and `convex/functions/generated.ts` no longer exists.
+</Callout>
 
 ```ts title="convex/functions/teams.ts" showLineNumbers {3,7-9}
 import { z } from 'zod';
 import { privateQuery } from '../lib/crpc';
-import { createCaller } from './generated';
+import { createTeamsCaller } from './generated/teams.runtime';
 
 export const getProjectAndOwner = privateQuery
   .input(z.object({ projectId: z.string() }))
   .query(async ({ ctx, input }) => {
-    const caller = createCaller(ctx);
-    const project = await caller.projects.get({ projectId: input.projectId });
-    const owner = await caller.user.getById({ id: project.ownerId });
+    const caller = createTeamsCaller(ctx);
+    const project = await caller.getProject({ projectId: input.projectId });
+    const owner = await caller.getOwner({ id: project.ownerId });
     return { project, owner };
   });
 ```
 
 ### How It Works
 
-`createCaller(ctx)` detects your context type and dispatches accordingly:
+`create<Module>Caller(ctx)` detects your context type and dispatches accordingly:
 
 - **`QueryCtx` / `MutationCtx`**: invokes the procedure handler directly — same transaction, no extra overhead.
 - **`ActionCtx`**: dispatches via `ctx.runQuery` / `ctx.runMutation` automatically (separate transactions).
@@ -205,27 +210,27 @@ export const getProjectAndOwner = privateQuery
 | `ActionCtx` | ✅ | ✅ | ❌ |
 
 <Callout icon={<InfoIcon />}>
-  **Note:** In actions, each `createCaller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
+  **Note:** In actions, each `create<Module>Caller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
 </Callout>
 
-### `createHandler(ctx)`
+### `create<Module>Handler(ctx)`
 
-For internal composition where the caller already validated inputs, use `createHandler(ctx)`. It bypasses input validation, middleware, and output validation — calling the raw handler directly.
+For internal composition where the caller already validated inputs, use `create<Module>Handler(ctx)`. It bypasses input validation, middleware, and output validation — calling the raw handler directly.
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {3,7-8}
 import { z } from 'zod';
 import { authQuery } from '../lib/crpc';
-import { createHandler } from './generated';
+import { createOrganizationHandler } from './generated/organization.runtime';
 
 export const listOrganizations = authQuery
   .query(async ({ ctx }) => {
-    const handler = createHandler(ctx);
-    const orgs = await handler.organization.listUserOrganizations();
+    const handler = createOrganizationHandler(ctx);
+    const orgs = await handler.listUserOrganizations();
     return orgs;
   });
 ```
 
-`createHandler(ctx)` is query/mutation-only (no action context support).
+`create<Module>Handler(ctx)` is query/mutation-only (no action context support).
 
 ### Paginated Queries
 
@@ -263,7 +268,7 @@ Use `privateMutation`, `privateQuery`, or `privateAction` for procedures only ca
 export const processJob = privateMutation
   .input(z.object({ data: z.string() }))
   .mutation(async ({ ctx, input }) => {
-    // Only callable via ctx.runMutation(internal.jobs.processJob, {...})
+    // Only callable via callers or ctx.scheduler
   });
 
 export const backfillData = privateMutation

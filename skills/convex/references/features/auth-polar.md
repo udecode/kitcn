@@ -46,9 +46,9 @@ import '../lib/polar-polyfills';
 
 import { checkout, polar, portal, usage, webhooks } from '@polar-sh/better-auth';
 import { Polar } from '@polar-sh/sdk';
-import type { ActionCtx } from './_generated/server';
-import { internal } from './_generated/api';
-import { defineAuth } from './generated';
+import { createPolarCustomerCaller } from './generated/polarCustomer.runtime';
+import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
     // ... existing config
@@ -75,24 +75,24 @@ export default defineAuth((ctx) => ({
             onCustomerCreated: async (payload) => {
               const userId = payload?.data.externalId;
               if (!userId) return;
-              await (ctx as ActionCtx).runMutation(
-                internal.polarCustomer.updateUserPolarCustomerId,
-                { customerId: payload.data.id, userId }
-              );
+              const caller = createPolarCustomerCaller(ctx);
+              await caller.updateUserPolarCustomerId({
+                customerId: payload.data.id, userId,
+              });
             },
             onSubscriptionCreated: async (payload) => {
               if (!payload.data.customer.externalId) return;
-              await (ctx as ActionCtx).runMutation(
-                internal.polarSubscription.createSubscription,
-                { subscription: convertToDatabaseSubscription(payload.data) }
-              );
+              const caller = createPolarSubscriptionCaller(ctx);
+              await caller.createSubscription({
+                subscription: convertToDatabaseSubscription(payload.data),
+              });
             },
             onSubscriptionUpdated: async (payload) => {
               if (!payload.data.customer.externalId) return;
-              await (ctx as ActionCtx).runMutation(
-                internal.polarSubscription.updateSubscription,
-                { subscription: convertToDatabaseSubscription(payload.data) }
-              );
+              const caller = createPolarSubscriptionCaller(ctx);
+              await caller.updateSubscription({
+                subscription: convertToDatabaseSubscription(payload.data),
+              });
             },
           }),
         ],
@@ -107,7 +107,7 @@ Create Polar customer asynchronously on signup:
 
 ```ts
 // convex/functions/auth.ts
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
   triggers: {
@@ -128,7 +128,7 @@ export default defineAuth((ctx) => ({
 
 ```ts
 // convex/functions/auth.ts
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
     user: {
@@ -392,7 +392,7 @@ import { getPolarClient } from '../lib/polar-client';
 // Create Polar customer (called from user.onCreate trigger)
 export const createCustomer = privateAction
   .input(z.object({ email: z.string().email(), name: z.string().optional(), userId: z.string() }))
-  .output(z.null())
+  
   .action(async ({ input: args }) => {
     const polar = getPolarClient();
     try {
@@ -410,7 +410,7 @@ export const createCustomer = privateAction
 // Link Polar customer ID to user (called from webhook)
 export const updateUserPolarCustomerId = privateMutation
   .input(z.object({ customerId: z.string(), userId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input: args }) => {
     const targetUser = await ctx.orm.query.user.findFirst({ where: { id: args.userId } });
     if (!targetUser) throw new CRPCError({ code: 'NOT_FOUND', message: 'User not found' });
@@ -434,13 +434,13 @@ import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authAction, privateMutation, privateQuery } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
-import { createCaller } from './generated';
+import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
 import { internal } from './_generated/api';
 
 // Create subscription (called from webhook)
 export const createSubscription = privateMutation
   .input(z.object({ subscription: subscriptionSchema }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input: args }) => {
     const existing = await ctx.orm.query.subscriptions.findFirst({
       where: { subscriptionId: args.subscription.subscriptionId },
@@ -484,8 +484,8 @@ export const cancelSubscription = authAction
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
 
-    const caller = createCaller(ctx);
-    const subscription = await caller.polarSubscription.getActiveSubscription({ userId: ctx.userId! });
+    const caller = createPolarSubscriptionCaller(ctx);
+    const subscription = await caller.getActiveSubscription({ userId: ctx.userId! });
 
     if (!subscription) {
       throw new CRPCError({ code: 'PRECONDITION_FAILED', message: 'No active subscription found' });
@@ -503,8 +503,8 @@ export const resumeSubscription = authAction
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
 
-    const caller = createCaller(ctx);
-    const subscription = await caller.polarSubscription.getActiveSubscription({ userId: ctx.userId! });
+    const caller = createPolarSubscriptionCaller(ctx);
+    const subscription = await caller.getActiveSubscription({ userId: ctx.userId! });
 
     if (!subscription) {
       throw new CRPCError({ code: 'PRECONDITION_FAILED', message: 'No active subscription found' });

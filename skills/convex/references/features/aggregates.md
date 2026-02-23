@@ -23,8 +23,10 @@ Canonical runtime rules:
 ## Always Use Triggers
 
 ```ts
-// CORRECT: Register trigger once, aggregates stay in sync
-scoresAggregate.trigger();
+// CORRECT: Register aggregate trigger in defineTriggers, aggregates stay in sync
+export const triggers = defineTriggers(relations, {
+  scores: { change: scoresAggregate.trigger },
+});
 await ctx.orm.insert(scores).values({ score: 100 }); // Done!
 
 // WRONG: Manual updates in every mutation
@@ -32,15 +34,15 @@ await ctx.orm.insert(scores).values({ score: 100 });
 await scoresAggregate.insert(ctx, doc); // Don't do this!
 ```
 
-## TableAggregate Definition
+## createAggregate Definition
 
 ```ts
-import { TableAggregate } from '@convex-dev/aggregate';
+import { createAggregate } from 'better-convex/aggregate';
 import { components } from './_generated/api';
 import type { DataModel } from './_generated/dataModel';
 
 // Count likes per post
-export const aggregatePostLikes = new TableAggregate<{
+export const aggregatePostLikes = createAggregate<{
   DataModel: DataModel;
   Key: null;              // No sorting, just counting
   Namespace: string;      // postId
@@ -56,7 +58,7 @@ export const aggregatePostLikes = new TableAggregate<{
 ### Count by Namespace
 
 ```ts
-export const aggregatePostLikes = new TableAggregate<{
+export const aggregatePostLikes = createAggregate<{
   DataModel: DataModel;
   Key: null;
   Namespace: string;
@@ -75,7 +77,7 @@ const likeCount = await aggregatePostLikes.count(ctx, {
 ### Global Count
 
 ```ts
-export const aggregateTotalUsers = new TableAggregate<{
+export const aggregateTotalUsers = createAggregate<{
   DataModel: DataModel;
   Key: null;
   Namespace: string;
@@ -96,7 +98,7 @@ const totalUsers = await aggregateTotalUsers.count(ctx, {
 For bidirectional relationships (followers/following):
 
 ```ts
-export const aggregateFollowers = new TableAggregate<{
+export const aggregateFollowers = createAggregate<{
   DataModel: DataModel;
   Key: null;
   Namespace: string;
@@ -106,7 +108,7 @@ export const aggregateFollowers = new TableAggregate<{
   sortKey: () => null,
 });
 
-export const aggregateFollowing = new TableAggregate<{
+export const aggregateFollowing = createAggregate<{
   DataModel: DataModel;
   Key: null;
   Namespace: string;
@@ -122,7 +124,7 @@ export const aggregateFollowing = new TableAggregate<{
 For rankings and top-N queries:
 
 ```ts
-export const aggregateScoresByValue = new TableAggregate<{
+export const aggregateScoresByValue = createAggregate<{
   DataModel: DataModel;
   Key: [number, string];  // [score desc, name asc]
   Namespace: string;
@@ -184,24 +186,26 @@ This also fixes the TypeScript "Type instantiation is excessively deep" error.
 
 ## Trigger Integration
 
-Register aggregates with triggers in schema:
+Register aggregates in `defineTriggers`:
 
 ```ts
-import { convexTable } from 'better-convex/orm';
+import { defineTriggers } from 'better-convex/orm';
 import { aggregateFollowers, aggregateFollowing, aggregatePostLikes, aggregateTotalUsers } from './aggregates';
 
-export const postLikesTable = convexTable('postLikes', {/* ... */}, () => [
-  aggregatePostLikes.trigger(),
-]);
-
-export const userTable = convexTable('user', {/* ... */}, () => [
-  aggregateTotalUsers.trigger(),
-]);
-
-export const followsTable = convexTable('follows', {/* ... */}, () => [
-  aggregateFollowers.trigger(),
-  aggregateFollowing.trigger(),
-]);
+export const triggers = defineTriggers(relations, {
+  postLikes: {
+    change: aggregatePostLikes.trigger,
+  },
+  user: {
+    change: aggregateTotalUsers.trigger,
+  },
+  follows: {
+    change: async (change, ctx) => {
+      await aggregateFollowers.trigger(change, ctx);
+      await aggregateFollowing.trigger(change, ctx);
+    },
+  },
+});
 ```
 
 ## Usage API
@@ -229,7 +233,7 @@ const rank = await aggregate.indexOf(ctx, userScore, { namespace: gameId });
 ### Random Access
 
 ```ts
-const randomAggregate = new TableAggregate<{
+const randomAggregate = createAggregate<{
   Key: null;
   DataModel: DataModel;
   TableName: 'songs';
@@ -363,15 +367,15 @@ await aggregate.replace(
 Multiple aggregates on same table for different access patterns:
 
 ```ts
-const byScore = new TableAggregate<{
+const byScore = createAggregate<{
   Key: number; DataModel: DataModel; TableName: 'players';
 }>(components.byScore, { sortKey: (doc) => doc.score });
 
-const byUsername = new TableAggregate<{
+const byUsername = createAggregate<{
   Key: string; DataModel: DataModel; TableName: 'players';
 }>(components.byUsername, { sortKey: (doc) => doc.username });
 
-const byActivity = new TableAggregate<{
+const byActivity = createAggregate<{
   Key: number; DataModel: DataModel; TableName: 'players';
 }>(components.byActivity, { sortKey: (doc) => doc.lastActiveAt });
 ```
@@ -381,7 +385,7 @@ const byActivity = new TableAggregate<{
 Multi-dimensional leaderboards with regional queries:
 
 ```ts
-const leaderboard = new TableAggregate<{
+const leaderboard = createAggregate<{
   Namespace: string;
   Key: [string, number, number]; // [region, score, timestamp]
   DataModel: DataModel;
@@ -407,24 +411,27 @@ const usWestCount = await leaderboard.count(ctx, {
 Aggregates update automatically when triggers handle cascade deletes:
 
 ```ts
-import { onDelete } from 'better-convex/orm';
+import { defineTriggers } from 'better-convex/orm';
 
-export const userTable = convexTable('user', {/* ... */}, () => [
-  onDelete(async (ctx, change) => {
-    const characterRows = await ctx.orm.query.characters.findMany({
-      where: { userId: change.id },
-      limit: 1000,
-    });
+export const triggers = defineTriggers(relations, {
+  user: {
+    delete: {
+      after: async (doc, ctx) => {
+        const characterRows = await ctx.orm.query.characters.findMany({
+          where: { userId: doc._id },
+          limit: 1000,
+        });
 
-    for (const char of characterRows) {
-      await ctx.orm.delete(characters).where(eq(characters.id, char.id));
-    }
-  }),
-]);
-
-export const characterStarsTable = convexTable('characterStars', {/* ... */}, () => [
-  aggregateCharacterStars.trigger(),
-]);
+        for (const char of characterRows) {
+          await ctx.orm.delete(characters).where(eq(characters.id, char.id));
+        }
+      },
+    },
+  },
+  characterStars: {
+    change: aggregateCharacterStars.trigger,
+  },
+});
 ```
 
 ## Performance
@@ -481,7 +488,7 @@ const allCount = await aggregate.count(ctx);
 ## Time-Based Aggregations
 
 ```ts
-const activityByHour = new TableAggregate<{
+const activityByHour = createAggregate<{
   Key: [number, string]; // [hour, userId]
   DataModel: DataModel;
   TableName: 'activities';

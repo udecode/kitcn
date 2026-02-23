@@ -145,6 +145,47 @@ describe('getSession', () => {
     expect(await getSession(ctx as any)).toBeNull();
     expect(dbGet).not.toHaveBeenCalled();
   });
+
+  test('prefers orm session query when orm exists', async () => {
+    const ormFindFirst = mock(async (_args: unknown) => ({
+      _id: 'orm-session',
+      token: 'orm-token',
+    }));
+    const dbGet = mock(async (_sessionId: string) => ({
+      _id: 'db-session',
+      token: 'db-token',
+    }));
+
+    const ctx = {
+      auth: {
+        getUserIdentity: async () => ({
+          sessionId: 'identity-session',
+          subject: 'user-1',
+        }),
+      },
+      db: {
+        get: dbGet,
+      },
+      orm: {
+        query: {
+          session: {
+            findFirst: ormFindFirst,
+          },
+        },
+      },
+    };
+
+    const session = await getSession(ctx as any);
+
+    expect(session).toEqual({
+      _id: 'orm-session',
+      token: 'orm-token',
+    });
+    expect(ormFindFirst).toHaveBeenCalledWith({
+      where: { id: 'identity-session' },
+    });
+    expect(dbGet).not.toHaveBeenCalled();
+  });
 });
 
 describe('getHeaders', () => {

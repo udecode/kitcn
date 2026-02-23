@@ -34,7 +34,7 @@ Add the admin plugin to your auth options:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {2,5-13}
 import { admin } from 'better-auth/plugins';
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
     // ... existing config
@@ -62,7 +62,7 @@ ADMIN=admin@example.com,other@example.com
 Assign admin role on user creation:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {1,4-15}
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
   // ... config

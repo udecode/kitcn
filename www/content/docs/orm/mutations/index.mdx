@@ -196,7 +196,7 @@ Async execution requires wiring `ormFunctions` and `scheduledMutationBatch` into
 ```ts showLineNumbers title="convex/functions/generated.ts" {4,12}
 import { createOrm } from 'better-convex/orm';
 import { internal } from './_generated/api';
-import { internalMutation } from './_generated/server';
+import { internalMutation } from './generated/server';
 import { relations } from './schema';
 
 export const orm = createOrm({

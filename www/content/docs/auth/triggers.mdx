@@ -49,7 +49,7 @@ Run after the database write. Use for side effects.
 Define triggers in `auth.ts` with `defineAuth`. Trigger handlers are doc-first, and `ctx` is available from the `defineAuth((ctx) => ...)` closure:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {1-2,5-20}
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
   baseURL: process.env.SITE_URL!,

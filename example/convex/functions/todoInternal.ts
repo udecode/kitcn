@@ -2,7 +2,7 @@ import { eq } from 'better-convex/orm';
 import { z } from 'zod';
 import { privateAction, privateMutation, privateQuery } from '../lib/crpc';
 import { aggregateTodosByStatus, aggregateTodosByUser } from './aggregates';
-import { createCaller } from './generated';
+import { createTodoInternalCaller } from './generated/todoInternal.runtime';
 import { todosTable } from './schema';
 
 // ============================================
@@ -468,10 +468,10 @@ export const processDailySummaries = privateAction
     })
   )
   .action(async ({ ctx }) => {
-    const caller = createCaller(ctx);
+    const caller = createTodoInternalCaller(ctx);
 
     // Get users with overdue todos
-    const usersToNotify = await caller.todoInternal.getUsersWithOverdueTodos({
+    const usersToNotify = await caller.getUsersWithOverdueTodos({
       hoursOverdue: 24,
       limit: 100,
     });
@@ -515,10 +515,10 @@ export const generateWeeklyReport = privateAction
   .action(async ({ ctx, input }) => {
     const now = Date.now();
     const weekStart = now - 7 * 24 * 60 * 60 * 1000;
-    const caller = createCaller(ctx);
+    const caller = createTodoInternalCaller(ctx);
 
     // Get user's todos from the past week
-    const weekTodos = await caller.todoInternal.getUserWeeklyActivity({
+    const weekTodos = await caller.getUserWeeklyActivity({
       userId: input.userId,
       weekStart,
     });
@@ -677,7 +677,7 @@ export const update = privateMutation
       description: z.string().max(1000).optional(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await ctx.orm.query.todos.findFirstOrThrow({
       where: { id: input.id, userId: input.userId },
@@ -691,7 +691,6 @@ export const update = privateMutation
         description: input.description,
       })
       .where(eq(todosTable.id, input.id));
-    return null;
   });
 
 /** Delete - called by HTTP actions after auth is verified */
@@ -702,7 +701,7 @@ export const deleteTodo = privateMutation
       id: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await ctx.orm.query.todos.findFirstOrThrow({
       where: { id: input.id, userId: input.userId },
@@ -712,5 +711,4 @@ export const deleteTodo = privateMutation
       .update(todosTable)
       .set({ deletionTime: new Date() })
       .where(eq(todosTable.id, input.id));
-    return null;
   });

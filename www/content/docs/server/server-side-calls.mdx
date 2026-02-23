@@ -100,28 +100,29 @@ If you customize `transformer`, use the same transformer in:
 
 `Date` support stays always on; custom transformer is additive only.
 
-## `createCallerFactory` vs `createCaller(ctx)`
+## `createCallerFactory` vs `create<Module>Caller(ctx)`
 
 There are two caller APIs, each for a different context:
 
 | API | Location | When to use | Transport |
 |-----|----------|-------------|-----------|
 | `createCallerFactory` | `better-convex/server` | Server-side HTTP calls (Next.js API routes, RSC) | Convex fetch APIs |
-| `createCaller(ctx)` | `convex/functions/generated.ts` | In-process composition inside Convex handlers | Direct handler (query/mutation) or `runQuery`/`runMutation` (action) |
+| `create<Module>Caller(ctx)` | `convex/functions/generated/<module>.runtime.ts` | In-process composition inside Convex handlers | Direct handler (query/mutation) or `runQuery`/`runMutation` (action) |
 
-Use `createCaller(ctx)` when you're already inside a Convex handler and want to call other cRPC procedures with type-safe autocomplete — no need to manually choose between `ctx.runQuery` and `ctx.runMutation`.
+Use `create<Module>Caller(ctx)` when you're already inside a Convex handler and want to call other cRPC procedures with type-safe autocomplete — no need to manually choose between `ctx.runQuery` and `ctx.runMutation`.
+
 
 ```ts title="convex/functions/teams.ts" showLineNumbers {3,7-9}
 import { z } from 'zod';
 import { privateQuery } from '../lib/crpc';
-import { createCaller } from './generated';
+import { createTeamsCaller } from './generated/teams.runtime';
 
 export const getTeamAndOwner = privateQuery
   .input(z.object({ teamId: z.string() }))
   .query(async ({ ctx, input }) => {
-    const caller = createCaller(ctx);
-    const team = await caller.teams.getTeam({ teamId: input.teamId });
-    const owner = await caller.user.getById({ id: team.ownerId });
+    const caller = createTeamsCaller(ctx);
+    const team = await caller.getTeam({ teamId: input.teamId });
+    const owner = await caller.getOwner({ id: team.ownerId });
     return { team, owner };
   });
 ```
@@ -135,7 +136,7 @@ export const getTeamAndOwner = privateQuery
 | `ActionCtx` | ✅ | ✅ | ❌ |
 
 <Callout icon={<InfoIcon />}>
-  **Note:** In actions, each `createCaller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
+  **Note:** In actions, each `create<Module>Caller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
 </Callout>
 
 For more details, see [In-Process Procedure Composition](/docs/server/procedures#in-process-procedure-composition).

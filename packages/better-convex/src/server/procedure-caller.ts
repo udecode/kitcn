@@ -91,6 +91,8 @@ type ProcedureCallable<TProcedure> =
           input: ProcedureInput<TProcedure>
         ) => Promise<ProcedureOutput<TProcedure>>;
 
+type SchedulableProcedureType = Exclude<ProcedureType, 'query'>;
+
 type AllowedProcedureType<TCtxType extends CallerContextType> =
   TCtxType extends 'query' ? 'query' : 'query' | 'mutation';
 
@@ -174,9 +176,9 @@ type ResolverOutput<TResolver> = TResolver extends (
 type RegistryEntryToPathShape<
   TPath extends string,
   TEntry,
-  TCtxType extends CallerContextType,
+  TAllowed extends ProcedureType,
 > = TEntry extends readonly [infer TType extends ProcedureType, infer TResolver]
-  ? TType extends AllowedProcedureType<TCtxType>
+  ? TType extends TAllowed
     ? BuildPathShape<
         SplitPath<TPath>,
         ProcedureCallable<
@@ -196,19 +198,65 @@ export type GeneratedProcedureRegistry = Record<
   GeneratedProcedureRegistryEntry
 >;
 
-export type ProcedureCallerFromRegistry<
+type ProcedureCallerFromRegistryByAllowedTypes<
   TRegistry extends GeneratedProcedureRegistry,
-  TCtxType extends CallerContextType,
+  TAllowed extends ProcedureType,
 > = SimplifyDeep<
   UnionToIntersection<
     {
       [K in keyof TRegistry & string]: RegistryEntryToPathShape<
         K,
         TRegistry[K],
-        TCtxType
+        TAllowed
       >;
     }[keyof TRegistry & string]
   >
+>;
+
+export type ProcedureCallerFromRegistry<
+  TRegistry extends GeneratedProcedureRegistry,
+  TCtxType extends CallerContextType,
+> = TCtxType extends 'query'
+  ? ProcedureCallerFromRegistryByAllowedTypes<TRegistry, 'query'>
+  : ProcedureCallerFromRegistryByAllowedTypes<TRegistry, 'query' | 'mutation'>;
+
+export type ProcedureActionCallerFromRegistry<
+  TRegistry extends GeneratedProcedureRegistry,
+> = ProcedureCallerFromRegistryByAllowedTypes<TRegistry, 'action'>;
+
+export type ProcedureSchedulableCallerFromRegistry<
+  TRegistry extends GeneratedProcedureRegistry,
+> = ProcedureCallerFromRegistryByAllowedTypes<
+  TRegistry,
+  SchedulableProcedureType
+>;
+
+export type ProcedureScheduleCallerFromRegistry<
+  TRegistry extends GeneratedProcedureRegistry,
+> = {
+  after: (delayMs: number) => ProcedureSchedulableCallerFromRegistry<TRegistry>;
+  at: (
+    timestamp: number | Date
+  ) => ProcedureSchedulableCallerFromRegistry<TRegistry>;
+  now: ProcedureSchedulableCallerFromRegistry<TRegistry>;
+  cancel: (id: string) => Promise<void>;
+};
+
+type ProcedureMutationCallerWithSchedule<
+  TRegistry extends GeneratedProcedureRegistry,
+> = SimplifyDeep<
+  ProcedureCallerFromRegistryByAllowedTypes<TRegistry, 'query' | 'mutation'> & {
+    schedule: ProcedureScheduleCallerFromRegistry<TRegistry>;
+  }
+>;
+
+type ProcedureActionCallerWithNamespaces<
+  TRegistry extends GeneratedProcedureRegistry,
+> = SimplifyDeep<
+  ProcedureCallerFromRegistryByAllowedTypes<TRegistry, 'query' | 'mutation'> & {
+    actions: ProcedureActionCallerFromRegistry<TRegistry>;
+    schedule: ProcedureScheduleCallerFromRegistry<TRegistry>;
+  }
 >;
 
 type RegistryCallerForContext<
@@ -218,12 +266,23 @@ type RegistryCallerForContext<
   TMutationCtx,
   TActionCtx = never,
 > = TCtx extends TMutationCtx
-  ? ProcedureCallerFromRegistry<TRegistry, 'mutation'>
+  ? ProcedureMutationCallerWithSchedule<TRegistry>
   : TCtx extends TActionCtx
-    ? ProcedureCallerFromRegistry<TRegistry, 'mutation'>
+    ? ProcedureActionCallerWithNamespaces<TRegistry>
     : TCtx extends TQueryCtx
       ? ProcedureCallerFromRegistry<TRegistry, 'query'>
       : never;
+
+type RegistryHandlerForContext<
+  TRegistry extends GeneratedProcedureRegistry,
+  TCtx,
+  TQueryCtx,
+  TMutationCtx,
+> = TCtx extends TMutationCtx
+  ? ProcedureCallerFromRegistry<TRegistry, 'mutation'>
+  : TCtx extends TQueryCtx
+    ? ProcedureCallerFromRegistry<TRegistry, 'query'>
+    : never;
 
 export type CreateProcedureCallerFactoryOptions<TApi extends ProcedureTree> = {
   api: TApi;
@@ -523,8 +582,22 @@ function getResolverFunctionReference(
 }
 
 type ActionDispatchContext = {
+  runAction?: (functionReference: unknown, args: unknown) => unknown;
   runMutation?: (functionReference: unknown, args: unknown) => unknown;
   runQuery?: (functionReference: unknown, args: unknown) => unknown;
+  scheduler?: {
+    runAfter?: (
+      delayMs: number,
+      functionReference: unknown,
+      args: unknown
+    ) => unknown;
+    runAt?: (
+      timestamp: number | Date,
+      functionReference: unknown,
+      args: unknown
+    ) => unknown;
+    cancel?: (id: unknown) => unknown;
+  };
 };
 
 async function executeActionContextProcedure(
@@ -559,6 +632,263 @@ async function executeActionContextProcedure(
   return decodeProcedureResult(procedure, result);
 }
 
+async function executeActionContextActionProcedure(
+  ctx: unknown,
+  procedure: ProcedureExport,
+  pathString: string,
+  resolver: () => Promise<unknown> | unknown,
+  input: unknown
+) {
+  const ctxValue = ctx as ActionDispatchContext;
+  const functionReference = getResolverFunctionReference(resolver);
+
+  if (!functionReference) {
+    throw new Error(
+      `[better-convex] Missing function reference metadata for action context dispatch: "${pathString}".`
+    );
+  }
+
+  if (typeof ctxValue.runAction !== 'function') {
+    throw new Error(
+      `[better-convex] Action context is missing ctx.runAction for "${pathString}".`
+    );
+  }
+
+  const encodedInput = encodeProcedureInput(procedure, input);
+  const result = await ctxValue.runAction(functionReference, encodedInput);
+  return decodeProcedureResult(procedure, result);
+}
+
+type ScheduleDispatchMode =
+  | {
+      type: 'after';
+      delayMs: number;
+    }
+  | {
+      type: 'at';
+      timestamp: number | Date;
+    };
+
+function getScheduleRunner(
+  ctx: unknown,
+  pathString: string,
+  mode: ScheduleDispatchMode
+) {
+  const scheduler = (ctx as ActionDispatchContext).scheduler;
+  if (!scheduler || typeof scheduler !== 'object') {
+    throw new Error(
+      `[better-convex] Context is missing ctx.scheduler for "${pathString}".`
+    );
+  }
+
+  if (mode.type === 'after') {
+    if (typeof scheduler.runAfter !== 'function') {
+      throw new Error(
+        `[better-convex] Context is missing ctx.scheduler.runAfter for "${pathString}".`
+      );
+    }
+    return (functionReference: unknown, args: unknown) =>
+      scheduler.runAfter?.(mode.delayMs, functionReference, args);
+  }
+
+  if (typeof scheduler.runAt !== 'function') {
+    throw new Error(
+      `[better-convex] Context is missing ctx.scheduler.runAt for "${pathString}".`
+    );
+  }
+  return (functionReference: unknown, args: unknown) =>
+    scheduler.runAt?.(mode.timestamp, functionReference, args);
+}
+
+async function executeScheduledProcedure(
+  ctx: unknown,
+  mode: ScheduleDispatchMode,
+  procedure: ProcedureExport,
+  pathString: string,
+  resolver: () => Promise<unknown> | unknown,
+  input: unknown
+) {
+  const functionReference = getResolverFunctionReference(resolver);
+  if (!functionReference) {
+    throw new Error(
+      `[better-convex] Missing function reference metadata for schedule dispatch: "${pathString}".`
+    );
+  }
+
+  const schedule = getScheduleRunner(ctx, pathString, mode);
+  const encodedInput = encodeProcedureInput(procedure, input);
+  return schedule(functionReference, encodedInput);
+}
+
+function createActionsRegistryProxy(
+  path: string[],
+  ctx: unknown,
+  registry: RuntimeGeneratedRegistry
+): unknown {
+  return new Proxy(() => {}, {
+    get(_target, prop: string | symbol) {
+      if (typeof prop === 'symbol') return;
+      if (prop === 'then') return;
+
+      return createActionsRegistryProxy([...path, prop], ctx, registry);
+    },
+    async apply(_target, _thisArg, argsList) {
+      const pathString = path.join('.');
+      const entry = registry[pathString];
+
+      if (!entry) {
+        if (hasProcedurePrefix(registry, pathString)) {
+          throw new Error(
+            `[better-convex] Path does not resolve to an action procedure: "${pathString}".`
+          );
+        }
+        throw new Error(
+          `[better-convex] Invalid procedure path: "${pathString}".`
+        );
+      }
+
+      const [procedureType, resolveProcedure] = entry;
+      if (procedureType !== 'action') {
+        throw new Error(
+          `[better-convex] Path does not resolve to an action procedure: "${pathString}".`
+        );
+      }
+
+      if (getContextType(ctx) !== 'action') {
+        throw new Error(
+          `[better-convex] Action procedures require action context: "${pathString}".`
+        );
+      }
+
+      const resolved = await resolveProcedure();
+      if (!isProcedureExport(resolved)) {
+        throw new Error(
+          `[better-convex] Resolved value is not a cRPC procedure: "${pathString}".`
+        );
+      }
+
+      if (resolved._crpcMeta?.type !== procedureType) {
+        throw new Error(
+          `[better-convex] Procedure type mismatch at "${pathString}". Expected "${procedureType}" but got "${resolved._crpcMeta?.type ?? 'unknown'}".`
+        );
+      }
+
+      return executeActionContextActionProcedure(
+        ctx,
+        resolved,
+        pathString,
+        resolveProcedure,
+        argsList[0] ?? {}
+      );
+    },
+  });
+}
+
+function createScheduledRegistryProxy(
+  path: string[],
+  ctx: unknown,
+  registry: RuntimeGeneratedRegistry,
+  mode: ScheduleDispatchMode
+): unknown {
+  return new Proxy(() => {}, {
+    get(_target, prop: string | symbol) {
+      if (typeof prop === 'symbol') return;
+      if (prop === 'then') return;
+
+      return createScheduledRegistryProxy([...path, prop], ctx, registry, mode);
+    },
+    async apply(_target, _thisArg, argsList) {
+      const pathString = path.join('.');
+      const entry = registry[pathString];
+
+      if (!entry) {
+        if (hasProcedurePrefix(registry, pathString)) {
+          throw new Error(
+            `[better-convex] Path does not resolve to a schedulable procedure: "${pathString}".`
+          );
+        }
+        throw new Error(
+          `[better-convex] Invalid procedure path: "${pathString}".`
+        );
+      }
+
+      const [procedureType, resolveProcedure] = entry;
+      if (procedureType === 'query') {
+        throw new Error(
+          `[better-convex] Cannot schedule query procedures: "${pathString}".`
+        );
+      }
+
+      const ctxType = getContextType(ctx);
+      if (ctxType !== 'mutation' && ctxType !== 'action') {
+        throw new Error(
+          `[better-convex] Scheduling requires mutation or action context: "${pathString}".`
+        );
+      }
+
+      const resolved = await resolveProcedure();
+      if (!isProcedureExport(resolved)) {
+        throw new Error(
+          `[better-convex] Resolved value is not a cRPC procedure: "${pathString}".`
+        );
+      }
+
+      if (resolved._crpcMeta?.type !== procedureType) {
+        throw new Error(
+          `[better-convex] Procedure type mismatch at "${pathString}". Expected "${procedureType}" but got "${resolved._crpcMeta?.type ?? 'unknown'}".`
+        );
+      }
+
+      return executeScheduledProcedure(
+        ctx,
+        mode,
+        resolved,
+        pathString,
+        resolveProcedure,
+        argsList[0] ?? {}
+      );
+    },
+  });
+}
+
+function createScheduleNamespace(
+  ctx: unknown,
+  registry: RuntimeGeneratedRegistry
+): ProcedureScheduleCallerFromRegistry<GeneratedProcedureRegistry> {
+  const nowProxy = createScheduledRegistryProxy([], ctx, registry, {
+    type: 'after',
+    delayMs: 0,
+  });
+  const schedule = {
+    after: (delayMs: number) =>
+      createScheduledRegistryProxy([], ctx, registry, {
+        type: 'after',
+        delayMs,
+      }),
+    at: (timestamp: number | Date) =>
+      createScheduledRegistryProxy([], ctx, registry, {
+        type: 'at',
+        timestamp,
+      }),
+    now: nowProxy,
+    cancel: async (id: string) => {
+      const scheduler = (ctx as ActionDispatchContext).scheduler;
+      if (!scheduler || typeof scheduler !== 'object') {
+        throw new Error(
+          '[better-convex] Context is missing ctx.scheduler for "schedule.cancel".'
+        );
+      }
+      if (typeof scheduler.cancel !== 'function') {
+        throw new Error(
+          '[better-convex] Context is missing ctx.scheduler.cancel for "schedule.cancel".'
+        );
+      }
+      return scheduler.cancel(id);
+    },
+  };
+  return schedule as ProcedureScheduleCallerFromRegistry<GeneratedProcedureRegistry>;
+}
+
 function createRegistryProxy(
   path: string[],
   ctx: unknown,
@@ -570,6 +900,12 @@ function createRegistryProxy(
     get(_target, prop: string | symbol) {
       if (typeof prop === 'symbol') return;
       if (prop === 'then') return;
+      if (mode === 'caller' && path.length === 0 && prop === 'actions') {
+        return createActionsRegistryProxy([], ctx, registry);
+      }
+      if (mode === 'caller' && path.length === 0 && prop === 'schedule') {
+        return createScheduleNamespace(ctx, registry);
+      }
 
       return createRegistryProxy(
         [...path, prop],
@@ -715,13 +1051,13 @@ export function createGenericHandlerFactory<
 >(registry: TRegistry) {
   return function createHandler<TCtx extends TQueryCtx | TMutationCtx>(
     ctx: TCtx
-  ): RegistryCallerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx> {
+  ): RegistryHandlerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx> {
     return createRegistryProxy(
       [],
       ctx,
       registry as RuntimeGeneratedRegistry,
       'handler',
       false
-    ) as RegistryCallerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx>;
+    ) as RegistryHandlerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx>;
   };
 }

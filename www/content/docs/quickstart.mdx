@@ -182,7 +182,7 @@ If you are not using codegen, use manual `initCRPC` from `better-convex/server` 
 Now create the cRPC builder in `convex/lib/crpc.ts`:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
-import { initCRPC } from '../functions/generated';
+import { initCRPC } from '../functions/generated/server';
 
 
 const c = initCRPC.create();

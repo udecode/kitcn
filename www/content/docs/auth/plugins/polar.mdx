@@ -62,15 +62,15 @@ export const getPolarClient = () =>
 
 ### Better Auth with Polar Plugin
 
-```ts title="convex/functions/auth.ts" showLineNumbers {2,7,10-53}
+```ts title="convex/functions/auth.ts" showLineNumbers {2,7-8,10-53}
 // IMPORTANT: Import polyfills FIRST
 import '../lib/polar-polyfills';
 
 import { checkout, polar, portal, usage, webhooks } from '@polar-sh/better-auth';
 import { Polar } from '@polar-sh/sdk';
-import type { ActionCtx } from './_generated/server';
-import { internal } from './_generated/api';
-import { defineAuth } from './generated';
+import { createPolarCustomerCaller } from './generated/polarCustomer.runtime';
+import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
     // ... existing config
@@ -100,26 +100,26 @@ export default defineAuth((ctx) => ({
               const userId = payload?.data.externalId;
               if (!userId) return;
 
-              await (ctx as ActionCtx).runMutation(
-                internal.polarCustomer.updateUserPolarCustomerId,
-                { customerId: payload.data.id, userId }
-              );
+              const caller = createPolarCustomerCaller(ctx);
+              await caller.updateUserPolarCustomerId({
+                customerId: payload.data.id, userId,
+              });
             },
             onSubscriptionCreated: async (payload) => {
               if (!payload.data.customer.externalId) return;
 
-              await (ctx as ActionCtx).runMutation(
-                internal.polarSubscription.createSubscription,
-                { subscription: convertToDatabaseSubscription(payload.data) }
-              );
+              const caller = createPolarSubscriptionCaller(ctx);
+              await caller.createSubscription({
+                subscription: convertToDatabaseSubscription(payload.data),
+              });
             },
             onSubscriptionUpdated: async (payload) => {
               if (!payload.data.customer.externalId) return;
 
-              await (ctx as ActionCtx).runMutation(
-                internal.polarSubscription.updateSubscription,
-                { subscription: convertToDatabaseSubscription(payload.data) }
-              );
+              const caller = createPolarSubscriptionCaller(ctx);
+              await caller.updateSubscription({
+                subscription: convertToDatabaseSubscription(payload.data),
+              });
             },
           }),
         ],
@@ -133,7 +133,7 @@ export default defineAuth((ctx) => ({
 Create Polar customer asynchronously when user signs up:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {1,4-14}
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
   // ... config
@@ -502,7 +502,7 @@ export const createCustomer = privateAction
       userId: z.string(),
     })
   )
-  .output(z.null())
+  
   .action(async ({ input: args }) => {
     const polar = getPolarClient();
 
@@ -527,7 +527,7 @@ export const updateUserPolarCustomerId = privateMutation
       userId: z.string(),
     })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input: args }) => {
     const targetUser = await ctx.orm.query.user.findFirst({
       where: { id: args.userId },
@@ -563,13 +563,13 @@ import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authAction, privateMutation, privateQuery } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
-import { createCaller } from './generated';
+import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
 import { internal } from './_generated/api';
 
 // Create subscription (called from webhook)
 export const createSubscription = privateMutation
   .input(z.object({ subscription: subscriptionSchema }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input: args }) => {
     const existing = await ctx.orm.query.subscriptions.findFirst({
       where: { subscriptionId: args.subscription.subscriptionId },
@@ -627,8 +627,8 @@ export const cancelSubscription = authAction
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
 
-    const caller = createCaller(ctx);
-    const subscription = await caller.polarSubscription.getActiveSubscription({ userId: ctx.userId! });
+    const caller = createPolarSubscriptionCaller(ctx);
+    const subscription = await caller.getActiveSubscription({ userId: ctx.userId! });
 
     if (!subscription) {
       throw new CRPCError({
@@ -651,8 +651,8 @@ export const resumeSubscription = authAction
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
 
-    const caller = createCaller(ctx);
-    const subscription = await caller.polarSubscription.getActiveSubscription({ userId: ctx.userId! });
+    const caller = createPolarSubscriptionCaller(ctx);
+    const subscription = await caller.getActiveSubscription({ userId: ctx.userId! });
 
     if (!subscription) {
       throw new CRPCError({
@@ -675,7 +675,7 @@ export const resumeSubscription = authAction
 Sync user deletion with Polar:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {1,4-14}
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
     user: {

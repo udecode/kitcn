@@ -578,6 +578,30 @@ const DEFAULT_MUTATION_SCHEDULE_CALL_CAP = 800;
 const DEFAULT_MUTATION_ASYNC_DELAY_MS = 0;
 const DEFAULT_RELATION_FAN_OUT_MAX_KEYS = 1000;
 const MEASURED_BYTE_SAFETY_MULTIPLIER = 2;
+const UTF8_LENGTH_THRESHOLD = 500;
+const UTF8_ENCODER = new TextEncoder();
+
+const getUtf8ByteLength = (value: string): number => {
+  if (value.length > UTF8_LENGTH_THRESHOLD) {
+    return UTF8_ENCODER.encode(value).length;
+  }
+
+  let bytes = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x80) {
+      bytes += 1;
+    } else if (code < 0x8_00) {
+      bytes += 2;
+    } else if (code >= 0xd8_00 && code <= 0xdb_ff) {
+      bytes += 4;
+      i += 1;
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+};
 
 export const resolveOrmRuntimeDefaults = (
   defaults: OrmRuntimeDefaults | undefined,
@@ -610,9 +634,10 @@ export const resolveOrmRuntimeDefaults = (
 
 export const estimateMeasuredMutationRowBytes = (
   row: Record<string, unknown>
-): number =>
-  Buffer.byteLength(JSON.stringify(row), 'utf8') *
-  MEASURED_BYTE_SAFETY_MULTIPLIER;
+): number => {
+  const serializedRow = JSON.stringify(row);
+  return getUtf8ByteLength(serializedRow) * MEASURED_BYTE_SAFETY_MULTIPLIER;
+};
 
 export const takeRowsWithinByteBudget = (
   rows: Record<string, unknown>[],

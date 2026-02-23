@@ -207,7 +207,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
 | `columns` | `columns` | Post-fetch projection |
 | `with` | `with` | Relation loading |
 | `insert/update/delete` | `insert/update/delete` | Same surface |
-| `count/sum/avg/max/min` in query builder | Use components | Use [Aggregates](/docs/server/advanced/aggregates) (`@convex-dev/aggregate`) |
+| `count/sum/avg/max/min` in query builder | Use components | Use [Aggregates](/docs/server/advanced/aggregates) (`createAggregate`) |
 | SQL joins | Not available | Use `with` |
 | Raw SQL | Not available | Convex is document-based |
 | Custom types | Not available | Use app-level encoding |
@@ -239,8 +239,7 @@ await db.query.users.findMany({
 });
 ```
 
-For aggregation use cases today, use the Convex aggregate component:
-- `@convex-dev/aggregate`
+For aggregation use cases today, use `createAggregate` from `better-convex/aggregate`:
 - Guide: [/docs/server/advanced/aggregates](/docs/server/advanced/aggregates)
 
 ## Post-Fetch Behavior

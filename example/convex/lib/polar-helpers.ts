@@ -52,7 +52,7 @@ export type DatabaseSubscription = ReturnType<
 /**
  * Delete all Polar customers (for reset/cleanup functionality)
  */
-export const deletePolarCustomers = async () => {
+export const deleteCustomers = async () => {
   const polar = getPolarClient();
 
   try {

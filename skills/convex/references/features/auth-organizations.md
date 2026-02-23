@@ -11,8 +11,8 @@ See [Better Auth Organization Plugin](https://www.better-auth.com/docs/plugins/o
 ```ts
 // convex/functions/auth.ts
 import { organization } from 'better-auth/plugins';
-import type { ActionCtx } from './_generated/server';
-import { defineAuth } from './generated';
+import type { ActionCtx } from './generated/server';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
     plugins: [
@@ -310,7 +310,7 @@ export const updateOrganization = authMutation
     name: z.string().min(1).max(100).optional(),
     slug: z.string().optional(),
   }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, { organizationId: input.organizationId, permissions: { organization: ['update'] } });
 
@@ -345,7 +345,7 @@ export const updateOrganization = authMutation
 ```ts
 export const deleteOrganization = authMutation
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, { organizationId: input.organizationId, permissions: { organization: ['delete'] } });
 
@@ -370,7 +370,7 @@ export const deleteOrganization = authMutation
 export const setActiveOrganization = authMutation
   .meta({ rateLimit: 'organization/setActive' })
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => setActiveOrganizationHandler(ctx, input));
 ```
 
@@ -382,7 +382,7 @@ export const setActiveOrganization = authMutation
 export const inviteMember = authMutation
   .meta({ rateLimit: 'organization/invite' })
   .input(z.object({ email: z.string().email(), organizationId: z.string(), role: z.enum(['owner', 'member']) }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, { organizationId: input.organizationId, permissions: { invitation: ['create'] } });
 
@@ -412,7 +412,7 @@ export const inviteMember = authMutation
 ```ts
 export const acceptInvitation = authMutation
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const inv = await ctx.orm.query.invitation
       .findFirstOrThrow({ where: { id: input.invitationId, email: ctx.user.email } })
@@ -427,7 +427,7 @@ export const acceptInvitation = authMutation
 export const rejectInvitation = authMutation
   .meta({ rateLimit: 'organization/rejectInvite' })
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const inv = await ctx.orm.query.invitation
       .findFirstOrThrow({ where: { id: input.invitationId, email: ctx.user.email } })
@@ -442,7 +442,7 @@ export const rejectInvitation = authMutation
 export const cancelInvitation = authMutation
   .meta({ rateLimit: 'organization/cancelInvite' })
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const inv = await ctx.orm.query.invitation.findFirstOrThrow({ where: { id: input.invitationId } });
     await hasPermission(ctx, { organizationId: inv.organizationId, permissions: { invitation: ['cancel'] } });
@@ -538,7 +538,7 @@ export const getActiveMember = authQuery
 export const addMember = authMutation
   .meta({ rateLimit: 'organization/addMember' })
   .input(z.object({ role: z.enum(['owner', 'member']), userId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, { permissions: { member: ['create'] } });
     await ctx.auth.api.addMember({
@@ -598,7 +598,7 @@ export const listMembers = authQuery
 export const updateMemberRole = authMutation
   .meta({ rateLimit: 'organization/updateRole' })
   .input(z.object({ memberId: z.string(), role: z.enum(['owner', 'member']) }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const m = await ctx.orm.query.member.findFirstOrThrow({ where: { id: input.memberId } });
     await hasPermission(ctx, { organizationId: m.organizationId, permissions: { member: ['update'] } });
@@ -617,7 +617,7 @@ export const updateMemberRole = authMutation
 export const removeMember = authMutation
   .meta({ rateLimit: 'organization/removeMember' })
   .input(z.object({ memberId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const m = await ctx.orm.query.member.findFirstOrThrow({ where: { id: input.memberId } });
     await hasPermission(ctx, { organizationId: m.organizationId, permissions: { member: ['delete'] } });
@@ -636,7 +636,7 @@ export const removeMember = authMutation
 export const leaveOrganization = authMutation
   .meta({ rateLimit: 'organization/leave' })
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     if (input.organizationId === ctx.user.personalOrganizationId) {
       throw new CRPCError({ code: 'BAD_REQUEST', message: 'Cannot leave personal organization' });

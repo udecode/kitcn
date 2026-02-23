@@ -30,6 +30,7 @@ export default defineConfig([
   // Server-safe builds (crpc, rsc, server, orm) - no "use client"
   {
     entry: {
+      'aggregate/index': 'src/aggregate/index.ts',
       'auth/config/index': 'src/auth-config/index.ts',
       'auth/http/index': 'src/auth-http/index.ts',
       'auth/index': 'src/auth/index.ts',

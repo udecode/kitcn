@@ -147,22 +147,26 @@ Automatic side effects when data changes. Use schema triggers for:
 - Audit logging
 - Syncing to external systems
 
-```ts showLineNumbers {1-2,4-8}
-import { eq, onChange } from 'better-convex/orm';
-import { post } from './schema';
+```ts showLineNumbers {1-2,4-15}
+import { defineTriggers, eq } from 'better-convex/orm';
+import { post, relations } from './schema';
 
-onChange(async (ctx, change) => {
-  if (change.operation === 'delete') {
-    // Cascade delete user's posts
-    // Index post.authorId.
-    const posts = await ctx.orm.query.post.findMany({
-      where: { authorId: change.id },
-      limit: 100,
-    });
-    for (const postRow of posts) {
-      await ctx.orm.delete(post).where(eq(post.id, postRow.id));
-    }
-  }
+export const triggers = defineTriggers(relations, {
+  user: {
+    change: async (change, ctx) => {
+      if (change.operation === 'delete') {
+        // Cascade delete user's posts
+        // Index post.authorId.
+        const posts = await ctx.orm.query.post.findMany({
+          where: { authorId: change.id },
+          limit: 100,
+        });
+        for (const postRow of posts) {
+          await ctx.orm.delete(post).where(eq(post.id, postRow.id));
+        }
+      }
+    },
+  },
 });
 ```
 

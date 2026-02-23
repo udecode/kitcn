@@ -8,8 +8,8 @@ import {
   authQuery,
   privateMutation,
 } from '../lib/crpc';
-import type { MutationCtx } from './_generated/server';
-import { createHandler } from './generated';
+import { createOrganizationHandler } from './generated/organization.runtime';
+import type { MutationCtx } from './generated/server';
 import {
   invitationTable,
   memberTable,
@@ -131,8 +131,8 @@ export const listOrganizations = authQuery
     })
   )
   .query(async ({ ctx }) => {
-    const handler = createHandler(ctx);
-    const orgs = await handler.organization.listUserOrganizations();
+    const handler = createOrganizationHandler(ctx);
+    const orgs = await handler.listUserOrganizations();
 
     if (!orgs || orgs.length === 0) {
       return {
@@ -237,7 +237,7 @@ export const updateOrganization = authMutation
       slug: z.string().optional(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -282,8 +282,6 @@ export const updateOrganization = authMutation
       body: { data, organizationId: input.organizationId },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 const slugSchema = z
@@ -355,21 +353,19 @@ const setActiveOrganizationHandler = async (
 
   // Skip updating lastActiveOrganizationId to avoid aggregate issues
   // The active organization is already tracked in the session
-
-  return null;
 };
 
 // Set active organization
 export const setActiveOrganization = authMutation
   .meta({ rateLimit: 'organization/setActive' })
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => setActiveOrganizationHandler(ctx, input));
 
 // Accept invitation
 export const acceptInvitation = authMutation
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -395,15 +391,13 @@ export const acceptInvitation = authMutation
       body: { invitationId: input.invitationId },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Reject invitation
 export const rejectInvitation = authMutation
   .meta({ rateLimit: 'organization/rejectInvite' })
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -429,15 +423,13 @@ export const rejectInvitation = authMutation
       body: { invitationId: input.invitationId },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Remove member from organization
 export const removeMember = authMutation
   .meta({ rateLimit: 'organization/removeMember' })
   .input(z.object({ memberId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const member = await ctx.orm.query.member.findFirstOrThrow({
       where: { id: input.memberId },
@@ -456,15 +448,13 @@ export const removeMember = authMutation
       },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Leave organization (self-leave)
 export const leaveOrganization = authMutation
   .meta({ rateLimit: 'organization/leave' })
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -520,8 +510,6 @@ export const leaveOrganization = authMutation
         organizationId: user.personalOrganizationId!,
       });
     }
-
-    return null;
   });
 
 // Update member role
@@ -533,7 +521,7 @@ export const updateMemberRole = authMutation
       role: z.enum(['owner', 'member']),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const member = await ctx.orm.query.member.findFirstOrThrow({
       where: { id: input.memberId },
@@ -553,14 +541,12 @@ export const updateMemberRole = authMutation
       },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Delete organization (owner only)
 export const deleteOrganization = authMutation
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -591,8 +577,6 @@ export const deleteOrganization = authMutation
       body: { organizationId: input.organizationId },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Get organization details by slug
@@ -912,7 +896,7 @@ export const inviteMember = authMutation
       role: z.enum(['owner', 'member']),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     // Premium guard for invitations
     // premiumGuard(ctx.user);
@@ -1016,15 +1000,13 @@ export const inviteMember = authMutation
         message: `Failed to send invitation: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
     }
-
-    return null;
   });
 
 // Cancel invitation
 export const cancelInvitation = authMutation
   .meta({ rateLimit: 'organization/cancelInvite' })
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const invitation = await ctx.orm.query.invitation.findFirstOrThrow({
       where: { id: input.invitationId },
@@ -1058,8 +1040,6 @@ export const cancelInvitation = authMutation
 
     // Note: Email cancellation through Resend is non-critical
     // The invitation being cancelled is the primary action
-
-    return null;
   });
 
 // Check if slug is available
@@ -1162,7 +1142,7 @@ export const addMember = authMutation
       userId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, { permissions: { member: ['create'] } });
 
@@ -1174,6 +1154,4 @@ export const addMember = authMutation
       },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });

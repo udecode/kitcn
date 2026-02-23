@@ -20,12 +20,38 @@ type MutationCtx = {
     kind: 'mutation';
   };
   runMutation: () => Promise<void>;
+  scheduler?: {
+    runAfter?: (
+      delayMs: number,
+      fn: unknown,
+      args: unknown
+    ) => Promise<unknown>;
+    runAt?: (
+      timestamp: number | Date,
+      fn: unknown,
+      args: unknown
+    ) => Promise<unknown>;
+    cancel?: (id: unknown) => Promise<void>;
+  };
 };
 
 type ActionCtx = {
-  runAction?: () => Promise<void>;
+  runAction?: (fn: unknown, args: unknown) => Promise<unknown>;
   runQuery: (fn: unknown, args: unknown) => Promise<unknown>;
   runMutation: (fn: unknown, args: unknown) => Promise<unknown>;
+  scheduler?: {
+    runAfter?: (
+      delayMs: number,
+      fn: unknown,
+      args: unknown
+    ) => Promise<unknown>;
+    runAt?: (
+      timestamp: number | Date,
+      fn: unknown,
+      args: unknown
+    ) => Promise<unknown>;
+    cancel?: (id: unknown) => Promise<void>;
+  };
 };
 
 const queryCtx: QueryCtx = { db: { kind: 'query' } };
@@ -322,6 +348,180 @@ describe('server/procedure-caller', () => {
     await expect(caller.jobs.reindex({ force: true })).rejects.toThrow(
       /cannot call action procedures from action context/i
     );
+  });
+
+  test('generated caller on action ctx dispatches action procedures via actions namespace', async () => {
+    const c = initCRPC.create();
+    const procedure = c.action
+      .input(z.object({ force: z.boolean() }))
+      .output(z.object({ started: z.boolean() }))
+      .action(async ({ input }) => ({ started: input.force }));
+
+    const actionRef = { path: 'jobs.reindex' } as any;
+    const runQuery = mock(async () => null);
+    const runMutation = mock(async () => null);
+    const runAction = mock(async (fn: unknown, args: unknown) => {
+      expect(fn).toBe(actionRef);
+      return (procedure as any)._handler({} as any, args as any);
+    });
+
+    const registry = {
+      'jobs.reindex': [
+        'action',
+        typedProcedureResolver(actionRef, async () => procedure),
+      ],
+    } as const;
+
+    const createCaller = createGenericCallerFactory<
+      QueryCtx,
+      MutationCtx,
+      typeof registry,
+      ActionCtx
+    >(registry);
+
+    const caller = createCaller<ActionCtx>({
+      runAction,
+      runMutation,
+      runQuery,
+    } as ActionCtx);
+    await expect(caller.actions.jobs.reindex({ force: true })).resolves.toEqual(
+      { started: true }
+    );
+    expect(runAction).toHaveBeenCalledTimes(1);
+  });
+
+  test('generated caller scheduling with now/after/at routes through scheduler', async () => {
+    const c = initCRPC.create();
+    const mutationProcedure = c.mutation
+      .input(z.object({ name: z.string() }))
+      .output(z.object({ ok: z.boolean() }))
+      .mutation(async () => ({ ok: true }));
+    const actionProcedure = c.action
+      .input(z.object({ force: z.boolean() }))
+      .output(z.object({ started: z.boolean() }))
+      .action(async () => ({ started: true }));
+
+    const mutationRef = { path: 'posts.create' } as any;
+    const actionRef = { path: 'jobs.reindex' } as any;
+    const runAfter = mock(async () => 'sched_after');
+    const runAt = mock(async () => 'sched_at');
+    const cancel = mock(async () => {});
+
+    const registry = {
+      'posts.create': [
+        'mutation',
+        typedProcedureResolver(mutationRef, async () => mutationProcedure),
+      ],
+      'jobs.reindex': [
+        'action',
+        typedProcedureResolver(actionRef, async () => actionProcedure),
+      ],
+    } as const;
+
+    const createCaller = createGenericCallerFactory<
+      QueryCtx,
+      MutationCtx,
+      typeof registry,
+      ActionCtx
+    >(registry);
+
+    const caller = createCaller<MutationCtx>({
+      ...mutationCtx,
+      scheduler: {
+        runAfter,
+        runAt,
+        cancel,
+      },
+    } as MutationCtx);
+
+    await expect(
+      caller.schedule.now.posts.create({ name: 'alpha' })
+    ).resolves.toBe('sched_after');
+    await expect(
+      caller.schedule.after(50).jobs.reindex({ force: true })
+    ).resolves.toBe('sched_after');
+    const date = new Date('2026-01-01T00:00:00.000Z');
+    await expect(
+      caller.schedule.at(date).jobs.reindex({ force: true })
+    ).resolves.toBe('sched_at');
+    await caller.schedule.cancel('scheduled_id' as any);
+
+    expect(runAfter).toHaveBeenCalledTimes(2);
+    expect(runAfter).toHaveBeenNthCalledWith(
+      1,
+      0,
+      mutationRef,
+      expect.anything()
+    );
+    expect(runAfter).toHaveBeenNthCalledWith(
+      2,
+      50,
+      actionRef,
+      expect.anything()
+    );
+    expect(runAt).toHaveBeenCalledWith(date, actionRef, expect.anything());
+    expect(cancel).toHaveBeenCalledWith('scheduled_id');
+  });
+
+  test('generated caller schedule excludes query procedures', async () => {
+    const c = initCRPC.create();
+    const queryProcedure = c.query
+      .input(z.object({ id: z.string() }))
+      .query(async ({ input }) => ({ id: input.id }));
+    const queryRef = { path: 'posts.list' } as any;
+    const runAfter = mock(async () => 'scheduled');
+
+    const registry = {
+      'posts.list': [
+        'query',
+        typedProcedureResolver(queryRef, async () => queryProcedure),
+      ],
+    } as const;
+
+    const createCaller = createGenericCallerFactory<
+      QueryCtx,
+      MutationCtx,
+      typeof registry,
+      ActionCtx
+    >(registry);
+
+    const caller = createCaller<MutationCtx>({
+      ...mutationCtx,
+      scheduler: {
+        runAfter,
+      },
+    } as MutationCtx) as any;
+
+    await expect(caller.schedule.now.posts.list({ id: 'p_1' })).rejects.toThrow(
+      /cannot schedule query procedures/i
+    );
+  });
+
+  test('generated caller schedule throws when scheduler is missing', async () => {
+    const c = initCRPC.create();
+    const mutationProcedure = c.mutation
+      .input(z.object({ name: z.string() }))
+      .mutation(async () => ({ ok: true }));
+    const mutationRef = { path: 'posts.create' } as any;
+
+    const registry = {
+      'posts.create': [
+        'mutation',
+        typedProcedureResolver(mutationRef, async () => mutationProcedure),
+      ],
+    } as const;
+
+    const createCaller = createGenericCallerFactory<
+      QueryCtx,
+      MutationCtx,
+      typeof registry,
+      ActionCtx
+    >(registry);
+
+    const caller = createCaller(mutationCtx);
+    await expect(
+      caller.schedule.now.posts.create({ name: 'demo' })
+    ).rejects.toThrow(/missing ctx.scheduler/i);
   });
 
   test('generated caller on action ctx throws without typed resolver metadata', async () => {

@@ -132,8 +132,8 @@ Prefer `updatedAt` (or a dedicated sortable field) for custom index definitions.
 ### 5.2 Attach ORM once (`ctx.orm`)
 
 Do **not** create `convex/lib/orm.ts`.
-`convex/functions/generated.ts` is generated and is the canonical server contract.
-It includes `initCRPC` and ORM helpers when `relations` exists.
+`convex/functions/generated/` directory is generated and is the canonical server contract.
+It includes `initCRPC` (from `generated/server`) and ORM helpers when `relations` exists.
 If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
 
 Why this shape:
@@ -146,7 +146,7 @@ Why this shape:
 **Create:** `convex/lib/crpc.ts`
 
 ```ts
-import { initCRPC } from "../functions/generated";
+import { initCRPC } from "../functions/generated/server";
 
 const c = initCRPC
   .meta<{
@@ -188,7 +188,7 @@ Generated exports include:
 3. `TableName`, `Select`, `Insert` (when `schema.ts` exports `tables`)
 
 Consume these from `@convex/api` on app/client side.
-Within Convex backend files, import server context/ORM helpers from `../functions/generated`.
+Within Convex backend files, import server context/ORM helpers from `../functions/generated/server`.
 
 ### 5.5 Start dev/codegen
 
@@ -216,7 +216,7 @@ Local deployment storage: New local and anonymous deployments store state under 
 This generates:
 
 - `convex/functions/_generated/*`
-- `convex/functions/generated.ts`
+- `convex/functions/generated/` directory
 - `convex/shared/api.ts`
 
 Agent command policy:
@@ -299,14 +299,16 @@ export const secret = convexTable.withRLS(
 ### 9.2 Schema triggers gate
 
 ```ts
-import { convexTable, onChange } from "better-convex/orm";
+import { convexTable, defineTriggers, text } from "better-convex/orm";
 
-export const post = convexTable("post", { title: text().notNull() }, () => [
-  onChange(async (ctx, change) => {
-    if (change.operation === "delete") return;
-    // side effects here
-  }),
-]);
+export const triggers = defineTriggers(relations, {
+  post: {
+    change: async (change, ctx) => {
+      if (change.operation === "delete") return;
+      // side effects here
+    },
+  },
+});
 ```
 
 Trigger guardrails:
@@ -333,13 +335,13 @@ app.use(aggregate, { name: "aggregatePostLikes" });
 export default app;
 ```
 
-Attach `TableAggregate.trigger()` in schema trigger list.
+Register aggregate in `defineTriggers`.
 
 If Aggregates are **disabled** (`Aggregates: No`), remove all aggregate wiring in one pass:
 
 1. Remove `app.use(aggregate, ...)` calls from `convex/functions/convex.config.ts`.
 2. Remove aggregate helper modules (for example `convex/functions/aggregates.ts`).
-3. Remove schema `aggregate*.trigger()` imports/hooks.
+3. Remove aggregate `change:` handlers from `defineTriggers`.
 4. Re-run `bunx better-convex dev --once --typecheck disable` immediately to catch stale references.
 
 ### 9.4 Rate limiting gate
@@ -369,7 +371,7 @@ import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { CRPCError } from "better-convex/server";
 import { components } from "../functions/_generated/api";
 
-import type { ActionCtx, MutationCtx } from "../functions/_generated/server";
+import type { ActionCtx, MutationCtx } from "../functions/generated/server";
 import type { SessionUser } from "../shared/auth-shared";
 
 const rateLimitConfig = {

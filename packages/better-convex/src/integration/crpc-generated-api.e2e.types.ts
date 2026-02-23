@@ -620,5 +620,13 @@ const createGeneratedRegistryCaller = createGenericCallerFactory<
 const generatedActionCaller = createGeneratedRegistryCaller(generatedActionCtx);
 generatedActionCaller.organization.get({ slug: 'acme' });
 generatedActionCaller.organization.update({ id: 'org_1', name: 'Renamed' });
-// @ts-expect-error action caller excludes action procedures
+generatedActionCaller.actions.jobs.reindex({ force: true });
+generatedActionCaller.schedule.now.organization.update({
+  id: 'org_1',
+  name: 'Renamed',
+});
+generatedActionCaller.schedule.now.jobs.reindex({ force: true });
+// @ts-expect-error schedule caller excludes query procedures
+generatedActionCaller.schedule.now.organization.get({ slug: 'acme' });
+// @ts-expect-error action caller excludes action procedures on root
 generatedActionCaller.jobs.reindex({ force: true });

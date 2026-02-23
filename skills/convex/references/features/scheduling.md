@@ -68,7 +68,8 @@ Format: `minute hour day-of-month month day-of-week`. Runs in **UTC**. Minimum i
 // convex/functions/crons.ts
 import { z } from 'zod';
 import { privateMutation, privateAction } from '../lib/crpc';
-import { createCaller } from './generated';
+import { createAnalyticsCaller } from './generated/analytics.runtime';
+import { createReportsCaller } from './generated/reports.runtime';
 
 export const cleanupStaleData = privateMutation
   .input(z.object({}))
@@ -87,11 +88,12 @@ export const cleanupStaleData = privateMutation
 
 export const generateDailyReport = privateAction
   .input(z.object({}))
-  .output(z.null())
+  
   .action(async ({ ctx }) => {
-    const caller = createCaller(ctx);
-    const stats = await caller.analytics.getDailyStats({});
-    await caller.reports.create({ type: 'daily', data: stats });
+    const analyticsCaller = createAnalyticsCaller(ctx);
+    const reportsCaller = createReportsCaller(ctx);
+    const stats = await analyticsCaller.getDailyStats({});
+    await reportsCaller.create({ type: 'daily', data: stats });
     return null;
   });
 ```
@@ -117,7 +119,7 @@ Schedule after a delay (milliseconds):
 ```ts
 export const processOrder = authMutation
   .input(z.object({ orderId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await ctx.orm.update(orders).set({ status: 'processing' }).where(eq(orders.id, input.orderId));
 
@@ -151,7 +153,7 @@ Schedule at a specific Unix timestamp (ms):
 ```ts
 export const scheduleReminder = authMutation
   .input(z.object({ message: z.string(), sendAt: z.number() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     if (input.sendAt <= Date.now()) {
       throw new CRPCError({ code: 'BAD_REQUEST', message: 'Reminder time must be in the future' });
@@ -186,7 +188,7 @@ export const createSubscription = authMutation
 
 export const cancelSubscription = authMutation
   .input(z.object({ subscriptionId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const subscription = await ctx.orm.query.subscriptions.findFirst({ where: { id: input.subscriptionId } });
     if (!subscription) throw new CRPCError({ code: 'NOT_FOUND', message: 'Subscription not found' });

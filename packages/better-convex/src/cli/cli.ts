@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
 import { generateMeta } from './codegen.js';
+import { loadBetterConvexConfig } from './config.js';
 import { syncEnv } from './env.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,12 +23,18 @@ export type ParsedArgs = {
   convexArgs: string[];
   debug: boolean;
   outputDir?: string;
+  scope?: 'all' | 'auth' | 'orm';
+  configPath?: string;
 };
 
-// Parse args: better-convex [command] [--api <dir>] [--debug] [...convex-args]
+const VALID_SCOPES = new Set(['all', 'auth', 'orm']);
+
+// Parse args: better-convex [command] [--api <dir>] [--scope <all|auth|orm>] [--config <path>] [--debug] [...convex-args]
 export function parseArgs(argv: string[]): ParsedArgs {
   let debug = false;
   let outputDir: string | undefined;
+  let scope: 'all' | 'auth' | 'orm' | undefined;
+  let configPath: string | undefined;
 
   const filtered: string[] = [];
   for (let i = 0; i < argv.length; i++) {
@@ -39,7 +46,33 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
 
     if (a === '--api') {
-      outputDir = argv[i + 1];
+      const value = argv[i + 1];
+      if (!value) {
+        throw new Error('Missing value for --api.');
+      }
+      outputDir = value;
+      i += 1; // skip value
+      continue;
+    }
+
+    if (a === '--scope') {
+      const value = argv[i + 1];
+      if (!value || !VALID_SCOPES.has(value)) {
+        throw new Error(
+          `Invalid --scope value "${value ?? ''}". Expected one of: all, auth, orm.`
+        );
+      }
+      scope = value as 'all' | 'auth' | 'orm';
+      i += 1; // skip value
+      continue;
+    }
+
+    if (a === '--config') {
+      const value = argv[i + 1];
+      if (!value) {
+        throw new Error('Missing value for --config.');
+      }
+      configPath = value;
       i += 1; // skip value
       continue;
     }
@@ -50,7 +83,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const command = filtered[0] || 'dev';
   const restArgs = filtered.slice(1);
 
-  return { command, restArgs, convexArgs: restArgs, debug, outputDir };
+  return {
+    command,
+    restArgs,
+    convexArgs: restArgs,
+    debug,
+    outputDir,
+    scope,
+    configPath,
+  };
 }
 
 // Track child processes for cleanup
@@ -68,8 +109,19 @@ export type RunDeps = {
   execa: typeof execa;
   generateMeta: typeof generateMeta;
   syncEnv: typeof syncEnv;
+  loadBetterConvexConfig: typeof loadBetterConvexConfig;
   realConvex: string;
 };
+
+function deriveScopeFromToggles(
+  api: boolean,
+  auth: boolean
+): 'all' | 'auth' | 'orm' | null {
+  if (api && auth) return 'all';
+  if (!api && auth) return 'auth';
+  if (!api && !auth) return 'orm';
+  return null;
+}
 
 export async function run(
   argv: string[],
@@ -79,20 +131,46 @@ export async function run(
     execa: execaFn,
     generateMeta: generateMetaFn,
     syncEnv: syncEnvFn,
+    loadBetterConvexConfig: loadBetterConvexConfigFn,
     realConvex: realConvexPath,
   } = {
     execa,
     generateMeta,
     syncEnv,
+    loadBetterConvexConfig,
     realConvex,
     ...deps,
   };
 
-  const { command, restArgs, convexArgs, debug, outputDir } = parseArgs(argv);
+  const {
+    command,
+    restArgs,
+    convexArgs,
+    debug: cliDebug,
+    outputDir: cliOutputDir,
+    scope: cliScope,
+    configPath,
+  } = parseArgs(argv);
 
   if (command === 'dev') {
+    if (cliScope) {
+      throw new Error(
+        '`--scope` is not supported for `better-convex dev`. Use `better-convex codegen --scope <all|auth|orm>` for scoped generation.'
+      );
+    }
+    const config = loadBetterConvexConfigFn(configPath);
+    const outputDir = cliOutputDir ?? config.outputDir;
+    const debug = cliDebug || config.dev.debug;
+    const generateApi = config.api;
+    const generateAuth = config.auth;
+    const convexDevArgs = [...config.dev.convexArgs, ...convexArgs];
+
     // Initial codegen
-    await generateMetaFn(outputDir, { debug });
+    await generateMetaFn(outputDir, {
+      debug,
+      api: generateApi,
+      auth: generateAuth,
+    });
 
     // Spawn watcher as child process
     const isTs = __filename.endsWith('.ts');
@@ -108,6 +186,8 @@ export async function run(
         ...process.env,
         BETTER_CONVEX_API_OUTPUT_DIR: outputDir || '',
         BETTER_CONVEX_DEBUG: debug ? '1' : '',
+        BETTER_CONVEX_GENERATE_API: generateApi ? '1' : '0',
+        BETTER_CONVEX_GENERATE_AUTH: generateAuth ? '1' : '0',
       },
     });
     processes.push(watcherProcess);
@@ -115,7 +195,7 @@ export async function run(
     // Spawn real convex dev
     const convexProcess = execaFn(
       'node',
-      [realConvexPath, 'dev', ...convexArgs],
+      [realConvexPath, 'dev', ...convexDevArgs],
       {
         stdio: 'inherit',
         cwd: process.cwd(),
@@ -144,13 +224,32 @@ export async function run(
     return result.exitCode ?? 0;
   }
   if (command === 'codegen') {
+    const config = loadBetterConvexConfigFn(configPath);
+    const outputDir = cliOutputDir ?? config.outputDir;
+    const debug = cliDebug || config.codegen.debug;
+    const convexCodegenArgs = [...config.codegen.convexArgs, ...convexArgs];
+    const scope = cliScope ?? config.codegen.scope;
+
     // Run better-convex codegen first
-    await generateMetaFn(outputDir, { debug });
+    if (scope) {
+      await generateMetaFn(outputDir, { debug, scope });
+    } else {
+      const derivedScope = deriveScopeFromToggles(config.api, config.auth);
+      if (derivedScope) {
+        await generateMetaFn(outputDir, { debug, scope: derivedScope });
+      } else {
+        await generateMetaFn(outputDir, {
+          debug,
+          api: config.api,
+          auth: config.auth,
+        });
+      }
+    }
 
     // Then run real convex codegen
     const result = await execaFn(
       'node',
-      [realConvexPath, 'codegen', ...convexArgs],
+      [realConvexPath, 'codegen', ...convexCodegenArgs],
       {
         stdio: 'inherit',
         cwd: process.cwd(),

@@ -6,7 +6,10 @@ import { getEnv } from '../lib/get-env';
 import { ac, roles } from '../shared/auth-shared';
 import { internal } from './_generated/api';
 import authConfig from './auth.config';
-import { createCaller, defineAuth, type MutationCtx } from './generated';
+import { defineAuth } from './generated/auth';
+import { createOrganizationCaller } from './generated/organization.runtime';
+import { createPolarCustomerCaller } from './generated/polarCustomer.runtime';
+import type { MutationCtx } from './generated/server';
 import { sessionTable } from './schema';
 
 export default defineAuth((ctx) => {
@@ -176,23 +179,20 @@ export default defineAuth((ctx) => {
         },
         onCreate: async (user) => {
           // Create personal organization for the new user.
-          const caller = createCaller(mutationCtx);
-          await caller.organization.createPersonalOrganization({
+          const caller = createOrganizationCaller(mutationCtx);
+          await caller.createPersonalOrganization({
             image: user.image || null,
             name: user.name,
             userId: user._id,
           });
 
           // Create Polar customer for the new user.
-          await mutationCtx.scheduler.runAfter(
-            0,
-            internal.polarCustomer.createCustomer,
-            {
-              email: user.email,
-              name: user.name,
-              userId: user._id,
-            }
-          );
+          const polarCustomerCaller = createPolarCustomerCaller(mutationCtx);
+          await polarCustomerCaller.schedule.now.createCustomer({
+            email: user.email,
+            name: user.name,
+            userId: user._id,
+          });
         },
       },
       session: {

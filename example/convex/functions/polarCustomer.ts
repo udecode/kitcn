@@ -16,7 +16,7 @@ export const createCustomer = privateAction
       userId: z.string(),
     })
   )
-  .output(z.null())
+
   .action(async ({ input: args }) => {
     const polar = getPolarClient();
 
@@ -30,8 +30,6 @@ export const createCustomer = privateAction
       // Don't fail signup if Polar customer creation fails
       console.error('Failed to create Polar customer:', error);
     }
-
-    return null;
   });
 
 // Link Polar customer ID to user (called from webhook)
@@ -42,7 +40,7 @@ export const updateUserPolarCustomerId = privateMutation
       userId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input: args }) => {
     const user = await ctx.orm.query.user.findFirstOrThrow({
       where: { id: args.userId },
@@ -64,5 +62,4 @@ export const updateUserPolarCustomerId = privateMutation
       .update(userTable)
       .set({ customerId: args.customerId })
       .where(eq(userTable.id, user.id));
-    return null;
   });

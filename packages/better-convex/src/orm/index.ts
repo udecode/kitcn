@@ -194,6 +194,14 @@ export {
 // M5: OrderBy
 export { asc, desc } from './order-by';
 export type {
+  DocByCtx,
+  LookupByIdResultByCtx,
+  QueryCtxWithOptionalOrmQueryTable,
+  QueryCtxWithOrmQueryTable,
+  QueryCtxWithPreferredOrmQueryTable,
+} from './query-context';
+export { getByIdWithOrmQueryFallback } from './query-context';
+export type {
   ExtractTablesWithRelations,
   ManyConfig,
   OneConfig,
@@ -233,19 +241,19 @@ export type { ConvexTable, TableConfig } from './table';
 export {
   type ConvexDeletionBuilder,
   type ConvexDeletionConfig,
-  type ConvexLifecycleBuilder,
   convexTable,
   deletion,
   type OrmLifecycleChange,
-  type OrmLifecycleConfig,
-  type OrmLifecycleHandler,
   type OrmLifecycleOperation,
-  type OrmTriggerLike,
-  onChange,
-  onDelete,
-  onInsert,
-  onUpdate,
 } from './table';
+export type {
+  OrmBeforeResult,
+  OrmTableTriggers,
+  OrmTriggerChange,
+  OrmTriggerContext,
+  OrmTriggers,
+} from './triggers';
+export { defineTriggers } from './triggers';
 // M3: Query Builder Types
 export type {
   BuildQueryResult,

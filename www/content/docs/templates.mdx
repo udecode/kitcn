@@ -228,8 +228,15 @@ import { getHeaders } from 'better-convex/auth';
 import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
 
-import type { ActionCtx, MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { createCaller, getAuth, initCRPC, type OrmCtx } from '../functions/generated';
+import { getAuth } from '../functions/generated/auth';
+import {
+  type ActionCtx,
+  initCRPC,
+  type MutationCtx,
+  type OrmCtx,
+  type QueryCtx,
+} from '../functions/generated/server';
+import { createUserCaller } from '../functions/generated/user.runtime';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
@@ -397,14 +404,14 @@ export const authMutation = c.mutation
   .use(rateLimitMiddleware);
 
 export const publicAction = c.action.use(devMiddleware);
-export const privateAction = c.action.internal();
+export const privateAction = c.action.use(devMiddleware).internal();
 
 export const authAction = c.action
   .meta({ auth: 'required' })
   .use(devMiddleware)
   .use(async ({ ctx, next }) => {
-    const caller = createCaller(ctx);
-    const user = requireAuth(await caller.user.getSessionUser());
+    const caller = createUserCaller(ctx);
+    const user = requireAuth(await caller.getSessionUser());
 
     return next({ ctx: { ...ctx, user, userId: user.id } });
   });
@@ -462,7 +469,7 @@ export const router = c.router;
 import { admin } from 'better-auth/plugins';
 import { convex } from 'better-convex/auth';
 import authConfig from './auth.config';
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => {
   return {
@@ -486,7 +493,7 @@ export default defineAuth((ctx) => {
 });
 ```
 
-Run `better-convex dev` first, then create `auth.ts` — runtime auth exports in `convex/functions/generated.ts` will regenerate automatically.
+Run `better-convex dev` first, then create `auth.ts` — runtime auth exports in `convex/functions/generated/auth.ts` will regenerate automatically.
 
 
 See [Auth Server documentation](/docs/auth/server) for detailed configuration.
@@ -513,7 +520,7 @@ export default {
     import { cors } from 'hono/cors';
     import { router } from '../lib/crpc';
     // Import your routers from convex/routers/
-    import { getAuth } from './generated';
+    import { getAuth } from './generated/auth';
 
     const app = new Hono();
 
@@ -543,7 +550,7 @@ export default {
     ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
     import { registerRoutes } from 'better-convex/auth/http';
     import { httpRouter } from 'convex/server';
-    import { getAuth } from './generated';
+    import { getAuth } from './generated/auth';
 
     const http = httpRouter();
 
@@ -603,18 +610,16 @@ export const getIsAuthenticated = publicQuery
 
 ### auth-shared.ts
 
-```ts title="convex/shared/auth-shared.ts" showLineNumbers {3-9}
-import type { Doc } from '../functions/_generated/dataModel';
+```ts title="convex/shared/auth-shared.ts" showLineNumbers {3-15}
 // biome-ignore lint/style/noRestrictedImports: types
-import type { getAuth } from '../functions/generated';
+import type { getAuth } from '../functions/generated/auth';
 import type { Select } from './api';
 
 export type Auth = ReturnType<typeof getAuth>;
 
 export type SessionUser = Select<'user'> & {
   isAdmin: boolean;
-  // Native Better Auth session document (used for auth header/session plumbing).
-  session: Doc<'session'>;
+  session: Select<'session'>;
   impersonatedBy?: string | null;
   plan?: 'premium' | 'team';
 };
@@ -637,8 +642,6 @@ export const authClient = createAuthClient({
   },
   plugins: [inferAdditionalFields<Auth>(), adminClient(), convexClient()],
 });
-
-export const { useActiveOrganization, useListOrganizations } = authClient;
 
 export const {
   useSignOutMutationOptions,
@@ -912,16 +915,16 @@ export function HydrateClient({ children }: { children: React.ReactNode }) {
 
 ### schema triggers
 
-```ts title="convex/functions/schema.ts" showLineNumbers {1-2,6-7}
-import { convexTable, onChange } from 'better-convex/orm';
+```ts title="convex/functions/schema.ts" showLineNumbers {1-2,5-8}
+import { defineTriggers } from 'better-convex/orm';
 import { aggregatePostCount } from './aggregates';
+import { relations } from './schema';
 
-export const postsTable = convexTable('posts', {/* columns */}, () => [
-  aggregatePostCount.trigger(),
-  onChange(async (_ctx, change) => {
-    console.log('Post changed:', change.operation, change.id);
-  }),
-]);
+export const triggers = defineTriggers(relations, {
+  posts: {
+    change: aggregatePostCount.trigger,
+  },
+});
 ```
 
 See [Triggers documentation](/docs/orm/triggers) for patterns.
@@ -932,7 +935,7 @@ See [Triggers documentation](/docs/orm/triggers) for patterns.
 import { MINUTE, RateLimiter } from '@convex-dev/rate-limiter';
 import { CRPCError } from 'better-convex/server';
 import { components } from '../functions/_generated/api';
-import type { ActionCtx, MutationCtx } from '../functions/_generated/server';
+import type { ActionCtx, MutationCtx } from '../functions/generated/server';
 import type { SessionUser } from '../shared/auth-shared';
 
 const rateLimitConfig = {
@@ -1026,7 +1029,7 @@ const assertDevOnly = () => {
   }
 };
 
-export const reset = privateAction.output(z.null()).action(async ({ ctx }) => {
+export const reset = privateAction.action(async ({ ctx }) => {
   assertDevOnly();
 
   for (const tableName of Object.keys(schema.tables)) {
@@ -1050,7 +1053,7 @@ export const deletePage = privateMutation
       tableName: z.string(),
     })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     assertDevOnly();
 
@@ -1101,14 +1104,14 @@ import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
-import { createCaller } from './generated';
+import { createSeedCaller } from './generated/seed.runtime';
 
 /**
  * Initialize the database on startup. This runs with: convex dev --run init
  */
 export default privateMutation
   .meta({ dev: true })
-  .output(z.null())
+  
   .mutation(async ({ ctx }) => {
     const env = getEnv();
     const adminEmails = env.ADMIN;
@@ -1137,8 +1140,8 @@ export default privateMutation
     }
 
     if (isFirstInit && getEnv().DEPLOY_ENV === 'development') {
-      const caller = createCaller(ctx);
-      await caller.seed.seed({});
+      const caller = createSeedCaller(ctx);
+      await caller.seed({});
     }
 
     return null;
@@ -1176,6 +1179,13 @@ Import boundaries with [Ultracite](https://github.com/12peanuts/ultracite):
 ```jsonc title="biome.jsonc" showLineNumbers
 {
   "extends": ["ultracite/core", "ultracite/react", "ultracite/next"],
+  "files": {
+    "includes": [
+      "!**/_generated",
+      "!**/generated",
+      "!**/convex/shared/api.ts"
+    ]
+  },
   "overrides": [
     {
       // src/ cannot import from convex/* packages directly
@@ -1192,7 +1202,7 @@ Import boundaries with [Ultracite](https://github.com/12peanuts/ultracite):
                     "message": "Use CRPCError from 'better-convex/crpc' instead."
                   },
                   "convex/react": "Use useCRPC from '@/lib/convex/crpc' instead.",
-                  "convex/nextjs": "Use caller from '@/lib/convex/rsc' instead."
+                  "convex/nextjs": "Use caller from '@/lib/convex/rsc' or createContext({ headers }).caller from '@/lib/convex/server' instead."
                 },
                 "patterns": [{
                   "group": ["**/../convex/**"],
@@ -1205,7 +1215,7 @@ Import boundaries with [Ultracite](https://github.com/12peanuts/ultracite):
       }
     },
     {
-      // convex/ cannot import from src/
+      // convex/ cannot import from src/ or _generated/server
       "includes": ["convex/**/*.ts*"],
       "linter": {
         "rules": {
@@ -1213,10 +1223,22 @@ Import boundaries with [Ultracite](https://github.com/12peanuts/ultracite):
             "noRestrictedImports": {
               "level": "error",
               "options": {
-                "patterns": [{
-                  "group": ["@/*", "**/src/**"],
-                  "message": "Convex files cannot import from src/."
-                }]
+                "paths": {
+                  "convex/values": {
+                    "importNames": ["ConvexError"],
+                    "message": "Use CRPCError from 'better-convex/crpc' instead."
+                  }
+                },
+                "patterns": [
+                  {
+                    "group": ["@/*", "**/src/**"],
+                    "message": "Convex files cannot import from src/."
+                  },
+                  {
+                    "group": ["**/_generated/server*"],
+                    "message": "Use convex/functions/generated/server instead of _generated/server."
+                  }
+                ]
               }
             }
           }
@@ -1232,10 +1254,28 @@ Import boundaries with [Ultracite](https://github.com/12peanuts/ultracite):
             "noRestrictedImports": {
               "level": "error",
               "options": {
-                "patterns": [{
-                  "group": ["**/convex/lib/**"],
-                  "message": "convex/shared cannot import from convex/lib."
-                }]
+                "patterns": [
+                  {
+                    "group": ["@/*", "**/src/**"],
+                    "message": "Convex files cannot import from src/."
+                  },
+                  {
+                    "group": ["**/convex/lib/**", "../lib/**"],
+                    "message": "convex/shared cannot import from convex/lib."
+                  },
+                  {
+                    "group": ["**/convex/routers/**", "../routers/**"],
+                    "message": "convex/shared cannot import from convex/routers."
+                  },
+                  {
+                    "group": ["**/_generated/server*"],
+                    "message": "Use convex/functions/generated/server instead of _generated/server."
+                  },
+                  {
+                    "group": ["**/../functions/*"],
+                    "message": "convex/shared cannot import from convex/functions."
+                  }
+                ]
               }
             }
           }

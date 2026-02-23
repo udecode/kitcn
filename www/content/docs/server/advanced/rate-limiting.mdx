@@ -49,7 +49,7 @@ Now let's create the rate limiter configuration. We'll extract the config to a c
 import { HOUR, MINUTE, RateLimiter, SECOND } from '@convex-dev/rate-limiter';
 import { CRPCError } from 'better-convex/server';
 import { components } from '../functions/_generated/api';
-import type { MutationCtx } from '../functions/_generated/server';
+import type { MutationCtx } from '../functions/generated/server';
 
 // Extract config for key checking in getRateLimitKey
 const rateLimitConfig = {

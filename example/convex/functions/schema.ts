@@ -5,6 +5,7 @@ import {
   custom,
   defineRelations,
   defineSchema,
+  defineTriggers,
   index,
   integer,
   searchIndex,
@@ -226,7 +227,6 @@ export const userTable = convexTable(
     index('username').on(t.username),
     index('personalOrganizationId').on(t.personalOrganizationId),
     index('lastActiveOrganizationId').on(t.lastActiveOrganizationId),
-    aggregateUsers.trigger(),
   ]
 );
 
@@ -306,9 +306,6 @@ export const todosTable = convexTable(
     searchIndex('search_title_description')
       .on(t.title)
       .filter(t.userId, t.completed, t.projectId),
-    aggregateTodosByUser.trigger(),
-    aggregateTodosByProject.trigger(),
-    aggregateTodosByStatus.trigger(),
   ]
 );
 
@@ -378,8 +375,6 @@ export const todoCommentsTable = convexTable(
     index('parentId').on(t.parentId),
     index('todoId').on(t.todoId),
     index('userId').on(t.userId),
-    aggregateCommentsByTodo.trigger(),
-    aggregateRepliesByParent.trigger(),
   ]
 );
 
@@ -403,7 +398,6 @@ export const projectMembersTable = convexTable(
     index('userId').on(t.userId),
     index('projectId_userId').on(t.projectId, t.userId),
     index('userId_projectId').on(t.userId, t.projectId),
-    aggregateProjectMembers.trigger(),
   ]
 );
 
@@ -423,7 +417,6 @@ export const todoTagsTable = convexTable(
     index('tagId').on(t.tagId),
     index('todoId_tagId').on(t.todoId, t.tagId),
     index('tagId_todoId').on(t.tagId, t.todoId),
-    aggregateTagUsage.trigger(),
   ]
 );
 
@@ -672,3 +665,28 @@ export const relations = defineRelations(tables, (r) => ({
     }),
   },
 }));
+
+export const triggers = defineTriggers(relations, {
+  user: {
+    change: aggregateUsers.trigger,
+  },
+  todos: {
+    change: async (change, ctx) => {
+      await aggregateTodosByUser.trigger(change, ctx);
+      await aggregateTodosByProject.trigger(change, ctx);
+      await aggregateTodosByStatus.trigger(change, ctx);
+    },
+  },
+  todoComments: {
+    change: async (change, ctx) => {
+      await aggregateCommentsByTodo.trigger(change, ctx);
+      await aggregateRepliesByParent.trigger(change, ctx);
+    },
+  },
+  projectMembers: {
+    change: aggregateProjectMembers.trigger,
+  },
+  todoTags: {
+    change: aggregateTagUsage.trigger,
+  },
+});

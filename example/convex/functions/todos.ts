@@ -2,7 +2,7 @@ import { eq, unsetToken } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authMutation, authQuery, optionalAuthQuery } from '../lib/crpc';
-import type { QueryCtx } from './generated';
+import type { QueryCtx } from './generated/server';
 import { todosTable, todoTagsTable } from './schema';
 
 // Schema for todo list items
@@ -382,7 +382,7 @@ export const update = authMutation
       tagIds: z.array(z.string()).max(10).optional(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await ctx.orm.query.todos.findFirstOrThrow({
       where: { id: input.id, userId: ctx.userId },
@@ -431,8 +431,6 @@ export const update = authMutation
         projectId: input.projectId === null ? unsetToken : input.projectId,
       })
       .where(eq(todosTable.id, input.id));
-
-    return null;
   });
 
 // Toggle todo completion status
@@ -458,7 +456,7 @@ export const toggleComplete = authMutation
 export const deleteTodo = authMutation
   .meta({ rateLimit: 'todo/delete' })
   .input(z.object({ id: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await ctx.orm.query.todos.findFirstOrThrow({
       where: { id: input.id, userId: ctx.userId },
@@ -468,15 +466,13 @@ export const deleteTodo = authMutation
       .update(todosTable)
       .set({ deletionTime: new Date() })
       .where(eq(todosTable.id, input.id));
-
-    return null;
   });
 
 // Restore a soft-deleted todo
 export const restore = authMutation
   .meta({ rateLimit: 'todo/update' })
   .input(z.object({ id: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const todo = await ctx.orm.query.todos.findFirstOrThrow({
       where: { id: input.id, userId: ctx.userId },
@@ -493,8 +489,6 @@ export const restore = authMutation
       .update(todosTable)
       .set({ deletionTime: unsetToken })
       .where(eq(todosTable.id, input.id));
-
-    return null;
   });
 
 // Bulk delete todos

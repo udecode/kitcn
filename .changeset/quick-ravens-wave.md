@@ -7,7 +7,7 @@
 ### Breaking changes
 
 - Replace split auth exports (`getAuthOptions` + `authTriggers`) with one default `defineAuth((ctx) => ({ ...options, triggers }))` contract in `convex/functions/auth.ts`.
-- Drop manual auth runtime exports from `convex/functions/auth.ts`; import runtime handlers (`getAuth`, CRUD, trigger handlers, `auth`) from `convex/functions/generated.ts`.
+- Drop manual auth runtime exports from `convex/functions/auth.ts`; codegen now generates runtime handlers (`getAuth`, CRUD, trigger handlers, `auth`) in `convex/functions/generated/auth`.
 - Drop trigger `ctx` as the first callback parameter and use doc-first signatures (`beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)`, etc.).
 - Rename `createApi` option `skipValidation` to `validateInput`; default is now `validateInput: false`.
 - Rename auth package entrypoints from hyphenated to namespaced paths:
@@ -24,7 +24,7 @@ export const getAuthOptions = (ctx) => ({ ...options });
 export const authTriggers = { user: { onCreate: async (ctx, user) => {} } };
 
 // After
-import { defineAuth } from "./generated";
+import { defineAuth } from "./generated/auth";
 
 export default defineAuth((ctx) => ({
   ...options,
@@ -42,7 +42,7 @@ import { getAuth } from "./auth";
 createApi(schema, getAuth, { skipValidation: true });
 
 // After
-import { getAuth } from "./generated";
+import { getAuth } from "./generated/auth";
 createApi(schema, getAuth); // validateInput defaults to false
 createApi(schema, getAuth, { validateInput: true });
 ```
@@ -71,36 +71,22 @@ import { authMiddleware, registerRoutes } from "better-convex/auth/http";
 ### Features
 
 - Add `defineAuth` helpers to unify codegen and non-codegen auth setup.
-- Add always-generated Better Auth runtime contract in `convex/functions/generated.ts`.
-- Add generated `defineAuth` export in `convex/functions/generated.ts` for inference-first `auth.ts` authoring.
+- Add always-generated Better Auth runtime contract in `convex/functions/generated/auth.ts`.
+- Add generated `defineAuth` export in `convex/functions/generated/auth.ts` for inference-first `auth.ts` authoring.
 
 ## Codegen
 
 ### Breaking changes
 
-- Drop manual `convex/lib/orm.ts` server wiring and import `orm`/`withOrm` from `convex/functions/generated.ts`.
-- Drop `OrmQueryCtx`/`OrmMutationCtx` primary usage and import wrapped `QueryCtx`/`MutationCtx` from `convex/functions/generated.ts`.
 - Drop generated internal auth calls from `internal.auth.*`; use `internal.generated.*`.
-- In codegen flows, drop manual `initCRPC.dataModel().context(...)` bootstrap and import generated `initCRPC`.
+- Drop manual `initCRPC.dataModel().context(...)` bootstrap; import generated `initCRPC` from `convex/functions/generated/server`.
+- Drop manual `ctx.runQuery`/`ctx.runMutation` for inter-procedure calls; use per-module `create<Module>Handler`/`create<Module>Caller` from `convex/functions/generated/<module>.runtime`.
 - Require `export const httpRouter = router(...)` in `convex/functions/http.ts` so codegen can include typed HTTP routes in generated API output.
 
 ```ts
 // Before
-import type { OrmQueryCtx, OrmMutationCtx } from "../lib/orm";
-import { withOrm } from "../lib/orm";
-await ctx.runMutation(internal.auth.beforeCreate, args);
-
-// After
-import type { QueryCtx, MutationCtx } from "../functions/generated";
-import { withOrm } from "../functions/generated";
-await ctx.runMutation(internal.generated.beforeCreate, args);
-```
-
-```ts
-// Before
 import { initCRPC } from "better-convex/server";
-import type { DataModel } from "../functions/_generated/dataModel";
-import { withOrm } from "../functions/generated";
+import type { DataModel } from "./_generated/dataModel";
 
 const c = initCRPC
   .dataModel<DataModel>()
@@ -116,7 +102,7 @@ const c = initCRPC
   .create();
 
 // After
-import { initCRPC } from "../functions/generated";
+import { initCRPC } from "./generated/server";
 
 const c = initCRPC
   .meta<{
@@ -145,17 +131,25 @@ export default createHttpRouter(app, httpRouter);
 
 ### Features
 
-- Add generated `convex/functions/generated.ts` with server ORM exports (`orm`, `withOrm`, `scheduledMutationBatch`, `scheduledDelete`) and wrapped ctx exports (`OrmCtx`, `QueryCtx`, `MutationCtx`, `GenericCtx`).
-- Add generated `initCRPC` in `convex/functions/generated.ts`:
-  - With `relations`: prewired `.dataModel<DataModel>().context({ query, mutation })`.
-  - Without `relations`: `.dataModel<DataModel>()` only.
-- Add generated `createCaller(ctx)` for type-safe in-process procedure composition. Replace manual `ctx.runQuery`/`ctx.runMutation` with `createCaller(ctx).x.y(args)`.
-  - Auto-generate procedure registry from all cRPC exports (public + internal).
-  - `QueryCtx`/`MutationCtx`: invoke handlers directly (same transaction).
-  - `ActionCtx`: dispatch via `ctx.runQuery`/`ctx.runMutation` automatically.
-  - Enforce call matrix: query ctx → queries only, mutation ctx → queries + mutations, action ctx → queries + mutations (not actions).
-- Add generated `createHandler(ctx)` for internal composition that bypasses input validation, middleware, and output validation.
+- Add generated `convex/functions/generated/` directory:
+  - `generated/server.ts` — ORM exports (`orm`, `withOrm`, `scheduledMutationBatch`, `scheduledDelete`), wrapped ctx types (`OrmCtx`, `QueryCtx`, `MutationCtx`, `GenericCtx`), prewired `initCRPC`.
+  - `generated/auth.ts` — `defineAuth`, `getAuth`, auth runtime contract.
+  - `generated/<module>.runtime.ts` — per-module scoped caller/handler factories.
+- Add per-module `create<Module>Handler(ctx)` (DEFAULT) for zero-overhead internal composition in queries/mutations. Bypasses input validation, middleware, and output validation. Same transaction, no serialization.
+- Add per-module `create<Module>Caller(ctx)` for actions and HTTP routes only. Goes through validation + middleware.
+  - Root calls in `ActionCtx` dispatch via `ctx.runQuery` / `ctx.runMutation`.
+  - Direct action calls are explicit under `caller.actions.*` and dispatch via `ctx.runAction`.
+  - Scheduled calls are available under `caller.schedule.*`:
+    - `caller.schedule.now.<mutation|action>(input)` (alias for `after(0)`)
+    - `caller.schedule.after(ms).<mutation|action>(input)`
+    - `caller.schedule.at(dateOrMs).<mutation|action>(input)`
+    - `caller.schedule.cancel(jobId)`
+  - Auto-generate procedure registry per module from cRPC exports (public + internal).
+  - Enforce call matrix: query ctx → root queries only; mutation ctx → root queries+mutations plus `schedule`; action ctx → root queries+mutations plus `actions` and `schedule`.
+  - Reserve module export names `actions` and `schedule` in runtime callers (codegen throws explicit conflict error).
+- Never use `ctx.runQuery`/`ctx.runMutation` directly — always use `create<Module>Handler` or `create<Module>Caller`.
 - Keep manual `initCRPC` setup from `better-convex/server` supported for apps not using codegen.
+- Add `better-convex.json` support (plus `--config <path>`) for codegen/dev defaults, feature toggles (`api`, `auth`), and passthrough Convex arg presets.
 
 ```ts
 // Before — manual runQuery/runMutation with function references
@@ -163,15 +157,21 @@ import { api, internal } from "./_generated/api";
 
 const result = await ctx.runQuery(api.todos.list, { limit: 10 });
 await ctx.runMutation(internal.todoInternal.create, { userId, ...input });
-const user = await ctx.runQuery(api.user.getSessionUser);
 
-// After — type-safe createCaller with autocomplete
-import { createCaller } from "./generated";
+// After (query/mutation) — per-module handler, zero overhead, same transaction
+import { createSeedHandler } from "./generated/seed.runtime";
 
-const caller = createCaller(ctx);
-const result = await caller.todos.list({ limit: 10 });
-await caller.todoInternal.create({ userId, ...input });
-const user = await caller.user.getSessionUser();
+const handler = createSeedHandler(ctx);
+await handler.cleanupSeedData();
+await handler.seedUsers();
+```
+
+```ts
+// After (action/HTTP) — per-module caller, validation + middleware
+import { createSeedCaller } from "./generated/seed.runtime";
+
+const caller = createSeedCaller(ctx);
+await caller.generateSamplesBatch({ count: 5, userId, batchIndex: 0 });
 ```
 
 ### Patches
@@ -244,3 +244,47 @@ export const crpc = createServerCRPCProxy({ api });
 ### Breaking changes
 
 - Bump Convex minimum peer dependency to `>=1.32`.
+
+## ORM
+
+### Breaking changes
+
+- Drop manual `convex/lib/orm.ts` server wiring; import `orm`/`withOrm` from `convex/functions/generated/server`.
+- Drop `OrmQueryCtx`/`OrmMutationCtx`; import wrapped `QueryCtx`/`MutationCtx` from `convex/functions/generated/server`.
+- Table-level lifecycle registration in `convexTable(..., extraConfig)` is removed.
+- Lifecycle helpers `onInsert`, `onUpdate`, `onDelete`, and `onChange` are removed from `better-convex/orm`.
+
+```ts
+// Before
+import type { OrmQueryCtx, OrmMutationCtx } from "../lib/orm";
+import { withOrm } from "../lib/orm";
+
+// After
+import type { QueryCtx, MutationCtx } from "./generated/server";
+import { withOrm } from "./generated/server";
+```
+
+### Features
+
+- ORM triggers are schema-level only and must be exported as `export const triggers = defineTriggers(relations, { ... })`.
+- Trigger definitions use object hooks per table:
+  - `create.before` / `create.after`
+  - `update.before` / `update.after`
+  - `delete.before` / `delete.after`
+  - `change(change, ctx)`
+- `before` return contract is:
+  - `void` => continue unchanged
+  - `{ data }` => shallow merge into write payload
+  - `false` => cancel write via `TriggerCancelledError`
+- Generated server wiring includes `triggers` only when `schema.ts` exports both `relations` and `triggers`.
+- Add `createOrm({ schema, triggers })` support for generated and manual setups.
+
+## Aggregates
+
+### Features
+
+- Add `better-convex/aggregate` entrypoint.
+- Add `createAggregate`, support both trigger invocation forms:
+  - `aggregate.trigger()`
+  - `aggregate.trigger(change, ctx)`
+- Add optional peer dependency `@convex-dev/aggregate >=0.2.0`.

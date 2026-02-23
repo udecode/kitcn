@@ -10,7 +10,7 @@ import {
   privateQuery,
 } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
-import { createCaller } from './generated';
+import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
 import { subscriptionsTable } from './schema';
 
 const subscriptionSchema = z.object({
@@ -39,7 +39,7 @@ const subscriptionSchema = z.object({
 // Create organization subscription (called from webhook)
 export const createSubscription = privateMutation
   .input(z.object({ subscription: subscriptionSchema }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input: args }) => {
     // Check if subscription already exists
     const existing = await ctx.orm.query.subscriptions.findFirst({
@@ -79,7 +79,6 @@ export const createSubscription = privateMutation
     }
 
     await ctx.orm.insert(subscriptionsTable).values(args.subscription);
-    return null;
   });
 
 // Update subscription (called from webhook)
@@ -172,9 +171,9 @@ export const cancelSubscription = authAction
   .output(z.object({ message: z.string(), success: z.boolean() }))
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
-    const caller = createCaller(ctx);
+    const caller = createPolarSubscriptionCaller(ctx);
 
-    const subscription = await caller.polarSubscription.getActiveSubscription({
+    const subscription = await caller.getActiveSubscription({
       userId: ctx.userId!,
     });
 
@@ -198,9 +197,9 @@ export const resumeSubscription = authAction
   .output(z.object({ message: z.string(), success: z.boolean() }))
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
-    const caller = createCaller(ctx);
+    const caller = createPolarSubscriptionCaller(ctx);
 
-    const subscription = await caller.polarSubscription.getActiveSubscription({
+    const subscription = await caller.getActiveSubscription({
       userId: ctx.userId!,
     });
 

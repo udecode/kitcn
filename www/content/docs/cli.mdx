@@ -12,6 +12,7 @@ import { InfoIcon } from "lucide-react"
 | Feature | Description |
 |---------|-------------|
 | API generation | Auto-generate `api.ts` with typed function refs |
+| Scoped generation | Generate only `all`, `auth`, or `orm` artifacts |
 | Auth-aware skipping | Enable query skipping based on auth state |
 | Type-safe references | Get full type safety for function references |
 | Custom metadata | Extract `.meta()` values from procedures |
@@ -36,8 +37,11 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--api <dir>` | Output directory for api.ts (default: `convex/shared`) |
+| `--config <path>` | Path to better-convex config file (default: `./better-convex.json`) |
 
-Wraps `convex dev` — generates `api.ts` on startup, watches for changes, passes all other flags through. Local backend state lives in `.convex/` at project root (isolated per worktree/clone).
+Wraps `convex dev` — generates runtime files on startup, watches for changes, passes all other flags through. Local backend state lives in `.convex/` at project root (isolated per worktree/clone).
+
+`better-convex dev` always runs full cRPC generation by default. Use `better-convex codegen --scope ...` for one-off scoped generation.
 
 ```bash showLineNumbers
 # With Convex flags
@@ -57,8 +61,22 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--api <dir>` | Output directory (default: `convex/shared`) |
+| `--scope <all\|auth\|orm>` | Generation scope (default: `all`) |
+| `--config <path>` | Path to better-convex config file (default: `./better-convex.json`) |
 | `--debug` | Show detailed output |
 | `--silent` | Suppress all output |
+
+### Scope Modes
+
+Scope modes apply to `better-convex codegen`.
+
+| Scope | Generated outputs |
+|------|--------------------|
+| `all` (default) | `convex/shared/api.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, cRPC module runtime files |
+| `auth` | `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, `convex/functions/generated/auth.runtime.ts` (when `auth.ts` has a default export) |
+| `orm` | `convex/functions/generated/server.ts` only |
+
+In scoped modes, stale artifacts outside the current scope are removed automatically (for example `convex/shared/api.ts` and cRPC runtime modules in `auth`/`orm` mode).
 
 ### env
 
@@ -136,6 +154,33 @@ export const admin = authQuery
 | `authAction` | `'required'` |
 
 ## Configuration
+
+`better-convex` supports a project config at `./better-convex.json` (or `--config <path>`):
+
+```json title="better-convex.json" showLineNumbers
+{
+  "auth": true,
+  "api": true,
+  "outputDir": "convex/shared",
+  "dev": {
+    "debug": false,
+    "convexArgs": []
+  },
+  "codegen": {
+    "debug": false,
+    "scope": "all",
+    "convexArgs": []
+  }
+}
+```
+
+Precedence:
+
+1. CLI flags override config values.
+2. Config `dev.convexArgs` / `codegen.convexArgs` are prepended to CLI passthrough args.
+3. If `codegen.scope` is missing, it defaults from `api` + `auth` toggles.
+
+If `./better-convex.json` is missing, defaults are used silently. If `--config` points to a missing file, the CLI exits with an error.
 
 The CLI reads from `convex.json`:
 

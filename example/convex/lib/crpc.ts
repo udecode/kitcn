@@ -32,17 +32,15 @@
 import { getHeaders } from 'better-convex/auth';
 import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
-import type {
-  ActionCtx,
-  MutationCtx,
-  QueryCtx,
-} from '../functions/_generated/server';
+import { getAuth } from '../functions/generated/auth';
 import {
-  createCaller,
-  getAuth,
+  type ActionCtx,
   initCRPC,
+  type MutationCtx,
   type OrmCtx,
-} from '../functions/generated';
+  type QueryCtx,
+} from '../functions/generated/server';
+import { createUserCaller } from '../functions/generated/user.runtime';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
@@ -145,7 +143,7 @@ function requireAuth<T>(user: T | null): T {
 export const publicQuery = c.query.use(devMiddleware);
 
 /** Private query - only callable from other Convex functions */
-export const privateQuery = c.query.internal();
+export const privateQuery = c.query.use(devMiddleware).internal();
 
 /** MaybeAuth query - ctx.user may be null, supports dev: true in meta */
 export const optionalAuthQuery = c.query
@@ -202,7 +200,7 @@ export const publicMutation = c.mutation
   .use(rateLimitMiddleware);
 
 /** Private mutation - only callable from other Convex functions */
-export const privateMutation = c.mutation.internal();
+export const privateMutation = c.mutation.use(devMiddleware).internal();
 
 /** MaybeAuth mutation - ctx.user may be null, rate limited, supports dev: true in meta */
 export const optionalAuthMutation = c.mutation
@@ -259,15 +257,15 @@ export const authMutation = c.mutation
 export const publicAction = c.action.use(devMiddleware);
 
 /** Private action - only callable from other Convex functions */
-export const privateAction = c.action.internal();
+export const privateAction = c.action.use(devMiddleware).internal();
 
 /** Auth action - ctx.user required, supports dev: true in meta */
 export const authAction = c.action
   .meta({ auth: 'required' })
   .use(devMiddleware)
   .use(async ({ ctx, next }) => {
-    const caller = createCaller(ctx);
-    const user = requireAuth(await caller.user.getSessionUser());
+    const caller = createUserCaller(ctx);
+    const user = requireAuth(await caller.getSessionUser());
 
     return next({ ctx: { ...ctx, user, userId: user.id } });
   });

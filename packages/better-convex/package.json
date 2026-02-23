@@ -12,6 +12,7 @@
   "sideEffects": false,
   "type": "module",
   "exports": {
+    "./aggregate": "./dist/aggregate/index.js",
     "./auth": "./dist/auth/index.js",
     "./auth/client": "./dist/auth/client/index.js",
     "./auth/config": "./dist/auth/config/index.js",
@@ -56,6 +57,7 @@
     "tsdown": "^0.20.1"
   },
   "peerDependencies": {
+    "@convex-dev/aggregate": ">=0.2.0",
     "@tanstack/react-query": ">=5",
     "better-auth": ">=1.4.9",
     "convex": ">=1.32",
@@ -65,6 +67,9 @@
     "zod": ">=4"
   },
   "peerDependenciesMeta": {
+    "@convex-dev/aggregate": {
+      "optional": true
+    },
     "better-auth": {
       "optional": true
     },

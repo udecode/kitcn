@@ -88,7 +88,7 @@ export const update = authMutation
         .optional(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const tag = await ctx.orm.query.tags.findFirstOrThrow({
       where: { id: input.tagId, createdBy: ctx.userId },
@@ -112,8 +112,6 @@ export const update = authMutation
       .update(tagsTable)
       .set({ name: input.name, color: input.color })
       .where(eq(tagsTable.id, input.tagId));
-
-    return null;
   });
 
 // Delete a tag (removes from all todos)
@@ -124,15 +122,13 @@ export const deleteTag = authMutation
       tagId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await ctx.orm.query.tags.findFirstOrThrow({
       where: { id: input.tagId, createdBy: ctx.userId },
     });
 
     await ctx.orm.delete(tagsTable).where(eq(tagsTable.id, input.tagId));
-
-    return null;
   });
 
 // Merge two tags
@@ -144,7 +140,7 @@ export const merge = authMutation
       targetTagId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     if (input.sourceTagId === input.targetTagId) {
       throw new CRPCError({
@@ -187,8 +183,6 @@ export const merge = authMutation
 
     // Delete source tag
     await ctx.orm.delete(tagsTable).where(eq(tagsTable.id, input.sourceTagId));
-
-    return null;
   });
 
 // Get most popular tags across all users

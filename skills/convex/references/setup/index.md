@@ -304,11 +304,11 @@ import { z } from "zod";
 import { createUser } from "../lib/auth/auth-helpers";
 import { privateMutation } from "../lib/crpc";
 import { getEnv } from "../lib/get-env";
-import { createHandler } from "./generated";
+import { createSeedHandler } from "./generated/seed.runtime";
 
 export default privateMutation
   .meta({ dev: true })
-  .output(z.null())
+  
   .mutation(async ({ ctx }) => {
     const env = getEnv();
     const adminEmails = env.ADMIN;
@@ -337,8 +337,8 @@ export default privateMutation
     }
 
     if (isFirstInit && getEnv().DEPLOY_ENV === "development") {
-      const handler = createHandler(ctx);
-      await handler.seed.seed({});
+      const handler = createSeedHandler(ctx);
+      await handler.seed({});
     }
 
     return null;
@@ -371,7 +371,7 @@ const assertDevOnly = () => {
   }
 };
 
-export const reset = privateAction.output(z.null()).action(async ({ ctx }) => {
+export const reset = privateAction.action(async ({ ctx }) => {
   assertDevOnly();
 
   for (const tableName of Object.keys(schema.tables)) {
@@ -395,7 +395,7 @@ export const deletePage = privateMutation
       tableName: z.string(),
     })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     assertDevOnly();
 
@@ -543,7 +543,7 @@ Then sanity-check auth runtime paths:
 | Auth works locally but fails in prod                                                  | JWKS not synced                                                                                 | Run `bunx better-convex env sync --auth --prod`                                                                                                                                             |
 | Sign-in fails on `/auth` (loop, no session, or immediate sign-out)                    | Auth route/env/provider wiring mismatch                                                         | Recheck Sections 6.5-6.7 (`authMiddleware`, route registration, env sync), verify provider credentials/URLs, then rerun Section 11.3                                                        |
 | `UNAUTHORIZED` on protected procedures                                                | auth middleware not attaching `userId`                                                          | Ensure `getAuth(ctx)` + `getHeaders(ctx)` session lookup is in middleware                                                                                                                   |
-| `ctx.orm` missing in handlers                                                         | Generated `initCRPC` not used                                                                  | Use `initCRPC` from `../functions/generated` — ORM context is pre-wired                                                                                                                     |
+| `ctx.orm` missing in handlers                                                         | Generated `initCRPC` not used                                                                  | Use `initCRPC` from `../functions/generated/server` — ORM context is pre-wired                                                                                                              |
 | `Property 'insert'/'update' does not exist on type 'OrmReader'`                       | Using query context for mutations                                                               | Ensure mutation handlers use `publicMutation` / `protectedMutation` builders                                                                                                                 |
 | `useCRPC must be used within CRPCProvider`                                            | Provider chain not mounted around route tree                                                    | Wrap app with `BetterConvexProvider` and verify `CRPCProvider` is inside QueryClientProvider (Section 7.4 / 8.A.4)                                                                          |
 | Route auth cookies not set                                                            | Missing CORS auth headers                                                                       | Add `Better-Auth-Cookie` allow/expose headers + credentials                                                                                                                                 |
@@ -554,8 +554,8 @@ Then sanity-check auth runtime paths:
 | `Invalid argument id for db.get` while testing `NOT_FOUND`                            | Fabricated Convex document ID                                                                   | Use real inserted IDs or non-ID lookup keys (slug/name/email) for not-found tests                                                                                                           |
 | Trigger side effects too slow                                                         | Heavy sync work inside trigger                                                                  | Move heavy work to scheduled actions via `ctx.scheduler`                                                                                                                                    |
 | Rate limiter no-op                                                                    | component not registered in `convex.config.ts`                                                  | Add `@convex-dev/rate-limiter` app component                                                                                                                                                |
-| fallback `better-convex codegen` fails after disabling aggregates                     | Aggregate helper/import references still exist                                                  | Remove `app.use(aggregate...)`, schema aggregate hooks, and aggregate helper modules in the same change; prefer rerunning `better-convex dev --once`                                        |
-| Aggregate counts drift                                                                | trigger not attached in schema                                                                  | Attach `aggregate.trigger()` in table extra config                                                                                                                                          |
+| fallback `better-convex codegen` fails after disabling aggregates                     | Aggregate helper/import references still exist                                                  | Remove `app.use(aggregate...)`, `defineTriggers` aggregate handlers, and aggregate helper modules in the same change; prefer rerunning `better-convex dev --once`                           |
+| Aggregate counts drift                                                                | trigger not registered in `defineTriggers`                                                      | Register `aggregate.trigger` in `defineTriggers` `change:` handler                                                                                                                          |
 | Invite emails never send                                                              | `@convex-dev/resend` component not registered                                                   | Add `app.use(resend)` and wire `functions/email.tsx`                                                                                                                                        |
 | Dev reset/seed commands do nothing                                                    | `init.ts`/`seed.ts`/`reset.ts` missing or not wired                                             | Add dev bootstrap functions and scripts from Section 11.1                                                                                                                                   |
 
@@ -594,7 +594,7 @@ This runbook + references map to the canonical template shape as follows:
 
 | Example Group                                                                                             | Primary Setup Section           | Additional Reference                     |
 | --------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------- |
-| Core infra (`schema.ts`, `functions/generated.ts`, `crpc.ts`, `http.ts`)                                  | Sections 5, 6.6, 9.6            | `orm.md`, `http.md`                      |
+| Core infra (`schema.ts`, `functions/generated/`, `crpc.ts`, `http.ts`)                                    | Sections 5, 6.6, 9.6            | `orm.md`, `http.md`                      |
 | Shared contracts (`shared/api.ts`, `shared/auth-shared.ts`, `shared/polar-shared.ts`)                   | Sections 5.4, 6.3.2, 10.2, 10.3 | `auth-organizations.md`                  |
 | Auth core (`auth.config.ts`, `auth.ts`)                                                                   | Section 6                       | `auth.md`                                |
 | Auth plugins (`admin.ts`, `organization.ts`, `polar*`)                                                    | Section 10                      | `auth-admin.md`, `auth-organizations.md` |
@@ -604,4 +604,4 @@ This runbook + references map to the canonical template shape as follows:
 | Scheduling + internals (`todoInternal.ts`, delayed jobs)                                                  | Sections 9.5, 11.1              | `scheduling.md`                          |
 | Email + Resend (`functions/email.tsx`, `lib/emails/*`)                                                    | Section 9.7                     | `auth-organizations.md`                  |
 | Dev bootstrap (`init.ts`, `seed.ts`, `reset.ts`)                                                          | Section 11.1                    | `testing.md` (for verification)          |
-| Generated outputs (`functions/_generated/*`, `functions/generated.ts`, `shared/api.ts`)                   | Section 5.5                     | n/a (generated by CLI)                   |
+| Generated outputs (`functions/_generated/*`, `functions/generated/`, `shared/api.ts`)                     | Section 5.5                     | n/a (generated by CLI)                   |

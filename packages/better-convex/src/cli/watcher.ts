@@ -15,6 +15,8 @@ export function getWatchPatterns(functionsDir: string): string[] {
 export async function startWatcher(opts?: {
   outputDir?: string;
   debug?: boolean;
+  api?: boolean;
+  auth?: boolean;
   debounceMs?: number;
   watch?: (
     patterns: string[],
@@ -26,6 +28,16 @@ export async function startWatcher(opts?: {
   const outputDir =
     opts?.outputDir ?? (process.env.BETTER_CONVEX_API_OUTPUT_DIR || undefined);
   const debug = opts?.debug ?? process.env.BETTER_CONVEX_DEBUG === '1';
+  const generateApi =
+    opts?.api ??
+    (process.env.BETTER_CONVEX_GENERATE_API
+      ? process.env.BETTER_CONVEX_GENERATE_API !== '0'
+      : true);
+  const generateAuth =
+    opts?.auth ??
+    (process.env.BETTER_CONVEX_GENERATE_AUTH
+      ? process.env.BETTER_CONVEX_GENERATE_AUTH !== '0'
+      : true);
   const debounceMs = opts?.debounceMs ?? 100;
   const resolveConfig = opts?.getConvexConfig ?? getConvexConfig;
   const runGenerateMeta = opts?.generateMeta ?? generateMeta;
@@ -41,7 +53,12 @@ export async function startWatcher(opts?: {
     .on('change', () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        runGenerateMeta(outputDir, { debug, silent: true });
+        runGenerateMeta(outputDir, {
+          debug,
+          silent: true,
+          api: generateApi,
+          auth: generateAuth,
+        });
       }, debounceMs);
     })
     .on('error', (err: unknown) => console.error('Watch error:', err));

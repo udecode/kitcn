@@ -17,6 +17,7 @@ import { createOrmDbLifecycle, type OrmDbLifecycle } from './lifecycle';
 import type { TablesRelationalConfig } from './relations';
 import { scheduledDeleteFactory } from './scheduled-delete';
 import { scheduledMutationBatchFactory } from './scheduled-mutation-batch';
+import type { OrmTriggers } from './triggers';
 import type { VectorSearchProvider } from './types';
 
 export type OrmFunctions = {
@@ -65,6 +66,7 @@ type GenericOrmCtx<
 
 type CreateOrmConfigBase<TSchema extends TablesRelationalConfig> = {
   schema: TSchema;
+  triggers?: OrmTriggers<TSchema, any>;
   internalMutation?: typeof internalMutationGeneric;
 };
 
@@ -132,14 +134,19 @@ function createDbFactory<TSchema extends TablesRelationalConfig>(
       db: rawDb,
     }) as OrmReaderCtx | OrmWriterCtx;
     const wrappedCtx = dbLifecycle.wrapDB(lifecycleSource);
-
-    return createDatabase(wrappedCtx.db, schema, edgeMetadata, {
+    const orm = createDatabase(wrappedCtx.db, schema, edgeMetadata, {
       ...options,
       scheduler,
       vectorSearch,
       scheduledDelete,
       scheduledMutationBatch,
     }) as OrmResult<TSource, TSchema>;
+
+    // Make orm available in trigger context for both orm.with(ctx) and orm.db(writer) paths.
+    (lifecycleSource as Record<string, unknown>).orm = orm as unknown;
+    (wrappedCtx as Record<string, unknown>).orm = orm as unknown;
+
+    return orm;
   }) as OrmFactory<TSchema>;
 }
 
@@ -154,7 +161,7 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
     | CreateOrmConfigWithFunctions<TSchema>
     | CreateOrmConfigWithoutFunctions<TSchema>
 ): OrmClientBase<TSchema> | OrmClientWithApi<TSchema> {
-  const dbLifecycle = createOrmDbLifecycle(config.schema);
+  const dbLifecycle = createOrmDbLifecycle(config.schema, config.triggers);
   const edgeMetadata = extractRelationsConfig(
     config.schema as TablesRelationalConfig
   );

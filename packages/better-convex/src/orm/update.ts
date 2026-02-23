@@ -64,20 +64,36 @@ const applyIndexFilter = (query: any, filter: FilterExpression<boolean>) => {
 };
 
 export type ConvexUpdateWithout<
-  T extends ConvexUpdateBuilder<any, any, any>,
+  T extends ConvexUpdateBuilder<any, any, any, any>,
   K extends string,
 > = Omit<T, K>;
+
+type ConvexUpdateExecutableThis<
+  TTable extends ConvexTable<any>,
+  TReturning extends MutationReturning,
+  TMode extends MutationExecutionMode,
+> = {
+  _: {
+    table: TTable;
+    returning: TReturning;
+    mode: TMode;
+    result: MutationExecuteResult<TTable, TReturning, TMode>;
+    hasWhereOrAllowFullScan: true;
+  };
+};
 
 export class ConvexUpdateBuilder<
   TTable extends ConvexTable<any>,
   TReturning extends MutationReturning = undefined,
   TMode extends MutationExecutionMode = 'single',
+  THasWhereOrAllowFullScan extends boolean = false,
 > extends QueryPromise<MutationExecuteResult<TTable, TReturning, TMode>> {
   declare readonly _: {
     readonly table: TTable;
     readonly returning: TReturning;
     readonly mode: TMode;
     readonly result: MutationExecuteResult<TTable, TReturning, TMode>;
+    readonly hasWhereOrAllowFullScan: THasWhereOrAllowFullScan;
   };
 
   private setValues?: UpdateSet<TTable>;
@@ -124,25 +140,32 @@ export class ConvexUpdateBuilder<
     return this;
   }
 
-  where(expression: FilterExpression<boolean>): this {
+  where(
+    expression: FilterExpression<boolean>
+  ): ConvexUpdateBuilder<TTable, TReturning, TMode, true> {
     this.whereExpression = expression;
-    return this;
+    return this as any;
   }
 
   returning(): ConvexUpdateWithout<
-    ConvexUpdateBuilder<TTable, true, TMode>,
+    ConvexUpdateBuilder<TTable, true, TMode, THasWhereOrAllowFullScan>,
     'returning'
   >;
   returning<TSelection extends ReturningSelection<TTable>>(
     fields: TSelection
   ): ConvexUpdateWithout<
-    ConvexUpdateBuilder<TTable, TSelection, TMode>,
+    ConvexUpdateBuilder<TTable, TSelection, TMode, THasWhereOrAllowFullScan>,
     'returning'
   >;
   returning(
     fields?: ReturningSelection<TTable>
   ): ConvexUpdateWithout<
-    ConvexUpdateBuilder<TTable, MutationReturning, TMode>,
+    ConvexUpdateBuilder<
+      TTable,
+      MutationReturning,
+      TMode,
+      THasWhereOrAllowFullScan
+    >,
     'returning'
   > {
     this.returningFields = (fields ?? true) as TReturning;
@@ -152,7 +175,7 @@ export class ConvexUpdateBuilder<
   paginate(
     config: MutationPaginateConfig
   ): ConvexUpdateWithout<
-    ConvexUpdateBuilder<TTable, TReturning, 'paged'>,
+    ConvexUpdateBuilder<TTable, TReturning, 'paged', THasWhereOrAllowFullScan>,
     'paginate'
   > {
     if (!Number.isInteger(config.limit) || config.limit < 1) {
@@ -162,9 +185,9 @@ export class ConvexUpdateBuilder<
     return this as any;
   }
 
-  allowFullScan(): this {
+  allowFullScan(): ConvexUpdateBuilder<TTable, TReturning, TMode, true> {
     this.allowFullScanFlag = true;
-    return this;
+    return this as any;
   }
 
   private getIdEquality():
@@ -193,6 +216,16 @@ export class ConvexUpdateBuilder<
     return { matched: false };
   }
 
+  executeAsync(
+    this: ConvexUpdateExecutableThis<TTable, TReturning, TMode>,
+    ...args: TMode extends 'single'
+      ? [config?: MutationAsyncConfig]
+      : [config: never]
+  ): Promise<
+    TMode extends 'single'
+      ? MutationExecuteResult<TTable, TReturning, 'single'>
+      : never
+  >;
   async executeAsync(
     ...args: TMode extends 'single'
       ? [config?: MutationAsyncConfig]
@@ -203,12 +236,24 @@ export class ConvexUpdateBuilder<
       : never
   > {
     const config = args[0] as MutationAsyncConfig | undefined;
-    return this.execute({
+    const executable = this as unknown as ConvexUpdateBuilder<
+      TTable,
+      TReturning,
+      TMode,
+      true
+    >;
+    return executable.execute({
       ...config,
       mode: 'async',
     } as never) as any;
   }
 
+  execute(
+    this: ConvexUpdateExecutableThis<TTable, TReturning, TMode>,
+    ...args: TMode extends 'single'
+      ? [config?: MutationExecuteConfig]
+      : [config?: never]
+  ): Promise<MutationExecuteResult<TTable, TReturning, TMode>>;
   async execute(
     ...args: TMode extends 'single'
       ? [config?: MutationExecuteConfig]
@@ -291,7 +336,13 @@ export class ConvexUpdateBuilder<
       this.executionModeOverride = 'async';
 
       try {
-        const firstBatch = (await this.execute()) as unknown as {
+        const executable = this as unknown as ConvexUpdateBuilder<
+          TTable,
+          TReturning,
+          TMode,
+          true
+        >;
+        const firstBatch = (await executable.execute()) as unknown as {
           continueCursor: string | null;
           isDone: boolean;
           numAffected: number;

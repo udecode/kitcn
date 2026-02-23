@@ -81,18 +81,24 @@ This mirrors native Convex indexing discipline: index the fields you filter and 
 
 ### Generate Runtime
 
-Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
+If using cRPC, run `better-convex dev` (generates all runtime including cRPC modules):
 
 ```bash
 npx better-convex dev
 ```
 
+Otherwise, run a scoped generation pass:
+
+```bash
+npx better-convex codegen --scope orm
+```
+
 ### Attach ORM to context once
 
-`convex/functions/generated.ts` exports `initCRPC` pre-wired with ORM context:
+`convex/functions/generated/server.ts` exports `initCRPC` pre-wired with ORM context:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {1}
-import { initCRPC } from '../functions/generated';
+import { initCRPC } from '../functions/generated/server';
 ```
 
 Every handler can now read through `ctx.orm`.
@@ -462,7 +468,7 @@ Vector search in native Convex is action-only. The migration keeps that shape: r
     ```ts title="convex/functions/posts.ts" showLineNumbers {2-7,16-28}
     import { z } from 'zod';
     import { publicAction, privateQuery } from '../lib/crpc';
-    import { createCaller } from './generated';
+    import { createPostsCaller } from './generated/posts.runtime';
 
     export const fetchByIds = privateQuery
       .input(z.object({ ids: z.array(z.string()) }))
@@ -483,8 +489,8 @@ Vector search in native Convex is action-only. The migration keeps that shape: r
           filter: (q) => q.eq('type', 'news'),
         });
 
-        const caller = createCaller(ctx);
-        const rows = await caller.posts.fetchByIds({
+        const caller = createPostsCaller(ctx);
+        const rows = await caller.fetchByIds({
           ids: hits.map((h) => h.id),
         });
 

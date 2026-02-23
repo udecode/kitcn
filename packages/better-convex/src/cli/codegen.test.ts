@@ -14,6 +14,73 @@ function writeFile(filePath: string, content: string) {
   fs.writeFileSync(filePath, content, 'utf-8');
 }
 
+function writeScopedFixture(dir: string) {
+  writeFile(
+    path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+    JSON.stringify({
+      name: 'better-convex',
+      type: 'module',
+      exports: {
+        './server': './server.js',
+      },
+    })
+  );
+  writeFile(
+    path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+    `
+    export const createApiLeaf = (fn, meta) =>
+      Object.assign(fn, meta, { functionRef: fn });
+    `.trim()
+  );
+  writeFile(
+    path.join(dir, 'convex', '_generated', 'api.js'),
+    `
+    export const api = {
+      todos: {
+        list: { ref: 'todos:list' },
+      },
+    };
+    `.trim()
+  );
+  writeFile(
+    path.join(dir, 'convex', 'todos.ts'),
+    `
+    export const list = {
+      _crpcMeta: {
+        type: 'query',
+      },
+    };
+    `.trim()
+  );
+  writeFile(
+    path.join(dir, 'convex', 'schema.ts'),
+    `
+    export const tables = {
+      todos: { table: 'todos' },
+    };
+    export const relations = {
+      todos: {},
+    };
+    export default {};
+    `.trim()
+  );
+  writeFile(
+    path.join(dir, 'convex', 'auth.ts'),
+    `
+    export default (_ctx) => ({
+      baseURL: "http://localhost:3000",
+      triggers: {},
+    });
+    `.trim()
+  );
+  writeFile(
+    path.join(dir, 'convex', 'http.ts'),
+    `
+    export default {};
+    `.trim()
+  );
+}
+
 describe('cli/codegen', () => {
   test('getConvexConfig uses defaults when convex.json is missing', () => {
     const dir = mkTempDir();
@@ -163,7 +230,7 @@ describe('cli/codegen', () => {
       );
       // Excluded generated server file (should never be parsed as cRPC module).
       writeFile(
-        path.join(dir, 'convex', 'generated.ts'),
+        path.join(dir, 'convex', 'generated', 'server.ts'),
         `export const shouldBeIgnored = { _crpcMeta: { type: 'query' } };`
       );
       writeFile(
@@ -227,9 +294,33 @@ describe('cli/codegen', () => {
       const { outputFile } = getConvexConfig();
       expect(fs.existsSync(outputFile)).toBe(true);
       const generated = fs.readFileSync(outputFile, 'utf-8');
-      const serverGeneratedFile = path.join(dir, 'convex', 'generated.ts');
+      const serverGeneratedFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
       expect(fs.existsSync(serverGeneratedFile)).toBe(true);
       const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
+      const nestedRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'items',
+        'queries.runtime.ts'
+      );
+      expect(fs.existsSync(nestedRuntimeFile)).toBe(true);
+      const allRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'all.runtime.ts'
+      );
+      expect(fs.existsSync(allRuntimeFile)).toBe(false);
+      const nestedRuntimeGenerated = fs.readFileSync(
+        nestedRuntimeFile,
+        'utf-8'
+      );
       expect(generated).toContain(
         'import { createApiLeaf } from "better-convex/server";'
       );
@@ -280,9 +371,6 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         "import { initCRPC as baseInitCRPC } from 'better-convex/server';"
       );
-      expect(serverGenerated).toContain(
-        "import {\n  createGenericCallerFactory,\n  createGenericHandlerFactory,\n  typedProcedureResolver,\n  type ProcedureCallerFromRegistry,\n} from 'better-convex/server';"
-      );
       expect(serverGenerated).toContain('export const orm = createOrm({');
       expect(serverGenerated).toContain(
         'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
@@ -299,32 +387,47 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
       );
-      expect(serverGenerated).toContain('export function defineAuth<');
+      expect(serverGenerated).not.toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
-      expect(serverGenerated).toContain('const procedureRegistry = {');
-      expect(serverGenerated).not.toContain('createRequire');
-      expect(serverGenerated).toContain(
-        '"items.queries.internalOnly": ["query", typedProcedureResolver(internal["items"]["queries"]["internalOnly"], () => (require("./items/queries") as Record<string, unknown>)["internalOnly"])],'
+      expect(serverGenerated).not.toContain('const procedureRegistry = {');
+      expect(serverGenerated).not.toContain(
+        'export function createCaller<TCtx extends'
       );
-      expect(serverGenerated).toContain(
-        'export function createCaller<TCtx extends ProcedureCallerContext>('
+      expect(serverGenerated).not.toContain(
+        'export function createHandler<TCtx extends'
       );
-      expect(serverGenerated).toContain(
-        'const createCallerFromRegistry = createGenericCallerFactory<'
-      );
-      expect(serverGenerated).toContain(
+      expect(nestedRuntimeGenerated).toContain('const procedureRegistry = {');
+      expect(nestedRuntimeGenerated).not.toContain(
         'export type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;'
       );
-      expect(serverGenerated).toContain(
+      expect(nestedRuntimeGenerated).not.toContain(
         'export type ProcedureHandlerContext = QueryCtx | MutationCtx;'
       );
-      expect(serverGenerated).toContain(
+      expect(nestedRuntimeGenerated).toContain(
+        'type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type ProcedureHandlerContext = QueryCtx | MutationCtx;'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'export type GeneratedProcedureCaller<'
+      );
+      expect(nestedRuntimeGenerated).toContain(
         'const createHandlerFromRegistry = createGenericHandlerFactory<'
       );
-      expect(serverGenerated).toContain(
-        'export function createHandler<TCtx extends ProcedureHandlerContext>('
+      expect(nestedRuntimeGenerated).toContain(
+        'export function createItemsQueriesCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'export function createItemsQueriesHandler<TCtx extends ProcedureHandlerContext>('
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        "import type { ActionCtx, MutationCtx, QueryCtx } from '../server';"
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        '"internalOnly": ["query", typedProcedureResolver(internal["items"]["queries"]["internalOnly"], () => (require("../../items/queries") as Record<string, unknown>)["internalOnly"])],'
       );
       expect(serverGenerated).toContain(
         'export const { scheduledMutationBatch, scheduledDelete } = orm.api();'
@@ -434,8 +537,20 @@ describe('cli/codegen', () => {
 
       const { outputFile } = getConvexConfig();
       const generated = fs.readFileSync(outputFile, 'utf-8');
-      const serverGeneratedFile = path.join(dir, 'convex', 'generated.ts');
+      const serverGeneratedFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
       const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
+      const todosRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'todos.runtime.ts'
+      );
+      const todosRuntimeGenerated = fs.readFileSync(todosRuntimeFile, 'utf-8');
       expect(generated).toContain(
         'import type { inferApiInputs, inferApiOutputs } from "better-convex/server";'
       );
@@ -469,25 +584,108 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
-      expect(serverGenerated).toContain('export function defineAuth<');
+      expect(serverGenerated).not.toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
       );
-      expect(serverGenerated).toContain('const procedureRegistry = {');
-      expect(serverGenerated).not.toContain('createRequire');
-      expect(serverGenerated).toContain(
-        '"todos.list": ["query", typedProcedureResolver(api["todos"]["list"], () => (require("./todos") as Record<string, unknown>)["list"])],'
-      );
-      expect(serverGenerated).toContain(
-        'const createHandlerFromRegistry = createGenericHandlerFactory<'
-      );
-      expect(serverGenerated).toContain(
-        'export function createHandler<TCtx extends ProcedureHandlerContext>('
+      expect(serverGenerated).not.toContain('const procedureRegistry = {');
+      expect(serverGenerated).not.toContain(
+        'export function createHandler<TCtx extends'
       );
       expect(serverGenerated).not.toContain('createOrm');
       expect(serverGenerated).not.toContain('withOrm');
       expect(serverGenerated).not.toContain('scheduledMutationBatch');
       expect(serverGenerated).not.toContain('export type OrmCtx<');
+      expect(todosRuntimeGenerated).toContain(
+        "import type { ActionCtx, MutationCtx, QueryCtx } from './server';"
+      );
+      expect(todosRuntimeGenerated).toContain(
+        '"list": ["query", typedProcedureResolver(api["todos"]["list"], () => (require("../todos") as Record<string, unknown>)["list"])],'
+      );
+      expect(todosRuntimeGenerated).toContain(
+        'export function createTodosCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(todosRuntimeGenerated).toContain(
+        'export function createTodosHandler<TCtx extends ProcedureHandlerContext>('
+      );
+      expect(todosRuntimeGenerated).not.toContain(
+        'export type ProcedureCallerContext ='
+      );
+      expect(todosRuntimeGenerated).not.toContain(
+        'export type ProcedureHandlerContext ='
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta supports first-run runtime placeholders with module-named exports', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          foo: {
+            list: { ref: 'foo:list' },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'foo.ts'),
+        `
+        import { createFooCaller } from './generated/foo.runtime';
+        void createFooCaller;
+
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(path.join(dir, 'convex', 'schema.ts'), 'export default {};');
+      writeFile(path.join(dir, 'convex', 'http.ts'), 'export default {};');
+
+      await generateMeta(undefined, { silent: true });
+
+      const runtimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'foo.runtime.ts'
+      );
+      const runtimeGenerated = fs.readFileSync(runtimeFile, 'utf-8');
+      expect(runtimeGenerated).toContain(
+        'export function createFooCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(runtimeGenerated).toContain(
+        'export function createFooHandler<TCtx extends ProcedureHandlerContext>('
+      );
+      expect(runtimeGenerated).not.toContain('export function createCaller(');
+      expect(runtimeGenerated).not.toContain('export function createHandler(');
     } finally {
       process.chdir(oldCwd);
     }
@@ -560,7 +758,12 @@ describe('cli/codegen', () => {
 
       const { outputFile } = getConvexConfig();
       const generated = fs.readFileSync(outputFile, 'utf-8');
-      const serverGeneratedFile = path.join(dir, 'convex', 'generated.ts');
+      const serverGeneratedFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
       const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
       expect(generated).not.toContain('export type GenericCtx =');
       expect(generated).toContain(
@@ -590,7 +793,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
-      expect(serverGenerated).toContain('export function defineAuth<');
+      expect(serverGenerated).not.toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
       );
@@ -598,6 +801,135 @@ describe('cli/codegen', () => {
       expect(serverGenerated).not.toContain('withOrm');
       expect(serverGenerated).not.toContain('scheduledMutationBatch');
       expect(serverGenerated).not.toContain('export type OrmCtx<');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta wires schema triggers into generated server when triggers export exists', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export const tables = {
+          todos: { table: 'todos' },
+        };
+        export const relations = {
+          todos: {},
+        };
+        export const triggers = {
+          todos: {},
+        };
+        export default {};
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      expect(generatedServer).toContain(
+        "import schema, { relations, triggers } from '../schema';"
+      );
+      expect(generatedServer).toContain('schema: relations,');
+      expect(generatedServer).toContain('triggers,');
+      expect(generatedServer).toContain('ormFunctions,');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta throws when schema exports triggers without relations', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {};
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export const triggers = {
+          todos: {},
+        };
+        export default {};
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        "schema.ts exports 'triggers' but is missing 'relations'"
+      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -735,42 +1067,59 @@ describe('cli/codegen', () => {
 
       await generateMeta(undefined, { silent: true });
 
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
-      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
-      expect(generatedServer).toContain('createAuthRuntime');
-      expect(generatedServer).toContain(
-        "import * as authDefinitionModule from './auth';"
+      const generatedAuthFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
       );
-      expect(generatedServer).toContain('getGeneratedAuthDisabledReason,');
-      expect(generatedServer).toContain(
-        'type AuthDefinitionFromFile = Extract<'
+      const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
+      expect(generatedAuth).toContain('createAuthRuntime');
+      expect(generatedAuth).toContain(
+        "import * as authDefinitionModule from '../auth';"
       );
-      expect(generatedServer).toContain('createAuthRuntime<');
-      expect(generatedServer).toContain('ReturnType<AuthDefinitionFromFile>');
-      expect(generatedServer).toContain(
+      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason,');
+      expect(generatedAuth).toContain('type AuthDefinitionFromFile = Extract<');
+      expect(generatedAuth).toContain('createAuthRuntime<');
+      expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
+      expect(generatedAuth).toContain(
         'resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
       );
-      expect(generatedServer).toContain(
+      expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("default_export_unavailable")'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
-      expect(generatedServer).toContain('auth: authDefinition,');
-      expect(generatedServer).toContain('context: withOrm,');
-      expect(generatedServer).toContain('authEnabled,');
-      expect(generatedServer).toContain(
-        '"generated.beforeCreate": ["mutation", typedProcedureResolver('
+      expect(generatedAuth).toContain('export function defineAuth<');
+      expect(generatedAuth).toContain('auth: authDefinition,');
+      expect(generatedAuth).toContain('context: withOrm,');
+      expect(generatedAuth).toContain('authEnabled,');
+      const generatedRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.runtime.ts'
       );
-      expect(generatedServer).toContain(
-        '"generated.onCreate": ["mutation", typedProcedureResolver('
+      const generatedRuntime = fs.readFileSync(generatedRuntimeFile, 'utf-8');
+      expect(generatedRuntime).toContain(
+        '"beforeCreate": ["mutation", typedProcedureResolver('
       );
-      expect(generatedServer).toContain(
-        '"generated.findOne": ["query", typedProcedureResolver('
+      expect(generatedRuntime).toContain(
+        '"onCreate": ["mutation", typedProcedureResolver('
       );
-      expect(generatedServer).not.toContain('createDisabledAuthRuntime');
-      expect(generatedServer).not.toContain(
-        'const authFunctions: AuthFunctions'
+      expect(generatedRuntime).toContain(
+        '"findOne": ["query", typedProcedureResolver('
       );
-      expect(generatedServer).not.toContain(
+      expect(generatedRuntime).toContain(
+        '"beforeCreate": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["beforeCreate"], () => (require("./auth") as Record<string, unknown>)["beforeCreate"])],'
+      );
+      expect(generatedRuntime).toContain(
+        'export function createGeneratedAuthCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(generatedRuntime).toContain(
+        'export function createGeneratedAuthHandler<TCtx extends ProcedureHandlerContext>('
+      );
+      expect(generatedAuth).not.toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).not.toContain('const authFunctions: AuthFunctions');
+      expect(generatedAuth).not.toContain(
         'import { type AuthFunctions, createApi, createClient } from "better-convex/auth";'
       );
     } finally {
@@ -842,29 +1191,41 @@ describe('cli/codegen', () => {
 
       await generateMeta(undefined, { silent: true });
 
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
-      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
-      expect(generatedServer).toContain('createAuthRuntime');
-      expect(generatedServer).toContain(
-        "import * as authDefinitionModule from './auth';"
+      const generatedAuthFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
       );
-      expect(generatedServer).toContain('getGeneratedAuthDisabledReason,');
-      expect(generatedServer).toContain(
-        'type AuthDefinitionFromFile = Extract<'
+      const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
+      expect(generatedAuth).toContain('createAuthRuntime');
+      expect(generatedAuth).toContain(
+        "import * as authDefinitionModule from '../auth';"
       );
-      expect(generatedServer).toContain('createAuthRuntime<');
-      expect(generatedServer).toContain('ReturnType<AuthDefinitionFromFile>');
-      expect(generatedServer).toContain(
+      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason,');
+      expect(generatedAuth).toContain('type AuthDefinitionFromFile = Extract<');
+      expect(generatedAuth).toContain('createAuthRuntime<');
+      expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
+      expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("default_export_unavailable")'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
+      expect(generatedAuth).toContain('export function defineAuth<');
+      expect(generatedAuth).not.toContain('import { withOrm } from');
+      expect(generatedAuth).not.toContain('context: withOrm,');
+      expect(generatedAuth).not.toContain('createDisabledAuthRuntime');
+
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
       expect(generatedServer).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
       );
       expect(generatedServer).not.toContain('createOrm');
       expect(generatedServer).not.toContain('withOrm');
-      expect(generatedServer).not.toContain('context: withOrm,');
-      expect(generatedServer).not.toContain('createDisabledAuthRuntime');
     } finally {
       process.chdir(oldCwd);
     }
@@ -928,21 +1289,26 @@ describe('cli/codegen', () => {
 
       await generateMeta(undefined, { silent: true });
 
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
-      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
-      expect(generatedServer).toContain('createDisabledAuthRuntime');
-      expect(generatedServer).toContain(
+      const generatedAuthFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
+      );
+      const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
+      expect(generatedAuth).toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).toContain(
         'const authRuntime = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
       );
-      expect(generatedServer).toContain(
+      expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_auth_file")'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
-      expect(generatedServer).toContain('authEnabled,');
-      expect(generatedServer).not.toContain(
-        "import * as authDefinitionModule from './auth';"
+      expect(generatedAuth).toContain('export function defineAuth<');
+      expect(generatedAuth).toContain('authEnabled,');
+      expect(generatedAuth).not.toContain(
+        "import * as authDefinitionModule from '../auth';"
       );
-      expect(generatedServer).not.toContain('createAuthRuntime<DataModel');
+      expect(generatedAuth).not.toContain('createAuthRuntime<DataModel');
     } finally {
       process.chdir(oldCwd);
     }
@@ -1008,15 +1374,20 @@ describe('cli/codegen', () => {
 
       await generateMeta(undefined, { silent: true });
 
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
-      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
-      expect(generatedServer).toContain('createDisabledAuthRuntime');
-      expect(generatedServer).toContain(
+      const generatedAuthFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
+      );
+      const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
+      expect(generatedAuth).toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_default_export")'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
-      expect(generatedServer).not.toContain(
-        "import * as authDefinitionModule from './auth';"
+      expect(generatedAuth).toContain('export function defineAuth<');
+      expect(generatedAuth).not.toContain(
+        "import * as authDefinitionModule from '../auth';"
       );
     } finally {
       process.chdir(oldCwd);
@@ -1068,6 +1439,275 @@ describe('cli/codegen', () => {
 
       await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
         /root "http" namespace is reserved/i
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta rejects reserved runtime caller export names', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            actions: { ref: 'todos:actions' },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const actions = {
+          _crpcMeta: { type: 'query' },
+        };
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        /reserved runtime caller namespace/i
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta scope=auth emits server+auth outputs only and removes stale cRPC outputs', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(path.join(dir, 'convex', 'shared', 'api.ts'), 'export {};');
+      writeFile(
+        path.join(dir, 'convex', 'generated', 'todos.runtime.ts'),
+        'export {};'
+      );
+      writeFile(
+        path.join(dir, 'convex', 'generated', 'items', 'queries.runtime.ts'),
+        'export {};'
+      );
+
+      await generateMeta(undefined, { silent: true, scope: 'auth' as any });
+
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'server.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
+        false
+      );
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'items', 'queries.runtime.ts')
+        )
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta scope=orm emits only generated/server.ts and removes auth+cRPC artifacts', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(path.join(dir, 'convex', 'shared', 'api.ts'), 'export {};');
+      writeFile(path.join(dir, 'convex', 'generated', 'auth.ts'), 'export {};');
+      writeFile(
+        path.join(dir, 'convex', 'generated', 'auth.runtime.ts'),
+        'export {};'
+      );
+      writeFile(
+        path.join(dir, 'convex', 'generated', 'todos.runtime.ts'),
+        'export {};'
+      );
+
+      await generateMeta(undefined, { silent: true, scope: 'orm' as any });
+
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'server.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
+      ).toBe(false);
+      expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
+        false
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta removes stale scoped outputs when switching all -> auth -> orm', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+
+      await generateMeta(undefined, { silent: true, scope: 'all' as any });
+      expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
+      ).toBe(true);
+
+      await generateMeta(undefined, { silent: true, scope: 'auth' as any });
+      expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
+        false
+      );
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))
+      ).toBe(true);
+
+      await generateMeta(undefined, { silent: true, scope: 'orm' as any });
+      expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
+        false
+      );
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'server.ts'))
+      ).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta with api=true auth=false keeps api outputs and removes auth outputs', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      await generateMeta(undefined, {
+        silent: true,
+        api: true,
+        auth: false,
+      } as any);
+
+      expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'server.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
+      ).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta with api=false auth=false removes api.ts and auth outputs', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      await generateMeta(undefined, {
+        silent: true,
+        api: false,
+        auth: false,
+      } as any);
+
+      expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
+        false
+      );
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'server.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta throws deterministic error for invalid scope', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      await expect(
+        generateMeta(undefined, { silent: true, scope: 'bad' as any })
+      ).rejects.toThrow(
+        'Invalid codegen scope "bad". Expected one of: all, auth, orm.'
       );
     } finally {
       process.chdir(oldCwd);

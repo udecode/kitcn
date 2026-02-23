@@ -8,7 +8,7 @@ import {
   publicQuery,
 } from '../lib/crpc';
 import { aggregateRepliesByParent } from './aggregates';
-import type { QueryCtx } from './generated';
+import type { QueryCtx } from './generated/server';
 import { todoCommentsTable } from './schema';
 
 // Schema for comment list items
@@ -522,7 +522,7 @@ export const updateComment = authMutation
       content: z.string().min(1).max(1000),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const comment = await ctx.orm.query.todoComments.findFirstOrThrow({
       where: { id: input.commentId },
@@ -549,14 +549,13 @@ export const updateComment = authMutation
       .update(todoCommentsTable)
       .set({ content: input.content })
       .where(eq(todoCommentsTable.id, input.commentId));
-    return null;
   });
 
 // Delete comment
 export const deleteComment = authMutation
   .meta({ rateLimit: 'todoComment/update' }) // Using update rate limit for delete
   .input(z.object({ commentId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const comment = await ctx.orm.query.todoComments.findFirstOrThrow({
       where: { id: input.commentId },
@@ -589,8 +588,6 @@ export const deleteComment = authMutation
         .delete(todoCommentsTable)
         .where(eq(todoCommentsTable.id, comment.id));
     }
-
-    return null;
   });
 
 // ============================================

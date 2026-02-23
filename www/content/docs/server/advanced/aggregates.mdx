@@ -1,13 +1,13 @@
 ---
 title: Aggregates
-description: O(log n) counts and sums with TableAggregate.
+description: O(log n) counts and sums with createAggregate.
 links:
   doc: https://www.convex.dev/components/aggregate
 ---
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore efficient aggregations in Convex. You'll learn to set up TableAggregate for O(log n) counts and sums, integrate with ORM triggers for automatic maintenance, and implement common patterns like leaderboards, follower counts, and dashboard metrics.
+In this guide, we'll explore efficient aggregations in Convex. You'll learn to set up createAggregate for O(log n) counts and sums, integrate with ORM triggers for automatic maintenance, and implement common patterns like leaderboards, follower counts, and dashboard metrics.
 
 ## Overview
 
@@ -28,9 +28,11 @@ Let's set it up.
 **Important:** NEVER manually update aggregates in mutations. ALWAYS use triggers for automatic maintenance.
 </Callout>
 
-```ts showLineNumbers {2,4-5,7-9}
+```ts showLineNumbers {2-4,7-8,10-12}
 // ✅ CORRECT: Register trigger once, aggregates stay in sync automatically
-scoresAggregate.trigger();
+const triggers = defineTriggers(relations, {
+  scores: { change: scoresAggregate.trigger },
+});
 
 // Just insert - trigger handles aggregate!
 await ctx.orm.insert(scores).values({ score: 100 });
@@ -69,12 +71,12 @@ export default app;
 Now let's create an aggregates file. This is where you'll define all your aggregate configurations:
 
 ```ts title="convex/functions/aggregates.ts" showLineNumbers {1-2,5-11}
-import { TableAggregate } from '@convex-dev/aggregate';
+import { createAggregate } from 'better-convex/aggregate';
 import { components } from './_generated/api';
 import type { DataModel } from './_generated/dataModel';
 
 // Count likes per post
-export const aggregatePostLikes = new TableAggregate<{
+export const aggregatePostLikes = createAggregate<{
   DataModel: DataModel;
   Key: null;              // No sorting, just counting
   Namespace: string;      // postId
@@ -84,6 +86,8 @@ export const aggregatePostLikes = new TableAggregate<{
   sortKey: () => null,
 });
 ```
+
+`createAggregate(...)` keeps normal aggregate reads (`count/sum/max/...`) and adds ergonomic trigger calls (`aggregate.trigger(change, ctx)`).
 
 ## Aggregate Types
 
@@ -106,7 +110,7 @@ Count all rows in a table:
 
 ```ts showLineNumbers {3-5,8-9,13-16}
 // Total users
-export const aggregateTotalUsers = new TableAggregate<{
+export const aggregateTotalUsers = createAggregate<{
   DataModel: DataModel;
   Key: null;
   Namespace: string;      // Always "global"
@@ -129,7 +133,7 @@ For bidirectional relationships like followers/following:
 
 ```ts showLineNumbers {3-5,8-9,13-15,18-19}
 // Followers (people following this user)
-export const aggregateFollowers = new TableAggregate<{
+export const aggregateFollowers = createAggregate<{
   DataModel: DataModel;
   Key: null;
   Namespace: string;      // followingId (user being followed)
@@ -140,7 +144,7 @@ export const aggregateFollowers = new TableAggregate<{
 });
 
 // Following (people this user follows)
-export const aggregateFollowing = new TableAggregate<{
+export const aggregateFollowing = createAggregate<{
   DataModel: DataModel;
   Key: null;
   Namespace: string;      // followerId
@@ -157,7 +161,7 @@ For rankings and top-N queries:
 
 ```ts showLineNumbers {3-5,8-12,15-18}
 // Scores sorted by value
-export const aggregateScoresByValue = new TableAggregate<{
+export const aggregateScoresByValue = createAggregate<{
   DataModel: DataModel;
   Key: [number, string];  // [score desc, name asc]
   Namespace: string;
@@ -248,27 +252,30 @@ This also fixes the TypeScript "Type instantiation is excessively deep" error.
 
 Register aggregates with [triggers](/docs/orm/triggers) directly in your schema:
 
-```ts title="convex/functions/schema.ts" showLineNumbers {1-2,6-7,9-10,12}
-import { convexTable } from 'better-convex/orm';
+```ts title="convex/functions/schema.ts" showLineNumbers {1-2,6-18}
+import { defineTriggers } from 'better-convex/orm';
 import {
   aggregateFollowers,
   aggregateFollowing,
   aggregatePostLikes,
   aggregateTotalUsers,
 } from './aggregates';
+import { relations } from './schema';
 
-export const postLikesTable = convexTable('postLikes', {/* ... */}, () => [
-  aggregatePostLikes.trigger(),
-]);
-
-export const userTable = convexTable('user', {/* ... */}, () => [
-  aggregateTotalUsers.trigger(),
-]);
-
-export const followsTable = convexTable('follows', {/* ... */}, () => [
-  aggregateFollowers.trigger(),
-  aggregateFollowing.trigger(),
-]);
+export const triggers = defineTriggers(relations, {
+  postLikes: {
+    change: aggregatePostLikes.trigger,
+  },
+  user: {
+    change: aggregateTotalUsers.trigger,
+  },
+  follows: {
+    change: async (change, ctx) => {
+      await aggregateFollowers.trigger(change, ctx);
+      await aggregateFollowing.trigger(change, ctx);
+    },
+  },
+});
 ```
 
 ## Usage
@@ -315,7 +322,7 @@ const rank = await aggregate.indexOf(ctx, userScore, { namespace: gameId });
 Get a random document from a table:
 
 ```ts showLineNumbers {1-6,9-13}
-const randomAggregate = new TableAggregate<{
+const randomAggregate = createAggregate<{
   Key: null;
   DataModel: DataModel;
   TableName: 'songs';
@@ -591,7 +598,7 @@ Define multiple aggregates for different access patterns on the same table:
 
 ```ts showLineNumbers {2-7,10-15,18-23}
 // By score for rankings
-const byScore = new TableAggregate<{
+const byScore = createAggregate<{
   Key: number;
   DataModel: DataModel;
   TableName: 'players';
@@ -600,7 +607,7 @@ const byScore = new TableAggregate<{
 });
 
 // By username for alphabetical listing
-const byUsername = new TableAggregate<{
+const byUsername = createAggregate<{
   Key: string;
   DataModel: DataModel;
   TableName: 'players';
@@ -609,7 +616,7 @@ const byUsername = new TableAggregate<{
 });
 
 // By activity for recency
-const byActivity = new TableAggregate<{
+const byActivity = createAggregate<{
   Key: number;
   DataModel: DataModel;
   TableName: 'players';
@@ -623,7 +630,7 @@ const byActivity = new TableAggregate<{
 Multi-dimensional leaderboards with regional queries:
 
 ```ts showLineNumbers {1-9,12-15,17-20}
-const leaderboard = new TableAggregate<{
+const leaderboard = createAggregate<{
   Namespace: string; // game mode
   Key: [string, number, number]; // [region, score, timestamp]
   DataModel: DataModel;
@@ -648,28 +655,33 @@ const usWestCount = await leaderboard.count(ctx, {
 
 ### Cascade Deletes with Aggregates
 
-Aggregates update automatically when triggers handle cascade deletes:
+Aggregates update automatically when schema triggers handle cascade deletes:
 
-```ts showLineNumbers {1-2,4-14}
-import { onDelete } from 'better-convex/orm';
+```ts showLineNumbers {1-2,4-16}
+import { defineTriggers } from 'better-convex/orm';
 
-export const userTable = convexTable('user', {/* ... */}, () => [
-  onDelete(async (ctx, change) => {
-    // Index characters.userId.
-    const characterRows = await ctx.orm.query.characters.findMany({
-      where: { userId: change.id },
-      limit: 1000,
-    });
+export const triggers = defineTriggers(relations, {
+  user: {
+    delete: {
+      after: async (doc, ctx) => {
+      // Index characters.userId.
+      const characterRows = await ctx.orm.query.characters.findMany({
+        where: { userId: doc.id },
+        limit: 1000,
+      });
 
-    for (const char of characterRows) {
-      await ctx.orm.delete(characters).where(eq(characters.id, char.id));
-    }
-  }),
-]);
-
-export const characterStarsTable = convexTable('characterStars', {/* ... */}, () => [
-  aggregateCharacterStars.trigger(),
-]);
+      for (const char of characterRows) {
+        await ctx.orm.delete(characters).where(eq(characters.id, char.id));
+      }
+      },
+    },
+  },
+  characterStars: {
+    change: async (change, ctx) => {
+      await aggregateCharacterStars.trigger(change, ctx);
+    },
+  },
+});
 ```
 
 ### Lazy Aggregation Configuration
@@ -689,7 +701,7 @@ await aggregate.clear(ctx, 16, false);
 Bucket data by time periods:
 
 ```ts showLineNumbers {1-9,12-19}
-const activityByHour = new TableAggregate<{
+const activityByHour = createAggregate<{
   Key: [number, string]; // [hour, userId]
   DataModel: DataModel;
   TableName: 'activities';

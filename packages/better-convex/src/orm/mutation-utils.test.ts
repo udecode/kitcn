@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/performance/useTopLevelRegex: inline regex assertions are intentional in tests. */
+import { vi } from 'vitest';
 import { and, eq, gt, isNull, not, or } from './filter-expression';
 import { convexTable, date, index, integer, text, timestamp } from './index';
 import {
@@ -10,6 +11,7 @@ import {
   deserializeFilterExpression,
   encodeUndefinedDeep,
   enforceCheckConstraints,
+  estimateMeasuredMutationRowBytes,
   evaluateCheckConstraintTriState,
   evaluateFilter,
   getMutationCollectionLimits,
@@ -68,6 +70,24 @@ const cascadeChildB = convexTable(
   },
   (t) => [index('by_parentSlug').on(t.parentSlug)]
 );
+
+const getUtf8ByteLength = (value: string): number => {
+  let bytes = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x80) {
+      bytes += 1;
+    } else if (code < 0x800) {
+      bytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      bytes += 4;
+      i += 1;
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+};
 
 describe('mutation-utils', () => {
   test('encodeUndefinedDeep/decodeUndefinedDeep round-trip nested values', () => {
@@ -214,6 +234,32 @@ describe('mutation-utils', () => {
     const allRows = takeRowsWithinByteBudget(rows as any, 10_000);
     expect(allRows.rows.length).toBe(3);
     expect(allRows.hitLimit).toBe(false);
+  });
+
+  test('estimateMeasuredMutationRowBytes matches UTF-8 byte length for short and long strings', () => {
+    const shortRow = {
+      id: 1,
+      payload: 'héllo🙂',
+    };
+    const shortSerialized = JSON.stringify(shortRow);
+    const shortExpected = getUtf8ByteLength(shortSerialized) * 2;
+    const shortEncodeSpy = vi.spyOn(TextEncoder.prototype, 'encode');
+    expect(estimateMeasuredMutationRowBytes(shortRow as any)).toBe(
+      shortExpected
+    );
+    expect(shortEncodeSpy).not.toHaveBeenCalled();
+    shortEncodeSpy.mockRestore();
+
+    const longRow = {
+      id: 2,
+      payload: 'héllo🙂'.repeat(120),
+    };
+    const longExpected =
+      new TextEncoder().encode(JSON.stringify(longRow)).length * 2;
+    const longEncodeSpy = vi.spyOn(TextEncoder.prototype, 'encode');
+    expect(estimateMeasuredMutationRowBytes(longRow as any)).toBe(longExpected);
+    expect(longEncodeSpy).toHaveBeenCalled();
+    longEncodeSpy.mockRestore();
   });
 
   test('getMutationCollectionLimits validates defaults', () => {

@@ -38,8 +38,20 @@ describe('integration/generated-api', () => {
 
       const { outputFile } = getConvexConfig();
       const generated = fs.readFileSync(outputFile, 'utf-8');
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
       const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      const generatedAuthFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
+      );
+      const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
 
       expect(generated).toContain('export const api = {');
       expect(generated).toContain('export type Api = typeof api;');
@@ -81,13 +93,13 @@ describe('integration/generated-api', () => {
       expect(generatedServer).toContain(
         'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
       expect(generatedServer).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
       expect(generatedServer).toContain(
         'export const { scheduledMutationBatch, scheduledDelete } = orm.api();'
       );
+      expect(generatedAuth).toContain('export function defineAuth<');
     } finally {
       process.chdir(oldCwd);
     }
@@ -183,8 +195,20 @@ describe('integration/generated-api', () => {
       await generateMeta(undefined, { silent: true });
       const { outputFile } = getConvexConfig();
       const generatedSource = fs.readFileSync(outputFile, 'utf-8');
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
       const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      const generatedAuthFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
+      );
+      const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
       expect(generatedSource).toContain(
         'http: undefined as unknown as typeof httpRouter,'
       );
@@ -203,13 +227,13 @@ describe('integration/generated-api', () => {
       expect(generatedServer).toContain(
         'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
       expect(generatedServer).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
       );
       expect(generatedServer).not.toContain('createOrm');
       expect(generatedServer).not.toContain('withOrm');
       expect(generatedServer).not.toContain('export type OrmCtx<');
+      expect(generatedAuth).toContain('export function defineAuth<');
       const generated = await import(pathToFileURL(outputFile).href);
       const api = generated.api as any;
 
@@ -341,33 +365,34 @@ describe('integration/generated-api', () => {
 
       await generateMeta(undefined, { silent: true });
 
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
-      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
+      );
+      const generatedAuth = fs.readFileSync(generatedServerFile, 'utf-8');
 
-      expect(generatedServer).toContain('createAuthRuntime');
-      expect(generatedServer).toContain('getGeneratedAuthDisabledReason,');
-      expect(generatedServer).toContain(
-        "import * as authDefinitionModule from './auth';"
+      expect(generatedAuth).toContain('createAuthRuntime');
+      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason,');
+      expect(generatedAuth).toContain(
+        "import * as authDefinitionModule from '../auth';"
       );
-      expect(generatedServer).toContain(
-        'type AuthDefinitionFromFile = Extract<'
-      );
-      expect(generatedServer).toContain('createAuthRuntime<');
-      expect(generatedServer).toContain('ReturnType<AuthDefinitionFromFile>');
-      expect(generatedServer).toContain(
+      expect(generatedAuth).toContain('type AuthDefinitionFromFile = Extract<');
+      expect(generatedAuth).toContain('createAuthRuntime<');
+      expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
+      expect(generatedAuth).toContain(
         'resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
       );
-      expect(generatedServer).toContain(
+      expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("default_export_unavailable")'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
-      expect(generatedServer).toContain('auth: authDefinition,');
-      expect(generatedServer).toContain('context: withOrm,');
-      expect(generatedServer).toContain('authEnabled,');
-      expect(generatedServer).not.toContain('createDisabledAuthRuntime');
-      expect(generatedServer).not.toContain(
-        'const authFunctions: AuthFunctions'
-      );
+      expect(generatedAuth).toContain('export function defineAuth<');
+      expect(generatedAuth).toContain('auth: authDefinition,');
+      expect(generatedAuth).toContain('context: withOrm,');
+      expect(generatedAuth).toContain('authEnabled,');
+      expect(generatedAuth).not.toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).not.toContain('const authFunctions: AuthFunctions');
     } finally {
       process.chdir(oldCwd);
     }
@@ -437,22 +462,27 @@ describe('integration/generated-api', () => {
 
       await generateMeta(undefined, { silent: true });
 
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
-      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
+      );
+      const generatedAuth = fs.readFileSync(generatedServerFile, 'utf-8');
 
-      expect(generatedServer).toContain('createDisabledAuthRuntime');
-      expect(generatedServer).toContain(
+      expect(generatedAuth).toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).toContain(
         'const authRuntime = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
       );
-      expect(generatedServer).toContain(
+      expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_auth_file")'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
-      expect(generatedServer).toContain('authEnabled,');
-      expect(generatedServer).not.toContain(
+      expect(generatedAuth).toContain('export function defineAuth<');
+      expect(generatedAuth).toContain('authEnabled,');
+      expect(generatedAuth).not.toContain(
         "import * as authDefinitionModule from './auth';"
       );
-      expect(generatedServer).not.toContain('createAuthRuntime<DataModel');
+      expect(generatedAuth).not.toContain('createAuthRuntime<DataModel');
     } finally {
       process.chdir(oldCwd);
     }
@@ -531,14 +561,19 @@ describe('integration/generated-api', () => {
 
       await generateMeta(undefined, { silent: true });
 
-      const generatedServerFile = path.join(dir, 'convex', 'generated.ts');
-      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
-      expect(generatedServer).toContain('createDisabledAuthRuntime');
-      expect(generatedServer).toContain(
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'auth.ts'
+      );
+      const generatedAuth = fs.readFileSync(generatedServerFile, 'utf-8');
+      expect(generatedAuth).toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_default_export")'
       );
-      expect(generatedServer).toContain('export function defineAuth<');
-      expect(generatedServer).not.toContain(
+      expect(generatedAuth).toContain('export function defineAuth<');
+      expect(generatedAuth).not.toContain(
         "import * as authDefinitionModule from './auth';"
       );
     } finally {

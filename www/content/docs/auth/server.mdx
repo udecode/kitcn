@@ -66,7 +66,7 @@ Here's what a typical auth contract looks like:
 import { admin } from 'better-auth/plugins';
 import { convex } from 'better-convex/auth';
 import authConfig from './auth.config';
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => {
   return {
@@ -252,7 +252,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
     import { router } from '../lib/crpc';
-    import { getAuth } from './generated';
+    import { getAuth } from './generated/auth';
 
     const app = new Hono();
 
@@ -281,7 +281,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
     ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
     import { registerRoutes } from 'better-convex/auth/http';
     import { httpRouter } from 'convex/server';
-    import { getAuth } from './generated';
+    import { getAuth } from './generated/auth';
 
     const http = httpRouter();
 
@@ -300,7 +300,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
     import { HttpRouterWithHono } from 'better-convex/server';
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
-    import { getAuth } from './generated';
+    import { getAuth } from './generated/auth';
 
     const app = new Hono();
 
@@ -396,18 +396,17 @@ Generated `getAuth(ctx)` uses the same context-aware adapter selection internall
 ### Database Triggers
 
 Auth triggers (`triggers: { user, session }`) are independent from database triggers.
-If you also need DB-level side effects (aggregates, cascades, denormalized counters), define them in schema table configs:
+If you also need DB-level side effects (aggregates, cascades, denormalized counters), define schema-level triggers in `schema.ts`:
 
-```ts title="convex/functions/schema.ts" showLineNumbers {1-2,6-11}
-import { convexTable, onChange } from 'better-convex/orm';
+```ts title="convex/functions/schema.ts" showLineNumbers {1-2,5-8}
+import { defineTriggers } from 'better-convex/orm';
 import { aggregateUsers } from './aggregates';
 
-export const userTable = convexTable('user', {/* ... */}, () => [
-  aggregateUsers.trigger(),
-  onChange(async (ctx, change) => {
-    // Additional DB side effects
-  }),
-]);
+export const triggers = defineTriggers(relations, {
+  user: {
+    change: aggregateUsers.trigger,
+  },
+});
 ```
 
 When your schema exports `relations`, generated runtime automatically wires ORM context so auth handlers can use `ctx.orm` directly.

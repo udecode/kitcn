@@ -104,7 +104,8 @@ Now let's define the handler functions that cron jobs call:
 ```ts title="convex/functions/crons.ts" showLineNumbers {5-13,15-25}
 import { z } from 'zod';
 import { privateMutation, privateAction } from '../lib/crpc';
-import { createCaller } from './generated';
+import { createAnalyticsCaller } from './generated/analytics.runtime';
+import { createReportsCaller } from './generated/reports.runtime';
 
 export const cleanupStaleData = privateMutation
   .input(z.object({}))
@@ -127,12 +128,13 @@ export const cleanupStaleData = privateMutation
 
 export const generateDailyReport = privateAction
   .input(z.object({}))
-  .output(z.null())
+  
   .action(async ({ ctx }) => {
-    const caller = createCaller(ctx);
-    const stats = await caller.analytics.getDailyStats({});
+    const analyticsCaller = createAnalyticsCaller(ctx);
+    const reportsCaller = createReportsCaller(ctx);
+    const stats = await analyticsCaller.getDailyStats({});
 
-    await caller.reports.create({
+    await reportsCaller.create({
       type: 'daily',
       data: stats,
     });
@@ -170,7 +172,7 @@ import { internal } from './_generated/api';
 
 export const processOrder = authMutation
   .input(z.object({ orderId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await ctx.orm
       .update(orders)
@@ -224,7 +226,7 @@ export const scheduleReminder = authMutation
     message: z.string(),
     sendAt: z.number(), // Unix timestamp in ms
   }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     if (input.sendAt <= Date.now()) {
       throw new CRPCError({
@@ -275,7 +277,7 @@ Then cancel using `ctx.scheduler.cancel()`:
 ```ts title="convex/functions/subscriptions.ts" showLineNumbers {11-14}
 export const cancelSubscription = authMutation
   .input(z.object({ subscriptionId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const subscription = await ctx.orm.query.subscriptions.findFirst({
       where: { id: input.subscriptionId },

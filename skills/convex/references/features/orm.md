@@ -943,41 +943,45 @@ const ormDb = orm.db(ctx, {
 
 ## Triggers
 
-Schema-level hooks: `onInsert`, `onUpdate`, `onDelete`, `onChange`. All from `better-convex/orm`.
+Schema-level hooks via `defineTriggers` from `better-convex/orm`. Trigger definitions are schema-level only; `convexTable(..., extraConfig)` no longer accepts trigger callbacks.
 
 ```ts
-export const comments = convexTable(
-  "comments",
-  {
-    postId: id("posts").notNull(),
-    body: text().notNull(),
+import { defineTriggers } from "better-convex/orm";
+
+export const triggers = defineTriggers(relations, {
+  comments: {
+    create: {
+      after: async (doc, ctx) => {
+        await ctx.orm
+          .update(posts)
+          .set({ lastCommentAt: new Date() })
+          .where(eq(posts.id, doc.postId));
+      },
+    },
+    delete: {
+      after: async (doc, ctx) => {
+        await ctx.orm
+          .update(posts)
+          .set({ lastCommentAt: new Date() })
+          .where(eq(posts.id, doc.postId));
+      },
+    },
   },
-  (t) => [
-    index("by_post").on(t.postId),
-    onInsert(async (ctx, change) => {
-      await ctx.orm
-        .update(posts)
-        .set({ lastCommentAt: new Date() })
-        .where(eq(posts.id, change.newDoc.postId));
-    }),
-    onDelete(async (ctx, change) => {
-      await ctx.orm
-        .update(posts)
-        .set({ lastCommentAt: new Date() })
-        .where(eq(posts.id, change.oldDoc.postId));
-    }),
-  ]
-);
+});
 ```
 
-### onChange payload
+### change payload
 
 ```ts
-onChange(async (ctx, change) => {
-  change.id; // always present
-  change.operation; // 'insert' | 'update' | 'delete'
-  change.oldDoc; // null on insert
-  change.newDoc; // null on delete
+export const triggers = defineTriggers(relations, {
+  comments: {
+    change: async (change, ctx) => {
+      change.id; // always present
+      change.operation; // 'insert' | 'update' | 'delete'
+      change.oldDoc; // null on insert
+      change.newDoc; // null on delete
+    },
+  },
 });
 ```
 
@@ -985,7 +989,12 @@ onChange(async (ctx, change) => {
 
 ```ts
 import { aggregatePostLikes } from "./aggregates";
-() => [aggregatePostLikes.trigger()];
+
+export const triggers = defineTriggers(relations, {
+  postLikes: {
+    change: aggregatePostLikes.trigger,
+  },
+});
 ```
 
 ### Trigger safety checklist
@@ -1009,14 +1018,13 @@ import {
   convexTable,
   defineRelations,
   defineSchema,
+  defineTriggers,
   deletion,
   eq,
   id,
   index,
   integer,
   json,
-  onChange,
-  onInsert,
   searchIndex,
   text,
   textEnum,
@@ -1057,9 +1065,6 @@ export const post = convexTable(
     index("by_author_created").on(t.authorId, t.createdAt),
     searchIndex("search_title").on(t.title).filter(t.authorId),
     deletion("scheduled", { delayMs: 60_000 }),
-    onInsert(async (ctx, change) => {
-      console.log("post created", change.id);
-    }),
   ]
 );
 
@@ -1076,6 +1081,16 @@ export const relations = defineRelations(tables, (r) => ({
     }),
   },
 }));
+
+export const triggers = defineTriggers(relations, {
+  post: {
+    create: {
+      after: async (doc) => {
+        console.log("post created", doc._id);
+      },
+    },
+  },
+});
 ```
 
 ## Related References

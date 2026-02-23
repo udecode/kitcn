@@ -127,10 +127,10 @@ export const create = authMutation
 
 ## Context in Actions
 
-Actions have a different context. Instead of direct database access, they call other procedures. Use `createCaller(ctx)` for type-safe dispatch with full autocomplete:
+Actions have a different context. Instead of direct database access, they call other procedures. Use the module runtime caller (for example `createUserCaller(ctx)`) for type-safe dispatch with full autocomplete:
 
 ```ts showLineNumbers {1,7-8,14}
-import { createCaller } from './generated';
+import { createUserCaller } from './generated/user.runtime';
 
 export const processAndSave = publicAction
   .input(z.object({ data: z.string() }))
@@ -142,13 +142,13 @@ export const processAndSave = publicAction
     });
 
     // Call a mutation to save results
-    const caller = createCaller(ctx);
-    await caller.user.updateProfile({ data: await result.json() });
+    const caller = createUserCaller(ctx);
+    await caller.updateProfile({ data: await result.json() });
   });
 ```
 
 <Callout icon={<InfoIcon />}>
-  **Note:** Actions can't access the database directly. `createCaller(ctx)` dispatches via `ctx.runQuery` / `ctx.runMutation` under the hood, ensuring all database operations are transactional. See [In-Process Procedure Composition](/docs/server/procedures#in-process-procedure-composition) for the full call matrix.
+  **Note:** Actions can't access the database directly. Module runtime callers (like `createUserCaller(ctx)`) dispatch via `ctx.runQuery` / `ctx.runMutation` under the hood, ensuring all database operations are transactional. See [In-Process Procedure Composition](/docs/server/procedures#in-process-procedure-composition) for the full call matrix.
 </Callout>
 
 ## Migrate from Convex

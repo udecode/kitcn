@@ -60,7 +60,7 @@ Malformed `JWKS` values can fail Convex module analysis during push/codegen.
 ```ts
 import { convex } from "better-convex/auth";
 import authConfig from "./auth.config";
-import { defineAuth } from "./generated";
+import { defineAuth } from "./generated/auth";
 
 export default defineAuth((ctx) => {
   return {
@@ -101,9 +101,9 @@ export default defineAuth((ctx) => {
 
 Canonical rule:
 
-1. Run `bunx better-convex dev` first to generate `convex/functions/generated.ts`.
-2. `auth.ts` default-exports `defineAuth((ctx) => ({ ...options, triggers }))` imported from `./generated`.
-3. Import runtime auth contract (`getAuth`, `authClient`, CRUD/triggers, `auth`) from `convex/functions/generated.ts`.
+1. Run `bunx better-convex dev` first to generate `convex/functions/generated/` directory.
+2. `auth.ts` default-exports `defineAuth((ctx) => ({ ...options, triggers }))` imported from `./generated/auth`.
+3. Import runtime auth contract (`getAuth`, `authClient`, CRUD/triggers, `auth`) from `convex/functions/generated/auth`.
 4. If `auth.ts` is missing or incomplete, codegen still succeeds and generated runtime exports `authEnabled = false` with setup guidance at call time.
 
 Do not manually create `authClient`, `createApi` exports, or static `auth` in `auth.ts`.
@@ -120,7 +120,7 @@ Ordering note:
 import { z } from "zod";
 import { getHeaders } from "better-convex/auth";
 
-import { getAuth } from "./generated";
+import { getAuth } from "./generated/auth";
 import { publicQuery } from "../lib/crpc";
 
 export const getSessionUser = publicQuery
@@ -165,15 +165,14 @@ export const getIsAuthenticated = publicQuery
 **Create:** `convex/shared/auth-shared.ts`
 
 ```ts
-import type { Doc } from "../functions/_generated/dataModel";
-import type { getAuth } from "../functions/generated";
+import type { getAuth } from "../functions/generated/auth";
 import type { Select } from "./api";
 
 export type Auth = ReturnType<typeof getAuth>;
 
 export type SessionUser = Select<"user"> & {
   isAdmin: boolean;
-  session: Doc<"session">;
+  session: Select<"session">;
   impersonatedBy?: string | null;
   plan?: "premium" | "team";
 };
@@ -208,14 +207,13 @@ Bootstrap note:
 cRPC + Hono route shape:
 
 ```ts
-
 import { authMiddleware } from "better-convex/auth/http";
 import { createHttpRouter } from "better-convex/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { router } from "../lib/crpc";
-import { getAuth } from "./generated";
+import { getAuth } from "./generated/auth";
 
 const app = new Hono();
 
@@ -279,8 +277,8 @@ After non-auth baseline is green, replace `convex/lib/crpc.ts` with this auth-aw
 import { getHeaders } from "better-convex/auth";
 import { CRPCError } from "better-convex/server";
 
-import { getAuth } from "../functions/generated";
-import { initCRPC } from "../functions/generated";
+import { getAuth } from "../functions/generated/auth";
+import { initCRPC } from "../functions/generated/server";
 
 const c = initCRPC
   .meta<{
@@ -446,7 +444,6 @@ Stop/go rule:
 1. If any sign-in gate check fails, fix auth wiring first.
 2. Do not continue to Section 7, 8, 9, or 10 until this gate is green.
 
-
 ## 10. Plugin Setup Modules
 
 Feature gate each plugin independently after auth core.
@@ -482,4 +479,3 @@ Server: add `organization({...})` plugin config.
 Client: add `organizationClient({...})` plugin config.
 
 Schema: add `organization`, `member`, `invitation` (+ optional `team`, `teamMember`), and session fields `activeOrganizationId`/`activeTeamId`.
-

@@ -86,7 +86,7 @@ npx better-convex dev
 import { admin } from 'better-auth/plugins';
 import { convex } from 'better-convex/auth';
 import authConfig from './auth.config';
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
   baseURL: process.env.SITE_URL!,
@@ -114,14 +114,14 @@ export default defineAuth((ctx) => ({
 }));
 ```
 
-Use runtime exports (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `auth`) from `convex/functions/generated.ts`.
+Use runtime exports (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `auth`) from `convex/functions/generated/auth`.
 
 ### 4. Schema (ORM API)
 
 Generate with CLI or define manually:
 
 ```bash
-npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth
 ```
 
 Manual template (auth-specific tables):
@@ -197,7 +197,7 @@ import { authMiddleware } from 'better-convex/auth/http';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { getAuth } from './generated';
+import { getAuth } from './generated/auth';
 
 const app = new Hono();
 app.use('/api/*', cors({
@@ -462,7 +462,7 @@ import {
   onCreate,
   onDelete,
   onUpdate,
-} from './generated';
+} from './generated/auth';
 ```
 
 ### Type Safety

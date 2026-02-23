@@ -141,6 +141,9 @@ const EXCLUDED_FILES = new Set([
  * Filters out private files/directories (prefixed with _) and config files.
  */
 export function isValidConvexFile(file: string): boolean {
+  if (file.endsWith('.runtime.ts')) return false;
+  if (file.startsWith('generated/')) return false;
+
   // Skip private files/directories (prefixed with _)
   if (file.startsWith('_') || file.includes('/_')) return false;
 

@@ -79,7 +79,7 @@ Before policies can run, you need to wire up the ORM with RLS enabled. Do this o
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {2,5}
 import type { GenericDatabaseWriter } from 'convex/server';
-import { orm } from '../functions/generated';
+import { orm } from '../functions/generated/server';
 
 export const withOrm = <Ctx extends { db: GenericDatabaseWriter<any> }>(ctx: Ctx) => {
   return orm.with(ctx, { rls: { ctx } });

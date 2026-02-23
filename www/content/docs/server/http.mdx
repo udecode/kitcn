@@ -152,7 +152,7 @@ Use `.searchParams()` for query string validation. Values come as strings, so us
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-8,11}
 import { z } from 'zod';
 import { publicRoute } from '../lib/crpc';
-import { createCaller } from '../functions/generated';
+import { createTodosCaller } from '../functions/generated/todos.runtime';
 
 export const list = publicRoute
   .get('/api/todos')
@@ -162,8 +162,8 @@ export const list = publicRoute
   }))
   .output(z.array(todoSchema))
   .query(async ({ ctx, searchParams }) => {
-    const caller = createCaller(ctx);
-    return caller.todos.list({
+    const caller = createTodosCaller(ctx);
+    return caller.list({
       limit: searchParams.limit,
       offset: searchParams.offset,
     });
@@ -181,15 +181,15 @@ Use `.params()` for URL path parameters. Define placeholders with `:paramName` i
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-6,9}
 import { z } from 'zod';
 import { publicRoute } from '../lib/crpc';
-import { createCaller } from '../functions/generated';
+import { createTodosCaller } from '../functions/generated/todos.runtime';
 
 export const get = publicRoute
   .get('/api/todos/:id')
   .params(z.object({ id: z.string() }))
   .output(todoSchema.nullable())
   .query(async ({ ctx, params }) => {
-    const caller = createCaller(ctx);
-    return caller.todos.get({ id: params.id });
+    const caller = createTodosCaller(ctx);
+    return caller.get({ id: params.id });
   });
 ```
 
@@ -200,7 +200,7 @@ Use `.post()` with `.input()` and `.mutation()` for create operations.
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-9,12-16}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
-import { createCaller } from '../functions/generated';
+import { createTodoInternalCaller } from '../functions/generated/todoInternal.runtime';
 
 export const create = authRoute
   .post('/api/todos')
@@ -210,8 +210,8 @@ export const create = authRoute
   }))
   .output(z.object({ id: z.string() }))
   .mutation(async ({ ctx, input }) => {
-    const caller = createCaller(ctx);
-    const id = await caller.todoInternal.create({
+    const caller = createTodoInternalCaller(ctx);
+    const id = await caller.create({
       userId: ctx.userId,
       ...input,
     });
@@ -226,7 +226,7 @@ Use `.patch()` for partial updates. Combine `.params()` for the resource ID and 
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-11,14-18}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
-import { createCaller } from '../functions/generated';
+import { createTodoInternalCaller } from '../functions/generated/todoInternal.runtime';
 
 export const update = authRoute
   .patch('/api/todos/:id')
@@ -237,8 +237,8 @@ export const update = authRoute
   }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, params, input }) => {
-    const caller = createCaller(ctx);
-    await caller.todoInternal.update({
+    const caller = createTodoInternalCaller(ctx);
+    await caller.update({
       id: params.id,
       ...input,
     });
@@ -253,15 +253,15 @@ Use `.delete()` for resource deletion. Typically only needs `.params()` for the 
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-8,11-13}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
-import { createCaller } from '../functions/generated';
+import { createTodoInternalCaller } from '../functions/generated/todoInternal.runtime';
 
 export const deleteTodo = authRoute
   .delete('/api/todos/:id')
   .params(z.object({ id: z.string() }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, params }) => {
-    const caller = createCaller(ctx);
-    await caller.todoInternal.deleteTodo({ id: params.id });
+    const caller = createTodoInternalCaller(ctx);
+    await caller.deleteTodo({ id: params.id });
     return { success: true };
   });
 ```
@@ -340,7 +340,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { router } from '../lib/crpc';
 
-import { getAuth } from './generated';
+import { getAuth } from './generated/auth';
 import { health } from '../routers/health';
 import { todosRouter } from '../routers/todos';
 
@@ -425,8 +425,8 @@ export const get = publicRoute
   .params(z.object({ id: z.string() }))
   .output(todoSchema)
   .query(async ({ ctx, params }) => {
-    const caller = createCaller(ctx);
-    const todo = await caller.todos.get({ id: params.id });
+    const caller = createTodosCaller(ctx);
+    const todo = await caller.get({ id: params.id });
 
     if (!todo) {
       throw new CRPCError({
@@ -479,8 +479,8 @@ export const download = authRoute
   .get('/api/todos/export/:format')
   .params(z.object({ format: z.enum(['json', 'csv']) }))
   .query(async ({ ctx, params, c }) => {
-    const caller = createCaller(ctx);
-    const todos = await caller.todos.list({ limit: 100 });
+    const caller = createTodosCaller(ctx);
+    const todos = await caller.list({ limit: 100 });
 
     c.header('Content-Disposition', `attachment; filename="todos.${params.format}"`);
     c.header('Cache-Control', 'no-cache');
@@ -523,6 +523,7 @@ For Server-Sent Events (SSE) and AI streaming, use Hono's streaming helpers.
 
 ```ts title="convex/routers/stream.ts" showLineNumbers {1,6-8,10-16}
 import { streamText } from 'hono/streaming';
+import { createDataCaller } from '../functions/generated/data.runtime';
 
 export const events = publicRoute
   .get('/api/stream')
@@ -533,8 +534,8 @@ export const events = publicRoute
 
     return streamText(c, async (stream) => {
       for (let i = 0; i < 10; i++) {
-        const caller = createCaller(ctx);
-        const data = await caller.data.getChunk({ index: i });
+        const caller = createDataCaller(ctx);
+        const data = await caller.getChunk({ index: i });
         await stream.write(`data: ${JSON.stringify(data)}\n\n`);
         await stream.sleep(1000);
       }
@@ -568,9 +569,11 @@ export const chat = publicRoute
 
 Handle external service callbacks like Stripe or GitHub using cRPC routes. Always verify signatures before processing.
 
-```ts title="convex/routers/webhooks.ts" showLineNumbers {4-8,14-17,22-32}
+```ts title="convex/routers/webhooks.ts" showLineNumbers {3-4,15,20-21,24-29}
 import { CRPCError } from 'better-convex/server';
 import { publicRoute } from '../lib/crpc';
+import { createPaymentsCaller } from '../functions/generated/payments.runtime';
+import { createSubscriptionsCaller } from '../functions/generated/subscriptions.runtime';
 
 export const stripe = publicRoute
   .post('/webhooks/stripe')
@@ -594,16 +597,18 @@ export const stripe = publicRoute
     }
 
     // 3. Process the webhook
+    const payments = createPaymentsCaller(ctx);
+    const subscriptions = createSubscriptionsCaller(ctx);
     const event = JSON.parse(body);
 
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await ctx.runMutation(internal.payments.markPaid, {
+        await payments.markPaid({
           paymentIntentId: event.data.object.id,
         });
         break;
       case 'customer.subscription.deleted':
-        await ctx.runMutation(internal.subscriptions.cancel, {
+        await subscriptions.cancel({
           subscriptionId: event.data.object.id,
         });
         break;

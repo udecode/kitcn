@@ -179,10 +179,16 @@ Passing a static JWKS avoids database queries during token verification.
 
 ## Step 4: Generate Runtime
 
-Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
+If using cRPC, run `better-convex dev` (generates all runtime including cRPC modules):
 
 ```bash
 npx better-convex dev
+```
+
+Otherwise, run a scoped generation pass:
+
+```bash
+npx better-convex codegen --scope auth
 ```
 
 ## Step 5: Migrate auth.ts
@@ -230,7 +236,7 @@ Here's what the before and after looks like:
     import { admin } from "better-auth/plugins";
     import { convex } from "better-convex/auth";
     import authConfig from "./auth.config";
-    import { defineAuth } from "./generated";
+    import { defineAuth } from "./generated/auth";
 
     export default defineAuth((ctx) => ({
       baseURL: process.env.SITE_URL!,
@@ -295,7 +301,7 @@ Use Hono only when you need cRPC or Hono middleware.
         ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
         import { registerRoutes } from 'better-convex/auth/http';
         import { httpRouter } from 'convex/server';
-        import { getAuth } from './generated';
+        import { getAuth } from './generated/auth';
 
         const http = httpRouter();
 
@@ -314,7 +320,7 @@ Use Hono only when you need cRPC or Hono middleware.
         import { HttpRouterWithHono } from 'better-convex/server';
         import { Hono } from 'hono';
         import { cors } from 'hono/cors';
-        import { getAuth } from './generated';
+        import { getAuth } from './generated/auth';
 
         const app = new Hono();
 
@@ -342,7 +348,7 @@ Use Hono only when you need cRPC or Hono middleware.
         import { Hono } from 'hono';
         import { cors } from 'hono/cors';
         import { router } from '../lib/crpc';
-        import { getAuth } from './generated';
+        import { getAuth } from './generated/auth';
 
         const app = new Hono();
 
@@ -982,7 +988,7 @@ export function SignOutButton() {
 Generated runtime can be disabled when `convex/functions/auth.ts` is missing or lacks a default export.
 
 ```ts
-import { defineAuth } from './generated';
+import { defineAuth } from './generated/auth';
 
 export default defineAuth((ctx) => ({
   // ...options

@@ -59,7 +59,7 @@ import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { router } from '../lib/crpc';
-import { getAuth } from './generated';
+import { getAuth } from './generated/auth';
 import { todosRouter } from '../routers/todos';
 import { health } from '../routers/health';
 
@@ -93,7 +93,7 @@ export default createHttpRouter(app, httpRouter);
 ### GET with Search Params
 
 ```ts
-import { createCaller } from '../functions/generated';
+import { createTodosCaller } from '../functions/generated/todos.runtime';
 
 export const list = publicRoute
   .get('/api/todos')
@@ -103,8 +103,8 @@ export const list = publicRoute
   }))
   .output(z.array(todoSchema))
   .query(async ({ ctx, searchParams }) => {
-    const caller = createCaller(ctx);
-    return caller.todos.list({ limit: searchParams.limit, offset: searchParams.offset });
+    const caller = createTodosCaller(ctx);
+    return caller.list({ limit: searchParams.limit, offset: searchParams.offset });
   });
 ```
 
@@ -118,8 +118,8 @@ export const get = publicRoute
   .params(z.object({ id: z.string() }))
   .output(todoSchema.nullable())
   .query(async ({ ctx, params }) => {
-    const caller = createCaller(ctx);
-    return caller.todos.get({ id: params.id });
+    const caller = createTodosCaller(ctx);
+    return caller.get({ id: params.id });
   });
 ```
 
@@ -131,8 +131,8 @@ export const create = authRoute
   .input(z.object({ title: z.string().min(1), description: z.string().optional() }))
   .output(z.object({ id: z.string() }))
   .mutation(async ({ ctx, input }) => {
-    const caller = createCaller(ctx);
-    const id = await caller.todoInternal.create({ userId: ctx.userId, ...input });
+    const caller = createTodoInternalCaller(ctx);
+    const id = await caller.create({ userId: ctx.userId, ...input });
     return { id };
   });
 
@@ -142,8 +142,8 @@ export const update = authRoute
   .input(z.object({ title: z.string().optional(), completed: z.boolean().optional() }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, params, input }) => {
-    const caller = createCaller(ctx);
-    await caller.todoInternal.update({ id: params.id, ...input });
+    const caller = createTodoInternalCaller(ctx);
+    await caller.update({ id: params.id, ...input });
     return { success: true };
   });
 
@@ -152,8 +152,8 @@ export const deleteTodo = authRoute
   .params(z.object({ id: z.string() }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, params }) => {
-    const caller = createCaller(ctx);
-    await caller.todoInternal.deleteTodo({ id: params.id });
+    const caller = createTodoInternalCaller(ctx);
+    await caller.deleteTodo({ id: params.id });
     return { success: true };
   });
 ```
@@ -175,8 +175,8 @@ export const createTask = authRoute
   .input(z.object({ title: z.string(), description: z.string().optional() }))
   .output(z.object({ taskId: z.string(), projectId: z.string() }))
   .mutation(async ({ ctx, params, searchParams, input }) => {
-    const caller = createCaller(ctx);
-    const taskId = await caller.tasks.create({ projectId: params.projectId, ...input });
+    const caller = createTasksCaller(ctx);
+    const taskId = await caller.create({ projectId: params.projectId, ...input });
     if (searchParams.notify) {
       await ctx.scheduler.runAfter(0, internal.notifications.send, { taskId });
     }
@@ -207,8 +207,8 @@ export const heavyEndpoint = publicRoute
   .meta({ rateLimit: 'api/heavy' })
   .get('/api/reports')
   .query(async ({ ctx }) => {
-    const caller = createCaller(ctx);
-    return caller.reports.generate({});
+    const caller = createReportsCaller(ctx);
+    return caller.generate({});
   });
 
 // Chained meta (shallow merge)
@@ -218,15 +218,15 @@ export const adminEndpoint = authRoute
   .delete('/api/users/:id')
   .params(z.object({ id: z.string() }))
   .mutation(async ({ ctx, params }) => {
-    const caller = createCaller(ctx);
-    await caller.admin.deleteUser({ id: params.id });
+    const caller = createAdminCaller(ctx);
+    await caller.deleteUser({ id: params.id });
   });
 
 // Custom middleware extending context
 export const withPermissions = authRoute
   .use(async ({ ctx, next }) => {
-    const caller = createCaller(ctx);
-    const permissions = await caller.permissions.get({ userId: ctx.userId });
+    const caller = createPermissionsCaller(ctx);
+    const permissions = await caller.get({ userId: ctx.userId });
     return next({ ctx: { ...ctx, permissions } });
   })
   .get('/api/protected')
@@ -244,10 +244,10 @@ export const withPermissions = authRoute
 export const publicOrAuth = optionalAuthRoute
   .get('/api/content')
   .query(async ({ ctx }) => {
-    const caller = createCaller(ctx);
+    const caller = createContentCaller(ctx);
     const userId: Id<'user'> | null = ctx.userId;
-    if (userId) return caller.content.personalized({ userId });
-    return caller.content.public({});
+    if (userId) return caller.personalized({ userId });
+    return caller.public({});
   });
 ```
 
@@ -276,8 +276,8 @@ export const download = authRoute
   .get('/api/todos/export/:format')
   .params(z.object({ format: z.enum(['json', 'csv']) }))
   .query(async ({ ctx, params, c }) => {
-    const caller = createCaller(ctx);
-    const todos = await caller.todos.list({ limit: 100 });
+    const caller = createTodosCaller(ctx);
+    const todos = await caller.list({ limit: 100 });
     c.header('Content-Disposition', `attachment; filename="todos.${params.format}"`);
     c.header('Cache-Control', 'no-cache');
     if (params.format === 'csv') {
@@ -316,8 +316,8 @@ export const events = publicRoute
     c.header('Cache-Control', 'no-cache');
     return streamText(c, async (stream) => {
       for (let i = 0; i < 10; i++) {
-        const caller = createCaller(ctx);
-        const data = await caller.data.getChunk({ index: i });
+        const caller = createDataCaller(ctx);
+        const data = await caller.getChunk({ index: i });
         await stream.write(`data: ${JSON.stringify(data)}\n\n`);
         await stream.sleep(1000);
       }
@@ -349,10 +349,11 @@ export const rateLimited = publicRoute
   .input(z.object({ data: z.string() }))
   .mutation(async ({ ctx, input, c }) => {
     const ip = c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ?? c.req.header('CF-Connecting-IP') ?? 'unknown';
-    const caller = createCaller(ctx);
-    const allowed = await caller.rateLimit.check({ key: `http:${ip}`, limit: 100, window: 3600000 });
+    const rateLimitCaller = createRateLimitCaller(ctx);
+    const allowed = await rateLimitCaller.check({ key: `http:${ip}`, limit: 100, window: 3600000 });
     if (!allowed) return c.text('Rate limit exceeded', 429, { 'Retry-After': '3600' });
-    const result = await caller.api.process({ data: input.data });
+    const apiCaller = createApiCaller(ctx);
+    const result = await apiCaller.process({ data: input.data });
     return c.json(result);
   });
 ```
@@ -372,14 +373,15 @@ export const stripeWebhook = publicRoute
     const isValid = await ctx.runAction(internal.stripe.verify, { body, signature });
     if (!isValid) throw new CRPCError({ code: 'BAD_REQUEST', message: 'Invalid signature' });
 
-    const caller = createCaller(ctx);
     const event = JSON.parse(body);
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await caller.payments.markPaid({ paymentIntentId: event.data.object.id });
+        const paymentsCaller = createPaymentsCaller(ctx);
+        await paymentsCaller.markPaid({ paymentIntentId: event.data.object.id });
         break;
       case 'customer.subscription.deleted':
-        await caller.subscriptions.cancel({ subscriptionId: event.data.object.id });
+        const subscriptionsCaller = createSubscriptionsCaller(ctx);
+        await subscriptionsCaller.cancel({ subscriptionId: event.data.object.id });
         break;
     }
     return c.text('OK', 200);
@@ -406,10 +408,10 @@ export const discordWebhook = publicRoute
     const interaction = JSON.parse(body);
     if (interaction.type === 1) return c.json({ type: 1 }); // PING
     if (interaction.type === 2) {
-      const caller = createCaller(ctx);
+      const statsCaller = createStatsCaller(ctx);
       switch (interaction.data.name) {
         case 'stats':
-          const stats = await caller.stats.get({});
+          const stats = await statsCaller.get({});
           return c.json({ type: 4, data: { content: `Users: ${stats.users}, Posts: ${stats.posts}` } });
         case 'create':
           await ctx.scheduler.runAfter(0, internal.discord.processCreate, { token: interaction.token });
@@ -419,8 +421,8 @@ export const discordWebhook = publicRoute
       }
     }
     if (interaction.type === 3) {
-      const caller2 = createCaller(ctx);
-      await caller2.discord.handleButton({ customId: interaction.data.custom_id, userId: interaction.user.id });
+      const discordCaller = createDiscordCaller(ctx);
+      await discordCaller.handleButton({ customId: interaction.data.custom_id, userId: interaction.user.id });
       return c.json({ type: 7, data: { content: 'Done!' } });
     }
     throw new CRPCError({ code: 'BAD_REQUEST', message: 'Unknown interaction' });

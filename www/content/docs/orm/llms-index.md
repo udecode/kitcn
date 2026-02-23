@@ -181,7 +181,7 @@ isNotNull(field);
 - Column selection (post‑fetch)
 - String operators (post‑fetch)
 - Mutations (insert, update, delete, returning)
-- Aggregation workaround via `/docs/server/advanced/aggregates` (`@convex-dev/aggregate`)
+- Aggregation workaround via `/docs/server/advanced/aggregates` (`createAggregate` from `better-convex/aggregate`)
 
 **Unavailable in Convex:**
 
@@ -196,7 +196,7 @@ isNotNull(field);
 - `Property 'query' does not exist` → Ensure ORM is attached as `ctx.orm`
 - `Type error: missing required field` → Check `.notNull()` in schema
 - `findUnique is not a function` → Use `findFirst` with `where`
-- `count/sum/avg/max/min is not on db.query.*` → Use `/docs/server/advanced/aggregates` (`@convex-dev/aggregate`)
+- `count/sum/avg/max/min is not on db.query.*` → Use `/docs/server/advanced/aggregates` (`createAggregate` from `better-convex/aggregate`)
 - `'include' does not exist` → Use `with` instead of `include`
 - `findMany() requires explicit sizing` → Add `limit`, use cursor pagination (`cursor` + `limit`), set schema `defaultLimit`, or opt in with `allowFullScan`
 - `.withIndex(...) required` → `predicate` `where` and typed post-fetch operators need explicit index selection

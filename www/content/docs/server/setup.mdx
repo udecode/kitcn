@@ -33,7 +33,7 @@ npx better-convex dev
 `convex/functions/generated.ts` is the canonical server contract — it exports `initCRPC` (with ORM pre-wired when `relations` exists) and `defineAuth` for auth.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
-import { initCRPC } from '../functions/generated';
+import { initCRPC } from '../functions/generated/server';
 
 const c = initCRPC.create();
 ```
@@ -49,7 +49,7 @@ cRPC serializes inputs/outputs through a transformer at the procedure boundary.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
 import { createTaggedTransformer } from 'better-convex/crpc';
-import { initCRPC } from '../functions/generated';
+import { initCRPC } from '../functions/generated/server';
 
 const transformer = createTaggedTransformer([
   // Add custom codecs here (Date is already built-in)

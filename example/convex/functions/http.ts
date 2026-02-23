@@ -7,7 +7,7 @@ import { getEnv } from '../lib/get-env';
 import { examplesRouter } from '../routers/examples';
 import { health } from '../routers/health';
 import { todosRouter } from '../routers/todos';
-import { getAuth } from './generated';
+import { getAuth } from './generated/auth';
 
 const app = new Hono();
 

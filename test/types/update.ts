@@ -120,6 +120,7 @@ const baseUpdate = {
   const result = await db
     .update(users)
     .set({ ...baseUpdate })
+    .allowFullScan()
     .executeAsync();
 
   Expect<Equal<undefined, typeof result>>;
@@ -130,6 +131,7 @@ const baseUpdate = {
   const result = await db
     .update(users)
     .set({ ...baseUpdate })
+    .allowFullScan()
     .returning({
       name: users.name,
     })
@@ -147,6 +149,7 @@ const baseUpdate = {
   const result = await db
     .update(users)
     .set({ ...baseUpdate })
+    .allowFullScan()
     .returning({
       name: users.name,
     })
@@ -260,11 +263,26 @@ const baseUpdate = {
 
 // execute(config) is not available on paginated update builders
 {
-  db.update(users)
+  const pagedUpdate = db
+    .update(users)
     .set({ ...baseUpdate })
-    .paginate({ cursor: null, limit: 10 })
-    // @ts-expect-error - execute config is not available after paginate()
-    .execute({ mode: 'async' });
+    .paginate({ cursor: null, limit: 10 });
+  // @ts-expect-error - execute config is not available after paginate()
+  pagedUpdate.execute({ mode: 'async' });
+}
+
+// execute() requires where() or allowFullScan()
+{
+  const unsafeUpdate = db.update(users).set({ ...baseUpdate });
+  // @ts-expect-error - execute requires where() or allowFullScan()
+  unsafeUpdate.execute();
+}
+
+// executeAsync() requires where() or allowFullScan()
+{
+  const unsafeUpdate = db.update(users).set({ ...baseUpdate });
+  // @ts-expect-error - executeAsync requires where() or allowFullScan()
+  unsafeUpdate.executeAsync();
 }
 
 // returning selection must use column builders

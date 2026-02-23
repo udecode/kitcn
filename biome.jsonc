@@ -5,7 +5,7 @@
     "includes": [
       "!!tmp",
       "!**/_generated",
-      "!**/convex/functions/generated.ts",
+      "!**/generated",
       "!**/convex/shared/api.ts",
       "!!**/convex.json",
       "!!packages/better-convex/src/internal/upstream/server/zod4.ts"
@@ -89,6 +89,7 @@
         "**/*.ts",
         "**/*.tsx",
         "!**/_generated",
+        "!**/generated",
         "!**/*.spec.*",
         "!**/*.test.*",
         "!tmp/**",
@@ -149,6 +150,10 @@
                   {
                     "group": ["@/*", "**/src/**"],
                     "message": "Convex files cannot import from src/."
+                  },
+                  {
+                    "group": ["**/_generated/server*"],
+                    "message": "Use convex/functions/generated/server instead of _generated/server."
                   }
                 ]
               }
@@ -179,11 +184,12 @@
                     "message": "convex/shared cannot import from convex/routers."
                   },
                   {
-                    "group": [
-                      "**/../functions/*",
-                      "!**/../functions/_generated/**"
-                    ],
-                    "message": "convex/shared cannot import from convex/functions (except _generated)."
+                    "group": ["**/_generated/server*"],
+                    "message": "Use convex/functions/generated/server instead of _generated/server."
+                  },
+                  {
+                    "group": ["**/../functions/*"],
+                    "message": "convex/shared cannot import from convex/functions."
                   }
                 ]
               }

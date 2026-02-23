@@ -33,7 +33,7 @@ Out of scope:
 4. Use `CRPCError` for expected failures.
 5. Prefer schema triggers for cross-row invariants, but move invariant maintenance to explicit mutation helpers if trigger execution is unstable (for example init/seed hangs or recursive write paths).
 6. Keep auth/rate-limit checks server-side.
-7. **Inter-procedure calls**: `createHandler(ctx)` in queries/mutations (zero overhead) unless validation is relevant, `createCaller(ctx)` in actions/HTTP routes. Never `ctx.runQuery`/`ctx.runMutation` directly.
+7. **Inter-procedure calls**: `create<Module>Handler(ctx)` in queries/mutations (zero overhead) unless validation is relevant, `create<Module>Caller(ctx)` in actions/HTTP routes. Import from `./generated/<module>.runtime`. Never `ctx.runQuery`/`ctx.runMutation` directly.
 
 ## Shortcut Mode (tRPC + Drizzle Mental Model)
 
@@ -45,7 +45,7 @@ Default assumption:
 Only remember these non-parity deltas:
 
 1. Procedure input root must be `z.object(...)` (no primitive root args).
-2. No `z.void()` outputs; use `.output(z.null())` for no-value mutations.
+2. No `z.void()` outputs; omit `.output(...)` for no-value mutations.
 3. Stacked `.input(...)` calls merge input shapes.
 4. `.paginated({ limit, item })` must be before `.query()` and auto-adds `input.cursor` + `input.limit`, output `{ page, continueCursor, isDone }`.
 5. Metadata is codegen’d onto `@convex/api` leaves (`api.namespace.fn.meta`) so never put secrets in `.meta(...)`; chaining `.meta(...)` is shallow merge and supports `defaultMeta`.
@@ -62,12 +62,12 @@ Only remember these non-parity deltas:
 16. In RSC, `prefetch` hydrates client, `caller` is server-only and not hydrated, `preloadQuery` hydrates but can cause stale split ownership if also rendered client-side.
 17. Better Auth Next.js shortcut is `convexBetterAuth(...)`; generic server-only shortcut is `createCallerFactory(...)`.
 18. Use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out.
-19. **NEVER** use `ctx.runQuery`/`ctx.runMutation` directly. Use `createHandler(ctx)` or `createCaller(ctx)` from `convex/functions/generated.ts` instead.
-20. **`createHandler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only.
-21. **`createCaller(ctx)`** — use in actions and HTTP routes (where `createHandler` is unavailable). Goes through validation + middleware. ActionCtx dispatches via `ctx.runQuery`/`ctx.runMutation` under the hood (separate transactions).
+19. **NEVER** use `ctx.runQuery`/`ctx.runMutation` directly. Use `create<Module>Handler(ctx)` or `create<Module>Caller(ctx)` from `convex/functions/generated/<module>.runtime` instead.
+20. **`create<Module>Handler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only. Import from `./generated/<module>.runtime`.
+21. **`create<Module>Caller(ctx)`** — use in actions and HTTP routes (where handler is unavailable). Goes through validation + middleware. ActionCtx dispatches via `ctx.runQuery`/`ctx.runMutation` under the hood (separate transactions). Import from `./generated/<module>.runtime`. Each caller/handler eagerly loads every procedure in its module (no lazy loading) — split large modules to keep bundles lean.
 22. API types (`Api`, `ApiInputs`, `ApiOutputs`, `Select`, `Insert`, `TableName`) import from `@convex/api` — no manual `inferApiInputs<typeof api>`.
 23. HTTP router must export as `httpRouter` (not `appRouter`) for codegen.
-24. All server wiring imports (`getAuth`, `initCRPC`, `withOrm`, `createCaller`, `createHandler`, `defineAuth`, `QueryCtx`, `MutationCtx`, `OrmCtx`) come from `convex/functions/generated.ts`. No manual `convex/lib/orm.ts`.
+24. Server wiring imports come from `convex/functions/generated/` directory: `getAuth`, `defineAuth` from `generated/auth`; `initCRPC`, `QueryCtx`, `MutationCtx`, `OrmCtx` from `generated/server`; `create<Module>Caller`, `create<Module>Handler` from `generated/<module>.runtime`. No manual `convex/lib/orm.ts`.
 25. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
 26. Internal auth functions at `internal.generated.*` (not `internal.auth.*`).
 27. Async mutation batching: `execute({ mode: "async", batchSize, delayMs })` for large update/delete. Schema config: `mutationExecutionMode: 'async'`, `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
@@ -128,10 +128,10 @@ import {
   convexTable,
   defineRelations,
   defineSchema,
+  defineTriggers,
   id,
   integer,
   index,
-  onChange,
   text,
   timestamp,
 } from "better-convex/orm";
@@ -167,7 +167,24 @@ export const task = convexTable(
   (t) => [
     index("projectId_updatedAt").on(t.projectId, t.updatedAt),
     index("projectId_status").on(t.projectId, t.status),
-    onChange(async (ctx, change) => {
+  ]
+);
+
+const tables = { project, task };
+export default defineSchema(tables, { strict: false });
+
+export const relations = defineRelations(tables, (r) => ({
+  project: {
+    tasks: r.many.task(),
+  },
+  task: {
+    project: r.one.project({ from: r.task.projectId, to: r.project.id }),
+  },
+}));
+
+export const triggers = defineTriggers(relations, {
+  task: {
+    change: async (change, ctx) => {
       const projectId = change.newDoc?.projectId ?? change.oldDoc?.projectId;
       if (!projectId) return;
       // Keep invariants bounded and idempotent.
@@ -183,21 +200,9 @@ export const task = convexTable(
           openTaskCount: open.length,
         })
         .where(eq(project.id, projectId));
-    }),
-  ]
-);
-
-const tables = { project, task };
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  project: {
-    tasks: r.many.task(),
+    },
   },
-  task: {
-    project: r.one.project({ from: r.task.projectId, to: r.project.id }),
-  },
-}));
+});
 ```
 
 Schema rules that matter:
@@ -213,7 +218,8 @@ Schema rules that matter:
 // convex/lib/crpc.ts (shape reference only)
 import { getHeaders } from "better-convex/auth";
 import { CRPCError } from "better-convex/server";
-import { createCaller, getAuth, initCRPC } from "../functions/generated";
+import { getAuth } from "../functions/generated/auth";
+import { initCRPC } from "../functions/generated/server";
 
 const c = initCRPC
   .meta<{
@@ -343,7 +349,7 @@ export const toggleTask = authMutation
   .input(
     z.object({ projectId: z.string(), taskId: z.string(), done: z.boolean() })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const ownedProject = await ctx.orm.query.project.findFirst({
       where: { id: input.projectId, ownerId: ctx.userId },
@@ -378,52 +384,55 @@ Procedure rules that matter:
 3. Throw `CRPCError` for expected runtime outcomes.
 4. Keep list queries bounded (`limit` and/or cursor).
 5. Root input must be `z.object(...)`.
-6. Use `.output(z.null())` (not `z.void()`) for no-value mutations.
+6. Omit `.output(...)` (not `z.void()`) for no-value mutations.
 7. Stack `.input(...)` for reusable procedure composition when needed.
 8. Use `.paginated(...)` for infinite-query endpoints instead of hand-rolling pagination output.
 
 ### 3b) Inter-Procedure Composition
 
-When one procedure calls another, use `createHandler(ctx)` (queries/mutations) or `createCaller(ctx)` (actions/HTTP). Never `ctx.runQuery`/`ctx.runMutation` directly.
+When one procedure calls another, use `create<Module>Handler(ctx)` (queries/mutations) or `create<Module>Caller(ctx)` (actions/HTTP). Import from `./generated/<module>.runtime`. Never `ctx.runQuery`/`ctx.runMutation` directly.
 
 ```ts
-import { createHandler, createCaller } from "./generated";
+import { createOrganizationHandler } from "./generated/organization.runtime";
+import { createSeedHandler } from "./generated/seed.runtime";
+import { createAnalyticsCaller, createReportsCaller } from "./generated/analytics.runtime";
 
 // Query/mutation → createHandler (zero overhead, bypasses validation)
 export const listOrganizations = authQuery
   .query(async ({ ctx }) => {
-    const handler = createHandler(ctx);
-    const orgs = await handler.organization.listUserOrganizations();
+    const handler = createOrganizationHandler(ctx);
+    const orgs = await handler.listUserOrganizations();
     return orgs;
   });
 
 // Mutation → createHandler for sub-procedure calls
 export const seed = privateMutation
-  .output(z.null())
+  
   .mutation(async ({ ctx }) => {
-    const handler = createHandler(ctx);
-    await handler.seed.cleanupSeedData();
-    await handler.seed.seedUsers();
+    const handler = createSeedHandler(ctx);
+    await handler.cleanupSeedData();
+    await handler.seedUsers();
     return null;
   });
 
-// Action → createCaller (createHandler unavailable)
+// Action → createCaller (handler unavailable)
 export const generateReport = privateAction
-  .output(z.null())
+  
   .action(async ({ ctx }) => {
-    const caller = createCaller(ctx);
-    const stats = await caller.analytics.getDailyStats({});
-    await caller.reports.create({ type: "daily", data: stats });
+    const analyticsCaller = createAnalyticsCaller(ctx);
+    const reportsCaller = createReportsCaller(ctx);
+    const stats = await analyticsCaller.getDailyStats({});
+    await reportsCaller.create({ type: "daily", data: stats });
     return null;
   });
 ```
 
 | Context | Use | Why |
 |---------|-----|-----|
-| `QueryCtx` | `createHandler(ctx)` | Zero overhead, direct handler call |
-| `MutationCtx` | `createHandler(ctx)` | Zero overhead, same transaction |
-| `ActionCtx` | `createCaller(ctx)` | `createHandler` unavailable; dispatches via `ctx.runQuery`/`ctx.runMutation` (separate transactions) |
-| HTTP routes | `createCaller(ctx)` | Action-like context |
+| `QueryCtx` | `create<Module>Handler(ctx)` | Zero overhead, direct handler call |
+| `MutationCtx` | `create<Module>Handler(ctx)` | Zero overhead, same transaction |
+| `ActionCtx` | `create<Module>Caller(ctx)` | Handler unavailable; dispatches via `ctx.runQuery`/`ctx.runMutation` (separate transactions) |
+| HTTP routes | `create<Module>Caller(ctx)` | Action-like context |
 
 ### 4) Query Modes (Use The Right One)
 
@@ -650,7 +659,7 @@ Hydration rule:
 
 ```ts
 // router endpoint example
-import { createCaller } from "../functions/generated";
+import { createTaskCaller } from "../functions/generated/task.runtime";
 
 export const createTaskRoute = authRoute
   .post("/api/projects/:projectId/tasks")
@@ -658,8 +667,8 @@ export const createTaskRoute = authRoute
   .input(z.object({ title: z.string().min(1) }))
   .output(z.object({ id: z.string() }))
   .mutation(async ({ ctx, params, input }) => {
-    const caller = createCaller(ctx);
-    const id = await caller.task.createFromHttp({
+    const caller = createTaskCaller(ctx);
+    const id = await caller.createFromHttp({
       projectId: params.projectId,
       title: input.title,
       userId: ctx.userId,
@@ -767,13 +776,13 @@ Before calling a feature done:
 | Throwing generic `Error` for expected outcomes      | Throw `CRPCError` with explicit code                                                     |
 | Infinite list with TanStack native hook directly    | Use `useInfiniteQuery` from `better-convex/react`                                        |
 | Primitive root input (`z.string()`)                 | Use root `z.object(...)` input schema                                                    |
-| Returning nothing with `z.void()`                   | Use `.output(z.null())` or omit explicit output                                          |
+| Returning nothing with `z.void()`                   | Omit explicit output                                                     |
 | Manual pagination wrappers for infinite endpoints   | Use `.paginated({ limit, item })`                                                        |
 | Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                 |
-| Aggregates disabled but helper/config still present | Remove aggregate helper + schema hooks + app config together                             |
+| Aggregates disabled but helper/config still present | Remove aggregate helper + `defineTriggers` handlers + app config together                |
 | Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                             |
-| Using `ctx.runQuery`/`ctx.runMutation` directly     | Use `createHandler(ctx)` in queries/mutations, `createCaller(ctx)` in actions/HTTP       |
-| Using `createCaller` in query/mutation context      | Use `createHandler(ctx)` — zero overhead, bypasses redundant validation                  |
+| Using `ctx.runQuery`/`ctx.runMutation` directly     | Use `create<Module>Handler(ctx)` in queries/mutations, `create<Module>Caller(ctx)` in actions/HTTP (from `generated/<module>.runtime`) |
+| Using `createCaller` in query/mutation context      | Use `create<Module>Handler(ctx)` — zero overhead, bypasses redundant validation          |
 | Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup/`  |
 | Relaxing lint rules to pass checks                  | Keep baseline lint config; fix code-level warnings/errors instead                        |
 

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { authAction, privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
-import { createCaller, createHandler } from './generated';
+import { createSeedCaller, createSeedHandler } from './generated/seed.runtime';
 import {
   projectsTable,
   tagsTable,
@@ -14,7 +14,7 @@ import {
 
 // Admin configuration - moved inside functions to avoid module-level execution
 const getAdminConfig = () => {
-  const adminEmail = getEnv().ADMIN[0] || 'admin@example.com';
+  const adminEmail = getEnv().ADMIN[0] || 'admin@better-convex.com';
 
   return { adminEmail };
 };
@@ -24,52 +24,46 @@ const getUsersData = () => [
   {
     id: 'alice',
     bio: 'Frontend Developer',
-    email: 'alice@example.com',
+    email: 'alice@better-convex.com',
     image: 'https://avatars.githubusercontent.com/u/2',
     name: 'Alice Johnson',
   },
   {
     id: 'bob',
     bio: 'Backend Developer',
-    email: 'bob@example.com',
+    email: 'bob@better-convex.com',
     image: 'https://avatars.githubusercontent.com/u/3',
     name: 'Bob Smith',
   },
   {
     id: 'carol',
     bio: 'UI/UX Designer',
-    email: 'carol@example.com',
+    email: 'carol@better-convex.com',
     image: 'https://avatars.githubusercontent.com/u/4',
     name: 'Carol Williams',
   },
   {
     id: 'dave',
     bio: 'DevOps Engineer',
-    email: 'dave@example.com',
+    email: 'dave@better-convex.com',
     image: undefined,
     name: 'Dave Brown',
   },
 ];
 
 // Main seed function that orchestrates everything
-export const seed = privateMutation
-  .output(z.null())
-  .mutation(async ({ ctx }) => {
-    const caller = createHandler(ctx);
+export const seed = privateMutation.mutation(async ({ ctx }) => {
+  const caller = createSeedHandler(ctx);
 
-    // Step 1: Clean up existing seed data
-    await caller.seed.cleanupSeedData();
+  // Step 1: Clean up existing seed data
+  await caller.cleanupSeedData();
 
-    // Step 2: Seed users
-    await caller.seed.seedUsers();
-
-    return null;
-  });
+  // Step 2: Seed users
+  await caller.seedUsers();
+});
 
 // Clean up existing seed data
-export const cleanupSeedData = privateMutation
-  .output(z.null())
-  .mutation(async (_args) => null);
+export const cleanupSeedData = privateMutation.mutation(async (_args) => {});
 
 // Seed users
 export const seedUsers = privateMutation
@@ -134,7 +128,7 @@ export const generateSamples = authAction
     })
   )
   .action(async ({ ctx, input }) => {
-    const caller = createCaller(ctx);
+    const caller = createSeedCaller(ctx);
     let totalCreated = 0;
     let totalTodosCreated = 0;
 
@@ -146,7 +140,7 @@ export const generateSamples = authAction
       const batchCount = Math.min(batchSize, input.count - i * batchSize);
 
       // Create projects in this batch using internal mutation
-      const batchResult = await caller.seed.generateSamplesBatch({
+      const batchResult = await caller.generateSamplesBatch({
         count: batchCount,
         userId: ctx.user.id,
         batchIndex: i,
