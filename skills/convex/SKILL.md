@@ -33,7 +33,7 @@ Out of scope:
 4. Use `CRPCError` for expected failures.
 5. Prefer schema triggers for cross-row invariants, but move invariant maintenance to explicit mutation helpers if trigger execution is unstable (for example init/seed hangs or recursive write paths).
 6. Keep auth/rate-limit checks server-side.
-7. **Inter-procedure calls**: `create<Module>Handler(ctx)` in queries/mutations (zero overhead) unless validation is relevant, `create<Module>Caller(ctx)` in actions/HTTP routes. Import from `./generated/<module>.runtime`. Never `ctx.runQuery`/`ctx.runMutation` directly.
+7. **Inter-procedure calls**: `create<Module>Handler(ctx)` in queries/mutations (zero overhead) unless validation is relevant, `create<Module>Caller(ctx)` in actions/HTTP routes. In action context use `caller.actions.*` for action procedures and `caller.schedule.*` for scheduling. Import from `./generated/<module>.runtime`. Never call `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly for module procedures.
 
 ## Shortcut Mode (tRPC + Drizzle Mental Model)
 
@@ -62,15 +62,15 @@ Only remember these non-parity deltas:
 16. In RSC, `prefetch` hydrates client, `caller` is server-only and not hydrated, `preloadQuery` hydrates but can cause stale split ownership if also rendered client-side.
 17. Better Auth Next.js shortcut is `convexBetterAuth(...)`; generic server-only shortcut is `createCallerFactory(...)`.
 18. Use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out.
-19. **NEVER** use `ctx.runQuery`/`ctx.runMutation` directly. Use `create<Module>Handler(ctx)` or `create<Module>Caller(ctx)` from `convex/functions/generated/<module>.runtime` instead.
+19. **NEVER** use `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly for module-to-module calls. Use `create<Module>Handler(ctx)` or `create<Module>Caller(ctx)` from `convex/functions/generated/<module>.runtime` instead.
 20. **`create<Module>Handler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only. Import from `./generated/<module>.runtime`.
-21. **`create<Module>Caller(ctx)`** — use in actions and HTTP routes (where handler is unavailable). Goes through validation + middleware. ActionCtx dispatches via `ctx.runQuery`/`ctx.runMutation` under the hood (separate transactions). Import from `./generated/<module>.runtime`. Each caller/handler eagerly loads every procedure in its module (no lazy loading) — split large modules to keep bundles lean.
+21. **`create<Module>Caller(ctx)`** — use in actions and HTTP routes (where handler is unavailable). Goes through validation + middleware. Root caller exposes query+mutation procedures. In `ActionCtx`, action procedures are under `caller.actions.*`; scheduling is under `caller.schedule.now|after|at` with `caller.schedule.cancel(id)`. Import from `./generated/<module>.runtime`. Each caller/handler eagerly loads every procedure in its module (no lazy loading) — split large modules to keep bundles lean.
 22. API types (`Api`, `ApiInputs`, `ApiOutputs`, `Select`, `Insert`, `TableName`) import from `@convex/api` — no manual `inferApiInputs<typeof api>`.
 23. HTTP router must export as `httpRouter` (not `appRouter`) for codegen.
 24. Server wiring imports come from `convex/functions/generated/` directory: `getAuth`, `defineAuth` from `generated/auth`; `initCRPC`, `QueryCtx`, `MutationCtx`, `OrmCtx` from `generated/server`; `create<Module>Caller`, `create<Module>Handler` from `generated/<module>.runtime`. No manual `convex/lib/orm.ts`.
 25. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
 26. Internal auth functions at `internal.generated.*` (not `internal.auth.*`).
-27. Async mutation batching: `execute({ mode: "async", batchSize, delayMs })` for large update/delete. Schema config: `mutationExecutionMode: 'async'`, `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
+27. Async mutation batching is the default (codegen wires it). Customize per call: `execute({ batchSize, delayMs })`. Opt into sync: `execute({ mode: 'sync' })` or `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`. Relevant defaults: `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
 
 ## Directory Boundary (Important)
 
@@ -390,12 +390,13 @@ Procedure rules that matter:
 
 ### 3b) Inter-Procedure Composition
 
-When one procedure calls another, use `create<Module>Handler(ctx)` (queries/mutations) or `create<Module>Caller(ctx)` (actions/HTTP). Import from `./generated/<module>.runtime`. Never `ctx.runQuery`/`ctx.runMutation` directly.
+When one procedure calls another, use `create<Module>Handler(ctx)` (queries/mutations) or `create<Module>Caller(ctx)` (actions/HTTP). Import from `./generated/<module>.runtime`. In action context use `caller.actions.*` and `caller.schedule.*` instead of `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction`.
 
 ```ts
 import { createOrganizationHandler } from "./generated/organization.runtime";
 import { createSeedHandler } from "./generated/seed.runtime";
-import { createAnalyticsCaller, createReportsCaller } from "./generated/analytics.runtime";
+import { createAnalyticsCaller } from "./generated/analytics.runtime";
+import { createReportsCaller } from "./generated/reports.runtime";
 
 // Query/mutation → createHandler (zero overhead, bypasses validation)
 export const listOrganizations = authQuery
@@ -421,8 +422,8 @@ export const generateReport = privateAction
   .action(async ({ ctx }) => {
     const analyticsCaller = createAnalyticsCaller(ctx);
     const reportsCaller = createReportsCaller(ctx);
-    const stats = await analyticsCaller.getDailyStats({});
-    await reportsCaller.create({ type: "daily", data: stats });
+    const stats = await analyticsCaller.actions.getDailyStats({});
+    await reportsCaller.schedule.now.create({ type: "daily", data: stats });
     return null;
   });
 ```
@@ -431,7 +432,7 @@ export const generateReport = privateAction
 |---------|-----|-----|
 | `QueryCtx` | `create<Module>Handler(ctx)` | Zero overhead, direct handler call |
 | `MutationCtx` | `create<Module>Handler(ctx)` | Zero overhead, same transaction |
-| `ActionCtx` | `create<Module>Caller(ctx)` | Handler unavailable; dispatches via `ctx.runQuery`/`ctx.runMutation` (separate transactions) |
+| `ActionCtx` | `create<Module>Caller(ctx)` | Root caller = query/mutation, `caller.actions.*` = action, `caller.schedule.*` = scheduled mutation/action |
 | HTTP routes | `create<Module>Caller(ctx)` | Action-like context |
 
 ### 4) Query Modes (Use The Right One)
@@ -561,13 +562,14 @@ Large update/delete workloads:
 await ctx.orm
   .delete(task)
   .where(eq(task.status, "done"))
-  .execute({ mode: "async", batchSize: 200, delayMs: 0 });
+  .execute({ batchSize: 200, delayMs: 0 }); // async by default
 ```
 
 Notes:
 
-1. Async mutation batching needs ORM scheduled batch wiring.
-2. Async `execute({ mode: "async" })` and builder `.paginate(...)` are separate strategies; do not combine in one call.
+1. Async is the default — codegen wires scheduling automatically.
+2. Async execution and builder `.paginate(...)` are separate strategies; do not combine in one call.
+3. Use `.execute({ mode: 'sync' })` to force all rows in a single transaction.
 
 ### 6) Error Model
 
@@ -692,7 +694,8 @@ HTTP-specific rules:
 Immediate side effect after commit:
 
 ```ts
-await ctx.scheduler.runAfter(0, internal.notifications.sendTaskCreated, {
+const caller = createTaskCaller(ctx);
+await caller.schedule.now.sendTaskCreated({
   taskId: created.id,
   userId: ctx.userId,
 });
@@ -701,7 +704,8 @@ await ctx.scheduler.runAfter(0, internal.notifications.sendTaskCreated, {
 Future execution:
 
 ```ts
-await ctx.scheduler.runAt(input.sendAt, internal.reminders.send, {
+const caller = createTaskCaller(ctx);
+await caller.schedule.at(input.sendAt).sendReminder({
   taskId: input.taskId,
   userId: ctx.userId,
 });
@@ -714,6 +718,7 @@ Scheduling rules:
 3. Store returned job IDs when cancellation is required.
 4. Scheduling inside actions is not atomic with action failure.
 5. Cron schedules run in UTC.
+6. Use `ctx.scheduler.*` directly only when you must schedule non-procedure `internal.*` functions.
 
 ### 11) Testing Baseline (High Signal)
 
@@ -781,7 +786,7 @@ Before calling a feature done:
 | Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                 |
 | Aggregates disabled but helper/config still present | Remove aggregate helper + `defineTriggers` handlers + app config together                |
 | Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                             |
-| Using `ctx.runQuery`/`ctx.runMutation` directly     | Use `create<Module>Handler(ctx)` in queries/mutations, `create<Module>Caller(ctx)` in actions/HTTP (from `generated/<module>.runtime`) |
+| Using `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly | Use `create<Module>Handler(ctx)` in queries/mutations, `create<Module>Caller(ctx)` in actions/HTTP with `caller.actions.*` / `caller.schedule.*` (from `generated/<module>.runtime`) |
 | Using `createCaller` in query/mutation context      | Use `create<Module>Handler(ctx)` — zero overhead, bypasses redundant validation          |
 | Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup/`  |
 | Relaxing lint rules to pass checks                  | Keep baseline lint config; fix code-level warnings/errors instead                        |

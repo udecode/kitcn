@@ -94,7 +94,7 @@ export default defineAuth((ctx) => {
         },
         onCreate: async (user) => {
           // `ctx` from defineAuth closure is available here.
-          // Example: await ctx.scheduler.runAfter(...);
+          // Example: const caller = createModuleCaller(ctx); await caller.schedule.now.fn(args);
           void user;
           void ctx;
         },

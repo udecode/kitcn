@@ -429,7 +429,7 @@ export async function rateLimitGuard(
 
 ### 9.5 Scheduling gate
 
-Create `convex/functions/crons.ts` with `cronJobs()` and use `ctx.scheduler.runAfter/runAt` in mutations/actions for delayed jobs.
+Create `convex/functions/crons.ts` with `cronJobs()` and use `caller.schedule.now/after/at` in mutations/actions for delayed procedure jobs (`ctx.scheduler.*` only for raw `internal.*` functions).
 
 ### 9.6 HTTP router gate
 
@@ -467,4 +467,3 @@ Recommended files for this gate:
 
 - `convex/functions/email.tsx`
 - `convex/lib/emails/organization-invite.tsx`
-

@@ -178,7 +178,7 @@ export const createTask = authRoute
     const caller = createTasksCaller(ctx);
     const taskId = await caller.create({ projectId: params.projectId, ...input });
     if (searchParams.notify) {
-      await ctx.scheduler.runAfter(0, internal.notifications.send, { taskId });
+      await caller.schedule.now.sendNotification({ taskId });
     }
     return { taskId, projectId: params.projectId };
   });
@@ -334,9 +334,10 @@ export const chat = publicRoute
   .post('/api/ai/stream')
   .input(z.object({ prompt: z.string() }))
   .mutation(async ({ ctx, input, c }) => {
+    const aiCaller = createAiCaller(ctx);
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
-    const aiStream = await ctx.runAction(internal.ai.streamResponse, { prompt: input.prompt });
+    const aiStream = await aiCaller.actions.streamResponse({ prompt: input.prompt });
     return stream(c, async (stream) => { await stream.pipe(aiStream); });
   });
 ```
@@ -366,11 +367,12 @@ export const rateLimited = publicRoute
 export const stripeWebhook = publicRoute
   .post('/webhooks/stripe')
   .mutation(async ({ ctx, c }) => {
+    const stripeCaller = createStripeCaller(ctx);
     const signature = c.req.header('stripe-signature');
     if (!signature) throw new CRPCError({ code: 'BAD_REQUEST', message: 'No signature' });
 
     const body = await c.req.text();
-    const isValid = await ctx.runAction(internal.stripe.verify, { body, signature });
+    const isValid = await stripeCaller.actions.verify({ body, signature });
     if (!isValid) throw new CRPCError({ code: 'BAD_REQUEST', message: 'Invalid signature' });
 
     const event = JSON.parse(body);
@@ -409,12 +411,13 @@ export const discordWebhook = publicRoute
     if (interaction.type === 1) return c.json({ type: 1 }); // PING
     if (interaction.type === 2) {
       const statsCaller = createStatsCaller(ctx);
+      const discordCaller = createDiscordCaller(ctx);
       switch (interaction.data.name) {
         case 'stats':
           const stats = await statsCaller.get({});
           return c.json({ type: 4, data: { content: `Users: ${stats.users}, Posts: ${stats.posts}` } });
         case 'create':
-          await ctx.scheduler.runAfter(0, internal.discord.processCreate, { token: interaction.token });
+          await discordCaller.schedule.now.processCreate({ token: interaction.token });
           return c.json({ type: 5 }); // DEFERRED
         default:
           return c.json({ type: 4, data: { content: 'Unknown command' } });

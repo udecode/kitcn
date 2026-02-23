@@ -49,7 +49,8 @@ export default defineAuth((ctx) => {
           },
         },
         sendInvitationEmail: async (data) => {
-          await requireActionCtx(ctx).scheduler.runAfter(
+          const actionCtx = requireActionCtx(ctx);
+          await actionCtx.scheduler.runAfter(
             0,
             internal.email.sendOrganizationInviteEmail,
             {

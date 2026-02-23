@@ -144,11 +144,13 @@ export const processAndSave = publicAction
     // Call a mutation to save results
     const caller = createUserCaller(ctx);
     await caller.updateProfile({ data: await result.json() });
+    await caller.actions.syncExternalAnalytics({ userId: 'u_1' });
+    await caller.schedule.now.sendFollowUpEmail({ userId: 'u_1' });
   });
 ```
 
 <Callout icon={<InfoIcon />}>
-  **Note:** Actions can't access the database directly. Module runtime callers (like `createUserCaller(ctx)`) dispatch via `ctx.runQuery` / `ctx.runMutation` under the hood, ensuring all database operations are transactional. See [In-Process Procedure Composition](/docs/server/procedures#in-process-procedure-composition) for the full call matrix.
+  **Note:** Actions can't access the database directly. Module runtime callers (like `createUserCaller(ctx)`) dispatch root calls via `ctx.runQuery` / `ctx.runMutation`, action calls via `caller.actions.*` (which uses `ctx.runAction`), and scheduling via `caller.schedule.*` (which uses `ctx.scheduler`).
 </Callout>
 
 ## Migrate from Convex
@@ -161,8 +163,8 @@ Base context properties work identically:
 - `ctx.orm` - Database access (queries + mutations)
 - `ctx.auth` - Authentication
 - `ctx.storage` - File storage
-- `ctx.scheduler` - Scheduler (mutations only)
-- `ctx.runQuery` / `ctx.runMutation` - Call procedures (actions only)
+- `ctx.scheduler` - Scheduler (mutations + actions)
+- `ctx.runQuery` / `ctx.runMutation` / `ctx.runAction` - Call procedures (actions only)
 
 ### What's new
 

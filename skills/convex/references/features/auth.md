@@ -418,7 +418,8 @@ triggers: {
     },
     onCreate: async (user) => {
       await ctx.orm.insert(profiles).values({ userId: user.id, bio: '' });
-      await ctx.scheduler.runAfter(0, internal.emails.sendWelcome, { userId: user.id });
+      const emailCaller = createEmailsCaller(ctx);
+      await emailCaller.schedule.now.sendWelcome({ userId: user.id });
     },
     onUpdate: async (newDoc, oldDoc) => {
       if (newDoc.image !== oldDoc.image) {

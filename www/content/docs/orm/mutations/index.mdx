@@ -181,36 +181,9 @@ The paginated result includes:
 
 ## Async Mutation Batching
 
-When a mutation can affect large sets of rows, use async mode. The first batch runs in the current mutation, then remaining batches are scheduled automatically through the Convex scheduler.
+Mutations that affect large sets of rows run in **async mode by default**. The first batch runs in the current mutation, then remaining batches are scheduled automatically through the Convex scheduler.
 
-You can enable async mode in three ways:
-
-- **Per call:** `.execute({ mode: 'async' })`
-- **Convenience alias:** `.executeAsync()`
-- **Global default:** `defineSchema(..., { defaults: { mutationExecutionMode: 'async' } })`
-
-### Wiring Setup
-
-Async execution requires wiring `ormFunctions` and `scheduledMutationBatch` into your ORM setup. Here's how to extend the module from [Quickstart](/docs/quickstart#orm-setup):
-
-```ts showLineNumbers title="convex/functions/generated.ts" {4,12}
-import { createOrm } from 'better-convex/orm';
-import { internal } from './_generated/api';
-import { internalMutation } from './generated/server';
-import { relations } from './schema';
-
-export const orm = createOrm({
-  schema: relations,
-  ormFunctions: internal.generated,
-  internalMutation,
-});
-
-export const { scheduledMutationBatch, scheduledDelete } = orm.api();
-```
-
-Then use `ctx.orm` as usual in your handlers:
-
-```ts showLineNumbers title="convex/functions/users.ts" {7-8}
+```ts showLineNumbers title="convex/functions/users.ts" {7}
 import { eq } from 'better-convex/orm';
 import { publicMutation } from '../lib/crpc';
 import { users } from '../schema';
@@ -219,14 +192,28 @@ export const renameUsers = publicMutation.mutation(async ({ ctx }) => {
   await ctx.orm
     .update(users)
     .set({ name: 'Updated' })
-    .where(eq(users.role, 'pending')) // requires index('by_role').on(t.role)
-    .execute({ mode: 'async', batchSize: 200, delayMs: 0 });
+    .where(eq(users.role, 'pending')); // async by default
 });
 ```
 
-<Callout icon={<InfoIcon />}>
-**Tip:** Both `update()` and `delete()` share the same async wiring. Set it up once and it works for all mutation types.
-</Callout>
+You can customize batch size and delay per call:
+
+```ts showLineNumbers
+await ctx.orm
+  .update(users)
+  .set({ name: 'Updated' })
+  .where(eq(users.role, 'pending'))
+  .execute({ batchSize: 200, delayMs: 0 });
+```
+
+### Sync Mode
+
+To force all rows to be processed in a single transaction (no scheduling), opt into sync mode:
+
+- **Per call:** `.execute({ mode: 'sync' })`
+- **Global default:** `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`
+
+Sync mode throws if matched rows exceed `mutationMaxRows`.
 
 You now have all the building blocks for writing data. Dive into the sub-pages below for detailed coverage of each mutation type.
 

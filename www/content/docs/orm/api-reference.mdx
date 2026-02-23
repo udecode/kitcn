@@ -248,36 +248,15 @@ defineRelations(schema, (r) => ({
 
 ### `createOrm()`
 
-```ts
-const orm = createOrm({ schema: relations });
-const db = orm.db(ctx);
-```
+Creates a unified ORM setup object. The CLI auto-generates this in `convex/functions/generated/server.ts` — you don't need to call it manually.
 
-Creates a unified ORM setup object. Use `orm.db(ctx)` to build a typed query/mutation client.
+<Callout icon={<InfoIcon />}>
+The generated module wires `schema`, `triggers`, `ormFunctions`, and `internalMutation`, then exports `scheduledMutationBatch` and `scheduledDelete`. See the generated file for the full setup.
+</Callout>
 
 `createdAt` is always public in ORM rows. Its type is:
 - `number` for the system alias
 - `Date` when your schema defines `createdAt: timestamp().notNull().defaultNow()`
-
-For async mutation batching, pass scheduler function refs and export generated handlers:
-
-```ts showLineNumbers
-import { createOrm } from 'better-convex/orm';
-import { internal } from './_generated/api';
-import { internalMutation } from './generated/server';
-
-const orm = createOrm({
-  schema: relations,
-  ormFunctions: internal.generated,
-  internalMutation,
-});
-
-export const { scheduledMutationBatch, scheduledDelete } = orm.api();
-```
-
-<Callout icon={<InfoIcon />}>
-Recommended: create `orm` once in your context layer and attach `orm.db(ctx)` to `ctx.orm`.
-</Callout>
 
 **RLS options**
 
@@ -552,8 +531,9 @@ await db
 - Async fan-out enforces `mutationMaxBytesPerBatch` (default `2_097_152` measured bytes) and `mutationScheduleCallCap` (default `800`).
 - Override defaults via `defineSchema(..., { defaults: { mutationMaxRows, mutationBatchSize, mutationLeafBatchSize, mutationMaxBytesPerBatch, mutationScheduleCallCap, mutationExecutionMode, mutationAsyncDelayMs } })`.
 - For large workloads, use `.paginate({ cursor, limit })` to execute one batch per mutation call.
-- Use `execute({ mode: 'async', batchSize?, delayMs? })` (or `.executeAsync(...)`) to run the first batch inline and schedule continuation.
-- Explicit async APIs cannot be combined with `.paginate()`.
+- Async mode is the default — first batch runs inline, remaining batches are scheduled automatically. Customize with `execute({ batchSize?, delayMs? })`.
+- Use `execute({ mode: 'sync' })` to force all rows in a single transaction (throws if exceeding `mutationMaxRows`).
+- Async mode cannot be combined with `.paginate()`.
 - Paged mode returns `{ continueCursor, isDone, numAffected }` (+ `page` when using `.returning()`).
 - Async `execute()` returns the same shape as sync `execute()` (`void` or first-batch `returning()` rows).
 - Paged mode currently supports single-range index plans only.
@@ -581,8 +561,9 @@ await db.delete(users).where(eq(users.id, userId));
 - Async fan-out enforces `mutationMaxBytesPerBatch` (default `2_097_152` measured bytes) and `mutationScheduleCallCap` (default `800`).
 - Override defaults via `defineSchema(..., { defaults: { mutationMaxRows, mutationBatchSize, mutationLeafBatchSize, mutationMaxBytesPerBatch, mutationScheduleCallCap, mutationExecutionMode, mutationAsyncDelayMs } })`.
 - For large workloads, use `.paginate({ cursor, limit })` to execute one batch per mutation call.
-- Use `execute({ mode: 'async', batchSize?, delayMs? })` (or `.executeAsync(...)`) to run the first batch inline and schedule continuation.
-- Explicit async APIs cannot be combined with `.paginate()` or resolved scheduled delete mode (`.scheduled(...)` or table-level `deletion('scheduled')`).
+- Async mode is the default — first batch runs inline, remaining batches are scheduled automatically. Customize with `execute({ batchSize?, delayMs? })`.
+- Use `execute({ mode: 'sync' })` to force all rows in a single transaction.
+- Async mode cannot be combined with `.paginate()` or resolved scheduled delete mode (`.scheduled(...)` or table-level `deletion('scheduled')`).
 - Paged mode returns `{ continueCursor, isDone, numAffected }` (+ `page` when using `.returning()`).
 - Async `execute()` returns the same shape as sync `execute()` (`void` or first-batch `returning()` rows).
 - Paged mode currently supports single-range index plans only.
@@ -617,9 +598,7 @@ Scheduled deletes require passing `{ scheduler, scheduledDelete }` when building
 and exposing `scheduledDeleteFactory(schema, edges, scheduledMutationBatchRef)` as an internal mutation.
 The scheduled worker validates the original `deletionTime` token before hard-deleting, so clearing/changing `deletionTime` cancels a pending scheduled delete.
 
-Async mutation batches (`execute({ mode: 'async' })` / `.executeAsync()` for update/delete) require passing
-`{ scheduler, scheduledMutationBatch }` when building `ctx.orm` and exposing
-`scheduledMutationBatchFactory(schema, edges, internalRef)` as an internal mutation.
+Async mutation batches are wired automatically by codegen in `convex/functions/generated/server.ts`.
 
 ### `returning()`
 

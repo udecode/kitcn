@@ -103,7 +103,8 @@ export const triggers = defineTriggers(relations, {
         data: { ...data, email: data.email.toLowerCase() },
       }),
       after: async (doc, ctx) => {
-        await ctx.scheduler.runAfter(0, internal.user.sendWelcomeEmail, {
+        const caller = createUserCaller(ctx);
+        await caller.schedule.now.sendWelcomeEmail({
           userId: doc._id,
         });
       },

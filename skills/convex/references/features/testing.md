@@ -137,7 +137,8 @@ test("scheduled cleanup runs", async () => {
   await t.run(async (baseCtx) => {
     const ctx = await runCtx(baseCtx);
 
-    await ctx.scheduler.runAfter(1000, internal.jobs.cleanup, { orgId: "org_1" });
+    const caller = createJobsCaller(ctx);
+    await caller.schedule.after(1000).cleanup({ orgId: "org_1" });
     vi.advanceTimersByTime(1000);
     await t.finishAllScheduledFunctions();
 

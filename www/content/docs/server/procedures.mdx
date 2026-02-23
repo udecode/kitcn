@@ -173,7 +173,7 @@ export const sendWelcomeEmail = publicAction
 
 ## In-Process Procedure Composition
 
-When one procedure needs to call another, use the module runtime factory from `convex/functions/generated/<module>.runtime.ts` (for example `createTeamsCaller(ctx)`). This gives you a type-safe proxy with full autocomplete — no more manually choosing between `ctx.runQuery` and `ctx.runMutation`.
+When one procedure needs to call another, use the module runtime factory from `convex/functions/generated/<module>.runtime.ts` (for example `createTeamsCaller(ctx)`). This gives you a type-safe proxy with full autocomplete — no more manually choosing between `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction`, and `ctx.scheduler`.
 
 <Callout icon={<InfoIcon />}>
   **Breaking change:** runtime modules now export module-named factories (`create<Module>Caller` / `create<Module>Handler`), and `convex/functions/generated.ts` no longer exists.
@@ -199,18 +199,38 @@ export const getProjectAndOwner = privateQuery
 `create<Module>Caller(ctx)` detects your context type and dispatches accordingly:
 
 - **`QueryCtx` / `MutationCtx`**: invokes the procedure handler directly — same transaction, no extra overhead.
-- **`ActionCtx`**: dispatches via `ctx.runQuery` / `ctx.runMutation` automatically (separate transactions).
+- **`ActionCtx`**: root calls dispatch via `ctx.runQuery` / `ctx.runMutation` automatically (separate transactions).
+- **`caller.actions.*`**: explicit action dispatch in `ActionCtx` via `ctx.runAction`.
+- **`caller.schedule.*`**: schedule mutation/action procedures via `ctx.scheduler`.
 
 ### Allowed Call Matrix
 
-| Caller context | Query procedures | Mutation procedures | Action procedures |
-|----------------|------------------|---------------------|-------------------|
-| `QueryCtx` | ✅ | ❌ | ❌ |
-| `MutationCtx` | ✅ | ✅ | ❌ |
-| `ActionCtx` | ✅ | ✅ | ❌ |
+| Caller context | Root query | Root mutation | Root action | `caller.actions.*` | `caller.schedule.*` |
+|----------------|------------|---------------|-------------|--------------------|---------------------|
+| `QueryCtx` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
+
+### Action and Schedule Namespaces
+
+```ts title="convex/functions/jobs.ts" showLineNumbers {7-8,10-12}
+const caller = createJobsCaller(ctx);
+
+// Direct action call (ActionCtx only)
+await caller.actions.reindex({ force: true });
+
+// Schedule mutation/action calls (MutationCtx + ActionCtx)
+await caller.schedule.now.enqueueReport({ reportId: 'r_1' });
+await caller.schedule.after(5000).reindex({ force: true });
+await caller.schedule.at(Date.now() + 60_000).reindex({ force: true });
+```
 
 <Callout icon={<InfoIcon />}>
   **Note:** In actions, each `create<Module>Caller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
+</Callout>
+
+<Callout icon={<InfoIcon />}>
+  **Bundle size:** Each caller eagerly loads every procedure in its module — there is no lazy loading. If a module grows large, split it into smaller files so callers only pull in what they need.
 </Callout>
 
 ### `create<Module>Handler(ctx)`

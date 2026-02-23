@@ -109,15 +109,9 @@ Each page returns:
 
 ## Async Batched Update
 
-When an update can affect large sets of rows, use async mode. The first batch runs in the current mutation, then remaining batches are scheduled automatically.
+Updates run in **async mode by default**. The first batch runs in the current mutation, then remaining batches are scheduled automatically.
 
-You can enable async mode in three ways:
-
-- **Per call:** `.execute({ mode: 'async' })`
-- **Convenience alias:** `.executeAsync()`
-- **Global default:** `defineSchema(..., { defaults: { mutationExecutionMode: 'async' } })`
-
-Here's an async update with custom batch size:
+Customize batch size and delay per call:
 
 ```ts showLineNumbers {5}
 const firstBatch = await ctx.orm
@@ -125,21 +119,18 @@ const firstBatch = await ctx.orm
   .set({ role: 'member' })
   .where(eq(users.role, 'pending'))
   .returning({ id: users.id })
-  .execute({ mode: 'async', batchSize: 200, delayMs: 0 });
+  .execute({ batchSize: 200, delayMs: 0 });
 ```
 
-Key behaviors to keep in mind:
+Key behaviors:
 
-- `execute()` in async mode returns the same shape as sync mode (with `.returning()`, you get rows from the first batch only)
-- Remaining batches are scheduled asynchronously
-- Async APIs (`execute({ mode: 'async' })` / `executeAsync()`) cannot be combined with `.paginate()`
+- With `.returning()`, you get rows from the first batch only — remaining batches are scheduled
+- Async mode cannot be combined with `.paginate()`
 - `batchSize` resolves as: per-call `batchSize` > `defaults.mutationBatchSize` > `400`
 - `delayMs` resolves as: per-call `delayMs` > `defaults.mutationAsyncDelayMs` > `0`
 - Async FK update fan-out (`onUpdate: 'cascade'`, `set null`, `set default`) uses `mutationLeafBatchSize`
 
-<Callout icon={<AlertTriangle />}>
-**Important:** Async execution requires wiring `ormFunctions` and `scheduledMutationBatch` in your ORM setup. See [Mutations -- Async Wiring Setup](/docs/orm/mutations#wiring-setup) for the setup steps.
-</Callout>
+To force sync execution (all rows in a single transaction), use `.execute({ mode: 'sync' })` or set `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`.
 
 ## Drizzle Differences
 

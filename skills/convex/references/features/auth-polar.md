@@ -113,7 +113,8 @@ export default defineAuth((ctx) => ({
   triggers: {
     user: {
       onCreate: async (user) => {
-        await ctx.scheduler.runAfter(0, internal.polarCustomer.createCustomer, {
+        const caller = createPolarCustomerCaller(ctx);
+        await caller.schedule.now.createCustomer({
           email: user.email,
           name: user.name || user.username,
           userId: user.id,
@@ -435,7 +436,6 @@ import { z } from 'zod';
 import { authAction, privateMutation, privateQuery } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
 import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
-import { internal } from './_generated/api';
 
 // Create subscription (called from webhook)
 export const createSubscription = privateMutation

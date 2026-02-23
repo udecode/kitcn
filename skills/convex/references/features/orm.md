@@ -261,7 +261,7 @@ export default defineSchema(tables, {
     mutationLeafBatchSize: 900, // async FK fan-out batch size
     mutationMaxBytesPerBatch: 2_097_152, // async measured-byte budget
     mutationScheduleCallCap: 100, // async schedule calls per mutation
-    mutationExecutionMode: "sync", // or 'async'
+    mutationExecutionMode: "async", // default when codegen wiring present; use 'sync' to opt out
     mutationAsyncDelayMs: 0,
     relationFanOutMaxKeys: 1000,
   },
@@ -846,24 +846,17 @@ const page1 = await ctx.orm
 
 ### Async Batched Mutations
 
-First batch runs sync, remaining auto-scheduled:
+Async is the default — first batch runs inline, remaining auto-scheduled. Customize per call:
 
 ```ts
-// Per call
 await ctx.orm
   .update(user)
   .set({ role: "member" })
   .where(eq(user.role, "pending"))
-  .execute({ mode: "async", batchSize: 200, delayMs: 0 });
-
-// Or convenience alias
-await ctx.orm.delete(user).where(eq(user.role, "inactive")).executeAsync();
-
-// Or global default
-defineSchema(relations, { defaults: { mutationExecutionMode: "async" } });
+  .execute({ batchSize: 200, delayMs: 0 });
 ```
 
-Async requires wiring `ormFunctions` + `scheduledMutationBatch` in ORM setup. See `setup/server.md`.
+To force sync (all rows in one transaction): `.execute({ mode: 'sync' })` or `defineSchema(relations, { defaults: { mutationExecutionMode: "sync" } })`.
 
 ## RLS (Row-Level Security)
 
@@ -908,13 +901,6 @@ export const secrets = convexTable.withRLS(
 | `insert`  | `withCheck`           | Validates new rows before write |
 | `update`  | `using` + `withCheck` | Filters existing, validates new |
 | `delete`  | `using`               | Filters rows before delete      |
-
-### Context setup
-
-```ts
-const orm = createOrm({ schema: relations });
-const ormDb = orm.db(ctx, { rls: { ctx } });
-```
 
 ### Bypass RLS
 
@@ -1002,7 +988,7 @@ export const triggers = defineTriggers(relations, {
 1. Idempotent logic.
 2. Bounded writes (no full-scan loops).
 3. No recursive ping-pong between tables.
-4. Expensive work → `ctx.scheduler.runAfter`, not long trigger chains.
+4. Expensive work → keep triggers thin; enqueue background work from procedure layer via `caller.schedule.*`.
 5. Auth checks in procedure layer; triggers focus on data invariants.
 
 ### Auth triggers vs DB triggers

@@ -377,7 +377,7 @@ For Drizzle parity, `date()` and `timestamp()` exist in the ORM, but storage fol
 
 | Issue | Cause | Fix |
 |---|---|---|
-| **`ctx.orm` is missing** | ORM not attached to context | Attach ORM once (`createOrm({ schema }).db(ctx)`) |
+| **`ctx.orm` is missing** | ORM not attached to context | Run `better-convex codegen` to generate `convex/functions/generated/server.ts` |
 | **Convex internal IDs** | Convex stores `_id` internally | Use public `id` in ORM APIs |
 | **Convex internal creation time** | Convex stores `_creationTime` internally | Use public `createdAt` in ORM APIs |
 | **Nullable fields** | Nullable by default | Add `.notNull()` |
@@ -387,7 +387,7 @@ For Drizzle parity, `date()` and `timestamp()` exist in the ORM, but storage fol
 | `findMany({ cursor, limit })` order changes | No index on primary sort | Add index on first `orderBy` field |
 | `findMany()` throws explicit sizing error | Non-paginated query has no `limit` and no schema `defaultLimit` | Add `limit`, use cursor pagination (`cursor` + `limit`), set `defaults.defaultLimit`, or opt in with `allowFullScan` |
 | `like` or `ilike` is slow | Post-fetch filtering | Use search indexes |
-| `vectorSearch` throws provider error | `createOrm(...).db(ctx)` was called without `vectorSearch` | Pass `vectorSearch: ctx.vectorSearch` when building ORM db |
+| `vectorSearch` throws provider error | ORM context missing vector search | Pass `vectorSearch: ctx.vectorSearch` in ORM options |
 | Relations not loading | Incomplete relation metadata | Define both relation sides or explicit `from`/`to` |
 | `update()`/`delete()` exceeds row cap | Matched rows > `mutationMaxRows` | Narrow filters, increase `defaults.mutationMaxRows`, or switch to paged mutation execution |
 | Paged update/delete throws multi-probe error | Filter compiles to multiple index probes | Rewrite filter to a single index range (or use non-paged mode with row cap) |

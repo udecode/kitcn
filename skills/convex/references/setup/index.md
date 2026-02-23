@@ -355,8 +355,8 @@ import { z } from "zod";
 
 import { privateAction, privateMutation } from "../lib/crpc";
 import { getEnv } from "../lib/get-env";
-import { internal } from "./_generated/api";
 import type { TableNames } from "./_generated/dataModel";
+import { createResetCaller } from "./generated/reset.runtime";
 import schema, { tables } from "./schema";
 
 const DELETE_BATCH_SIZE = 64;
@@ -373,13 +373,14 @@ const assertDevOnly = () => {
 
 export const reset = privateAction.action(async ({ ctx }) => {
   assertDevOnly();
+  const caller = createResetCaller(ctx);
 
   for (const tableName of Object.keys(schema.tables)) {
     if (excludedTables.has(tableName as TableNames)) {
       continue;
     }
 
-    await ctx.scheduler.runAfter(0, internal.reset.deletePage, {
+    await caller.schedule.now.deletePage({
       cursor: null,
       tableName,
     });
@@ -398,6 +399,7 @@ export const deletePage = privateMutation
   
   .mutation(async ({ ctx, input }) => {
     assertDevOnly();
+    const caller = createResetCaller(ctx);
 
     const table = (tables as Record<string, any>)[input.tableName];
     if (!table) {
@@ -429,7 +431,7 @@ export const deletePage = privateMutation
     }
 
     if (!results.isDone) {
-      await ctx.scheduler.runAfter(0, internal.reset.deletePage, {
+      await caller.schedule.now.deletePage({
         cursor: results.continueCursor,
         tableName: input.tableName,
       });

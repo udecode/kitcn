@@ -18,13 +18,13 @@ View scheduled jobs in [Dashboard](https://dashboard.convex.dev) → **Schedules
 | Scenario | Cron Jobs | Scheduled Functions |
 |----------|-----------|---------------------|
 | Daily cleanup | Fixed schedule | |
-| Send email after signup | | `runAfter(0)` |
-| Subscription expiration | | `runAt(timestamp)` |
+| Send email after signup | | `caller.schedule.now.*` |
+| Subscription expiration | | `caller.schedule.at(timestamp).*` |
 | Hourly analytics | Fixed schedule | |
 | Reminder notifications | | User-defined time |
-| Order processing delay | | `runAfter(5000)` |
+| Order processing delay | | `caller.schedule.after(5000).*` |
 
-**Tip:** Use `runAfter(0)` to trigger actions immediately after a mutation commits — perfect for emails, webhooks, or other side effects.
+**Tip:** Use `caller.schedule.now.*` to trigger work immediately after a mutation commits.
 
 ## Cron Jobs
 
@@ -92,8 +92,8 @@ export const generateDailyReport = privateAction
   .action(async ({ ctx }) => {
     const analyticsCaller = createAnalyticsCaller(ctx);
     const reportsCaller = createReportsCaller(ctx);
-    const stats = await analyticsCaller.getDailyStats({});
-    await reportsCaller.create({ type: 'daily', data: stats });
+    const stats = await analyticsCaller.actions.getDailyStats({});
+    await reportsCaller.schedule.now.create({ type: 'daily', data: stats });
     return null;
   });
 ```
@@ -112,7 +112,9 @@ export const generateDailyReport = privateAction
 
 **Warning:** Auth context is NOT available in scheduled functions. Pass `userId` or other auth data as arguments.
 
-### scheduler.runAfter
+Use `caller.schedule.*` when scheduling cRPC procedures. Use `ctx.scheduler.*` only when you must schedule a raw `internal.*` Convex function.
+
+### caller.schedule.after
 
 Schedule after a delay (milliseconds):
 
@@ -121,32 +123,34 @@ export const processOrder = authMutation
   .input(z.object({ orderId: z.string() }))
   
   .mutation(async ({ ctx, input }) => {
+    const caller = createOrdersCaller(ctx);
     await ctx.orm.update(orders).set({ status: 'processing' }).where(eq(orders.id, input.orderId));
 
     // Run after 5 seconds
-    await ctx.scheduler.runAfter(5000, internal.orders.charge, { orderId: input.orderId });
+    await caller.schedule.after(5000).charge({ orderId: input.orderId });
     return null;
   });
 ```
 
 ### Immediate Execution
 
-`runAfter(0)` triggers actions immediately after mutation commits:
+`caller.schedule.now.*` triggers work immediately after mutation commits:
 
 ```ts
 export const createItem = authMutation
   .input(z.object({ name: z.string() }))
   .output(z.string())
   .mutation(async ({ ctx, input }) => {
+    const caller = createItemsCaller(ctx);
     const [row] = await ctx.orm.insert(items).values({ name: input.name }).returning({ id: items.id });
 
     // Action runs immediately after mutation commits
-    await ctx.scheduler.runAfter(0, internal.items.sendNotification, { itemId: row.id });
+    await caller.schedule.now.sendNotification({ itemId: row.id });
     return row.id;
   });
 ```
 
-### scheduler.runAt
+### caller.schedule.at
 
 Schedule at a specific Unix timestamp (ms):
 
@@ -155,10 +159,11 @@ export const scheduleReminder = authMutation
   .input(z.object({ message: z.string(), sendAt: z.number() }))
   
   .mutation(async ({ ctx, input }) => {
+    const caller = createRemindersCaller(ctx);
     if (input.sendAt <= Date.now()) {
       throw new CRPCError({ code: 'BAD_REQUEST', message: 'Reminder time must be in the future' });
     }
-    await ctx.scheduler.runAt(input.sendAt, internal.reminders.send, { message: input.message });
+    await caller.schedule.at(input.sendAt).send({ message: input.message });
     return null;
   });
 ```
@@ -172,12 +177,9 @@ export const createSubscription = authMutation
   .input(z.object({ planId: z.string() }))
   .output(z.string())
   .mutation(async ({ ctx, input }) => {
+    const caller = createSubscriptionsCaller(ctx);
     // Schedule expiration in 30 days
-    const expirationJobId = await ctx.scheduler.runAfter(
-      30 * 24 * 60 * 60 * 1000,
-      internal.subscriptions.expire,
-      { userId: ctx.userId }
-    );
+    const expirationJobId = await caller.schedule.after(30 * 24 * 60 * 60 * 1000).expire({ userId: ctx.userId });
 
     const [row] = await ctx.orm
       .insert(subscriptions)
@@ -190,11 +192,12 @@ export const cancelSubscription = authMutation
   .input(z.object({ subscriptionId: z.string() }))
   
   .mutation(async ({ ctx, input }) => {
+    const caller = createSubscriptionsCaller(ctx);
     const subscription = await ctx.orm.query.subscriptions.findFirst({ where: { id: input.subscriptionId } });
     if (!subscription) throw new CRPCError({ code: 'NOT_FOUND', message: 'Subscription not found' });
 
     if (subscription.expirationJobId) {
-      await ctx.scheduler.cancel(subscription.expirationJobId);
+      await caller.schedule.cancel(subscription.expirationJobId);
     }
     await ctx.orm.delete(subscriptions).where(eq(subscriptions.id, subscription.id));
     return null;
@@ -238,7 +241,7 @@ export const listPendingJobs = publicQuery
 | `inProgress` | Currently running (actions only) |
 | `success` | Completed successfully |
 | `failed` | Hit an error |
-| `canceled` | Canceled via dashboard or `ctx.scheduler.cancel()` |
+| `canceled` | Canceled via dashboard or `caller.schedule.cancel()` |
 
 ## Error Handling
 
@@ -256,9 +259,9 @@ export const listPendingJobs = publicQuery
 
 ## Best Practices
 
-1. **Use internal functions** — prevent external access to scheduled work
+1. **Use internal procedures/functions** — prevent external access to scheduled work
 2. **Store job IDs** — when you need to cancel scheduled functions
 3. **Check conditions** — target may be deleted before execution
 4. **Consider idempotency** — scheduled functions might run multiple times
 5. **Pass auth info** — auth not propagated, pass user data as arguments
-6. **Use `runAfter(0)`** — trigger actions after mutation commits
+6. **Use `caller.schedule.now.*`** — trigger work after mutation commits

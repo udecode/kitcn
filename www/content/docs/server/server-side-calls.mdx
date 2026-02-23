@@ -107,9 +107,9 @@ There are two caller APIs, each for a different context:
 | API | Location | When to use | Transport |
 |-----|----------|-------------|-----------|
 | `createCallerFactory` | `better-convex/server` | Server-side HTTP calls (Next.js API routes, RSC) | Convex fetch APIs |
-| `create<Module>Caller(ctx)` | `convex/functions/generated/<module>.runtime.ts` | In-process composition inside Convex handlers | Direct handler (query/mutation) or `runQuery`/`runMutation` (action) |
+| `create<Module>Caller(ctx)` | `convex/functions/generated/<module>.runtime.ts` | In-process composition inside Convex handlers | Direct handler, `runQuery`/`runMutation`, `runAction`, and `scheduler` |
 
-Use `create<Module>Caller(ctx)` when you're already inside a Convex handler and want to call other cRPC procedures with type-safe autocomplete — no need to manually choose between `ctx.runQuery` and `ctx.runMutation`.
+Use `create<Module>Caller(ctx)` when you're already inside a Convex handler and want to call other cRPC procedures with type-safe autocomplete — no need to manually choose between `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction`, and `ctx.scheduler`.
 
 
 ```ts title="convex/functions/teams.ts" showLineNumbers {3,7-9}
@@ -129,11 +129,11 @@ export const getTeamAndOwner = privateQuery
 
 ### Call Matrix
 
-| Caller context | Query procedures | Mutation procedures | Action procedures |
-|----------------|------------------|---------------------|-------------------|
-| `QueryCtx` | ✅ | ❌ | ❌ |
-| `MutationCtx` | ✅ | ✅ | ❌ |
-| `ActionCtx` | ✅ | ✅ | ❌ |
+| Caller context | Root query | Root mutation | Root action | `caller.actions.*` | `caller.schedule.*` |
+|----------------|------------|---------------|-------------|--------------------|---------------------|
+| `QueryCtx` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
 
 <Callout icon={<InfoIcon />}>
   **Note:** In actions, each `create<Module>Caller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.

@@ -545,8 +545,9 @@ export const events = publicRoute
 
 ### AI Streaming
 
-```ts title="convex/routers/ai.ts" showLineNumbers {1,8-9,11-13}
+```ts title="convex/routers/ai.ts" showLineNumbers {1-2,9-12}
 import { stream } from 'hono/streaming';
+import { createAiCaller } from '../functions/generated/ai.runtime';
 
 export const chat = publicRoute
   .post('/api/ai/stream')
@@ -555,7 +556,8 @@ export const chat = publicRoute
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
 
-    const aiStream = await ctx.runAction(internal.ai.streamResponse, {
+    const ai = createAiCaller(ctx);
+    const aiStream = await ai.actions.streamResponse({
       prompt: input.prompt,
     });
 
@@ -569,10 +571,11 @@ export const chat = publicRoute
 
 Handle external service callbacks like Stripe or GitHub using cRPC routes. Always verify signatures before processing.
 
-```ts title="convex/routers/webhooks.ts" showLineNumbers {3-4,15,20-21,24-29}
+```ts title="convex/routers/webhooks.ts" showLineNumbers {3-5,15,20-23,27-32}
 import { CRPCError } from 'better-convex/server';
 import { publicRoute } from '../lib/crpc';
 import { createPaymentsCaller } from '../functions/generated/payments.runtime';
+import { createStripeCaller } from '../functions/generated/stripe.runtime';
 import { createSubscriptionsCaller } from '../functions/generated/subscriptions.runtime';
 
 export const stripe = publicRoute
@@ -587,7 +590,8 @@ export const stripe = publicRoute
     const body = await c.req.text();
 
     // 2. Verify signature
-    const isValid = await ctx.runAction(internal.stripe.verify, {
+    const stripeCaller = createStripeCaller(ctx);
+    const isValid = await stripeCaller.actions.verify({
       body,
       signature,
     });

@@ -312,7 +312,8 @@ export const backfillAggregate = privateMutation
     }
 
     if (!results.isDone) {
-      await ctx.scheduler.runAfter(0, internal.aggregates.backfillAggregate, {
+      const caller = createAggregatesCaller(ctx);
+      await caller.schedule.now.backfillAggregate({
         cursor: results.continueCursor,
         batchSize: input.batchSize,
       });

@@ -118,7 +118,8 @@ triggers: {
       });
 
       // Schedule welcome email
-      await ctx.scheduler.runAfter(0, internal.emails.sendWelcome, {
+      const emailCaller = createEmailsCaller(ctx);
+      await emailCaller.schedule.now.sendWelcome({
         userId: user.id,
         email: user.email,
       });

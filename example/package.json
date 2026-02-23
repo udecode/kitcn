@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "analyze": "node scripts/analyze-runtime.mjs",
     "codegen": "better-convex codegen",
     "convex:dev": "convex dev --until-success --run init && better-convex dev",
     "convex:logs": "bun convex logs --history 50",

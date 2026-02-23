@@ -165,14 +165,14 @@ Scheduled functions run once at a specific time or after a delay. Let's explore 
 
 Use `runAfter` to schedule a function to run after a delay (in milliseconds):
 
-```ts title="convex/functions/orders.ts" showLineNumbers {10-13}
+```ts title="convex/functions/orders.ts" showLineNumbers {3,12-14}
 import { z } from 'zod';
 import { authMutation } from '../lib/crpc';
-import { internal } from './_generated/api';
+import { createOrdersCaller } from './generated/orders.runtime';
 
 export const processOrder = authMutation
   .input(z.object({ orderId: z.string() }))
-  
+
   .mutation(async ({ ctx, input }) => {
     await ctx.orm
       .update(orders)
@@ -180,7 +180,8 @@ export const processOrder = authMutation
       .where(eq(orders.id, input.orderId));
 
     // Run after 5 seconds
-    await ctx.scheduler.runAfter(5000, internal.orders.charge, {
+    const caller = createOrdersCaller(ctx);
+    await caller.schedule.after(5000).charge({
       orderId: input.orderId,
     });
 
@@ -192,7 +193,9 @@ export const processOrder = authMutation
 
 Here's a powerful pattern: use `runAfter(0)` to trigger actions immediately after a mutation commits:
 
-```ts title="convex/functions/items.ts" showLineNumbers {6-9}
+```ts title="convex/functions/items.ts" showLineNumbers {1,8-11}
+import { createItemsCaller } from './generated/items.runtime';
+
 export const createItem = authMutation
   .input(z.object({ name: z.string() }))
   .output(z.string())
@@ -204,9 +207,8 @@ export const createItem = authMutation
     const itemId = row.id;
 
     // Action runs immediately after mutation commits
-    await ctx.scheduler.runAfter(0, internal.items.sendNotification, {
-      itemId,
-    });
+    const caller = createItemsCaller(ctx);
+    await caller.schedule.now.sendNotification({ itemId });
 
     return itemId;
   });
@@ -218,15 +220,16 @@ This is perfect for sending emails, webhooks, or other side effects that shouldn
 
 Use `runAt` to schedule a function to run at a specific Unix timestamp:
 
-```ts title="convex/functions/reminders.ts" showLineNumbers {8-13,15-17}
+```ts title="convex/functions/reminders.ts" showLineNumbers {1,10-13}
 import { CRPCError } from 'better-convex/server';
+import { createRemindersCaller } from './generated/reminders.runtime';
 
 export const scheduleReminder = authMutation
   .input(z.object({
     message: z.string(),
     sendAt: z.number(), // Unix timestamp in ms
   }))
-  
+
   .mutation(async ({ ctx, input }) => {
     if (input.sendAt <= Date.now()) {
       throw new CRPCError({
@@ -235,7 +238,8 @@ export const scheduleReminder = authMutation
       });
     }
 
-    await ctx.scheduler.runAt(input.sendAt, internal.reminders.send, {
+    const caller = createRemindersCaller(ctx);
+    await caller.schedule.at(input.sendAt).send({
       message: input.message,
     });
 
@@ -247,17 +251,18 @@ export const scheduleReminder = authMutation
 
 Store the job ID to cancel later. Here's the pattern:
 
-```ts title="convex/functions/subscriptions.ts" showLineNumbers {5-9,12-16}
+```ts title="convex/functions/subscriptions.ts" showLineNumbers {1,7-10,13-17}
+import { createSubscriptionsCaller } from './generated/subscriptions.runtime';
+
 export const createSubscription = authMutation
   .input(z.object({ planId: z.string() }))
   .output(z.string())
   .mutation(async ({ ctx, input }) => {
     // Schedule expiration in 30 days
-    const expirationJobId = await ctx.scheduler.runAfter(
-      30 * 24 * 60 * 60 * 1000,
-      internal.subscriptions.expire,
-      { userId: ctx.userId }
-    );
+    const caller = createSubscriptionsCaller(ctx);
+    const expirationJobId = await caller.schedule
+      .after(30 * 24 * 60 * 60 * 1000)
+      .expire({ userId: ctx.userId });
 
     // Store job ID for cancellation
     const [row] = await ctx.orm
@@ -272,12 +277,14 @@ export const createSubscription = authMutation
   });
 ```
 
-Then cancel using `ctx.scheduler.cancel()`:
+Then cancel using `caller.schedule.cancel()`:
 
-```ts title="convex/functions/subscriptions.ts" showLineNumbers {11-14}
+```ts title="convex/functions/subscriptions.ts" showLineNumbers {1,12-15}
+import { createSubscriptionsCaller } from './generated/subscriptions.runtime';
+
 export const cancelSubscription = authMutation
   .input(z.object({ subscriptionId: z.string() }))
-  
+
   .mutation(async ({ ctx, input }) => {
     const subscription = await ctx.orm.query.subscriptions.findFirst({
       where: { id: input.subscriptionId },
@@ -288,8 +295,9 @@ export const cancelSubscription = authMutation
     }
 
     // Cancel the scheduled expiration
+    const caller = createSubscriptionsCaller(ctx);
     if (subscription.expirationJobId) {
-      await ctx.scheduler.cancel(subscription.expirationJobId);
+      await caller.schedule.cancel(subscription.expirationJobId);
     }
 
     await ctx.orm
@@ -354,7 +362,7 @@ export const listPendingJobs = publicQuery
 | `inProgress` | Currently running (actions only) |
 | `success` | Completed successfully |
 | `failed` | Hit an error |
-| `canceled` | Canceled via dashboard or `ctx.scheduler.cancel()` |
+| `canceled` | Canceled via dashboard or `caller.schedule.cancel()` |
 
 ## Error Handling
 

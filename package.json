@@ -9,6 +9,7 @@
     "www"
   ],
   "scripts": {
+    "analyze": "bun --cwd example analyze",
     "build": "bun --cwd www build",
     "build:pkg": "bun --cwd packages/better-convex build",
     "build:watch": "bun --cwd packages/better-convex build:watch",
