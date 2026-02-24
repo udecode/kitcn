@@ -1,5 +1,11 @@
 # better-convex
 
+## 0.6.4
+
+### Patch Changes
+
+- [#93](https://github.com/udecode/better-convex/pull/93) [`8153811`](https://github.com/udecode/better-convex/commit/81538110000a33855f1b5bb9b66f613604cd8388) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix `findFirst` now returns `null` instead of `undefined` when no result is found. Fix `.returning()` crash on nullable timestamp fields.
+
 ## 0.6.3
 
 ### Patch Changes
