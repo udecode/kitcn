@@ -539,8 +539,8 @@ export class RelationalSelectChain<
     );
   }
 
-  first(): GelRelationalQuery<TSchema, TTableConfig, TRow | undefined> {
-    return this.createQuery<TRow | undefined>(
+  first(): GelRelationalQuery<TSchema, TTableConfig, TRow | null> {
+    return this.createQuery<TRow | null>(
       {
         ...this.asManyConfig(),
         limit: 1,

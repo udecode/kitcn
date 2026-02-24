@@ -332,6 +332,15 @@ describe('M3 Query Builder', () => {
     });
   });
 
+  describe('select().first()', () => {
+    it('should return null for empty results', async ({ ctx }) => {
+      const db = ctx.orm;
+      const result = await db.query.users.select().first();
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('findFirstOrThrow()', () => {
     it('should return first result', async ({ ctx }) => {
       await ctx.db.insert('users', {
