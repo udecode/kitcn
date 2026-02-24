@@ -766,7 +766,7 @@ export class RelationalQueryBuilder<
    *
    * @template TConfig - Query configuration type (without limit)
    * @param config - Optional query configuration (columns, with, where, orderBy, offset)
-   * @returns Query promise that resolves to single result or undefined
+   * @returns Query promise that resolves to single result or null
    *
    * @example
    * const user = await ctx.db.query.users.findFirst({
@@ -783,7 +783,7 @@ export class RelationalQueryBuilder<
   ): GelRelationalQuery<
     TSchema,
     TTableConfig,
-    BuildQueryResult<TSchema, TTableConfig, TConfig> | undefined
+    BuildQueryResult<TSchema, TTableConfig, TConfig> | null
   >;
   findFirst<TConfig extends FindFirstConfigNoSearch<TSchema, TTableConfig>>(
     config?: KnownKeysOnly<
@@ -794,7 +794,7 @@ export class RelationalQueryBuilder<
   ): GelRelationalQuery<
     TSchema,
     TTableConfig,
-    BuildQueryResult<TSchema, TTableConfig, TConfig> | undefined
+    BuildQueryResult<TSchema, TTableConfig, TConfig> | null
   >;
   findFirst(config?: any): GelRelationalQuery<TSchema, TTableConfig, any> {
     if (config && (config as { pipeline?: unknown }).pipeline !== undefined) {

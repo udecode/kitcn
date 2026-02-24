@@ -324,11 +324,11 @@ describe('M3 Query Builder', () => {
       expect(result?.id).toBe(userId);
     });
 
-    it('should return undefined for empty results', async ({ ctx }) => {
+    it('should return null for empty results', async ({ ctx }) => {
       const db = ctx.orm;
       const result = await db.query.users.findFirst();
 
-      expect(result).toBeUndefined();
+      expect(result).toBeNull();
     });
   });
 

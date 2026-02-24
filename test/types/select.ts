@@ -495,13 +495,13 @@ const db = orm.db(mockDb);
 // FINDFIRST RESULT TYPE TESTS
 // ============================================================================
 
-// Test: findFirst returns T | undefined
+// Test: findFirst returns T | null
 {
   const result = await db.query.users.findFirst({
     where: { name: 'Alice' },
   });
 
-  type Expected = UserRow | undefined;
+  type Expected = UserRow | null;
 
   Expect<Equal<Expected, typeof result>>;
 }
@@ -512,18 +512,18 @@ const db = orm.db(mockDb);
     orderBy: { age: 'desc' },
   });
 
-  type Expected = UserRow | undefined;
+  type Expected = UserRow | null;
 
   Expect<Equal<Expected, typeof result>>;
 }
 
-// Test: findFirst with no match returns undefined
+// Test: findFirst with no match returns null
 {
   const result = await db.query.users.findFirst({
     where: { name: 'NonExistent' },
   });
 
-  type Expected = UserRow | undefined;
+  type Expected = UserRow | null;
 
   Expect<Equal<Expected, typeof result>>;
 }
@@ -537,7 +537,7 @@ const db = orm.db(mockDb);
   Expect<Equal<IsArray, false>>;
 }
 
-// Test: findFirstOrThrow returns T (never undefined)
+// Test: findFirstOrThrow returns T (never null)
 {
   const result = await db.query.users.findFirstOrThrow({
     where: { name: 'Alice' },

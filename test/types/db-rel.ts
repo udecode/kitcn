@@ -390,34 +390,32 @@ const db = orm.db(mockDb);
     },
   });
 
-  type Expected =
-    | {
-        id: UserId;
-        createdAt: number;
-        name: string;
-        email: string;
-        height: number | null;
-        age: number | null;
-        status: string | null;
-        role: string | null;
-        deletedAt: number | null;
-        cityId: CityId | null;
-        homeCityId: CityId | null;
-        posts: Array<{
-          id: PostId;
-          createdAt: number;
-          text: string;
-          numLikes: number;
-          type: string;
-          embedding: number[] | null;
-          title: string | null;
-          content: string | null;
-          authorId: UserId | null;
-          publishedAt: number | null;
-          published: boolean | null;
-        }>;
-      }
-    | undefined;
+  type Expected = {
+    id: UserId;
+    createdAt: number;
+    name: string;
+    email: string;
+    height: number | null;
+    age: number | null;
+    status: string | null;
+    role: string | null;
+    deletedAt: number | null;
+    cityId: CityId | null;
+    homeCityId: CityId | null;
+    posts: Array<{
+      id: PostId;
+      createdAt: number;
+      text: string;
+      numLikes: number;
+      type: string;
+      embedding: number[] | null;
+      title: string | null;
+      content: string | null;
+      authorId: UserId | null;
+      publishedAt: number | null;
+      published: boolean | null;
+    }>;
+  } | null;
 
   Expect<Equal<Expected, typeof result>>;
 }
