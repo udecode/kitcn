@@ -360,6 +360,11 @@ export const hydrateDateFieldsForRead = <T>(
       result[name] = hydrateTemporalReadValue(descriptor, rawCreationTime);
       continue;
     }
+
+    if (!Object.hasOwn(result, name)) {
+      continue;
+    }
+
     result[name] = hydrateTemporalReadValue(descriptor, result[name]);
   }
 

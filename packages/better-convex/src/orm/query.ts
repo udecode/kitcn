@@ -321,7 +321,7 @@ export class GelRelationalQuery<
         this.tableConfig.name
       );
     }
-    return first as TResult;
+    return (first ?? null) as TResult;
   }
 
   private async _applyRlsSelectFilter(
