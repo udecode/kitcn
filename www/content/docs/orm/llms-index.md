@@ -185,7 +185,7 @@ isNotNull(field);
 - String operators (post‑fetch)
 - Mutations (insert, update, delete, returning)
 - Distinct via select pipeline (`.select().distinct({ fields: ['field'] })`)
-- Aggregate runtime via `/docs/orm/aggregates` (`TableAggregate` from `better-convex/aggregate`)
+- Aggregate runtime via `/docs/orm/queries/aggregates` (`TableAggregate` from `better-convex/aggregate`)
 
 **Unavailable in Convex:**
 

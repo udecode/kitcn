@@ -23,8 +23,6 @@
     "orm/queries",
     "orm/mutations",
     "orm/rls",
-    "orm/triggers",
-    "orm/aggregates",
     "orm/api-reference",
     "---Integrations---",
     "react",

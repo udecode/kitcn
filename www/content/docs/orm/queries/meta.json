@@ -1,5 +1,5 @@
 {
   "title": "Queries",
   "defaultOpen": true,
-  "pages": ["operators", "filters", "pagination"]
+  "pages": ["operators", "filters", "pagination", "aggregates"]
 }
