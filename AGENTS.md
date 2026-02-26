@@ -33,7 +33,7 @@
 
 ## Prompt Hook
 
-### MANDATORY-FIRST-RESPONSE
+### Mandatory First Response
 
 🚨 STOP - SKILL ANALYSIS IS MANDATORY
 
@@ -48,7 +48,7 @@
 **Skill Analysis Checklist:**
 ☐ Skill analysis (SKIP if 'quick' in message): (1) STOP rationalizing ('simple question', 'overkill', 'might be relevant') (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓. Only ✗ if DEFINITELY not related (4) Skill(...) for ALL ✓ IN ONE PARALLEL CALL - do NOT load one then wait (5) Output '[Skills: X available, Y loaded: name1, name2]' CRITICAL: 'Might be relevant' = MUST load. '1% chance' = MUST load.
 
-### VERIFICATION-CHECKLIST
+### Verification Checklist
 
 🔒 VERIFICATION REQUIRED - NO COMPLETION WITHOUT FRESH EVIDENCE
 
@@ -66,7 +66,7 @@
 - [ ] Lint: Bash `bun lint:fix`
 - [ ] Learn (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: Skill(learn) NOW to extract the knowledge (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
 
-### POST-COMPACT-RECOVERY
+### Post Compact Recovery
 
 🚨 CONTEXT WIPED - MANDATORY SKILL RELOAD
 

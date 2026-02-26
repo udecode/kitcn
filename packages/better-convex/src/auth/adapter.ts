@@ -1,10 +1,11 @@
-import type { BetterAuthOptions, Where } from 'better-auth';
 import {
   type AdapterFactoryOptions,
   createAdapterFactory,
   type DBAdapterDebugLogOption,
 } from 'better-auth/adapters';
 import { type BetterAuthDBSchema, getAuthTables } from 'better-auth/db';
+import type { BetterAuthOptions } from 'better-auth/minimal';
+import type { Where } from 'better-auth/types';
 import type {
   GenericDataModel,
   PaginationOptions,
@@ -131,8 +132,8 @@ export const adapterConfig = {
   supportsArrays: true,
   transaction: false,
   usePlural: false,
-  // Dates provided as strings
-  // Convert dates to numbers. This aligns with how Convex stores _creationTime and avoids a breaking change.
+  // Better Auth expects Date runtime values for date fields.
+  // Convex stores numbers, so normalize on input and rehydrate on output.
   customTransformInput: ({ data, fieldAttributes }) => {
     if (data && fieldAttributes.type === 'date') {
       return new Date(data).getTime();
@@ -142,7 +143,7 @@ export const adapterConfig = {
   },
   customTransformOutput: ({ data, fieldAttributes }) => {
     if (data && fieldAttributes.type === 'date') {
-      return new Date(data).getTime();
+      return new Date(data);
     }
 
     return data;

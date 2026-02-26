@@ -82,7 +82,7 @@ describe('handlePagination', () => {
 });
 
 describe('adapterConfig', () => {
-  test('transforms date fields to unix millis for input and output', () => {
+  test('transforms date fields to unix millis for input and Date for output', () => {
     const input = adapterConfig.customTransformInput({
       action: 'create',
       data: '2026-01-01T00:00:00.000Z',
@@ -103,7 +103,8 @@ describe('adapterConfig', () => {
     });
 
     expect(input).toBe(new Date('2026-01-01T00:00:00.000Z').getTime());
-    expect(output).toBe(new Date('2026-01-01T00:00:00.000Z').getTime());
+    expect(output).toBeInstanceOf(Date);
+    expect((output as Date).toISOString()).toBe('2026-01-01T00:00:00.000Z');
   });
 
   test('returns non-date values unchanged', () => {

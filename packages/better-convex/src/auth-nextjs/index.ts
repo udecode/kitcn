@@ -75,15 +75,19 @@ export function convexBetterAuth<TApi extends Record<string, unknown>>(
     convexSiteUrl: opts.convexSiteUrl,
     auth: jwtCacheEnabled
       ? {
-          getToken: (siteUrl, headers, getTokenOpts) =>
-            getToken(siteUrl, headers, {
+          getToken: (siteUrl, headers, getTokenOpts) => {
+            const mutableHeaders = new Headers(headers);
+            mutableHeaders.delete('content-length');
+            mutableHeaders.delete('transfer-encoding');
+            return getToken(siteUrl, mutableHeaders, {
               ...(getTokenOpts as GetTokenOptions),
               jwtCache: {
                 enabled: true,
                 expirationToleranceSeconds: auth.expirationToleranceSeconds,
                 isAuthError: auth.isUnauthorized ?? defaultIsUnauthorized,
               },
-            }),
+            });
+          },
           isUnauthorized: auth.isUnauthorized ?? defaultIsUnauthorized,
         }
       : undefined,

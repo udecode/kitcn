@@ -1,4 +1,4 @@
-import { type BetterAuthOptions, betterAuth } from 'better-auth';
+import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
 import type {
   GenericDataModel,
   GenericMutationCtx,

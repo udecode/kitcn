@@ -52,6 +52,13 @@ const defaultMutationHandler = () => {
   });
 };
 
+const hasActiveSessionData = (session: unknown) => {
+  if (!session || typeof session !== 'object') {
+    return false;
+  }
+  return Boolean((session as { session?: unknown }).session);
+};
+
 /**
  * Unified auth provider for Convex + Better Auth.
  * Handles token sync, HMR persistence, and auth callbacks.
@@ -116,13 +123,14 @@ function ConvexAuthProviderInner({
   // This prevents Convex SDK from calling setAuth() again and causing race conditions
   const sessionRef = useRef(session);
   const isPendingRef = useRef(isPending);
+  const pendingTokenRef = useRef<Promise<string | null> | null>(null);
   sessionRef.current = session;
   isPendingRef.current = isPending;
 
   // Clear token when session becomes null (logout)
   // This can't be inside fetchAccessToken because it's not called after logout
   useEffect(() => {
-    if (!session && !isPending) {
+    if (!hasActiveSessionData(session) && !isPending) {
       authStore.set('token', null);
       authStore.set('expiresAt', null);
       authStore.set('isAuthenticated', false);
@@ -139,11 +147,12 @@ function ConvexAuthProviderInner({
     } = {}) => {
       const currentSession = sessionRef.current;
       const currentIsPending = isPendingRef.current;
+      const hasSession = hasActiveSessionData(currentSession);
 
       // If no session:
       // - If still pending (hydration), return cached token from SSR
       // - If not pending (confirmed no session), clear cache
-      if (!currentSession) {
+      if (!hasSession) {
         if (!currentIsPending) {
           authStore.set('token', null);
           authStore.set('expiresAt', null);
@@ -166,23 +175,39 @@ function ConvexAuthProviderInner({
         return cachedToken;
       }
 
-      // Fetch fresh JWT
-      try {
-        // biome-ignore lint/suspicious/noExplicitAny: convex plugin type
-        const { data } = await (authClient as any).convex.token();
-        const jwt = data?.token || null;
-
-        if (jwt) {
-          const exp = decodeJwtExp(jwt);
-          authStore.set('token', jwt);
-          authStore.set('expiresAt', exp);
-        }
-
-        return jwt;
-      } catch (e) {
-        console.error('[fetchAccessToken] error', e);
-        return null;
+      if (!forceRefreshToken && pendingTokenRef.current) {
+        return pendingTokenRef.current;
       }
+
+      // Fetch fresh JWT
+      // biome-ignore lint/suspicious/noExplicitAny: convex plugin type
+      pendingTokenRef.current = (authClient as any).convex
+        .token({ fetchOptions: { throw: false } })
+        .then((result: { data?: { token?: string | null } | null }) => {
+          const jwt = result.data?.token || null;
+
+          if (jwt) {
+            const exp = decodeJwtExp(jwt);
+            authStore.set('token', jwt);
+            authStore.set('expiresAt', exp);
+            return jwt;
+          }
+
+          authStore.set('token', null);
+          authStore.set('expiresAt', null);
+          return null;
+        })
+        .catch((error: unknown) => {
+          authStore.set('token', null);
+          authStore.set('expiresAt', null);
+          console.error('[fetchAccessToken] error', error);
+          return null;
+        })
+        .finally(() => {
+          pendingTokenRef.current = null;
+        });
+
+      return pendingTokenRef.current;
     },
     // Stable deps - authStore/authClient rarely change
     // session/isPending accessed via refs to prevent callback recreation
@@ -194,13 +219,17 @@ function ConvexAuthProviderInner({
   // This prevents Convex SDK from calling setAuth() on every session refetch
   const useAuth = useCallback(
     function useConvexAuthHook() {
+      const token = authStore.get('token');
+      const hasSession = hasActiveSessionData(sessionRef.current);
+      const sessionMissing = !hasSession && !isPendingRef.current;
       return {
-        isLoading: isPendingRef.current,
-        isAuthenticated: sessionRef.current !== null,
+        isLoading: isPendingRef.current && !token,
+        // If Better Auth confirms no session, stale JWT should not keep auth=true.
+        isAuthenticated: sessionMissing ? false : hasSession || token !== null,
         fetchAccessToken,
       };
     },
-    [fetchAccessToken]
+    [fetchAccessToken, authStore]
   );
 
   return (
@@ -251,13 +280,17 @@ function AuthStateSync({ children }: { children: ReactNode }) {
 function useOTTHandler(authClient: AuthClient) {
   useEffect(() => {
     (async () => {
-      const url = new URL(window.location?.href);
+      if (typeof window === 'undefined' || !window.location?.href) {
+        return;
+      }
+      const url = new URL(window.location.href);
       const token = url.searchParams.get('ott');
 
       if (token) {
         // biome-ignore lint/suspicious/noExplicitAny: cross-domain plugin type
         const authClientWithCrossDomain = authClient as any;
         url.searchParams.delete('ott');
+        window.history.replaceState({}, '', url);
         const result =
           await authClientWithCrossDomain.crossDomain.oneTimeToken.verify({
             token,
@@ -274,8 +307,6 @@ function useOTTHandler(authClient: AuthClient) {
           });
           authClientWithCrossDomain.updateSession();
         }
-
-        window.history.replaceState({}, '', url);
       }
     })();
   }, [authClient]);

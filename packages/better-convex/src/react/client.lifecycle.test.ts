@@ -256,6 +256,137 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
     unsubObserver();
   });
 
+  test('onUpdateQueryKeyHash resolves skipUnauth auth errors to null without onQueryUnauthorized', async () => {
+    const ConvexQueryClient = await getClientConvexQueryClient(
+      'update-errors-skip-unauth'
+    );
+
+    const onQueryUnauthorized = mock(async () => undefined);
+    const authStore = {
+      get: (key: string) => {
+        if (key === 'isLoading') return false;
+        if (key === 'isAuthenticated') return true;
+        if (key === 'onQueryUnauthorized') return onQueryUnauthorized;
+        if (key === 'isUnauthorized') {
+          return (error: unknown) =>
+            error instanceof Error && error.message === 'unauthorized';
+        }
+        return;
+      },
+    };
+
+    const queryClient = new QueryClient();
+    const convexClient = {
+      watchQuery: () => ({
+        onUpdate: () => () => {},
+      }),
+    };
+    const client = new ConvexQueryClient(convexClient, {
+      authStore,
+      queryClient,
+      unsubscribeDelay: 0,
+    });
+
+    const queryKey = ['convexQuery', 'user:getCurrentUser', {}] as const;
+    const observer = new QueryObserver(queryClient as any, {
+      meta: { authType: 'required', skipUnauth: true, subscribe: true },
+      queryFn: async () => ({ ok: true }),
+      queryKey,
+    });
+    const unsubObserver = observer.subscribe(() => {});
+
+    const query =
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .find((q) => JSON.stringify(q.queryKey) === JSON.stringify(queryKey)) ??
+      null;
+    expect(query).not.toBeNull();
+
+    client.subscriptions[(query as any).queryHash] = {
+      queryKey: queryKey as any,
+      watch: {
+        localQueryResult: () => {
+          throw new Error('unauthorized');
+        },
+      } as any,
+      unsubscribe: () => {},
+    };
+
+    client.onUpdateQueryKeyHash((query as any).queryHash);
+
+    expect(onQueryUnauthorized).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(queryKey as any)).toBeNull();
+    expect((query as any).state.status).toBe('success');
+
+    unsubObserver();
+  });
+
+  test('onUpdateQueryKeyHash does not call onQueryUnauthorized when already unauthenticated', async () => {
+    const ConvexQueryClient = await getClientConvexQueryClient(
+      'update-errors-logout'
+    );
+
+    const onQueryUnauthorized = mock(async () => undefined);
+    const authStore = {
+      get: (key: string) => {
+        if (key === 'isLoading') return false;
+        if (key === 'isAuthenticated') return false;
+        if (key === 'onQueryUnauthorized') return onQueryUnauthorized;
+        if (key === 'isUnauthorized') {
+          return (error: unknown) =>
+            error instanceof Error && error.message === 'unauthorized';
+        }
+        return;
+      },
+    };
+
+    const queryClient = new QueryClient();
+    const convexClient = {
+      watchQuery: () => ({
+        onUpdate: () => () => {},
+      }),
+    };
+    const client = new ConvexQueryClient(convexClient, {
+      authStore,
+      queryClient,
+      unsubscribeDelay: 0,
+    });
+
+    const queryKey = ['convexQuery', 'todos:list', { status: 'open' }] as const;
+    const observer = new QueryObserver(queryClient as any, {
+      meta: { authType: 'required', subscribe: true },
+      queryFn: async () => ({ ok: true }),
+      queryKey,
+    });
+    const unsubObserver = observer.subscribe(() => {});
+
+    const query =
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .find((q) => JSON.stringify(q.queryKey) === JSON.stringify(queryKey)) ??
+      null;
+    expect(query).not.toBeNull();
+
+    client.subscriptions[(query as any).queryHash] = {
+      queryKey: queryKey as any,
+      watch: {
+        localQueryResult: () => {
+          throw new Error('unauthorized');
+        },
+      } as any,
+      unsubscribe: () => {},
+    };
+
+    client.onUpdateQueryKeyHash((query as any).queryHash);
+
+    expect(onQueryUnauthorized).not.toHaveBeenCalled();
+    expect((query as any).state.status).toBe('error');
+
+    unsubObserver();
+  });
+
   test('queryFn enforces authType=required on client and throws CRPCClientError', async () => {
     const ConvexQueryClient = await getClientConvexQueryClient('queryfn-auth');
 

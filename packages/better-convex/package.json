@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
-    "@convex-dev/better-auth": "^0.10.10",
+    "@convex-dev/better-auth": "^0.10.11",
     "chokidar": "^5.0.0",
     "common-tags": "^1.8.2",
     "dotenv": "^17.3.1",

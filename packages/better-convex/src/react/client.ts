@@ -460,6 +460,17 @@ export class ConvexQueryClient {
     } else {
       const { error } = result;
       const authState = this.getAuthState();
+      const meta = query.meta as ConvexQueryMeta | undefined;
+      const isUnauthorized = authState?.isUnauthorized(error) ?? false;
+
+      // skipUnauth queries should resolve to null, never surface auth errors/toasts.
+      if (isUnauthorized && meta?.skipUnauth) {
+        this.queryClient.setQueryData(
+          queryKey,
+          this.transformer.output.deserialize(null)
+        );
+        return;
+      }
 
       // Push error state to TanStack cache
       query.setState(
@@ -475,8 +486,9 @@ export class ConvexQueryClient {
         { meta: 'set by ConvexQueryClient' }
       );
 
-      // Call onQueryUnauthorized if server returned auth error
-      if (authState?.isUnauthorized(error)) {
+      // During logout/auth transitions, auth-required subscriptions can still emit
+      // UNAUTHORIZED once. Skip callbacks when we already know auth is unauthenticated.
+      if (isUnauthorized && authState?.isAuthenticated) {
         const [, funcName] = queryKey;
         authState.onUnauthorized({ queryName: funcName as string });
       }
