@@ -44,7 +44,7 @@ describe('example schema aggregate triggers', () => {
   });
 
   test('registers triggers only on user/session tables', () => {
-    const triggeredTables = new Set(['session', 'user']);
+    const triggeredTables = new Set(['session', 'triggerDemoRecord', 'user']);
 
     for (const [tableName, table] of Object.entries(tables)) {
       void table;
@@ -54,6 +54,14 @@ describe('example schema aggregate triggers', () => {
           | {
               change?: (...args: unknown[]) => unknown;
               create?: {
+                before?: (...args: unknown[]) => unknown;
+                after?: (...args: unknown[]) => unknown;
+              };
+              update?: {
+                before?: (...args: unknown[]) => unknown;
+                after?: (...args: unknown[]) => unknown;
+              };
+              delete?: {
                 before?: (...args: unknown[]) => unknown;
                 after?: (...args: unknown[]) => unknown;
               };
@@ -70,6 +78,16 @@ describe('example schema aggregate triggers', () => {
         if (tableName === 'user') {
           expect(typeof tableTrigger?.create?.before).toBe('function');
           expect(typeof tableTrigger?.create?.after).toBe('function');
+          continue;
+        }
+        if (tableName === 'triggerDemoRecord') {
+          expect(typeof tableTrigger?.create?.before).toBe('function');
+          expect(typeof tableTrigger?.create?.after).toBe('function');
+          expect(typeof tableTrigger?.update?.before).toBe('function');
+          expect(typeof tableTrigger?.update?.after).toBe('function');
+          expect(typeof tableTrigger?.delete?.before).toBe('function');
+          expect(typeof tableTrigger?.delete?.after).toBe('function');
+          expect(typeof tableTrigger?.change).toBe('function');
           continue;
         }
       }

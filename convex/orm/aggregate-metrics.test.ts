@@ -18,6 +18,7 @@ const schedulerStub = {
 
 const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
+const METRIC_STATE_KIND = 'metric' as const;
 
 const buildMetricFixtures = (options?: { defaults?: OrmRuntimeDefaults }) => {
   const metricUsers = convexTable(
@@ -1382,8 +1383,11 @@ describe('aggregateBackfill resume compatibility', () => {
 
       const states = await baseCtx.db
         .query('aggregate_state')
-        .withIndex('by_table_index', (q: any) =>
-          q.eq('tableKey', 'metricUsers').eq('indexName', 'by_org_status')
+        .withIndex('by_kind_table_index', (q: any) =>
+          q
+            .eq('kind', METRIC_STATE_KIND)
+            .eq('tableKey', 'metricUsers')
+            .eq('indexName', 'by_org_status')
         )
         .collect();
       expect(states[0]).toBeDefined();
@@ -1460,8 +1464,11 @@ describe('aggregateBackfill resume compatibility', () => {
 
       const states = await baseCtx.db
         .query('aggregate_state')
-        .withIndex('by_table_index', (q: any) =>
-          q.eq('tableKey', 'metricUsers').eq('indexName', 'by_org_status')
+        .withIndex('by_kind_table_index', (q: any) =>
+          q
+            .eq('kind', METRIC_STATE_KIND)
+            .eq('tableKey', 'metricUsers')
+            .eq('indexName', 'by_org_status')
         )
         .collect();
       expect(states[0]).toBeDefined();

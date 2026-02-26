@@ -1,7 +1,4 @@
-import {
-  aggregateStorageTables,
-  TableAggregate,
-} from 'better-convex/aggregate';
+import { TableAggregate } from 'better-convex/aggregate';
 import {
   aggregateIndex,
   convexTable,
@@ -32,6 +29,7 @@ const schedulerStub = {
 
 const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
+const METRIC_STATE_KIND = 'metric' as const;
 
 const buildCountIndexedFixtures = (options?: {
   includeOrgStatusIndex?: boolean;
@@ -204,7 +202,6 @@ describe('ORM count()', () => {
 
     const localTables = {
       countParityUsers: aggUsers,
-      ...aggregateStorageTables,
     };
     const localSchema = defineSchema(localTables, {
       defaults: {
@@ -1105,8 +1102,11 @@ describe('ORM count() with aggregateIndex', () => {
 
       const states = await baseCtx.db
         .query('aggregate_state')
-        .withIndex('by_table_index', (q: any) =>
-          q.eq('tableKey', 'countUsers').eq('indexName', 'by_org_status')
+        .withIndex('by_kind_table_index', (q: any) =>
+          q
+            .eq('kind', METRIC_STATE_KIND)
+            .eq('tableKey', 'countUsers')
+            .eq('indexName', 'by_org_status')
         )
         .collect();
 
@@ -1173,8 +1173,11 @@ describe('ORM count() with aggregateIndex', () => {
 
       const existingState = await baseCtx.db
         .query('aggregate_state')
-        .withIndex('by_table_index', (q: any) =>
-          q.eq('tableKey', 'countUsers').eq('indexName', 'by_org_status')
+        .withIndex('by_kind_table_index', (q: any) =>
+          q
+            .eq('kind', METRIC_STATE_KIND)
+            .eq('tableKey', 'countUsers')
+            .eq('indexName', 'by_org_status')
         )
         .collect();
       expect(existingState).toHaveLength(1);
@@ -1208,8 +1211,11 @@ describe('ORM count() with aggregateIndex', () => {
 
       const remainingState = await baseCtx.db
         .query('aggregate_state')
-        .withIndex('by_table_index', (q: any) =>
-          q.eq('tableKey', 'countUsers').eq('indexName', 'by_org_status')
+        .withIndex('by_kind_table_index', (q: any) =>
+          q
+            .eq('kind', METRIC_STATE_KIND)
+            .eq('tableKey', 'countUsers')
+            .eq('indexName', 'by_org_status')
         )
         .collect();
       expect(remainingState).toHaveLength(0);
@@ -1224,8 +1230,11 @@ describe('ORM count() with aggregateIndex', () => {
 
       const remainingMembers = await baseCtx.db
         .query('aggregate_member')
-        .withIndex('by_table_index', (q: any) =>
-          q.eq('tableKey', 'countUsers').eq('indexName', 'by_org_status')
+        .withIndex('by_kind_table_index', (q: any) =>
+          q
+            .eq('kind', METRIC_STATE_KIND)
+            .eq('tableKey', 'countUsers')
+            .eq('indexName', 'by_org_status')
         )
         .collect();
       expect(remainingMembers).toHaveLength(0);
@@ -1253,6 +1262,7 @@ describe('ORM count() with aggregateIndex', () => {
         updatedAt: 0,
       });
       await baseCtx.db.insert('aggregate_member', {
+        kind: METRIC_STATE_KIND,
         tableKey: 'countUsers',
         indexName: 'by_org_status',
         docId: 'doc_without_state',
@@ -1304,8 +1314,11 @@ describe('ORM count() with aggregateIndex', () => {
 
       const remainingMembers = await baseCtx.db
         .query('aggregate_member')
-        .withIndex('by_table_index', (q: any) =>
-          q.eq('tableKey', 'countUsers').eq('indexName', 'by_org_status')
+        .withIndex('by_kind_table_index', (q: any) =>
+          q
+            .eq('kind', METRIC_STATE_KIND)
+            .eq('tableKey', 'countUsers')
+            .eq('indexName', 'by_org_status')
         )
         .collect();
       expect(remainingMembers).toHaveLength(0);
