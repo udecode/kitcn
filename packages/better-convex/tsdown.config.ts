@@ -18,7 +18,6 @@ export default defineConfig([
       'auth/client/index': 'src/auth-client/index.ts',
       'react/index': 'src/react/index.ts',
     },
-    inlineOnly: false,
     platform: 'neutral',
     target: 'esnext',
     tsconfig: 'tooling/tsconfig.build.json',
@@ -41,7 +40,8 @@ export default defineConfig([
       'server/index': 'src/server/index.ts',
       'orm/index': 'src/orm/index.ts',
     },
-    inlineOnly: false,
+    // Keep CI strict: only allow this known transitive Better Auth dep to inline.
+    inlineOnly: ['kysely'],
     platform: 'neutral',
     target: 'esnext',
     tsconfig: 'tooling/tsconfig.build.json',
