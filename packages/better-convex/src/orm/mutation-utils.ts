@@ -380,6 +380,11 @@ export const hydrateDateFieldsForRead = <T>(
       result[name] = hydrateTemporalReadValue(descriptor, rawCreationTime);
       continue;
     }
+
+    if (!Object.hasOwn(result, name)) {
+      continue;
+    }
+
     result[name] = hydrateTemporalReadValue(descriptor, result[name]);
   }
 
@@ -2205,6 +2210,9 @@ export function toConvexFilter(
         case 'inArray': {
           const values = value as any[];
           return (q: any) => {
+            if (values.length === 0) {
+              return q.eq(q.field('_id'), '__better_convex_never__');
+            }
             const conditions = values.map((v) => q.eq(q.field(fieldName), v));
             return conditions.reduce((acc, cond) => q.or(acc, cond));
           };

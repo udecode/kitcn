@@ -201,11 +201,11 @@ export class ConvexInsertBuilder<
       const tableName = getTableName(this.table);
 
       if (
-        !canInsertRow({
+        !(await canInsertRow({
           table: this.table,
           row: preparedValue as any,
           rls,
-        })
+        }))
       ) {
         throw new Error(
           `RLS policy violation for insert on table "${tableName}"`
@@ -392,7 +392,7 @@ export class ConvexInsertBuilder<
     };
     const writeSet = normalizeDateFieldsForWrite(this.table, effectiveSet);
 
-    const updateDecision = evaluateUpdateDecision({
+    const updateDecision = await evaluateUpdateDecision({
       table: this.table,
       existingRow: existing as any,
       updatedRow: { ...(existing as any), ...(writeSet as any) },

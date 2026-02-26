@@ -622,11 +622,11 @@ export class ConvexDeleteBuilder<
 
     for (const row of rows) {
       if (
-        !canDeleteRow({
+        !(await canDeleteRow({
           table: this.table,
           row: row as Record<string, unknown>,
           rls,
-        })
+        }))
       ) {
         continue;
       }

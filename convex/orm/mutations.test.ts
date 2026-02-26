@@ -25,6 +25,7 @@ import {
   notInArray,
   scheduledMutationBatchFactory,
   text,
+  timestamp,
 } from 'better-convex/orm';
 import { anyApi, type SchedulableFunctionReference } from 'convex/server';
 import { it as baseIt, describe, expect, vi } from 'vitest';
@@ -230,6 +231,42 @@ describe('M7 Mutations', () => {
     expect(user).toEqual({
       name: 'Alice',
       email: 'alice@example.com',
+    });
+  });
+
+  it('should support returning() on nullable timestamp columns in convex-test', async () => {
+    const localSubscriptions = convexTable('localSubscriptions', {
+      plan: text().notNull(),
+      referenceId: text().notNull(),
+      status: text(),
+      periodStart: timestamp(),
+      periodEnd: timestamp(),
+      trialStart: timestamp(),
+      trialEnd: timestamp(),
+      createdAt: timestamp().notNull().defaultNow(),
+      updatedAt: timestamp().notNull().defaultNow(),
+    });
+    const localSchema = defineSchema({
+      localSubscriptions,
+    });
+    const localRelations = defineRelations(
+      {
+        localSubscriptions,
+      },
+      () => ({})
+    );
+
+    await withOrmCtx(localSchema, localRelations, async ({ orm }) => {
+      const [sub] = await orm
+        .insert(localSubscriptions)
+        .values({ plan: 'pro', referenceId: 'ref_1', status: 'active' })
+        .returning();
+
+      expect(sub.id).toBeDefined();
+      expect(sub.periodStart).toBeUndefined();
+      expect(sub.periodEnd).toBeUndefined();
+      expect(sub.trialStart).toBeUndefined();
+      expect(sub.trialEnd).toBeUndefined();
     });
   });
 

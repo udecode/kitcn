@@ -8,14 +8,14 @@
 - Removed generated auth trigger procedures (`beforeCreate`, `onCreate`, `beforeUpdate`, `onUpdate`, `beforeDelete`, `onDelete`).
 - Auth trigger callbacks now run inline in auth CRUD handlers with explicit callback ctx.
 
-| Old | New |
-| --- | --- |
-| `beforeCreate` | `create.before(data, ctx)` |
-| `onCreate` | `create.after(doc, ctx)` |
+| Old            | New                          |
+| -------------- | ---------------------------- |
+| `beforeCreate` | `create.before(data, ctx)`   |
+| `onCreate`     | `create.after(doc, ctx)`     |
 | `beforeUpdate` | `update.before(update, ctx)` |
-| `onUpdate` | `update.after(newDoc, ctx)` |
-| `beforeDelete` | `delete.before(doc, ctx)` |
-| `onDelete` | `delete.after(doc, ctx)` |
+| `onUpdate`     | `update.after(newDoc, ctx)`  |
+| `beforeDelete` | `delete.before(doc, ctx)`    |
+| `onDelete`     | `delete.after(doc, ctx)`     |
 
 ## 0.6.2
 
@@ -238,7 +238,7 @@
     useSignUpMutationOptions({
       onSuccess: () => router.push("/"), // Only on success now
       onError: (error) => toast.error(error.message), // Fires on auth errors
-    }),
+    })
   );
   ```
 
@@ -510,7 +510,7 @@
     cors({
       origin: process.env.SITE_URL!,
       credentials: true,
-    }),
+    })
   );
 
   app.use(authMiddleware(createAuth));
@@ -537,7 +537,7 @@
 
       c.header(
         "Content-Disposition",
-        `attachment; filename="todos.${params.format}"`,
+        `attachment; filename="todos.${params.format}"`
       );
 
       if (params.format === "csv") {

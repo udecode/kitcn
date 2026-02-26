@@ -594,7 +594,6 @@ export function not(expression: FilterExpression<boolean>): UnaryExpression {
 
 /**
  * Array membership operator: field IN array
- * Validates array is non-empty at construction time
  *
  * @example
  * const filter = inArray(cols.status, ['active', 'pending']);
@@ -603,10 +602,6 @@ export function inArray<TBuilder extends ColumnBuilder<any, any, any>>(
   col: ColumnArgument<TBuilder>,
   values: readonly ColumnToType<TBuilder>[]
 ): BinaryExpression<ColumnToType<TBuilder>> {
-  // Validation: Array must be non-empty
-  if (!Array.isArray(values) || values.length === 0) {
-    throw new Error('inArray requires a non-empty array of values');
-  }
   const resolved = resolveColumn(col);
   return new BinaryExpressionImpl('inArray', [
     fieldRef(resolved.columnName),

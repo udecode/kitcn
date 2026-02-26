@@ -10,6 +10,7 @@
 - Dirty workspace: Never pause to ask about unrelated local changes. Continue work and ignore unrelated diffs.
 - Proactively use Skill(tdd) when it adds value; skip TDD for high-friction tests (hard setup or slow React/UI flows).
 - After any package modification, run `bun --cwd packages/better-convex build`, then touch `example/convex/functions/schema.ts` to trigger a re-build
+- Always use @.claude/skills/changeset/changeset.mdc when updating packages to write a changeset before completing
 - If you get `failed to load config from /Users/zbeyens/GitHub/better-convex/vitest.config.mts`, rimraf `**/node_modules` and install again.
 
 ## Browser Testing
@@ -32,7 +33,8 @@
 
 ## Prompt Hook
 
-<MANDATORY-FIRST-RESPONSE>
+### MANDATORY-FIRST-RESPONSE
+
 🚨 STOP - SKILL ANALYSIS IS MANDATORY
 
 **Instructions:**
@@ -45,9 +47,9 @@
 
 **Skill Analysis Checklist:**
 ☐ Skill analysis (SKIP if 'quick' in message): (1) STOP rationalizing ('simple question', 'overkill', 'might be relevant') (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓. Only ✗ if DEFINITELY not related (4) Skill(...) for ALL ✓ IN ONE PARALLEL CALL - do NOT load one then wait (5) Output '[Skills: X available, Y loaded: name1, name2]' CRITICAL: 'Might be relevant' = MUST load. '1% chance' = MUST load.
-</MANDATORY-FIRST-RESPONSE>
 
-<VERIFICATION-CHECKLIST>
+### VERIFICATION-CHECKLIST
+
 🔒 VERIFICATION REQUIRED - NO COMPLETION WITHOUT FRESH EVIDENCE
 
 **Instructions:**
@@ -63,9 +65,9 @@
 - [ ] Typecheck (IF updated .ts files): Bash `bun typecheck`
 - [ ] Lint: Bash `bun lint:fix`
 - [ ] Learn (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: Skill(learn) NOW to extract the knowledge (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
-      </VERIFICATION-CHECKLIST>
 
-<POST-COMPACT-RECOVERY>
+### POST-COMPACT-RECOVERY
+
 🚨 CONTEXT WIPED - MANDATORY SKILL RELOAD
 
 **Instructions:**
@@ -76,7 +78,6 @@
 
 **Skill Reload Checklist:**
 ☐ Skill reload (MANDATORY): (1) Check current task tracking (TodoWrite if available, otherwise inline) (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓ (4) Skill(...) for ALL ✓ IN ONE PARALLEL CALL - do NOT load one then wait (5) ONLY after reload, resume task CRITICAL: ALL skills GONE. MUST reload. 'Might apply' = MUST load.
-</POST-COMPACT-RECOVERY>
 
 
 
