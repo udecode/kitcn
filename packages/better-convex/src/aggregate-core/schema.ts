@@ -1,5 +1,7 @@
 import { type Infer, v } from 'convex/values';
-import { convexTable, custom, id, index, integer, text } from '../orm';
+import { custom, id, integer, text } from '../orm/builders';
+import { index } from '../orm/indexes';
+import { convexTable } from '../orm/table';
 
 export const AGGREGATE_TREE_TABLE = 'aggregate_rank_tree';
 export const AGGREGATE_NODE_TABLE = 'aggregate_rank_node';

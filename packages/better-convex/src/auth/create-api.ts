@@ -14,7 +14,8 @@ import {
   customMutation,
 } from '../internal/upstream/server/customFunctions';
 import { partial } from '../internal/upstream/validators';
-import { eq, unsetToken } from '../orm';
+import { eq } from '../orm/filter-expression';
+import { unsetToken } from '../orm/unset-token';
 import {
   adapterWhereValidator,
   checkUniqueFields,
