@@ -83,23 +83,6 @@ export default defineAuth((ctx) => {
       updateAge: 60 * 60 * 24 * 15, // 15 days
     },
     trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
-    triggers: {
-      user: {
-        create: {
-          before: async (data, triggerCtx) => {
-            const username =
-              data.username?.trim() ??
-              data.email?.split('@')[0] ??
-              `user-${Date.now()}`;
-            return { data: { ...data, username } };
-          },
-          after: async (user, triggerCtx) => {
-            // `ctx` from defineAuth closure is still available here.
-            // `triggerCtx` is also passed explicitly to every callback.
-          },
-        },
-      },
-    },
   };
 });
 ```
@@ -395,37 +378,41 @@ Generated `getAuth(ctx)` uses the same context-aware adapter selection internall
 
 ### Triggers
 
-Auth triggers use the same API as [ORM Triggers](/docs/orm/schema/triggers) — see that page for the full hook signatures.
+The recommended approach is schema-level [ORM Triggers](/docs/orm/schema/triggers) via `defineTriggers` in `schema.ts`. These run for **all writes** to auth tables (ORM mutations, auth API, direct `ctx.db`).
 
-<Callout icon={<InfoIcon />}>
-`defineTriggers` runs at the `ctx.orm` level (all writes). `defineAuth` triggers run only at the Better Auth API level.
-</Callout>
-
-<Tabs groupId="triggers" items={["ORM (recommended)", "defineAuth"]} persist>
-  <Tab value="ORM (recommended)">
-    Define triggers in `schema.ts` via `defineTriggers`. These run for all writes to auth tables, including ORM mutations:
-
-    ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-16}
+<Tabs groupId="triggers" items={["Schema triggers (recommended)", "defineAuth triggers"]} persist>
+  <Tab value="Schema triggers (recommended)">
+    ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-20}
     import { defineTriggers } from 'better-convex/orm';
     import { relations } from './relations';
 
     export const triggers = defineTriggers(relations, {
       user: {
         create: {
-          before: async (data, ctx) => {
+          before: async (data) => {
             return { data: { ...data, role: 'user' } };
           },
-          after: async (doc, ctx) => {},
+          after: async (doc, ctx) => {
+            // e.g. create personal organization, send welcome email
+          },
         },
-        change: async (change, ctx) => {},
+      },
+      session: {
+        create: {
+          after: async (session, ctx) => {
+            // e.g. set activeOrganizationId from last active
+          },
+        },
       },
     });
     ```
-  </Tab>
-  <Tab value="defineAuth">
-    Define triggers inline in `auth.ts`. These run only for auth CRUD operations:
 
-    ```ts title="convex/functions/auth.ts" showLineNumbers {4-16}
+    See [Triggers](/docs/orm/schema/triggers) for the full hook signatures, `change` handler, cancellation, and `withoutTriggers`.
+  </Tab>
+  <Tab value="defineAuth triggers">
+    If you're not using the ORM, define triggers inline in `auth.ts`. These run only for Better Auth API operations:
+
+    ```ts title="convex/functions/auth.ts" showLineNumbers {4-14}
     import { defineAuth } from './generated/auth';
 
     export default defineAuth((ctx) => ({
@@ -438,11 +425,12 @@ Auth triggers use the same API as [ORM Triggers](/docs/orm/schema/triggers) — 
             },
             after: async (doc, triggerCtx) => {},
           },
-          change: async (change, triggerCtx) => {},
         },
       },
     }));
     ```
+
+    See [migrating from Better Auth component](/docs/migrations/auth) for this pattern.
   </Tab>
 </Tabs>
 
