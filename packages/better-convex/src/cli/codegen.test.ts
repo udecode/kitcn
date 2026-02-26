@@ -1799,6 +1799,44 @@ describe('cli/codegen', () => {
     }
   });
 
+  test('generateMeta preserves module runtime file when module parse fails', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        throw new Error('parse failure');
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      const todosRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'todos.runtime.ts'
+      );
+      const runtimeSentinel = '// keep me';
+      writeFile(todosRuntimeFile, runtimeSentinel);
+
+      await generateMeta(undefined, { silent: true });
+
+      expect(fs.existsSync(todosRuntimeFile)).toBe(true);
+      expect(fs.readFileSync(todosRuntimeFile, 'utf-8')).toContain(
+        runtimeSentinel
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta throws deterministic error for invalid scope', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

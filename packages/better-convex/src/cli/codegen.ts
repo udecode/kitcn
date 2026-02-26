@@ -1272,6 +1272,7 @@ export async function generateMeta(
   const allHttpRoutes: HttpRoutes = {};
   const procedureEntries: ProcedureRegistryEntry[] = [];
   let createdRuntimePlaceholders: string[] = [];
+  const runtimeFilesPreservedFromParseFailures = new Set<string>();
   let totalFunctions = 0;
   const authFilePath = path.join(functionsDir, 'auth.ts');
   const hasAuthFile = fs.existsSync(authFilePath);
@@ -1356,6 +1357,9 @@ export async function generateMeta(
           });
         }
       } catch (error) {
+        runtimeFilesPreservedFromParseFailures.add(
+          getGeneratedRuntimeOutputFile(functionsDir, moduleName)
+        );
         // Always log http.ts errors as they contain critical HTTP routes
         if (debug || file === 'http.ts') {
           console.error(`  ⚠ Failed to parse ${file}:`, error);
@@ -1561,13 +1565,19 @@ ${optionalTypeExports}
   const runtimeOutputFileSet = new Set(runtimeOutputFiles);
   const existingRuntimeFiles = listGeneratedRuntimeFiles(functionsDir);
   for (const existingRuntimeFile of existingRuntimeFiles) {
-    if (runtimeOutputFileSet.has(existingRuntimeFile)) {
+    if (
+      runtimeOutputFileSet.has(existingRuntimeFile) ||
+      runtimeFilesPreservedFromParseFailures.has(existingRuntimeFile)
+    ) {
       continue;
     }
     fs.rmSync(existingRuntimeFile, { force: true });
   }
   for (const createdRuntimePlaceholder of createdRuntimePlaceholders) {
-    if (runtimeOutputFileSet.has(createdRuntimePlaceholder)) {
+    if (
+      runtimeOutputFileSet.has(createdRuntimePlaceholder) ||
+      runtimeFilesPreservedFromParseFailures.has(createdRuntimePlaceholder)
+    ) {
       continue;
     }
     fs.rmSync(createdRuntimePlaceholder, { force: true });
