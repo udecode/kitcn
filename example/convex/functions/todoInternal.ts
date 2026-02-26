@@ -151,14 +151,40 @@ export const getSystemStats = privateQuery
       (user) => (user._count?.todos ?? 0) > 0
     ).length;
 
-    // Todo stats (only count active todos, not soft-deleted)
-    const totalTodos = await ctx.orm.query.todos.count({
-      where: { deletionTime: { isNull: true } },
-    });
-    // Count completed active todos
-    const completedTodos = await ctx.orm.query.todos.count({
-      where: { completed: true, deletionTime: { isNull: true } },
-    });
+    const [todosByCompletion, todosByPriority, todosWithNoPriority] =
+      await Promise.all([
+        ctx.orm.query.todos.groupBy({
+          by: ['completed'],
+          where: {
+            completed: { in: [true, false] },
+            deletionTime: { isNull: true },
+          },
+          _count: true,
+        }),
+        ctx.orm.query.todos.groupBy({
+          by: ['priority'],
+          where: {
+            priority: { in: ['low', 'medium', 'high'] },
+            deletionTime: { isNull: true },
+          },
+          _count: true,
+        }),
+        ctx.orm.query.todos.groupBy({
+          by: ['priority'],
+          where: {
+            priority: { isNull: true },
+            deletionTime: { isNull: true },
+          },
+          _count: true,
+        }),
+      ]);
+
+    const totalTodos = todosByCompletion.reduce(
+      (sum, group) => sum + group._count,
+      0
+    );
+    const completedTodos =
+      todosByCompletion.find((group) => group.completed === true)?._count ?? 0;
 
     // Count overdue (exclude soft-deleted)
     const overdueTodos = (
@@ -172,27 +198,22 @@ export const getSystemStats = privateQuery
       })
     ).length;
 
-    // Priority breakdown (exclude soft-deleted)
     const byPriority: Record<'low' | 'medium' | 'high' | 'none', number> = {
       low: 0,
       medium: 0,
       high: 0,
       none: 0,
     };
-    for (const priority of ['low', 'medium', 'high'] as const) {
-      byPriority[priority] = (
-        await ctx.orm.query.todos.findMany({
-          where: { priority, deletionTime: { isNull: true } },
-          limit: 1000,
-        })
-      ).length;
+    for (const group of todosByPriority) {
+      if (
+        group.priority === 'low' ||
+        group.priority === 'medium' ||
+        group.priority === 'high'
+      ) {
+        byPriority[group.priority] = group._count;
+      }
     }
-    byPriority.none = (
-      await ctx.orm.query.todos.findMany({
-        where: { priority: { isNull: true }, deletionTime: { isNull: true } },
-        limit: 1000,
-      })
-    ).length;
+    byPriority.none = todosWithNoPriority[0]?._count ?? 0;
 
     // Project stats
     const projects = await ctx.orm.query.projects.findMany({ limit: 1000 });
@@ -349,47 +370,39 @@ export const recalculateUserStats = privateMutation
   .mutation(async ({ ctx, input }) => {
     // Calculate streak (consecutive days with completed todos, exclude soft-deleted)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [userWithTotalTodos, userWithCompletedTodos, recentCompleted] =
-      await Promise.all([
-        ctx.orm.query.user.findFirstOrThrow({
-          where: { id: input.userId },
-          with: {
-            _count: {
-              todos: {
-                where: {
-                  deletionTime: { isNull: true },
-                },
-              },
-            },
-          },
-        }),
-        ctx.orm.query.user.findFirst({
-          where: { id: input.userId },
-          with: {
-            _count: {
-              todos: {
-                where: {
-                  completed: true,
-                  deletionTime: { isNull: true },
-                },
-              },
-            },
-          },
-        }),
-        ctx.orm.query.todos.findMany({
-          where: {
-            userId: input.userId,
-            completed: true,
-            createdAt: { gte: thirtyDaysAgo },
-            deletionTime: { isNull: true },
-          },
-          orderBy: { createdAt: 'desc' },
-          limit: 1000,
-        }),
-      ]);
+    await ctx.orm.query.user.findFirstOrThrow({
+      where: { id: input.userId },
+      columns: { id: true },
+    });
 
-    const totalTodos = userWithTotalTodos._count?.todos ?? 0;
-    const completedTodos = userWithCompletedTodos?._count?.todos ?? 0;
+    const [todosByCompletion, recentCompleted] = await Promise.all([
+      ctx.orm.query.todos.groupBy({
+        by: ['completed'],
+        where: {
+          userId: input.userId,
+          completed: { in: [true, false] },
+          deletionTime: { isNull: true },
+        },
+        _count: true,
+      }),
+      ctx.orm.query.todos.findMany({
+        where: {
+          userId: input.userId,
+          completed: true,
+          createdAt: { gte: thirtyDaysAgo },
+          deletionTime: { isNull: true },
+        },
+        orderBy: { createdAt: 'desc' },
+        limit: 1000,
+      }),
+    ]);
+
+    const totalTodos = todosByCompletion.reduce(
+      (sum, group) => sum + group._count,
+      0
+    );
+    const completedTodos =
+      todosByCompletion.find((group) => group.completed === true)?._count ?? 0;
 
     // Calculate streak
     let streak = 0;

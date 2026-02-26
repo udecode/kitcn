@@ -953,6 +953,16 @@ export const triggers = defineTriggers(relations, {
 });
 ```
 
+### `withoutTriggers`
+
+Bypass all trigger hooks for a block of operations (bulk resets, migrations, seeding):
+
+```ts
+await ctx.orm.withoutTriggers(async (orm) => {
+  await orm.delete(todosTable).allowFullScan();
+});
+```
+
 ### Trigger safety checklist
 
 1. Idempotent logic.

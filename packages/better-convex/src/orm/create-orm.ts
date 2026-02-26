@@ -1,6 +1,7 @@
 import {
   type GenericDatabaseReader,
   type GenericDatabaseWriter,
+  internalActionGeneric,
   internalMutationGeneric,
   type SchedulableFunctionReference,
   type Scheduler,
@@ -25,6 +26,7 @@ export type OrmFunctions = {
   scheduledMutationBatch: SchedulableFunctionReference;
   scheduledDelete: SchedulableFunctionReference;
   aggregateBackfillChunk?: SchedulableFunctionReference;
+  resetChunk?: SchedulableFunctionReference;
 };
 
 export type CreateOrmOptions = CreateDatabaseOptions;
@@ -95,6 +97,8 @@ type OrmApiResult = {
   aggregateBackfill: ReturnType<typeof internalMutationGeneric>;
   aggregateBackfillChunk: ReturnType<typeof internalMutationGeneric>;
   aggregateBackfillStatus: ReturnType<typeof internalMutationGeneric>;
+  resetChunk: ReturnType<typeof internalMutationGeneric>;
+  reset: ReturnType<typeof internalActionGeneric>;
 };
 
 type OrmClientBase<TSchema extends TablesRelationalConfig> = {
@@ -199,6 +203,8 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
     api: () => {
       let aggregateBackfillChunkRef: SchedulableFunctionReference | undefined =
         config.ormFunctions.aggregateBackfillChunk;
+      let resetChunkRef: SchedulableFunctionReference | undefined =
+        config.ormFunctions.resetChunk;
       const countBackfillHandlers = createCountBackfillHandlers(
         config.schema,
         () => aggregateBackfillChunkRef
@@ -209,6 +215,44 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
       });
       if (!aggregateBackfillChunkRef) {
         aggregateBackfillChunkRef = aggregateBackfillChunk as any;
+      }
+      const resetChunk = mutationBuilder({
+        args: v.object({
+          tableName: v.string(),
+          cursor: v.union(v.string(), v.null()),
+        }),
+        handler: async (
+          ctx: { db: GenericDatabaseWriter<any> },
+          args: { tableName: string; cursor: string | null }
+        ) => {
+          const page = await (
+            ctx.db.query(args.tableName as any) as any
+          ).paginate({
+            cursor: args.cursor,
+            numItems: 256,
+          });
+          const docs = Array.isArray(page?.page)
+            ? (page.page as Array<{ _id?: string }>)
+            : [];
+          let deleted = 0;
+          for (const doc of docs) {
+            if (!doc?._id) {
+              continue;
+            }
+            await ctx.db.delete(args.tableName as any, doc._id as any);
+            deleted += 1;
+          }
+          return {
+            cursor: page?.isDone
+              ? null
+              : ((page?.continueCursor ?? null) as string | null),
+            deleted,
+            isDone: Boolean(page?.isDone),
+          };
+        },
+      });
+      if (!resetChunkRef) {
+        resetChunkRef = resetChunk as unknown as SchedulableFunctionReference;
       }
 
       return {
@@ -236,6 +280,45 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
         aggregateBackfillStatus: mutationBuilder({
           args: v.any(),
           handler: countBackfillHandlers.status as any,
+        }),
+        resetChunk,
+        reset: internalActionGeneric({
+          args: v.any(),
+          handler: async (ctx: any) => {
+            const tableNames = [
+              ...new Set(
+                Object.values(config.schema).map(
+                  (tableConfig) => tableConfig.name
+                )
+              ),
+            ];
+            let deleted = 0;
+
+            for (const tableName of tableNames) {
+              let cursor: string | null = null;
+              while (true) {
+                const chunk = (await ctx.runMutation(resetChunkRef, {
+                  tableName,
+                  cursor,
+                })) as {
+                  cursor: string | null;
+                  deleted: number;
+                  isDone: boolean;
+                };
+                deleted += chunk.deleted;
+                if (chunk.isDone) {
+                  break;
+                }
+                cursor = chunk.cursor;
+              }
+            }
+
+            return {
+              status: 'ok' as const,
+              tables: tableNames.length,
+              deleted,
+            };
+          },
         }),
       };
     },

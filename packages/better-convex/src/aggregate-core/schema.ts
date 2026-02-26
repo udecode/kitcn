@@ -1,8 +1,8 @@
 import { type Infer, v } from 'convex/values';
 import { convexTable, custom, id, index, integer, text } from '../orm';
 
-export const AGGREGATE_TREE_TABLE = 'bc_aggregate_tree';
-export const AGGREGATE_NODE_TABLE = 'bc_aggregate_node';
+export const AGGREGATE_TREE_TABLE = 'aggregate_rank_tree';
+export const AGGREGATE_NODE_TABLE = 'aggregate_rank_node';
 
 export const aggregateCounterValidator = v.object({
   count: v.number(),

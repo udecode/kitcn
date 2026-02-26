@@ -129,6 +129,37 @@ describe('orm lifecycle hooks', () => {
     ]);
   });
 
+  test('orm.withoutTriggers bypasses trigger hooks for scoped writes', async () => {
+    const events: string[] = [];
+    const { users, schema, triggers } = createUsersSchema(
+      'users_lifecycle_without_triggers_test',
+      { name: text().notNull() },
+      {
+        create: {
+          after: async (doc: { name: string }) => {
+            events.push(`create:${doc.name}`);
+          },
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
+    const { writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    await ctx.orm.insert(users).values({ name: 'with-triggers' }).returning();
+    expect(events).toEqual(['create:with-triggers']);
+
+    await ctx.orm.withoutTriggers(async (ormNoTriggers: typeof ctx.orm) => {
+      await ormNoTriggers
+        .insert(users)
+        .values({ name: 'without-triggers' })
+        .returning();
+    });
+
+    expect(events).toEqual(['create:with-triggers']);
+  });
+
   test('hook docs include public id alias when storage only exposes _id', async () => {
     const events: Array<{ hook: string; id: unknown; _id: unknown }> = [];
 

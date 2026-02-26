@@ -397,6 +397,13 @@ type BackfillCliOverrides = {
   strict?: boolean;
 };
 
+type ResetCliOptions = {
+  confirmed: boolean;
+  beforeHook?: string;
+  afterHook?: string;
+  remainingArgs: string[];
+};
+
 const VALID_BACKFILL_ENABLED = new Set<BackfillEnabled>(['auto', 'on', 'off']);
 
 function parsePositiveIntegerArg(flag: string, raw: string): number {
@@ -537,6 +544,68 @@ function extractBackfillCliOptions(args: string[]): {
   return {
     remainingArgs,
     overrides,
+  };
+}
+
+function extractResetCliOptions(args: string[]): ResetCliOptions {
+  const remainingArgs: string[] = [];
+  let confirmed = false;
+  let beforeHook: string | undefined;
+  let afterHook: string | undefined;
+
+  const isBackfillFlag = (arg: string) =>
+    arg === '--backfill' ||
+    arg.startsWith('--backfill=') ||
+    arg.startsWith('--backfill-') ||
+    arg.startsWith('--no-backfill-');
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (isBackfillFlag(arg)) {
+      throw new Error(
+        '`better-convex reset` does not accept backfill flags. It always runs aggregateBackfill in resume mode.'
+      );
+    }
+    if (arg === '--yes') {
+      confirmed = true;
+      continue;
+    }
+    if (arg === '--before') {
+      const { value, nextIndex } = readFlagValue(args, i, '--before');
+      beforeHook = value;
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--before=')) {
+      const value = arg.slice('--before='.length);
+      if (!value) {
+        throw new Error('Missing value for --before.');
+      }
+      beforeHook = value;
+      continue;
+    }
+    if (arg === '--after') {
+      const { value, nextIndex } = readFlagValue(args, i, '--after');
+      afterHook = value;
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--after=')) {
+      const value = arg.slice('--after='.length);
+      if (!value) {
+        throw new Error('Missing value for --after.');
+      }
+      afterHook = value;
+      continue;
+    }
+    remainingArgs.push(arg);
+  }
+
+  return {
+    confirmed,
+    beforeHook,
+    afterHook,
+    remainingArgs,
   };
 }
 
@@ -1273,6 +1342,74 @@ export async function run(
   }
   if (command === 'analyze') {
     return runAnalyzeFn(restArgs);
+  }
+  if (command === 'reset') {
+    const {
+      confirmed,
+      beforeHook,
+      afterHook,
+      remainingArgs: resetCommandArgs,
+    } = extractResetCliOptions(convexArgs);
+    if (!confirmed) {
+      throw new Error(
+        '`better-convex reset` is destructive. Re-run with `--yes`.'
+      );
+    }
+
+    const config = loadBetterConvexConfigFn(configPath);
+    const resetArgs = [...config.deploy.convexArgs, ...resetCommandArgs];
+    const deploymentArgs = extractRunDeploymentArgs(resetArgs);
+
+    const runOptionalHook = async (functionName: string | undefined) => {
+      if (!functionName) {
+        return 0;
+      }
+      const result = await runConvexFunction(
+        execaFn,
+        realConvexPath,
+        functionName,
+        {},
+        deploymentArgs
+      );
+      return result.exitCode;
+    };
+
+    const beforeExitCode = await runOptionalHook(beforeHook);
+    if (beforeExitCode !== 0) {
+      return beforeExitCode;
+    }
+
+    const resetResult = await runConvexFunction(
+      execaFn,
+      realConvexPath,
+      'generated/server:reset',
+      {},
+      deploymentArgs
+    );
+    if (resetResult.exitCode !== 0) {
+      return resetResult.exitCode;
+    }
+
+    const backfillExitCode = await runAggregateBackfillFlow({
+      execaFn,
+      realConvexPath,
+      backfillConfig: {
+        enabled: 'on',
+        wait: true,
+        batchSize: 1000,
+        pollIntervalMs: 1000,
+        timeoutMs: 900_000,
+        strict: false,
+      },
+      mode: 'resume',
+      deploymentArgs,
+      context: 'aggregate',
+    });
+    if (backfillExitCode !== 0) {
+      return backfillExitCode;
+    }
+
+    return runOptionalHook(afterHook);
   }
   if (command === 'deploy') {
     const config = loadBetterConvexConfigFn(configPath);

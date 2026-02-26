@@ -4,7 +4,7 @@ import type {
   SystemFields,
 } from './builders/system-fields';
 import { createSystemFields } from './builders/system-fields';
-import { getAggregateIndexes, getIndexes } from './index-utils';
+import { getAggregateIndexes, getIndexes, getRankIndexes } from './index-utils';
 import {
   getChecks,
   getForeignKeys,
@@ -58,6 +58,7 @@ export type TableConfigResult<TTable extends ConvexTable<any>> = {
   columns: ReturnType<typeof getTableColumns<TTable>>;
   indexes: ReturnType<typeof getIndexes>;
   aggregateIndexes: ReturnType<typeof getAggregateIndexes>;
+  rankIndexes: ReturnType<typeof getRankIndexes>;
   uniqueIndexes: ReturnType<typeof getUniqueIndexes>;
   foreignKeys: ReturnType<typeof getForeignKeys>;
   checks: ReturnType<typeof getChecks>;
@@ -80,6 +81,7 @@ export function getTableConfig<TTable extends ConvexTable<any>>(
     columns: getTableColumns(table),
     indexes: getIndexes(table),
     aggregateIndexes: getAggregateIndexes(table),
+    rankIndexes: getRankIndexes(table),
     uniqueIndexes: getUniqueIndexes(table),
     foreignKeys: getForeignKeys(table),
     checks: getChecks(table),

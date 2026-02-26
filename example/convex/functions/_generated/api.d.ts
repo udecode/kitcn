@@ -961,6 +961,13 @@ export declare const internal: {
         any,
         any
       >;
+      reset: FunctionReference<"action", "internal", any, any>;
+      resetChunk: FunctionReference<
+        "mutation",
+        "internal",
+        { cursor: string | null; tableName: string },
+        any
+      >;
       scheduledDelete: FunctionReference<"mutation", "internal", any, any>;
       scheduledMutationBatch: FunctionReference<
         "mutation",
@@ -980,15 +987,6 @@ export declare const internal: {
       { image?: string | null; name: string; userId: string },
       { id: string; slug: string } | null
     >;
-  };
-  reset: {
-    deleteTable: FunctionReference<
-      "mutation",
-      "internal",
-      { cursor: string | null; tableName: string },
-      any
-    >;
-    reset: FunctionReference<"action", "internal", {}, any>;
   };
   seed: {
     cleanupSeedData: FunctionReference<"mutation", "internal", {}, any>;

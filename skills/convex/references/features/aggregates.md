@@ -96,6 +96,19 @@ const rows = await ctx.orm.query.orders.groupBy({
 });
 ```
 
+#### When to use `groupBy` vs alternatives
+
+Use `groupBy` when you need **multi-bucket metrics in one call** where each bucket is a distinct field value:
+
+| Pattern | Use instead | Why |
+|---------|------------|-----|
+| Multiple `.count()` calls with different filter values | `groupBy({ by, _count })` | One call replaces N sequential counts |
+| `findMany` + manual Map/reduce grouping in JS | `groupBy({ by, _count, _sum })` | O(log n) per bucket vs O(n) scan |
+| Sampling + estimation (e.g. "count admins from 100 users") | `groupBy({ by: ['role'], _count })` | Exact counts, no estimation |
+| Dashboard stats with breakdowns by category | `groupBy({ by: ['status'], _sum, _avg })` | Single query for full breakdown |
+
+Delta from parity: Unlike Prisma, `groupBy` requires every `by` field to be finite-constrained in `where` (`eq`/`in`/`isNull`) and backed by an `aggregateIndex`. Unconstrained `by` fields throw `AGGREGATE_ARGS_UNSUPPORTED`.
+
 ### `findMany({ distinct })` (Unsupported)
 
 `findMany({ distinct })` is not available to keep strict no-scan/index-backed guarantees.

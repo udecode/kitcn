@@ -68,6 +68,15 @@ const DIRECT_OPS = [
   'restoreTodo',
 ] as const;
 
+const AGGREGATE_STORAGE_TABLES = [
+  'aggregate_bucket',
+  'aggregate_member',
+  'aggregate_extrema',
+  'aggregate_rank_tree',
+  'aggregate_rank_node',
+  'aggregate_state',
+] as const;
+
 const DirectOpSchema = z.object({
   op: z.enum(DIRECT_OPS),
 });
@@ -768,6 +777,34 @@ async function collectRuntimeCoverage(
         : 0;
 
   const probes = [
+    {
+      id: 'aggregate-storage-namespace',
+      area: 'aggregate' as const,
+      label: 'internal aggregate storage namespace (aggregate_*)',
+      expected: 'supported' as const,
+      reason:
+        'Internal storage tables are in aggregate_* namespace (no leading underscore).',
+      errorCode: null,
+      run: async () => {
+        const invalidPrefix = AGGREGATE_STORAGE_TABLES.filter(
+          (tableName) => !tableName.startsWith('aggregate_')
+        );
+
+        for (const tableName of AGGREGATE_STORAGE_TABLES) {
+          const query = (
+            ctx.db.query as unknown as (table: string) => {
+              take: (limit: number) => Promise<unknown>;
+            }
+          )(tableName);
+          await query.take(0);
+        }
+
+        return {
+          tables: AGGREGATE_STORAGE_TABLES,
+          invalidPrefixCount: invalidPrefix.length,
+        };
+      },
+    },
     {
       id: 'count-window-skip-take',
       area: 'count' as const,

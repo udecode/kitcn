@@ -319,7 +319,18 @@ describe('cli/codegen', () => {
         'generated',
         'all.runtime.ts'
       );
+      const serverRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.runtime.ts'
+      );
       expect(fs.existsSync(allRuntimeFile)).toBe(false);
+      expect(fs.existsSync(serverRuntimeFile)).toBe(true);
+      const serverRuntimeGenerated = fs.readFileSync(
+        serverRuntimeFile,
+        'utf-8'
+      );
       const nestedRuntimeGenerated = fs.readFileSync(
         nestedRuntimeFile,
         'utf-8'
@@ -402,6 +413,7 @@ describe('cli/codegen', () => {
         'export function createHandler<TCtx extends'
       );
       expect(nestedRuntimeGenerated).toContain('const procedureRegistry = {');
+      expect(nestedRuntimeGenerated).not.toContain('const handlerRegistry = {');
       expect(nestedRuntimeGenerated).not.toContain(
         'export type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;'
       );
@@ -426,6 +438,36 @@ describe('cli/codegen', () => {
       expect(nestedRuntimeGenerated).toContain(
         'export function createItemsQueriesHandler<TCtx extends ProcedureHandlerContext>('
       );
+      expect(serverRuntimeGenerated).toContain(
+        'export function createServerCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(serverRuntimeGenerated).not.toContain(
+        'export function createServerHandler<TCtx extends ProcedureHandlerContext>('
+      );
+      expect(serverRuntimeGenerated).not.toContain(
+        'createGenericHandlerFactory'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"scheduledMutationBatch": ["mutation", typedProcedureResolver(internal["generated"]["server"]["scheduledMutationBatch"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"scheduledDelete": ["mutation", typedProcedureResolver(internal["generated"]["server"]["scheduledDelete"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"aggregateBackfill": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfill"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"aggregateBackfillChunk": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfillChunk"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"aggregateBackfillStatus": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfillStatus"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"resetChunk": ["mutation", typedProcedureResolver(internal["generated"]["server"]["resetChunk"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"reset": ["action", typedProcedureResolver(internal["generated"]["server"]["reset"]'
+      );
       expect(nestedRuntimeGenerated).toContain(
         "import type { ActionCtx, MutationCtx, QueryCtx } from '../server';"
       );
@@ -435,6 +477,8 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain('aggregateBackfill');
       expect(serverGenerated).toContain('aggregateBackfillChunk');
       expect(serverGenerated).toContain('aggregateBackfillStatus');
+      expect(serverGenerated).toContain('resetChunk');
+      expect(serverGenerated).toContain('reset');
 
       const module = await import(pathToFileURL(outputFile).href);
       expect(module).toHaveProperty('api');
@@ -547,6 +591,12 @@ describe('cli/codegen', () => {
         'server.ts'
       );
       const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
+      const serverRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.runtime.ts'
+      );
       const todosRuntimeFile = path.join(
         dir,
         'convex',
@@ -599,6 +649,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).not.toContain('withOrm');
       expect(serverGenerated).not.toContain('scheduledMutationBatch');
       expect(serverGenerated).not.toContain('export type OrmCtx<');
+      expect(fs.existsSync(serverRuntimeFile)).toBe(false);
       expect(todosRuntimeGenerated).toContain(
         "import type { ActionCtx, MutationCtx, QueryCtx } from './server';"
       );
@@ -768,6 +819,12 @@ describe('cli/codegen', () => {
         'server.ts'
       );
       const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
+      const serverRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.runtime.ts'
+      );
       expect(generated).not.toContain('export type GenericCtx =');
       expect(generated).toContain(
         'export type TableName = keyof typeof tables;'
@@ -804,6 +861,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).not.toContain('withOrm');
       expect(serverGenerated).not.toContain('scheduledMutationBatch');
       expect(serverGenerated).not.toContain('export type OrmCtx<');
+      expect(fs.existsSync(serverRuntimeFile)).toBe(false);
     } finally {
       process.chdir(oldCwd);
     }
@@ -1523,6 +1581,21 @@ describe('cli/codegen', () => {
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
       ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'server.runtime.ts')
+        )
+      ).toBe(true);
+      const serverRuntimeGenerated = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'server.runtime.ts'),
+        'utf-8'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        'export function createServerCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(serverRuntimeGenerated).not.toContain(
+        'export function createServerHandler<TCtx extends ProcedureHandlerContext>('
+      );
       expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
         false
       );
@@ -1569,6 +1642,11 @@ describe('cli/codegen', () => {
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
       ).toBe(false);
       expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'server.runtime.ts')
+        )
+      ).toBe(true);
+      expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
       ).toBe(false);
       expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
@@ -1597,6 +1675,11 @@ describe('cli/codegen', () => {
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
       ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'server.runtime.ts')
+        )
+      ).toBe(true);
 
       await generateMeta(undefined, { silent: true, scope: 'auth' as any });
       expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
@@ -1607,6 +1690,11 @@ describe('cli/codegen', () => {
       ).toBe(false);
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'server.runtime.ts')
+        )
       ).toBe(true);
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))
@@ -1622,6 +1710,11 @@ describe('cli/codegen', () => {
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
       ).toBe(false);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'server.runtime.ts')
+        )
+      ).toBe(true);
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'server.ts'))
       ).toBe(true);
@@ -1656,6 +1749,11 @@ describe('cli/codegen', () => {
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
       ).toBe(false);
       expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'server.runtime.ts')
+        )
+      ).toBe(true);
+      expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
       ).toBe(true);
     } finally {
@@ -1688,6 +1786,11 @@ describe('cli/codegen', () => {
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
       ).toBe(false);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'server.runtime.ts')
+        )
+      ).toBe(true);
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'todos.runtime.ts'))
       ).toBe(false);

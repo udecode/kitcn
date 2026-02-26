@@ -241,6 +241,83 @@ describe('ConvexQueryClient (client mode)', () => {
     expect(onUnauthorized).toHaveBeenCalledWith({ queryName: 'todos:list' });
   });
 
+  test('queryFn returns null when auth is required, unauthenticated, and skipUnauth is true', async () => {
+    const ConvexQueryClient = await getClientConvexQueryClient('skip-unauth');
+    const onUnauthorized = mock((_info: { queryName: string }) => {});
+
+    const convexClient = {
+      query: async () => {
+        throw new Error('should not execute query');
+      },
+    };
+
+    const authStore = {
+      get: (key: string) => {
+        switch (key) {
+          case 'isLoading':
+            return false;
+          case 'isAuthenticated':
+            return false;
+          case 'onQueryUnauthorized':
+            return onUnauthorized;
+          case 'isUnauthorized':
+            return () => false;
+          default:
+            return;
+        }
+      },
+    };
+
+    const client = new ConvexQueryClient(convexClient, { authStore });
+    const fn = client.queryFn();
+    await expect(
+      fn({
+        meta: { authType: 'required', skipUnauth: true },
+        queryKey: ['convexQuery', 'user:getCurrentUser', {}],
+      } as unknown as QueryFunctionContext<readonly unknown[]>)
+    ).resolves.toBeNull();
+
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  test('queryFn returns null when skipUnauth is true and backend returns UNAUTHORIZED', async () => {
+    const ConvexQueryClient = await getClientConvexQueryClient(
+      'skip-unauth-backend'
+    );
+
+    const convexClient = {
+      query: async () => {
+        throw { data: { code: 'UNAUTHORIZED' } };
+      },
+    };
+
+    const authStore = {
+      get: (key: string) => {
+        switch (key) {
+          case 'isLoading':
+            return false;
+          case 'isAuthenticated':
+            return true;
+          case 'onQueryUnauthorized':
+            return () => {};
+          case 'isUnauthorized':
+            return () => true;
+          default:
+            return;
+        }
+      },
+    };
+
+    const client = new ConvexQueryClient(convexClient as any, { authStore });
+    const fn = client.queryFn();
+    await expect(
+      fn({
+        meta: { authType: 'required', skipUnauth: true },
+        queryKey: ['convexQuery', 'user:getCurrentUser', {}],
+      } as unknown as QueryFunctionContext<readonly unknown[]>)
+    ).resolves.toBeNull();
+  });
+
   test('queryFn executes Convex actions via convexClient.action', async () => {
     const ConvexQueryClient = await getClientConvexQueryClient('action');
     const calls: Array<{ args: unknown; name: string }> = [];

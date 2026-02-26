@@ -51,8 +51,11 @@ type ProcedureMeta = {
   type: 'query' | 'mutation' | 'action';
 };
 
+type RuntimeEntryKind = 'crpc' | 'dispatch';
+
 type ProcedureRegistryEntry = ProcedureMeta & {
   moduleName: string;
+  kind: RuntimeEntryKind;
 };
 
 export type CodegenScope = 'all' | 'auth' | 'orm';
@@ -125,7 +128,7 @@ function resolveGenerationMode(options?: {
 
 const AUTH_RUNTIME_PROCEDURES: readonly Omit<
   ProcedureRegistryEntry,
-  'moduleName'
+  'moduleName' | 'kind'
 >[] = [
   { exportName: 'create', internal: true, type: 'mutation' },
   { exportName: 'deleteMany', internal: true, type: 'mutation' },
@@ -136,6 +139,19 @@ const AUTH_RUNTIME_PROCEDURES: readonly Omit<
   { exportName: 'rotateKeys', internal: true, type: 'action' },
   { exportName: 'updateMany', internal: true, type: 'mutation' },
   { exportName: 'updateOne', internal: true, type: 'mutation' },
+];
+
+const GENERATED_SERVER_RUNTIME_PROCEDURES: readonly Omit<
+  ProcedureRegistryEntry,
+  'moduleName' | 'kind'
+>[] = [
+  { exportName: 'scheduledMutationBatch', internal: true, type: 'mutation' },
+  { exportName: 'scheduledDelete', internal: true, type: 'mutation' },
+  { exportName: 'aggregateBackfill', internal: true, type: 'mutation' },
+  { exportName: 'aggregateBackfillChunk', internal: true, type: 'mutation' },
+  { exportName: 'aggregateBackfillStatus', internal: true, type: 'mutation' },
+  { exportName: 'resetChunk', internal: true, type: 'mutation' },
+  { exportName: 'reset', internal: true, type: 'action' },
 ];
 
 function listFilesRecursive(cwd: string, relDir = ''): string[] {
@@ -201,6 +217,12 @@ function getModuleRuntimeExportNames(moduleName: string): {
   callerExportName: string;
   handlerExportName: string;
 } {
+  if (moduleName === 'generated/server') {
+    return {
+      callerExportName: 'createServerCaller',
+      handlerExportName: 'createServerHandler',
+    };
+  }
   const base = getModuleRuntimeExportBase(moduleName);
   return {
     callerExportName: `create${base}Caller`,
@@ -531,6 +553,8 @@ export const {
   aggregateBackfill,
   aggregateBackfillChunk,
   aggregateBackfillStatus,
+  resetChunk,
+  reset,
 } = orm.api();
 `;
 }
@@ -685,24 +709,84 @@ function emitGeneratedModuleRuntimeFile(
     outputFile,
     functionsDir
   );
-  const procedureRegistryLines = emitProcedureRegistryEntries(
-    procedureEntries,
+  const { callerEntries, handlerEntries } =
+    partitionRuntimeEntriesForEmission(procedureEntries);
+  const callerRegistryLines = emitProcedureRegistryEntries(
+    callerEntries,
     outputFile,
     functionsDir,
     moduleName
   );
-  const procedureRegistryBody =
-    procedureRegistryLines.length > 0
-      ? `\n${procedureRegistryLines.join('\n')}\n`
+  const callerRegistryBody =
+    callerRegistryLines.length > 0
+      ? `\n${callerRegistryLines.join('\n')}\n`
       : '\n';
+  const hasHandlerRegistry = handlerEntries.length > 0;
+  const handlerRegistryLines = hasHandlerRegistry
+    ? emitProcedureRegistryEntries(
+        handlerEntries,
+        outputFile,
+        functionsDir,
+        moduleName
+      )
+    : [];
+  const handlerRegistryBody =
+    handlerRegistryLines.length > 0
+      ? `\n${handlerRegistryLines.join('\n')}\n`
+      : '\n';
+  const allEntriesAreCrpc =
+    callerEntries.length > 0 && callerEntries.length === handlerEntries.length;
+  const callerRegistryIdentifier = allEntriesAreCrpc
+    ? 'procedureRegistry'
+    : 'callerRegistry';
+  const handlerRegistryIdentifier = allEntriesAreCrpc
+    ? 'procedureRegistry'
+    : 'handlerRegistry';
+  const callerRegistryDeclaration = allEntriesAreCrpc
+    ? `const procedureRegistry = {${callerRegistryBody}} as const;`
+    : `const callerRegistry = {${callerRegistryBody}} as const;`;
+  const handlerImportSpecifier = hasHandlerRegistry
+    ? '\n  createGenericHandlerFactory,'
+    : '';
+  const handlerRegistryDeclaration =
+    hasHandlerRegistry && !allEntriesAreCrpc
+      ? `\nconst handlerRegistry = {${handlerRegistryBody}} as const;\n`
+      : '';
+  const handlerTypeDeclarations = hasHandlerRegistry
+    ? `
+type ProcedureHandlerContext = QueryCtx | MutationCtx;
+type GeneratedProcedureHandler<
+  TCtx extends ProcedureHandlerContext = ProcedureHandlerContext,
+> = TCtx extends MutationCtx
+  ? ProcedureCallerFromRegistry<typeof ${handlerRegistryIdentifier}, 'mutation'>
+  : ProcedureCallerFromRegistry<typeof ${handlerRegistryIdentifier}, 'query'>;
+`
+    : '';
+  const handlerFactoryDeclaration = hasHandlerRegistry
+    ? `
+const createHandlerFromRegistry = createGenericHandlerFactory<
+  QueryCtx,
+  MutationCtx,
+  typeof ${handlerRegistryIdentifier}
+>(${handlerRegistryIdentifier});
+`
+    : '';
+  const handlerExport = hasHandlerRegistry
+    ? `
+export function ${handlerExportName}<TCtx extends ProcedureHandlerContext>(
+  ctx: TCtx
+): GeneratedProcedureHandler<TCtx> {
+  return createHandlerFromRegistry(ctx) as GeneratedProcedureHandler<TCtx>;
+}
+`
+    : '';
 
   return `// biome-ignore-all format: generated
 // This file is auto-generated by better-convex
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
 
 import {
-  createGenericCallerFactory,
-  createGenericHandlerFactory,
+  createGenericCallerFactory,${handlerImportSpecifier}
   typedProcedureResolver,
   type ProcedureActionCallerFromRegistry,
   type ProcedureCallerFromRegistry,
@@ -711,51 +795,36 @@ import {
 import { api, internal } from '${runtimeApiImportPath}';
 import type { ActionCtx, MutationCtx, QueryCtx } from '${generatedServerImportPath}';
 
-const procedureRegistry = {${procedureRegistryBody}} as const;
+${callerRegistryDeclaration}${handlerRegistryDeclaration}
 
 type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;
-type ProcedureHandlerContext = QueryCtx | MutationCtx;
 type GeneratedProcedureCaller<
   TCtx extends ProcedureCallerContext = ProcedureCallerContext,
 > = TCtx extends MutationCtx
-  ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'> & {
-      schedule: ProcedureScheduleCallerFromRegistry<typeof procedureRegistry>;
+  ? ProcedureCallerFromRegistry<typeof ${callerRegistryIdentifier}, 'mutation'> & {
+      schedule: ProcedureScheduleCallerFromRegistry<typeof ${callerRegistryIdentifier}>;
     }
   : TCtx extends ActionCtx
-    ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'> & {
-        actions: ProcedureActionCallerFromRegistry<typeof procedureRegistry>;
-        schedule: ProcedureScheduleCallerFromRegistry<typeof procedureRegistry>;
+    ? ProcedureCallerFromRegistry<typeof ${callerRegistryIdentifier}, 'mutation'> & {
+        actions: ProcedureActionCallerFromRegistry<typeof ${callerRegistryIdentifier}>;
+        schedule: ProcedureScheduleCallerFromRegistry<typeof ${callerRegistryIdentifier}>;
       }
-    : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
-type GeneratedProcedureHandler<
-  TCtx extends ProcedureHandlerContext = ProcedureHandlerContext,
-> = TCtx extends MutationCtx
-  ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'>
-  : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
+    : ProcedureCallerFromRegistry<typeof ${callerRegistryIdentifier}, 'query'>;
+${handlerTypeDeclarations}
 
 const createCallerFromRegistry = createGenericCallerFactory<
   QueryCtx,
   MutationCtx,
-  typeof procedureRegistry,
+  typeof ${callerRegistryIdentifier},
   ActionCtx
->(procedureRegistry);
-const createHandlerFromRegistry = createGenericHandlerFactory<
-  QueryCtx,
-  MutationCtx,
-  typeof procedureRegistry
->(procedureRegistry);
+>(${callerRegistryIdentifier});${handlerFactoryDeclaration}
 
 export function ${callerExportName}<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
   return createCallerFromRegistry(ctx) as GeneratedProcedureCaller<TCtx>;
 }
-
-export function ${handlerExportName}<TCtx extends ProcedureHandlerContext>(
-  ctx: TCtx
-): GeneratedProcedureHandler<TCtx> {
-  return createHandlerFromRegistry(ctx) as GeneratedProcedureHandler<TCtx>;
-}
+${handlerExport}
 `;
 }
 
@@ -980,7 +1049,30 @@ function buildAuthRuntimeProcedureEntries(
   return AUTH_RUNTIME_PROCEDURES.map((entry) => ({
     ...entry,
     moduleName,
+    kind: 'crpc',
   }));
+}
+
+function buildGeneratedServerRuntimeProcedureEntries(
+  moduleName: string
+): ProcedureRegistryEntry[] {
+  return GENERATED_SERVER_RUNTIME_PROCEDURES.map((entry) => ({
+    ...entry,
+    moduleName,
+    kind: 'dispatch',
+  }));
+}
+
+function partitionRuntimeEntriesForEmission(
+  entries: ProcedureRegistryEntry[]
+): {
+  callerEntries: ProcedureRegistryEntry[];
+  handlerEntries: ProcedureRegistryEntry[];
+} {
+  return {
+    callerEntries: entries,
+    handlerEntries: entries.filter((entry) => entry.kind === 'crpc'),
+  };
 }
 
 function dedupeProcedureEntries(
@@ -1216,6 +1308,7 @@ export async function generateMeta(
     const runtimePlaceholderModules = [
       ...new Set([
         ...files.map((file) => file.replace(TS_EXTENSION_RE, '')),
+        ...(hasRelationsExport ? ['generated/server'] : []),
         ...(generateAuth ? [generatedAuthModuleName] : []),
       ]),
     ];
@@ -1259,6 +1352,7 @@ export async function generateMeta(
             exportName: procedure.exportName,
             internal: procedure.internal,
             type: procedure.type,
+            kind: 'crpc',
           });
         }
       } catch (error) {
@@ -1416,6 +1510,9 @@ ${optionalTypeExports}
   fs.rmSync(getLegacyGeneratedOutputFile(functionsDir), { force: true });
 
   const mergedProcedureEntries = dedupeProcedureEntries([
+    ...(hasRelationsExport
+      ? buildGeneratedServerRuntimeProcedureEntries('generated/server')
+      : []),
     ...(generateApi ? procedureEntries : []),
     ...(generateAuth && hasAuthDefaultExport
       ? buildAuthRuntimeProcedureEntries(generatedAuthModuleName)

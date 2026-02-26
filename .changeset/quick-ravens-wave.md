@@ -292,6 +292,7 @@ import { withOrm } from "./generated/server";
   - `false` => cancel write via `TriggerCancelledError`
 - Generated server wiring includes `triggers` only when `schema.ts` exports both `relations` and `triggers`.
 - Add `createOrm({ schema, triggers })` support for generated and manual setups.
+- Add `ctx.orm.withoutTriggers(callback)` to bypass trigger hooks for bulk operations (e.g. data resets, migrations). The callback receives a trigger-free ORM instance scoped to the same transaction.
 
 ## Aggregates
 
@@ -349,15 +350,18 @@ const users = await ctx.orm.query.user.findMany({
 ```
 
 - Add generated `aggregateBackfill` and `aggregateBackfillStatus` procedures for index building and status polling.
-- Add ORM internal storage tables (`aggregate_bucket`, `aggregate_member`, `aggregate_extrema`, `aggregate_state`) auto-injected by `defineSchema`.
-
-Temporary:
-
-- Add `better-convex/aggregate` entrypoint with `TableAggregate`, `DirectAggregate`, and `createDirectAggregate({ name })`:
-  - `TableAggregate` supports dual trigger invocation: `aggregate.trigger()` (factory) and `aggregate.trigger(change, ctx)` (direct call from `defineTriggers`).
-  - `DirectAggregate` for table-independent manual aggregation.
-  - Re-exports `aggregateStorageTables` for schema injection.
-- Built-in ranked APIs (`at`, `indexOf`, `paginate`, `paginateNamespaces`) — no `@convex-dev/aggregate` dependency needed.
+- Add ORM internal storage tables (`aggregate_bucket`, `aggregate_member`, `aggregate_extrema`, `aggregate_state`, `aggregate_rank_tree`, `aggregate_rank_node`) auto-injected by `defineSchema`. Convex rejects table names starting with `_`, so internals use the `aggregate_` prefix.
+- Add `rankIndex` schema builder for declaring ranked/ordered aggregate indexes:
+  - `rankIndex(name).partitionBy(field1, field2).orderBy(t.score).sum(t.amount)` — partitioned rank index with optional weighted sum.
+  - `rankIndex(name).all().orderBy(t.score)` — unpartitioned (global) rank index.
+  - `orderBy()` supports `integer()`/`timestamp()`/`date()` columns only.
+- Add `db.query.<table>.rank(indexName, { where })` query builder with O(log n) operations:
+  - `.count()`, `.sum()` — aggregate reads.
+  - `.at(offset)` — positional access by rank.
+  - `.indexOf({ id })` — rank lookup by document ID.
+  - `.paginate({ cursor, limit })` — cursor-based ranked pagination.
+  - `.min()`, `.max()`, `.random()` — extrema and random sampling.
+- Add backfill support for rank indexes alongside metric indexes (shared `aggregateBackfill`/`aggregateBackfillStatus` procedures).
 
 ## CLI
 
@@ -378,3 +382,4 @@ Temporary:
   - `batchSize`, `pollIntervalMs`, `timeoutMs`: tuning knobs.
   - `strict`: exit 1 on failure/timeout (default `true` for deploy, `false` for dev).
 - Add CLI flags for aggregate backfill overrides: `--backfill`, `--backfill-wait`, `--backfill-strict`, `--backfill-batch-size`, `--backfill-timeout-ms`, `--backfill-poll-ms`.
+- Add `better-convex reset --yes` command: calls `generated/server:reset`. Supports `--before <fn>` and `--after <fn>` hooks.

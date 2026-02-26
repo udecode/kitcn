@@ -10,6 +10,15 @@ export type TableAggregateIndex = {
   minFields: string[];
   maxFields: string[];
 };
+export type TableRankIndex = {
+  name: string;
+  partitionFields: string[];
+  orderFields: Array<{
+    field: string;
+    direction: 'asc' | 'desc';
+  }>;
+  sumField?: string;
+};
 export type TableSearchIndex = {
   name: string;
   searchField: string;
@@ -33,6 +42,11 @@ export function getAggregateIndexes(
   table: ConvexTable<any>
 ): TableAggregateIndex[] {
   const indexes = (table as any).getAggregateIndexes?.();
+  return Array.isArray(indexes) ? indexes : [];
+}
+
+export function getRankIndexes(table: ConvexTable<any>): TableRankIndex[] {
+  const indexes = (table as any).getRankIndexes?.();
   return Array.isArray(indexes) ? indexes : [];
 }
 

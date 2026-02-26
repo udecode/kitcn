@@ -1,11 +1,13 @@
 import { v } from 'convex/values';
-import { custom, integer, text } from '../builders';
+import { custom, id, integer, text } from '../builders';
 import { index } from '../indexes';
 import { convexTable } from '../table';
 
 export const AGGREGATE_BUCKET_TABLE = 'aggregate_bucket';
 export const AGGREGATE_MEMBER_TABLE = 'aggregate_member';
 export const AGGREGATE_EXTREMA_TABLE = 'aggregate_extrema';
+export const AGGREGATE_RANK_TREE_TABLE = 'aggregate_rank_tree';
+export const AGGREGATE_RANK_NODE_TABLE = 'aggregate_rank_node';
 export const AGGREGATE_STATE_TABLE = 'aggregate_state';
 
 export const countBucketTable = convexTable(
@@ -29,6 +31,7 @@ export const countBucketTable = convexTable(
 export const countMemberTable = convexTable(
   AGGREGATE_MEMBER_TABLE,
   {
+    kind: text().notNull(),
     tableKey: text().notNull(),
     indexName: text().notNull(),
     docId: text().notNull(),
@@ -37,11 +40,19 @@ export const countMemberTable = convexTable(
     sumValues: custom(v.record(v.string(), v.number())).notNull(),
     nonNullCountValues: custom(v.record(v.string(), v.number())).notNull(),
     extremaValues: custom(v.record(v.string(), v.any())).notNull(),
+    rankNamespace: custom(v.any()),
+    rankKey: custom(v.any()),
+    rankSumValue: integer(),
     updatedAt: integer().notNull(),
   },
   (t) => [
-    index('by_table_index_doc').on(t.tableKey, t.indexName, t.docId),
-    index('by_table_index').on(t.tableKey, t.indexName),
+    index('by_kind_table_index_doc').on(
+      t.kind,
+      t.tableKey,
+      t.indexName,
+      t.docId
+    ),
+    index('by_kind_table_index').on(t.kind, t.tableKey, t.indexName),
   ]
 );
 
@@ -80,6 +91,7 @@ export const countExtremaTable = convexTable(
 export const countStateTable = convexTable(
   AGGREGATE_STATE_TABLE,
   {
+    kind: text().notNull(),
     tableKey: text().notNull(),
     indexName: text().notNull(),
     keyDefinitionHash: text().notNull(),
@@ -93,15 +105,48 @@ export const countStateTable = convexTable(
     lastError: text(),
   },
   (t) => [
-    index('by_table_index').on(t.tableKey, t.indexName),
-    index('by_status').on(t.status),
+    index('by_kind_table_index').on(t.kind, t.tableKey, t.indexName),
+    index('by_kind_status').on(t.kind, t.status),
   ]
 );
+
+const aggregateCounterValidator = v.object({
+  count: v.number(),
+  sum: v.number(),
+});
+
+const aggregateItemValidator = v.object({
+  k: v.any(),
+  v: v.any(),
+  s: v.number(),
+});
+
+export const rankTreeTable = convexTable(
+  AGGREGATE_RANK_TREE_TABLE,
+  {
+    aggregateName: text().notNull(),
+    maxNodeSize: integer().notNull(),
+    namespace: custom(v.any()),
+    root: id(AGGREGATE_RANK_NODE_TABLE).notNull(),
+  },
+  (tree) => [
+    index('by_namespace').on(tree.namespace),
+    index('by_aggregate_name').on(tree.aggregateName),
+  ]
+);
+
+export const rankNodeTable = convexTable(AGGREGATE_RANK_NODE_TABLE, {
+  aggregate: custom(aggregateCounterValidator),
+  items: custom(v.array(aggregateItemValidator)).notNull(),
+  subtrees: custom(v.array(v.string())).notNull(),
+});
 
 export const aggregateStorageTables = {
   [AGGREGATE_BUCKET_TABLE]: countBucketTable,
   [AGGREGATE_MEMBER_TABLE]: countMemberTable,
   [AGGREGATE_EXTREMA_TABLE]: countExtremaTable,
+  [AGGREGATE_RANK_TREE_TABLE]: rankTreeTable,
+  [AGGREGATE_RANK_NODE_TABLE]: rankNodeTable,
   [AGGREGATE_STATE_TABLE]: countStateTable,
 } as const;
 
@@ -109,6 +154,8 @@ export const AGGREGATE_STORAGE_TABLE_NAMES = new Set([
   AGGREGATE_BUCKET_TABLE,
   AGGREGATE_MEMBER_TABLE,
   AGGREGATE_EXTREMA_TABLE,
+  AGGREGATE_RANK_TREE_TABLE,
+  AGGREGATE_RANK_NODE_TABLE,
   AGGREGATE_STATE_TABLE,
 ]);
 

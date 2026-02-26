@@ -6,13 +6,19 @@ import type {
 } from 'convex/server';
 import type { TablesRelationalConfig } from '../relations';
 import {
+  clearRankIndexData,
+  getRankIndexDefinitions,
+  reconcileRankMembership,
+} from './rank-runtime';
+import {
+  AGGREGATE_STATE_KIND_METRIC,
+  AGGREGATE_STATE_KIND_RANK,
   COUNT_STATUS_BUILDING,
   COUNT_STATUS_READY,
   clearCountIndexData,
   computeAggregateMetricValues,
   computeCountKeyParts,
   getCountState,
-  listCountStates,
   listSchemaAggregateIndexes,
   reconcileAggregateMembership,
   setCountState,
@@ -46,14 +52,17 @@ export type CountBackfillStatusArgs = {
 };
 
 type CountBackfillTarget = {
+  kind: 'metric' | 'rank';
   tableName: string;
   indexName: string;
   fields: string[];
-  countFields: string[];
-  sumFields: string[];
-  avgFields: string[];
-  minFields: string[];
-  maxFields: string[];
+  countFields?: string[];
+  sumFields?: string[];
+  avgFields?: string[];
+  minFields?: string[];
+  maxFields?: string[];
+  orderFields?: Array<{ field: string; direction: 'asc' | 'desc' }>;
+  rankSumField?: string;
 };
 
 type CountBackfillContext = {
@@ -122,39 +131,64 @@ const matchesFilter = (
 const getTargets = (
   schema: TablesRelationalConfig,
   args: { tableName?: string; indexName?: string }
-): CountBackfillTarget[] =>
-  listSchemaAggregateIndexes(schema)
-    .map((entry) => ({
-      tableName: entry.tableName,
-      indexName: entry.indexName,
-      fields: entry.fields,
-      countFields: entry.countFields,
-      sumFields: entry.sumFields,
-      avgFields: entry.avgFields,
-      minFields: entry.minFields,
-      maxFields: entry.maxFields,
-    }))
-    .filter((entry) => matchesFilter(entry, args));
+): CountBackfillTarget[] => {
+  const metricTargets = listSchemaAggregateIndexes(schema).map((entry) => ({
+    kind: 'metric' as const,
+    tableName: entry.tableName,
+    indexName: entry.indexName,
+    fields: entry.fields,
+    countFields: entry.countFields,
+    sumFields: entry.sumFields,
+    avgFields: entry.avgFields,
+    minFields: entry.minFields,
+    maxFields: entry.maxFields,
+  }));
+
+  const rankTargets: CountBackfillTarget[] = [];
+  for (const tableConfig of Object.values(schema)) {
+    const rankIndexes = getRankIndexDefinitions(tableConfig);
+    for (const rankIndex of rankIndexes) {
+      rankTargets.push({
+        kind: 'rank',
+        tableName: tableConfig.name,
+        indexName: rankIndex.name,
+        fields: rankIndex.partitionFields,
+        orderFields: rankIndex.orderFields,
+        rankSumField: rankIndex.sumField,
+      });
+    }
+  }
+
+  return [...metricTargets, ...rankTargets].filter((entry) =>
+    matchesFilter(entry, args)
+  );
+};
 
 const dedupe = (fields: string[]): string[] => [...new Set(fields)];
 
 const computeMetricDefinition = (
   target: CountBackfillTarget
 ): MetricDefinition => ({
-  countFields: dedupe(target.countFields),
-  sumFields: dedupe(target.sumFields),
-  avgFields: dedupe(target.avgFields),
-  minFields: dedupe(target.minFields),
-  maxFields: dedupe(target.maxFields),
+  countFields: dedupe(target.countFields ?? []),
+  sumFields: dedupe(target.sumFields ?? []),
+  avgFields: dedupe(target.avgFields ?? []),
+  minFields: dedupe(target.minFields ?? []),
+  maxFields: dedupe(target.maxFields ?? []),
 });
 
 const computeKeyDefinitionHash = (target: CountBackfillTarget): string =>
   JSON.stringify({
+    kind: target.kind,
     fields: target.fields,
+    orderFields: target.orderFields ?? [],
   });
 
 const computeMetricDefinitionHash = (target: CountBackfillTarget): string =>
-  JSON.stringify(computeMetricDefinition(target));
+  target.kind === 'rank'
+    ? JSON.stringify({
+        sumField: target.rankSumField ?? null,
+      })
+    : JSON.stringify(computeMetricDefinition(target));
 
 const parseMetricDefinitionHash = (
   metricDefinitionHash: string
@@ -245,8 +279,11 @@ export function createCountBackfillHandlers(
   schema: TablesRelationalConfig,
   getChunkRef?: () => SchedulableFunctionReference | undefined
 ) {
-  const serializeKey = (tableName: string, indexName: string): string =>
-    `${tableName}\u0000${indexName}`;
+  const serializeKey = (
+    kind: 'metric' | 'rank',
+    tableName: string,
+    indexName: string
+  ): string => `${kind}\u0000${tableName}\u0000${indexName}`;
 
   const pruneRemovedState = async (
     ctx: CountBackfillContext,
@@ -254,12 +291,25 @@ export function createCountBackfillHandlers(
     targets: CountBackfillTarget[]
   ): Promise<number> => {
     const targetKeys = new Set(
-      targets.map((target) => serializeKey(target.tableName, target.indexName))
+      targets.map((target) =>
+        serializeKey(target.kind, target.tableName, target.indexName)
+      )
     );
-    const states = await listCountStates(ctx.db);
+    const states = (await ctx.db
+      .query(AGGREGATE_STATE_TABLE)
+      .collect()) as Array<{
+      _id: string;
+      kind: string;
+      tableKey: string;
+      indexName: string;
+    }>;
     const stateByKey = new Map(
       states.map((state) => [
-        serializeKey(state.tableName, state.indexName),
+        serializeKey(
+          state.kind === AGGREGATE_STATE_KIND_RANK ? 'rank' : 'metric',
+          state.tableKey,
+          state.indexName
+        ),
         state,
       ])
     );
@@ -268,7 +318,7 @@ export function createCountBackfillHandlers(
         Array<{ tableKey: string; indexName: string }>
       >,
       ctx.db.query(AGGREGATE_MEMBER_TABLE).collect() as Promise<
-        Array<{ tableKey: string; indexName: string }>
+        Array<{ kind?: string; tableKey: string; indexName: string }>
       >,
       ctx.db.query(AGGREGATE_EXTREMA_TABLE).collect() as Promise<
         Array<{ tableKey: string; indexName: string }>
@@ -276,21 +326,32 @@ export function createCountBackfillHandlers(
     ]);
     const existingKeys = new Set<string>();
     for (const state of states) {
-      existingKeys.add(serializeKey(state.tableName, state.indexName));
+      existingKeys.add(
+        serializeKey(
+          state.kind === AGGREGATE_STATE_KIND_RANK ? 'rank' : 'metric',
+          state.tableKey,
+          state.indexName
+        )
+      );
     }
     for (const row of bucketRows) {
-      existingKeys.add(serializeKey(row.tableKey, row.indexName));
+      existingKeys.add(serializeKey('metric', row.tableKey, row.indexName));
     }
     for (const row of memberRows) {
-      existingKeys.add(serializeKey(row.tableKey, row.indexName));
+      const kind = row.kind === AGGREGATE_STATE_KIND_RANK ? 'rank' : 'metric';
+      existingKeys.add(serializeKey(kind, row.tableKey, row.indexName));
     }
     for (const row of extremaRows) {
-      existingKeys.add(serializeKey(row.tableKey, row.indexName));
+      existingKeys.add(serializeKey('metric', row.tableKey, row.indexName));
     }
     let pruned = 0;
 
     for (const key of existingKeys) {
-      const [tableName, indexName] = key.split('\u0000');
+      const [kind, tableName, indexName] = key.split('\u0000') as [
+        'metric' | 'rank',
+        string,
+        string,
+      ];
       if (args.tableName && tableName !== args.tableName) {
         continue;
       }
@@ -301,7 +362,11 @@ export function createCountBackfillHandlers(
         continue;
       }
 
-      await clearCountIndexData(ctx.db, tableName, indexName);
+      if (kind === 'metric') {
+        await clearCountIndexData(ctx.db, tableName, indexName);
+      } else {
+        await clearRankIndexData(ctx.db, tableName, indexName);
+      }
       const state = stateByKey.get(key);
       if (state) {
         await ctx.db.delete(AGGREGATE_STATE_TABLE, state._id as any);
@@ -338,10 +403,15 @@ export function createCountBackfillHandlers(
     let needsRebuild = 0;
 
     for (const target of targets) {
+      const stateKind =
+        target.kind === 'rank'
+          ? AGGREGATE_STATE_KIND_RANK
+          : AGGREGATE_STATE_KIND_METRIC;
       const existing = await getCountState(
         ctx.db,
         target.tableName,
-        target.indexName
+        target.indexName,
+        stateKind
       );
       const keyDefinitionHash = computeKeyDefinitionHash(target);
       const metricDefinitionHash = computeMetricDefinitionHash(target);
@@ -353,17 +423,26 @@ export function createCountBackfillHandlers(
       };
 
       if (mode === 'rebuild') {
-        await clearCountIndexData(ctx.db, target.tableName, target.indexName);
-        await setCountState(ctx.db, {
-          ...nextStateBase,
-          status: COUNT_STATUS_BUILDING,
-          cursor: null,
-          processed: 0,
-          startedAt: now,
-          updatedAt: now,
-          completedAt: null,
-          lastError: null,
-        });
+        if (target.kind === 'rank') {
+          await clearRankIndexData(ctx.db, target.tableName, target.indexName);
+        } else {
+          await clearCountIndexData(ctx.db, target.tableName, target.indexName);
+        }
+        await setCountState(
+          ctx.db,
+          {
+            ...nextStateBase,
+            kind: stateKind,
+            status: COUNT_STATUS_BUILDING,
+            cursor: null,
+            processed: 0,
+            startedAt: now,
+            updatedAt: now,
+            completedAt: null,
+            lastError: null,
+          },
+          stateKind
+        );
       } else if (existing) {
         if (existing.keyDefinitionHash !== keyDefinitionHash) {
           needsRebuild += 1;
@@ -373,28 +452,59 @@ export function createCountBackfillHandlers(
         const metricChanged =
           existing.metricDefinitionHash !== metricDefinitionHash;
         if (metricChanged) {
-          const needsMetricBackfill = requiresMetricBackfill(
-            existing.metricDefinitionHash,
-            metricDefinitionHash
-          );
+          const needsMetricBackfill =
+            target.kind === 'rank'
+              ? true
+              : requiresMetricBackfill(
+                  existing.metricDefinitionHash,
+                  metricDefinitionHash
+                );
 
           if (!needsMetricBackfill && existing.status === COUNT_STATUS_READY) {
-            await setCountState(ctx.db, {
-              ...nextStateBase,
-              status: COUNT_STATUS_READY,
-              cursor: null,
-              processed: existing.processed,
-              startedAt: existing.startedAt,
-              updatedAt: now,
-              completedAt: existing.completedAt ?? now,
-              lastError: null,
-            });
+            await setCountState(
+              ctx.db,
+              {
+                ...nextStateBase,
+                kind: stateKind,
+                status: COUNT_STATUS_READY,
+                cursor: null,
+                processed: existing.processed,
+                startedAt: existing.startedAt,
+                updatedAt: now,
+                completedAt: existing.completedAt ?? now,
+                lastError: null,
+              },
+              stateKind
+            );
             skippedReady += 1;
             continue;
           }
 
-          await setCountState(ctx.db, {
+          await setCountState(
+            ctx.db,
+            {
+              ...nextStateBase,
+              kind: stateKind,
+              status: COUNT_STATUS_BUILDING,
+              cursor: null,
+              processed: 0,
+              startedAt: now,
+              updatedAt: now,
+              completedAt: null,
+              lastError: null,
+            },
+            stateKind
+          );
+        } else if (existing.status === COUNT_STATUS_READY) {
+          skippedReady += 1;
+          continue;
+        }
+      } else {
+        await setCountState(
+          ctx.db,
+          {
             ...nextStateBase,
+            kind: stateKind,
             status: COUNT_STATUS_BUILDING,
             cursor: null,
             processed: 0,
@@ -402,22 +512,9 @@ export function createCountBackfillHandlers(
             updatedAt: now,
             completedAt: null,
             lastError: null,
-          });
-        } else if (existing.status === COUNT_STATUS_READY) {
-          skippedReady += 1;
-          continue;
-        }
-      } else {
-        await setCountState(ctx.db, {
-          ...nextStateBase,
-          status: COUNT_STATUS_BUILDING,
-          cursor: null,
-          processed: 0,
-          startedAt: now,
-          updatedAt: now,
-          completedAt: null,
-          lastError: null,
-        });
+          },
+          stateKind
+        );
       }
 
       const chunkRef = getChunkRef?.();
@@ -450,10 +547,15 @@ export function createCountBackfillHandlers(
     const targets = getTargets(schema, args);
     if (targets.length > 1) {
       for (const target of targets) {
+        const stateKind =
+          target.kind === 'rank'
+            ? AGGREGATE_STATE_KIND_RANK
+            : AGGREGATE_STATE_KIND_METRIC;
         const state = await getCountState(
           ctx.db,
           target.tableName,
-          target.indexName
+          target.indexName,
+          stateKind
         );
         if (!state || state.status !== COUNT_STATUS_READY) {
           return chunk(ctx, {
@@ -469,11 +571,16 @@ export function createCountBackfillHandlers(
     }
 
     for (const target of targets) {
+      const stateKind =
+        target.kind === 'rank'
+          ? AGGREGATE_STATE_KIND_RANK
+          : AGGREGATE_STATE_KIND_METRIC;
       try {
         const state = await getCountState(
           ctx.db,
           target.tableName,
-          target.indexName
+          target.indexName,
+          stateKind
         );
         if (!state || state.status === COUNT_STATUS_READY) {
           continue;
@@ -485,56 +592,80 @@ export function createCountBackfillHandlers(
           .paginate({ cursor, numItems: batchSize });
 
         for (const doc of page.page as Record<string, unknown>[]) {
-          await reconcileAggregateMembership(ctx.db, {
-            tableName: target.tableName,
-            indexName: target.indexName,
-            docId: String((doc as any)._id),
-            keyParts: computeCountKeyParts(doc, target.fields),
-            metricValues: computeAggregateMetricValues(doc, {
-              name: target.indexName,
-              fields: target.fields,
-              countFields: target.countFields,
-              sumFields: target.sumFields,
-              avgFields: target.avgFields,
-              minFields: target.minFields,
-              maxFields: target.maxFields,
-            }),
-          });
+          if (target.kind === 'rank') {
+            await reconcileRankMembership(ctx.db, {
+              tableName: target.tableName,
+              definition: {
+                name: target.indexName,
+                partitionFields: target.fields,
+                orderFields: target.orderFields ?? [],
+                sumField: target.rankSumField,
+              },
+              docId: String((doc as any)._id),
+              doc,
+            });
+          } else {
+            await reconcileAggregateMembership(ctx.db, {
+              tableName: target.tableName,
+              indexName: target.indexName,
+              docId: String((doc as any)._id),
+              keyParts: computeCountKeyParts(doc, target.fields),
+              metricValues: computeAggregateMetricValues(doc, {
+                name: target.indexName,
+                fields: target.fields,
+                countFields: target.countFields ?? [],
+                sumFields: target.sumFields ?? [],
+                avgFields: target.avgFields ?? [],
+                minFields: target.minFields ?? [],
+                maxFields: target.maxFields ?? [],
+              }),
+            });
+          }
         }
 
         const now = Date.now();
         const nextProcessed = state.processed + page.page.length;
 
         if (page.isDone) {
-          await setCountState(ctx.db, {
-            tableName: target.tableName,
-            indexName: target.indexName,
-            keyDefinitionHash: state.keyDefinitionHash,
-            metricDefinitionHash: state.metricDefinitionHash,
-            status: COUNT_STATUS_READY,
-            cursor: null,
-            processed: nextProcessed,
-            startedAt: state.startedAt,
-            updatedAt: now,
-            completedAt: now,
-            lastError: null,
-          });
+          await setCountState(
+            ctx.db,
+            {
+              tableName: target.tableName,
+              indexName: target.indexName,
+              kind: stateKind,
+              keyDefinitionHash: state.keyDefinitionHash,
+              metricDefinitionHash: state.metricDefinitionHash,
+              status: COUNT_STATUS_READY,
+              cursor: null,
+              processed: nextProcessed,
+              startedAt: state.startedAt,
+              updatedAt: now,
+              completedAt: now,
+              lastError: null,
+            },
+            stateKind
+          );
           continue;
         }
 
-        await setCountState(ctx.db, {
-          tableName: target.tableName,
-          indexName: target.indexName,
-          keyDefinitionHash: state.keyDefinitionHash,
-          metricDefinitionHash: state.metricDefinitionHash,
-          status: COUNT_STATUS_BUILDING,
-          cursor: page.continueCursor,
-          processed: nextProcessed,
-          startedAt: state.startedAt,
-          updatedAt: now,
-          completedAt: null,
-          lastError: null,
-        });
+        await setCountState(
+          ctx.db,
+          {
+            tableName: target.tableName,
+            indexName: target.indexName,
+            kind: stateKind,
+            keyDefinitionHash: state.keyDefinitionHash,
+            metricDefinitionHash: state.metricDefinitionHash,
+            status: COUNT_STATUS_BUILDING,
+            cursor: page.continueCursor,
+            processed: nextProcessed,
+            startedAt: state.startedAt,
+            updatedAt: now,
+            completedAt: null,
+            lastError: null,
+          },
+          stateKind
+        );
 
         const chunkRef = getChunkRef?.();
         if (ctx.scheduler && chunkRef) {
@@ -549,7 +680,8 @@ export function createCountBackfillHandlers(
           ctx.db,
           target.tableName,
           target.indexName,
-          error
+          error,
+          stateKind
         );
         throw error;
       }
@@ -564,20 +696,44 @@ export function createCountBackfillHandlers(
     ctx: { db: GenericDatabaseReader<any> | GenericDatabaseWriter<any> },
     args: CountBackfillStatusArgs
   ) => {
-    const states = await listCountStates(ctx.db);
+    const states = (await ctx.db
+      .query(AGGREGATE_STATE_TABLE)
+      .collect()) as Array<{
+      _id: string;
+      kind: string;
+      tableKey: string;
+      indexName: string;
+      keyDefinitionHash: string;
+      metricDefinitionHash: string;
+      status: string;
+      cursor?: string | null;
+      processed: number;
+      startedAt: number;
+      updatedAt: number;
+      completedAt?: number | null;
+      lastError?: string | null;
+    }>;
     const statesByKey = new Map<string, (typeof states)[number]>(
       states.map(
-        (entry) => [`${entry.tableName}:${entry.indexName}`, entry] as const
+        (entry) =>
+          [
+            `${entry.kind === AGGREGATE_STATE_KIND_RANK ? 'rank' : 'metric'}:${entry.tableKey}:${entry.indexName}`,
+            entry,
+          ] as const
       )
     );
 
     const targets = getTargets(schema, args);
 
     return targets.map((target) => {
-      const key = `${target.tableName}:${target.indexName}`;
+      const key = `${target.kind}:${target.tableName}:${target.indexName}`;
       const entry = statesByKey.get(key);
       if (!entry) {
         return {
+          kind:
+            target.kind === 'rank'
+              ? AGGREGATE_STATE_KIND_RANK
+              : AGGREGATE_STATE_KIND_METRIC,
           tableName: target.tableName,
           indexName: target.indexName,
           keyDefinitionHash: computeKeyDefinitionHash(target),
@@ -591,7 +747,11 @@ export function createCountBackfillHandlers(
           lastError: null,
         };
       }
-      return entry;
+      const { tableKey, ...rest } = entry;
+      return {
+        ...rest,
+        tableName: tableKey,
+      };
     });
   };
 

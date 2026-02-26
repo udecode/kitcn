@@ -14,7 +14,7 @@
     "gen:auth": "bunx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts",
     "lint": "biome check",
     "lint:fix": "biome check --write",
-    "reset": "convex run reset:reset && sleep 5 && convex run init",
+    "reset": "better-convex reset --yes && sleep 3 && convex run init",
     "seed": "convex run seed:seed",
     "start": "next start",
     "studio": "bun convex dashboard",

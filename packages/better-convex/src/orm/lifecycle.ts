@@ -3,6 +3,10 @@ import type {
   GenericDatabaseWriter,
 } from 'convex/server';
 import {
+  applyRankIndexesForChange,
+  getRankIndexDefinitions,
+} from './aggregate-index/rank-runtime';
+import {
   applyAggregateIndexesForChange,
   getAggregateIndexDefinitions,
 } from './aggregate-index/runtime';
@@ -19,6 +23,7 @@ import {
 const ORMLIFECYCLE_WRAPPED_DB = Symbol.for(
   'better-convex:OrmLifecycleWrappedDB'
 );
+const ORMLIFECYCLE_INNER_DB = Symbol.for('better-convex:OrmLifecycleInnerDB');
 
 type AnyRecord = Record<string, unknown>;
 type AnyCtx = {
@@ -59,6 +64,16 @@ const markLifecycleWrappedDb = <TDb extends GenericDatabaseWriter<any>>(
     });
   }
   return db;
+};
+
+export const getOrmLifecycleInnerDb = (
+  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>
+): GenericDatabaseWriter<any> | undefined => {
+  const inner = (db as any)[ORMLIFECYCLE_INNER_DB];
+  if (!inner || !isWriterDb(inner)) {
+    return undefined;
+  }
+  return inner;
 };
 
 const isBeforeDataResult = (
@@ -455,7 +470,7 @@ function writerWithHooks(
     );
   };
 
-  return {
+  const wrappedDb = {
     insert: async (table: string, value: AnyRecord): Promise<any> => {
       const tableHooks = hooksByTable.get(table);
       if (!tableHooks) {
@@ -517,6 +532,15 @@ function writerWithHooks(
     query: innerDb.query.bind(innerDb),
     normalizeId: innerDb.normalizeId.bind(innerDb),
   };
+
+  Object.defineProperty(wrappedDb, ORMLIFECYCLE_INNER_DB, {
+    configurable: false,
+    enumerable: false,
+    value: innerDb,
+    writable: false,
+  });
+
+  return wrappedDb;
 }
 
 export type OrmDbLifecycle = {
@@ -570,7 +594,8 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
       continue;
     }
     const aggregateIndexes = getAggregateIndexDefinitions(tableConfig);
-    if (aggregateIndexes.length === 0) {
+    const rankIndexes = getRankIndexDefinitions(tableConfig);
+    if (aggregateIndexes.length === 0 && rankIndexes.length === 0) {
       continue;
     }
 
@@ -581,26 +606,53 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
       ...existing,
       change: async (change, ctx) => {
         if (change.operation === 'delete') {
-          await applyAggregateIndexesForChange(
-            ctx.db as GenericDatabaseWriter<any>,
-            tableConfig.name,
-            aggregateIndexes,
-            {
-              operation: 'delete',
-              id: change.id as any,
-            }
-          );
+          if (aggregateIndexes.length > 0) {
+            await applyAggregateIndexesForChange(
+              ctx.db as GenericDatabaseWriter<any>,
+              tableConfig.name,
+              aggregateIndexes,
+              {
+                operation: 'delete',
+                id: change.id as any,
+              }
+            );
+          }
+          if (rankIndexes.length > 0) {
+            await applyRankIndexesForChange(
+              ctx.db as GenericDatabaseWriter<any>,
+              tableConfig.name,
+              rankIndexes,
+              {
+                operation: 'delete',
+                id: change.id as any,
+              }
+            );
+          }
         } else {
-          await applyAggregateIndexesForChange(
-            ctx.db as GenericDatabaseWriter<any>,
-            tableConfig.name,
-            aggregateIndexes,
-            {
-              operation: change.operation,
-              id: change.id as any,
-              newDoc: change.newDoc as Record<string, unknown>,
-            }
-          );
+          if (aggregateIndexes.length > 0) {
+            await applyAggregateIndexesForChange(
+              ctx.db as GenericDatabaseWriter<any>,
+              tableConfig.name,
+              aggregateIndexes,
+              {
+                operation: change.operation,
+                id: change.id as any,
+                newDoc: change.newDoc as Record<string, unknown>,
+              }
+            );
+          }
+          if (rankIndexes.length > 0) {
+            await applyRankIndexesForChange(
+              ctx.db as GenericDatabaseWriter<any>,
+              tableConfig.name,
+              rankIndexes,
+              {
+                operation: change.operation,
+                id: change.id as any,
+                newDoc: change.newDoc as Record<string, unknown>,
+              }
+            );
+          }
         }
 
         await existingChange?.(change, ctx);

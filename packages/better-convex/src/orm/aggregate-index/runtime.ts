@@ -18,6 +18,8 @@ const FLOAT64_MASK = (1n << 64n) - 1n;
 const DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS = 4096;
 const DEFAULT_AGGREGATE_WORK_BUDGET = 16_384;
 const RANGE_PREFIX_WORK_UNIT_BASE = 2;
+export const AGGREGATE_STATE_KIND_METRIC = 'metric';
+export const AGGREGATE_STATE_KIND_RANK = 'rank';
 
 export const COUNT_STATUS_BUILDING = 'BUILDING';
 export const COUNT_STATUS_READY = 'READY';
@@ -79,6 +81,7 @@ type AggregateMetricValues = {
 
 type CountStateRow = {
   _id: GenericId<any>;
+  kind: string;
   tableKey: string;
   indexName: string;
   keyDefinitionHash: string;
@@ -94,6 +97,7 @@ type CountStateRow = {
 
 export type CountState = {
   _id: GenericId<any>;
+  kind?: string;
   tableName: string;
   indexName: string;
   keyDefinitionHash: string;
@@ -109,6 +113,7 @@ export type CountState = {
 
 type CountMemberRow = {
   _id: GenericId<any>;
+  kind: string;
   tableKey: string;
   indexName: string;
   docId: string;
@@ -117,6 +122,9 @@ type CountMemberRow = {
   sumValues: Record<string, number>;
   nonNullCountValues: Record<string, number>;
   extremaValues: Record<string, unknown>;
+  rankNamespace?: unknown;
+  rankKey?: unknown;
+  rankSumValue?: number;
 };
 
 type CountBucketRow = {
@@ -1836,8 +1844,11 @@ const listMembersForIndex = async (
 ): Promise<CountMemberRow[]> =>
   (await db
     .query(AGGREGATE_MEMBER_TABLE)
-    .withIndex('by_table_index', (q: any) =>
-      q.eq('tableKey', tableName).eq('indexName', indexName)
+    .withIndex('by_kind_table_index', (q: any) =>
+      q
+        .eq('kind', AGGREGATE_STATE_KIND_METRIC)
+        .eq('tableKey', tableName)
+        .eq('indexName', indexName)
     )
     .collect()) as CountMemberRow[];
 
@@ -2379,8 +2390,12 @@ const getMemberByDoc = async (
 ): Promise<CountMemberRow | null> => {
   const rows = (await db
     .query(AGGREGATE_MEMBER_TABLE)
-    .withIndex('by_table_index_doc', (q: any) =>
-      q.eq('tableKey', tableName).eq('indexName', indexName).eq('docId', docId)
+    .withIndex('by_kind_table_index_doc', (q: any) =>
+      q
+        .eq('kind', AGGREGATE_STATE_KIND_METRIC)
+        .eq('tableKey', tableName)
+        .eq('indexName', indexName)
+        .eq('docId', docId)
     )
     .collect()) as CountMemberRow[];
   return rows[0] ?? null;
@@ -2567,6 +2582,7 @@ export const reconcileAggregateMembership = async (
 
   if (existing) {
     await db.patch(AGGREGATE_MEMBER_TABLE, existing._id as any, {
+      kind: AGGREGATE_STATE_KIND_METRIC,
       keyHash,
       keyParts: normalizedKeyParts,
       sumValues: normalizedNextSumValues,
@@ -2578,6 +2594,7 @@ export const reconcileAggregateMembership = async (
   }
 
   await db.insert(AGGREGATE_MEMBER_TABLE, {
+    kind: AGGREGATE_STATE_KIND_METRIC,
     tableKey: tableName,
     indexName,
     docId,
@@ -2675,12 +2692,13 @@ export const applyCountIndexesForChange = async (
 export const getCountState = async (
   db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>,
   tableName: string,
-  indexName: string
+  indexName: string,
+  kind: string = AGGREGATE_STATE_KIND_METRIC
 ): Promise<CountState | null> => {
   const states = (await db
     .query(AGGREGATE_STATE_TABLE)
-    .withIndex('by_table_index', (q: any) =>
-      q.eq('tableKey', tableName).eq('indexName', indexName)
+    .withIndex('by_kind_table_index', (q: any) =>
+      q.eq('kind', kind).eq('tableKey', tableName).eq('indexName', indexName)
     )
     .collect()) as CountStateRow[];
   const state = states[0];
@@ -2696,14 +2714,17 @@ export const getCountState = async (
 
 export const setCountState = async (
   db: GenericDatabaseWriter<any>,
-  nextState: Omit<CountState, '_id'>
+  nextState: Omit<CountState, '_id'>,
+  kind: string = AGGREGATE_STATE_KIND_METRIC
 ): Promise<void> => {
   const existing = await getCountState(
     db,
     nextState.tableName,
-    nextState.indexName
+    nextState.indexName,
+    kind
   );
   const payload = {
+    kind,
     tableKey: nextState.tableName,
     indexName: nextState.indexName,
     keyDefinitionHash: nextState.keyDefinitionHash,
@@ -2727,10 +2748,11 @@ export const setCountStateError = async (
   db: GenericDatabaseWriter<any>,
   tableName: string,
   indexName: string,
-  error: unknown
+  error: unknown,
+  kind: string = AGGREGATE_STATE_KIND_METRIC
 ): Promise<void> => {
   const now = Date.now();
-  const existing = await getCountState(db, tableName, indexName);
+  const existing = await getCountState(db, tableName, indexName, kind);
   const message = error instanceof Error ? error.message : String(error);
 
   if (!existing) {
@@ -2773,13 +2795,15 @@ export const listCountStates = async (
   const rows = (await db
     .query(AGGREGATE_STATE_TABLE)
     .collect()) as CountStateRow[];
-  return rows.map((row) => {
-    const { tableKey, ...rest } = row;
-    return {
-      ...rest,
-      tableName: tableKey,
-    };
-  });
+  return rows
+    .filter((row) => row.kind === AGGREGATE_STATE_KIND_METRIC)
+    .map((row) => {
+      const { tableKey, ...rest } = row;
+      return {
+        ...rest,
+        tableName: tableKey,
+      };
+    });
 };
 
 export const createCountError = (

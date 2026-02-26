@@ -102,6 +102,30 @@ describe('rsc/server-query-client', () => {
     expect(fetchQuerySpy).not.toHaveBeenCalled();
   });
 
+  test('convexQuery returns null for auth-required query when token is invalid', async () => {
+    fetchQuerySpy = spyOn(convexNextjs, 'fetchQuery').mockRejectedValue({
+      data: { code: 'UNAUTHORIZED' },
+    });
+
+    const opts = getServerQueryClientOptions({
+      getToken: async () => 'stale-token',
+    });
+
+    const funcRef = makeFunctionReference<'query'>('user:getCurrentUser');
+    await expect(
+      opts.queries.queryFn({
+        queryKey: ['convexQuery', funcRef, {}],
+        meta: { authType: 'required' },
+      })
+    ).resolves.toBeNull();
+
+    expect(fetchQuerySpy).toHaveBeenCalledWith(
+      funcRef,
+      {},
+      { token: 'stale-token' }
+    );
+  });
+
   test('convexQuery calls fetchQuery with token when provided', async () => {
     fetchQuerySpy = spyOn(convexNextjs, 'fetchQuery').mockResolvedValue('Q');
 

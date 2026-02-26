@@ -31,6 +31,8 @@ import type {
   ConvexIndexBuilder,
   ConvexIndexBuilderOn,
   ConvexIndexColumn,
+  ConvexRankIndexBuilder,
+  ConvexRankIndexBuilderOn,
   ConvexSearchIndexBuilder,
   ConvexSearchIndexBuilderOn,
   ConvexVectorIndexBuilder,
@@ -121,6 +123,7 @@ type ColumnsWithTableName<TColumns, TName extends string> = {
 export type ConvexTableExtraConfigValue =
   | ConvexIndexBuilder
   | ConvexAggregateIndexBuilder
+  | ConvexRankIndexBuilder
   | ConvexSearchIndexBuilder
   | ConvexVectorIndexBuilder
   | ConvexForeignKeyBuilder
@@ -428,6 +431,28 @@ function isConvexAggregateIndexBuilderOn(
   );
 }
 
+function isConvexRankIndexBuilderOn(
+  value: unknown
+): value is ConvexRankIndexBuilderOn {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { [entityKind]?: string })[entityKind] ===
+      'ConvexRankIndexBuilderOn'
+  );
+}
+
+function isConvexRankIndexBuilder(
+  value: unknown
+): value is ConvexRankIndexBuilder {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { [entityKind]?: string })[entityKind] ===
+      'ConvexRankIndexBuilder'
+  );
+}
+
 function isConvexUniqueConstraintBuilderOn(
   value: unknown
 ): value is ConvexUniqueConstraintBuilderOn {
@@ -676,6 +701,20 @@ function assertAggregateComparableFieldType(
   }
 }
 
+function assertRankOrderFieldType(
+  column: ColumnBuilderBase,
+  indexName: string
+): void {
+  const columnType = getColumnType(column) ?? 'unknown';
+  if (!['ConvexNumber', 'ConvexTimestamp', 'ConvexDate'].includes(columnType)) {
+    throw new Error(
+      `rankIndex '${indexName}' orderBy() supports integer()/timestamp()/date() columns only. Field '${getColumnName(
+        column
+      )}' is type '${columnType}'.`
+    );
+  }
+}
+
 const dedupeFieldNames = (fields: string[]): string[] => [...new Set(fields)];
 
 function applyExtraConfig<T extends TableConfig>(
@@ -702,6 +741,12 @@ function applyExtraConfig<T extends TableConfig>(
     if (isConvexAggregateIndexBuilderOn(entry)) {
       throw new Error(
         `Invalid aggregate index definition on '${table.tableName}'. Did you forget to call .on(...) or .all()?`
+      );
+    }
+
+    if (isConvexRankIndexBuilderOn(entry)) {
+      throw new Error(
+        `Invalid rank index definition on '${table.tableName}'. Did you forget to call .partitionBy(...) or .all()?`
       );
     }
 
@@ -874,6 +919,63 @@ function applyExtraConfig<T extends TableConfig>(
         avgFields: resolvedAvgFields,
         minFields: resolvedMinFields,
         maxFields: resolvedMaxFields,
+      });
+      continue;
+    }
+
+    if (isConvexRankIndexBuilder(entry)) {
+      const { name, partitionColumns, orderColumns, sumField } = entry.config;
+
+      if (!orderColumns.length) {
+        throw new Error(
+          `rankIndex '${name}' on '${table.tableName}' must declare at least one orderBy(...) column.`
+        );
+      }
+
+      const resolvedPartitionFields = dedupeFieldNames(
+        partitionColumns.map((column) =>
+          assertColumnInTable(column, table.tableName, `rankIndex '${name}'`)
+        )
+      );
+      assertNoReservedCreatedAtIndexFields(
+        resolvedPartitionFields,
+        `rankIndex '${name}' partitionBy`
+      );
+
+      const resolvedOrderFields = orderColumns.map((entry) => {
+        const field = assertColumnInTable(
+          entry.column,
+          table.tableName,
+          `rankIndex '${name}' orderBy`
+        );
+        assertNoReservedCreatedAtIndexFields([field], `rankIndex '${name}'`);
+        assertRankOrderFieldType(entry.column, name);
+        return {
+          field,
+          direction: entry.direction,
+        } as const;
+      });
+
+      const resolvedSumField = sumField
+        ? (() => {
+            const field = assertColumnInTable(
+              sumField,
+              table.tableName,
+              `rankIndex '${name}' sum`
+            );
+            assertNoReservedCreatedAtIndexFields(
+              [field],
+              `rankIndex '${name}'`
+            );
+            assertAggregateSumFieldType(sumField, name);
+            return field;
+          })()
+        : undefined;
+
+      table.addRankIndex(name, {
+        partitionFields: resolvedPartitionFields,
+        orderFields: resolvedOrderFields,
+        sumField: resolvedSumField,
       });
       continue;
     }
@@ -1060,6 +1162,15 @@ class ConvexTableImpl<T extends TableConfig> {
     minFields: string[];
     maxFields: string[];
   }[] = [];
+  private rankIndexes: {
+    name: string;
+    partitionFields: string[];
+    orderFields: Array<{
+      field: string;
+      direction: 'asc' | 'desc';
+    }>;
+    sumField?: string;
+  }[] = [];
   private foreignKeys: ForeignKeyDefinition[] = [];
   private deferredForeignKeys: DeferredForeignKeyDefinition[] = [];
   private deferredForeignKeysResolved = false;
@@ -1202,7 +1313,10 @@ class ConvexTableImpl<T extends TableConfig> {
       maxFields: string[];
     }
   ): void {
-    if (this.aggregateIndexes.some((index) => index.name === name)) {
+    if (
+      this.aggregateIndexes.some((index) => index.name === name) ||
+      this.rankIndexes.some((index) => index.name === name)
+    ) {
       throw new Error(
         `Duplicate aggregate index '${name}' on '${this.tableName}'.`
       );
@@ -1218,6 +1332,33 @@ class ConvexTableImpl<T extends TableConfig> {
     });
   }
 
+  addRankIndex<IndexName extends string>(
+    name: IndexName,
+    config: {
+      partitionFields: string[];
+      orderFields: Array<{
+        field: string;
+        direction: 'asc' | 'desc';
+      }>;
+      sumField?: string;
+    }
+  ): void {
+    if (
+      this.rankIndexes.some((index) => index.name === name) ||
+      this.aggregateIndexes.some((index) => index.name === name)
+    ) {
+      throw new Error(
+        `Duplicate aggregate index '${name}' on '${this.tableName}'.`
+      );
+    }
+    this.rankIndexes.push({
+      name,
+      partitionFields: config.partitionFields,
+      orderFields: config.orderFields,
+      sumField: config.sumField,
+    });
+  }
+
   getAggregateIndexes(): {
     name: string;
     fields: string[];
@@ -1228,6 +1369,18 @@ class ConvexTableImpl<T extends TableConfig> {
     maxFields: string[];
   }[] {
     return [...this.aggregateIndexes];
+  }
+
+  getRankIndexes(): {
+    name: string;
+    partitionFields: string[];
+    orderFields: Array<{
+      field: string;
+      direction: 'asc' | 'desc';
+    }>;
+    sumField?: string;
+  }[] {
+    return [...this.rankIndexes];
   }
 
   /**

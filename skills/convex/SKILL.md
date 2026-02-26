@@ -58,14 +58,15 @@ Only remember these non-parity deltas:
 12. String operators / `columns` projection / many-relation subfilters can run post-fetch; bound result size early.
 13. Search mode is relevance-ordered and does not support `orderBy`; vector mode has stricter limits (no cursor/offset/top-level where/order).
 14. Update/delete without `where` throws unless `allowFullScan()`.
-15. cRPC React queries are real-time by default (`subscribe: true`); never use `queryClient.invalidateQueries` for these subscribed paths.
-16. In RSC, `prefetch` hydrates client, `caller` is server-only and not hydrated, `preloadQuery` hydrates but can cause stale split ownership if also rendered client-side.
-17. Better Auth Next.js shortcut is `convexBetterAuth(...)`; generic server-only shortcut is `createCallerFactory(...)`.
-18. Use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out.
-19. **NEVER** use `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly for module-to-module calls. Use `create<Module>Handler(ctx)` or `create<Module>Caller(ctx)` from `convex/functions/generated/<module>.runtime` instead.
-20. **`create<Module>Handler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only. Import from `./generated/<module>.runtime`.
-21. **`create<Module>Caller(ctx)`** — use in actions and HTTP routes (where handler is unavailable). Goes through validation + middleware. Root caller exposes query+mutation procedures. In `ActionCtx`, action procedures are under `caller.actions.*`; scheduling is under `caller.schedule.now|after|at` with `caller.schedule.cancel(id)`. Import from `./generated/<module>.runtime`. Each caller/handler eagerly loads every procedure in its module (no lazy loading) — split large modules to keep bundles lean.
-22. API types (`Api`, `ApiInputs`, `ApiOutputs`, `Select`, `Insert`, `TableName`) import from `@convex/api` — no manual `inferApiInputs<typeof api>`.
+15. `count()`, `aggregate()`, and `groupBy()` require a matching `aggregateIndex`. Use `groupBy({ by, _count, _sum })` instead of multiple `.count()` calls or `findMany` + manual JS grouping. Every `by` field must be finite-constrained (`eq`/`in`/`isNull`) in `where`. See `references/features/aggregates.md`.
+16. cRPC React queries are real-time by default (`subscribe: true`); never use `queryClient.invalidateQueries` for these subscribed paths.
+17. In RSC, `prefetch` hydrates client, `caller` is server-only and not hydrated, `preloadQuery` hydrates but can cause stale split ownership if also rendered client-side.
+18. Better Auth Next.js shortcut is `convexBetterAuth(...)`; generic server-only shortcut is `createCallerFactory(...)`.
+19. Use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out.
+20. **NEVER** use `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly for module-to-module calls. Use `create<Module>Handler(ctx)` or `create<Module>Caller(ctx)` from `convex/functions/generated/<module>.runtime` instead.
+21. **`create<Module>Handler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only. Import from `./generated/<module>.runtime`.
+22. **`create<Module>Caller(ctx)`** — use in actions and HTTP routes (where handler is unavailable). Goes through validation + middleware. Root caller exposes query+mutation procedures. In `ActionCtx`, action procedures are under `caller.actions.*`; scheduling is under `caller.schedule.now|after|at` with `caller.schedule.cancel(id)`. Import from `./generated/<module>.runtime`. Each caller/handler eagerly loads every procedure in its module (no lazy loading) — split large modules to keep bundles lean.
+23. API types (`Api`, `ApiInputs`, `ApiOutputs`, `Select`, `Insert`, `TableName`) import from `@convex/api` — no manual `inferApiInputs<typeof api>`.
 23. HTTP router must export as `httpRouter` (not `appRouter`) for codegen.
 24. Server wiring imports come from `convex/functions/generated/` directory: `getAuth`, `defineAuth` from `generated/auth`; `initCRPC`, `QueryCtx`, `MutationCtx`, `OrmCtx` from `generated/server`; `create<Module>Caller`, `create<Module>Handler` from `generated/<module>.runtime`. No manual `convex/lib/orm.ts`.
 25. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.

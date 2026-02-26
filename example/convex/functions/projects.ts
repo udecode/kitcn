@@ -43,32 +43,23 @@ export const list = optionalAuthQuery
         >();
       }
 
-      const [projectsWithCounts, projectsWithCompletedCounts] =
-        await Promise.all([
-          ctx.orm.query.projects.findMany({
-            where: { id: { in: projectIds } },
-            limit: projectIds.length,
-            columns: { id: true },
-            with: {
-              _count: {
-                members: true,
-                todos: true,
-              },
-            },
-          }),
-          ctx.orm.query.projects.findMany({
-            where: { id: { in: projectIds } },
-            limit: projectIds.length,
-            columns: { id: true },
-            with: {
-              _count: {
-                todos: {
-                  where: { completed: true },
-                },
-              },
-            },
-          }),
-        ]);
+      const [memberCounts, todoCountsByCompletion] = await Promise.all([
+        ctx.orm.query.projectMembers.groupBy({
+          by: ['projectId'],
+          where: {
+            projectId: { in: projectIds },
+          },
+          _count: true,
+        }),
+        ctx.orm.query.todos.groupBy({
+          by: ['projectId', 'completed'],
+          where: {
+            projectId: { in: projectIds },
+            completed: { in: [true, false] },
+          },
+          _count: true,
+        }),
+      ]);
 
       const statsByProject = new Map<
         string,
@@ -79,18 +70,28 @@ export const list = optionalAuthQuery
         }
       >();
 
-      for (const project of projectsWithCounts) {
-        statsByProject.set(project.id, {
-          memberCount: project._count?.members ?? 0,
-          todoCount: project._count?.todos ?? 0,
+      for (const projectId of projectIds) {
+        statsByProject.set(projectId, {
+          memberCount: 0,
+          todoCount: 0,
           completedTodoCount: 0,
         });
       }
 
-      for (const project of projectsWithCompletedCounts) {
-        const entry = statsByProject.get(project.id);
+      for (const memberCount of memberCounts) {
+        const entry = statsByProject.get(memberCount.projectId);
         if (!entry) continue;
-        entry.completedTodoCount = project._count?.todos ?? 0;
+        entry.memberCount = memberCount._count;
+      }
+
+      for (const todoCount of todoCountsByCompletion) {
+        if (!todoCount.projectId) continue;
+        const entry = statsByProject.get(todoCount.projectId);
+        if (!entry) continue;
+        entry.todoCount += todoCount._count;
+        if (todoCount.completed) {
+          entry.completedTodoCount = todoCount._count;
+        }
       }
 
       return statsByProject;

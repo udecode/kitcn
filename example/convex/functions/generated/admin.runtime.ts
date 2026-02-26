@@ -22,7 +22,6 @@ const procedureRegistry = {
 } as const;
 
 type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;
-type ProcedureHandlerContext = QueryCtx | MutationCtx;
 type GeneratedProcedureCaller<
   TCtx extends ProcedureCallerContext = ProcedureCallerContext,
 > = TCtx extends MutationCtx
@@ -35,11 +34,14 @@ type GeneratedProcedureCaller<
         schedule: ProcedureScheduleCallerFromRegistry<typeof procedureRegistry>;
       }
     : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
+
+type ProcedureHandlerContext = QueryCtx | MutationCtx;
 type GeneratedProcedureHandler<
   TCtx extends ProcedureHandlerContext = ProcedureHandlerContext,
 > = TCtx extends MutationCtx
   ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'>
   : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
+
 
 const createCallerFromRegistry = createGenericCallerFactory<
   QueryCtx,
@@ -53,6 +55,7 @@ const createHandlerFromRegistry = createGenericHandlerFactory<
   typeof procedureRegistry
 >(procedureRegistry);
 
+
 export function createAdminCaller<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
@@ -64,3 +67,4 @@ export function createAdminHandler<TCtx extends ProcedureHandlerContext>(
 ): GeneratedProcedureHandler<TCtx> {
   return createHandlerFromRegistry(ctx) as GeneratedProcedureHandler<TCtx>;
 }
+

@@ -17,6 +17,7 @@ import { InfoIcon } from "lucide-react"
 | Auth-aware skipping | Enable query skipping based on auth state |
 | Type-safe references | Get full type safety for function references |
 | Custom metadata | Extract `.meta()` values from procedures |
+| Dev reset | Wipe all tables, re-backfill, run seed hooks |
 | Environment sync | Sync env vars to Convex deployment |
 
 ## Installation
@@ -159,6 +160,34 @@ npx better-convex aggregate prune --prod
 ```
 
 Runs `generated/server:aggregateBackfill` in prune mode to delete storage/state for aggregate indexes no longer declared in schema.
+
+### reset
+
+Wipe all table data in one step. Useful for dev resets and seeding workflows.
+
+```bash showLineNumbers
+npx better-convex reset --yes
+```
+
+The `--yes` flag is required — reset is destructive. Under the hood it calls `generated/server:reset` (which uses `ctx.orm.withoutTriggers` to clear every table).
+
+You can run custom functions before and after the reset:
+
+```bash showLineNumbers {2,5}
+# Seed data after reset
+npx better-convex reset --yes --after generated/seed:seedAll
+
+# Snapshot before, seed after
+npx better-convex reset --yes --before generated/seed:snapshot --after generated/seed:seedAll
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | **Required.** Confirm destructive reset |
+| `--before <fn>` | Run a Convex function before reset |
+| `--after <fn>` | Run a Convex function after reset |
 
 ### analyze
 

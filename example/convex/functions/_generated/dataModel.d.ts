@@ -167,7 +167,11 @@ export type DataModel = {
       indexName: string;
       keyHash: string;
       keyParts: Array<any>;
+      kind: string;
       nonNullCountValues: Record<string, number>;
+      rankKey?: null | any;
+      rankNamespace?: null | any;
+      rankSumValue?: null | number;
       sumValues: Record<string, number>;
       tableKey: string;
       updatedAt: number;
@@ -183,8 +187,12 @@ export type DataModel = {
       | "indexName"
       | "keyHash"
       | "keyParts"
+      | "kind"
       | "nonNullCountValues"
       | `nonNullCountValues.${string}`
+      | "rankKey"
+      | "rankNamespace"
+      | "rankSumValue"
       | "sumValues"
       | `sumValues.${string}`
       | "tableKey"
@@ -192,8 +200,62 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_table_index: ["tableKey", "indexName", "_creationTime"];
-      by_table_index_doc: ["tableKey", "indexName", "docId", "_creationTime"];
+      by_kind_table_index: ["kind", "tableKey", "indexName", "_creationTime"];
+      by_kind_table_index_doc: [
+        "kind",
+        "tableKey",
+        "indexName",
+        "docId",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  aggregate_rank_node: {
+    document: {
+      aggregate?: null | { count: number; sum: number };
+      items: Array<{ k: any; s: number; v: any }>;
+      subtrees: Array<string>;
+      _id: Id<"aggregate_rank_node">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "aggregate"
+      | "aggregate.count"
+      | "aggregate.sum"
+      | "items"
+      | "subtrees";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  aggregate_rank_tree: {
+    document: {
+      aggregateName: string;
+      maxNodeSize: number;
+      namespace?: null | any;
+      root: Id<"aggregate_rank_node">;
+      _id: Id<"aggregate_rank_tree">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "aggregateName"
+      | "maxNodeSize"
+      | "namespace"
+      | "root";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_aggregate_name: ["aggregateName", "_creationTime"];
+      by_namespace: ["namespace", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -204,6 +266,7 @@ export type DataModel = {
       cursor?: null | string;
       indexName: string;
       keyDefinitionHash: string;
+      kind: string;
       lastError?: null | string;
       metricDefinitionHash: string;
       processed: number;
@@ -221,6 +284,7 @@ export type DataModel = {
       | "cursor"
       | "indexName"
       | "keyDefinitionHash"
+      | "kind"
       | "lastError"
       | "metricDefinitionHash"
       | "processed"
@@ -231,8 +295,8 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_status: ["status", "_creationTime"];
-      by_table_index: ["tableKey", "indexName", "_creationTime"];
+      by_kind_status: ["kind", "status", "_creationTime"];
+      by_kind_table_index: ["kind", "tableKey", "indexName", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

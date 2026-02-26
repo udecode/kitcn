@@ -12,7 +12,7 @@
 import type { GenericDatabaseReader } from 'convex/server';
 import type { KnownKeysOnly } from '../internal/types';
 import type { EdgeMetadata } from './extractRelationsConfig';
-import { GelRelationalQuery } from './query';
+import { GelRankQuery, GelRelationalQuery } from './query';
 import { QueryPromise } from './query-promise';
 import type { RlsContext } from './rls/types';
 import type {
@@ -740,6 +740,21 @@ export class RelationalQueryBuilder<
     return this.createQuery<GroupByResult<TTableConfig, TConfig>>(
       config as DBQueryConfig<'many', true, TSchema, TTableConfig>,
       'groupBy'
+    );
+  }
+
+  rank(
+    indexName: string,
+    config?: {
+      where?: Record<string, unknown>;
+    }
+  ): GelRankQuery<TTableConfig> {
+    return new GelRankQuery<TTableConfig>(
+      this.db,
+      this.tableConfig,
+      indexName,
+      config,
+      this.rls
     );
   }
 

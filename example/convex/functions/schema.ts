@@ -218,6 +218,7 @@ export const userTable = convexTable(
     index('customerId').on(t.customerId),
     index('email_name').on(t.email, t.name),
     index('name').on(t.name),
+    aggregateIndex('by_role').on(t.role),
     index('username').on(t.username),
     index('personalOrganizationId').on(t.personalOrganizationId),
     index('lastActiveOrganizationId').on(t.lastActiveOrganizationId),
@@ -305,6 +306,7 @@ export const todosTable = convexTable(
       t.completed,
       t.deletionTime
     ),
+    aggregateIndex('by_priority_deletion_time').on(t.priority, t.deletionTime),
     aggregateIndex('by_user_deletion_time').on(t.userId, t.deletionTime),
     aggregateIndex('by_user_completed_deletion_time').on(
       t.userId,

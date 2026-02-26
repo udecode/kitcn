@@ -49,6 +49,34 @@ export interface ConvexAggregateIndexConfig<
   sumFields: readonly ConvexIndexColumn[];
 }
 
+export interface ConvexRankIndexOrderSpec<
+  TColumn extends ConvexIndexColumn = ConvexIndexColumn,
+> {
+  column: TColumn;
+  direction: 'asc' | 'desc';
+}
+
+type ConvexRankOrderByInput<TColumn extends ConvexIndexColumn> =
+  | TColumn
+  | {
+      column: {
+        builder: TColumn;
+      };
+      direction: 'asc' | 'desc';
+    };
+
+export interface ConvexRankIndexConfig<
+  TName extends string = string,
+  TPartitionColumns extends readonly ConvexIndexColumn[] = ConvexIndexColumn[],
+  TOrderColumns extends
+    readonly ConvexRankIndexOrderSpec[] = readonly ConvexRankIndexOrderSpec[],
+> {
+  name: TName;
+  orderColumns: TOrderColumns;
+  partitionColumns: TPartitionColumns;
+  sumField?: ConvexIndexColumn;
+}
+
 export class ConvexIndexBuilderOn<
   TName extends string = string,
   TUnique extends boolean = boolean,
@@ -255,6 +283,93 @@ export class ConvexAggregateIndexBuilder<
   }
 }
 
+export class ConvexRankIndexBuilderOn<TName extends string = string> {
+  static readonly [entityKind] = 'ConvexRankIndexBuilderOn';
+  readonly [entityKind] = 'ConvexRankIndexBuilderOn';
+
+  constructor(private name: TName) {}
+
+  partitionBy<TColumns extends readonly ConvexIndexColumn[]>(
+    ...columns: TColumns
+  ): ConvexRankIndexBuilder<TName, TColumns, []> {
+    return new ConvexRankIndexBuilder(this.name, columns, []);
+  }
+
+  all(): ConvexRankIndexBuilder<TName, [], []> {
+    return new ConvexRankIndexBuilder(this.name, [], []);
+  }
+}
+
+export class ConvexRankIndexBuilder<
+  TName extends string = string,
+  TPartitionColumns extends readonly ConvexIndexColumn[] = ConvexIndexColumn[],
+  TOrderColumns extends
+    readonly ConvexRankIndexOrderSpec[] = readonly ConvexRankIndexOrderSpec[],
+> {
+  static readonly [entityKind] = 'ConvexRankIndexBuilder';
+  readonly [entityKind] = 'ConvexRankIndexBuilder';
+
+  declare _: {
+    brand: 'ConvexRankIndexBuilder';
+    name: TName;
+    partitionColumns: TPartitionColumns;
+    orderColumns: TOrderColumns;
+  };
+
+  config: ConvexRankIndexConfig<TName, TPartitionColumns, TOrderColumns>;
+
+  constructor(
+    name: TName,
+    partitionColumns: TPartitionColumns,
+    orderColumns: TOrderColumns
+  ) {
+    this.config = {
+      name,
+      partitionColumns,
+      orderColumns,
+      sumField: undefined,
+    };
+  }
+
+  orderBy<TNextColumns extends readonly ConvexRankIndexOrderSpec[]>(
+    ...columns: TNextColumns &
+      readonly ConvexRankOrderByInput<ConvexIndexColumn>[]
+  ): ConvexRankIndexBuilder<TName, TPartitionColumns, TNextColumns> {
+    this.config.orderColumns = columns.map((entry) => {
+      if (
+        entry &&
+        typeof entry === 'object' &&
+        'column' in entry &&
+        'direction' in entry
+      ) {
+        const builder = (entry as any).column?.builder as ConvexIndexColumn;
+        if (!builder) {
+          throw new Error('rankIndex orderBy() expected a column builder.');
+        }
+        return {
+          column: builder,
+          direction: (entry as any).direction,
+        } as ConvexRankIndexOrderSpec;
+      }
+
+      return {
+        column: entry as ConvexIndexColumn,
+        direction: 'asc',
+      } as ConvexRankIndexOrderSpec;
+    }) as unknown as TOrderColumns;
+    return this as unknown as ConvexRankIndexBuilder<
+      TName,
+      TPartitionColumns,
+      TNextColumns
+    >;
+  }
+
+  sum(field: ConvexIndexColumn): this {
+    this.config.sumField = field;
+    return this;
+  }
+}
+
 export class ConvexVectorIndexBuilder<
   TName extends string = string,
   TVectorField extends ConvexIndexColumn = ConvexIndexColumn,
@@ -351,4 +466,10 @@ export function aggregateIndex<TName extends string>(
   name: TName
 ): ConvexAggregateIndexBuilderOn<TName> {
   return new ConvexAggregateIndexBuilderOn(name);
+}
+
+export function rankIndex<TName extends string>(
+  name: TName
+): ConvexRankIndexBuilderOn<TName> {
+  return new ConvexRankIndexBuilderOn(name);
 }

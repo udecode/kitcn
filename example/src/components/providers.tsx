@@ -6,7 +6,9 @@ import { caller, crpc, HydrateClient, prefetch } from '@/lib/convex/rsc';
 export async function Providers({ children }: { children: ReactNode }) {
   const token = await caller.getToken();
 
-  prefetch(crpc.user.getCurrentUser.queryOptions());
+  prefetch(
+    crpc.user.getCurrentUser.queryOptions(undefined, { skipUnauth: true })
+  );
 
   return (
     <BetterConvexProvider token={token}>

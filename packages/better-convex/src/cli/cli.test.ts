@@ -655,6 +655,104 @@ describe('cli/cli', () => {
     );
   });
 
+  test('run(reset) requires --yes confirmation', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    await expect(
+      run(['reset'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      })
+    ).rejects.toThrow(
+      '`better-convex reset` is destructive. Re-run with `--yes`.'
+    );
+  });
+
+  test('run(reset) rejects backfill flags', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    await expect(
+      run(['reset', '--yes', '--backfill=off'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      })
+    ).rejects.toThrow(
+      '`better-convex reset` does not accept backfill flags. It always runs aggregateBackfill in resume mode.'
+    );
+  });
+
+  test('run(reset) executes before hook, reset, resume backfill, status, then after hook', async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (
+        args[1] === 'run' &&
+        args.includes('generated/server:aggregateBackfillStatus')
+      ) {
+        return { exitCode: 0, stdout: '[]\n', stderr: '' } as any;
+      }
+      if (
+        args[1] === 'run' &&
+        args.includes('generated/server:aggregateBackfill')
+      ) {
+        return { exitCode: 0, stdout: '{"status":"ok"}\n', stderr: '' } as any;
+      }
+      if (args[1] === 'run') {
+        return { exitCode: 0, stdout: '{"status":"ok"}\n', stderr: '' } as any;
+      }
+      return { exitCode: 0 } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    const exitCode = await run(
+      [
+        'reset',
+        '--yes',
+        '--before',
+        'internal.app.resetHooks:before',
+        '--after=internal.app.resetHooks:after',
+        '--prod',
+      ],
+      {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      }
+    );
+
+    expect(exitCode).toBe(0);
+    const runCalls = calls.filter((entry) => entry.args[1] === 'run');
+    const runFunctions = runCalls.map((entry) => entry.args.at(-2));
+    expect(runFunctions).toEqual([
+      'internal.app.resetHooks:before',
+      'generated/server:reset',
+      'generated/server:aggregateBackfill',
+      'generated/server:aggregateBackfillStatus',
+      'internal.app.resetHooks:after',
+    ]);
+    expect(runCalls[1]?.args[runCalls[1].args.length - 1]).toBe('{}');
+    expect(runCalls[2]?.args[runCalls[2].args.length - 1]).toContain(
+      '"mode":"resume"'
+    );
+  });
+
   test('run(dev) runs aggregateBackfill and waits via status polling by default', async () => {
     const calls: { cmd: string; args: string[]; opts?: any }[] = [];
     const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);

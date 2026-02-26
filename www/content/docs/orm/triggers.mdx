@@ -215,9 +215,23 @@ Context (`ctx`) includes:
 
 `after` hooks always return `void`.
 
+### `withoutTriggers`
+
+Bypass all trigger hooks for a block of operations. Useful for bulk resets, migrations, and data seeding where triggers would interfere or cause infinite recursion.
+
+```ts
+await ctx.orm.withoutTriggers(async (orm) => {
+  // These writes skip all before/after/change hooks
+  await orm.delete(todosTable).allowFullScan();
+  await orm.insert(todosTable).values({ title: "Seed", completed: false, userId });
+});
+```
+
+The callback receives a trigger-free ORM instance scoped to the same transaction. Reads and mutations work identically — only hook dispatch is disabled.
+
 ### Runtime Guarantees
 
 1. Hooks run only for wrapped mutation contexts (`ctx.orm` / generated server context).
 2. Trigger errors fail the mutation.
 3. Recursive writes are queued deterministically.
-4. `ctx.innerDb` bypasses recursive dispatch.
+4. `ctx.innerDb` bypasses recursive dispatch (low-level; prefer `withoutTriggers` for most cases).

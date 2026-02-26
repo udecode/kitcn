@@ -316,6 +316,40 @@ describe('server/procedure-caller', () => {
     expect(runQuery).toHaveBeenCalledTimes(0);
   });
 
+  test('generated caller on action ctx dispatches non-cRPC mutation export via runMutation when function reference metadata exists', async () => {
+    const mutationRef = { path: 'generated.server.aggregateBackfill' } as any;
+    const runQuery = mock(async () => null);
+    const runMutation = mock(async (fn: unknown, args: unknown) => {
+      expect(fn).toBe(mutationRef);
+      expect(args).toEqual({ mode: 'resume' });
+      return { status: 'ok' };
+    });
+
+    const registry = {
+      'generated.server.aggregateBackfill': [
+        'mutation',
+        typedProcedureResolver(mutationRef, async () => ({ kind: 'mutation' })),
+      ],
+    } as const;
+
+    const createCaller = createGenericCallerFactory<
+      QueryCtx,
+      MutationCtx,
+      typeof registry,
+      ActionCtx
+    >(registry);
+
+    const caller = createCaller<ActionCtx>({
+      runMutation,
+      runQuery,
+    } as ActionCtx);
+    await expect(
+      caller.generated.server.aggregateBackfill({ mode: 'resume' } as any)
+    ).resolves.toEqual({ status: 'ok' });
+    expect(runMutation).toHaveBeenCalledTimes(1);
+    expect(runQuery).toHaveBeenCalledTimes(0);
+  });
+
   test('generated caller on action ctx rejects action procedures', async () => {
     const c = initCRPC.create();
     const procedure = c.action
@@ -386,6 +420,41 @@ describe('server/procedure-caller', () => {
     } as ActionCtx);
     await expect(caller.actions.jobs.reindex({ force: true })).resolves.toEqual(
       { started: true }
+    );
+    expect(runAction).toHaveBeenCalledTimes(1);
+  });
+
+  test('generated caller actions namespace dispatches non-cRPC action export via runAction when function reference metadata exists', async () => {
+    const actionRef = { path: 'jobs.reindex' } as any;
+    const runQuery = mock(async () => null);
+    const runMutation = mock(async () => null);
+    const runAction = mock(async (fn: unknown, args: unknown) => {
+      expect(fn).toBe(actionRef);
+      expect(args).toEqual({ force: true });
+      return { queued: true };
+    });
+
+    const registry = {
+      'jobs.reindex': [
+        'action',
+        typedProcedureResolver(actionRef, async () => ({ kind: 'action' })),
+      ],
+    } as const;
+
+    const createCaller = createGenericCallerFactory<
+      QueryCtx,
+      MutationCtx,
+      typeof registry,
+      ActionCtx
+    >(registry);
+
+    const caller = createCaller<ActionCtx>({
+      runAction,
+      runMutation,
+      runQuery,
+    } as ActionCtx);
+    await expect(caller.actions.jobs.reindex({ force: true })).resolves.toEqual(
+      { queued: true }
     );
     expect(runAction).toHaveBeenCalledTimes(1);
   });
@@ -461,6 +530,43 @@ describe('server/procedure-caller', () => {
     );
     expect(runAt).toHaveBeenCalledWith(date, actionRef, expect.anything());
     expect(cancel).toHaveBeenCalledWith('scheduled_id');
+  });
+
+  test('generated caller scheduling dispatches non-cRPC exports with function reference metadata', async () => {
+    const mutationRef = { path: 'generated.server.aggregateBackfill' } as any;
+    const runAfter = mock(async () => 'sched_after');
+
+    const registry = {
+      'generated.server.aggregateBackfill': [
+        'mutation',
+        typedProcedureResolver(mutationRef, async () => ({ kind: 'mutation' })),
+      ],
+    } as const;
+
+    const createCaller = createGenericCallerFactory<
+      QueryCtx,
+      MutationCtx,
+      typeof registry,
+      ActionCtx
+    >(registry);
+
+    const caller = createCaller<MutationCtx>({
+      ...mutationCtx,
+      scheduler: {
+        runAfter,
+      },
+    } as MutationCtx);
+
+    await expect(
+      caller.schedule.now.generated.server.aggregateBackfill({
+        mode: 'resume',
+      } as any)
+    ).resolves.toBe('sched_after');
+
+    expect(runAfter).toHaveBeenCalledTimes(1);
+    expect(runAfter).toHaveBeenCalledWith(0, mutationRef, {
+      mode: 'resume',
+    });
   });
 
   test('generated caller schedule excludes query procedures', async () => {

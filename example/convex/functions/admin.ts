@@ -281,28 +281,16 @@ export const getDashboardStats = authQuery
       });
     }
 
-    // Count admins from last 100 users (representative sample)
-    const sampleUsers = toRows(
-      await ctx.orm.query.user.findMany({ limit: 100 })
-    );
-    let adminCount = 0;
-
-    for (const user of sampleUsers) {
-      if (user.role === 'admin') {
-        adminCount++;
-      }
-    }
-
-    const totalUsers = await ctx.orm.query.user.count();
-
-    // Estimate total admins based on sample
-    const estimatedAdmins = Math.round(
-      (adminCount / sampleUsers.length) * totalUsers
-    );
+    const [totalUsers, totalAdmins] = await Promise.all([
+      ctx.orm.query.user.count(),
+      ctx.orm.query.user.count({
+        where: { role: 'admin' },
+      }),
+    ]);
 
     return {
       recentUsers,
-      totalAdmins: estimatedAdmins,
+      totalAdmins,
       totalUsers,
       userGrowth,
     };

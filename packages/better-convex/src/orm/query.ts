@@ -8,6 +8,19 @@
  */
 
 import type { GenericDatabaseReader } from 'convex/server';
+import {
+  compileRankPlan,
+  ensureRankAllowedForRls,
+  ensureRankIndexReady,
+  readRankAt,
+  readRankCount,
+  readRankIndexOf,
+  readRankMax,
+  readRankMin,
+  readRankPaginate,
+  readRankRandom,
+  readRankSum,
+} from './aggregate-index/rank-runtime';
 import type { PlanBucketReadCache } from './aggregate-index/runtime';
 import {
   AGGREGATE_ERROR,
@@ -190,6 +203,89 @@ class LimitedQueryStream<
 
   getEqualityIndexFilter(): any[] {
     return this.inner.getEqualityIndexFilter();
+  }
+}
+
+export class GelRankQuery<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> {
+  constructor(
+    private readonly db: GenericDatabaseReader<any>,
+    private readonly tableConfig: TTableConfig,
+    private readonly indexName: string,
+    private readonly config: {
+      where?: Record<string, unknown>;
+    } = {},
+    private readonly rls?: RlsContext
+  ) {}
+
+  private async _plan() {
+    ensureRankAllowedForRls(this.tableConfig, this.rls?.mode);
+    const plan = compileRankPlan(
+      this.tableConfig,
+      this.indexName,
+      this.config.where
+    );
+    await ensureRankIndexReady(this.db, this.tableConfig.name, this.indexName);
+    return plan;
+  }
+
+  async count(): Promise<number> {
+    const plan = await this._plan();
+    return await readRankCount(this.db, plan);
+  }
+
+  async sum(): Promise<number> {
+    const plan = await this._plan();
+    return await readRankSum(this.db, plan);
+  }
+
+  async at(
+    offset: number
+  ): Promise<{ id: string; key: unknown; sumValue: number } | null> {
+    const plan = await this._plan();
+    return await readRankAt(this.db, plan, offset);
+  }
+
+  async indexOf(args: { id: string }): Promise<number> {
+    const plan = await this._plan();
+    return await readRankIndexOf(this.db, plan, args);
+  }
+
+  async paginate(args: { cursor?: string | null; limit: number }): Promise<{
+    continueCursor: string;
+    isDone: boolean;
+    page: Array<{ id: string; key: unknown; sumValue: number }>;
+  }> {
+    if (!Number.isInteger(args.limit) || args.limit < 1) {
+      throw new Error('rank().paginate() requires a positive integer limit.');
+    }
+    const plan = await this._plan();
+    return await readRankPaginate(
+      this.db,
+      plan,
+      args.cursor ?? null,
+      args.limit
+    );
+  }
+
+  async min(): Promise<{ id: string; key: unknown; sumValue: number } | null> {
+    const plan = await this._plan();
+    return await readRankMin(this.db, plan);
+  }
+
+  async max(): Promise<{ id: string; key: unknown; sumValue: number } | null> {
+    const plan = await this._plan();
+    return await readRankMax(this.db, plan);
+  }
+
+  async random(): Promise<{
+    id: string;
+    key: unknown;
+    sumValue: number;
+  } | null> {
+    const plan = await this._plan();
+    return await readRankRandom(this.db, plan);
   }
 }
 

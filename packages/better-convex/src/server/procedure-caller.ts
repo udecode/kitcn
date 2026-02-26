@@ -604,7 +604,7 @@ type ActionDispatchContext = {
 async function executeActionContextProcedure(
   ctx: unknown,
   procedureType: Exclude<ProcedureType, 'action'>,
-  procedure: ProcedureExport,
+  procedure: ProcedureExport | null,
   pathString: string,
   resolver: () => Promise<unknown> | unknown,
   input: unknown
@@ -618,7 +618,9 @@ async function executeActionContextProcedure(
     );
   }
 
-  const encodedInput = encodeProcedureInput(procedure, input);
+  const encodedInput = procedure
+    ? encodeProcedureInput(procedure, input)
+    : input;
   const runner =
     procedureType === 'query' ? ctxValue.runQuery : ctxValue.runMutation;
 
@@ -630,12 +632,12 @@ async function executeActionContextProcedure(
   }
 
   const result = await runner(functionReference, encodedInput);
-  return decodeProcedureResult(procedure, result);
+  return procedure ? decodeProcedureResult(procedure, result) : result;
 }
 
 async function executeActionContextActionProcedure(
   ctx: unknown,
-  procedure: ProcedureExport,
+  procedure: ProcedureExport | null,
   pathString: string,
   resolver: () => Promise<unknown> | unknown,
   input: unknown
@@ -655,9 +657,11 @@ async function executeActionContextActionProcedure(
     );
   }
 
-  const encodedInput = encodeProcedureInput(procedure, input);
+  const encodedInput = procedure
+    ? encodeProcedureInput(procedure, input)
+    : input;
   const result = await ctxValue.runAction(functionReference, encodedInput);
-  return decodeProcedureResult(procedure, result);
+  return procedure ? decodeProcedureResult(procedure, result) : result;
 }
 
 type ScheduleDispatchMode =
@@ -704,7 +708,7 @@ function getScheduleRunner(
 async function executeScheduledProcedure(
   ctx: unknown,
   mode: ScheduleDispatchMode,
-  procedure: ProcedureExport,
+  procedure: ProcedureExport | null,
   pathString: string,
   resolver: () => Promise<unknown> | unknown,
   input: unknown
@@ -717,7 +721,9 @@ async function executeScheduledProcedure(
   }
 
   const schedule = getScheduleRunner(ctx, pathString, mode);
-  const encodedInput = encodeProcedureInput(procedure, input);
+  const encodedInput = procedure
+    ? encodeProcedureInput(procedure, input)
+    : input;
   return schedule(functionReference, encodedInput);
 }
 
@@ -762,21 +768,24 @@ function createActionsRegistryProxy(
       }
 
       const resolved = await resolveProcedure();
-      if (!isProcedureExport(resolved)) {
+      const procedure = isProcedureExport(resolved) ? resolved : null;
+      const canDispatchDirectly =
+        !!getResolverFunctionReference(resolveProcedure);
+      if (!procedure && !canDispatchDirectly) {
         throw new Error(
           `[better-convex] Resolved value is not a cRPC procedure: "${pathString}".`
         );
       }
 
-      if (resolved._crpcMeta?.type !== procedureType) {
+      if (procedure && procedure._crpcMeta?.type !== procedureType) {
         throw new Error(
-          `[better-convex] Procedure type mismatch at "${pathString}". Expected "${procedureType}" but got "${resolved._crpcMeta?.type ?? 'unknown'}".`
+          `[better-convex] Procedure type mismatch at "${pathString}". Expected "${procedureType}" but got "${procedure._crpcMeta?.type ?? 'unknown'}".`
         );
       }
 
       return executeActionContextActionProcedure(
         ctx,
-        resolved,
+        procedure,
         pathString,
         resolveProcedure,
         argsList[0] ?? {}
@@ -828,22 +837,25 @@ function createScheduledRegistryProxy(
       }
 
       const resolved = await resolveProcedure();
-      if (!isProcedureExport(resolved)) {
+      const procedure = isProcedureExport(resolved) ? resolved : null;
+      const canDispatchDirectly =
+        !!getResolverFunctionReference(resolveProcedure);
+      if (!procedure && !canDispatchDirectly) {
         throw new Error(
           `[better-convex] Resolved value is not a cRPC procedure: "${pathString}".`
         );
       }
 
-      if (resolved._crpcMeta?.type !== procedureType) {
+      if (procedure && procedure._crpcMeta?.type !== procedureType) {
         throw new Error(
-          `[better-convex] Procedure type mismatch at "${pathString}". Expected "${procedureType}" but got "${resolved._crpcMeta?.type ?? 'unknown'}".`
+          `[better-convex] Procedure type mismatch at "${pathString}". Expected "${procedureType}" but got "${procedure._crpcMeta?.type ?? 'unknown'}".`
         );
       }
 
       return executeScheduledProcedure(
         ctx,
         mode,
-        resolved,
+        procedure,
         pathString,
         resolveProcedure,
         argsList[0] ?? {}
@@ -938,15 +950,20 @@ function createRegistryProxy(
       });
 
       const resolved = await resolveProcedure();
-      if (!isProcedureExport(resolved)) {
+      const procedure = isProcedureExport(resolved) ? resolved : null;
+      const canDispatchDirectly =
+        mode === 'caller' &&
+        ctxType === 'action' &&
+        !!getResolverFunctionReference(resolveProcedure);
+      if (!procedure && !canDispatchDirectly) {
         throw new Error(
           `[better-convex] Resolved value is not a cRPC procedure: "${pathString}".`
         );
       }
 
-      if (resolved._crpcMeta?.type !== procedureType) {
+      if (procedure && procedure._crpcMeta?.type !== procedureType) {
         throw new Error(
-          `[better-convex] Procedure type mismatch at "${pathString}". Expected "${procedureType}" but got "${resolved._crpcMeta?.type ?? 'unknown'}".`
+          `[better-convex] Procedure type mismatch at "${pathString}". Expected "${procedureType}" but got "${procedure._crpcMeta?.type ?? 'unknown'}".`
         );
       }
 
@@ -960,14 +977,19 @@ function createRegistryProxy(
         return executeActionContextProcedure(
           ctx,
           procedureType,
-          resolved,
+          procedure,
           pathString,
           resolveProcedure,
           input
         );
       }
 
-      return executeProcedure(resolved, mode, pathString, ctx, input);
+      if (!procedure) {
+        throw new Error(
+          `[better-convex] Resolved value is not a cRPC procedure: "${pathString}".`
+        );
+      }
+      return executeProcedure(procedure, mode, pathString, ctx, input);
     },
   });
 }

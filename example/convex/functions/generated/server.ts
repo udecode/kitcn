@@ -44,4 +44,6 @@ export const {
   aggregateBackfill,
   aggregateBackfillChunk,
   aggregateBackfillStatus,
+  resetChunk,
+  reset,
 } = orm.api();
