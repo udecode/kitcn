@@ -34,8 +34,7 @@ Use this workflow when release docs must match current changeset content.
    - Include every file in:
      - `www/**/*.md`
      - `www/**/*.mdx`
-     - `skills/convex/SKILL.md`
-     - `skills/convex/references/*.md`
+     - `skills/convex/**/*.md`
    - Keep `/example` crosswalk checklist in `task_plan.md` in sync during the run.
 
 5. Read every listed doc and sync:

@@ -174,6 +174,9 @@ isNotNull(field);
 - Schema definition (convexTable, column builders)
 - Relations definition and loading (one, many, with)
 - Query operations (findMany, findFirst, cursor pagination)
+- Count operations (`db.query.*.count()`, windowed `count({ orderBy, skip, take, cursor })`)
+- Prisma-style aggregate operations (`db.query.*.aggregate({ _count/_sum/_avg/_min/_max })`)
+- GroupBy operations (`db.query.*.groupBy({ by, _count/_sum/_avg/_min/_max })`)
 - Where filtering (object filters)
 - Pagination (limit, offset)
 - Order by (multi‑field, index‑aware first sort)
@@ -181,14 +184,15 @@ isNotNull(field);
 - Column selection (post‑fetch)
 - String operators (post‑fetch)
 - Mutations (insert, update, delete, returning)
-- Aggregation workaround via `/docs/server/advanced/aggregates` (`createAggregate` from `better-convex/aggregate`)
+- Distinct via select pipeline (`.select().distinct({ fields: ['field'] })`)
+- Aggregate runtime via `/docs/orm/aggregates` (`TableAggregate` from `better-convex/aggregate`)
 
 **Unavailable in Convex:**
 
 - Raw SQL queries
 - Database migrations
 - SQL joins
-- ORM query-builder aggregations (`count`, `sum`, `avg`, `max`, `min`) should use Convex aggregate components
+- SQL `having` and SQL window functions (`groupBy` is supported with finite constraints)
 
 ## Error Messages & Solutions
 
@@ -196,7 +200,15 @@ isNotNull(field);
 - `Property 'query' does not exist` → Ensure ORM is attached as `ctx.orm`
 - `Type error: missing required field` → Check `.notNull()` in schema
 - `findUnique is not a function` → Use `findFirst` with `where`
-- `count/sum/avg/max/min is not on db.query.*` → Use `/docs/server/advanced/aggregates` (`createAggregate` from `better-convex/aggregate`)
+- `COUNT_NOT_INDEXED` → declare matching `aggregateIndex(...).on(...)` and run backfill until READY
+- `COUNT_FILTER_UNSUPPORTED` → count supports `eq`/`in`/`isNull`/range + `AND`, plus finite safe `OR` rewrite in v1
+- `COUNT_INDEX_BUILDING` → run `aggregateBackfill`, then check `aggregateBackfillStatus` until READY
+- `aggregateBackfill` says rebuild required (or CLI tells you to run rebuild) → key shape changed; run `better-convex aggregate rebuild`
+- `COUNT_RLS_UNSUPPORTED` → count is disabled in RLS-restricted contexts in v1
+- `AGGREGATE_NOT_INDEXED` → declare matching `aggregateIndex(...).on(...)` metric coverage and run backfill until READY
+- `AGGREGATE_FILTER_UNSUPPORTED` → `aggregate(...)` supports `eq`/`in`/`isNull`/range + `AND`, plus finite safe `OR` rewrite in v1
+- `AGGREGATE_INDEX_BUILDING` → run `aggregateBackfill` and wait for `READY`
+- `AGGREGATE_RLS_UNSUPPORTED` → `aggregate(...)` is disabled in RLS-restricted contexts in v1
 - `'include' does not exist` → Use `with` instead of `include`
 - `findMany() requires explicit sizing` → Add `limit`, use cursor pagination (`cursor` + `limit`), set schema `defaultLimit`, or opt in with `allowFullScan`
 - `.withIndex(...) required` → `predicate` `where` and typed post-fetch operators need explicit index selection

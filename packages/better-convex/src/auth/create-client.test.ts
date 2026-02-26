@@ -1,249 +1,33 @@
 import { createClient } from './create-client';
 
 const authFunctions = {
-  beforeCreate: 'beforeCreate',
-  beforeDelete: 'beforeDelete',
-  beforeUpdate: 'beforeUpdate',
   create: 'create',
   deleteMany: 'deleteMany',
   deleteOne: 'deleteOne',
   findMany: 'findMany',
   findOne: 'findOne',
-  onCreate: 'onCreate',
-  onDelete: 'onDelete',
-  onUpdate: 'onUpdate',
   updateMany: 'updateMany',
   updateOne: 'updateOne',
 } as any;
 
 describe('createClient', () => {
-  test('creates trigger API handlers that call configured trigger callbacks', async () => {
-    const captured: any[] = [];
-    const internalMutation = ((config: any) => {
-      captured.push(config);
-      return config;
-    }) as any;
-
-    const triggers = {
-      user: {
-        beforeCreate: async (data: any) => ({
-          ...data,
-          tagged: true,
-        }),
-        beforeDelete: async (doc: any) => ({
-          ...doc,
-          deletedByHook: true,
-        }),
-        beforeUpdate: async (_doc: any, update: any) => ({
-          ...update,
-          updatedByHook: true,
-        }),
-        onCreate: async (_doc: any) => {},
-        onDelete: async (_doc: any) => {},
-        onUpdate: async (_newDoc: any, _oldDoc: any) => {},
-      },
-    } as any;
-
+  test('exposes adapter factory and removes trigger procedure API', () => {
     const client = createClient({
       authFunctions,
-      internalMutation,
-      schema: {} as any,
-      triggers,
-    });
-    const api = client.triggersApi() as any;
-
-    expect(captured).toHaveLength(6);
-
-    const beforeCreate = await api.beforeCreate.handler(
-      {},
-      { data: { email: 'a@b.com' }, model: 'user' }
-    );
-    const beforeDelete = await api.beforeDelete.handler(
-      {},
-      { doc: { _id: 'u1' }, model: 'user' }
-    );
-    const beforeUpdate = await api.beforeUpdate.handler(
-      {},
-      {
-        doc: { _id: 'u1' },
-        model: 'user',
-        update: { name: 'new' },
-      }
-    );
-
-    expect(beforeCreate).toEqual({ email: 'a@b.com', tagged: true });
-    expect(beforeDelete).toEqual({
-      _id: 'u1',
-      deletedByHook: true,
-      id: 'u1',
-    });
-    expect(beforeUpdate).toEqual({ name: 'new', updatedByHook: true });
-  });
-
-  test('falls back to original values when trigger callback is missing', async () => {
-    const internalMutation = ((config: any) => config) as any;
-
-    const client = createClient({
-      authFunctions,
-      internalMutation,
-      schema: {} as any,
-      triggers: {},
-    });
-    const api = client.triggersApi() as any;
-
-    const beforeCreate = await api.beforeCreate.handler(
-      {},
-      { data: { email: 'a@b.com' }, model: 'missing' }
-    );
-    const beforeDelete = await api.beforeDelete.handler(
-      {},
-      { doc: { _id: 'u1' }, model: 'missing' }
-    );
-    const beforeUpdate = await api.beforeUpdate.handler(
-      {},
-      {
-        doc: { _id: 'u1' },
-        model: 'missing',
-        update: { name: 'new' },
-      }
-    );
-
-    expect(beforeCreate).toEqual({ email: 'a@b.com' });
-    expect(beforeDelete).toEqual({ _id: 'u1', id: 'u1' });
-    expect(beforeUpdate).toEqual({ name: 'new' });
-  });
-
-  test('normalizes trigger docs to include both id and _id', async () => {
-    const onCreate = mock(async (_doc: any) => undefined);
-    const onDelete = mock(async (_doc: any) => undefined);
-    const onUpdate = mock(async (_newDoc: any, _oldDoc: any) => undefined);
-    const internalMutation = ((config: any) => config) as any;
-
-    const client = createClient({
-      authFunctions,
-      internalMutation,
       schema: {} as any,
       triggers: {
         user: {
-          beforeDelete: async (doc: any) => doc,
-          beforeUpdate: async (_doc: any, update: any) => update,
-          onCreate,
-          onDelete,
-          onUpdate,
+          create: {
+            after: async () => {},
+            before: async (data: any) => ({ data }),
+          },
         },
       } as any,
-    });
-    const api = client.triggersApi() as any;
-
-    await expect(
-      api.beforeDelete.handler({}, { doc: { id: 'u1' }, model: 'user' })
-    ).resolves.toEqual({ _id: 'u1', id: 'u1' });
-
-    await api.beforeUpdate.handler(
-      {},
-      {
-        doc: { id: 'u2' },
-        model: 'user',
-        update: { name: 'updated' },
-      }
-    );
-    await api.onCreate.handler({}, { doc: { id: 'u3' }, model: 'user' });
-    await api.onDelete.handler({}, { doc: { _id: 'u4' }, model: 'user' });
-    await api.onUpdate.handler(
-      {},
-      {
-        model: 'user',
-        newDoc: { id: 'u5' },
-        oldDoc: { _id: 'u6' },
-      }
-    );
-
-    expect(onCreate).toHaveBeenCalledWith({ _id: 'u3', id: 'u3' });
-    expect(onDelete).toHaveBeenCalledWith({ _id: 'u4', id: 'u4' });
-    expect(onUpdate).toHaveBeenCalledWith(
-      { _id: 'u5', id: 'u5' },
-      { _id: 'u6', id: 'u6' }
-    );
-  });
-
-  test('applies context before executing trigger callbacks', async () => {
-    const internalMutation = ((config: any) => config) as any;
-
-    const beforeCreate = mock(async (data: any) => ({
-      ...data,
-      usedOrm: true,
-    }));
-
-    const client = createClient({
-      authFunctions,
-      internalMutation,
-      schema: {} as any,
-      context: async (ctx: any) => ({ ...ctx, orm: true }),
-      triggers: (ctx: any) => ({
-        user: {
-          beforeCreate: async (data: any) => {
-            expect(ctx.orm).toBe(true);
-            return beforeCreate(data);
-          },
-        },
-      }),
-    });
-
-    const api = client.triggersApi() as any;
-
-    const result = await api.beforeCreate.handler(
-      { db: {} },
-      { data: { email: 'a@b.com' }, model: 'user' }
-    );
-
-    expect(beforeCreate).toHaveBeenCalled();
-    expect(result).toEqual({ email: 'a@b.com', usedOrm: true });
-  });
-
-  test('applies context transforms for trigger callbacks', async () => {
-    const beforeCreate = mock(async (data: any) => ({
-      ...data,
-      transformed: true,
-    }));
-
-    const client = createClient({
-      authFunctions,
-      schema: {} as any,
-      context: async (ctx: any) => ({
-        ...ctx,
-        contextWrapped: true,
-      }),
-      triggers: (ctx: any) => ({
-        user: {
-          beforeCreate: async (data: any) => {
-            expect(ctx.contextWrapped).toBe(true);
-            return beforeCreate(data);
-          },
-        },
-      }),
-    });
-
-    const api = client.triggersApi() as any;
-    const result = await api.beforeCreate._handler(
-      { db: {} },
-      { data: { email: 'a@b.com' }, model: 'user' }
-    );
-
-    expect(beforeCreate).toHaveBeenCalled();
-    expect(result).toEqual({
-      email: 'a@b.com',
-      transformed: true,
-    });
-  });
-
-  test('exposes adapter factory', () => {
-    const client = createClient({
-      authFunctions,
-      schema: {} as any,
     });
 
     expect(typeof client.adapter).toBe('function');
     expect(client.authFunctions).toBe(authFunctions);
+    expect(client).not.toHaveProperty('triggersApi');
   });
 
   test('adapter uses db path for query ctx', async () => {

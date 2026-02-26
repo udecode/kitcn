@@ -388,14 +388,7 @@ export const list = publicQuery
 
 ### Return Value
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `data` | `T[]` | Flattened array of all items |
-| `pages` | `T[][]` | Raw page arrays |
-| `fetchNextPage` | `(limit?) => void` | Load next page |
-| `hasNextPage` | `boolean` | More pages exist |
-| `status` | `PaginationStatus` | `'LoadingFirstPage' \| 'LoadingMore' \| 'CanLoadMore' \| 'Exhausted'` |
-| `isPlaceholderData` | `boolean` | Showing placeholder |
+See [Infinite Query Return Value](#infinite-query-return-value) in the API Reference below.
 
 ### Prefetching
 
@@ -647,3 +640,18 @@ Must wrap ALL client components that use prefetched queries. Server and client p
 ### Data Ownership Caveat
 
 Don't render `preloadQuery` data in BOTH Server and Client components — the server-rendered part can't be revalidated by React Query. Prefer `prefetch` (let client own data) unless you need server-side access (metadata, 404, redirects).
+
+---
+
+## API Reference
+
+### Infinite Query Return Value
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `data` | `T[]` | Flattened array of all items |
+| `pages` | `T[][]` | Raw page arrays |
+| `fetchNextPage` | `(limit?) => void` | Load next page |
+| `hasNextPage` | `boolean` | More pages exist |
+| `status` | `PaginationStatus` | `'LoadingFirstPage' \| 'LoadingMore' \| 'CanLoadMore' \| 'Exhausted'` |
+| `isPlaceholderData` | `boolean` | Showing placeholder |

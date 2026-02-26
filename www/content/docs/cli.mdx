@@ -13,6 +13,7 @@ import { InfoIcon } from "lucide-react"
 |---------|-------------|
 | API generation | Auto-generate `api.ts` with typed function refs |
 | Scoped generation | Generate only `all`, `auth`, or `orm` artifacts |
+| Runtime analysis | Inspect Convex isolate bundle size before deploy |
 | Auth-aware skipping | Enable query skipping based on auth state |
 | Type-safe references | Get full type safety for function references |
 | Custom metadata | Extract `.meta()` values from procedures |
@@ -38,10 +39,16 @@ Options:
 |------|-------------|
 | `--api <dir>` | Output directory for api.ts (default: `convex/shared`) |
 | `--config <path>` | Path to better-convex config file (default: `./better-convex.json`) |
+| `--backfill=auto\|on\|off` | Dev aggregate backfill mode toggle (default: `auto`) |
+| `--backfill-wait` / `--no-backfill-wait` | Wait for all target indexes to become `READY` |
+| `--backfill-batch-size <n>` | Batch size for aggregate backfill kickoff |
 
 Wraps `convex dev` — generates runtime files on startup, watches for changes, passes all other flags through. Local backend state lives in `.convex/` at project root (isolated per worktree/clone).
 
 `better-convex dev` always runs full cRPC generation by default. Use `better-convex codegen --scope ...` for one-off scoped generation.
+
+When aggregate backfill is enabled, `better-convex dev` kicks off `aggregateBackfill` and waits for `READY` by default (in background).
+When `convex/functions/schema.ts` changes, `better-convex dev` re-runs resume backfill automatically only if aggregate index signatures changed.
 
 ```bash showLineNumbers
 # With Convex flags
@@ -66,17 +73,7 @@ Options:
 | `--debug` | Show detailed output |
 | `--silent` | Suppress all output |
 
-### Scope Modes
-
-Scope modes apply to `better-convex codegen`.
-
-| Scope | Generated outputs |
-|------|--------------------|
-| `all` (default) | `convex/shared/api.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, cRPC module runtime files |
-| `auth` | `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, `convex/functions/generated/auth.runtime.ts` (when `auth.ts` has a default export) |
-| `orm` | `convex/functions/generated/server.ts` only |
-
-In scoped modes, stale artifacts outside the current scope are removed automatically (for example `convex/shared/api.ts` and cRPC runtime modules in `auth`/`orm` mode).
+See [Scope Modes](#scope-modes) for the full output manifest per scope.
 
 ### env
 
@@ -115,72 +112,95 @@ npx better-convex env set <name> <value>
 npx better-convex env remove <name>
 ```
 
+### deploy
+
+```bash showLineNumbers
+npx better-convex deploy --prod
+```
+
+`better-convex deploy` runs:
+1. `convex deploy ...`
+2. post-deploy `generated/server:aggregateBackfill`
+3. status polling (`generated/server:aggregateBackfillStatus`) until `READY` (default behavior)
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--backfill=auto\|on\|off` | Enable/disable post-deploy aggregate backfill |
+| `--backfill-wait` / `--no-backfill-wait` | Wait for all target indexes to become `READY` |
+| `--backfill-batch-size <n>` | Batch size for backfill jobs |
+| `--backfill-poll-ms <n>` | Poll interval while waiting |
+| `--backfill-timeout-ms <n>` | Max wait duration before timeout |
+| `--backfill-strict` / `--no-backfill-strict` | Fail deploy on timeout/backfill error |
+
+Already-`READY` indexes are skipped (noop). See [Resume Compatibility](#resume-compatibility) for full behavior rules.
+
+### aggregate rebuild
+
+```bash showLineNumbers
+npx better-convex aggregate rebuild --prod
+```
+
+Runs `generated/server:aggregateBackfill` in rebuild mode (clear + recompute) for the selected deployment, then waits for `READY` by default.
+
+### aggregate backfill
+
+```bash showLineNumbers
+npx better-convex aggregate backfill --prod
+```
+
+Runs `generated/server:aggregateBackfill` in resume mode (no clear/rebuild) for the selected deployment, then waits for `READY` by default.
+
+### aggregate prune
+
+```bash showLineNumbers
+npx better-convex aggregate prune --prod
+```
+
+Runs `generated/server:aggregateBackfill` in prune mode to delete storage/state for aggregate indexes no longer declared in schema.
+
+### analyze
+
+Analyze Convex runtime bundle size and dependency hotspots:
+
+```bash showLineNumbers {2,5,8}
+# Function-oriented hotspot ranking (default)
+npx better-convex analyze
+
+# Deploy-accurate bundle view
+npx better-convex analyze --deploy
+
+# Deep drilldown for one entry
+npx better-convex analyze '^convex/functions/auth\\.ts$' --details
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--deploy` | Deploy-accurate isolate bundle analysis |
+| `--details` | Show expanded per-entry package graph details |
+| `--input` | Include top internal inputs in expanded details |
+| `--interactive`, `-i` | Enable interactive hotspot UI (default: off, TTY only) |
+| `--all`, `-a` | Include Convex-ignored entries (multi-dot files and `generated/` modules) |
+| `--show-small` | Include tiny dependencies (hidden by default) |
+| `--warn-mb <n>` | WARN threshold in MB (default: `6`) |
+| `--danger-mb <n>` | DANGER threshold in MB (default: `8`) |
+| `--fail-mb <n>` | Exit with code `1` if largest output meets threshold |
+| `--width <n>` | Force terminal output width |
+
+See [Mode Behavior](#mode-behavior) for the full 12-item behavior reference.
+
 ## Output
 
 The CLI generates `convex/shared/api.ts`. Do not create this file manually — it is fully generated by `better-convex dev` / `better-convex codegen`.
 
-## Metadata Extraction
-
-### Supported Patterns
-
-```ts showLineNumbers {2-4,7-9,12-14}
-// Base procedure auth is detected
-export const list = publicQuery.query(...);           // auth: undefined
-export const me = authQuery.query(...);               // auth: 'required'
-export const profile = optionalAuthQuery.query(...);  // auth: 'optional'
-
-// Function type is detected
-export const get = publicQuery.query(...);      // type: 'query'
-export const create = publicMutation.mutation(...);  // type: 'mutation'
-export const sync = publicAction.action(...);   // type: 'action'
-
-// .meta() is extracted
-export const admin = authQuery
-  .meta({ role: 'admin' })
-  .query(...);  // { auth: 'required', role: 'admin', type: 'query' }
-```
-
-### Base Procedure Mapping
-
-| Base Procedure | Auth Type |
-|---------------|-----------|
-| `publicQuery` | `undefined` |
-| `publicMutation` | `undefined` |
-| `publicAction` | `undefined` |
-| `optionalAuthQuery` | `'optional'` |
-| `optionalAuthMutation` | `'optional'` |
-| `authQuery` | `'required'` |
-| `authMutation` | `'required'` |
-| `authAction` | `'required'` |
+The CLI extracts metadata from procedure exports automatically. See [Metadata Extraction](#metadata-extraction) for supported patterns and base procedure mapping.
 
 ## Configuration
 
-`better-convex` supports a project config at `./better-convex.json` (or `--config <path>`):
-
-```json title="better-convex.json" showLineNumbers
-{
-  "auth": true,
-  "api": true,
-  "outputDir": "convex/shared",
-  "dev": {
-    "debug": false,
-    "convexArgs": []
-  },
-  "codegen": {
-    "debug": false,
-    "scope": "all",
-    "convexArgs": []
-  }
-}
-```
-
-Precedence:
-
-1. CLI flags override config values.
-2. Config `dev.convexArgs` / `codegen.convexArgs` are prepended to CLI passthrough args.
-3. If `codegen.scope` is missing, it defaults from `api` + `auth` toggles.
-
-If `./better-convex.json` is missing, defaults are used silently. If `--config` points to a missing file, the CLI exits with an error.
+`better-convex` supports a project config at `./better-convex.json` (or `--config <path>`). See [Configuration Reference](#configuration-reference) for the full schema and precedence rules.
 
 The CLI reads from `convex.json`:
 
@@ -218,3 +238,123 @@ import { api } from '@convex/api';
   <Card title="Server Setup" href="/docs/server/setup" />
   <Card title="React Setup" href="/docs/react" />
 </Cards>
+
+---
+
+## API Reference
+
+### Scope Modes
+
+Scope modes apply to `better-convex codegen`.
+
+| Scope | Generated outputs |
+|------|--------------------|
+| `all` (default) | `convex/shared/api.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, cRPC module runtime files |
+| `auth` | `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, `convex/functions/generated/auth.runtime.ts` (when `auth.ts` has a default export) |
+| `orm` | `convex/functions/generated/server.ts` only |
+
+In scoped modes, stale artifacts outside the current scope are removed automatically (for example `convex/shared/api.ts` and cRPC runtime modules in `auth`/`orm` mode).
+
+### Resume Compatibility
+
+- key shape changes (`aggregateIndex(...).on(...)` fields / `.all()` key shape) require rebuild; deploy exits in strict mode and instructs `better-convex aggregate rebuild`
+- metric additions (`.count/.sum/.avg/.min/.max`) are backfilled automatically
+- metric removals are metadata-only updates (no clear/rebuild)
+- removed aggregate indexes are pruned automatically (state + bucket/member/extrema rows)
+
+### Mode Behavior
+
+1. Default mode (`better-convex analyze`) ranks least optimized Convex function modules by output size and dependency weight.
+2. `--deploy` mirrors deploy shape by bundling the same selected entry set together with shared chunks.
+3. Convex-ignored entries with detected handlers are included by default in both modes. Add `--all` to include every ignored entry (including ones without detected handlers).
+4. `--details` adds a package graph view (size + top cross-package imports). Add `--input` to include the top internal inputs table.
+5. Filter to specific entries by passing a positional regex: `better-convex analyze polar.*` or `better-convex analyze '^convex/functions/polar.*\\.ts$'`.
+6. Hotspot output is agent-first: it prints an **Agent queue** with ready-to-run optimization commands.
+7. Use `--interactive` to open the keyboard-driven hotspot UI (`--interactive` is hotspot-only and rejected with `--deploy`).
+8. Ranking includes only modules with detected handler exports (cRPC `_crpcMeta` scan, plus native Convex handler exports).
+9. Interactive mode uses split panes by default (entry list left, detail preview right, key/status bar bottom).
+10. Right pane always follows the current selection (no pin mode).
+11. On narrow terminals (`<120` columns), interactive mode falls back to stacked layout (list first, details second, key/status last).
+12. Interactive controls: `j/k` move, `←/→` pane cycle, `/` filter, `s` sort cycle, `g` all-toggle, `r` refresh, `w` watch toggle, `q` quit, `?` help.
+
+### Metadata Extraction
+
+#### Supported Patterns
+
+```ts showLineNumbers {2-4,7-9,12-14}
+// Base procedure auth is detected
+export const list = publicQuery.query(...);           // auth: undefined
+export const me = authQuery.query(...);               // auth: 'required'
+export const profile = optionalAuthQuery.query(...);  // auth: 'optional'
+
+// Function type is detected
+export const get = publicQuery.query(...);      // type: 'query'
+export const create = publicMutation.mutation(...);  // type: 'mutation'
+export const sync = publicAction.action(...);   // type: 'action'
+
+// .meta() is extracted
+export const admin = authQuery
+  .meta({ role: 'admin' })
+  .query(...);  // { auth: 'required', role: 'admin', type: 'query' }
+```
+
+#### Base Procedure Mapping
+
+| Base Procedure | Auth Type |
+|---------------|-----------|
+| `publicQuery` | `undefined` |
+| `publicMutation` | `undefined` |
+| `publicAction` | `undefined` |
+| `optionalAuthQuery` | `'optional'` |
+| `optionalAuthMutation` | `'optional'` |
+| `authQuery` | `'required'` |
+| `authMutation` | `'required'` |
+| `authAction` | `'required'` |
+
+### Configuration Reference
+
+`better-convex` supports a project config at `./better-convex.json` (or `--config <path>`):
+
+```json title="better-convex.json" showLineNumbers
+{
+  "auth": true,
+  "api": true,
+  "outputDir": "convex/shared",
+  "dev": {
+    "debug": false,
+    "convexArgs": [],
+    "aggregateBackfill": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 1000,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": false
+    }
+  },
+  "codegen": {
+    "debug": false,
+    "scope": "all",
+    "convexArgs": []
+  },
+  "deploy": {
+    "convexArgs": [],
+    "aggregateBackfill": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 1000,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": true
+    }
+  }
+}
+```
+
+Precedence:
+
+1. CLI flags override config values.
+2. Config `dev.convexArgs` / `codegen.convexArgs` / `deploy.convexArgs` are prepended to CLI passthrough args.
+3. If `codegen.scope` is missing, it defaults from `api` + `auth` toggles.
+
+If `./better-convex.json` is missing, defaults are used silently. If `--config` points to a missing file, the CLI exits with an error.

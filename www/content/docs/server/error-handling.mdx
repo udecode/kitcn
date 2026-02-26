@@ -67,23 +67,7 @@ This helps with debugging by keeping the full error chain.
 
 ## Error Codes
 
-Here are all available error codes with their HTTP status mappings:
-
-| Code | Description | HTTP |
-|------|-------------|------|
-| `BAD_REQUEST` | Invalid request or input validation failed | 400 |
-| `UNAUTHORIZED` | Missing or invalid authentication | 401 |
-| `PAYMENT_REQUIRED` | Payment required to access resource | 402 |
-| `FORBIDDEN` | Authenticated but not authorized | 403 |
-| `NOT_FOUND` | Resource not found | 404 |
-| `METHOD_NOT_SUPPORTED` | Method not supported | 405 |
-| `TIMEOUT` | Request timeout | 408 |
-| `CONFLICT` | Resource conflict | 409 |
-| `PRECONDITION_FAILED` | Precondition failed | 412 |
-| `PAYLOAD_TOO_LARGE` | Request too large | 413 |
-| `UNPROCESSABLE_CONTENT` | Valid syntax but cannot process | 422 |
-| `TOO_MANY_REQUESTS` | Rate limit exceeded | 429 |
-| `INTERNAL_SERVER_ERROR` | Unexpected server error | 500 |
+For the full error code list, see [Error Codes](#error-codes-1) in API Reference below.
 
 <Callout icon={<InfoIcon />}>
 **Tip:** Use `UNAUTHORIZED` when the user isn't logged in, and `FORBIDDEN` when they're logged in but don't have permission.
@@ -253,3 +237,25 @@ Key differences:
   <Card title="Client Error Handling" href="/docs/react/error-handling" />
   <Card title="Rate Limiting" href="/docs/server/advanced/rate-limiting" />
 </Cards>
+
+## API Reference
+
+### Error Codes
+
+All available error codes with their HTTP status mappings:
+
+| Code | Description | HTTP |
+|------|-------------|------|
+| `BAD_REQUEST` | Invalid request or input validation failed | 400 |
+| `UNAUTHORIZED` | Missing or invalid authentication | 401 |
+| `PAYMENT_REQUIRED` | Payment required to access resource | 402 |
+| `FORBIDDEN` | Authenticated but not authorized | 403 |
+| `NOT_FOUND` | Resource not found | 404 |
+| `METHOD_NOT_SUPPORTED` | Method not supported | 405 |
+| `TIMEOUT` | Request timeout | 408 |
+| `CONFLICT` | Resource conflict | 409 |
+| `PRECONDITION_FAILED` | Precondition failed | 412 |
+| `PAYLOAD_TOO_LARGE` | Request too large | 413 |
+| `UNPROCESSABLE_CONTENT` | Valid syntax but cannot process | 422 |
+| `TOO_MANY_REQUESTS` | Rate limit exceeded | 429 |
+| `INTERNAL_SERVER_ERROR` | Unexpected server error | 500 |

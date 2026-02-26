@@ -84,15 +84,7 @@ For more on `allowFullScan` and index compilation, see [Querying Data](/docs/orm
 **Important:** Convex mutations are atomic -- all changes in a single mutation call succeed or fail together.
 </Callout>
 
-### Safety Limits
-
-The ORM enforces runtime limits on how many rows a single mutation can touch. The key defaults are:
-
-- `mutationBatchSize`: `400` (page size for collecting matched rows)
-- `mutationMaxRows`: `10000` (sync-mode hard cap)
-- `mutationLeafBatchSize`: `1600` (async FK fan-out batch size)
-
-You can customize these in your schema definition. For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
+The ORM enforces runtime limits on how many rows a single mutation can touch. See [API Reference -- Safety Limits](#safety-limits) for defaults and override syntax.
 
 ## Insert
 
@@ -216,6 +208,18 @@ To force all rows to be processed in a single transaction (no scheduling), opt i
 Sync mode throws if matched rows exceed `mutationMaxRows`.
 
 You now have all the building blocks for writing data. Dive into the sub-pages below for detailed coverage of each mutation type.
+
+## API Reference
+
+### Safety Limits
+
+The ORM enforces runtime limits on how many rows a single mutation can touch. The key defaults are:
+
+- `mutationBatchSize`: `400` (page size for collecting matched rows)
+- `mutationMaxRows`: `10000` (sync-mode hard cap)
+- `mutationLeafBatchSize`: `1600` (async FK fan-out batch size)
+
+You can customize these in your schema definition. For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
 
 ## Next Steps
 

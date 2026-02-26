@@ -39,25 +39,26 @@
     "typecheck:types": "tsc --project ../../convex/test-types/tsconfig.json"
   },
   "dependencies": {
+    "@clack/prompts": "^0.11.0",
     "@convex-dev/better-auth": "^0.10.10",
     "chokidar": "^5.0.0",
     "common-tags": "^1.8.2",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.3.1",
+    "esbuild": "^0.27.3",
     "execa": "^9.6.1",
     "jiti": "^2.6.1",
-    "jotai": "^2.17.0",
+    "jotai": "^2.18.0",
     "jotai-x": "^2.3.3",
     "picocolors": "^1.1.1",
-    "remeda": "^2.33.4",
-    "type-fest": "^5.4.2"
+    "remeda": "^2.33.6",
+    "type-fest": "^5.4.4"
   },
   "devDependencies": {
     "@rollup/plugin-babel": "^6.1.0",
     "babel-plugin-react-compiler": "^1.0.0",
-    "tsdown": "^0.20.1"
+    "tsdown": "^0.20.3"
   },
   "peerDependencies": {
-    "@convex-dev/aggregate": ">=0.2.0",
     "@tanstack/react-query": ">=5",
     "better-auth": ">=1.4.9",
     "convex": ">=1.32",
@@ -67,9 +68,6 @@
     "zod": ">=4"
   },
   "peerDependenciesMeta": {
-    "@convex-dev/aggregate": {
-      "optional": true
-    },
     "better-auth": {
       "optional": true
     },

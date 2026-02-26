@@ -70,6 +70,210 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  aggregate_bucket: {
+    document: {
+      count: number;
+      indexName: string;
+      keyHash: string;
+      keyParts: Array<any>;
+      nonNullCountValues: Record<string, number>;
+      sumValues: Record<string, number>;
+      tableKey: string;
+      updatedAt: number;
+      _id: Id<"aggregate_bucket">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "count"
+      | "indexName"
+      | "keyHash"
+      | "keyParts"
+      | "nonNullCountValues"
+      | `nonNullCountValues.${string}`
+      | "sumValues"
+      | `sumValues.${string}`
+      | "tableKey"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_table_index: ["tableKey", "indexName", "_creationTime"];
+      by_table_index_hash: [
+        "tableKey",
+        "indexName",
+        "keyHash",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  aggregate_extrema: {
+    document: {
+      count: number;
+      fieldName: string;
+      indexName: string;
+      keyHash: string;
+      sortKey: string;
+      tableKey: string;
+      updatedAt: number;
+      value: any;
+      valueHash: string;
+      _id: Id<"aggregate_extrema">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "count"
+      | "fieldName"
+      | "indexName"
+      | "keyHash"
+      | "sortKey"
+      | "tableKey"
+      | "updatedAt"
+      | "value"
+      | "valueHash";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_table_index: ["tableKey", "indexName", "_creationTime"];
+      by_table_index_hash_field_sort: [
+        "tableKey",
+        "indexName",
+        "keyHash",
+        "fieldName",
+        "sortKey",
+        "_creationTime",
+      ];
+      by_table_index_hash_field_value: [
+        "tableKey",
+        "indexName",
+        "keyHash",
+        "fieldName",
+        "valueHash",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  aggregate_member: {
+    document: {
+      docId: string;
+      extremaValues: Record<string, any>;
+      indexName: string;
+      keyHash: string;
+      keyParts: Array<any>;
+      nonNullCountValues: Record<string, number>;
+      sumValues: Record<string, number>;
+      tableKey: string;
+      updatedAt: number;
+      _id: Id<"aggregate_member">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "docId"
+      | "extremaValues"
+      | `extremaValues.${string}`
+      | "indexName"
+      | "keyHash"
+      | "keyParts"
+      | "nonNullCountValues"
+      | `nonNullCountValues.${string}`
+      | "sumValues"
+      | `sumValues.${string}`
+      | "tableKey"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_table_index: ["tableKey", "indexName", "_creationTime"];
+      by_table_index_doc: ["tableKey", "indexName", "docId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  aggregate_state: {
+    document: {
+      completedAt?: null | number;
+      cursor?: null | string;
+      indexName: string;
+      keyDefinitionHash: string;
+      lastError?: null | string;
+      metricDefinitionHash: string;
+      processed: number;
+      startedAt: number;
+      status: string;
+      tableKey: string;
+      updatedAt: number;
+      _id: Id<"aggregate_state">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "completedAt"
+      | "cursor"
+      | "indexName"
+      | "keyDefinitionHash"
+      | "lastError"
+      | "metricDefinitionHash"
+      | "processed"
+      | "startedAt"
+      | "status"
+      | "tableKey"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_status: ["status", "_creationTime"];
+      by_table_index: ["tableKey", "indexName", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  aggregateDemoRun: {
+    document: {
+      active: boolean;
+      createdAt?: number;
+      projectMembers: Array<string>;
+      projects: Array<string>;
+      seed: number;
+      tags: Array<string>;
+      todoComments: Array<string>;
+      todoTags: Array<string>;
+      todos: Array<string>;
+      userId: string;
+      _id: Id<"aggregateDemoRun">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "active"
+      | "createdAt"
+      | "projectMembers"
+      | "projects"
+      | "seed"
+      | "tags"
+      | "todoComments"
+      | "todos"
+      | "todoTags"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      userId: ["userId", "_creationTime"];
+      userId_active: ["userId", "active", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   commentReplies: {
     document: {
       createdAt?: number;
@@ -484,6 +688,126 @@ export type DataModel = {
       tagId_todoId: ["tagId", "todoId", "_creationTime"];
       todoId: ["todoId", "_creationTime"];
       todoId_tagId: ["todoId", "tagId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  triggerDemoAudit: {
+    document: {
+      createdAt?: number;
+      hook: string;
+      message?: null | string;
+      operation: string;
+      ownerId: string;
+      recordId?: null | string;
+      runId: string;
+      _id: Id<"triggerDemoAudit">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "hook"
+      | "message"
+      | "operation"
+      | "ownerId"
+      | "recordId"
+      | "runId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      ownerId: ["ownerId", "_creationTime"];
+      ownerId_runId: ["ownerId", "runId", "_creationTime"];
+      runId: ["runId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  triggerDemoRecord: {
+    document: {
+      createdAt?: number;
+      deleteGuard: boolean;
+      email: string;
+      lifecycleTag?: null | string;
+      name: string;
+      ownerId: string;
+      recursivePatchCount: number;
+      runId: string;
+      status?: null | "draft" | "active" | "archived";
+      updatedAt: number;
+      _id: Id<"triggerDemoRecord">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "deleteGuard"
+      | "email"
+      | "lifecycleTag"
+      | "name"
+      | "ownerId"
+      | "recursivePatchCount"
+      | "runId"
+      | "status"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      ownerId: ["ownerId", "_creationTime"];
+      ownerId_runId: ["ownerId", "runId", "_creationTime"];
+      runId: ["runId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  triggerDemoRun: {
+    document: {
+      createdAt?: number;
+      ownerId: string;
+      summary: any;
+      _id: Id<"triggerDemoRun">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "createdAt" | "ownerId" | "summary";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      ownerId: ["ownerId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  triggerDemoStats: {
+    document: {
+      changeCount: number;
+      createCount: number;
+      createdAt?: number;
+      deleteCount: number;
+      ownerId: string;
+      runId: string;
+      updateCount: number;
+      updatedAt: number;
+      _id: Id<"triggerDemoStats">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "changeCount"
+      | "createCount"
+      | "createdAt"
+      | "deleteCount"
+      | "ownerId"
+      | "runId"
+      | "updateCount"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      ownerId: ["ownerId", "_creationTime"];
+      runId: ["runId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

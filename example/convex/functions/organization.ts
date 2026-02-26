@@ -604,22 +604,20 @@ export const getOrganization = authQuery
     // Get organization by slug using index
     const org = await ctx.orm.query.organization.findFirst({
       where: { slug: input.slug },
+      with: {
+        _count: {
+          members: true,
+        },
+      },
     });
 
     if (!org) {
       return null;
     }
 
-    const [currentMember, memberRows] = await Promise.all([
-      ctx.orm.query.member.findFirst({
-        where: { organizationId: org.id, userId: ctx.userId },
-      }),
-      ctx.orm.query.member.findMany({
-        where: { organizationId: org.id },
-        limit: DEFAULT_LIST_LIMIT,
-        columns: { id: true },
-      }),
-    ]);
+    const currentMember = await ctx.orm.query.member.findFirst({
+      where: { organizationId: org.id, userId: ctx.userId },
+    });
 
     const plan = DEFAULT_PLAN;
 
@@ -629,7 +627,7 @@ export const getOrganization = authQuery
       isActive: org.id === user.activeOrganization?.id,
       isPersonal: org.id === user.personalOrganizationId,
       logo: org.logo || null,
-      membersCount: memberRows.length || 1,
+      membersCount: org._count?.members || 1,
       name: org.name,
       plan,
       role: currentMember?.role,
@@ -683,6 +681,11 @@ export const getOrganizationOverview = authQuery
     // Get organization details
     const org = await ctx.orm.query.organization.findFirst({
       where: { slug: input.slug },
+      with: {
+        _count: {
+          members: true,
+        },
+      },
     });
 
     if (!org) {
@@ -691,16 +694,9 @@ export const getOrganizationOverview = authQuery
 
     // Get current membership (fast) + member count.
     // Avoid relying on the active organization: we're scoping by the org in the URL.
-    const [currentMember, memberRows] = await Promise.all([
-      ctx.orm.query.member.findFirst({
-        where: { organizationId: org.id, userId: ctx.userId },
-      }),
-      ctx.orm.query.member.findMany({
-        where: { organizationId: org.id },
-        limit: DEFAULT_LIST_LIMIT,
-        columns: { id: true },
-      }),
-    ]);
+    const currentMember = await ctx.orm.query.member.findFirst({
+      where: { organizationId: org.id, userId: ctx.userId },
+    });
 
     const organizationData = {
       id: org.id,
@@ -708,7 +704,7 @@ export const getOrganizationOverview = authQuery
       isActive: user.activeOrganization?.id === org.id,
       isPersonal: org.id === user.personalOrganizationId,
       logo: org.logo,
-      membersCount: memberRows.length || 1,
+      membersCount: org._count?.members || 1,
       name: org.name,
       plan: undefined,
       role: currentMember?.role,

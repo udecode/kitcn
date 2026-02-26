@@ -33,16 +33,16 @@ import {
  * Contains index selection and filter expressions
  */
 export interface WhereClauseResult {
-  /** Planning strategy used for index compilation */
-  strategy: IndexStrategy;
-  /** Selected index for query optimization (null if no suitable index) */
-  selectedIndex: IndexLike | null;
   /** Filters that can use the index (eq/range on indexed fields) */
   indexFilters: FilterExpression<boolean>[];
-  /** Multi-probe filter groups for OR/inArray index union plans */
-  probeFilters: FilterExpression<boolean>[][];
   /** Filters applied after index scan (gt, lt, and, or, not) */
   postFilters: FilterExpression<boolean>[];
+  /** Multi-probe filter groups for OR/inArray index union plans */
+  probeFilters: FilterExpression<boolean>[][];
+  /** Selected index for query optimization (null if no suitable index) */
+  selectedIndex: IndexLike | null;
+  /** Planning strategy used for index compilation */
+  strategy: IndexStrategy;
 }
 
 export type IndexStrategy =
@@ -56,9 +56,9 @@ export type IndexStrategy =
  */
 interface IndexScore {
   index: IndexLike;
-  score: number;
-  matchType: 'exact' | 'prefix' | 'partial';
   matchedFields: string[];
+  matchType: 'exact' | 'prefix' | 'partial';
+  score: number;
 }
 
 // ============================================================================
@@ -75,8 +75,8 @@ interface IndexScore {
  * 4. Split filters into index-compatible vs post-filters
  */
 export interface IndexLike {
-  indexName: string;
   indexFields: string[];
+  indexName: string;
 }
 
 export class WhereClauseCompiler {

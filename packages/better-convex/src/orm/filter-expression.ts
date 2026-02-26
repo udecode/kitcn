@@ -42,16 +42,16 @@ const FilterExpressionBrand: unique symbol = Symbol('FilterExpression');
  * @template TValue - The TypeScript type this expression evaluates to
  */
 export interface FilterExpression<_TValue = boolean> {
-  /** Brand symbol for nominal typing */
-  readonly [FilterExpressionBrand]: true;
-  /** Expression type discriminator */
-  readonly type: 'binary' | 'logical' | 'unary';
-  /** Operator string (eq, and, not, etc.) */
-  readonly operator: string;
-  /** Expression operands (FieldReference, values, or nested expressions) */
-  readonly operands: readonly any[];
   /** Accept visitor for traversal */
   accept<R>(visitor: ExpressionVisitor<R>): R;
+  /** Expression operands (FieldReference, values, or nested expressions) */
+  readonly operands: readonly any[];
+  /** Operator string (eq, and, not, etc.) */
+  readonly operator: string;
+  /** Expression type discriminator */
+  readonly type: 'binary' | 'logical' | 'unary';
+  /** Brand symbol for nominal typing */
+  readonly [FilterExpressionBrand]: true;
 }
 
 /**
@@ -62,7 +62,8 @@ export interface FilterExpression<_TValue = boolean> {
  */
 export interface BinaryExpression<TField = any>
   extends FilterExpression<boolean> {
-  readonly type: 'binary';
+  /** [field, value] or [field, array] for inArray/notInArray */
+  readonly operands: readonly [FieldReference<TField>, TField | TField[]];
   readonly operator:
     | 'eq'
     | 'ne'
@@ -82,8 +83,7 @@ export interface BinaryExpression<TField = any>
     | 'startsWith'
     | 'endsWith'
     | 'contains';
-  /** [field, value] or [field, array] for inArray/notInArray */
-  readonly operands: readonly [FieldReference<TField>, TField | TField[]];
+  readonly type: 'binary';
 }
 
 /**
@@ -91,10 +91,10 @@ export interface BinaryExpression<TField = any>
  * Combines multiple filter expressions
  */
 export interface LogicalExpression extends FilterExpression<boolean> {
-  readonly type: 'logical';
-  readonly operator: 'and' | 'or';
   /** Array of nested filter expressions */
   readonly operands: readonly FilterExpression<boolean>[];
+  readonly operator: 'and' | 'or';
+  readonly type: 'logical';
 }
 
 /**
@@ -102,10 +102,10 @@ export interface LogicalExpression extends FilterExpression<boolean> {
  * Negates or checks null state of an expression
  */
 export interface UnaryExpression extends FilterExpression<boolean> {
-  readonly type: 'unary';
-  readonly operator: 'not' | 'isNull' | 'isNotNull';
   /** Single nested filter expression or field reference for null checks */
   readonly operands: readonly [FilterExpression<boolean> | FieldReference<any>];
+  readonly operator: 'not' | 'isNull' | 'isNotNull';
+  readonly type: 'unary';
 }
 
 // ============================================================================
@@ -122,9 +122,9 @@ export interface UnaryExpression extends FilterExpression<boolean> {
  */
 export interface FieldReference<TValue = unknown> {
   readonly __brand: 'FieldReference';
-  readonly fieldName: string;
   /** Phantom type for type inference - not present at runtime */
   readonly __type?: TValue;
+  readonly fieldName: string;
 }
 
 /**

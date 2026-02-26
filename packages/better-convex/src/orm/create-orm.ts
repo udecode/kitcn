@@ -6,6 +6,7 @@ import {
   type Scheduler,
 } from 'convex/server';
 import { v } from 'convex/values';
+import { createCountBackfillHandlers } from './aggregate-index/backfill';
 import {
   type CreateDatabaseOptions,
   createDatabase,
@@ -23,9 +24,10 @@ import type { VectorSearchProvider } from './types';
 export type OrmFunctions = {
   scheduledMutationBatch: SchedulableFunctionReference;
   scheduledDelete: SchedulableFunctionReference;
+  aggregateBackfillChunk?: SchedulableFunctionReference;
 };
 
-export type CreateOrmOptions = Omit<CreateDatabaseOptions, never>;
+export type CreateOrmOptions = CreateDatabaseOptions;
 
 type OrmWriterCtx = {
   db: GenericDatabaseWriter<any>;
@@ -90,6 +92,9 @@ type OrmFactory<TSchema extends TablesRelationalConfig> = <
 type OrmApiResult = {
   scheduledMutationBatch: ReturnType<typeof internalMutationGeneric>;
   scheduledDelete: ReturnType<typeof internalMutationGeneric>;
+  aggregateBackfill: ReturnType<typeof internalMutationGeneric>;
+  aggregateBackfillChunk: ReturnType<typeof internalMutationGeneric>;
+  aggregateBackfillStatus: ReturnType<typeof internalMutationGeneric>;
 };
 
 type OrmClientBase<TSchema extends TablesRelationalConfig> = {
@@ -191,24 +196,49 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
   return {
     db,
     with: withContext,
-    api: () => ({
-      scheduledMutationBatch: mutationBuilder({
+    api: () => {
+      let aggregateBackfillChunkRef: SchedulableFunctionReference | undefined =
+        config.ormFunctions.aggregateBackfillChunk;
+      const countBackfillHandlers = createCountBackfillHandlers(
+        config.schema,
+        () => aggregateBackfillChunkRef
+      );
+      const aggregateBackfillChunk = mutationBuilder({
         args: v.any(),
-        handler: scheduledMutationBatchFactory(
-          config.schema,
-          edgeMetadata,
-          config.ormFunctions.scheduledMutationBatch
-        ) as any,
-      }),
-      scheduledDelete: mutationBuilder({
-        args: v.any(),
-        handler: scheduledDeleteFactory(
-          config.schema,
-          edgeMetadata,
-          config.ormFunctions.scheduledMutationBatch
-        ) as any,
-      }),
-    }),
+        handler: countBackfillHandlers.chunk as any,
+      });
+      if (!aggregateBackfillChunkRef) {
+        aggregateBackfillChunkRef = aggregateBackfillChunk as any;
+      }
+
+      return {
+        scheduledMutationBatch: mutationBuilder({
+          args: v.any(),
+          handler: scheduledMutationBatchFactory(
+            config.schema,
+            edgeMetadata,
+            config.ormFunctions.scheduledMutationBatch
+          ) as any,
+        }),
+        scheduledDelete: mutationBuilder({
+          args: v.any(),
+          handler: scheduledDeleteFactory(
+            config.schema,
+            edgeMetadata,
+            config.ormFunctions.scheduledMutationBatch
+          ) as any,
+        }),
+        aggregateBackfill: mutationBuilder({
+          args: v.any(),
+          handler: countBackfillHandlers.kickoff as any,
+        }),
+        aggregateBackfillChunk,
+        aggregateBackfillStatus: mutationBuilder({
+          args: v.any(),
+          handler: countBackfillHandlers.status as any,
+        }),
+      };
+    },
   };
 }
 

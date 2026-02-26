@@ -21,11 +21,11 @@ export interface HttpRouterRecord {
  * Router definition - stores both flat procedures and hierarchical record
  */
 export interface HttpRouterDef<TRecord extends HttpRouterRecord> {
-  router: true;
   /** Flat map with dot-notation keys (e.g., "todos.get") for lookup */
   procedures: Record<string, HttpProcedure>;
   /** Hierarchical structure for type inference */
   record: TRecord;
+  router: true;
 }
 
 /**

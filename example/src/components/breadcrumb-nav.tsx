@@ -3,6 +3,8 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useMaybeAuth } from 'better-convex/react';
 import {
+  Activity,
+  BarChart3,
   Building2,
   CheckSquare,
   ChevronDown,
@@ -10,7 +12,6 @@ import {
   Loader2,
   LogIn,
   LogOut,
-  Sparkles,
   Tags,
   TestTube2,
   User,
@@ -32,7 +33,7 @@ import { useSignOutMutationOptions } from '@/lib/convex/auth-client';
 import { useCRPC } from '@/lib/convex/crpc';
 import { useCurrentUser } from '@/lib/convex/hooks';
 
-const navItems = [
+const APP_NAV_ITEMS = [
   {
     href: '/' as const,
     label: 'Todos',
@@ -52,6 +53,30 @@ const navItems = [
     match: (p: string) => p.startsWith('/tags'),
   },
 ];
+
+const LAB_NAV_ITEMS = [
+  {
+    href: '/aggregate' as const,
+    label: 'Aggregate',
+    icon: BarChart3,
+    match: (p: string) => p.startsWith('/aggregate'),
+  },
+  {
+    href: '/triggers' as const,
+    label: 'Triggers',
+    icon: Activity,
+    match: (p: string) => p.startsWith('/triggers'),
+  },
+];
+
+type NavSection = 'app' | 'labs';
+
+function activeSectionFromPath(pathname: string): NavSection {
+  if (pathname.startsWith('/aggregate') || pathname.startsWith('/triggers')) {
+    return 'labs';
+  }
+  return 'app';
+}
 
 export function BreadcrumbNav() {
   const pathname = usePathname();
@@ -79,64 +104,37 @@ export function BreadcrumbNav() {
     )
   );
   const hasData = projectsData && projectsData.page.length > 0;
+  const activeSection = activeSectionFromPath(pathname);
+  const scopedNavItems =
+    activeSection === 'labs' ? LAB_NAV_ITEMS : APP_NAV_ITEMS;
+  const labsRootHref = '/aggregate';
 
   return (
     <header className="sticky top-0 z-50 border-border/40 border-b bg-background/80 backdrop-blur-xl">
       <div className="container mx-auto px-6">
         <div className="flex h-14 items-center justify-between">
-          {/* Brand */}
-          <Link
-            className="group flex items-center gap-2 transition-opacity hover:opacity-80"
-            href="/"
-          >
-            <div className="flex size-8 items-center justify-center rounded-lg bg-foreground">
-              <Sparkles className="size-4 text-background" />
-            </div>
-            <span className="font-semibold text-lg tracking-tight">
-              Taskflow
-            </span>
-          </Link>
-
-          {/* Navigation */}
-          <nav className="flex items-center gap-1">
-            {navItems.map((item) => {
-              const isActive = item.match(pathname);
-              const Icon = item.icon;
-              return (
-                <Link
-                  className={`relative flex items-center gap-2 rounded-md px-3 py-2 font-medium text-sm transition-colors ${
-                    isActive
-                      ? 'text-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  href={item.href}
-                  key={item.href}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                  {isActive && (
-                    <span className="absolute inset-x-1 -bottom-[13px] h-0.5 rounded-full bg-foreground" />
-                  )}
-                </Link>
-              );
-            })}
-            {user?.activeOrganization?.slug && (
-              <Link
-                className={`relative flex items-center gap-2 rounded-md px-3 py-2 font-medium text-sm transition-colors ${
-                  pathname.startsWith('/org')
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-                href={`/org/${encodeURIComponent(user.activeOrganization.slug)}`}
-              >
-                <Building2 className="size-4" />
-                Organization
-                {pathname.startsWith('/org') && (
-                  <span className="absolute inset-x-1 -bottom-[13px] h-0.5 rounded-full bg-foreground" />
-                )}
-              </Link>
-            )}
-          </nav>
+          <div className="inline-flex shrink-0 items-center rounded-lg bg-secondary/60 p-1">
+            <Link
+              className={`rounded-md px-3 py-1.5 font-medium text-xs transition-colors ${
+                activeSection === 'app'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              href="/"
+            >
+              App
+            </Link>
+            <Link
+              className={`rounded-md px-3 py-1.5 font-medium text-xs transition-colors ${
+                activeSection === 'labs'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              href={labsRootHref}
+            >
+              Labs
+            </Link>
+          </div>
 
           {/* Actions */}
           <div className="flex items-center gap-3">
@@ -204,6 +202,42 @@ export function BreadcrumbNav() {
               </Button>
             ) : null}
           </div>
+        </div>
+        <div className="flex h-12 items-center gap-3 border-border/50 border-t">
+          <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {scopedNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.match(pathname);
+
+              return (
+                <Link
+                  className={`inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 font-medium text-sm transition-colors ${
+                    isActive
+                      ? 'bg-secondary text-foreground'
+                      : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+                  }`}
+                  href={item.href}
+                  key={item.href}
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+            {activeSection === 'app' && user?.activeOrganization?.slug && (
+              <Link
+                className={`inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 font-medium text-sm transition-colors ${
+                  pathname.startsWith('/org')
+                    ? 'bg-secondary text-foreground'
+                    : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+                }`}
+                href={`/org/${encodeURIComponent(user.activeOrganization.slug)}`}
+              >
+                <Building2 className="size-4" />
+                Organization
+              </Link>
+            )}
+          </nav>
         </div>
       </div>
     </header>

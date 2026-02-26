@@ -62,7 +62,7 @@ export const list = publicQuery
 
 ### Input Merging
 
-Here's where cRPC gets powerful. You can stack `.input()` calls to build complex types. This is especially useful when middleware needs to validate its own input:
+You can stack `.input()` calls to build complex types. This is especially useful when middleware needs to validate its own input:
 
 First, define a procedure that validates and fetches a target user:
 
@@ -203,13 +203,7 @@ export const getProjectAndOwner = privateQuery
 - **`caller.actions.*`**: explicit action dispatch in `ActionCtx` via `ctx.runAction`.
 - **`caller.schedule.*`**: schedule mutation/action procedures via `ctx.scheduler`.
 
-### Allowed Call Matrix
-
-| Caller context | Root query | Root mutation | Root action | `caller.actions.*` | `caller.schedule.*` |
-|----------------|------------|---------------|-------------|--------------------|---------------------|
-| `QueryCtx` | ✅ | ❌ | ❌ | ❌ | ❌ |
-| `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
-| `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
+See the [Allowed Call Matrix](#allowed-call-matrix) in API Reference for the full compatibility table.
 
 ### Action and Schedule Namespaces
 
@@ -347,21 +341,9 @@ export const update = publicMutation
   });
 ```
 
-## Zod vs Convex Validators
-
-cRPC uses Zod for validation instead of Convex's `v` validators. Here's a quick reference:
-
-| Zod | Convex `v` |
-|-----|------------|
-| `z.string()` | `v.string()` |
-| `z.number()` | `v.number()` |
-| `z.boolean()` | `v.boolean()` |
-| `z.array(z.string())` | `v.array(v.string())` |
-| `z.object({...})` | `v.object({...})` |
-| `z.string().optional()` | `v.optional(v.string())` |
-| `zid('tablename')` | `v.id('tablename')` |
-
 ## Migrate from Convex
+
+cRPC uses Zod for validation instead of Convex's `v` validators. See [Zod vs Convex Validators](#zod-vs-convex-validators) in API Reference for the full mapping table.
 
 If you're coming from vanilla Convex, here's what changes.
 
@@ -413,3 +395,25 @@ Key differences:
   <Card title="Middleware" href="/docs/server/middlewares" />
   <Card title="HTTP Router" href="/docs/server/http" />
 </Cards>
+
+## API Reference
+
+### Allowed Call Matrix
+
+| Caller context | Root query | Root mutation | Root action | `caller.actions.*` | `caller.schedule.*` |
+|----------------|------------|---------------|-------------|--------------------|---------------------|
+| `QueryCtx` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
+
+### Zod vs Convex Validators
+
+| Zod | Convex `v` |
+|-----|------------|
+| `z.string()` | `v.string()` |
+| `z.number()` | `v.number()` |
+| `z.boolean()` | `v.boolean()` |
+| `z.array(z.string())` | `v.array(v.string())` |
+| `z.object({...})` | `v.object({...})` |
+| `z.string().optional()` | `v.optional(v.string())` |
+| `zid('tablename')` | `v.id('tablename')` |

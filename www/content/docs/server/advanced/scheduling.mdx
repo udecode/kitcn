@@ -147,19 +147,11 @@ export const generateDailyReport = privateAction
 
 Scheduled functions run once at a specific time or after a delay. Let's explore the key concepts.
 
-### Key Concepts
-
-| Concept | Description |
-|---------|-------------|
-| **Atomicity** | Scheduling from mutations is atomic - if mutation fails, nothing is scheduled |
-| **Non-atomic in actions** | Scheduled functions from actions run even if the action fails |
-| **Limits** | Single function can schedule up to 1000 functions with 8MB total argument size |
-| **Auth not propagated** | Pass user info as arguments if needed |
-| **Results retention** | Available for 7 days after completion |
-
 <Callout icon={<InfoIcon />}>
 **Warning:** Auth context is NOT available in scheduled functions. Pass `userId` or other auth data as arguments when scheduling.
 </Callout>
+
+Key behavioral constraints: scheduling from mutations is atomic (failure cancels the schedule), limits are 1000 functions / 8MB args per function, and results are retained for 7 days. See [Scheduled Function Behavior](#scheduled-function-behavior) in the API Reference.
 
 ### scheduler.runAfter
 
@@ -191,7 +183,7 @@ export const processOrder = authMutation
 
 ### Immediate Execution
 
-Here's a powerful pattern: use `runAfter(0)` to trigger actions immediately after a mutation commits:
+Use `runAfter(0)` to trigger actions immediately after a mutation commits:
 
 ```ts title="convex/functions/items.ts" showLineNumbers {1,8-11}
 import { createItemsCaller } from './generated/items.runtime';
@@ -366,9 +358,27 @@ export const listPendingJobs = publicQuery
 
 ## Error Handling
 
-Understanding how scheduled functions handle errors is critical for reliable systems.
+Mutations are automatically retried on internal Convex errors and execute exactly once. Actions are **not** automatically retried (they may have side effects) and execute at most once. See [Error Retry Behavior](#error-retry-behavior) in the API Reference for the full breakdown.
 
-### Mutations
+<Callout icon={<InfoIcon />}>
+**Warning:** For critical actions that must succeed, implement manual retry with exponential backoff. See [Error Handling](/docs/server/error-handling) for patterns.
+</Callout>
+
+## API Reference
+
+### Scheduled Function Behavior
+
+| Concept | Description |
+|---------|-------------|
+| **Atomicity** | Scheduling from mutations is atomic - if mutation fails, nothing is scheduled |
+| **Non-atomic in actions** | Scheduled functions from actions run even if the action fails |
+| **Limits** | Single function can schedule up to 1000 functions with 8MB total argument size |
+| **Auth not propagated** | Pass user info as arguments if needed |
+| **Results retention** | Available for 7 days after completion |
+
+### Error Retry Behavior
+
+#### Mutations
 
 | Behavior | Description |
 |----------|-------------|
@@ -376,17 +386,13 @@ Understanding how scheduled functions handle errors is critical for reliable sys
 | **Guaranteed execution** | Once scheduled, mutations execute exactly once |
 | **Permanent failure** | Only fails on developer errors |
 
-### Actions
+#### Actions
 
 | Behavior | Description |
 |----------|-------------|
 | **No automatic retry** | Actions may have side effects, so not retried |
 | **At most once** | Actions execute at most once |
 | **Manual retry** | Implement retry logic if needed |
-
-<Callout icon={<InfoIcon />}>
-**Warning:** For critical actions that must succeed, implement manual retry with exponential backoff. See [Error Handling](/docs/server/error-handling) for patterns.
-</Callout>
 
 ## Best Practices
 

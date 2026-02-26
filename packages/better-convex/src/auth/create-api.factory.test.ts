@@ -101,19 +101,32 @@ describe('auth/create-api createApi()', () => {
       },
     });
 
-    const api = createApi(schema, getAuth as any);
+    const api = createApi(schema, getAuth as any, {
+      triggers: {
+        user: {
+          create: {
+            before: async (data: Record<string, unknown>) => ({
+              data: { ...data, name: 'created' },
+            }),
+          },
+          delete: {
+            before: async (doc: Record<string, unknown>) => ({
+              data: { ...doc, name: 'deleted' },
+            }),
+          },
+          update: {
+            before: async (update: Record<string, unknown>) => ({
+              data: { ...update, name: 'updated' },
+            }),
+          },
+        },
+      } as any,
+    });
 
     const store = new Map<string, any>([
       ['user-1', { _id: 'user-1', email: 'a@site.com', name: 'alice' }],
       ['user-2', { _id: 'user-2', email: 'b@site.com', name: 'bob' }],
     ]);
-
-    const runMutation = mock(async (handle: string, args: any) => {
-      if (handle === 'before-create') return { ...args.data, name: 'created' };
-      if (handle === 'before-update')
-        return { ...args.update, name: 'updated' };
-      if (handle === 'before-delete') return { ...args.doc, name: 'deleted' };
-    });
 
     const ctx = {
       db: {
@@ -132,13 +145,10 @@ describe('auth/create-api createApi()', () => {
           store.delete(id);
         },
       },
-      runMutation,
     };
 
     await expect(
       (api.create as any)._handler(ctx, {
-        beforeCreateHandle: 'before-create',
-        onCreateHandle: 'on-create',
         input: { model: 'user', data: { email: 'c@site.com', name: 'c' } },
         select: ['email'],
       })
@@ -161,8 +171,6 @@ describe('auth/create-api createApi()', () => {
 
     await expect(
       (api.updateOne as any)._handler(ctx, {
-        beforeUpdateHandle: 'before-update',
-        onUpdateHandle: 'on-update',
         input: {
           model: 'user',
           update: { name: 'ignored' },
@@ -173,8 +181,6 @@ describe('auth/create-api createApi()', () => {
 
     await expect(
       (api.updateMany as any)._handler(ctx, {
-        beforeUpdateHandle: 'before-update',
-        onUpdateHandle: 'on-update',
         input: {
           model: 'user',
           update: { name: 'ignored' },
@@ -188,8 +194,6 @@ describe('auth/create-api createApi()', () => {
 
     await expect(
       (api.deleteOne as any)._handler(ctx, {
-        beforeDeleteHandle: 'before-delete',
-        onDeleteHandle: 'on-delete',
         input: {
           model: 'user',
           where: [{ field: '_id', operator: 'eq', value: 'user-2' }],
@@ -199,8 +203,6 @@ describe('auth/create-api createApi()', () => {
 
     await expect(
       (api.deleteMany as any)._handler(ctx, {
-        beforeDeleteHandle: 'before-delete',
-        onDeleteHandle: 'on-delete',
         input: {
           model: 'user',
           where: [{ field: '_id', operator: 'in', value: ['user-1'] }],
@@ -208,8 +210,6 @@ describe('auth/create-api createApi()', () => {
         paginationOpts: { cursor: null, numItems: 10 },
       })
     ).resolves.toMatchObject({ isDone: true, count: expect.any(Number) });
-
-    expect(runMutation).toHaveBeenCalled();
   });
 
   test('validateInput toggles exported arg schema shape', async () => {
@@ -674,9 +674,19 @@ describe('auth/create-api createApi()', () => {
       expect(store.size).toBe(1);
     });
 
-    test('create normalizes ORM docs for onCreate hooks and serializes Date values', async () => {
-      const api = createApi(schema, getAuth as any);
-      const runMutation = mock(async () => undefined);
+    test('create normalizes ORM docs for create.after hooks and serializes Date values', async () => {
+      const after = mock(async () => undefined);
+      const change = mock(async () => undefined);
+      const api = createApi(schema, getAuth as any, {
+        triggers: {
+          user: {
+            change,
+            create: {
+              after,
+            },
+          },
+        } as any,
+      });
       const createdAt = new Date('2026-02-14T12:36:05.293Z');
       const updatedAt = new Date('2026-02-14T12:36:05.168Z');
       const expiresAt = new Date('2026-02-14T12:46:05.168Z');
@@ -720,7 +730,6 @@ describe('auth/create-api createApi()', () => {
             where: async () => undefined,
           })),
         },
-        runMutation,
       };
 
       await (api.create as any)._handler(ctx, {
@@ -728,21 +737,37 @@ describe('auth/create-api createApi()', () => {
           model: 'user',
           data: { email: 'c@site.com', name: 'carol' },
         },
-        onCreateHandle: 'on-create',
       });
 
-      expect(runMutation).toHaveBeenCalledWith('on-create', {
-        doc: {
+      expect(after).toHaveBeenCalledWith(
+        {
           _id: 'user-1',
           createdAt: createdAt.getTime(),
-          updatedAt: updatedAt.getTime(),
-          expiresAt: expiresAt.getTime(),
           email: 'c@site.com',
+          expiresAt: expiresAt.getTime(),
           id: 'user-1',
           name: 'carol',
+          updatedAt: updatedAt.getTime(),
         },
-        model: 'user',
-      });
+        ctx
+      );
+      expect(change).toHaveBeenCalledWith(
+        {
+          id: 'user-1',
+          newDoc: {
+            _id: 'user-1',
+            createdAt: createdAt.getTime(),
+            email: 'c@site.com',
+            expiresAt: expiresAt.getTime(),
+            id: 'user-1',
+            name: 'carol',
+            updatedAt: updatedAt.getTime(),
+          },
+          oldDoc: null,
+          operation: 'insert',
+        },
+        ctx
+      );
     });
 
     test('create returns normalized ORM docs with _id when ORM returns only id', async () => {
@@ -848,9 +873,19 @@ describe('auth/create-api createApi()', () => {
       expect(dbDelete).toHaveBeenCalledTimes(1);
     });
 
-    test('create normalizes non-ORM docs for onCreate hooks', async () => {
-      const api = createApi(schema, getAuth as any);
-      const runMutation = mock(async () => undefined);
+    test('create normalizes non-ORM docs for create.after hooks', async () => {
+      const after = mock(async () => undefined);
+      const change = mock(async () => undefined);
+      const api = createApi(schema, getAuth as any, {
+        triggers: {
+          user: {
+            change,
+            create: {
+              after,
+            },
+          },
+        } as any,
+      });
 
       const ctx = {
         db: {
@@ -863,7 +898,6 @@ describe('auth/create-api createApi()', () => {
           patch: mock(async () => undefined),
           delete: mock(async () => undefined),
         },
-        runMutation,
       };
 
       await (api.create as any)._handler(ctx, {
@@ -871,18 +905,31 @@ describe('auth/create-api createApi()', () => {
           model: 'user',
           data: { email: 'c@site.com', name: 'carol' },
         },
-        onCreateHandle: 'on-create',
       });
 
-      expect(runMutation).toHaveBeenCalledWith('on-create', {
-        doc: {
+      expect(after).toHaveBeenCalledWith(
+        {
           _id: 'user-1',
           email: 'c@site.com',
           id: 'user-1',
           name: 'carol',
         },
-        model: 'user',
-      });
+        ctx
+      );
+      expect(change).toHaveBeenCalledWith(
+        {
+          id: 'user-1',
+          newDoc: {
+            _id: 'user-1',
+            email: 'c@site.com',
+            id: 'user-1',
+            name: 'carol',
+          },
+          oldDoc: null,
+          operation: 'insert',
+        },
+        ctx
+      );
     });
 
     test('ORM update maps undefined fields to unsetToken', async () => {

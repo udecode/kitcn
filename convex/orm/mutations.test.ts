@@ -9,7 +9,9 @@
  */
 
 import {
+  aggregateIndex,
   convexTable,
+  createOrm,
   defineRelations,
   defineSchema,
   deletion,
@@ -60,6 +62,36 @@ const baseUser = {
 const scheduledMutationBatchRef = anyApi.orm
   .scheduledMutationBatch as SchedulableFunctionReference;
 
+const relationCountSchedulerStub = {
+  runAfter: vi.fn(async () => undefined),
+};
+
+const passthroughInternalMutation = ((definition: unknown) =>
+  definition) as never;
+
+const runBackfillToReady = async (api: any, ctx: { db: any }) => {
+  await (api as any).aggregateBackfill.handler(
+    { db: ctx.db, scheduler: relationCountSchedulerStub },
+    {}
+  );
+
+  for (let i = 0; i < 20; i += 1) {
+    const status = await (api as any).aggregateBackfillStatus.handler(
+      { db: ctx.db, scheduler: relationCountSchedulerStub },
+      {}
+    );
+    if (status.every((entry: any) => entry.status === 'READY')) {
+      return;
+    }
+    await (api as any).aggregateBackfillChunk.handler(
+      { db: ctx.db, scheduler: relationCountSchedulerStub },
+      {}
+    );
+  }
+
+  throw new Error('aggregateBackfill did not reach READY state in time.');
+};
+
 describe('M7 Mutations', () => {
   it('should insert and return full row', async ({ ctx }) => {
     const db = ctx.orm;
@@ -69,6 +101,123 @@ describe('M7 Mutations', () => {
     expect(user.name).toBe('Alice');
     expect(user.email).toBe('alice@example.com');
     expect(user.id).toBeDefined();
+  });
+
+  it('should support returning({ _count }) on update and delete', async () => {
+    const mutationCountUsers = convexTable('mutationCountUsers', {
+      name: text().notNull(),
+    });
+    const mutationCountPosts = convexTable(
+      'mutationCountPosts',
+      {
+        authorId: text().notNull(),
+        status: text().notNull(),
+      },
+      (t) => [
+        aggregateIndex('by_author').on(t.authorId),
+        aggregateIndex('by_author_status').on(t.authorId, t.status),
+      ]
+    );
+
+    const customSchema = defineSchema({
+      mutationCountUsers,
+      mutationCountPosts,
+    });
+    const customRelations = defineRelations(
+      { mutationCountUsers, mutationCountPosts },
+      (r) => ({
+        mutationCountUsers: {
+          posts: r.many.mutationCountPosts({
+            from: r.mutationCountUsers.id,
+            to: r.mutationCountPosts.authorId,
+          }),
+        },
+        mutationCountPosts: {
+          author: r.one.mutationCountUsers({
+            from: r.mutationCountPosts.authorId,
+            to: r.mutationCountUsers.id,
+          }),
+        },
+      })
+    );
+
+    const t = convexTest(customSchema);
+    await t.run(async (baseCtx) => {
+      const ormClient = createOrm({
+        schema: customRelations,
+        ormFunctions: {
+          scheduledDelete: {} as any,
+          scheduledMutationBatch: {} as any,
+        },
+        internalMutation: passthroughInternalMutation,
+      });
+      const ctx = ormClient.with({
+        db: baseCtx.db,
+        scheduler: relationCountSchedulerStub as any,
+      });
+      const api = ormClient.api();
+
+      const userId = await ctx.db.insert('mutationCountUsers', {
+        name: 'Alice',
+      });
+      await ctx.db.insert('mutationCountPosts', {
+        authorId: userId,
+        status: 'published',
+      });
+      await ctx.db.insert('mutationCountPosts', {
+        authorId: userId,
+        status: 'published',
+      });
+      await ctx.db.insert('mutationCountPosts', {
+        authorId: userId,
+        status: 'draft',
+      });
+
+      await runBackfillToReady(api as any, baseCtx as any);
+
+      const updated = await ctx.orm
+        .update(mutationCountUsers)
+        .set({ name: 'Alice Updated' })
+        .where(eq(mutationCountUsers.id, userId))
+        .returning({
+          name: mutationCountUsers.name,
+          _count: {
+            posts: {
+              where: {
+                status: 'published',
+              },
+            },
+          },
+        });
+
+      expect(updated).toEqual([
+        {
+          name: 'Alice Updated',
+          _count: {
+            posts: 2,
+          },
+        },
+      ]);
+
+      const deleted = await ctx.orm
+        .delete(mutationCountUsers)
+        .where(eq(mutationCountUsers.id, userId))
+        .returning({
+          name: mutationCountUsers.name,
+          _count: {
+            posts: true,
+          },
+        });
+
+      expect(deleted).toEqual([
+        {
+          name: 'Alice Updated',
+          _count: {
+            posts: 3,
+          },
+        },
+      ]);
+    });
   });
 
   it('should insert and return partial fields', async ({ ctx }) => {
@@ -1047,11 +1196,12 @@ describe('M7 Mutations', () => {
     ctx,
   }) => {
     await expect(
-      ctx.orm
-        .update(users)
-        .set({ role: 'editor' })
-        .paginate({ cursor: null, limit: 10 })
-        .executeAsync(undefined as never)
+      (
+        ctx.orm
+          .update(users)
+          .set({ role: 'editor' })
+          .paginate({ cursor: null, limit: 10 }) as any
+      ).executeAsync(undefined as never)
     ).rejects.toThrow(/cannot be combined with paginate/i);
   });
 

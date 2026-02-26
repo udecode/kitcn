@@ -15,7 +15,7 @@ Payment and subscription system with [Better Auth's Polar plugin](https://www.be
 
 | Feature | Description |
 |---------|-------------|
-| Checkout | Seamless payment flows |
+| Checkout | Payment flows |
 | Subscriptions | Recurring billing management |
 | Portal | Customer self-service |
 | Usage billing | Event-based metering |
@@ -140,14 +140,16 @@ export default defineAuth((ctx) => ({
   // ... config
   triggers: {
     user: {
-      onCreate: async (user) => {
-        // Create Polar customer via caller from defineAuth closure ctx
-        const caller = createPolarCustomerCaller(ctx);
-        await caller.schedule.now.createCustomer({
-          email: user.email,
-          name: user.name || user.username,
-          userId: user.id,
-        });
+      create: {
+        after: async (user, triggerCtx) => {
+          // Create Polar customer via caller from defineAuth closure ctx
+          const caller = createPolarCustomerCaller(ctx);
+          await caller.schedule.now.createCustomer({
+            email: user.email,
+            name: user.name || user.username,
+            userId: user.id,
+          });
+        },
       },
     },
   },
@@ -266,7 +268,7 @@ export const convertToDatabaseSubscription = (
 
 ## Checkout Plugin
 
-Enable seamless checkout integration:
+Configure checkout:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {1-9}
 checkout({
@@ -430,54 +432,9 @@ const { data: customerMeters } = await authClient.usage.meters.list({
 
 ## Webhooks Plugin
 
-Handle all Polar webhook events:
+The `webhooks()` plugin verifies Polar webhook signatures and routes events to typed handler callbacks. Pass it your `POLAR_WEBHOOK_SECRET` and implement any of the ~20 available event handlers.
 
-```ts title="convex/functions/auth.ts" showLineNumbers {1-2,5-12,15-21,24-35,38-42}
-webhooks({
-  secret: process.env.POLAR_WEBHOOK_SECRET!,
-
-  // Checkout
-  onCheckoutCreated: (payload) => {},
-  onCheckoutUpdated: (payload) => {},
-
-  // Orders
-  onOrderCreated: (payload) => {},
-  onOrderPaid: (payload) => {},
-  onOrderRefunded: (payload) => {},
-
-  // Refunds
-  onRefundCreated: (payload) => {},
-  onRefundUpdated: (payload) => {},
-
-  // Subscriptions
-  onSubscriptionCreated: (payload) => {},
-  onSubscriptionUpdated: (payload) => {},
-  onSubscriptionActive: (payload) => {},
-  onSubscriptionCanceled: (payload) => {},
-  onSubscriptionRevoked: (payload) => {},
-  onSubscriptionUncanceled: (payload) => {},
-
-  // Products
-  onProductCreated: (payload) => {},
-  onProductUpdated: (payload) => {},
-
-  // Benefits
-  onBenefitCreated: (payload) => {},
-  onBenefitUpdated: (payload) => {},
-  onBenefitGrantCreated: (payload) => {},
-  onBenefitGrantUpdated: (payload) => {},
-  onBenefitGrantRevoked: (payload) => {},
-
-  // Customers
-  onCustomerCreated: (payload) => {},
-  onCustomerUpdated: (payload) => {},
-  onCustomerDeleted: (payload) => {},
-  onCustomerStateChanged: (payload) => {},
-
-  // Catch-all
-  onPayload: (payload) => {},
-}),
-```
+For the full list of webhook events, see [API Reference](#webhook-events) below.
 
 ## Convex Functions
 
@@ -495,7 +452,7 @@ import { z } from 'zod';
 import { privateAction, privateMutation } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
 
-// Create Polar customer (called from user.onCreate trigger)
+// Create Polar customer (called from user.create.after trigger)
 export const createCustomer = privateAction
   .input(
     z.object({
@@ -753,6 +710,59 @@ const isPremium = !!subscription;
 ```
 
 ## API Reference
+
+### Webhook Events
+
+All events are passed to `webhooks({ secret, ...handlers })` inside the `use: []` array of the `polar()` plugin.
+
+```ts title="convex/functions/auth.ts"
+webhooks({
+  secret: process.env.POLAR_WEBHOOK_SECRET!,
+
+  // Checkout
+  onCheckoutCreated: (payload) => {},
+  onCheckoutUpdated: (payload) => {},
+
+  // Orders
+  onOrderCreated: (payload) => {},
+  onOrderPaid: (payload) => {},
+  onOrderRefunded: (payload) => {},
+
+  // Refunds
+  onRefundCreated: (payload) => {},
+  onRefundUpdated: (payload) => {},
+
+  // Subscriptions
+  onSubscriptionCreated: (payload) => {},
+  onSubscriptionUpdated: (payload) => {},
+  onSubscriptionActive: (payload) => {},
+  onSubscriptionCanceled: (payload) => {},
+  onSubscriptionRevoked: (payload) => {},
+  onSubscriptionUncanceled: (payload) => {},
+
+  // Products
+  onProductCreated: (payload) => {},
+  onProductUpdated: (payload) => {},
+
+  // Benefits
+  onBenefitCreated: (payload) => {},
+  onBenefitUpdated: (payload) => {},
+  onBenefitGrantCreated: (payload) => {},
+  onBenefitGrantUpdated: (payload) => {},
+  onBenefitGrantRevoked: (payload) => {},
+
+  // Customers
+  onCustomerCreated: (payload) => {},
+  onCustomerUpdated: (payload) => {},
+  onCustomerDeleted: (payload) => {},
+  onCustomerStateChanged: (payload) => {},
+
+  // Catch-all
+  onPayload: (payload) => {},
+}),
+```
+
+### Operations
 
 | Operation | Method | Type |
 |-----------|--------|------|

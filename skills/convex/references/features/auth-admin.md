@@ -40,14 +40,16 @@ import { defineAuth } from './generated/auth';
 export default defineAuth((ctx) => ({
   triggers: {
     user: {
-      beforeCreate: async (data) => {
-        const env = getEnv();
-        const adminEmails = env.ADMIN;
-        const role =
-          data.role !== 'admin' && adminEmails?.includes(data.email)
-            ? 'admin'
-            : data.role;
-        return { ...data, role };
+      create: {
+        before: async (data, triggerCtx) => {
+          const env = getEnv();
+          const adminEmails = env.ADMIN;
+          const role =
+            data.role !== 'admin' && adminEmails?.includes(data.email)
+              ? 'admin'
+              : data.role;
+          return { data: { ...data, role } };
+        },
       },
     },
   },
@@ -336,7 +338,7 @@ export const getDashboardStats = authQuery
 
     const sampleUsers = toRows(await ctx.orm.query.user.findMany({ limit: 100 }));
     const adminCount = sampleUsers.filter((u) => u.role === 'admin').length;
-    const totalUsers = await aggregateUsers.count(ctx, { bounds: {}, namespace: 'global' });
+    const totalUsers = await ctx.orm.query.user.count();
     const totalAdmins = Math.round((adminCount / sampleUsers.length) * totalUsers);
 
     return { recentUsers, totalAdmins, totalUsers, userGrowth };

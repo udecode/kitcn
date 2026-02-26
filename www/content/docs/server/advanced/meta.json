@@ -1,5 +1,5 @@
 {
   "title": "Advanced",
   "defaultOpen": true,
-  "pages": ["scheduling", "aggregates", "rate-limiting"]
+  "pages": ["scheduling", "rate-limiting"]
 }

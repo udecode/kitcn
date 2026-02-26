@@ -1,20 +1,14 @@
 import { admin, organization } from 'better-auth/plugins';
 import { convex } from 'better-convex/auth';
-import { eq } from 'better-convex/orm';
 import { requireActionCtx } from 'better-convex/server';
 import { getEnv } from '../lib/get-env';
 import { ac, roles } from '../shared/auth-shared';
 import { internal } from './_generated/api';
 import authConfig from './auth.config';
 import { defineAuth } from './generated/auth';
-import { createOrganizationCaller } from './generated/organization.runtime';
-import { createPolarCustomerCaller } from './generated/polarCustomer.runtime';
-import type { MutationCtx } from './generated/server';
-import { sessionTable } from './schema';
 
 export default defineAuth((ctx) => {
   const env = getEnv();
-  const mutationCtx = ctx as MutationCtx;
 
   return {
     emailAndPassword: {
@@ -160,62 +154,6 @@ export default defineAuth((ctx) => {
       },
       deleteUser: {
         enabled: false,
-      },
-    },
-    triggers: {
-      user: {
-        beforeCreate: async (data) => {
-          const adminEmails = env.ADMIN;
-
-          // Check if this user email is in the admin list and update role.
-          const role =
-            data.role !== 'admin' && adminEmails?.includes(data.email)
-              ? 'admin'
-              : data.role;
-
-          return {
-            ...data,
-            role,
-          };
-        },
-        onCreate: async (user) => {
-          // Create personal organization for the new user.
-          const caller = createOrganizationCaller(mutationCtx);
-          await caller.createPersonalOrganization({
-            image: user.image || null,
-            name: user.name,
-            userId: user._id,
-          });
-
-          // Create Polar customer for the new user.
-          const polarCustomerCaller = createPolarCustomerCaller(mutationCtx);
-          await polarCustomerCaller.schedule.now.createCustomer({
-            email: user.email,
-            name: user.name,
-            userId: user._id,
-          });
-        },
-      },
-      session: {
-        onCreate: async (session) => {
-          if (!session.activeOrganizationId) {
-            const userId = String(session.userId);
-            const user = await mutationCtx.orm.query.user.findFirst({
-              where: { id: userId },
-            });
-            if (!user) return;
-
-            const activeOrganizationId =
-              user.lastActiveOrganizationId ??
-              user.personalOrganizationId ??
-              null;
-
-            await mutationCtx.orm
-              .update(sessionTable)
-              .set({ activeOrganizationId })
-              .where(eq(sessionTable.id, session._id));
-          }
-        },
       },
     },
   };

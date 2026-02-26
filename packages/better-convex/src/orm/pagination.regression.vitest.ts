@@ -32,7 +32,7 @@ for (let a = 0; a < 3; a++) {
   }
 }
 
-describe('manual pagination compatibility', () => {
+describe('manual pagination regression', () => {
   beforeEach(() => {});
   afterEach(() => {});
 
@@ -246,7 +246,7 @@ describe('manual pagination compatibility', () => {
   });
 });
 
-describe('paginator compatibility', () => {
+describe('paginator regression', () => {
   test('full table scan', async () => {
     const t = convexTest(schema);
     await t.run(async (ctx) => {

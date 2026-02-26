@@ -1,4 +1,5 @@
 import {
+  aggregateIndex,
   Columns,
   check,
   convexTable,
@@ -48,6 +49,8 @@ test('getTableConfig includes indexes/unique/fk/rls/checks', () => {
     },
     (t) => [
       index('by_name').on(t.name),
+      aggregateIndex('by_name_count').on(t.name),
+      aggregateIndex('all_name_metrics').all().min(t.name).max(t.name),
       uniqueIndex('unique_email').on(t.email),
       check('name_present', isNotNull(t.name)),
     ]
@@ -63,6 +66,12 @@ test('getTableConfig includes indexes/unique/fk/rls/checks', () => {
   expect(usersConfig.indexes.some((idx) => idx.name === 'by_name')).toBe(true);
   expect(
     usersConfig.uniqueIndexes.some((idx) => idx.name === 'unique_email')
+  ).toBe(true);
+  expect(
+    usersConfig.aggregateIndexes.some((idx) => idx.name === 'all_name_metrics')
+  ).toBe(true);
+  expect(
+    usersConfig.aggregateIndexes.some((idx) => idx.name === 'by_name_count')
   ).toBe(true);
   expect(usersConfig.rls.enabled).toBe(true);
   expect(usersConfig.checks.some((c) => c.name === 'name_present')).toBe(true);

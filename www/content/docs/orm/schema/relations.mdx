@@ -604,40 +604,7 @@ Drizzle parity includes polymorphic-style relation filtering via relation `where
 True polymorphic FK integrity is app/schema-level (Step 2), not a single built-in polymorphic FK primitive.
 </Callout>
 
-## Indexing For Relation Loading
-
-The ORM will use indexes when loading relations and will throw (unless `allowFullScan`) if the needed index is missing.
-
-- For compound relations, your index must start with the same columns in the same order as `to` / `.through(...)`.
-- `many()` (one-to-many): index the child foreign key (example: `posts.userId`)
-- `.through()` (many-to-many): index the junction table foreign keys you query by (usually both directions; add a compound index if you also query by both)
-- `one()`: `to: ...id` uses `db.get()` (no extra index); non-`id` targets require an index on the target fields
-
-```ts title="convex/schema.ts" showLineNumbers {8,18-19}
-import { convexTable, id, index, text } from 'better-convex/orm';
-
-export const posts = convexTable(
-  'posts',
-  {
-    title: text().notNull(),
-    userId: id('users').notNull(),
-  },
-  (t) => [index('by_user').on(t.userId)]
-);
-
-export const usersToGroups = convexTable(
-  'usersToGroups',
-  {
-    userId: id('users').notNull(),
-    groupId: id('groups').notNull(),
-  },
-  (t) => [
-    index('by_user').on(t.userId),
-    index('by_group').on(t.groupId),
-    index('by_user_group').on(t.userId, t.groupId),
-  ]
-);
-```
+For index requirements per relation type, see [API Reference](#indexing-for-relation-loading) below.
 
 ## Relation Loading with `with:`
 
@@ -680,6 +647,43 @@ const usersOnlyPosts = await db.query.users.findMany({
 <Callout icon={<InfoIcon />}>
 **Note**: `columns` only affects table columns. Relation data and `extras` are preserved.
 </Callout>
+
+## API Reference
+
+### Indexing For Relation Loading
+
+The ORM will use indexes when loading relations and will throw (unless `allowFullScan`) if the needed index is missing.
+
+- For compound relations, your index must start with the same columns in the same order as `to` / `.through(...)`.
+- `many()` (one-to-many): index the child foreign key (example: `posts.userId`)
+- `.through()` (many-to-many): index the junction table foreign keys you query by (usually both directions; add a compound index if you also query by both)
+- `one()`: `to: ...id` uses `db.get()` (no extra index); non-`id` targets require an index on the target fields
+
+```ts title="convex/schema.ts" showLineNumbers {8,18-19}
+import { convexTable, id, index, text } from 'better-convex/orm';
+
+export const posts = convexTable(
+  'posts',
+  {
+    title: text().notNull(),
+    userId: id('users').notNull(),
+  },
+  (t) => [index('by_user').on(t.userId)]
+);
+
+export const usersToGroups = convexTable(
+  'usersToGroups',
+  {
+    userId: id('users').notNull(),
+    groupId: id('groups').notNull(),
+  },
+  (t) => [
+    index('by_user').on(t.userId),
+    index('by_group').on(t.groupId),
+    index('by_user_group').on(t.userId, t.groupId),
+  ]
+);
+```
 
 ## Common Gotchas
 

@@ -21,7 +21,7 @@ Let's explore each concept.
 
 ## The Problem
 
-You know how Convex works: you write functions, the database is reactive, and everything syncs in real-time. It's powerful. But as your application grows, you start noticing friction.
+You know how Convex works: you write functions, the database is reactive, and everything syncs in real-time. But as your application grows, you start noticing friction.
 
 Let's say you want to use TanStack Query. You'll need to manually wire up hooks for each function, and you'll lose Convex's real-time subscriptions - or spend time implementing them yourself. Want to add authentication checks? You'll copy the same auth logic into every function. Need rate limiting? That's more boilerplate.
 
@@ -175,15 +175,24 @@ export const triggers = defineTriggers(relations, {
 O(log n) operations for counts, sums, and rankings. Essential for dashboards and leaderboards at scale:
 
 ```ts showLineNumbers {5-6}
-// Slow: Counting all rows (O(n))
-const count = (await ctx.orm.query.user.findMany({ limit: 10_000 })).length;
+// Prisma-style aggregate APIs (strict no-scan with index coverage + READY backfill)
+const count = await ctx.orm.query.user.count();
+const activeCount = await ctx.orm.query.user.count({
+  where: { status: 'active' },
+});
+const stats = await ctx.orm.query.user.aggregate({
+  where: { status: 'active' },
+  _sum: { amount: true },
+  _avg: { amount: true },
+  _min: { score: true },
+  _max: { score: true },
+});
 
-// Fast: Using aggregates (O(log n))
-const count = await userAggregate.count(ctx);
+// Aggregate runtime for advanced/ranked metrics
 const topUsers = await userAggregate.rank(ctx, { limit: 10 });
 ```
 
-_Aggregates are critical when you have thousands of records. A naive count query scans every row; aggregates use tree structures for constant-time lookups._
+_Use `db.query.*.count(...)` and `db.query.*.aggregate(...)` for scalar metrics. Use `TableAggregate` for ranked and namespace-ordered metrics._
 
 ## File Structure
 

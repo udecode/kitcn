@@ -12,8 +12,8 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 // Route definition stored on the procedure
 export interface HttpRouteDefinition<TMethod extends HttpMethod = HttpMethod> {
-  path: string;
   method: TMethod;
+  path: string;
   pathParamNames: string[];
   usePathPrefix: boolean;
 }
@@ -41,19 +41,6 @@ export interface HttpProcedureBuilderDef<
   TMethod extends HttpMethod = HttpMethod,
   TForm extends UnsetMarker | z.ZodTypeAny = UnsetMarker,
 > {
-  middlewares: AnyMiddleware[];
-  meta: TMeta;
-  inputSchema?: z.ZodTypeAny;
-  outputSchema?: z.ZodTypeAny;
-  paramsSchema?: z.ZodTypeAny;
-  querySchema?: z.ZodTypeAny;
-  formSchema?: z.ZodTypeAny;
-  route?: HttpRouteDefinition<TMethod>;
-  functionConfig: {
-    base: HttpActionConstructor;
-    createContext: (ctx: GenericActionCtx<GenericDataModel>) => TCtx;
-    transformer: CombinedDataTransformer;
-  };
   /** @internal Phantom types for type inference */
   _types?: {
     input: TInput;
@@ -62,6 +49,19 @@ export interface HttpProcedureBuilderDef<
     query: TQuery;
     form: TForm;
   };
+  formSchema?: z.ZodTypeAny;
+  functionConfig: {
+    base: HttpActionConstructor;
+    createContext: (ctx: GenericActionCtx<GenericDataModel>) => TCtx;
+    transformer: CombinedDataTransformer;
+  };
+  inputSchema?: z.ZodTypeAny;
+  meta: TMeta;
+  middlewares: AnyMiddleware[];
+  outputSchema?: z.ZodTypeAny;
+  paramsSchema?: z.ZodTypeAny;
+  querySchema?: z.ZodTypeAny;
+  route?: HttpRouteDefinition<TMethod>;
 }
 
 // Type for httpAction constructor from convex/server (HttpActionBuilder)
@@ -125,9 +125,9 @@ export type HttpHandlerOpts<
  * Hono handler with cRPC route metadata attached
  */
 export interface CRPCHonoHandler {
-  (c: Context): Promise<Response>;
   _crpcRoute: {
     path: string;
     method: HttpMethod;
   };
+  (c: Context): Promise<Response>;
 }

@@ -5,6 +5,9 @@ import { pathToFileURL } from 'node:url';
 
 import { generateMeta, getConvexConfig } from './codegen';
 
+const RESERVED_HTTP_NAMESPACE_ERROR = /root "http" namespace is reserved/i;
+const RESERVED_RUNTIME_NAMESPACE_ERROR = /reserved runtime caller namespace/i;
+
 function mkTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-codegen-'));
 }
@@ -429,9 +432,9 @@ describe('cli/codegen', () => {
       expect(nestedRuntimeGenerated).toContain(
         '"internalOnly": ["query", typedProcedureResolver(internal["items"]["queries"]["internalOnly"], () => (require("../../items/queries") as Record<string, unknown>)["internalOnly"])],'
       );
-      expect(serverGenerated).toContain(
-        'export const { scheduledMutationBatch, scheduledDelete } = orm.api();'
-      );
+      expect(serverGenerated).toContain('aggregateBackfill');
+      expect(serverGenerated).toContain('aggregateBackfillChunk');
+      expect(serverGenerated).toContain('aggregateBackfillStatus');
 
       const module = await import(pathToFileURL(outputFile).href);
       expect(module).toHaveProperty('api');
@@ -1100,17 +1103,13 @@ describe('cli/codegen', () => {
       );
       const generatedRuntime = fs.readFileSync(generatedRuntimeFile, 'utf-8');
       expect(generatedRuntime).toContain(
-        '"beforeCreate": ["mutation", typedProcedureResolver('
-      );
-      expect(generatedRuntime).toContain(
-        '"onCreate": ["mutation", typedProcedureResolver('
+        '"create": ["mutation", typedProcedureResolver('
       );
       expect(generatedRuntime).toContain(
         '"findOne": ["query", typedProcedureResolver('
       );
-      expect(generatedRuntime).toContain(
-        '"beforeCreate": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["beforeCreate"], () => (require("./auth") as Record<string, unknown>)["beforeCreate"])],'
-      );
+      expect(generatedRuntime).not.toContain('"beforeCreate": [');
+      expect(generatedRuntime).not.toContain('"onCreate": [');
       expect(generatedRuntime).toContain(
         'export function createGeneratedAuthCaller<TCtx extends ProcedureCallerContext>('
       );
@@ -1438,7 +1437,7 @@ describe('cli/codegen', () => {
       );
 
       await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
-        /root "http" namespace is reserved/i
+        RESERVED_HTTP_NAMESPACE_ERROR
       );
     } finally {
       process.chdir(oldCwd);
@@ -1489,7 +1488,7 @@ describe('cli/codegen', () => {
       );
 
       await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
-        /reserved runtime caller namespace/i
+        RESERVED_RUNTIME_NAMESPACE_ERROR
       );
     } finally {
       process.chdir(oldCwd);

@@ -1346,18 +1346,18 @@ projectsQueryHandler.create;
 
 projectsMutationHandler.list;
 projectsMutationHandler.create;
-generatedMutationHandler.beforeCreate;
-generatedMutationHandler.onCreate;
+generatedMutationHandler.create;
+generatedMutationHandler.deleteOne;
 generatedMutationHandler.findOne;
 generatedMutationHandler.updateOne;
 // @ts-expect-error query handler excludes generated mutations
-generatedQueryHandler.beforeCreate;
+generatedQueryHandler.create;
 generatedQueryHandler.findOne;
 generatedActionCaller.findOne;
-generatedActionCaller.beforeCreate;
+generatedActionCaller.create;
 generatedActionCaller.actions.getLatestJwks;
 generatedActionCaller.actions.rotateKeys;
-generatedActionCaller.schedule.now.beforeCreate;
+generatedActionCaller.schedule.now.create;
 generatedActionCaller.schedule.now.rotateKeys;
 // @ts-expect-error schedule excludes queries
 generatedActionCaller.schedule.now.findOne;

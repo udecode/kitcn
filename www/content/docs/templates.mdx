@@ -884,8 +884,8 @@ export const getQueryClient = cache(createServerQueryClient);
 
 export function prefetch<T extends { queryKey: readonly unknown[] }>(
   queryOptions: T
-): void {
-  void getQueryClient().prefetchQuery(queryOptions);
+) {
+  getQueryClient().prefetchQuery(queryOptions);
 }
 
 export function preloadQuery<
@@ -1007,96 +1007,46 @@ See [Rate Limiting documentation](/docs/server/advanced/rate-limiting) for setup
 ### reset.ts
 
 ```ts title="convex/functions/reset.ts" showLineNumbers
-/** biome-ignore-all lint/suspicious/noExplicitAny: dev */
-import { eq } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { privateAction, privateMutation } from '../lib/crpc';
-import { getEnv } from '../lib/get-env';
 import type { TableNames } from './_generated/dataModel';
 import { createResetCaller } from './generated/reset.runtime';
 import schema, { tables } from './schema';
 
-const DELETE_BATCH_SIZE = 64;
+// Clear all of the tables except...
 const excludedTables = new Set<TableNames>();
 
-const assertDevOnly = () => {
-  if (getEnv().DEPLOY_ENV === 'production') {
-    throw new CRPCError({
-      code: 'FORBIDDEN',
-      message: 'This function is only available in development',
-    });
-  }
-};
+export const reset = privateAction
+  .meta({ dev: true })
+  .action(async ({ ctx }) => {
+    const caller = createResetCaller(ctx);
 
-export const reset = privateAction.action(async ({ ctx }) => {
-  assertDevOnly();
+    for (const tableName of Object.keys(schema.tables)) {
+      if (excludedTables.has(tableName as TableNames)) {
+        continue;
+      }
 
-  const caller = createResetCaller(ctx);
-
-  for (const tableName of Object.keys(schema.tables)) {
-    if (excludedTables.has(tableName as TableNames)) {
-      continue;
+      await caller.schedule.now.deleteTable({
+        cursor: null,
+        tableName,
+      });
     }
+  });
 
-    await caller.schedule.now.deletePage({
-      cursor: null,
-      tableName,
-    });
-  }
-
-  return null;
-});
-
-export const deletePage = privateMutation
+export const deleteTable = privateMutation
+  .meta({ dev: true })
   .input(
     z.object({
       cursor: z.union([z.string(), z.null()]),
       tableName: z.string(),
     })
   )
-  
   .mutation(async ({ ctx, input }) => {
-    assertDevOnly();
-
+    // biome-ignore lint/suspicious/noExplicitAny: generic
     const table = (tables as Record<string, any>)[input.tableName];
-    if (!table) {
-      throw new CRPCError({
-        code: 'BAD_REQUEST',
-        message: `Unknown table: ${input.tableName}`,
-      });
-    }
 
-    const query = (ctx.orm.query as Record<string, any>)[input.tableName];
-    if (!query || typeof query.findMany !== 'function') {
-      throw new CRPCError({
-        code: 'BAD_REQUEST',
-        message: `Unknown query table: ${input.tableName}`,
-      });
-    }
-
-    const results = await query.findMany({
-      cursor: input.cursor,
-      limit: DELETE_BATCH_SIZE,
-    });
-
-    for (const row of results.page) {
-      try {
-        await ctx.orm.delete(table).where(eq(table.id, (row as any).id));
-      } catch {
-        // Document might have been deleted by a trigger or concurrent process
-      }
-    }
-
-    if (!results.isDone) {
-      const caller = createResetCaller(ctx);
-      await caller.schedule.now.deletePage({
-        cursor: results.continueCursor,
-        tableName: input.tableName,
-      });
-    }
-
-    return null;
+    // full-table reset is intentional; strict mode requires explicit opt-in
+    await ctx.orm.delete(table).allowFullScan();
   });
 ```
 

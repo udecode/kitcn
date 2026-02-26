@@ -112,13 +112,15 @@ import { defineAuth } from './generated/auth';
 export default defineAuth((ctx) => ({
   triggers: {
     user: {
-      onCreate: async (user) => {
-        const caller = createPolarCustomerCaller(ctx);
-        await caller.schedule.now.createCustomer({
-          email: user.email,
-          name: user.name || user.username,
-          userId: user.id,
-        });
+      create: {
+        after: async (user, triggerCtx) => {
+          const caller = createPolarCustomerCaller(ctx);
+          await caller.schedule.now.createCustomer({
+            email: user.email,
+            name: user.name || user.username,
+            userId: user.id,
+          });
+        },
       },
     },
   },

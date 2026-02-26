@@ -389,18 +389,18 @@ export type HttpCRPCClientFromRouter<TRouter extends CRPCHttpRouter<any>> =
 export interface HttpProxyOptions<TRoutes extends HttpRouteMap> {
   /** Base URL for the Convex HTTP API (e.g., https://your-site.convex.site) */
   convexSiteUrl: string;
-  /** Runtime route definitions (from codegen httpRoutes) */
-  routes: TRoutes;
+  /** Custom fetch function (defaults to global fetch) */
+  fetch?: typeof fetch;
   /** Default headers or async function returning headers (for auth tokens) */
   headers?:
     | { [key: string]: string | undefined }
     | (() =>
         | { [key: string]: string | undefined }
         | Promise<{ [key: string]: string | undefined }>);
-  /** Custom fetch function (defaults to global fetch) */
-  fetch?: typeof fetch;
   /** Error handler called on HTTP errors */
   onError?: (error: HttpClientError) => void;
+  /** Runtime route definitions (from codegen httpRoutes) */
+  routes: TRoutes;
   /** Optional payload transformer (always composed with built-in Date support). */
   transformer?: DataTransformerOptions;
 }

@@ -44,20 +44,37 @@ type _HasSessionTrigger = ExpectTrue<
 type _BeforeCreateArgNotAny = ExpectFalse<
   IsAny<
     Parameters<
-      NonNullable<NonNullable<TestTriggers['user']>['beforeCreate']>
+      NonNullable<
+        NonNullable<NonNullable<TestTriggers['user']>['create']>['before']
+      >
     >[0]
   >
 >;
 type _BeforeUpdateArgNotAny = ExpectFalse<
   IsAny<
     Parameters<
-      NonNullable<NonNullable<TestTriggers['user']>['beforeUpdate']>
-    >[1]
+      NonNullable<
+        NonNullable<NonNullable<TestTriggers['user']>['update']>['before']
+      >
+    >[0]
   >
 >;
 type _OnCreateArgNotAny = ExpectFalse<
   IsAny<
-    Parameters<NonNullable<NonNullable<TestTriggers['user']>['onCreate']>>[0]
+    Parameters<
+      NonNullable<
+        NonNullable<NonNullable<TestTriggers['user']>['create']>['after']
+      >
+    >[0]
+  >
+>;
+type _CreateBeforeCtxArgNotAny = ExpectFalse<
+  IsAny<
+    Parameters<
+      NonNullable<
+        NonNullable<NonNullable<TestTriggers['user']>['create']>['before']
+      >
+    >[1]
   >
 >;
 
@@ -67,26 +84,40 @@ const defaultCtxAuth = defineAuth((ctx) => ({
 type DefaultCtx = Parameters<typeof defaultCtxAuth>[0];
 type _DefineAuthDefaultCtxNotAny = ExpectFalse<IsAny<DefaultCtx>>;
 
+const _legacyTriggerKeysCompileError = defineAuth((_ctx: unknown) => ({
+  baseURL: 'http://localhost:3000',
+  triggers: {
+    user: {
+      beforeCreate: async (data: unknown) => data,
+    },
+  },
+}));
+void _legacyTriggerKeysCompileError;
+
 describe('defineAuth', () => {
-  test('returns auth definition with doc-first triggers', async () => {
+  test('returns auth definition with parity trigger shape', async () => {
     const auth = defineAuth((_ctx: unknown) => ({
       baseURL: 'http://localhost:3000',
       triggers: {
         user: {
-          beforeCreate: async (data) => ({
-            ...data,
-            normalized: true,
-          }),
+          create: {
+            before: async (data, _ctx) => ({
+              data: { ...data, normalized: true },
+            }),
+          },
         },
       },
     }));
 
     const resolved = auth({});
-    const result = await resolved.triggers?.user?.beforeCreate?.({
-      email: 'x@y.z',
-    });
+    const result = await resolved.triggers?.user?.create?.before?.(
+      {
+        email: 'x@y.z',
+      },
+      {}
+    );
 
-    expect(result).toMatchObject({ normalized: true });
+    expect(result).toMatchObject({ data: { normalized: true } });
   });
 });
 

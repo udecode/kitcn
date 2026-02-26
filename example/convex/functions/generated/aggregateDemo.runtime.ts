@@ -14,12 +14,10 @@ import { api, internal } from '../_generated/api.js';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 
 const procedureRegistry = {
-  "cancelSubscription": ["action", typedProcedureResolver(api["polarSubscription"]["cancelSubscription"], () => (require("../polarSubscription") as Record<string, unknown>)["cancelSubscription"])],
-  "createSubscription": ["mutation", typedProcedureResolver(internal["polarSubscription"]["createSubscription"], () => (require("../polarSubscription") as Record<string, unknown>)["createSubscription"])],
-  "getActiveSubscription": ["query", typedProcedureResolver(internal["polarSubscription"]["getActiveSubscription"], () => (require("../polarSubscription") as Record<string, unknown>)["getActiveSubscription"])],
-  "getOrganizationSubscription": ["query", typedProcedureResolver(api["polarSubscription"]["getOrganizationSubscription"], () => (require("../polarSubscription") as Record<string, unknown>)["getOrganizationSubscription"])],
-  "resumeSubscription": ["action", typedProcedureResolver(api["polarSubscription"]["resumeSubscription"], () => (require("../polarSubscription") as Record<string, unknown>)["resumeSubscription"])],
-  "updateSubscription": ["mutation", typedProcedureResolver(internal["polarSubscription"]["updateSubscription"], () => (require("../polarSubscription") as Record<string, unknown>)["updateSubscription"])],
+  "exerciseIdempotentTrigger": ["mutation", typedProcedureResolver(api["aggregateDemo"]["exerciseIdempotentTrigger"], () => (require("../aggregateDemo") as Record<string, unknown>)["exerciseIdempotentTrigger"])],
+  "getSnapshot": ["query", typedProcedureResolver(api["aggregateDemo"]["getSnapshot"], () => (require("../aggregateDemo") as Record<string, unknown>)["getSnapshot"])],
+  "runDirectOp": ["mutation", typedProcedureResolver(api["aggregateDemo"]["runDirectOp"], () => (require("../aggregateDemo") as Record<string, unknown>)["runDirectOp"])],
+  "toggleRandomFillReset": ["mutation", typedProcedureResolver(api["aggregateDemo"]["toggleRandomFillReset"], () => (require("../aggregateDemo") as Record<string, unknown>)["toggleRandomFillReset"])],
 } as const;
 
 type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;
@@ -54,13 +52,13 @@ const createHandlerFromRegistry = createGenericHandlerFactory<
   typeof procedureRegistry
 >(procedureRegistry);
 
-export function createPolarSubscriptionCaller<TCtx extends ProcedureCallerContext>(
+export function createAggregateDemoCaller<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
   return createCallerFromRegistry(ctx) as GeneratedProcedureCaller<TCtx>;
 }
 
-export function createPolarSubscriptionHandler<TCtx extends ProcedureHandlerContext>(
+export function createAggregateDemoHandler<TCtx extends ProcedureHandlerContext>(
   ctx: TCtx
 ): GeneratedProcedureHandler<TCtx> {
   return createHandlerFromRegistry(ctx) as GeneratedProcedureHandler<TCtx>;

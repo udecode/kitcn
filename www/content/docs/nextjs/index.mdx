@@ -83,22 +83,7 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 });
 ```
 
-Here's what `convexBetterAuth` returns:
-
-| Export | Description |
-|--------|-------------|
-| `createContext` | Creates RSC context with auth |
-| `createCaller` | Creates server-side caller |
-| `handler` | Next.js API route handler |
-
-And the options:
-
-| Option | Description |
-|--------|-------------|
-| `api` | Your Convex API object |
-| `convexSiteUrl` | Convex site URL (must end in `.convex.site`) |
-| `auth.jwtCache` | Enable/disable JWT caching (default: `true`) |
-| `auth.isUnauthorized` | Custom UNAUTHORIZED error detection |
+See the [API Reference](#convexbetterauth) below for full details on what `convexBetterAuth` returns and its options.
 
 <Callout icon={<InfoIcon />}>
 **Note:** Not using Better Auth? See [Server Side Calls](/docs/server/server-side-calls).
@@ -254,7 +239,48 @@ export function preloadQuery<
 }
 ```
 
-## Server Proxy
+The RSC file above exports these helpers. See the [Helpers](#helpers) reference for descriptions of each.
+
+## Next Steps
+
+<Cards>
+  <Card title="RSC Usage" href="/docs/nextjs/rsc" />
+  <Card title="Auth Helpers" href="/docs/auth/server#helpers" />
+</Cards>
+
+## API Reference
+
+### convexBetterAuth
+
+`convexBetterAuth` returns:
+
+| Export | Description |
+|--------|-------------|
+| `createContext` | Creates RSC context with auth |
+| `createCaller` | Creates server-side caller |
+| `handler` | Next.js API route handler |
+
+Options:
+
+| Option | Description |
+|--------|-------------|
+| `api` | Your Convex API object |
+| `convexSiteUrl` | Convex site URL (must end in `.convex.site`) |
+| `auth.jwtCache` | Enable/disable JWT caching (default: `true`) |
+| `auth.isUnauthorized` | Custom UNAUTHORIZED error detection |
+
+### Helpers
+
+The RSC Setup exports these helpers (see code above for implementations):
+
+| Helper | Description |
+|--------|-------------|
+| `caller` | Direct server calls - **not cached, not hydrated to client**. Use for server-only logic. |
+| `prefetch` | Fire-and-forget prefetch. Data fetched in background and hydrated to client. |
+| `HydrateClient` | Wrapper that dehydrates prefetched queries for client hydration. |
+| `preloadQuery` | Awaited fetch that returns data on the server. Equivalent to Convex's `preloadQuery`. |
+
+### Server Proxy
 
 `createServerCRPCProxy` creates a cRPC proxy for Server Components:
 
@@ -270,7 +296,7 @@ crpc.posts.list.queryOptions({}); // Works
 crpc.posts.create.mutationOptions(); // Not available in RSC
 ```
 
-## Query Client Options
+### Query Client Options
 
 `getServerQueryClientOptions` configures the QueryClient for server-side HTTP fetching:
 
@@ -297,21 +323,3 @@ const queryClient = new QueryClient({
 ```
 
 `Date` support is always on. If you pass a custom `transformer`, it is additive and should be shared across server, client, and caller boundaries.
-
-## Helpers
-
-The RSC Setup above exports these helpers (see code above for implementations):
-
-| Helper | Description |
-|--------|-------------|
-| `caller` | Direct server calls - **not cached, not hydrated to client**. Use for server-only logic. |
-| `prefetch` | Fire-and-forget prefetch. Data fetched in background and hydrated to client. |
-| `HydrateClient` | Wrapper that dehydrates prefetched queries for client hydration. |
-| `preloadQuery` | Awaited fetch that returns data on the server. Equivalent to Convex's `preloadQuery`. |
-
-## Next Steps
-
-<Cards>
-  <Card title="RSC Usage" href="/docs/nextjs/rsc" />
-  <Card title="Auth Helpers" href="/docs/auth/server#helpers" />
-</Cards>

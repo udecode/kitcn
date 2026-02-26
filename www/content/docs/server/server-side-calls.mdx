@@ -127,19 +127,11 @@ export const getTeamAndOwner = privateQuery
   });
 ```
 
-### Call Matrix
-
-| Caller context | Root query | Root mutation | Root action | `caller.actions.*` | `caller.schedule.*` |
-|----------------|------------|---------------|-------------|--------------------|---------------------|
-| `QueryCtx` | ✅ | ❌ | ❌ | ❌ | ❌ |
-| `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
-| `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
-
 <Callout icon={<InfoIcon />}>
   **Note:** In actions, each `create<Module>Caller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
 </Callout>
 
-For more details, see [In-Process Procedure Composition](/docs/server/procedures#in-process-procedure-composition).
+For the full call matrix and type definitions, see [API Reference](#api-reference) below. For more details on composition, see [In-Process Procedure Composition](/docs/server/procedures#in-process-procedure-composition).
 
 ## Usage
 
@@ -221,6 +213,16 @@ Key differences:
 - Built-in auth/token management
 
 ## API Reference
+
+### Call Matrix
+
+What each caller context can invoke via `create<Module>Caller(ctx)`:
+
+| Caller context | Root query | Root mutation | Root action | `caller.actions.*` | `caller.schedule.*` |
+|----------------|------------|---------------|-------------|--------------------|---------------------|
+| `QueryCtx` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
 
 ### createCallerFactory
 

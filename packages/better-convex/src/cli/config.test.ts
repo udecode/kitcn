@@ -26,10 +26,29 @@ describe('cli/config', () => {
         dev: {
           debug: false,
           convexArgs: [],
+          aggregateBackfill: {
+            enabled: 'auto',
+            wait: true,
+            batchSize: 1000,
+            pollIntervalMs: 1000,
+            timeoutMs: 900_000,
+            strict: false,
+          },
         },
         codegen: {
           debug: false,
           convexArgs: [],
+        },
+        deploy: {
+          convexArgs: [],
+          aggregateBackfill: {
+            enabled: 'auto',
+            wait: true,
+            batchSize: 1000,
+            pollIntervalMs: 1000,
+            timeoutMs: 900_000,
+            strict: true,
+          },
         },
       });
     } finally {
@@ -65,11 +84,27 @@ describe('cli/config', () => {
           dev: {
             debug: true,
             convexArgs: ['--team', 'dev-team'],
+            aggregateBackfill: {
+              enabled: 'on',
+              wait: false,
+              batchSize: 250,
+            },
           },
           codegen: {
             debug: true,
             convexArgs: ['--prod'],
             scope: 'auth',
+          },
+          deploy: {
+            convexArgs: ['--prod'],
+            aggregateBackfill: {
+              enabled: 'auto',
+              wait: true,
+              batchSize: 500,
+              pollIntervalMs: 750,
+              timeoutMs: 120_000,
+              strict: false,
+            },
           },
         },
         null,
@@ -86,11 +121,30 @@ describe('cli/config', () => {
         dev: {
           debug: true,
           convexArgs: ['--team', 'dev-team'],
+          aggregateBackfill: {
+            enabled: 'on',
+            wait: false,
+            batchSize: 250,
+            pollIntervalMs: 1000,
+            timeoutMs: 900_000,
+            strict: false,
+          },
         },
         codegen: {
           debug: true,
           convexArgs: ['--prod'],
           scope: 'auth',
+        },
+        deploy: {
+          convexArgs: ['--prod'],
+          aggregateBackfill: {
+            enabled: 'auto',
+            wait: true,
+            batchSize: 500,
+            pollIntervalMs: 750,
+            timeoutMs: 120_000,
+            strict: false,
+          },
         },
       });
     } finally {
@@ -115,6 +169,31 @@ describe('cli/config', () => {
     try {
       expect(() => loadBetterConvexConfig()).toThrow(
         'Invalid codegen.scope in'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('throws for invalid aggregate backfill values', () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    writeFile(
+      path.join(dir, 'better-convex.json'),
+      JSON.stringify({
+        deploy: {
+          aggregateBackfill: {
+            enabled: 'bad',
+          },
+        },
+      })
+    );
+
+    process.chdir(dir);
+    try {
+      expect(() => loadBetterConvexConfig()).toThrow(
+        'Invalid deploy.aggregateBackfill.enabled in'
       );
     } finally {
       process.chdir(oldCwd);

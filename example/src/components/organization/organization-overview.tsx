@@ -1,7 +1,7 @@
 'use client';
 
 import type { ApiInputs } from '@convex/api';
-import { skipToken, useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Ban,
   Calendar,
@@ -61,14 +61,6 @@ export function OrganizationOverview({
       { skipUnauth: true }
     )
   );
-
-  // Subscription query
-  const subscriptionQuery = useQuery(
-    crpc.polarSubscription.getOrganizationSubscription.queryOptions(
-      organization?.id ? { organizationId: organization.id } : skipToken
-    )
-  );
-  const subscription = subscriptionQuery.data;
 
   const updateOrganization = useMutation(
     crpc.organization.updateOrganization.mutationOptions({
@@ -160,6 +152,7 @@ export function OrganizationOverview({
 
   const isOwner = organization.role === 'owner';
   const canEdit = isOwner && !organization.isPersonal;
+  const hasPremium = organization.plan === 'premium';
   const daysActive = organization.createdAt
     ? Math.floor(
         (now - organization.createdAt.getTime()) / (1000 * 60 * 60 * 24)
@@ -167,21 +160,19 @@ export function OrganizationOverview({
     : 0;
 
   const handleManageSubscription = async () => {
-    try {
-      if (subscription) {
-        // Has subscription - open customer portal
-        await authClient.customer.portal();
-      } else {
-        // No subscription - checkout
-        await authClient.checkout({
-          slug: 'premium',
-          referenceId: organization.id,
-        });
-      }
-    } catch (error) {
-      console.error('Subscription error:', error);
-      toast.error('Failed to manage subscription');
-    }
+    // try {
+    //   if (hasPremium) {
+    //     await authClient.customer.portal();
+    //   } else {
+    //     await authClient.checkout({
+    //       slug: 'premium',
+    //       referenceId: organization.id,
+    //     });
+    //   }
+    // } catch (error) {
+    //   console.error('Subscription error:', error);
+    //   toast.error('Failed to manage subscription');
+    // }
   };
 
   return (
@@ -289,13 +280,11 @@ export function OrganizationOverview({
               </div>
               <div>
                 <p className="font-medium text-sm">
-                  {subscription ? 'Premium Plan' : 'Free Plan'}
+                  {hasPremium ? 'Premium Plan' : 'Free Plan'}
                 </p>
                 <p className="text-muted-foreground text-xs">
-                  {subscription
-                    ? subscription.cancelAtPeriodEnd
-                      ? `Cancels ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'soon'}`
-                      : `Renews ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'soon'}`
+                  {hasPremium
+                    ? 'Manage your billing and subscription.'
                     : 'Upgrade to unlock premium features'}
                 </p>
               </div>
@@ -305,7 +294,7 @@ export function OrganizationOverview({
               size="sm"
               variant="secondary"
             >
-              {subscription ? 'Manage' : 'Upgrade'}
+              {hasPremium ? 'Manage' : 'Upgrade'}
             </Button>
           </div>
         </section>

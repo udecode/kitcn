@@ -61,17 +61,13 @@ Each policy targets a specific operation via the `for` field:
 
 ### Enable RLS without policies
 
-You can also enable RLS on a table without adding any policies. This effectively locks the table -- no rows are accessible through `ctx.orm` until you add permissive policies.
+You can also enable RLS without adding policies. This effectively locks the table -- no rows are accessible through `ctx.orm` until you add permissive policies.
 
 ```ts showLineNumbers
-const secrets = convexTable('secrets', {
+const secrets = convexTable.withRLS('secrets', {
   value: text().notNull(),
-}).enableRLS();
+});
 ```
-
-<Callout icon={<AlertTriangle />}>
-**Important:** `enableRLS()` is deprecated (Drizzle parity). Prefer `convexTable.withRLS(...)` for new code.
-</Callout>
 
 ## Context Setup
 

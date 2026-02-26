@@ -26,6 +26,8 @@ import type {
 } from './constraints';
 import type { FilterExpression } from './filter-expression';
 import type {
+  ConvexAggregateIndexBuilder,
+  ConvexAggregateIndexBuilderOn,
   ConvexIndexBuilder,
   ConvexIndexBuilderOn,
   ConvexIndexColumn,
@@ -54,9 +56,9 @@ const RESERVED_TABLES = new Set(['_storage', '_scheduled_functions']);
 const RESERVED_COLUMN_NAMES = new Set(['id', '_id', '_creationTime']);
 
 /**
- * Valid table name pattern: starts with letter, contains only alphanumeric and underscore
+ * Valid table name pattern: starts with letter/underscore, contains only alphanumeric and underscore
  */
-const TABLE_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+const TABLE_NAME_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 /**
  * Validate table name against Convex constraints
@@ -102,8 +104,8 @@ function createValidatorFromColumns(
  * CRITICAL: No extends constraint on TColumns to avoid type widening (convex-ents pattern)
  */
 export interface TableConfig<TName extends string = string, TColumns = any> {
-  name: TName;
   columns: TColumns;
+  name: TName;
 }
 
 type ColumnsWithTableName<TColumns, TName extends string> = {
@@ -118,6 +120,7 @@ type ColumnsWithTableName<TColumns, TName extends string> = {
 
 export type ConvexTableExtraConfigValue =
   | ConvexIndexBuilder
+  | ConvexAggregateIndexBuilder
   | ConvexSearchIndexBuilder
   | ConvexVectorIndexBuilder
   | ConvexForeignKeyBuilder
@@ -182,6 +185,12 @@ type SearchFilterFieldsUnionFromColumns<
   ? ColumnNameFromBuilder<TColumn>
   : never;
 
+type AggregateFieldUnionFromColumns<
+  TColumns extends readonly ConvexIndexColumn[],
+> = TColumns[number] extends infer TColumn extends ConvexIndexColumn
+  ? ColumnNameFromBuilder<TColumn>
+  : never;
+
 type InferSearchIndexRecordFromExtraValue<TValue> =
   TValue extends ConvexSearchIndexBuilder<
     infer TName extends string,
@@ -213,6 +222,14 @@ type InferVectorIndexRecordFromExtraValue<TValue> =
       >
     : {};
 
+type InferAggregateIndexRecordFromExtraValue<TValue> =
+  TValue extends ConvexAggregateIndexBuilder<
+    infer TName extends string,
+    infer TColumns extends readonly ConvexIndexColumn[]
+  >
+    ? Record<TName, AggregateFieldUnionFromColumns<TColumns>>
+    : {};
+
 type InferredDbIndexesFromExtraConfig<TExtraConfig> = UnionToIntersection<
   InferDbIndexRecordFromExtraValue<
     ExtraConfigValues<Exclude<TExtraConfig, undefined>>
@@ -230,6 +247,13 @@ type InferredVectorIndexesFromExtraConfig<TExtraConfig> = UnionToIntersection<
     ExtraConfigValues<Exclude<TExtraConfig, undefined>>
   >
 >;
+
+type InferredAggregateIndexesFromExtraConfig<TExtraConfig> =
+  UnionToIntersection<
+    InferAggregateIndexRecordFromExtraValue<
+      ExtraConfigValues<Exclude<TExtraConfig, undefined>>
+    >
+  >;
 
 type NormalizeDbIndexMap<TIndexMap> = {
   [K in keyof TIndexMap as K extends string
@@ -261,6 +285,12 @@ type NormalizeVectorIndexMap<TIndexMap> = {
         filterFields: TFilterFields;
       }
     : never;
+};
+
+type NormalizeAggregateIndexMap<TIndexMap> = {
+  [K in keyof TIndexMap as K extends string
+    ? K
+    : never]: TIndexMap[K] extends string ? TIndexMap[K] : never;
 };
 
 type InferDbIndexesFromExtraConfig<TExtraConfig> = SimplifyObject<
@@ -376,6 +406,28 @@ function isConvexIndexBuilderOn(value: unknown): value is ConvexIndexBuilderOn {
   );
 }
 
+function isConvexAggregateIndexBuilder(
+  value: unknown
+): value is ConvexAggregateIndexBuilder {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { [entityKind]?: string })[entityKind] ===
+      'ConvexAggregateIndexBuilder'
+  );
+}
+
+function isConvexAggregateIndexBuilderOn(
+  value: unknown
+): value is ConvexAggregateIndexBuilderOn {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { [entityKind]?: string })[entityKind] ===
+      'ConvexAggregateIndexBuilderOn'
+  );
+}
+
 function isConvexUniqueConstraintBuilderOn(
   value: unknown
 ): value is ConvexUniqueConstraintBuilderOn {
@@ -480,10 +532,6 @@ function isConvexLifecycleBuilder(value: unknown): boolean {
   );
 }
 
-function isLegacyTriggerCallback(value: unknown): boolean {
-  return typeof value === 'function';
-}
-
 function getColumnName(column: ColumnBuilderBase): string {
   const config = (column as { config?: { name?: string } }).config;
   if (!config?.name) {
@@ -577,6 +625,59 @@ function assertVectorFieldType(
   }
 }
 
+function assertAggregateSumFieldType(
+  column: ColumnBuilderBase,
+  indexName: string
+): void {
+  const columnType = getColumnType(column) ?? 'unknown';
+  if (!['ConvexNumber', 'ConvexTimestamp'].includes(columnType)) {
+    throw new Error(
+      `aggregateIndex '${indexName}' sum() supports integer()/timestamp() columns only. Field '${getColumnName(
+        column
+      )}' is type '${columnType}'.`
+    );
+  }
+}
+
+function assertAggregateAvgFieldType(
+  column: ColumnBuilderBase,
+  indexName: string
+): void {
+  const columnType = getColumnType(column) ?? 'unknown';
+  if (!['ConvexNumber', 'ConvexTimestamp'].includes(columnType)) {
+    throw new Error(
+      `aggregateIndex '${indexName}' avg() supports integer()/timestamp() columns only. Field '${getColumnName(
+        column
+      )}' is type '${columnType}'.`
+    );
+  }
+}
+
+function assertAggregateComparableFieldType(
+  column: ColumnBuilderBase,
+  indexName: string,
+  method: 'min' | 'max'
+): void {
+  const columnType = getColumnType(column) ?? 'unknown';
+  const supported = [
+    'ConvexNumber',
+    'ConvexTimestamp',
+    'ConvexDate',
+    'ConvexText',
+    'ConvexBoolean',
+    'ConvexId',
+  ];
+  if (!supported.includes(columnType)) {
+    throw new Error(
+      `aggregateIndex '${indexName}' ${method}() does not support column type '${columnType}' on '${getColumnName(
+        column
+      )}'.`
+    );
+  }
+}
+
+const dedupeFieldNames = (fields: string[]): string[] => [...new Set(fields)];
+
 function applyExtraConfig<T extends TableConfig>(
   table: ConvexTableImpl<T>,
   config: ConvexTableExtraConfigValue[] | ConvexTableExtraConfig | undefined
@@ -595,6 +696,12 @@ function applyExtraConfig<T extends TableConfig>(
     if (isConvexUniqueConstraintBuilderOn(entry)) {
       throw new Error(
         `Invalid unique constraint definition on '${table.tableName}'. Did you forget to call .on(...)?`
+      );
+    }
+
+    if (isConvexAggregateIndexBuilderOn(entry)) {
+      throw new Error(
+        `Invalid aggregate index definition on '${table.tableName}'. Did you forget to call .on(...) or .all()?`
       );
     }
 
@@ -642,12 +749,6 @@ function applyExtraConfig<T extends TableConfig>(
       );
     }
 
-    if (isLegacyTriggerCallback(entry)) {
-      throw new Error(
-        `Trigger callbacks are no longer supported inside convexTable('${table.tableName}', ..., extraConfig). Export schema triggers with defineTriggers(relations, { ... }) from schema.ts.`
-      );
-    }
-
     if (isConvexIndexBuilder(entry)) {
       const { name, columns, unique, where } = entry.config;
 
@@ -670,6 +771,110 @@ function applyExtraConfig<T extends TableConfig>(
       if (unique) {
         table.addUniqueIndex(name, fields, false);
       }
+      continue;
+    }
+
+    if (isConvexAggregateIndexBuilder(entry)) {
+      const {
+        name,
+        columns,
+        countFields,
+        sumFields,
+        avgFields,
+        minFields,
+        maxFields,
+      } = entry.config;
+      const fields = columns.map((column) =>
+        assertColumnInTable(
+          column,
+          table.tableName,
+          `Aggregate index '${name}'`
+        )
+      );
+      assertNoReservedCreatedAtIndexFields(fields, `Aggregate index '${name}'`);
+
+      const resolvedCountFields = dedupeFieldNames(
+        countFields.map((column) =>
+          assertColumnInTable(
+            column,
+            table.tableName,
+            `Aggregate index '${name}' count`
+          )
+        )
+      );
+      assertNoReservedCreatedAtIndexFields(
+        resolvedCountFields,
+        `Aggregate index '${name}' count`
+      );
+      const resolvedSumFields = dedupeFieldNames(
+        sumFields.map((column) => {
+          const field = assertColumnInTable(
+            column,
+            table.tableName,
+            `Aggregate index '${name}' sum`
+          );
+          assertAggregateSumFieldType(column, name);
+          return field;
+        })
+      );
+      assertNoReservedCreatedAtIndexFields(
+        resolvedSumFields,
+        `Aggregate index '${name}' sum`
+      );
+      const resolvedAvgFields = dedupeFieldNames(
+        avgFields.map((column) => {
+          const field = assertColumnInTable(
+            column,
+            table.tableName,
+            `Aggregate index '${name}' avg`
+          );
+          assertAggregateAvgFieldType(column, name);
+          return field;
+        })
+      );
+      assertNoReservedCreatedAtIndexFields(
+        resolvedAvgFields,
+        `Aggregate index '${name}' avg`
+      );
+      const resolvedMinFields = dedupeFieldNames(
+        minFields.map((column) => {
+          const field = assertColumnInTable(
+            column,
+            table.tableName,
+            `Aggregate index '${name}' min`
+          );
+          assertAggregateComparableFieldType(column, name, 'min');
+          return field;
+        })
+      );
+      assertNoReservedCreatedAtIndexFields(
+        resolvedMinFields,
+        `Aggregate index '${name}' min`
+      );
+      const resolvedMaxFields = dedupeFieldNames(
+        maxFields.map((column) => {
+          const field = assertColumnInTable(
+            column,
+            table.tableName,
+            `Aggregate index '${name}' max`
+          );
+          assertAggregateComparableFieldType(column, name, 'max');
+          return field;
+        })
+      );
+      assertNoReservedCreatedAtIndexFields(
+        resolvedMaxFields,
+        `Aggregate index '${name}' max`
+      );
+
+      table.addAggregateIndex(name, {
+        fields,
+        countFields: resolvedCountFields,
+        sumFields: resolvedSumFields,
+        avgFields: resolvedAvgFields,
+        minFields: resolvedMinFields,
+        maxFields: resolvedMaxFields,
+      });
       continue;
     }
 
@@ -846,6 +1051,15 @@ class ConvexTableImpl<T extends TableConfig> {
     fields: string[];
     nullsNotDistinct: boolean;
   }[] = [];
+  private aggregateIndexes: {
+    name: string;
+    fields: string[];
+    countFields: string[];
+    sumFields: string[];
+    avgFields: string[];
+    minFields: string[];
+    maxFields: string[];
+  }[] = [];
   private foreignKeys: ForeignKeyDefinition[] = [];
   private deferredForeignKeys: DeferredForeignKeyDefinition[] = [];
   private deferredForeignKeysResolved = false;
@@ -975,6 +1189,45 @@ class ConvexTableImpl<T extends TableConfig> {
     nullsNotDistinct: boolean
   ): void {
     this.uniqueIndexes.push({ name, fields, nullsNotDistinct });
+  }
+
+  addAggregateIndex<IndexName extends string>(
+    name: IndexName,
+    config: {
+      fields: string[];
+      countFields: string[];
+      sumFields: string[];
+      avgFields: string[];
+      minFields: string[];
+      maxFields: string[];
+    }
+  ): void {
+    if (this.aggregateIndexes.some((index) => index.name === name)) {
+      throw new Error(
+        `Duplicate aggregate index '${name}' on '${this.tableName}'.`
+      );
+    }
+    this.aggregateIndexes.push({
+      name,
+      fields: config.fields,
+      countFields: config.countFields,
+      sumFields: config.sumFields,
+      avgFields: config.avgFields,
+      minFields: config.minFields,
+      maxFields: config.maxFields,
+    });
+  }
+
+  getAggregateIndexes(): {
+    name: string;
+    fields: string[];
+    countFields: string[];
+    sumFields: string[];
+    avgFields: string[];
+    minFields: string[];
+    maxFields: string[];
+  }[] {
+    return [...this.aggregateIndexes];
   }
 
   /**
@@ -1218,36 +1471,6 @@ class ConvexTableImpl<T extends TableConfig> {
   }
 
   /**
-   * Legacy chainable index API is not supported.
-   * Use index('name').on(...) in convexTable extraConfig instead.
-   */
-  index(_name: string, _fields: string[]): never {
-    throw new Error(
-      'table.index() is not supported. Use index(name).on(...) in convexTable extraConfig.'
-    );
-  }
-
-  /**
-   * Legacy chainable searchIndex API is not supported.
-   * Use searchIndex('name').on(...) in convexTable extraConfig instead.
-   */
-  searchIndex(): never {
-    throw new Error(
-      'table.searchIndex() is not supported. Use searchIndex(name).on(...) in convexTable extraConfig.'
-    );
-  }
-
-  /**
-   * Legacy chainable vectorIndex API is not supported.
-   * Use vectorIndex('name').on(...).dimensions(n) in convexTable extraConfig instead.
-   */
-  vectorIndex(): never {
-    throw new Error(
-      'table.vectorIndex() is not supported. Use vectorIndex(name).on(...).dimensions(n) in convexTable extraConfig.'
-    );
-  }
-
-  /**
    * Export the contents of this definition for Convex schema tooling.
    * Mirrors convex/server TableDefinition.export().
    */
@@ -1284,6 +1507,7 @@ export interface ConvexTable<
   Indexes extends GenericTableIndexes = {},
   SearchIndexes extends GenericTableSearchIndexes = {},
   VectorIndexes extends GenericTableVectorIndexes = {},
+  AggregateIndexes extends Record<string, string> = {},
 > extends TableDefinition<
     Validator<any, any, any>,
     Indexes,
@@ -1298,16 +1522,23 @@ export interface ConvexTable<
     readonly brand: 'ConvexTable';
     readonly name: T['name'];
     readonly columns: T['columns'];
+    readonly aggregateIndexes: AggregateIndexes;
     readonly inferSelect: import('./types').InferSelectModel<ConvexTable<T>>;
     readonly inferInsert: import('./types').InferInsertModel<ConvexTable<T>>;
   };
+  readonly $inferInsert: import('./types').InferInsertModel<ConvexTable<T>>;
 
   /**
    * Inferred types for select and insert operations
    * Following Drizzle's pattern: $inferSelect and $inferInsert properties
    */
   readonly $inferSelect: import('./types').InferSelectModel<ConvexTable<T>>;
-  readonly $inferInsert: import('./types').InferInsertModel<ConvexTable<T>>;
+  tableName: T['name'];
+
+  /**
+   * Convex schema validator
+   */
+  validator: Validator<any, any, any>;
 
   /**
    * Symbol-based metadata storage
@@ -1318,14 +1549,6 @@ export interface ConvexTable<
   [RlsPolicies]: RlsPolicy[];
   [EnableRLS]: boolean;
   [TableDeleteConfig]?: OrmTableDeleteConfig;
-
-  /**
-   * Convex schema validator
-   */
-  validator: Validator<any, any, any>;
-  tableName: T['name'];
-
-  // Note: chainable index methods are intentionally unsupported; use builders in extraConfig.
 }
 
 /**
@@ -1339,7 +1562,8 @@ export type ConvexTableWithColumns<
   Indexes extends GenericTableIndexes = {},
   SearchIndexes extends GenericTableSearchIndexes = {},
   VectorIndexes extends GenericTableVectorIndexes = {},
-> = ConvexTable<T, Indexes, SearchIndexes, VectorIndexes> & {
+  AggregateIndexes extends Record<string, string> = {},
+> = ConvexTable<T, Indexes, SearchIndexes, VectorIndexes, AggregateIndexes> & {
   [Key in keyof T['columns']]: T['columns'][Key];
 } & SystemFields<T['name']> &
   SystemFieldAliases<T['name'], T['columns']>;
@@ -1393,7 +1617,10 @@ type ConvexTableFnInternal = <
   },
   InferDbIndexesFromExtraConfig<TExtraConfig>,
   InferSearchIndexesFromExtraConfig<TExtraConfig>,
-  InferVectorIndexesFromExtraConfig<TExtraConfig>
+  InferVectorIndexesFromExtraConfig<TExtraConfig>,
+  NormalizeAggregateIndexMap<
+    InferredAggregateIndexesFromExtraConfig<TExtraConfig>
+  >
 >;
 
 export interface ConvexTableFn extends ConvexTableFnInternal {
@@ -1404,10 +1631,16 @@ const convexTableInternal: ConvexTableFnInternal = (
   name,
   columns,
   extraConfig
-): ConvexTableWithColumns<{
-  name: typeof name;
-  columns: ColumnsWithTableName<typeof columns, typeof name>;
-}> => {
+): ConvexTableWithColumns<
+  {
+    name: typeof name;
+    columns: ColumnsWithTableName<typeof columns, typeof name>;
+  },
+  any,
+  any,
+  any,
+  any
+> => {
   // Create raw table instance
   const rawTable = new ConvexTableImpl(name, columns as any);
 

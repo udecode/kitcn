@@ -1,4 +1,4 @@
-import { createAggregate } from 'better-convex/aggregate';
+import { TableAggregate } from 'better-convex/aggregate';
 import * as ormModule from 'better-convex/orm';
 import {
   convexTable,
@@ -32,16 +32,13 @@ type UsersDoc = InferSelectModel<typeof users>;
 type UsersAggregateCtx = OrmTriggerContext<typeof relations>;
 type UsersAggregateChange = OrmTriggerChange<UsersDoc>;
 
-const usersAggregate = createAggregate({
-  trigger:
-    () => async (ctx: UsersAggregateCtx, change: UsersAggregateChange) => {
-      Expect<Equal<typeof ctx.orm, OrmWriter<typeof relations>>>;
-      void change;
-    },
+const usersAggregate = new TableAggregate({
+  name: 'usersTriggerTypes',
+  table: 'users_trigger_types',
+  sortKey: () => null,
 });
 
 const usersAggregateHandler = usersAggregate.trigger();
-Expect<Equal<Parameters<typeof usersAggregateHandler>[0], UsersAggregateCtx>>;
 Expect<
   Equal<
     Parameters<typeof usersAggregateHandler>[1]['operation'],

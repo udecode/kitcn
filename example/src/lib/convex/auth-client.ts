@@ -1,5 +1,4 @@
 import { type Auth, ac, roles } from '@convex/auth-shared';
-import { polarClient } from '@polar-sh/better-auth';
 import {
   adminClient,
   inferAdditionalFields,
@@ -23,7 +22,6 @@ export const authClient = createAuthClient({
       ac,
       roles,
     }),
-    polarClient(),
     convexClient(),
   ],
 });

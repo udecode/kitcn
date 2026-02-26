@@ -3,7 +3,6 @@ import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 
 import { authMutation, authQuery } from '../lib/crpc';
-import { aggregateUsers } from './aggregates';
 import { userTable } from './schema';
 
 // Admin operations that work with our application's user role system
@@ -294,11 +293,7 @@ export const getDashboardStats = authQuery
       }
     }
 
-    // Get exact user count using aggregate - O(log n) performance!
-    const totalUsers = await aggregateUsers.count(ctx, {
-      bounds: {},
-      namespace: 'global',
-    });
+    const totalUsers = await ctx.orm.query.user.count();
 
     // Estimate total admins based on sample
     const estimatedAdmins = Math.round(

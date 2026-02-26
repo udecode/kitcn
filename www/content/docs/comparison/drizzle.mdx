@@ -32,7 +32,7 @@ This guide compares Drizzle and the ORM side-by-side. It focuses on API mapping 
 - SQL joins and raw SQL execution
 - Database migrations and database-side constraints/triggers
 - Custom SQL data types
-- ORM query-builder aggregations (`count`, `sum`, `avg`, `max`, `min`) should use Convex aggregate components
+- SQL-style `having` and window functions (planned separately)
 
 ## Convex‑Ents Compatibility
 
@@ -189,6 +189,10 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
       orderBy: { createdAt: 'desc' },
       limit: 10,
     });
+
+    const activeCount = await ctx.orm.query.users.count({
+      where: { role: 'admin' },
+    });
     ```
   </CompareItem>
 </Compare>
@@ -207,11 +211,44 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
 | `columns` | `columns` | Post-fetch projection |
 | `with` | `with` | Relation loading |
 | `insert/update/delete` | `insert/update/delete` | Same surface |
-| `count/sum/avg/max/min` in query builder | Use components | Use [Aggregates](/docs/server/advanced/aggregates) (`createAggregate`) |
+| `count` in query builder | `db.query.*.count()` | Strict no-scan filtered count via declarative `aggregateIndex` |
+| `aggregate` in query builder | `db.query.*.aggregate({...})` | Prisma-style `_count/_sum/_avg/_min/_max`, strict no-scan via declarative `aggregateIndex` |
+| `groupBy` in query builder | `db.query.*.groupBy({...})` | Prisma-style `by` + `_count/_sum/_avg/_min/_max`; requires finite `where` constraints on `by` fields |
 | SQL joins | Not available | Use `with` |
 | Raw SQL | Not available | Convex is document-based |
 | Custom types | Not available | Use app-level encoding |
 | Table introspection | `getTableColumns`, `getTableConfig` | Runtime metadata helpers |
+
+## Query Capability Matrix
+
+| Capability | Drizzle | better-convex ORM | Notes |
+|---|---|---|---|
+| `findMany` / `findFirst` | Yes | Yes | Same top-level shape |
+| `findMany({ distinct })` | Yes (SQL `DISTINCT`) | No | Use `select().distinct({ fields })` pipeline when needed |
+| `findFirstOrThrow` | No | Yes | ORM sugar |
+| Object `where` | Yes | Yes | Same shape |
+| Callback `where` (read queries) | Yes | Yes | ORM callback path is index-aware when possible |
+| `with` relation loading | Yes | Yes | Same API style |
+| Relation `_count` in `with` | No | Yes | Prisma-style `_count` relation map |
+| Relation `_count` nested relation filter | n/a | No | Blocked in v1 (`RELATION_COUNT_FILTER_UNSUPPORTED`) |
+| Relation `_count` filtered `through()` relation | n/a | Yes | Indexed lookups + no-scan-safe filter validation |
+| Mutation `returning({ _count })` | No | Yes | Split selection + relation count loading on insert/update/delete |
+| `count()` | Yes | Yes | ORM unfiltered count uses native Convex count syscall |
+| `count({ where })` | Yes | Yes | ORM requires aggregateIndex coverage (strict no-scan) |
+| `count({ where, select: { _all, field } })` | No | Yes | Field counts require `aggregateIndex(...).count(field)` |
+| `count({ orderBy, skip, take, cursor })` | No | Yes | Windowed count with ordering and pagination bounds |
+| `aggregate({ _count/_sum/_avg/_min/_max })` | Yes | Yes | ORM is Prisma-style and index-backed |
+| `aggregate({ orderBy/take/skip/cursor })` | Yes | Partial | `orderBy/cursor` supported; `skip/take` is `_count`-only in v1 |
+| `OR` in aggregate/count `where` | Yes | Yes | Safe finite OR rewrite when each branch is index-plannable |
+| Advanced aggregate/count filters (`NOT/string/relation`) | Yes | No | Blocked in ORM v1 (`AGGREGATE_FILTER_UNSUPPORTED`) |
+| Search query mode | SQL/extension-specific | Yes | `findMany({ search })` |
+| Vector query mode | SQL/extension-specific | Yes | `findMany({ vectorSearch })` |
+| Cursor pagination | Yes | Yes | ORM cursor is first `orderBy` field |
+| Offset pagination | Yes | Yes | ORM supports `offset`, but deep offsets are not ideal |
+| `groupBy({ by, _count/_sum/_avg/_min/_max })` | Yes | Yes | Finite-constrained `by` fields only; no `having`/`orderBy`/`skip`/`take` in v1 |
+| Window analytics (`having` / window functions) | Yes | No | Deferred |
+| Raw SQL / joins | Yes | No | Use relations + document query model |
+| Aggregate read path overhead | n/a | Direct in-query path | ORM aggregate/count reads bucket tables directly (no component `runQuery` boundary) |
 
 ## Not Available In Convex
 
@@ -219,7 +256,7 @@ These Drizzle features are SQL-specific and do not map to Convex:
 
 - SQL joins
 - SQL subqueries and operators that depend on them (`exists`, `notExists`)
-- ORM query-builder aggregations (`count`, `sum`, `avg`, `max`, `min`) should use Convex aggregate components
+- SQL `having` and SQL window functions (`groupBy` is supported with finite constraints)
 - Raw SQL execution
 - RQB SQL-only features: `RAW` filters and SQL placeholders in `where`/`limit`/`offset` are not supported at runtime
 - Database migrations and database-side constraints/triggers
@@ -239,8 +276,8 @@ await db.query.users.findMany({
 });
 ```
 
-For aggregation use cases today, use `createAggregate` from `better-convex/aggregate`:
-- Guide: [/docs/server/advanced/aggregates](/docs/server/advanced/aggregates)
+For rank/window-like aggregation use cases (`at/indexOf/paginate/random`), use aggregate runtime (`TableAggregate`) from `better-convex/aggregate`:
+- Guide: [/docs/orm/aggregates](/docs/orm/aggregates)
 
 ## Post-Fetch Behavior
 

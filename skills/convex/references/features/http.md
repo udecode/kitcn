@@ -4,29 +4,6 @@ Typed REST APIs with cRPC HTTP router, Hono integration, webhooks, streaming, an
 
 Prerequisites: `setup/server.md`.
 
-## Quick Reference
-
-| Pattern                                  | Use Case                    |
-| ---------------------------------------- | --------------------------- |
-| `publicRoute.get('/path').query()`       | Public GET endpoint         |
-| `authRoute.post('/path').mutation()`     | Auth-required POST          |
-| `optionalAuthRoute.get('/path').query()` | Optional auth endpoint      |
-| `.params(z.object({id}))`                | Path params `/todos/:id`    |
-| `.searchParams(z.object({limit}))`       | Query params `?limit=10`    |
-| `.input(z.object({...}))`               | JSON body (POST/PATCH)      |
-| `.form(z.object({file, description}))`   | FormData uploads            |
-| `.output(z.object({...}))`              | Response validation         |
-| `.meta({ rateLimit: 'api/heavy' })`     | Procedure metadata          |
-| `.use(middleware)`                       | Custom middleware           |
-| `router({ endpoint1, endpoint2 })`       | Group endpoints             |
-
-| Method | Builder | Use Case | Has Body |
-|--------|---------|----------|----------|
-| GET | `.get().query()` | Read operations | No |
-| POST | `.post().mutation()` | Create operations | Yes |
-| PATCH | `.patch().mutation()` | Partial updates | Yes |
-| DELETE | `.delete().mutation()` | Delete operations | No |
-
 ## Setup
 
 ### Route Builders
@@ -253,18 +230,7 @@ export const publicOrAuth = optionalAuthRoute
 
 ## Error Handling
 
-| Code | HTTP Status | Use Case |
-|------|-------------|----------|
-| `BAD_REQUEST` | 400 | Invalid request format |
-| `UNAUTHORIZED` | 401 | Missing or invalid authentication |
-| `FORBIDDEN` | 403 | Authenticated but not authorized |
-| `NOT_FOUND` | 404 | Resource doesn't exist |
-| `CONFLICT` | 409 | Resource conflict (duplicate) |
-| `UNPROCESSABLE_CONTENT` | 422 | Validation failed |
-| `TOO_MANY_REQUESTS` | 429 | Rate limit exceeded |
-| `INTERNAL_SERVER_ERROR` | 500 | Unexpected server error |
-
-Zod validation failures auto-return `400 Bad Request` with error details.
+See [Error Codes](#error-codes) in API Reference. Zod validation failures auto-return `400 Bad Request` with error details.
 
 ## Custom Responses
 
@@ -434,17 +400,7 @@ export const discordWebhook = publicRoute
 
 ## React Client
 
-### Input Args
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `params` | `Record<string, string>` | Path parameters (`:id`) |
-| `searchParams` | `Record<string, string \| string[]>` | Query string params |
-| `form` | `z.infer<TForm>` | Typed FormData (if `.form()` defined) |
-| `fetch` | `typeof fetch` | Custom fetch function |
-| `init` | `RequestInit` | Request options |
-| `headers` | `Record<string, string> \| (() => ...)` | Headers (incl. cookies) |
-| `[key]` | `unknown` | JSON body fields at root |
+See [Input Args](#input-args) in API Reference.
 
 ### Query Patterns
 
@@ -518,15 +474,7 @@ const updateTodo = useMutation(
 );
 ```
 
-### Client API Reference
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `queryOptions` | `(args?, queryOpts?)` | Options for `useQuery`/`useSuspenseQuery` |
-| `staticQueryOptions` | `(args?, queryOpts?)` | For event handlers/prefetching (no hooks) |
-| `mutationOptions` | `(mutationOpts?)` | Options for `useMutation` |
-| `queryKey` | `(args?)` | Get query key for cache operations |
-| `queryFilter` | `(args?, filters?)` | Filter for `invalidateQueries` |
+See [Client Methods](#client-methods) in API Reference.
 
 ## RSC Prefetching
 
@@ -567,3 +515,65 @@ const ctx = await createContext({ headers: request.headers });
 const todos = await ctx.caller.todos.list({ limit: 10 });
 if (ctx.isAuthenticated) await ctx.caller.todos.create({ title: 'New task' });
 ```
+
+## API Reference
+
+### Route Builder Patterns
+
+| Pattern                                  | Use Case                    |
+| ---------------------------------------- | --------------------------- |
+| `publicRoute.get('/path').query()`       | Public GET endpoint         |
+| `authRoute.post('/path').mutation()`     | Auth-required POST          |
+| `optionalAuthRoute.get('/path').query()` | Optional auth endpoint      |
+| `.params(z.object({id}))`                | Path params `/todos/:id`    |
+| `.searchParams(z.object({limit}))`       | Query params `?limit=10`    |
+| `.input(z.object({...}))`               | JSON body (POST/PATCH)      |
+| `.form(z.object({file, description}))`   | FormData uploads            |
+| `.output(z.object({...}))`              | Response validation         |
+| `.meta({ rateLimit: 'api/heavy' })`     | Procedure metadata          |
+| `.use(middleware)`                       | Custom middleware           |
+| `router({ endpoint1, endpoint2 })`       | Group endpoints             |
+
+### HTTP Methods
+
+| Method | Builder | Use Case | Has Body |
+|--------|---------|----------|----------|
+| GET | `.get().query()` | Read operations | No |
+| POST | `.post().mutation()` | Create operations | Yes |
+| PATCH | `.patch().mutation()` | Partial updates | Yes |
+| DELETE | `.delete().mutation()` | Delete operations | No |
+
+### Error Codes
+
+| Code | HTTP Status | Use Case |
+|------|-------------|----------|
+| `BAD_REQUEST` | 400 | Invalid request format |
+| `UNAUTHORIZED` | 401 | Missing or invalid authentication |
+| `FORBIDDEN` | 403 | Authenticated but not authorized |
+| `NOT_FOUND` | 404 | Resource doesn't exist |
+| `CONFLICT` | 409 | Resource conflict (duplicate) |
+| `UNPROCESSABLE_CONTENT` | 422 | Validation failed |
+| `TOO_MANY_REQUESTS` | 429 | Rate limit exceeded |
+| `INTERNAL_SERVER_ERROR` | 500 | Unexpected server error |
+
+### Input Args
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `params` | `Record<string, string>` | Path parameters (`:id`) |
+| `searchParams` | `Record<string, string \| string[]>` | Query string params |
+| `form` | `z.infer<TForm>` | Typed FormData (if `.form()` defined) |
+| `fetch` | `typeof fetch` | Custom fetch function |
+| `init` | `RequestInit` | Request options |
+| `headers` | `Record<string, string> \| (() => ...)` | Headers (incl. cookies) |
+| `[key]` | `unknown` | JSON body fields at root |
+
+### Client Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `queryOptions` | `(args?, queryOpts?)` | Options for `useQuery`/`useSuspenseQuery` |
+| `staticQueryOptions` | `(args?, queryOpts?)` | For event handlers/prefetching (no hooks) |
+| `mutationOptions` | `(mutationOpts?)` | Options for `useMutation` |
+| `queryKey` | `(args?)` | Get query key for cache operations |
+| `queryFilter` | `(args?, filters?)` | Filter for `invalidateQueries` |

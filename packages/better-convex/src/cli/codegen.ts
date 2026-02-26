@@ -127,18 +127,12 @@ const AUTH_RUNTIME_PROCEDURES: readonly Omit<
   ProcedureRegistryEntry,
   'moduleName'
 >[] = [
-  { exportName: 'beforeCreate', internal: true, type: 'mutation' },
-  { exportName: 'beforeDelete', internal: true, type: 'mutation' },
-  { exportName: 'beforeUpdate', internal: true, type: 'mutation' },
   { exportName: 'create', internal: true, type: 'mutation' },
   { exportName: 'deleteMany', internal: true, type: 'mutation' },
   { exportName: 'deleteOne', internal: true, type: 'mutation' },
   { exportName: 'findMany', internal: true, type: 'query' },
   { exportName: 'findOne', internal: true, type: 'query' },
   { exportName: 'getLatestJwks', internal: true, type: 'action' },
-  { exportName: 'onCreate', internal: true, type: 'mutation' },
-  { exportName: 'onDelete', internal: true, type: 'mutation' },
-  { exportName: 'onUpdate', internal: true, type: 'mutation' },
   { exportName: 'rotateKeys', internal: true, type: 'action' },
   { exportName: 'updateMany', internal: true, type: 'mutation' },
   { exportName: 'updateOne', internal: true, type: 'mutation' },
@@ -531,7 +525,13 @@ export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({
   mutation: (ctx) => withOrm(ctx),
 });
 
-export const { scheduledMutationBatch, scheduledDelete } = orm.api();
+export const {
+  scheduledMutationBatch,
+  scheduledDelete,
+  aggregateBackfill,
+  aggregateBackfillChunk,
+  aggregateBackfillStatus,
+} = orm.api();
 `;
 }
 
@@ -665,12 +665,6 @@ export const {
   updateOne,
   getLatestJwks,
   rotateKeys,
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
 } = authRuntime;
 `;
 }

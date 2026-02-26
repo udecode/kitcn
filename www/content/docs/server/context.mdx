@@ -72,7 +72,7 @@ if (!identity) {
 
 ## Extending Context with Middleware
 
-Here's where cRPC shines. Use middleware to add custom data to context - the authenticated user, feature flags, rate limit info, anything your procedures need.
+Use middleware to add custom data to context - the authenticated user, feature flags, rate limit info, anything your procedures need.
 
 The pattern is simple: fetch what you need, then call `next()` with the extended context.
 

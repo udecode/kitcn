@@ -11,8 +11,8 @@ export const reset = privateAction
   .meta({ dev: true })
   .action(async ({ ctx }) => {
     const caller = createResetCaller(ctx);
-    // Delete all Polar customers first (comprehensive cleanup)
-    // await deletePolarCustomers();
+    // Delete all customers first
+    // await deleteCustomers();
 
     for (const tableName of Object.keys(schema.tables)) {
       if (excludedTables.has(tableName as TableNames)) {

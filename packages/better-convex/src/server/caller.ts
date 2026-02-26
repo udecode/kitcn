@@ -57,30 +57,28 @@ type ResolvedCreateCallerOptions = Omit<CreateCallerOptions, 'transformer'> & {
 };
 
 // Helper type for optional args when empty
-type ServerCallerFn<
-  TApi,
-  K extends keyof TApi,
-> = TApi[K] extends FunctionReference<infer T, 'public'>
-  ? T extends 'query' | 'mutation' | 'action'
-    ? keyof TApi[K]['_args'] extends never
-      ? // No args defined → optional
-        <Opts extends CallerOpts | undefined = undefined>(
-          args?: EmptyObject,
-          opts?: Opts
-        ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
-      : EmptyObject extends TApi[K]['_args']
-        ? // All args optional → optional
+type ServerCallerFn<TApi, K extends keyof TApi> =
+  TApi[K] extends FunctionReference<infer T, 'public'>
+    ? T extends 'query' | 'mutation' | 'action'
+      ? keyof TApi[K]['_args'] extends never
+        ? // No args defined → optional
           <Opts extends CallerOpts | undefined = undefined>(
-            args?: TApi[K]['_args'],
+            args?: EmptyObject,
             opts?: Opts
           ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
-        : // Has required args → required
-          <Opts extends CallerOpts | undefined = undefined>(
-            args: TApi[K]['_args'],
-            opts?: Opts
-          ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
-    : never
-  : ServerCaller<TApi[K]>;
+        : EmptyObject extends TApi[K]['_args']
+          ? // All args optional → optional
+            <Opts extends CallerOpts | undefined = undefined>(
+              args?: TApi[K]['_args'],
+              opts?: Opts
+            ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
+          : // Has required args → required
+            <Opts extends CallerOpts | undefined = undefined>(
+              args: TApi[K]['_args'],
+              opts?: Opts
+            ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
+      : never
+    : ServerCaller<TApi[K]>;
 
 // Recursive type for the caller proxy
 export type ServerCaller<TApi> = {

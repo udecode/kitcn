@@ -236,42 +236,6 @@ The problem: When React Query revalidates on the client, the `PostList` componen
 
 See [TanStack Query Advanced SSR Guide](https://tanstack.com/query/latest/docs/framework/react/guides/advanced-ssr#data-ownership-and-revalidation) for more details.
 
-## Comparison
-
-| Feature | `prefetch` | `caller` | `preloadQuery` |
-|---------|------------|----------|----------------|
-| Convex equivalent | **None** (new) | `fetchQuery` | `preloadQuery` |
-| Blocking | No | Yes | Yes |
-| Returns data | No (void) | Yes | Yes |
-| Client hydration | Yes | **No** | Yes |
-| Revalidation safe | Yes | N/A | Requires care |
-| Use case | Client-only data | Server-only logic | Server + client data |
-
-## How It Works
-
-Let's understand how hydration bridges server and client.
-
-`HydrateClient` dehydrates the prefetched queries so client components receive data instantly:
-
-1. Server prefetches queries into the QueryClient
-2. `HydrateClient` serializes the cache via `dehydrate()`
-3. `HydrationBoundary` restores data on the client
-4. Client components get instant data, then subscribe for real-time updates
-
-### Query Key Matching
-
-The server and client proxies generate identical query keys, ensuring prefetched data is found:
-
-```ts showLineNumbers {2,6}
-// Server (RSC)
-crpc.posts.list.queryOptions({ limit: 10 });
-// queryKey: ['convexQuery', funcRef, { limit: 10 }]
-
-// Client (same key)
-crpc.posts.list.queryOptions({ limit: 10 });
-// queryKey: ['convexQuery', funcRef, { limit: 10 }]
-```
-
 ## Important Notes
 
 ### HydrateClient Placement
@@ -372,3 +336,39 @@ If you're coming from vanilla Convex, here's what changes.
   <Card title="HTTP Router" href="/docs/server/http" />
   <Card title="Auth Server" href="/docs/auth/server" />
 </Cards>
+
+## API Reference
+
+### Comparison
+
+| Feature | `prefetch` | `caller` | `preloadQuery` |
+|---------|------------|----------|----------------|
+| Convex equivalent | **None** (new) | `fetchQuery` | `preloadQuery` |
+| Blocking | No | Yes | Yes |
+| Returns data | No (void) | Yes | Yes |
+| Client hydration | Yes | **No** | Yes |
+| Revalidation safe | Yes | N/A | Requires care |
+| Use case | Client-only data | Server-only logic | Server + client data |
+
+### How It Works
+
+`HydrateClient` dehydrates the prefetched queries so client components receive data instantly:
+
+1. Server prefetches queries into the QueryClient
+2. `HydrateClient` serializes the cache via `dehydrate()`
+3. `HydrationBoundary` restores data on the client
+4. Client components get instant data, then subscribe for real-time updates
+
+#### Query Key Matching
+
+The server and client proxies generate identical query keys, ensuring prefetched data is found:
+
+```ts showLineNumbers {2,6}
+// Server (RSC)
+crpc.posts.list.queryOptions({ limit: 10 });
+// queryKey: ['convexQuery', funcRef, { limit: 10 }]
+
+// Client (same key)
+crpc.posts.list.queryOptions({ limit: 10 });
+// queryKey: ['convexQuery', funcRef, { limit: 10 }]
+```

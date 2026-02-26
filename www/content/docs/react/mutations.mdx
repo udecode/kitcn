@@ -64,25 +64,7 @@ const updateUser = useMutation(
 );
 ```
 
-### Signature
-
-```ts showLineNumbers
-crpc.path.to.mutation.mutationOptions(
-  options?   // TanStack Query mutation options (except mutationFn)
-)
-```
-
-### Options
-
-All standard [TanStack Query mutation options](https://tanstack.com/query/latest/docs/framework/react/reference/useMutation) are supported except `mutationFn` (reserved):
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `onSuccess` | `(data, variables, context) => void` | Called on successful mutation |
-| `onError` | `(error, variables, context) => void` | Called on error |
-| `onMutate` | `(variables) => context` | Called before mutation (for optimistic updates) |
-| `onSettled` | `(data, error, variables, context) => void` | Called on completion |
-| `retry` | `number \| boolean` | Retry failed mutations |
+See [API Reference](#mutationoptions-1) for the full signature and options.
 
 ## Mutation Keys
 
@@ -233,3 +215,23 @@ If you're coming from vanilla Convex, here's what changes.
   <Card title="Type Inference" href="/docs/react/infer-types" />
   <Card title="Error Handling" href="/docs/react/error-handling" />
 </Cards>
+
+## API Reference
+
+### mutationOptions
+
+```ts showLineNumbers
+crpc.path.to.mutation.mutationOptions(
+  options?   // TanStack Query mutation options (except mutationFn)
+)
+```
+
+All standard [TanStack Query mutation options](https://tanstack.com/query/latest/docs/framework/react/reference/useMutation) are supported except `mutationFn` (reserved):
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `onSuccess` | `(data, variables, context) => void` | Called on successful mutation |
+| `onError` | `(error, variables, context) => void` | Called on error |
+| `onMutate` | `(variables) => context` | Called before mutation (for optimistic updates) |
+| `onSettled` | `(data, error, variables, context) => void` | Called on completion |
+| `retry` | `number \| boolean` | Retry failed mutations |

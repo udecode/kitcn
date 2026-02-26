@@ -64,10 +64,4 @@ export const {
   updateOne,
   getLatestJwks,
   rotateKeys,
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
 } = authRuntime;

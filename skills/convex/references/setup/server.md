@@ -258,7 +258,6 @@ Enable only selected modules.
 When multiple components are enabled, register all in one `defineApp()` file:
 
 ```ts
-import aggregate from "@convex-dev/aggregate/convex.config";
 import rateLimiter from "@convex-dev/rate-limiter/convex.config";
 import resend from "@convex-dev/resend/convex.config";
 import { defineApp } from "convex/server";
@@ -268,8 +267,6 @@ const app = defineApp();
 // Enable only selected components:
 app.use(rateLimiter);
 app.use(resend);
-app.use(aggregate, { name: "aggregateUsers" });
-app.use(aggregate, { name: "aggregateTodosByUser" });
 
 export default app;
 ```
@@ -319,30 +316,33 @@ Trigger guardrails:
 
 ### 9.3 Aggregates gate
 
-Install and register component:
-
-```bash
-bun add @convex-dev/aggregate
-```
+Aggregates use the built-in `better-convex/aggregate` runtime (no external dependency needed):
 
 ```ts
-// convex/functions/convex.config.ts
-import aggregate from "@convex-dev/aggregate/convex.config";
-import { defineApp } from "convex/server";
+// convex/functions/aggregates.ts
+import { TableAggregate } from "better-convex/aggregate";
+import type { DataModel } from "./_generated/dataModel";
 
-const app = defineApp();
-app.use(aggregate, { name: "aggregatePostLikes" });
-export default app;
+export const aggregatePostLikes = new TableAggregate<{
+  DataModel: DataModel;
+  Key: null;
+  Namespace: string;
+  TableName: "postLikes";
+}>({
+  name: "aggregatePostLikes",
+  table: "postLikes",
+  namespace: (doc) => doc.postId,
+  sortKey: () => null,
+});
 ```
 
 Register aggregate in `defineTriggers`.
 
 If Aggregates are **disabled** (`Aggregates: No`), remove all aggregate wiring in one pass:
 
-1. Remove `app.use(aggregate, ...)` calls from `convex/functions/convex.config.ts`.
-2. Remove aggregate helper modules (for example `convex/functions/aggregates.ts`).
-3. Remove aggregate `change:` handlers from `defineTriggers`.
-4. Re-run `bunx better-convex dev --once --typecheck disable` immediately to catch stale references.
+1. Remove aggregate helper modules (for example `convex/functions/aggregates.ts`).
+2. Remove aggregate `change:` handlers from `defineTriggers`.
+3. Re-run `bunx better-convex dev --once --typecheck disable` immediately to catch stale references.
 
 ### 9.4 Rate limiting gate
 

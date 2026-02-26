@@ -85,13 +85,15 @@ export default defineAuth((ctx) => {
     ],
     triggers: {
       user: {
-        beforeCreate: async (data) => {
-          const adminEmails = (process.env.ADMIN ?? "").split(",");
-          const role =
-            data.role !== "admin" && adminEmails.includes(data.email)
-              ? "admin"
-              : data.role;
-          return { ...data, role };
+        create: {
+          before: async (data, triggerCtx) => {
+            const adminEmails = (process.env.ADMIN ?? "").split(",");
+            const role =
+              data.role !== "admin" && adminEmails.includes(data.email)
+                ? "admin"
+                : data.role;
+            return { data: { ...data, role } };
+          },
         },
       },
     },

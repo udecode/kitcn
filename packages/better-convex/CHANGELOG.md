@@ -1,5 +1,22 @@
 # better-convex
 
+## Unreleased
+
+### Breaking Changes
+
+- Auth triggers now hard-break to `defineTriggers` parity.
+- Removed generated auth trigger procedures (`beforeCreate`, `onCreate`, `beforeUpdate`, `onUpdate`, `beforeDelete`, `onDelete`).
+- Auth trigger callbacks now run inline in auth CRUD handlers with explicit callback ctx.
+
+| Old | New |
+| --- | --- |
+| `beforeCreate` | `create.before(data, ctx)` |
+| `onCreate` | `create.after(doc, ctx)` |
+| `beforeUpdate` | `update.before(update, ctx)` |
+| `onUpdate` | `update.after(newDoc, ctx)` |
+| `beforeDelete` | `delete.before(doc, ctx)` |
+| `onDelete` | `delete.after(doc, ctx)` |
+
 ## 0.6.2
 
 ### Patch Changes

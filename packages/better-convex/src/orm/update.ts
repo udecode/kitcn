@@ -20,13 +20,14 @@ import {
   normalizeDateFieldsForWrite,
   selectReturningRowWithHydration,
   serializeFilterExpression,
+  splitReturningSelection,
   toConvexFilter,
 } from './mutation-utils';
+import { GelRelationalQuery } from './query';
 import { QueryPromise } from './query-promise';
 import { evaluateUpdateDecision } from './rls/evaluator';
 import type { ConvexTable } from './table';
 import type {
-  MutationAsyncConfig,
   MutationExecuteConfig,
   MutationExecuteResult,
   MutationExecutionMode,
@@ -102,6 +103,53 @@ export class ConvexUpdateBuilder<
   private allowFullScanFlag = false;
   private paginateConfig?: MutationPaginateConfig;
   private executionModeOverride?: 'sync' | 'async';
+
+  private async _loadReturningCount(
+    row: Record<string, unknown>,
+    countSelection: Record<string, unknown>,
+    ormContext: ReturnType<typeof getOrmContext>
+  ): Promise<Record<string, number>> {
+    const schema = ormContext?.schema;
+    const edgeMetadata = ormContext?.edgeMetadata;
+    if (!schema || !edgeMetadata) {
+      throw new Error(
+        'returning({ _count }) requires orm.db(ctx) configured from createOrm({ schema, ... }).'
+      );
+    }
+
+    const tableName = getTableName(this.table);
+    const tableConfig = Object.values(schema).find(
+      (config) => config.name === tableName
+    );
+    if (!tableConfig) {
+      throw new Error(`Table config for '${tableName}' is not registered.`);
+    }
+    const tableEdges = edgeMetadata.filter(
+      (edge) => edge.sourceTable === tableName
+    );
+
+    const counted = await new GelRelationalQuery(
+      schema as any,
+      tableConfig as any,
+      tableEdges as any,
+      this.db as any,
+      {
+        where: {
+          id: row._id,
+        },
+        columns: {},
+        with: {
+          _count: countSelection,
+        },
+      } as any,
+      'first',
+      edgeMetadata as any,
+      ormContext?.rls,
+      ormContext?.relationLoading
+    ).execute();
+
+    return ((counted as any)?._count ?? {}) as Record<string, number>;
+  }
 
   constructor(
     private db: GenericDatabaseWriter<any>,
@@ -219,7 +267,7 @@ export class ConvexUpdateBuilder<
   executeAsync(
     this: ConvexUpdateExecutableThis<TTable, TReturning, TMode>,
     ...args: TMode extends 'single'
-      ? [config?: MutationAsyncConfig]
+      ? [config?: Omit<MutationExecuteConfig, 'mode'>]
       : [config: never]
   ): Promise<
     TMode extends 'single'
@@ -228,14 +276,14 @@ export class ConvexUpdateBuilder<
   >;
   async executeAsync(
     ...args: TMode extends 'single'
-      ? [config?: MutationAsyncConfig]
+      ? [config?: Omit<MutationExecuteConfig, 'mode'>]
       : [config: never]
   ): Promise<
     TMode extends 'single'
       ? MutationExecuteResult<TTable, TReturning, 'single'>
       : never
   > {
-    const config = args[0] as MutationAsyncConfig | undefined;
+    const config = args[0] as Omit<MutationExecuteConfig, 'mode'> | undefined;
     const executable = this as unknown as ConvexUpdateBuilder<
       TTable,
       TReturning,
@@ -290,6 +338,12 @@ export class ConvexUpdateBuilder<
 
     const config = args[0] as MutationExecuteConfig | undefined;
     const ormContext = getOrmContext(this.db);
+    const returningSelection =
+      this.returningFields && this.returningFields !== true
+        ? splitReturningSelection(
+            this.returningFields as Record<string, unknown>
+          )
+        : undefined;
     const strict = ormContext?.strict ?? true;
     const allowFullScan = this.allowFullScanFlag;
     const pagination = this.paginateConfig;
@@ -655,13 +709,21 @@ export class ConvexUpdateBuilder<
       if (this.returningFields === true) {
         results.push(hydrateDateFieldsForRead(this.table, updated as any));
       } else {
-        results.push(
-          selectReturningRowWithHydration(
-            this.table,
+        const nextRow = returningSelection?.columnSelection
+          ? selectReturningRowWithHydration(
+              this.table,
+              updated as any,
+              returningSelection.columnSelection
+            )
+          : {};
+        if (returningSelection?.countSelection) {
+          nextRow._count = await this._loadReturningCount(
             updated as any,
-            this.returningFields as any
-          )
-        );
+            returningSelection.countSelection,
+            ormContext
+          );
+        }
+        results.push(nextRow);
       }
     }
 

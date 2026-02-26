@@ -156,14 +156,6 @@
       },
       {
         "sourceType": "plugin",
-        "pluginId": "ralph-loop@claude-plugins-official",
-        "pluginVersion": "2cd88e7947b7",
-        "sourceKind": "command",
-        "sourceRelPath": "commands/cancel-ralph.md",
-        "destRelPath": "cancel-ralph"
-      },
-      {
-        "sourceType": "plugin",
         "pluginId": "compound-engineering@every-marketplace",
         "pluginVersion": "2.35.2",
         "sourceKind": "command",
@@ -452,14 +444,6 @@
       },
       {
         "sourceType": "plugin",
-        "pluginId": "ralph-loop@claude-plugins-official",
-        "pluginVersion": "2cd88e7947b7",
-        "sourceKind": "command",
-        "sourceRelPath": "commands/help.md",
-        "destRelPath": "help"
-      },
-      {
-        "sourceType": "plugin",
         "pluginId": "dotai@dotai",
         "pluginVersion": "1.0.0",
         "sourceKind": "command",
@@ -553,14 +537,6 @@
         "sourceKind": "agent",
         "sourceRelPath": "agents/workflow/pr-comment-resolver.md",
         "destRelPath": "pr-comment-resolver"
-      },
-      {
-        "sourceType": "plugin",
-        "pluginId": "ralph-loop@claude-plugins-official",
-        "pluginVersion": "2cd88e7947b7",
-        "sourceKind": "command",
-        "sourceRelPath": "commands/ralph-loop.md",
-        "destRelPath": "ralph-loop"
       },
       {
         "sourceType": "plugin",

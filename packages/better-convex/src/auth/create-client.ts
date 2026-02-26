@@ -1,18 +1,12 @@
 import type { BetterAuthOptions } from 'better-auth';
 
-import {
-  type FunctionReference,
-  type GenericDataModel,
-  type GenericMutationCtx,
-  type GenericSchema,
-  internalMutationGeneric,
-  type SchemaDefinition,
+import type {
+  FunctionReference,
+  GenericDataModel,
+  GenericMutationCtx,
+  GenericSchema,
+  SchemaDefinition,
 } from 'convex/server';
-import { v } from 'convex/values';
-import {
-  customCtx,
-  customMutation,
-} from '../internal/upstream/server/customFunctions';
 import type { GenericCtx } from '../server/context-utils';
 import { isQueryCtx } from '../server/context-utils';
 import { dbAdapter, httpAdapter } from './adapter';
@@ -26,18 +20,13 @@ export type AuthFunctions = {
   findOne: FunctionReference<'query', 'internal', Record<string, any>>;
   updateMany: FunctionReference<'mutation', 'internal', Record<string, any>>;
   updateOne: FunctionReference<'mutation', 'internal', Record<string, any>>;
-  onCreate: FunctionReference<'mutation', 'internal', Record<string, any>>;
-  onDelete: FunctionReference<'mutation', 'internal', Record<string, any>>;
-  onUpdate: FunctionReference<'mutation', 'internal', Record<string, any>>;
-  beforeCreate?: FunctionReference<'mutation', 'internal', Record<string, any>>;
-  beforeDelete?: FunctionReference<'mutation', 'internal', Record<string, any>>;
-  beforeUpdate?: FunctionReference<'mutation', 'internal', Record<string, any>>;
 };
 
 export type Triggers<
   DataModel extends GenericDataModel,
   Schema extends SchemaDefinition<any, any>,
-> = GenericAuthTriggers<DataModel, Schema>;
+  TriggerCtx = unknown,
+> = GenericAuthTriggers<DataModel, Schema, TriggerCtx>;
 
 export type TriggerResolver<
   DataModel extends GenericDataModel,
@@ -45,31 +34,8 @@ export type TriggerResolver<
   TriggerCtx extends
     GenericMutationCtx<DataModel> = GenericMutationCtx<DataModel>,
 > =
-  | Triggers<DataModel, Schema>
-  | ((ctx: TriggerCtx) => Triggers<DataModel, Schema> | undefined);
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
-
-const withBothIdFields = <T>(value: T): T => {
-  if (!isPlainObject(value)) {
-    return value;
-  }
-
-  const existingUnderscoreId = value._id as string | undefined;
-  const existingId = value.id as string | undefined;
-  const id = existingUnderscoreId ?? existingId;
-
-  if (!id) {
-    return value;
-  }
-
-  return {
-    ...value,
-    _id: existingUnderscoreId ?? id,
-    id: existingId ?? id,
-  } as T;
-};
+  | Triggers<DataModel, Schema, TriggerCtx>
+  | ((ctx: TriggerCtx) => Triggers<DataModel, Schema, TriggerCtx> | undefined);
 
 export const createClient = <
   DataModel extends GenericDataModel,
@@ -79,7 +45,6 @@ export const createClient = <
 >(config: {
   authFunctions: AuthFunctions;
   schema: Schema;
-  internalMutation?: typeof internalMutationGeneric;
   context?: (
     ctx: GenericMutationCtx<DataModel>
   ) => TriggerCtx | Promise<TriggerCtx>;
@@ -94,116 +59,4 @@ export const createClient = <
     isQueryCtx(ctx)
       ? dbAdapter(ctx, getAuthOptions, config)
       : httpAdapter(ctx, config),
-  triggersApi: () => {
-    const mutationBuilderBase =
-      config.internalMutation ?? internalMutationGeneric;
-    const hasMutationCtxTransforms = config.context !== undefined;
-    const transformMutationCtx = async (ctx: GenericMutationCtx<DataModel>) =>
-      (await config.context?.(ctx)) ?? (ctx as TriggerCtx);
-    const mutationBuilder: typeof mutationBuilderBase = hasMutationCtxTransforms
-      ? (customMutation(
-          mutationBuilderBase,
-          customCtx(
-            async (ctx: GenericMutationCtx<DataModel>) =>
-              await transformMutationCtx(ctx)
-          )
-        ) as typeof mutationBuilderBase)
-      : mutationBuilderBase;
-    const resolveTriggers = (ctx: TriggerCtx) =>
-      typeof config.triggers === 'function'
-        ? config.triggers(ctx)
-        : config.triggers;
-    const getTriggers = (model: string, ctx: TriggerCtx) =>
-      resolveTriggers(ctx)?.[model as keyof Triggers<DataModel, Schema>];
-    const resolveTriggerCtx = async (ctx: GenericMutationCtx<DataModel>) =>
-      hasMutationCtxTransforms
-        ? (ctx as TriggerCtx)
-        : await transformMutationCtx(ctx);
-
-    return {
-      beforeCreate: mutationBuilder({
-        args: {
-          data: v.any(),
-          model: v.string(),
-        },
-        handler: async (ctx, args) => {
-          const triggerCtx = await resolveTriggerCtx(ctx);
-
-          return (
-            (await getTriggers(args.model, triggerCtx)?.beforeCreate?.(
-              args.data
-            )) ?? args.data
-          );
-        },
-      }),
-      beforeDelete: mutationBuilder({
-        args: {
-          doc: v.any(),
-          model: v.string(),
-        },
-        handler: async (ctx, args) => {
-          const triggerCtx = await resolveTriggerCtx(ctx);
-          const doc = withBothIdFields(args.doc);
-
-          return (
-            (await getTriggers(args.model, triggerCtx)?.beforeDelete?.(doc)) ??
-            doc
-          );
-        },
-      }),
-      beforeUpdate: mutationBuilder({
-        args: {
-          doc: v.any(),
-          model: v.string(),
-          update: v.any(),
-        },
-        handler: async (ctx, args) => {
-          const triggerCtx = await resolveTriggerCtx(ctx);
-          const doc = withBothIdFields(args.doc);
-
-          return (
-            (await getTriggers(args.model, triggerCtx)?.beforeUpdate?.(
-              doc,
-              args.update
-            )) ?? args.update
-          );
-        },
-      }),
-      onCreate: mutationBuilder({
-        args: {
-          doc: v.any(),
-          model: v.string(),
-        },
-        handler: async (ctx, args) => {
-          const triggerCtx = await resolveTriggerCtx(ctx);
-          const doc = withBothIdFields(args.doc);
-          await getTriggers(args.model, triggerCtx)?.onCreate?.(doc);
-        },
-      }),
-      onDelete: mutationBuilder({
-        args: {
-          doc: v.any(),
-          model: v.string(),
-        },
-        handler: async (ctx, args) => {
-          const triggerCtx = await resolveTriggerCtx(ctx);
-          const doc = withBothIdFields(args.doc);
-          await getTriggers(args.model, triggerCtx)?.onDelete?.(doc);
-        },
-      }),
-      onUpdate: mutationBuilder({
-        args: {
-          model: v.string(),
-          newDoc: v.any(),
-          oldDoc: v.any(),
-        },
-        handler: async (ctx, args) => {
-          const triggerCtx = await resolveTriggerCtx(ctx);
-          const newDoc = withBothIdFields(args.newDoc);
-          const oldDoc = withBothIdFields(args.oldDoc);
-          await getTriggers(args.model, triggerCtx)?.onUpdate?.(newDoc, oldDoc);
-        },
-      }),
-    };
-  },
 });

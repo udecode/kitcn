@@ -100,14 +100,15 @@ export default defineAuth((ctx) => ({
   trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
   triggers: {
     user: {
-      beforeCreate: async (data) => {
-        const username =
-          data.username?.trim() ?? data.email?.split('@')[0] ?? `user-${Date.now()}`;
-        return { ...data, username };
-      },
-      onCreate: async (user) => {
-        void user;
-        void ctx; // closure ctx for orm/scheduler side-effects
+      create: {
+        before: async (data, triggerCtx) => {
+          const username =
+            data.username?.trim() ?? data.email?.split('@')[0] ?? `user-${Date.now()}`;
+          return { data: { ...data, username } };
+        },
+        after: async (user, triggerCtx) => {
+          // triggerCtx has orm/scheduler access
+        },
       },
     },
   },
@@ -394,42 +395,51 @@ import { ConvexProviderWithAuth } from 'better-convex/react';
 
 ## Auth Triggers
 
-Define triggers in `auth.ts` via `defineAuth((ctx) => ({ triggers }))`. Before triggers run in the same transaction; after triggers run post-write.
+Define triggers in `auth.ts` via `defineAuth((ctx) => ({ triggers }))`. Triggers run inline in the same CRUD transaction.
 
-### User Triggers
+### Trigger Shape
 
-| Trigger | Signature | Return |
-|---------|-----------|--------|
-| `beforeCreate` | `(data) => data \| undefined` | Modified data |
-| `onCreate` | `(doc) => void` | Side effects |
-| `beforeUpdate` | `(doc, update) => update \| undefined` | Modified update |
-| `onUpdate` | `(newDoc, oldDoc) => void` | Sync changes |
-| `beforeDelete` | `(doc) => doc \| undefined` | Modified doc |
-| `onDelete` | `(doc) => void` | Cleanup |
+Nested `{ create, update, delete, change }` per table, matching ORM `defineTriggers` pattern. See [Trigger Shape reference](#trigger-shape-1) below for callback signatures.
+
+`before` return contract: `void` (continue unchanged), `{ data }` (shallow merge into payload), `false` (cancel write).
+
+`change` receives `{ operation: 'insert' | 'update' | 'delete', id, newDoc, oldDoc }`.
 
 ```ts
-// `ctx` is from defineAuth((ctx) => ({ triggers: ... })) closure.
 triggers: {
   user: {
-    beforeCreate: async (data) => {
-      const username = await generateUniqueUsername(ctx, data.name);
-      const role = adminEmails.includes(data.email) ? 'admin' : 'user';
-      return { ...data, username, role };
+    create: {
+      before: async (data, triggerCtx) => {
+        const username = await generateUniqueUsername(triggerCtx, data.name);
+        const role = adminEmails.includes(data.email) ? 'admin' : 'user';
+        return { data: { ...data, username, role } };
+      },
+      after: async (user, triggerCtx) => {
+        await triggerCtx.orm.insert(profiles).values({ userId: user.id, bio: '' });
+        const emailCaller = createEmailsCaller(triggerCtx);
+        await emailCaller.schedule.now.sendWelcome({ userId: user.id });
+      },
     },
-    onCreate: async (user) => {
-      await ctx.orm.insert(profiles).values({ userId: user.id, bio: '' });
-      const emailCaller = createEmailsCaller(ctx);
-      await emailCaller.schedule.now.sendWelcome({ userId: user.id });
+    update: {
+      after: async (newDoc, triggerCtx) => {
+        // Use `change` handler for old vs new comparisons
+      },
     },
-    onUpdate: async (newDoc, oldDoc) => {
-      if (newDoc.image !== oldDoc.image) {
-        const profile = await ctx.orm.query.profiles.findFirst({ where: { userId: newDoc.id } });
-        if (profile) await ctx.orm.update(profiles).set({ avatar: newDoc.image }).where(eq(profiles.id, profile.id));
+    delete: {
+      after: async (user, triggerCtx) => {
+        const profiles = await triggerCtx.orm.query.profiles.findMany({ where: { userId: user.id }, limit: 1000 });
+        for (const p of profiles) await triggerCtx.orm.delete(profilesTable).where(eq(profilesTable.id, p.id));
+      },
+    },
+    change: async (change, triggerCtx) => {
+      switch (change.operation) {
+        case 'update':
+          if (change.newDoc.image !== change.oldDoc.image) {
+            const profile = await triggerCtx.orm.query.profiles.findFirst({ where: { userId: change.id } });
+            if (profile) await triggerCtx.orm.update(profiles).set({ avatar: change.newDoc.image }).where(eq(profiles.id, profile.id));
+          }
+          break;
       }
-    },
-    onDelete: async (user) => {
-      const profiles = await ctx.orm.query.profiles.findMany({ where: { userId: user.id }, limit: 1000 });
-      for (const p of profiles) await ctx.orm.delete(profilesTable).where(eq(profilesTable.id, p.id));
     },
   },
 }
@@ -440,30 +450,19 @@ triggers: {
 ```ts
 triggers: {
   session: {
-    onCreate: async (session) => {
-      if (!session.activeOrganizationId) {
-        const user = await ctx.orm.query.user.findFirst({ where: { id: session.userId } });
-        if (user?.lastActiveOrganizationId) {
-          await ctx.orm.update(sessionTable).set({ activeOrganizationId: user.lastActiveOrganizationId })
-            .where(eq(sessionTable.id, session.id));
+    create: {
+      after: async (session, triggerCtx) => {
+        if (!session.activeOrganizationId) {
+          const user = await triggerCtx.orm.query.user.findFirst({ where: { id: session.userId } });
+          if (user?.lastActiveOrganizationId) {
+            await triggerCtx.orm.update(sessionTable).set({ activeOrganizationId: user.lastActiveOrganizationId })
+              .where(eq(sessionTable.id, session.id));
+          }
         }
-      }
+      },
     },
   },
 }
-```
-
-### Trigger Runtime Exports
-
-```ts
-import {
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
-} from './generated/auth';
 ```
 
 ### Type Safety
@@ -474,4 +473,22 @@ Triggers are typed from schema: `data` is `Infer<Schema['tables']['user']['valid
 
 ## Auth vs DB Triggers
 
-Auth triggers (`defineAuth(...).triggers`) handle auth lifecycle events. DB triggers (`convexTable('user', {...}, () => [...])`) handle database-level side effects (aggregates, cascades, counters).
+Auth triggers (`defineAuth(...).triggers`) handle auth lifecycle events. DB triggers (`defineTriggers`) handle database-level side effects (aggregates, cascades, counters).
+
+---
+
+## API Reference
+
+### Trigger Shape
+
+Nested `{ create, update, delete, change }` per table, matching ORM `defineTriggers` pattern:
+
+| Hook | Signature | Return |
+|------|-----------|--------|
+| `create.before` | `(data, ctx) => void \| { data } \| false` | Merge / cancel |
+| `create.after` | `(doc, ctx) => void` | Side effects |
+| `update.before` | `(update, ctx) => void \| { data } \| false` | Merge / cancel |
+| `update.after` | `(newDoc, ctx) => void` | Sync changes |
+| `delete.before` | `(doc, ctx) => void \| { data } \| false` | Guard / cancel |
+| `delete.after` | `(doc, ctx) => void` | Cleanup |
+| `change` | `(change, ctx) => void` | Cross-operation |

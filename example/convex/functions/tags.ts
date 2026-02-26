@@ -2,7 +2,6 @@ import { eq } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authMutation, authQuery } from '../lib/crpc';
-import { aggregateTagUsage } from './aggregates';
 import { tagsTable, todoTagsTable } from './schema';
 
 // List user's tags with usage count
@@ -22,18 +21,18 @@ export const list = authQuery
     const tags = await ctx.orm.query.tags.findMany({
       where: { createdBy: ctx.userId },
       orderBy: { createdAt: 'asc' },
+      with: {
+        _count: {
+          todos: true,
+        },
+      },
     });
 
     if (!tags.length) return [];
 
-    const usageCounts = await aggregateTagUsage.countBatch(
-      ctx,
-      tags.map((tag) => ({ namespace: tag.id, bounds: {} }))
-    );
-
-    return tags.map((tag, idx) => ({
+    return tags.map((tag) => ({
       ...tag,
-      usageCount: usageCounts[idx] ?? 0,
+      usageCount: tag._count?.todos ?? 0,
     }));
   });
 
@@ -207,18 +206,20 @@ export const popular = authQuery
     const limit = input.limit || 10;
 
     // Get all tags with usage counts
-    const allTags = await ctx.orm.query.tags.findMany({ limit: 100 });
+    const allTags = await ctx.orm.query.tags.findMany({
+      limit: 100,
+      with: {
+        _count: {
+          todos: true,
+        },
+      },
+    });
 
     if (!allTags.length) return [];
 
-    const usageCounts = await aggregateTagUsage.countBatch(
-      ctx,
-      allTags.map((tag) => ({ namespace: tag.id, bounds: {} }))
-    );
-
-    const tagsWithCounts = allTags.map((tag, idx) => ({
+    const tagsWithCounts = allTags.map((tag) => ({
       ...tag,
-      usageCount: usageCounts[idx] ?? 0,
+      usageCount: tag._count?.todos ?? 0,
       isOwn: tag.createdBy === ctx.userId,
     }));
 

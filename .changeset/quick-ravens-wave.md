@@ -6,9 +6,12 @@
 
 ### Breaking changes
 
-- Replace split auth exports (`getAuthOptions` + `authTriggers`) with one default `defineAuth((ctx) => ({ ...options, triggers }))` contract in `convex/functions/auth.ts`.
-- Drop manual auth runtime exports from `convex/functions/auth.ts`; codegen now generates runtime handlers (`getAuth`, CRUD, trigger handlers, `auth`) in `convex/functions/generated/auth`.
-- Drop trigger `ctx` as the first callback parameter and use doc-first signatures (`beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)`, etc.).
+- Redesign auth trigger API from flat callbacks to nested `{ create, update, delete, change }` shape matching ORM `defineTriggers` pattern.
+- Replace split auth exports (`getAuthOptions` + `authTriggers`) with one default `defineAuth((ctx) => ({ ...options, triggers }))` contract.
+- Drop generated trigger procedures (`beforeCreate`, `onCreate`, `beforeUpdate`, `onUpdate`, `beforeDelete`, `onDelete`); triggers now run inline in the same CRUD transaction.
+- Add `ctx` as second parameter to all trigger callbacks for access to mutation context.
+- Add `before` hook return contract: `void` (continue unchanged), `{ data }` (shallow merge into payload), `false` (cancel write).
+- Add unified `change(change, ctx)` handler with discriminated union `{ operation, id, newDoc, oldDoc }`.
 - Rename `createApi` option `skipValidation` to `validateInput`; default is now `validateInput: false`.
 - Rename auth package entrypoints from hyphenated to namespaced paths:
   - `better-convex/auth-client` -> `better-convex/auth/client`
@@ -30,7 +33,17 @@ export default defineAuth((ctx) => ({
   ...options,
   triggers: {
     user: {
-      onCreate: async (user) => {},
+      create: {
+        before: async (data, ctx) => ({ data: { ...data, role: "user" } }),
+        after: async (doc, ctx) => {},
+      },
+      update: {
+        after: async (newDoc, ctx) => {},
+      },
+      change: async (change, ctx) => {
+        // change.operation: 'insert' | 'update' | 'delete'
+        // change.id, change.newDoc, change.oldDoc
+      },
     },
   },
 }));
@@ -73,6 +86,7 @@ import { authMiddleware, registerRoutes } from "better-convex/auth/http";
 - Add `defineAuth` helpers to unify codegen and non-codegen auth setup.
 - Add always-generated Better Auth runtime contract in `convex/functions/generated/auth.ts`.
 - Add generated `defineAuth` export in `convex/functions/generated/auth.ts` for inference-first `auth.ts` authoring.
+- Support ORM-aware auth writes (insert/update/delete go through ORM when available).
 
 ## Codegen
 
@@ -283,8 +297,84 @@ import { withOrm } from "./generated/server";
 
 ### Features
 
-- Add `better-convex/aggregate` entrypoint.
-- Add `createAggregate`, support both trigger invocation forms:
-  - `aggregate.trigger()`
-  - `aggregate.trigger(change, ctx)`
-- Add optional peer dependency `@convex-dev/aggregate >=0.2.0`.
+- Add built-in aggregate-core runtime (B-tree backed).
+- Add `aggregateIndex` schema builder for declaring ORM count and aggregate index coverage:
+  - `aggregateIndex(name).on(field1, field2)` — filter key fields.
+  - `aggregateIndex(name).all()` — unfiltered (global) metrics.
+  - Chainable metric methods: `.count(field)`, `.sum(field)`, `.avg(field)`, `.min(field)`, `.max(field)`.
+
+```ts
+// Schema declaration
+const orders = convexTable(
+  "orders",
+  { orgId: text(), amount: integer(), score: integer() },
+  (t) => [
+    aggregateIndex("by_org")
+      .on(t.orgId)
+      .sum(t.amount)
+      .avg(t.amount)
+      .min(t.score)
+      .max(t.score),
+    aggregateIndex("all_metrics").all().sum(t.amount).count(t.orgId),
+  ]
+);
+```
+
+- Add `ctx.orm.query.<table>.count()` and `ctx.orm.query.<table>.count({ where, select, orderBy, skip, take, cursor })` for O(1) filtered counts backed by `aggregateIndex`. Windowed count (`skip`/`take`/`cursor`) counts rows within a window defined by ordering and bounds.
+- Add `ctx.orm.query.<table>.aggregate({ where, _count, _sum, _avg, _min, _max, orderBy, skip, take, cursor })` for Prisma-style aggregate blocks with optional windowed bounds.
+- Add safe finite `OR` rewrite for aggregate/count `where` — `OR` branches collapse when each is index-plannable (differs on one scalar eq/in/isNull field).
+- Add `findMany({ distinct })` deterministic `DISTINCT_UNSUPPORTED` error directing to `select().distinct({ fields })` pipeline.
+- Add relation `_count` loading via `with: { _count: { todos: true } }` with optional filtered variants.
+- Add through-filtered relation `_count` for `through()` relations using indexed lookups + no-scan-safe filter validation.
+- Add mutation `returning({ _count })` for insert/update/delete via split selection + relation count loading.
+- Add Prisma-style `_sum` nullability: returns `null` for empty sets or all-null field values (instead of `0`).
+- Add `groupBy()` to the ORM query builder with Prisma-style `by`, `_count`, `_sum`, `_avg`, `_min`, `_max` blocks. Requires finite `where` constraints (`eq`/`in`/`isNull`) on every `by` field — no `having`/`orderBy`/`skip`/`take`/`cursor` in v1.
+
+```ts
+// Count
+const total = await ctx.orm.query.todos.count({ where: { projectId } });
+
+// Aggregate
+const stats = await ctx.orm.query.orders.aggregate({
+  where: { orgId: "org-1" },
+  _count: { _all: true },
+  _sum: { amount: true },
+  _avg: { amount: true },
+});
+
+// Relation _count
+const users = await ctx.orm.query.user.findMany({
+  with: { _count: { todos: { where: { completed: true } } } },
+});
+```
+
+- Add generated `aggregateBackfill` and `aggregateBackfillStatus` procedures for index building and status polling.
+- Add ORM internal storage tables (`aggregate_bucket`, `aggregate_member`, `aggregate_extrema`, `aggregate_state`) auto-injected by `defineSchema`.
+
+Temporary:
+
+- Add `better-convex/aggregate` entrypoint with `TableAggregate`, `DirectAggregate`, and `createDirectAggregate({ name })`:
+  - `TableAggregate` supports dual trigger invocation: `aggregate.trigger()` (factory) and `aggregate.trigger(change, ctx)` (direct call from `defineTriggers`).
+  - `DirectAggregate` for table-independent manual aggregation.
+  - Re-exports `aggregateStorageTables` for schema injection.
+- Built-in ranked APIs (`at`, `indexOf`, `paginate`, `paginateNamespaces`) — no `@convex-dev/aggregate` dependency needed.
+
+## CLI
+
+### Features
+
+- Add `better-convex analyze` command with two modes:
+  - Default **hotspot** mode: per-entry bundle analysis showing output size, dependency size, and handler counts. Interactive TUI with keyboard navigation, live filtering, sort cycling, detail panes (handlers/packages/inputs), and file watch for auto-refresh.
+  - `--deploy` mode: single-isolate bundle analysis matching Convex deploy bundling. Reports total size, top inputs, and top packages.
+  - `--fail-mb <n>` for CI gating: exit 1 if largest entry or chunk exceeds threshold.
+  - Positional regex argument to filter entry points (e.g. `better-convex analyze "auth.*"`).
+- Add `better-convex deploy` command that wraps `convex deploy` with automatic post-deploy aggregate backfill.
+- Add `better-convex aggregate rebuild` command for full aggregate index rebuild.
+- Add `better-convex aggregate backfill` command for resume-mode backfill (no clear/rebuild).
+- Add automatic aggregate backfill to `better-convex dev` (auto-resumes on startup, non-blocking).
+- Add `aggregateBackfill` config section in `better-convex.json` for both `dev` and `deploy`:
+  - `enabled`: `"auto"` (skip if function not found), `"on"`, or `"off"`.
+  - `wait`: poll until all indexes READY or timeout (default `true`).
+  - `batchSize`, `pollIntervalMs`, `timeoutMs`: tuning knobs.
+  - `strict`: exit 1 on failure/timeout (default `true` for deploy, `false` for dev).
+- Add CLI flags for aggregate backfill overrides: `--backfill`, `--backfill-wait`, `--backfill-strict`, `--backfill-batch-size`, `--backfill-timeout-ms`, `--backfill-poll-ms`.

@@ -16,13 +16,6 @@ const envSchema = z.object({
   JWKS: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
 
-  // Polar (new payment provider)
-  POLAR_ACCESS_TOKEN: z.string().optional(),
-  POLAR_PRODUCT_CREDITS: z.string().optional(),
-  POLAR_PRODUCT_PREMIUM: z.string().default('premium'),
-  POLAR_SERVER: z.enum(['production', 'sandbox']).default('sandbox'),
-  POLAR_WEBHOOK_SECRET: z.string().optional(),
-
   // Superadmin emails
   ADMIN: z
     .string()

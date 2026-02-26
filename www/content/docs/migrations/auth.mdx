@@ -250,8 +250,13 @@ Here's what the before and after looks like:
       ],
       triggers: {
         user: {
-          beforeCreate: async (data) => data,
-          onCreate: async (user) => {},
+          create: {
+            before: async (data, triggerCtx) => {
+              return { data };
+            },
+            after: async (user, triggerCtx) => {
+            },
+          },
         },
       },
     }));
@@ -268,7 +273,7 @@ Here's a summary of what changed and why:
 | `createAuthOptions`/`getAuth` split | Single `defineAuth((ctx) => ({ ... }))` | One contract, less boilerplate |
 | Runtime exports from `auth.ts` | Generated runtime in `convex/functions/generated.ts` | Codegen handles wiring for you |
 | `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` with context-aware adapter | Automatic direct DB in queries, HTTP adapter in actions |
-| Trigger signature `(ctx, ...)` | Trigger signatures `(...)` with closure `ctx` | Cleaner API — `ctx` comes from the `defineAuth` closure |
+| Trigger signature `(ctx, ...)` | Trigger signatures `(..., ctx)` | Full parity with ORM `defineTriggers` callbacks |
 | Component namespace routing | Generated contract + `internal.generated.*` handlers | No more component indirection |
 
 <Callout icon={<InfoIcon />}>
@@ -400,7 +405,7 @@ Now we'll update the client-side auth setup.
   </CompareItem>
   <CompareItem title="After (lib/convex/auth-client.ts)">
     ```ts showLineNumbers title="lib/convex/auth-client.ts" {3,12-16}
-    import { convexClient } from "better-auth/client/plugins";
+    import { convexClient } from "better-convex/auth/client";
     import { createAuthClient } from "better-auth/react";
     import { createAuthMutations } from "better-convex/react";
 
@@ -1016,7 +1021,6 @@ If it still fails, re-run `better-convex codegen` first so generated exports are
 Done! Your auth is now migrated. Here's what to explore next:
 
 <Cards>
-  <Card title="Triggers" href="/docs/auth/triggers" description="Add user triggers" />
   <Card title="Organizations" href="/docs/auth/plugins/organizations" description="Multi-tenant support" />
   <Card title="Client Setup" href="/docs/auth/client" description="React hooks and utilities" />
 </Cards>

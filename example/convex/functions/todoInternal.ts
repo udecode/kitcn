@@ -1,7 +1,6 @@
 import { eq } from 'better-convex/orm';
 import { z } from 'zod';
 import { privateAction, privateMutation, privateQuery } from '../lib/crpc';
-import { aggregateTodosByStatus, aggregateTodosByUser } from './aggregates';
 import { createTodoInternalCaller } from './generated/todoInternal.runtime';
 import { todosTable } from './schema';
 
@@ -131,46 +130,34 @@ export const getSystemStats = privateQuery
     todayStart.setHours(0, 0, 0, 0);
 
     // User stats
-    const allUsers = await ctx.orm.query.user.findMany({ limit: 1000 });
+    const allUsers = await ctx.orm.query.user.findMany({
+      limit: 1000,
+      with: {
+        _count: {
+          todos: {
+            where: {
+              deletionTime: { isNull: true },
+            },
+          },
+        },
+      },
+    });
     // For active users, check by creation time since _lastModified doesn't exist
     const activeUsers = allUsers.filter(
       (u) => u.createdAt.getTime() > thirtyDaysAgo
     );
 
-    // Count users with todos using aggregates (exclude soft-deleted)
-    const activeTodoCounts = allUsers.length
-      ? await aggregateTodosByUser.countBatch(
-          ctx,
-          allUsers.map((user) => ({
-            namespace: user.id,
-            bounds: {
-              lower: { key: ['high', false, false], inclusive: true },
-              upper: { key: ['none', true, false], inclusive: true },
-            },
-          }))
-        )
-      : [];
-    const usersWithTodos = activeTodoCounts.filter((count) => count > 0).length;
+    const usersWithTodos = allUsers.filter(
+      (user) => (user._count?.todos ?? 0) > 0
+    ).length;
 
     // Todo stats (only count active todos, not soft-deleted)
-    const totalTodos = await aggregateTodosByStatus.count(ctx, {
-      bounds: {
-        lower: { key: [false, 'high', 0, false], inclusive: true },
-        upper: {
-          key: [true, 'none', Number.POSITIVE_INFINITY, false],
-          inclusive: true,
-        },
-      },
+    const totalTodos = await ctx.orm.query.todos.count({
+      where: { deletionTime: { isNull: true } },
     });
     // Count completed active todos
-    const completedTodos = await aggregateTodosByStatus.count(ctx, {
-      bounds: {
-        lower: { key: [true, 'high', 0, false], inclusive: true },
-        upper: {
-          key: [true, 'none', Number.POSITIVE_INFINITY, false],
-          inclusive: true,
-        },
-      },
+    const completedTodos = await ctx.orm.query.todos.count({
+      where: { completed: true, deletionTime: { isNull: true } },
     });
 
     // Count overdue (exclude soft-deleted)
@@ -360,68 +347,49 @@ export const recalculateUserStats = privateMutation
     })
   )
   .mutation(async ({ ctx, input }) => {
-    await ctx.orm.query.user.findFirstOrThrow({
-      where: { id: input.userId },
-    });
-
-    // Get todo counts from aggregates (exclude soft-deleted)
-    const totalTodos = await aggregateTodosByUser.count(ctx, {
-      namespace: input.userId,
-      bounds: {
-        lower: { key: ['high', false, false], inclusive: true },
-        upper: { key: ['none', true, false], inclusive: true },
-      },
-    });
-
-    // Count completed todos (exclude soft-deleted)
-    const completedCounts = await Promise.all([
-      aggregateTodosByUser.count(ctx, {
-        namespace: input.userId,
-        bounds: {
-          lower: { key: ['low', true, false], inclusive: true },
-          upper: { key: ['low', true, false], inclusive: true },
-        },
-      }),
-      aggregateTodosByUser.count(ctx, {
-        namespace: input.userId,
-        bounds: {
-          lower: { key: ['medium', true, false], inclusive: true },
-          upper: { key: ['medium', true, false], inclusive: true },
-        },
-      }),
-      aggregateTodosByUser.count(ctx, {
-        namespace: input.userId,
-        bounds: {
-          lower: { key: ['high', true, false], inclusive: true },
-          upper: { key: ['high', true, false], inclusive: true },
-        },
-      }),
-      aggregateTodosByUser.count(ctx, {
-        namespace: input.userId,
-        bounds: {
-          lower: { key: ['none', true, false], inclusive: true },
-          upper: { key: ['none', true, false], inclusive: true },
-        },
-      }),
-    ]);
-
-    const completedTodos = completedCounts.reduce(
-      (sum, count) => sum + count,
-      0
-    );
-
     // Calculate streak (consecutive days with completed todos, exclude soft-deleted)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const recentCompleted = await ctx.orm.query.todos.findMany({
-      where: {
-        userId: input.userId,
-        completed: true,
-        createdAt: { gte: thirtyDaysAgo },
-        deletionTime: { isNull: true },
-      },
-      orderBy: { createdAt: 'desc' },
-      limit: 1000,
-    });
+    const [userWithTotalTodos, userWithCompletedTodos, recentCompleted] =
+      await Promise.all([
+        ctx.orm.query.user.findFirstOrThrow({
+          where: { id: input.userId },
+          with: {
+            _count: {
+              todos: {
+                where: {
+                  deletionTime: { isNull: true },
+                },
+              },
+            },
+          },
+        }),
+        ctx.orm.query.user.findFirst({
+          where: { id: input.userId },
+          with: {
+            _count: {
+              todos: {
+                where: {
+                  completed: true,
+                  deletionTime: { isNull: true },
+                },
+              },
+            },
+          },
+        }),
+        ctx.orm.query.todos.findMany({
+          where: {
+            userId: input.userId,
+            completed: true,
+            createdAt: { gte: thirtyDaysAgo },
+            deletionTime: { isNull: true },
+          },
+          orderBy: { createdAt: 'desc' },
+          limit: 1000,
+        }),
+      ]);
+
+    const totalTodos = userWithTotalTodos._count?.todos ?? 0;
+    const completedTodos = userWithCompletedTodos?._count?.todos ?? 0;
 
     // Calculate streak
     let streak = 0;

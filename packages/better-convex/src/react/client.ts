@@ -119,17 +119,20 @@ export interface ConvexQueryClientOptions extends ConvexReactClientOptions {
   /** Auth store for checking auth state in queryFn */
   authStore?: AuthStore;
 
+  /**
+   * Opt out of consistent SSR queries for faster performance.
+   * Trade-off: queries may return results from different timestamps.
+   */
+  dangerouslyUseInconsistentQueriesDuringSSR?: boolean;
+
   /** TanStack QueryClient. Can also be set later via .connect(queryClient) */
   queryClient?: QueryClient;
 
   /** Custom fetch for SSR. Avoid bundling on client. */
   serverFetch?: typeof globalThis.fetch;
 
-  /**
-   * Opt out of consistent SSR queries for faster performance.
-   * Trade-off: queries may return results from different timestamps.
-   */
-  dangerouslyUseInconsistentQueriesDuringSSR?: boolean;
+  /** Optional payload transformer (always composed with built-in Date support). */
+  transformer?: DataTransformerOptions;
 
   /**
    * Delay in ms before unsubscribing when a query has no observers.
@@ -138,9 +141,6 @@ export interface ConvexQueryClientOptions extends ConvexReactClientOptions {
    * @default 3000
    */
   unsubscribeDelay?: number;
-
-  /** Optional payload transformer (always composed with built-in Date support). */
-  transformer?: DataTransformerOptions;
 }
 
 // ============================================================================

@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/performance/useTopLevelRegex: inline regex assertions are intentional in tests. */
-import { vi } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { and, eq, gt, isNull, not, or } from './filter-expression';
 import { convexTable, date, index, integer, text, timestamp } from './index';
 import {

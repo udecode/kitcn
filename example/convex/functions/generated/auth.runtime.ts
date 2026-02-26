@@ -14,18 +14,12 @@ import { api, internal } from '../_generated/api.js';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 
 const procedureRegistry = {
-  "beforeCreate": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["beforeCreate"], () => (require("./auth") as Record<string, unknown>)["beforeCreate"])],
-  "beforeDelete": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["beforeDelete"], () => (require("./auth") as Record<string, unknown>)["beforeDelete"])],
-  "beforeUpdate": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["beforeUpdate"], () => (require("./auth") as Record<string, unknown>)["beforeUpdate"])],
   "create": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["create"], () => (require("./auth") as Record<string, unknown>)["create"])],
   "deleteMany": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["deleteMany"], () => (require("./auth") as Record<string, unknown>)["deleteMany"])],
   "deleteOne": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["deleteOne"], () => (require("./auth") as Record<string, unknown>)["deleteOne"])],
   "findMany": ["query", typedProcedureResolver(internal["generated"]["auth"]["findMany"], () => (require("./auth") as Record<string, unknown>)["findMany"])],
   "findOne": ["query", typedProcedureResolver(internal["generated"]["auth"]["findOne"], () => (require("./auth") as Record<string, unknown>)["findOne"])],
   "getLatestJwks": ["action", typedProcedureResolver(internal["generated"]["auth"]["getLatestJwks"], () => (require("./auth") as Record<string, unknown>)["getLatestJwks"])],
-  "onCreate": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["onCreate"], () => (require("./auth") as Record<string, unknown>)["onCreate"])],
-  "onDelete": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["onDelete"], () => (require("./auth") as Record<string, unknown>)["onDelete"])],
-  "onUpdate": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["onUpdate"], () => (require("./auth") as Record<string, unknown>)["onUpdate"])],
   "rotateKeys": ["action", typedProcedureResolver(internal["generated"]["auth"]["rotateKeys"], () => (require("./auth") as Record<string, unknown>)["rotateKeys"])],
   "updateMany": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["updateMany"], () => (require("./auth") as Record<string, unknown>)["updateMany"])],
   "updateOne": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["updateOne"], () => (require("./auth") as Record<string, unknown>)["updateOne"])],

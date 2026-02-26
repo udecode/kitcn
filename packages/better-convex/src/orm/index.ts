@@ -49,6 +49,11 @@ export type {
   GenericSchema,
   SchemaDefinition,
 } from 'convex/server';
+export type {
+  CountBackfillChunkArgs,
+  CountBackfillKickoffArgs,
+  CountBackfillStatusArgs,
+} from './aggregate-index/backfill';
 // M6: Column Builders (Drizzle-style)
 export type {
   AnyColumn,
@@ -173,6 +178,9 @@ export {
 } from './filter-expression';
 // M1: Index Builders (Drizzle-style)
 export {
+  aggregateIndex,
+  type ConvexAggregateIndexBuilder,
+  type ConvexAggregateIndexBuilderOn,
   type ConvexIndexBuilder,
   type ConvexIndexBuilderOn,
   type ConvexSearchIndexBuilder,
@@ -256,8 +264,13 @@ export type {
 export { defineTriggers } from './triggers';
 // M3: Query Builder Types
 export type {
+  AggregateConfig,
+  AggregateFieldValue,
+  AggregateResult,
   BuildQueryResult,
   BuildRelationResult,
+  CountConfig,
+  CountResult,
   DBQueryConfig,
   FilterOperators,
   GetColumnData,
@@ -265,7 +278,6 @@ export type {
   InferModelFromColumns,
   InferSelectModel,
   InsertValue,
-  MutationAsyncConfig,
   MutationExecuteConfig,
   MutationExecuteResult,
   MutationExecutionMode,

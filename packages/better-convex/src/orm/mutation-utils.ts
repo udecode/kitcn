@@ -8,6 +8,7 @@ import type {
   ColumnBuilder,
   ForeignKeyAction,
 } from './builders/column-builder';
+import type { EdgeMetadata } from './extractRelationsConfig';
 import type {
   BinaryExpression,
   ExpressionVisitor,
@@ -60,6 +61,9 @@ export type ForeignKeyGraph = {
 
 export type OrmContextValue = {
   foreignKeyGraph?: ForeignKeyGraph;
+  schema?: TablesRelationalConfig;
+  edgeMetadata?: EdgeMetadata[];
+  relationLoading?: { concurrency?: number };
   scheduler?: Scheduler;
   scheduledDelete?: SchedulableFunctionReference;
   scheduledMutationBatch?: SchedulableFunctionReference;
@@ -73,7 +77,10 @@ export type MutationRunMode = 'sync' | 'async';
 
 export type ResolvedOrmRuntimeDefaults = {
   defaultLimit?: number;
+  countBackfillBatchSize: number;
   relationFanOutMaxKeys: number;
+  aggregateCartesianMaxKeys: number;
+  aggregateWorkBudget: number;
   mutationBatchSize: number;
   mutationLeafBatchSize: number;
   mutationMaxRows: number;
@@ -576,7 +583,10 @@ const DEFAULT_MUTATION_MAX_ROWS = 10_000;
 const DEFAULT_MUTATION_MAX_BYTES_PER_BATCH = 2_097_152;
 const DEFAULT_MUTATION_SCHEDULE_CALL_CAP = 800;
 const DEFAULT_MUTATION_ASYNC_DELAY_MS = 0;
+const DEFAULT_COUNT_BACKFILL_BATCH_SIZE = 1000;
 const DEFAULT_RELATION_FAN_OUT_MAX_KEYS = 1000;
+const DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS = 4096;
+const DEFAULT_AGGREGATE_WORK_BUDGET = 16_384;
 const MEASURED_BYTE_SAFETY_MULTIPLIER = 2;
 const UTF8_LENGTH_THRESHOLD = 500;
 const UTF8_ENCODER = new TextEncoder();
@@ -614,8 +624,15 @@ export const resolveOrmRuntimeDefaults = (
     runtime.scheduler && runtime.scheduledMutationBatch ? 'async' : 'sync';
   return {
     defaultLimit: defaults?.defaultLimit,
+    countBackfillBatchSize:
+      defaults?.countBackfillBatchSize ?? DEFAULT_COUNT_BACKFILL_BATCH_SIZE,
     relationFanOutMaxKeys:
       defaults?.relationFanOutMaxKeys ?? DEFAULT_RELATION_FAN_OUT_MAX_KEYS,
+    aggregateCartesianMaxKeys:
+      defaults?.aggregateCartesianMaxKeys ??
+      DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS,
+    aggregateWorkBudget:
+      defaults?.aggregateWorkBudget ?? DEFAULT_AGGREGATE_WORK_BUDGET,
     mutationBatchSize:
       defaults?.mutationBatchSize ?? DEFAULT_MUTATION_BATCH_SIZE,
     mutationLeafBatchSize:
@@ -1698,6 +1715,83 @@ export function getSelectionColumnName(value: unknown): string {
     }
   }
   throw new Error('Returning selection must reference a column');
+}
+
+export type MutationReturningCountSelection = Record<
+  string,
+  | true
+  | {
+      where?: Record<string, unknown> | undefined;
+    }
+  | undefined
+>;
+
+export function splitReturningSelection(fields: Record<string, unknown>): {
+  columnSelection: Record<string, unknown> | undefined;
+  countSelection: MutationReturningCountSelection | undefined;
+} {
+  const columnSelection: Record<string, unknown> = {};
+  let countSelection: MutationReturningCountSelection | undefined;
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (key !== '_count') {
+      getSelectionColumnName(value);
+      columnSelection[key] = value;
+      continue;
+    }
+
+    if (value === undefined) {
+      continue;
+    }
+    if (!isPlainObject(value)) {
+      throw new Error('returning({ _count }) requires an object.');
+    }
+
+    const nextCountSelection: MutationReturningCountSelection = {};
+    for (const [relationName, relationSelection] of Object.entries(value)) {
+      if (relationSelection === undefined || relationSelection === false) {
+        continue;
+      }
+      if (relationSelection === true) {
+        nextCountSelection[relationName] = true;
+        continue;
+      }
+      if (!isPlainObject(relationSelection)) {
+        throw new Error(
+          `returning({ _count.${relationName} }) must be true or { where }`
+        );
+      }
+      if ('select' in relationSelection) {
+        throw new Error(
+          `returning({ _count.${relationName}.select }) is removed. Use returning({ _count: { ${relationName}: true } })`
+        );
+      }
+      for (const [optionKey, optionValue] of Object.entries(
+        relationSelection
+      )) {
+        if (optionKey !== 'where' && optionValue !== undefined) {
+          throw new Error(
+            `returning({ _count.${relationName} }) does not support '${optionKey}'`
+          );
+        }
+      }
+      if (typeof relationSelection.where === 'function') {
+        throw new Error(
+          `returning({ _count.${relationName}.where }) callback is unsupported in v1`
+        );
+      }
+      nextCountSelection[relationName] = {
+        where: relationSelection.where as Record<string, unknown> | undefined,
+      };
+    }
+    countSelection = nextCountSelection;
+  }
+
+  return {
+    columnSelection:
+      Object.keys(columnSelection).length > 0 ? columnSelection : undefined,
+    countSelection,
+  };
 }
 
 export function selectReturningRow(

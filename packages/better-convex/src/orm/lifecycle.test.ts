@@ -129,6 +129,74 @@ describe('orm lifecycle hooks', () => {
     ]);
   });
 
+  test('hook docs include public id alias when storage only exposes _id', async () => {
+    const events: Array<{ hook: string; id: unknown; _id: unknown }> = [];
+
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_public_id_alias_test',
+      { name: text().notNull() },
+      {
+        create: {
+          after: async (doc: { id?: string; _id?: string }) => {
+            events.push({ hook: 'create', id: doc.id, _id: doc._id });
+          },
+        },
+        update: {
+          after: async (doc: { id?: string; _id?: string }) => {
+            events.push({ hook: 'update', id: doc.id, _id: doc._id });
+          },
+        },
+        delete: {
+          after: async (doc: { id?: string; _id?: string }) => {
+            events.push({ hook: 'delete', id: doc.id, _id: doc._id });
+          },
+        },
+        change: async (change: {
+          operation: 'insert' | 'update' | 'delete';
+          oldDoc: { id?: string; _id?: string } | null;
+          newDoc: { id?: string; _id?: string } | null;
+        }) => {
+          if (change.operation === 'delete') {
+            events.push({
+              hook: 'change:delete',
+              id: change.oldDoc?.id,
+              _id: change.oldDoc?._id,
+            });
+            return;
+          }
+          events.push({
+            hook: `change:${change.operation}`,
+            id: change.newDoc?.id,
+            _id: change.newDoc?._id,
+          });
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
+    const { writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    const id = await ctx.db.insert('users_lifecycle_public_id_alias_test', {
+      name: 'Ada',
+    } as any);
+    await ctx.db.patch(
+      'users_lifecycle_public_id_alias_test',
+      id as any,
+      { name: 'Grace' } as any
+    );
+    await ctx.db.delete('users_lifecycle_public_id_alias_test', id as any);
+
+    expect(events).toEqual([
+      { hook: 'create', id, _id: id },
+      { hook: 'change:insert', id, _id: id },
+      { hook: 'update', id, _id: id },
+      { hook: 'change:update', id, _id: id },
+      { hook: 'delete', id, _id: id },
+      { hook: 'change:delete', id, _id: id },
+    ]);
+  });
+
   test('orm.db(ctx) runs hooks for ORM writes and forwards ctx.orm', async () => {
     let seenOrm = false;
     const events: string[] = [];
@@ -160,6 +228,42 @@ describe('orm lifecycle hooks', () => {
 
     expect(events).toEqual(['create:Ada']);
     expect(seenOrm).toBe(true);
+  });
+
+  test('ctx.orm writes inside hooks do not deadlock', async () => {
+    const events: string[] = [];
+
+    const { users, schema, triggers } = createUsersSchema(
+      'users_lifecycle_ctx_orm_nested_write_test',
+      { name: text().notNull() },
+      {
+        create: {
+          after: async (
+            doc: { id: string; name: string },
+            ctx: Record<string, unknown>
+          ) => {
+            events.push(`create:${doc.name}`);
+            if (doc.name !== 'Ada') {
+              return;
+            }
+            await (ctx.orm as any).insert(users).values({
+              name: 'Grace',
+            });
+          },
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
+    const { docs, writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    await ctx.db.insert('users_lifecycle_ctx_orm_nested_write_test', {
+      name: 'Ada',
+    } as any);
+
+    expect(events).toEqual(['create:Ada', 'create:Grace']);
+    expect(docs.size).toBe(2);
   });
 
   test('create.before can merge insert payload', async () => {

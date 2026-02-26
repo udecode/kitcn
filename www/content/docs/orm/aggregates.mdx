@@ -1,0 +1,719 @@
+---
+title: Aggregates
+description: Efficient counts, sums, and rankings — from ORM scalar metrics to TableAggregate.
+links:
+  doc: https://www.convex.dev/components/aggregate
+---
+
+import { InfoIcon } from "lucide-react"
+
+In this guide, we'll explore two approaches to aggregation. **Scalar metrics** give you counts, sums, and averages through the ORM query builder — no extra setup beyond declaring an index. **TableAggregate** is for what the ORM can't do: rankings, random access, and sorted pagination.
+
+## Scalar Metrics
+
+The easiest way to aggregate. Declare an `aggregateIndex` on your table, and the ORM handles everything — no triggers, no manual maintenance.
+
+<Callout icon={<InfoIcon />}>
+**Important:** Scalar metrics are strict no-scan. Filtered aggregate/count paths require a declared `aggregateIndex` matching the filter shape. Missing index → `COUNT_NOT_INDEXED` or `AGGREGATE_NOT_INDEXED` error. Unfiltered `count()` uses the native Convex count syscall.
+</Callout>
+
+### Declaring Aggregate Indexes
+
+We'll start by telling the ORM what we want to aggregate. Add `aggregateIndex` to your table definition:
+
+```ts title="convex/functions/schema.ts" showLineNumbers {3}
+const users = convexTable('users', { orgId: text().notNull(), status: text(), email: text() }, (t) => [
+  aggregateIndex('by_org_status').on(t.orgId, t.status),
+]);
+```
+
+`.on(fields)` defines the filter key — you'll query filtered counts/aggregates by these fields. For unfiltered aggregate blocks (like `_sum/_avg/_min/_max`), use `.all()`. Plain `count()` without `where` uses the native syscall. You can chain metric declarations:
+
+```ts title="convex/functions/schema.ts" showLineNumbers {10-17}
+const orders = convexTable(
+  'orders',
+  {
+    orgId: text().notNull(),
+    status: text(),
+    customerEmail: text(),
+    amount: integer(),
+    score: integer(),
+  },
+  (t) => [
+    aggregateIndex('all_metrics')
+      .all()
+      .count(t.customerEmail)
+      .sum(t.amount)
+      .avg(t.amount)
+      .min(t.score)
+      .max(t.score),
+    aggregateIndex('by_org_status')
+      .on(t.orgId, t.status)
+      .count(t.customerEmail)
+      .sum(t.amount)
+      .avg(t.amount)
+      .min(t.score)
+      .max(t.score),
+  ]
+);
+```
+
+After deploying, the CLI runs `aggregateBackfill` automatically. Wait for `aggregateBackfillStatus` to report `READY` before querying.
+
+### `count()`
+
+Now you can count rows efficiently:
+
+```ts showLineNumbers {1-2,4-6,8-13}
+// Total users (native count syscall; no aggregateIndex required)
+const totalUsers = await ctx.orm.query.users.count();
+
+// Filtered count (requires aggregateIndex matching filter shape)
+const activeUsers = await ctx.orm.query.users.count({
+  where: { status: 'active' },
+});
+
+// Per-field non-null counts
+const nonNulls = await ctx.orm.query.users.count({
+  where: { status: 'active' },
+  select: {
+    _all: true,
+    email: true,
+  },
+});
+```
+
+Filtered `count()` accepts index-compilable filters: `eq`, `in`, `isNull`, `gt`, `gte`, `lt`, `lte`, conjunction via `AND`, and bounded finite DNF `OR` when every branch is index-plannable on the same `aggregateIndex`. Field counts in `select` require `.count(field)` metric declarations on the matching `aggregateIndex`.
+
+Missing or mismatched indexes throw deterministic errors — see [Error Codes](#error-codes) below.
+
+For windowed counts with `orderBy`, `skip`, `take`, and `cursor`, see [Windowed Count](#windowed-count) below.
+
+### `aggregate()`
+
+For sum, avg, min, and max — use Prisma-style aggregate blocks:
+
+```ts showLineNumbers {1-2,4-5,7-8,10-11,13-14}
+const metrics = await ctx.orm.query.orders.aggregate({
+  where: { orgId: 'org-1', status: 'paid' },
+  _count: {
+    _all: true,
+    customerEmail: true,
+  },
+  _sum: {
+    amount: true,
+  },
+  _avg: {
+    amount: true,
+  },
+  _min: {
+    score: true,
+  },
+  _max: {
+    score: true,
+  },
+});
+```
+
+Same filter rules as `count()` — strict no-scan, index-backed. Supports bounded finite DNF `OR` when every branch is index-plannable and resolves to the same `aggregateIndex`. Unsupported args (callback `where`, relation filters) throw `AGGREGATE_ARGS_UNSUPPORTED`.
+
+For windowed aggregate queries with `orderBy`, `cursor`, `skip`, and `take`, see [Windowed Aggregate](#windowed-aggregate) below.
+
+### `groupBy()`
+
+`groupBy()` is available with strict no-scan guardrails:
+- `by` is required
+- every `by` field must have finite `where` constraints (`eq`/`in`/`isNull`)
+- `orderBy` supports `by` fields and selected metric fields
+- `skip`/`take`/`cursor` require explicit `orderBy`
+- `having` supports conjunction filters on `by` fields and selected metric outputs
+- `OR`/`NOT` in `having` are unsupported (`AGGREGATE_FILTER_UNSUPPORTED`)
+
+```ts showLineNumbers
+const grouped = await ctx.orm.query.orders.groupBy({
+  by: ['orgId'],
+  where: {
+    orgId: { in: ['org-1', 'org-2'] },
+    status: 'paid',
+  },
+  _count: true,
+  _sum: { amount: true },
+  _avg: { amount: true },
+  orderBy: [{ _count: 'desc' }, { _sum: { amount: 'desc' } }],
+  having: { _count: { gt: 0 } },
+  take: 10,
+});
+```
+
+If any `by` field is unconstrained, `groupBy()` throws `AGGREGATE_ARGS_UNSUPPORTED` to avoid implicit bucket-wide scans.
+
+### Relation `_count`
+
+Load relation counts alongside query results — no N+1:
+
+```ts showLineNumbers {2-3}
+const projects = await ctx.orm.query.projects.findMany({
+  with: { _count: { todos: true, members: true } },
+});
+// projects[0]._count?.todos => 5
+```
+
+You can filter the counted relations:
+
+```ts showLineNumbers {3-5}
+const users = await ctx.orm.query.users.findMany({
+  with: {
+    _count: {
+      todos: { where: { completed: true } },
+    },
+  },
+});
+// users[0]._count?.todos => 3
+```
+
+Through-filtered `_count` also works for `through()` relations using indexed lookups:
+
+```ts showLineNumbers {3-5}
+const users = await ctx.orm.query.users.findMany({
+  with: {
+    _count: {
+      memberTeams: { where: { name: 'Core' } },
+    },
+  },
+});
+// users[0]._count?.memberTeams => 1
+```
+
+Access counts via `row._count?.relation ?? 0`. Works on `findMany`, `findFirst`, and `findFirstOrThrow`.
+
+### Mutation `returning({ _count })`
+
+You can include `_count` in mutation returning selections:
+
+```ts showLineNumbers {4-5}
+const [user] = await ctx.orm
+  .insert(usersTable)
+  .values({ name: 'Alice' })
+  .returning({
+    id: usersTable.id,
+    _count: { posts: true },
+  });
+// user._count?.posts => 0
+```
+
+This works with filters too:
+
+```ts showLineNumbers {5-6}
+const [updated] = await ctx.orm
+  .update(usersTable)
+  .set({ name: 'Bob' })
+  .where(eq(usersTable.id, userId))
+  .returning({
+    id: usersTable.id,
+    _count: { posts: { where: { status: 'published' } } },
+  });
+// updated._count?.posts => 2
+```
+
+Works on `insert`, `update`, and `delete` via split selection + relation count loading.
+
+## TableAggregate Runtime
+
+For **rankings**, **random access**, and **sorted pagination** — things the ORM scalar metrics don't support — use `TableAggregate`. It's a built-in B-tree runtime with O(log n) operations. No external dependencies.
+
+<Callout icon={<InfoIcon />}>
+**Note:** For counts and sums, use [Scalar Metrics](#scalar-metrics) above. `TableAggregate` is for ranked access patterns: `indexOf`, `at`, `paginate`, `max`, `min`, bounded range queries.
+</Callout>
+
+| Operation | Description |
+|-----------|-------------|
+| `indexOf(key)` | Position/rank of a key |
+| `at(index)` | Document at a specific position |
+| `paginate({ limit, cursor })` | Sorted page traversal |
+| `max()` / `min()` | Extremes by sort key |
+
+### Defining a TableAggregate
+
+Let's build a leaderboard — the canonical use case. We need to rank scores per game:
+
+```ts title="convex/functions/aggregates.ts" showLineNumbers {4-6,9-10}
+import { TableAggregate } from 'better-convex/aggregate';
+import type { DataModel } from './_generated/dataModel';
+
+export const leaderboardAggregate = new TableAggregate<{
+  DataModel: DataModel;
+  Key: [number, string];   // [score desc, name asc]
+  Namespace: string;       // gameId isolates each game
+  TableName: 'scores';
+}>({
+  name: 'leaderboardAggregate',
+  table: 'scores',
+  namespace: (doc) => doc.gameId,
+  sortKey: (doc) => [-doc.value, doc.name],
+});
+```
+
+| Parameter | Purpose | Examples |
+|-----------|---------|---------|
+| `Key` | Sort key type — determines ranking order | `number` for single-field, `[number, string]` for composite |
+| `Namespace` | Grouping key — isolates separate B-trees | Parent ID like `gameId`, `userId` |
+
+### Always Use Triggers
+
+<Callout icon={<InfoIcon />}>
+**Important:** Never manually update aggregates in mutations. Always use triggers — they keep aggregates in sync automatically.
+</Callout>
+
+```ts title="convex/functions/schema.ts" showLineNumbers {4-5}
+import { defineTriggers } from 'better-convex/orm';
+import { leaderboardAggregate } from './aggregates';
+
+export const triggers = defineTriggers(relations, {
+  scores: { change: leaderboardAggregate.trigger },
+});
+```
+
+For tables with multiple aggregates, compose them in a single `change` handler:
+
+```ts showLineNumbers {2-5}
+players: {
+  change: async (change, ctx) => {
+    await byScore.trigger(change, ctx);
+    await byUsername.trigger(change, ctx);
+  },
+},
+```
+
+### Rankings
+
+Now let's use the leaderboard. These operations are what make `TableAggregate` worth it — none are possible with ORM scalar metrics:
+
+```ts showLineNumbers {1-4,6-8,10-12,14-17}
+// Top 5 scores
+const topScores = await leaderboardAggregate.paginate(ctx, {
+  namespace: gameId,
+  limit: 5,
+});
+
+// User's rank (position for a given score)
+const rank = await leaderboardAggregate.indexOf(ctx, [-userScore, userName], {
+  namespace: gameId,
+});
+
+// Score at a specific position
+const thirdPlace = await leaderboardAggregate.at(ctx, 2, {
+  namespace: gameId,
+});
+
+// 95th percentile (use ORM count for the total)
+const totalPlayers = await ctx.orm.query.scores.count({ where: { gameId } });
+const p95Index = Math.floor(totalPlayers * 0.95);
+const p95 = await leaderboardAggregate.at(ctx, p95Index, { namespace: gameId });
+```
+
+### Random Access
+
+Pick a random document from a table — only possible with `at(index)`:
+
+```ts title="convex/functions/aggregates.ts" showLineNumbers {1-5}
+export const songsAggregate = new TableAggregate<{
+  Key: null; DataModel: DataModel; TableName: 'songs';
+}>({
+  name: 'songsAggregate',
+  table: 'songs',
+  sortKey: () => null,
+});
+```
+
+```ts showLineNumbers {1-2,4-7}
+const totalSongs = await ctx.orm.query.songs.count();
+if (totalSongs === 0) return null;
+
+const randomIndex = Math.floor(Math.random() * totalSongs);
+const result = await songsAggregate.at(ctx, randomIndex);
+const song = result
+  ? await ctx.orm.query.songs.findFirst({ where: { id: result.doc.id } })
+  : null;
+```
+
+### Key Patterns
+
+Choosing the right key shapes how you can query rankings.
+
+**Simple keys:**
+
+```ts showLineNumbers {1-2,4-5,7-8}
+// By number (scores, rankings)
+sortKey: (doc) => doc.score
+
+// By string (alphabetical listing)
+sortKey: (doc) => doc.username
+
+// By timestamp (chronological)
+sortKey: (doc) => doc._creationTime
+```
+
+**Composite keys** let you query with prefixes — `paginate`, `max`, `min` all accept `bounds: { prefix }`:
+
+```ts showLineNumbers {1-2,4-7}
+// Sort by game, then username, then score
+sortKey: (doc) => [doc.game, doc.username, doc.score]
+
+// Top score in a specific game
+const topInGame = await leaderboardAggregate.max(ctx, {
+  bounds: { prefix: [game] },
+});
+```
+
+<Callout icon={<InfoIcon />}>
+**Note:** Key ordering matters:
+- `[game, username, score]` — query by game OR game+username
+- `[game, score]` — find highest score per game
+- `[username, score]` — find user's highest score
+
+Design keys for your actual query patterns.
+</Callout>
+
+### Bounded Queries
+
+Filter by key range for `max`, `min`, and `paginate`:
+
+```ts showLineNumbers {1-8,10-11}
+// Top score in a range
+const topInRange = await leaderboardAggregate.max(ctx, {
+  namespace: gameId,
+  bounds: {
+    lower: { key: [-1000], inclusive: true },
+    upper: { key: [-100], inclusive: true },
+  },
+});
+
+// Global extremes
+const topScore = await leaderboardAggregate.max(ctx, { namespace: gameId });
+const lowestScore = await leaderboardAggregate.min(ctx, { namespace: gameId });
+```
+
+### Batch Operations
+
+When reading multiple positions, batch calls reduce overhead:
+
+```ts showLineNumbers {1-2}
+// Get items at multiple positions in one call
+const items = await leaderboardAggregate.atBatch(ctx, [0, 1, 2], { namespace: gameId });
+```
+
+### Leaderboard with User Stats
+
+A complete real-world example combining `TableAggregate` rankings with ORM queries:
+
+```ts showLineNumbers {11-16,22-27}
+export const getUserStats = authQuery
+  .input(z.object({ gameId: z.string() }))
+  .output(z.object({
+    highScore: z.number(),
+    averageScore: z.number(),
+    gamesPlayed: z.number(),
+    globalRank: z.number().nullable(),
+    percentile: z.number(),
+  }))
+  .query(async ({ ctx, input }) => {
+    const gameScores = await ctx.orm.query.scores.findMany({
+      where: { userId: ctx.userId, gameId: input.gameId },
+      limit: 1000,
+    });
+
+    if (gameScores.length === 0) {
+      return { highScore: 0, averageScore: 0, gamesPlayed: 0, globalRank: null, percentile: 0 };
+    }
+
+    const highScore = Math.max(...gameScores.map((s) => s.score));
+    const averageScore = gameScores.reduce((sum, s) => sum + s.score, 0) / gameScores.length;
+
+    // Ranking requires TableAggregate — ORM can't do this
+    const globalRank = await leaderboardAggregate.indexOf(ctx, [-highScore, ctx.userId], {
+      namespace: input.gameId,
+    });
+    // Use ORM for the total count
+    const totalPlayers = await ctx.orm.query.scores.count({ where: { gameId: input.gameId } });
+
+    const percentile = globalRank != null && totalPlayers > 0
+      ? ((totalPlayers - globalRank) / totalPlayers) * 100
+      : 0;
+
+    return { highScore, averageScore, gamesPlayed: gameScores.length, globalRank, percentile };
+  });
+```
+
+## DirectAggregate
+
+For aggregating data not stored in tables — you manage inserts and deletes manually:
+
+```ts showLineNumbers {1,3-6,8-12,14-18}
+import { createDirectAggregate } from 'better-convex/aggregate';
+
+const eventAggregate = createDirectAggregate<{
+  Key: number;
+  Id: string;
+}>({
+  name: 'eventAggregate',
+});
+
+// Insert manually
+await eventAggregate.insert(ctx, {
+  key: Date.now(),
+  id: `${userId}-${Date.now()}`,
+  sumValue: value,
+});
+
+// Replace (update key or value)
+await eventAggregate.replace(
+  ctx,
+  { key: oldTimestamp, id: eventId },
+  { key: Date.now(), id: eventId, sumValue: newValue }
+);
+```
+
+## Advanced Patterns
+
+### Multiple Sort Orders
+
+Define multiple aggregates on the same table for different ranking views:
+
+```ts title="convex/functions/aggregates.ts" showLineNumbers {2-5,8-11}
+// Rankings by score
+const byScore = new TableAggregate<{
+  Key: number; DataModel: DataModel; TableName: 'players';
+}>({
+  name: 'byScore', table: 'players', sortKey: (doc) => doc.score,
+});
+
+// Alphabetical listing
+const byUsername = new TableAggregate<{
+  Key: string; DataModel: DataModel; TableName: 'players';
+}>({
+  name: 'byUsername', table: 'players', sortKey: (doc) => doc.username,
+});
+```
+
+### Composite Aggregation
+
+Multi-dimensional leaderboards with regional queries:
+
+```ts showLineNumbers {2-3,7-8}
+const regionalLeaderboard = new TableAggregate<{
+  Namespace: string;                      // game mode
+  Key: [string, number, number];          // [region, score, timestamp]
+  DataModel: DataModel;
+  TableName: 'matches';
+}>({
+  name: 'regionalLeaderboard',
+  table: 'matches',
+  namespace: (doc) => doc.gameMode,
+  sortKey: (doc) => [doc.region, doc.score, doc.timestamp],
+});
+
+// Regional high score
+const regionalHigh = await regionalLeaderboard.max(ctx, {
+  namespace: 'ranked',
+  bounds: { prefix: ['us-west'] },
+});
+```
+
+### Cascade Deletes
+
+Aggregates update automatically when schema triggers handle cascade deletes:
+
+```ts showLineNumbers {3-12,14}
+export const triggers = defineTriggers(relations, {
+  user: {
+    delete: {
+      after: async (doc, ctx) => {
+        const characters = await ctx.orm.query.characters.findMany({
+          where: { userId: doc._id },
+          limit: 1000,
+        });
+        for (const char of characters) {
+          await ctx.orm.delete(charactersTable).where(eq(charactersTable.id, char.id));
+        }
+      },
+    },
+  },
+  characterStars: {
+    change: characterStarsAggregate.trigger,
+  },
+});
+```
+
+## Repair
+
+If an aggregate gets out of sync (rare, but possible after bugs or interrupted deployments):
+
+```ts showLineNumbers {2-4,6-9}
+export const repairAggregate = privateMutation
+  .mutation(async ({ ctx }) => {
+    await leaderboardAggregate.clear(ctx);
+
+    const docs = await ctx.orm.query.scores.findMany({
+      limit: 10_000,
+      orderBy: { createdAt: 'asc' },
+    });
+    for (const doc of docs) {
+      await leaderboardAggregate.insert(ctx, doc);
+    }
+  });
+```
+
+## Best Practices
+
+### Use Namespaces for Isolation
+
+```ts showLineNumbers {1-3,5-7}
+// ✅ Namespace prevents contention between users
+namespace: (doc) => doc.tenantId,
+sortKey: (doc) => doc.score
+
+// ❌ No namespace causes write contention across all tenants
+sortKey: (doc) => [doc.tenantId, doc.score]
+// All tenants compete for the same B-tree nodes
+```
+
+### Design Keys for Query Patterns
+
+```ts showLineNumbers {1-3,5-7}
+// ✅ Keys match how you query
+sortKey: (doc) => [doc.category, doc.priority, doc.createdAt]
+// Allows: by category, category+priority, full ordering
+
+// ❌ Keys don't match access patterns
+sortKey: (doc) => doc.internalId
+// Can't query by meaningful attributes
+```
+
+## When to Use
+
+| Need | Use |
+|------|-----|
+| Counts, sums, averages | [Scalar Metrics](#scalar-metrics) (`aggregateIndex` + ORM `count()`/`aggregate()`) |
+| Relation counts | [Relation `_count`](#relation-_count) (`with: { _count: { ... } }`) |
+| Rankings, leaderboards | [TableAggregate](#tableaggregate-runtime) (`indexOf`, `at`, `paginate`) |
+| Random document access | [TableAggregate](#tableaggregate-runtime) (`at(randomIndex)`) |
+| Sorted pagination | [TableAggregate](#tableaggregate-runtime) (`paginate({ limit, cursor })`) |
+| Non-table data | [DirectAggregate](#directaggregate) (manual insert/replace/delete) |
+
+## API Reference
+
+### Prisma Parity Matrix (No-Scan)
+
+| Prisma feature | Status | Notes |
+|---|---|---|
+| `aggregate({ _count/_sum/_avg/_min/_max, where })` | Supported | Bucket-backed, no base-table scan fallback |
+| `aggregate({ _sum })` nullability | Supported | Returns `null` for empty/all-null sets |
+| `groupBy({ by, where, _count/_sum/_avg/_min/_max })` | Supported | `by` fields must be finite-constrained (`eq/in/isNull`) in `where` |
+| `groupBy({ having/orderBy/skip/take/cursor })` | Partial | Supported for finite index-bounded groups with conjunction-only `having` |
+| `count()` | Supported | Native Convex count syscall |
+| `count({ where })` | Supported | Indexed scalar subset |
+| `count({ where, select: { _all, field } })` | Supported | Field counts require `aggregateIndex.count(field)` |
+| `findMany({ with: { _count: { relation: true } } })` | Supported | Indexed relation counts |
+| `findMany({ with: { _count: { relation: { where } } } })` | Supported | Direct relation scalar filters |
+| `aggregate({ orderBy/take/skip/cursor })` | Partial | `orderBy/cursor` supported; `skip/take` is `_count`-only in v1 |
+| Advanced aggregate/count filters (`OR/NOT/string/relation`) | Partial | Bounded finite DNF `OR` rewrite is supported when branches resolve to one `aggregateIndex`; `NOT`/string/relation filters are blocked |
+| Relation `_count` nested relation filter | Blocked | `RELATION_COUNT_FILTER_UNSUPPORTED` |
+| `findMany({ distinct })` | Blocked | Not available under strict no-scan contract. Use `select().distinct({ fields })` |
+| Relation `_count` filtered through relation | Supported | Indexed `through()` relation filters |
+| Mutation return `_count` parity | Supported | `returning({ _count })` on insert/update/delete |
+
+### Windowed Count
+
+Count rows within a window defined by ordering and bounds:
+
+```ts showLineNumbers
+// Count with skip/take (pagination window)
+const windowCount = await ctx.orm.query.todos.count({
+  where: { projectId },
+  orderBy: { createdAt: 'desc' },
+  skip: 10,
+  take: 50,
+});
+
+// Count with cursor (rows after a specific value)
+const afterCursor = await ctx.orm.query.todos.count({
+  where: { projectId },
+  orderBy: { createdAt: 'desc' },
+  cursor: { createdAt: lastSeen },
+});
+```
+
+- `orderBy` — sort direction for window bounds
+- `skip` — number of rows to skip before counting
+- `take` — max rows to count within the window
+- `cursor` — start counting after a specific field value (requires `orderBy`, single field in v1)
+
+<Callout icon={<InfoIcon />}>
+`count({ select: { field: true } })` with `skip`/`take`/`cursor` is not supported in v1. Use `count()` or `count({ select: { _all: true } })` for windowed counts.
+</Callout>
+
+### Windowed Aggregate
+
+`aggregate()` supports window args with strict no-scan guardrails:
+- `orderBy` + `cursor`: supported for `_count/_sum/_avg/_min/_max`
+- `skip`/`take`: supported for `_count` only in v1
+
+```ts showLineNumbers
+const metrics = await ctx.orm.query.orders.aggregate({
+  where: { orgId: 'org-1' },
+  orderBy: { amount: 'desc' },
+  skip: 10,
+  take: 100,
+  _sum: { amount: true },
+  _count: { _all: true },
+});
+```
+
+`skip`/`take` with non-count metrics throws `AGGREGATE_ARGS_UNSUPPORTED` because metric window skip/take is not bucket-computable under strict no-scan in v1.
+
+### Error Codes
+
+| Error | Cause |
+|-------|-------|
+| `COUNT_NOT_INDEXED` | No `aggregateIndex` matches the filter shape |
+| `COUNT_FILTER_UNSUPPORTED` | Filter uses unsupported operators (`NOT`, string, relation, or non-finite `OR`) |
+| `COUNT_INDEX_BUILDING` | Index is still backfilling |
+| `COUNT_RLS_UNSUPPORTED` | Called in an RLS-restricted context |
+
+### `_sum` Nullability
+
+`_sum` returns `null` for empty sets or when all field values are `null` (Prisma-compatible):
+
+```ts showLineNumbers
+// Empty table or all-null amounts → { _sum: { amount: null } }
+// Non-empty with values → { _sum: { amount: 1500 } }
+```
+
+### Limitations
+
+| Consideration | Guideline |
+|--------------|-----------|
+| Update frequency | High-frequency updates to nearby keys cause contention |
+| Key size | Keep composite keys reasonable (3-4 components max) |
+| Namespace count | Each namespace has overhead |
+| Query patterns | Design keys for actual needs, not hypothetical |
+
+### `findMany({ distinct })` (Unsupported)
+
+`findMany({ distinct })` is not available to keep strict index-backed no-scan guarantees.
+
+If you need deduplication in query pipelines, use:
+
+```ts showLineNumbers
+const page = await ctx.orm.query.todos
+  .select()
+  .distinct({ fields: ['status'] })
+  .paginate({ cursor: null, limit: 100 });
+```
+
+## Next Steps
+
+<Cards>
+  <Card title="Triggers" href="/docs/orm/triggers" />
+  <Card title="Rate Limiting" href="/docs/server/advanced/rate-limiting" />
+</Cards>

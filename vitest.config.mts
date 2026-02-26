@@ -4,8 +4,12 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: {
+      'better-convex/aggregate': path.resolve(
+        import.meta.dirname,
+        'packages/better-convex/src/aggregate/index.ts'
+      ),
       'better-convex/orm': path.resolve(
-        __dirname,
+        import.meta.dirname,
         'packages/better-convex/src/orm/index.ts'
       ),
     },

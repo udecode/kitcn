@@ -133,18 +133,12 @@ type ProcedureExportLike = {
 };
 
 const AUTH_RUNTIME_PROCEDURE_TYPES = {
-  beforeCreate: 'mutation',
-  beforeDelete: 'mutation',
-  beforeUpdate: 'mutation',
   create: 'mutation',
   deleteMany: 'mutation',
   deleteOne: 'mutation',
   findMany: 'query',
   findOne: 'query',
   getLatestJwks: 'action',
-  onCreate: 'mutation',
-  onDelete: 'mutation',
-  onUpdate: 'mutation',
   rotateKeys: 'action',
   updateMany: 'mutation',
   updateOne: 'mutation',
@@ -215,12 +209,18 @@ export const createAuthRuntime = <
   const authFunctions = (config.internal as Record<string, AuthFunctions>)[
     config.moduleName
   ];
+  const resolveRuntimeTriggers = (
+    ctx: TriggerCtx
+  ): GenericAuthTriggers<DataModel, Schema, TriggerCtx> | undefined =>
+    authDefinition(ctx as unknown as GenericCtx).triggers as unknown as
+      | GenericAuthTriggers<DataModel, Schema, TriggerCtx>
+      | undefined;
 
   const authClient = createClient<DataModel, Schema, TriggerCtx>({
     authFunctions,
     schema: config.schema,
     ...(config.context ? { context: config.context } : {}),
-    triggers: (ctx) => authDefinition(ctx as unknown as GenericCtx).triggers,
+    triggers: resolveRuntimeTriggers,
   });
 
   type AdapterCtx = Parameters<typeof authClient.adapter>[0];
@@ -235,16 +235,12 @@ export const createAuthRuntime = <
       ctx,
       (_ctx) => authClient.adapter(_ctx as AdapterCtx, adapterGetAuthOptions)
     );
-
   const getAuth = (ctx: GenericCtx) => betterAuth(resolveAuthOptions(ctx));
-  const authApi = createApi(
-    config.schema,
-    getAuth,
-    config.context ? { context: config.context } : undefined
-  );
-  const triggerApi = authClient.triggersApi();
+  const authApi = createApi(config.schema, getAuth, {
+    ...(config.context ? { context: config.context } : {}),
+    triggers: resolveRuntimeTriggers,
+  });
   const decoratedAuthApi = decorateAuthRuntimeProcedures(authApi);
-  const decoratedTriggerApi = decorateAuthRuntimeProcedures(triggerApi);
   let staticAuth: ReturnType<typeof betterAuth> | undefined;
   const getStaticAuth = () => {
     staticAuth ??= betterAuth(resolveAuthOptions({} as GenericCtx));
@@ -257,7 +253,6 @@ export const createAuthRuntime = <
     getAuth,
     auth: createLazyAuthProxy(getStaticAuth),
     ...decoratedAuthApi,
-    ...decoratedTriggerApi,
   };
 };
 
@@ -278,7 +273,6 @@ export const createDisabledAuthRuntime = <
       authFunctions: {} as AuthFunctions,
       triggers: undefined,
       adapter: createDisabledError(message, 'authClient.adapter'),
-      triggersApi: createDisabledError(message, 'authClient.triggersApi'),
     } as unknown as ReturnType<
       typeof createClient<DataModel, Schema, TriggerCtx>
     >,
@@ -302,11 +296,5 @@ export const createDisabledAuthRuntime = <
     updateOne: createDisabledError(message, 'updateOne'),
     getLatestJwks: createDisabledError(message, 'getLatestJwks'),
     rotateKeys: createDisabledError(message, 'rotateKeys'),
-    beforeCreate: createDisabledError(message, 'beforeCreate'),
-    beforeDelete: createDisabledError(message, 'beforeDelete'),
-    beforeUpdate: createDisabledError(message, 'beforeUpdate'),
-    onCreate: createDisabledError(message, 'onCreate'),
-    onDelete: createDisabledError(message, 'onDelete'),
-    onUpdate: createDisabledError(message, 'onUpdate'),
   };
 };

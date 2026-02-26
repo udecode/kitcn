@@ -18,6 +18,12 @@ export const api = {
     grantAdminByEmail: createApiLeaf<"mutation", typeof import("../functions/admin").grantAdminByEmail>(convexApi["admin"]["grantAdminByEmail"], { auth: "required", role: "admin", type: "mutation" }),
     updateUserRole: createApiLeaf<"mutation", typeof import("../functions/admin").updateUserRole>(convexApi["admin"]["updateUserRole"], { auth: "required", role: "admin", type: "mutation" }),
   },
+  aggregateDemo: {
+    exerciseIdempotentTrigger: createApiLeaf<"mutation", typeof import("../functions/aggregateDemo").exerciseIdempotentTrigger>(convexApi["aggregateDemo"]["exerciseIdempotentTrigger"], { auth: "required", type: "mutation" }),
+    getSnapshot: createApiLeaf<"query", typeof import("../functions/aggregateDemo").getSnapshot>(convexApi["aggregateDemo"]["getSnapshot"], { auth: "required", type: "query" }),
+    runDirectOp: createApiLeaf<"mutation", typeof import("../functions/aggregateDemo").runDirectOp>(convexApi["aggregateDemo"]["runDirectOp"], { auth: "required", type: "mutation" }),
+    toggleRandomFillReset: createApiLeaf<"mutation", typeof import("../functions/aggregateDemo").toggleRandomFillReset>(convexApi["aggregateDemo"]["toggleRandomFillReset"], { auth: "required", type: "mutation" }),
+  },
   items: {
     queries: {
       get: createApiLeaf<"query", typeof import("../functions/items/queries").get>(convexApi["items"]["queries"]["get"], { type: "query" }),
@@ -46,11 +52,6 @@ export const api = {
     setActiveOrganization: createApiLeaf<"mutation", typeof import("../functions/organization").setActiveOrganization>(convexApi["organization"]["setActiveOrganization"], { auth: "required", rateLimit: "organization/setActive", type: "mutation" }),
     updateMemberRole: createApiLeaf<"mutation", typeof import("../functions/organization").updateMemberRole>(convexApi["organization"]["updateMemberRole"], { auth: "required", rateLimit: "organization/updateRole", type: "mutation" }),
     updateOrganization: createApiLeaf<"mutation", typeof import("../functions/organization").updateOrganization>(convexApi["organization"]["updateOrganization"], { auth: "required", rateLimit: "organization/update", type: "mutation" }),
-  },
-  polarSubscription: {
-    cancelSubscription: createApiLeaf<"action", typeof import("../functions/polarSubscription").cancelSubscription>(convexApi["polarSubscription"]["cancelSubscription"], { auth: "required", type: "action" }),
-    getOrganizationSubscription: createApiLeaf<"query", typeof import("../functions/polarSubscription").getOrganizationSubscription>(convexApi["polarSubscription"]["getOrganizationSubscription"], { auth: "required", type: "query" }),
-    resumeSubscription: createApiLeaf<"action", typeof import("../functions/polarSubscription").resumeSubscription>(convexApi["polarSubscription"]["resumeSubscription"], { auth: "required", type: "action" }),
   },
   projects: {
     addMember: createApiLeaf<"mutation", typeof import("../functions/projects").addMember>(convexApi["projects"]["addMember"], { auth: "required", rateLimit: "project/member", type: "mutation" }),
@@ -97,6 +98,10 @@ export const api = {
     search: createApiLeaf<"query", typeof import("../functions/todos").search>(convexApi["todos"]["search"], { auth: "optional", limit: 20, type: "query" }),
     toggleComplete: createApiLeaf<"mutation", typeof import("../functions/todos").toggleComplete>(convexApi["todos"]["toggleComplete"], { auth: "required", rateLimit: "todo/update", type: "mutation" }),
     update: createApiLeaf<"mutation", typeof import("../functions/todos").update>(convexApi["todos"]["update"], { auth: "required", rateLimit: "todo/update", type: "mutation" }),
+  },
+  triggerDemo: {
+    getSnapshot: createApiLeaf<"query", typeof import("../functions/triggerDemo").getSnapshot>(convexApi["triggerDemo"]["getSnapshot"], { auth: "required", type: "query" }),
+    runCoverage: createApiLeaf<"mutation", typeof import("../functions/triggerDemo").runCoverage>(convexApi["triggerDemo"]["runCoverage"], { auth: "required", type: "mutation" }),
   },
   user: {
     getCurrentUser: createApiLeaf<"query", typeof import("../functions/user").getCurrentUser>(convexApi["user"]["getCurrentUser"], { auth: "required", type: "query" }),

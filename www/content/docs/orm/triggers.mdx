@@ -50,32 +50,7 @@ export const triggers = defineTriggers(relations, {
 
 `change` runs for all operations and receives `{ id, operation, oldDoc, newDoc }`.
 
-## Hook Signatures
-
-- `create.before(data, ctx)`
-- `create.after(doc, ctx)`
-- `update.before(data, ctx)`
-- `update.after(doc, ctx)`
-- `delete.before(doc, ctx)`
-- `delete.after(doc, ctx)`
-- `change(change, ctx)`
-
-Context (`ctx`) includes:
-
-- `ctx.db`: wrapped writer (triggers enabled)
-- `ctx.innerDb`: raw writer (bypasses trigger recursion)
-- `ctx.orm`: typed ORM writer
-- your custom context fields (`scheduler`, request ids, etc.)
-
-## Before Return Behavior
-
-`before` hooks support exactly:
-
-- `void`: continue unchanged
-- `{ data }`: shallow-merge into the write payload
-- `false`: cancel write and throw `TriggerCancelledError`
-
-`after` hooks always return `void`.
+For hook signatures and return types, see [API Reference](#api-reference) below.
 
 ## Setup In Schema
 
@@ -128,7 +103,7 @@ Trigger definitions are schema-level only. `convexTable(..., extraConfig)` no lo
 
 Compose aggregate handlers inside `change`:
 
-When aggregates are wrapped with `createAggregate(...)` from `better-convex/aggregate`, you can pass `aggregate.trigger` directly or call `aggregate.trigger(change, ctx)`.
+With `TableAggregate` from `better-convex/aggregate`, you can pass `aggregate.trigger` directly or call `aggregate.trigger(change, ctx)`.
 
 ```ts title="convex/functions/schema.ts"
 export const triggers = defineTriggers(relations, {
@@ -202,12 +177,7 @@ export const triggers = defineTriggers(relations, {
 });
 ```
 
-## Runtime Guarantees
-
-1. Hooks run only for wrapped mutation contexts (`ctx.orm` / generated server context).
-2. Trigger errors fail the mutation.
-3. Recursive writes are queued deterministically.
-4. `ctx.innerDb` bypasses recursive dispatch.
+For runtime behavior, see [API Reference](#api-reference) below.
 
 ## Best Practices
 
@@ -215,3 +185,39 @@ export const triggers = defineTriggers(relations, {
 2. Keep expensive work in `scheduler.runAfter`.
 3. Index every query path used inside hooks.
 4. Prefer `create/update/delete` for specific rules; use `change` for cross-operation logic.
+
+## API Reference
+
+### Hook Signatures
+
+- `create.before(data, ctx)`
+- `create.after(doc, ctx)`
+- `update.before(data, ctx)`
+- `update.after(doc, ctx)`
+- `delete.before(doc, ctx)`
+- `delete.after(doc, ctx)`
+- `change(change, ctx)`
+
+Context (`ctx`) includes:
+
+- `ctx.db`: wrapped writer (triggers enabled)
+- `ctx.innerDb`: raw writer (bypasses trigger recursion)
+- `ctx.orm`: typed ORM writer
+- your custom context fields (`scheduler`, request ids, etc.)
+
+### Before Return Behavior
+
+`before` hooks support exactly:
+
+- `void`: continue unchanged
+- `{ data }`: shallow-merge into the write payload
+- `false`: cancel write and throw `TriggerCancelledError`
+
+`after` hooks always return `void`.
+
+### Runtime Guarantees
+
+1. Hooks run only for wrapped mutation contexts (`ctx.orm` / generated server context).
+2. Trigger errors fail the mutation.
+3. Recursive writes are queued deterministically.
+4. `ctx.innerDb` bypasses recursive dispatch.

@@ -1,0 +1,201 @@
+---
+title: From Aggregate Component (Count/Sum/Min/Max)
+description: Migrate scalar aggregate reads from @convex-dev/aggregate components to ORM count and aggregate APIs.
+---
+
+import { InfoIcon, AlertTriangle } from "lucide-react"
+
+This guide migrates scalar aggregate reads from `@convex-dev/aggregate` component instances to ORM query APIs:
+- `count()`
+- `aggregate({ _sum/_avg/_min/_max/_count })`
+
+It does **not** migrate ranked APIs (`at`, `indexOf`, `paginate`, `random`). Use `better-convex/aggregate` `TableAggregate` for those — ranked APIs are built-in.
+
+## Prerequisite
+
+<Callout icon={<InfoIcon />}>
+Complete [DB migration](/docs/migrations/db) first. This guide assumes your app already runs on Better Convex ORM runtime.
+</Callout>
+
+## Direct answer
+
+<Callout icon={<InfoIcon />}>
+For scalar aggregate migration (`count/sum/min/max`), you do **not** add `aggregateStorageTables`.
+</Callout>
+
+Scalar aggregates use ORM-managed internal tables and `aggregateBackfill`.
+
+## Before vs After
+
+| Area | Before (`@convex-dev/aggregate`) | After (`better-convex` ORM aggregates) |
+|---|---|---|
+| `convex.config.ts` | `app.use(aggregate, { name })` | no aggregate component usage |
+| Scalar reads | `aggregate.count/sum/min/max(...)` | `ctx.orm.query.<table>.count(...)` + `ctx.orm.query.<table>.aggregate(...)` |
+| Infra | component instances + `_components` state | `aggregateIndex` + `aggregateBackfill` |
+| Aggregate tables | component-managed | not used for scalar aggregates |
+
+## Step 1: Remove Aggregate Component Wiring
+
+<Compare>
+  <CompareItem title="Before">
+    ```ts title="convex/convex.config.ts" showLineNumbers
+    import { defineApp } from 'convex/server';
+    import aggregate from '@convex-dev/aggregate/convex.config';
+
+    const app = defineApp();
+    app.use(aggregate, { name: 'aggregateByProject' });
+
+    export default app;
+    ```
+  </CompareItem>
+  <CompareItem title="After">
+    ```ts title="convex/convex.config.ts" showLineNumbers
+    import { defineApp } from 'convex/server';
+
+    const app = defineApp();
+
+    export default app;
+    ```
+  </CompareItem>
+</Compare>
+
+## Step 2: Declare Aggregate Indexes
+
+Define index coverage for each production aggregate shape:
+
+```ts title="convex/functions/schema.ts" showLineNumbers
+import {
+  aggregateIndex,
+  convexTable,
+  defineSchema,
+  integer,
+  text,
+} from 'better-convex/orm';
+
+export const todos = convexTable(
+  'todos',
+  {
+    projectId: text(),
+    status: text(),
+    effort: integer(),
+    priority: integer(),
+  },
+  (t) => [
+    // count-only shape
+    aggregateIndex('by_project_status_count').on(t.projectId, t.status),
+
+    // aggregate metric shapes
+    aggregateIndex('all_todos').all().sum(t.effort).avg(t.effort).min(t.priority).max(t.priority),
+    aggregateIndex('by_project_status')
+      .on(t.projectId, t.status)
+      .count(t.status)
+      .sum(t.effort)
+      .avg(t.effort)
+      .min(t.priority)
+      .max(t.priority),
+  ]
+);
+
+export default defineSchema({ todos });
+```
+
+<Callout icon={<AlertTriangle />}>
+`count(...)` and `aggregate(...)` are strict no-scan. Missing or mismatched index coverage throws deterministic errors.
+</Callout>
+
+## Step 3: Run Codegen
+
+If using cRPC, run:
+
+```bash
+npx better-convex dev
+```
+
+Otherwise run scoped codegen:
+
+```bash
+npx better-convex codegen --scope orm
+```
+
+## Step 4: Deploy (Backfill Runs Automatically)
+
+Use:
+
+```bash
+npx better-convex deploy --prod
+```
+
+`better-convex deploy` runs `aggregateBackfill` in `resume` mode and waits for `aggregateBackfillStatus` to report `READY` (default deploy behavior).
+
+`resume` is idempotent:
+- already-`READY` indexes are skipped
+- `BUILDING` indexes continue
+- metric additions are backfilled automatically
+- metric removals are metadata-only updates (no clear/rebuild)
+- key shape changes require rebuild:
+
+```bash
+npx better-convex aggregate rebuild --prod
+```
+
+If you need manual control, you can still run:
+
+```bash
+npx better-convex aggregate backfill --prod
+```
+
+## Step 5: Switch Reads
+
+<Compare>
+  <CompareItem title="Before (component)">
+    ```ts
+    const total = await aggregateTodos.count(ctx, {
+      namespace: projectId,
+      bounds: { prefix: ['done'] },
+    });
+
+    const effortSum = await aggregateTodos.sum(ctx, {
+      namespace: projectId,
+      bounds: { prefix: ['done'] },
+    });
+    ```
+  </CompareItem>
+  <CompareItem title="After (ORM)">
+    ```ts
+    const total = await ctx.orm.query.todos.count({
+      where: { projectId, status: 'done' },
+    });
+
+    const stats = await ctx.orm.query.todos.aggregate({
+      where: { projectId, status: 'done' },
+      _sum: { effort: true },
+      _avg: { effort: true },
+      _min: { priority: true },
+      _max: { priority: true },
+      _count: { _all: true, status: true },
+    });
+    ```
+  </CompareItem>
+</Compare>
+
+## Step 6: Validate And Cut Over
+
+- compare old component values vs new ORM values on sampled traffic
+- wait for all required indexes to report `READY`
+- switch read paths fully
+- remove old scalar aggregate component calls
+
+If you still use ranked APIs (`at`, `indexOf`, `paginate`, `random`), use `better-convex/aggregate` `TableAggregate` — ranked APIs are built-in, no `@convex-dev/aggregate` dependency needed.
+
+## API Reference
+
+### Error Guidance
+
+- `COUNT_NOT_INDEXED`: add matching `aggregateIndex(...).on(...)`
+- `COUNT_INDEX_BUILDING`: continue backfill until `READY`
+- `COUNT_FILTER_UNSUPPORTED`: unsupported filter shape for `count`
+- `COUNT_RLS_UNSUPPORTED`: `count` blocked in RLS-restricted context (v1)
+- `AGGREGATE_NOT_INDEXED`: add matching `aggregateIndex(...).on(...)` metric coverage (or `.all()` for unfiltered)
+- `AGGREGATE_INDEX_BUILDING`: continue backfill until `READY`
+- `AGGREGATE_FILTER_UNSUPPORTED`: unsupported filter shape for `aggregate(...)`
+- `AGGREGATE_RLS_UNSUPPORTED`: `aggregate(...)` blocked in RLS-restricted context (v1)

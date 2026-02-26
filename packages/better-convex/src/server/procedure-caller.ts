@@ -100,13 +100,14 @@ type CallerKey<
   TValue,
   TCtxType extends CallerContextType,
   TKey extends PropertyKey,
-> = TValue extends ProcedureDefinition<infer TType, any>
-  ? TType extends AllowedProcedureType<TCtxType>
-    ? TKey
-    : never
-  : TValue extends RecordLike
-    ? TKey
-    : never;
+> =
+  TValue extends ProcedureDefinition<infer TType, any>
+    ? TType extends AllowedProcedureType<TCtxType>
+      ? TKey
+      : never
+    : TValue extends RecordLike
+      ? TKey
+      : never;
 
 export type ProcedureCaller<
   TApi,

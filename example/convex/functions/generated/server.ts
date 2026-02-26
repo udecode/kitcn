@@ -38,4 +38,10 @@ export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({
   mutation: (ctx) => withOrm(ctx),
 });
 
-export const { scheduledMutationBatch, scheduledDelete } = orm.api();
+export const {
+  scheduledMutationBatch,
+  scheduledDelete,
+  aggregateBackfill,
+  aggregateBackfillChunk,
+  aggregateBackfillStatus,
+} = orm.api();

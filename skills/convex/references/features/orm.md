@@ -12,23 +12,7 @@ Complete ORM API for feature work. Prerequisites: `setup/server.md`.
 
 ## Column Types
 
-All from `better-convex/orm`:
-
-| Builder                         | TS Type       | Convex                 | Notes                                      |
-| ------------------------------- | ------------- | ---------------------- | ------------------------------------------ |
-| `text()`                        | `string`      | `v.string()`           |                                            |
-| `textEnum(['a','b'] as const)`  | `'a' \| 'b'`  | `v.string()`           | Runtime-validated                          |
-| `integer()`                     | `number`      | `v.number()`           | Float64                                    |
-| `boolean()`                     | `boolean`     | `v.boolean()`          |                                            |
-| `bigint()`                      | `bigint`      | `v.int64()`            |                                            |
-| `timestamp()`                   | `Date`        | `v.number()`           | `.defaultNow()` for createdAt              |
-| `timestamp({ mode: 'string' })` | `string`      | `v.number()`           |                                            |
-| `date()`                        | `string`      | `v.string()`           | YYYY-MM-DD, or `{ mode: 'date' }` → `Date` |
-| `id('table')`                   | `Id<'table'>` | `v.id('table')`        | Typed reference                            |
-| `vector(dims)`                  | `number[]`    | `v.array(v.float64())` | For vectorIndex                            |
-| `bytes()`                       | `ArrayBuffer` | `v.bytes()`            |                                            |
-| `json<T>()`                     | `T`           | `v.any()`              | Type-only, no runtime validation           |
-| `custom(validator)`             | inferred      | any `v.*`              | Full Convex validator                      |
+All from `better-convex/orm`. See [Column Types](#column-types-1) in API Reference.
 
 ### Column Modifiers
 
@@ -310,6 +294,20 @@ const files = await ctx.orm.system.query("_storage").take(20);
 
 Non-paginated `findMany()` requires sizing: `limit`, `cursor + limit`, `allowFullScan`, or `defaults.defaultLimit`.
 
+### distinct (`findMany` unsupported)
+
+`findMany({ distinct })` is not available to preserve strict no-scan/index-backed guarantees.
+
+Use select-pipeline distinct instead:
+
+```ts
+const page = await ctx.orm.query.todos
+  .select()
+  .where({ projectId })
+  .distinct({ fields: ['status'] })
+  .paginate({ cursor: null, limit: 100 });
+```
+
 ## Filtering + Pagination
 
 | Query mode                       | Index required?                               | Pagination                                  | Ordering        |
@@ -341,17 +339,7 @@ const admins = await ctx.orm.query.users.findMany({
 });
 ```
 
-### Operators
-
-| Category            | Operators                                                                    |
-| ------------------- | ---------------------------------------------------------------------------- |
-| Comparison          | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`                                         |
-| Range               | `between` (inclusive), `notBetween` (strict outside)                         |
-| Set                 | `in`, `notIn`                                                                |
-| Null                | `isNull`, `isNotNull`                                                        |
-| Logical             | `AND`, `OR`, `NOT`                                                           |
-| String (post-fetch) | `like`, `ilike`, `notLike`, `notIlike`, `startsWith`, `endsWith`, `contains` |
-| Array (post-fetch)  | `arrayContains`, `arrayContained`, `arrayOverlaps`                           |
+See [Operators](#operators-1) in API Reference.
 
 Index-compiled: `eq`, `ne`, `in`, `notIn`, `isNull`, `isNotNull`, `between`, `notBetween`, `startsWith`, `like('prefix%')`.
 Post-fetch: everything else. Require `.withIndex(...)` in typed API to make scan scope deliberate.
@@ -574,16 +562,7 @@ const page = await ctx.orm.query.users
   .paginate({ cursor: null, limit: 20 });
 ```
 
-### Composition limitations
-
-| Combination               | Status        |
-| ------------------------- | ------------- |
-| `select() + search`       | Not supported |
-| `select() + vectorSearch` | Not supported |
-| `select() + offset`       | Not supported |
-| `select() + with`         | Not supported |
-| `select() + extras`       | Not supported |
-| `select() + columns`      | Not supported |
+See [Select Composition Limitations](#select-composition-limitations) in API Reference.
 
 ## Pagination Modes
 
@@ -709,16 +688,7 @@ const filtered = results.filter((a) => a.publishedAt >= startDate);
 6. **Strict mode** — `strict: true` throws on missing `maxScan` for scan-fallback plans; `strict: false` warns.
 7. **Search overhead** — don't over-index. Use `filterFields` to narrow before text matching.
 
-### Full-Scan Operator Workarounds
-
-| Operator                           | Scalable workaround                                |
-| ---------------------------------- | -------------------------------------------------- |
-| `arrayContains/Contained/Overlaps` | Inverted/join table keyed by element               |
-| `contains`                         | `withSearchIndex` or tokenized denormalized field  |
-| `endsWith`                         | Store reversed column, use `startsWith`            |
-| `ilike`/`notIlike`                 | Lowercase column + `startsWith`/`like('prefix%')`  |
-| `notLike`                          | Indexed positive pre-filter + `notLike` post-fetch |
-| `NOT` (general)                    | Rewrite to positive predicates; cap with `maxScan` |
+See [Full-Scan Operator Workarounds](#full-scan-operator-workarounds-1) in API Reference.
 
 ## Mutations
 
@@ -1085,3 +1055,59 @@ export const triggers = defineTriggers(relations, {
 - Scheduling: `./scheduling.md`
 - HTTP: `./http.md`
 - React/RSC: `./react.md`
+
+## API Reference
+
+### Column Types
+
+All from `better-convex/orm`:
+
+| Builder                         | TS Type       | Convex                 | Notes                                      |
+| ------------------------------- | ------------- | ---------------------- | ------------------------------------------ |
+| `text()`                        | `string`      | `v.string()`           |                                            |
+| `textEnum(['a','b'] as const)`  | `'a' \| 'b'`  | `v.string()`           | Runtime-validated                          |
+| `integer()`                     | `number`      | `v.number()`           | Float64                                    |
+| `boolean()`                     | `boolean`     | `v.boolean()`          |                                            |
+| `bigint()`                      | `bigint`      | `v.int64()`            |                                            |
+| `timestamp()`                   | `Date`        | `v.number()`           | `.defaultNow()` for createdAt              |
+| `timestamp({ mode: 'string' })` | `string`      | `v.number()`           |                                            |
+| `date()`                        | `string`      | `v.string()`           | YYYY-MM-DD, or `{ mode: 'date' }` → `Date` |
+| `id('table')`                   | `Id<'table'>` | `v.id('table')`        | Typed reference                            |
+| `vector(dims)`                  | `number[]`    | `v.array(v.float64())` | For vectorIndex                            |
+| `bytes()`                       | `ArrayBuffer` | `v.bytes()`            |                                            |
+| `json<T>()`                     | `T`           | `v.any()`              | Type-only, no runtime validation           |
+| `custom(validator)`             | inferred      | any `v.*`              | Full Convex validator                      |
+
+### Operators
+
+| Category            | Operators                                                                    |
+| ------------------- | ---------------------------------------------------------------------------- |
+| Comparison          | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`                                         |
+| Range               | `between` (inclusive), `notBetween` (strict outside)                         |
+| Set                 | `in`, `notIn`                                                                |
+| Null                | `isNull`, `isNotNull`                                                        |
+| Logical             | `AND`, `OR`, `NOT`                                                           |
+| String (post-fetch) | `like`, `ilike`, `notLike`, `notIlike`, `startsWith`, `endsWith`, `contains` |
+| Array (post-fetch)  | `arrayContains`, `arrayContained`, `arrayOverlaps`                           |
+
+### Select Composition Limitations
+
+| Combination               | Status        |
+| ------------------------- | ------------- |
+| `select() + search`       | Not supported |
+| `select() + vectorSearch` | Not supported |
+| `select() + offset`       | Not supported |
+| `select() + with`         | Not supported |
+| `select() + extras`       | Not supported |
+| `select() + columns`      | Not supported |
+
+### Full-Scan Operator Workarounds
+
+| Operator                           | Scalable workaround                                |
+| ---------------------------------- | -------------------------------------------------- |
+| `arrayContains/Contained/Overlaps` | Inverted/join table keyed by element               |
+| `contains`                         | `withSearchIndex` or tokenized denormalized field  |
+| `endsWith`                         | Store reversed column, use `startsWith`            |
+| `ilike`/`notIlike`                 | Lowercase column + `startsWith`/`like('prefix%')`  |
+| `notLike`                          | Indexed positive pre-filter + `notLike` post-fetch |
+| `NOT` (general)                    | Rewrite to positive predicates; cap with `maxScan` |

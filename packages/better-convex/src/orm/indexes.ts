@@ -7,8 +7,8 @@ export interface ConvexIndexConfig<
   TColumns extends readonly ConvexIndexColumn[] = ConvexIndexColumn[],
   TUnique extends boolean = boolean,
 > {
-  name: TName;
   columns: TColumns;
+  name: TName;
   unique: TUnique;
   where?: unknown;
 }
@@ -18,9 +18,9 @@ export interface ConvexSearchIndexConfig<
   TSearchField extends ConvexIndexColumn = ConvexIndexColumn,
   TFilterFields extends readonly ConvexIndexColumn[] = ConvexIndexColumn[],
 > {
+  filterFields: TFilterFields;
   name: TName;
   searchField: TSearchField;
-  filterFields: TFilterFields;
   staged: boolean;
 }
 
@@ -29,11 +29,24 @@ export interface ConvexVectorIndexConfig<
   TVectorField extends ConvexIndexColumn = ConvexIndexColumn,
   TFilterFields extends readonly ConvexIndexColumn[] = ConvexIndexColumn[],
 > {
-  name: TName;
-  vectorField: TVectorField;
   dimensions: number;
   filterFields: TFilterFields;
+  name: TName;
   staged: boolean;
+  vectorField: TVectorField;
+}
+
+export interface ConvexAggregateIndexConfig<
+  TName extends string = string,
+  TColumns extends readonly ConvexIndexColumn[] = ConvexIndexColumn[],
+> {
+  avgFields: readonly ConvexIndexColumn[];
+  columns: TColumns;
+  countFields: readonly ConvexIndexColumn[];
+  maxFields: readonly ConvexIndexColumn[];
+  minFields: readonly ConvexIndexColumn[];
+  name: TName;
+  sumFields: readonly ConvexIndexColumn[];
 }
 
 export class ConvexIndexBuilderOn<
@@ -172,6 +185,76 @@ export class ConvexVectorIndexBuilderOn<TName extends string = string> {
   }
 }
 
+export class ConvexAggregateIndexBuilderOn<TName extends string = string> {
+  static readonly [entityKind] = 'ConvexAggregateIndexBuilderOn';
+  readonly [entityKind] = 'ConvexAggregateIndexBuilderOn';
+
+  constructor(private name: TName) {}
+
+  on<TColumns extends [ConvexIndexColumn, ...ConvexIndexColumn[]]>(
+    ...columns: TColumns
+  ): ConvexAggregateIndexBuilder<TName, TColumns> {
+    return new ConvexAggregateIndexBuilder(this.name, columns);
+  }
+
+  all(): ConvexAggregateIndexBuilder<TName, []> {
+    return new ConvexAggregateIndexBuilder(this.name, []);
+  }
+}
+
+export class ConvexAggregateIndexBuilder<
+  TName extends string = string,
+  TColumns extends readonly ConvexIndexColumn[] = ConvexIndexColumn[],
+> {
+  static readonly [entityKind] = 'ConvexAggregateIndexBuilder';
+  readonly [entityKind] = 'ConvexAggregateIndexBuilder';
+
+  declare _: {
+    brand: 'ConvexAggregateIndexBuilder';
+    name: TName;
+    columns: TColumns;
+  };
+
+  config: ConvexAggregateIndexConfig<TName, TColumns>;
+
+  constructor(name: TName, columns: TColumns) {
+    this.config = {
+      name,
+      columns,
+      countFields: [],
+      sumFields: [],
+      avgFields: [],
+      minFields: [],
+      maxFields: [],
+    };
+  }
+
+  count(...fields: readonly ConvexIndexColumn[]): this {
+    this.config.countFields = [...this.config.countFields, ...fields];
+    return this;
+  }
+
+  sum(...fields: readonly ConvexIndexColumn[]): this {
+    this.config.sumFields = [...this.config.sumFields, ...fields];
+    return this;
+  }
+
+  avg(...fields: readonly ConvexIndexColumn[]): this {
+    this.config.avgFields = [...this.config.avgFields, ...fields];
+    return this;
+  }
+
+  min(...fields: readonly ConvexIndexColumn[]): this {
+    this.config.minFields = [...this.config.minFields, ...fields];
+    return this;
+  }
+
+  max(...fields: readonly ConvexIndexColumn[]): this {
+    this.config.maxFields = [...this.config.maxFields, ...fields];
+    return this;
+  }
+}
+
 export class ConvexVectorIndexBuilder<
   TName extends string = string,
   TVectorField extends ConvexIndexColumn = ConvexIndexColumn,
@@ -262,4 +345,10 @@ export function vectorIndex<TName extends string>(
   name: TName
 ): ConvexVectorIndexBuilderOn<TName> {
   return new ConvexVectorIndexBuilderOn(name);
+}
+
+export function aggregateIndex<TName extends string>(
+  name: TName
+): ConvexAggregateIndexBuilderOn<TName> {
+  return new ConvexAggregateIndexBuilderOn(name);
 }

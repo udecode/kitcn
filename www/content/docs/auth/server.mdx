@@ -85,18 +85,18 @@ export default defineAuth((ctx) => {
     trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
     triggers: {
       user: {
-        beforeCreate: async (data) => {
-          const username =
-            data.username?.trim() ??
-            data.email?.split('@')[0] ??
-            `user-${Date.now()}`;
-          return { ...data, username };
-        },
-        onCreate: async (user) => {
-          // `ctx` from defineAuth closure is available here.
-          // Example: const caller = createModuleCaller(ctx); await caller.schedule.now.fn(args);
-          void user;
-          void ctx;
+        create: {
+          before: async (data, triggerCtx) => {
+            const username =
+              data.username?.trim() ??
+              data.email?.split('@')[0] ??
+              `user-${Date.now()}`;
+            return { data: { ...data, username } };
+          },
+          after: async (user, triggerCtx) => {
+            // `ctx` from defineAuth closure is still available here.
+            // `triggerCtx` is also passed explicitly to every callback.
+          },
         },
       },
     },
@@ -393,23 +393,58 @@ Generated `getAuth(ctx)` uses the same context-aware adapter selection internall
 **Performance:** In queries/mutations, the direct DB adapter is selected automatically, avoiding the extra `ctx.runQuery`/`ctx.runMutation` hop.
 </Callout>
 
-### Database Triggers
+### Triggers
 
-Auth triggers (`triggers: { user, session }`) are independent from database triggers.
-If you also need DB-level side effects (aggregates, cascades, denormalized counters), define schema-level triggers in `schema.ts`:
+Auth triggers use the same API as [ORM Triggers](/docs/orm/triggers) — see that page for the full hook signatures.
 
-```ts title="convex/functions/schema.ts" showLineNumbers {1-2,5-8}
-import { defineTriggers } from 'better-convex/orm';
-import { aggregateUsers } from './aggregates';
+<Callout icon={<InfoIcon />}>
+`defineTriggers` runs at the `ctx.orm` level (all writes). `defineAuth` triggers run only at the Better Auth API level.
+</Callout>
 
-export const triggers = defineTriggers(relations, {
-  user: {
-    change: aggregateUsers.trigger,
-  },
-});
-```
+<Tabs groupId="triggers" items={["ORM (recommended)", "defineAuth"]} persist>
+  <Tab value="ORM (recommended)">
+    Define triggers in `schema.ts` via `defineTriggers`. These run for all writes to auth tables, including ORM mutations:
 
-When your schema exports `relations`, generated runtime automatically wires ORM context so auth handlers can use `ctx.orm` directly.
+    ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-16}
+    import { defineTriggers } from 'better-convex/orm';
+    import { relations } from './relations';
+
+    export const triggers = defineTriggers(relations, {
+      user: {
+        create: {
+          before: async (data, ctx) => {
+            return { data: { ...data, role: 'user' } };
+          },
+          after: async (doc, ctx) => {},
+        },
+        change: async (change, ctx) => {},
+      },
+    });
+    ```
+  </Tab>
+  <Tab value="defineAuth">
+    Define triggers inline in `auth.ts`. These run only for auth CRUD operations:
+
+    ```ts title="convex/functions/auth.ts" showLineNumbers {4-16}
+    import { defineAuth } from './generated/auth';
+
+    export default defineAuth((ctx) => ({
+      baseURL: process.env.SITE_URL!,
+      triggers: {
+        user: {
+          create: {
+            before: async (data, triggerCtx) => {
+              return { data: { ...data, role: 'user' } };
+            },
+            after: async (doc, triggerCtx) => {},
+          },
+          change: async (change, triggerCtx) => {},
+        },
+      },
+    }));
+    ```
+  </Tab>
+</Tabs>
 
 ## Environment Variables
 
@@ -479,7 +514,7 @@ npx convex run auth:rotateKeys --prod | npx convex env set JWKS --prod
 - Verify authentication works with new keys
 - Monitor for authentication errors
 
-## API
+## API Reference
 
 ### Convex Plugin
 
@@ -632,5 +667,4 @@ Done! You now have authentication set up. Here's where to go next:
 <Cards>
   <Card title="Templates" href="/docs/templates#authts" />
   <Card title="Client" href="/docs/auth/client" />
-  <Card title="Triggers" href="/docs/auth/triggers" />
 </Cards>

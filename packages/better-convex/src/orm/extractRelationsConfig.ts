@@ -11,36 +11,36 @@ import type { One, Relation, TablesRelationalConfig } from './relations';
  * Consumed by query builder for relation traversal
  */
 export interface EdgeMetadata {
-  /** Source table name (ts name) */
-  sourceTable: string;
-  /** Relation field name on source */
-  edgeName: string;
-  /** Target table name (ts name) */
-  targetTable: string;
+  /** Alias for disambiguation (v1 rename of relationName) */
+  alias?: string;
   /** Cardinality: one-to-one/many-to-one or one-to-many */
   cardinality: 'one' | 'many';
+  /** Relation field name on source */
+  edgeName: string;
   /** Primary source field name (best-effort) */
   fieldName: string;
+  /** Index fields for compound indexes */
+  indexFields: string[];
+  /** Index name for efficient lookups */
+  indexName: string;
+  /** Inverse edge if bidirectional relation */
+  inverseEdge?: EdgeMetadata;
+  /** Relation optional (one only) */
+  optional: boolean;
   /** Source field names (from) */
   sourceFields: string[];
-  /** Target field names (to) */
-  targetFields: string[];
   /**
    * True when the FK columns on the source side are nullable (i.e. the relation
    * can be absent). Used to avoid rejecting optional/self-referencing relations
    * as "circular dependencies".
    */
   sourceNullable: boolean;
-  /** Inverse edge if bidirectional relation */
-  inverseEdge?: EdgeMetadata;
-  /** Index name for efficient lookups */
-  indexName: string;
-  /** Index fields for compound indexes */
-  indexFields: string[];
-  /** Relation optional (one only) */
-  optional: boolean;
-  /** Alias for disambiguation (v1 rename of relationName) */
-  alias?: string;
+  /** Source table name (ts name) */
+  sourceTable: string;
+  /** Target field names (to) */
+  targetFields: string[];
+  /** Target table name (ts name) */
+  targetTable: string;
   /** Many-to-many through info */
   through?: {
     table: string;

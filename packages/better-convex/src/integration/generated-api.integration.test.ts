@@ -96,9 +96,9 @@ describe('integration/generated-api', () => {
       expect(generatedServer).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
-      expect(generatedServer).toContain(
-        'export const { scheduledMutationBatch, scheduledDelete } = orm.api();'
-      );
+      expect(generatedServer).toContain('aggregateBackfill');
+      expect(generatedServer).toContain('aggregateBackfillChunk');
+      expect(generatedServer).toContain('aggregateBackfillStatus');
       expect(generatedAuth).toContain('export function defineAuth<');
     } finally {
       process.chdir(oldCwd);

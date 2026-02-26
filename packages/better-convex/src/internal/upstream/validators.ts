@@ -323,19 +323,20 @@ export const withSystemFields = <
 export type AddFieldsToValidator<
   V extends Validator<any, any, any>,
   Fields extends PropertyValidators,
-> = V extends VObject<infer T, infer F, infer O>
-  ? VObject<Expand<T & ObjectType<Fields>>, Expand<F & Fields>, O>
-  : Validator<
-      Expand<V['type'] & ObjectType<Fields>>,
-      V['isOptional'],
-      V['fieldPaths'] &
-        {
-          [Property in keyof Fields & string]:
-            | `${Property}.${Fields[Property]['fieldPaths']}`
-            | Property;
-        }[keyof Fields & string] &
-        string
-    >;
+> =
+  V extends VObject<infer T, infer F, infer O>
+    ? VObject<Expand<T & ObjectType<Fields>>, Expand<F & Fields>, O>
+    : Validator<
+        Expand<V['type'] & ObjectType<Fields>>,
+        V['isOptional'],
+        V['fieldPaths'] &
+          {
+            [Property in keyof Fields & string]:
+              | `${Property}.${Fields[Property]['fieldPaths']}`
+              | Property;
+          }[keyof Fields & string] &
+          string
+      >;
 
 /**
  * Equivalent to `v.object({ ...validator, ...fields })`.

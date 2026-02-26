@@ -23,6 +23,7 @@ describe('createOrm type adapters', () => {
     expect(db[OrmContext]).toBeDefined();
     expect(Object.hasOwn(db[OrmContext], 'types')).toBe(false);
     expect(db[OrmContext].resolvedDefaults).toMatchObject({
+      countBackfillBatchSize: 1000,
       relationFanOutMaxKeys: 1000,
       mutationBatchSize: 400,
       mutationLeafBatchSize: 1600,

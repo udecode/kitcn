@@ -54,15 +54,7 @@ export const myPosts = authQuery
 
 ## Middleware Signature
 
-Every middleware receives an object with these properties:
-
-| Property | Description |
-|----------|-------------|
-| `ctx` | Current context |
-| `meta` | Procedure metadata |
-| `next` | Function to call next middleware/handler |
-| `input` | Validated input (`unknown` before `.input()`, typed after) |
-| `getRawInput` | Function to get raw input before validation |
+Every middleware receives an object — see [Middleware Parameters](#middleware-parameters) in API Reference for the full property list.
 
 Here's the basic pattern:
 
@@ -372,3 +364,17 @@ Key differences:
   <Card title="Context" href="/docs/server/context" />
   <Card title="Rate Limiting" href="/docs/server/advanced/rate-limiting" />
 </Cards>
+
+## API Reference
+
+### Middleware Parameters
+
+Every middleware receives an object with these properties:
+
+| Property | Description |
+|----------|-------------|
+| `ctx` | Current context |
+| `meta` | Procedure metadata |
+| `next` | Function to call next middleware/handler |
+| `input` | Validated input (`unknown` before `.input()`, typed after) |
+| `getRawInput` | Function to get raw input before validation |

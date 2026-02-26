@@ -74,13 +74,14 @@ export type QueryCtxWithPreferredOrmQueryTable<
 type OrmQueryRowByCtx<
   TCtx extends GenericQueryCtx<any>,
   TableName extends TableNamesInDataModel<InferCtxDataModel<TCtx>>,
-> = OrmQueryEntryByCtx<TCtx, TableName> extends {
-  _: {
-    baseResult: infer TResult;
-  };
-}
-  ? TResult
-  : never;
+> =
+  OrmQueryEntryByCtx<TCtx, TableName> extends {
+    _: {
+      baseResult: infer TResult;
+    };
+  }
+    ? TResult
+    : never;
 
 export type LookupByIdResultByCtx<
   TCtx extends GenericQueryCtx<any>,

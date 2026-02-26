@@ -11,7 +11,7 @@ In this guide, we'll explore advanced querying in Convex. You'll learn to implem
 
 ## Overview
 
-Convex provides powerful querying capabilities beyond basic filtering:
+Convex provides querying capabilities beyond basic filtering:
 
 | Feature | Description |
 |---------|-------------|
@@ -25,17 +25,7 @@ Let's explore each one.
 
 ## Filtering + Pagination Compatibility
 
-Pagination and filtering are tightly coupled.
-We'll start with a decision table, then walk through each mode with examples.
-
-| Query mode | Index requirement | Pagination support | Relation-aware filtering | Ordering |
-|---|---|---|---|---|
-| `findMany({ where: object })` | Optional. Planner uses indexes when possible; otherwise it runs a bounded scan. Some post-fetch operators are typed to require `.withIndex(...)`. | `limit/offset`, `cursor + limit` | Yes (`where: { relation: ... }`) | `orderBy` supported; first field drives cursor stability |
-| `findMany({ where: (table, ops) => ... })` | Optional. Planner uses indexes when possible; otherwise it runs a bounded scan. Some post-fetch operators are typed to require `.withIndex(...)`. | `limit/offset`, `cursor + limit` | No (base-table expression only) | `orderBy` supported; first field drives cursor stability |
-| `findMany({ where: (_table, { predicate }) => predicate(...) })` | Required explicit `.withIndex(name, range?)` | `limit/offset`, `cursor + limit`, optional `maxScan` (cursor mode) | No (predicate replaces object relation filter path) | Index/stream-backed; first order field matters for cursor mode |
-| `findMany({ search })` | Required `searchIndex` | `limit/offset`, `cursor + limit` | No relation filters (base-table object `where` only) | Relevance order only (`orderBy` unsupported) |
-| `findMany({ vectorSearch })` | Required `vectorIndex` + configured provider | `vectorSearch.limit` only (no `cursor`, `offset`, top-level `limit`) | No | Similarity order only |
-| `select().<composition>.paginate({ cursor, limit })` | Schema + index/range path per union source (or inferred base path) | `cursor + limit` (+ optional `endCursor`, `maxScan`) or non-cursor | Manual via composition chain (`filter`, `map`, `flatMap`, `distinct`, `union`, `interleaveBy`) | Stream-backed index order |
+Pagination and filtering are tightly coupled. For the full compatibility matrix, see [API Reference](#api-reference) below.
 
 ### How to choose
 
@@ -384,8 +374,6 @@ const filtered = searchResults.filter((article) =>
 
 ## Performance Considerations
 
-Understanding performance is critical for production apps.
-
 ### Search Performance
 
 - Search indexes have overhead - don't over-index
@@ -446,11 +434,24 @@ Here are key practices to follow when using filters and search.
 
 That's it. You now have all the tools for full-text search, predicate filtering, and advanced query composition in the ORM.
 
+## API Reference
+
+### Filtering + Pagination Compatibility Matrix
+
+| Query mode | Index requirement | Pagination support | Relation-aware filtering | Ordering |
+|---|---|---|---|---|
+| `findMany({ where: object })` | Optional. Planner uses indexes when possible; otherwise it runs a bounded scan. Some post-fetch operators are typed to require `.withIndex(...)`. | `limit/offset`, `cursor + limit` | Yes (`where: { relation: ... }`) | `orderBy` supported; first field drives cursor stability |
+| `findMany({ where: (table, ops) => ... })` | Optional. Planner uses indexes when possible; otherwise it runs a bounded scan. Some post-fetch operators are typed to require `.withIndex(...)`. | `limit/offset`, `cursor + limit` | No (base-table expression only) | `orderBy` supported; first field drives cursor stability |
+| `findMany({ where: (_table, { predicate }) => predicate(...) })` | Required explicit `.withIndex(name, range?)` | `limit/offset`, `cursor + limit`, optional `maxScan` (cursor mode) | No (predicate replaces object relation filter path) | Index/stream-backed; first order field matters for cursor mode |
+| `findMany({ search })` | Required `searchIndex` | `limit/offset`, `cursor + limit` | No relation filters (base-table object `where` only) | Relevance order only (`orderBy` unsupported) |
+| `findMany({ vectorSearch })` | Required `vectorIndex` + configured provider | `vectorSearch.limit` only (no `cursor`, `offset`, top-level `limit`) | No | Similarity order only |
+| `select().<composition>.paginate({ cursor, limit })` | Schema + index/range path per union source (or inferred base path) | `cursor + limit` (+ optional `endCursor`, `maxScan`) or non-cursor | Manual via composition chain (`filter`, `map`, `flatMap`, `distinct`, `union`, `interleaveBy`) | Stream-backed index order |
+
 ## Next Steps
 
 <Cards>
   <Card title="ORM" href="/docs/orm" />
   <Card title="Triggers" href="/docs/orm/triggers" />
-  <Card title="Aggregates" href="/docs/server/advanced/aggregates" />
+  <Card title="Aggregates" href="/docs/orm/aggregates" />
   <Card title="better-convex" href="https://github.com/get-convex/better-convex" />
 </Cards>

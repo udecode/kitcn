@@ -152,6 +152,9 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
     });
     const ormContext: OrmContextValue = {
       foreignKeyGraph: buildForeignKeyGraph(schema),
+      schema,
+      edgeMetadata,
+      relationLoading: options?.relationLoading,
       scheduler: options?.scheduler,
       scheduledDelete: options?.scheduledDelete,
       scheduledMutationBatch: options?.scheduledMutationBatch,

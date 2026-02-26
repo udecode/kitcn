@@ -396,21 +396,8 @@ app.use(
 );
 ```
 
-### CORS Options
-
-Hono's CORS middleware accepts these options:
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `origin` | `string \| string[]` | `'*'` | Allowed origin URLs or `'*'` for any |
-| `allowMethods` | `string[]` | `['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH']` | Allowed HTTP methods |
-| `allowHeaders` | `string[]` | `[]` | Allowed request headers |
-| `exposeHeaders` | `string[]` | `[]` | Headers exposed to the browser |
-| `credentials` | `boolean` | `false` | Allow cookies and auth headers |
-| `maxAge` | `number` | - | Preflight cache duration in seconds |
-
 <Callout icon={<InfoIcon />}>
-  **Note:** For Better Auth integration, include `'Better-Auth-Cookie'` in `allowHeaders` and `'Set-Better-Auth-Cookie'` in `exposeHeaders` to ensure auth cookies work correctly.
+  **Note:** For Better Auth integration, include `'Better-Auth-Cookie'` in `allowHeaders` and `'Set-Better-Auth-Cookie'` in `exposeHeaders` to ensure auth cookies work correctly. See [CORS Options](#cors-options) in the API Reference for all available parameters.
 </Callout>
 
 ## Error Handling
@@ -504,16 +491,7 @@ export const redirect = publicRoute
   .query(async ({ c }) => c.redirect('/api/new-path', 301));
 ```
 
-### Hono Context Methods
-
-| Method | Description |
-|--------|-------------|
-| `c.json(data)` | Return JSON response |
-| `c.text(str)` | Return text response |
-| `c.redirect(url, status?)` | Return redirect response |
-| `c.header(name, value)` | Set response header |
-| `c.req.header(name)` | Get request header |
-| `c.req.text()` | Get raw request body as text |
+See [Hono Context Methods](#hono-context-methods) in the API Reference for all available `c` methods.
 
 ## Streaming
 
@@ -626,21 +604,7 @@ export const stripe = publicRoute
 
 Access HTTP endpoints on the client via `crpc.http.*`. The proxy uses a **hybrid API** that combines the best of both worlds: tRPC-style JSON body at root level with explicit `params`/`searchParams`/`form` for URL and form data.
 
-### Input Args
-
-The client uses a structured input format that separates concerns clearly. All options go in args (1st param):
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `params` | `Record<string, string>` | Path parameters (`:id` in `/users/:id`) |
-| `searchParams` | `Record<string, string \| string[]>` | Query string parameters |
-| `form` | `z.infer<TForm>` | Typed FormData (if server uses `.form()`) |
-| `fetch` | `typeof fetch` | Custom fetch function (per-call override) |
-| `init` | `RequestInit` | Standard fetch options (highest priority) |
-| `headers` | `Record<string, string> \| (() => ...)` | Request headers (incl. auth, cookies) |
-| `[key]` | `unknown` | JSON body fields at root level |
-
-JSON body fields are spread at the root level (tRPC-style), while URL-related data and client options use explicit keys.
+The client uses a structured input format that separates concerns clearly. All options go in args (1st param). JSON body fields are spread at the root level (tRPC-style), while URL-related data and client options use explicit keys. See [Input Args](#input-args) in the API Reference for the full property list.
 
 ### Setup
 
@@ -914,14 +878,7 @@ createTodo.mutate({
 });
 ```
 
-### Client API Reference
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `queryOptions` | `(args?, queryOpts?)` | Options for `useQuery`/`useSuspenseQuery`. `args` includes client opts, `queryOpts` is TanStack Query only |
-| `mutationOptions` | `(mutationOpts?)` | Options for `useMutation`. `mutationOpts` is TanStack Mutation only, client opts go in `mutate(args)` |
-| `queryKey` | `(args?)` | Get the query key for cache operations |
-| `queryFilter` | `(args?, filters?)` | Filter for `invalidateQueries`, etc. |
+See [Client API Reference](#client-api-reference) in the API Reference below for all available methods.
 
 <Callout icon={<InfoIcon />}>
   **Note:** For more React patterns including loading states, error handling, and conditional queries, see [Queries](/docs/react/queries) and [Mutations](/docs/react/mutations).
@@ -1041,6 +998,59 @@ export async function POST(request: Request) {
 <Callout icon={<InfoIcon />}>
   **Note:** The caller provides full type safety and uses your cRPC router definitions. See [Server-Side Calls](/docs/server/server-side-calls) for complete setup.
 </Callout>
+
+## API Reference
+
+### CORS Options
+
+Hono's `cors()` middleware accepts these options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `origin` | `string \| string[]` | `'*'` | Allowed origin URLs or `'*'` for any |
+| `allowMethods` | `string[]` | `['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH']` | Allowed HTTP methods |
+| `allowHeaders` | `string[]` | `[]` | Allowed request headers |
+| `exposeHeaders` | `string[]` | `[]` | Headers exposed to the browser |
+| `credentials` | `boolean` | `false` | Allow cookies and auth headers |
+| `maxAge` | `number` | - | Preflight cache duration in seconds |
+
+### Hono Context Methods
+
+The `c` (Hono Context) object available in all handlers:
+
+| Method | Description |
+|--------|-------------|
+| `c.json(data)` | Return JSON response |
+| `c.text(str)` | Return text response |
+| `c.redirect(url, status?)` | Return redirect response |
+| `c.header(name, value)` | Set response header |
+| `c.req.header(name)` | Get request header |
+| `c.req.text()` | Get raw request body as text |
+
+### Input Args
+
+Structured input format for all client calls. All options go in the first argument:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `params` | `Record<string, string>` | Path parameters (`:id` in `/users/:id`) |
+| `searchParams` | `Record<string, string \| string[]>` | Query string parameters |
+| `form` | `z.infer<TForm>` | Typed FormData (if server uses `.form()`) |
+| `fetch` | `typeof fetch` | Custom fetch function (per-call override) |
+| `init` | `RequestInit` | Standard fetch options (highest priority) |
+| `headers` | `Record<string, string> \| (() => ...)` | Request headers (incl. auth, cookies) |
+| `[key]` | `unknown` | JSON body fields at root level |
+
+### Client API Reference
+
+Methods available on each route proxy (`crpc.http.*.*`):
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `queryOptions` | `(args?, queryOpts?)` | Options for `useQuery`/`useSuspenseQuery`. `args` includes client opts, `queryOpts` is TanStack Query only |
+| `mutationOptions` | `(mutationOpts?)` | Options for `useMutation`. `mutationOpts` is TanStack Mutation only, client opts go in `mutate(args)` |
+| `queryKey` | `(args?)` | Get the query key for cache operations |
+| `queryFilter` | `(args?, filters?)` | Filter for `invalidateQueries`, etc. |
 
 ## Next Steps
 

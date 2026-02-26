@@ -1171,103 +1171,6 @@ const members = await ctx.auth.api.listTeamMembers({
 });
 ```
 
-## Hooks
-
-Hooks allow custom logic during organization lifecycle events.
-
-### Organization Hooks
-
-```ts title="convex/functions/auth.ts" showLineNumbers {2-14}
-organization({
-  // Organization creation
-  organizationCreation: {
-    beforeCreate: async ({ organization, user }) => {
-      // Validate or modify before creation
-      return { data: organization };
-    },
-    afterCreate: async ({ organization, member, user }) => {
-      // Setup default resources, create initial data
-    },
-  },
-
-  // Organization deletion
-  organizationDeletion: {
-    beforeDelete: async (data) => {
-      // Cleanup related resources before deletion
-    },
-    afterDelete: async (data) => {
-      // Post-deletion cleanup
-    },
-  },
-}),
-```
-
-### Member Hooks
-
-```ts title="convex/functions/auth.ts" showLineNumbers {2-20}
-organization({
-  membershipManagement: {
-    beforeAddMember: async ({ organization, member, user }) => {
-      // Validate member addition
-      return { data: member };
-    },
-    afterAddMember: async ({ organization, member, user }) => {
-      // Post-addition logic (notifications, etc.)
-    },
-    beforeRemoveMember: async ({ organization, member, user }) => {
-      // Cleanup before removal
-    },
-    afterRemoveMember: async ({ organization, member, user }) => {
-      // Post-removal logic
-    },
-    beforeUpdateRole: async ({ organization, member, role }) => {
-      return { data: { role } };
-    },
-    afterUpdateRole: async ({ organization, member, role }) => {
-      // Role change notifications
-    },
-  },
-}),
-```
-
-### Invitation Hooks
-
-```ts title="convex/functions/auth.ts" showLineNumbers {2-15}
-organization({
-  invitationManagement: {
-    beforeCreateInvitation: async ({ invitation, organization, inviter }) => {
-      return { data: invitation };
-    },
-    afterCreateInvitation: async ({ invitation, organization, inviter }) => {
-      // Send custom notification
-    },
-    beforeAcceptInvitation: async ({ invitation, user }) => {
-      return { data: invitation };
-    },
-    afterAcceptInvitation: async ({ invitation, member, user }) => {
-      // Welcome logic
-    },
-  },
-}),
-```
-
-### Team Hooks
-
-```ts title="convex/functions/auth.ts" showLineNumbers {2-12}
-organization({
-  teamManagement: {
-    beforeCreateTeam: async ({ team, organization }) => {
-      return { data: team };
-    },
-    afterCreateTeam: async ({ team, organization }) => {},
-    beforeAddTeamMember: async ({ team, user }) => {
-      return { data: { team, user } };
-    },
-    afterAddTeamMember: async ({ team, user }) => {},
-  },
-}),
-```
-
 ## Client Usage
 
 ### React Hooks
@@ -1388,6 +1291,103 @@ await authClient.organization.setActiveTeam({
 });
 ```
 
+## Hooks
+
+Hooks allow custom logic during organization lifecycle events.
+
+### Organization Hooks
+
+```ts title="convex/functions/auth.ts" showLineNumbers {2-14}
+organization({
+  // Organization creation
+  organizationCreation: {
+    beforeCreate: async ({ organization, user }) => {
+      // Validate or modify before creation
+      return { data: organization };
+    },
+    afterCreate: async ({ organization, member, user }) => {
+      // Setup default resources, create initial data
+    },
+  },
+
+  // Organization deletion
+  organizationDeletion: {
+    beforeDelete: async (data) => {
+      // Cleanup related resources before deletion
+    },
+    afterDelete: async (data) => {
+      // Post-deletion cleanup
+    },
+  },
+}),
+```
+
+### Member Hooks
+
+```ts title="convex/functions/auth.ts" showLineNumbers {2-20}
+organization({
+  membershipManagement: {
+    beforeAddMember: async ({ organization, member, user }) => {
+      // Validate member addition
+      return { data: member };
+    },
+    afterAddMember: async ({ organization, member, user }) => {
+      // Post-addition logic (notifications, etc.)
+    },
+    beforeRemoveMember: async ({ organization, member, user }) => {
+      // Cleanup before removal
+    },
+    afterRemoveMember: async ({ organization, member, user }) => {
+      // Post-removal logic
+    },
+    beforeUpdateRole: async ({ organization, member, role }) => {
+      return { data: { role } };
+    },
+    afterUpdateRole: async ({ organization, member, role }) => {
+      // Role change notifications
+    },
+  },
+}),
+```
+
+### Invitation Hooks
+
+```ts title="convex/functions/auth.ts" showLineNumbers {2-15}
+organization({
+  invitationManagement: {
+    beforeCreateInvitation: async ({ invitation, organization, inviter }) => {
+      return { data: invitation };
+    },
+    afterCreateInvitation: async ({ invitation, organization, inviter }) => {
+      // Send custom notification
+    },
+    beforeAcceptInvitation: async ({ invitation, user }) => {
+      return { data: invitation };
+    },
+    afterAcceptInvitation: async ({ invitation, member, user }) => {
+      // Welcome logic
+    },
+  },
+}),
+```
+
+### Team Hooks
+
+```ts title="convex/functions/auth.ts" showLineNumbers {2-12}
+organization({
+  teamManagement: {
+    beforeCreateTeam: async ({ team, organization }) => {
+      return { data: team };
+    },
+    afterCreateTeam: async ({ team, organization }) => {},
+    beforeAddTeamMember: async ({ team, user }) => {
+      return { data: { team, user } };
+    },
+    afterAddTeamMember: async ({ team, user }) => {},
+  },
+}),
+```
+
 ## API Reference
 
 | Operation | Method | Multi-table |
@@ -1419,5 +1419,4 @@ Use Better Auth API for operations that modify multiple tables. Use direct table
 <Cards>
   <Card title="Templates" href="/docs/templates" />
   <Card title="Auth Server" href="/docs/auth/server" />
-  <Card title="Triggers" href="/docs/auth/triggers" />
 </Cards>

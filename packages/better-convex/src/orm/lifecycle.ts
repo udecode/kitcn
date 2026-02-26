@@ -2,6 +2,10 @@ import type {
   GenericDatabaseReader,
   GenericDatabaseWriter,
 } from 'convex/server';
+import {
+  applyAggregateIndexesForChange,
+  getAggregateIndexDefinitions,
+} from './aggregate-index/runtime';
 import type { TablesRelationalConfig } from './relations';
 import {
   type NormalizedOrmTableTriggers,
@@ -96,6 +100,7 @@ class Lock {
 const innerWriteLock = new Lock();
 const outerWriteLock = new Lock();
 const hookQueue: QueuedHook[] = [];
+let activeHookDepth = 0;
 
 const createHookCtx = (
   ctx: AnyMutationCtx,
@@ -136,6 +141,14 @@ const mergeBeforeData = async (
   return data;
 };
 
+const withPublicIdAlias = (doc: AnyRecord, id: string): AnyRecord =>
+  doc.id !== undefined
+    ? doc
+    : {
+        ...doc,
+        id,
+      };
+
 const tableNameFromId = (
   db: GenericDatabaseReader<any>,
   hooksByTable: HookMap,
@@ -171,7 +184,7 @@ const executeThenDrainHooks = async <R>(
   isWithinHook: boolean,
   execute: (hookCtx: AnyRecord) => Promise<HookExecutionResult<R>>
 ): Promise<R> => {
-  if (isWithinHook) {
+  if (isWithinHook || activeHookDepth > 0) {
     return queueOperationHooks(ctx, innerDb, hooksByTable, execute);
   }
 
@@ -190,6 +203,7 @@ const executeThenDrainHooks = async <R>(
         continue;
       }
       try {
+        activeHookDepth += 1;
         await hook();
       } catch (error) {
         if (firstError === null) {
@@ -197,6 +211,8 @@ const executeThenDrainHooks = async <R>(
         } else {
           console.error(error);
         }
+      } finally {
+        activeHookDepth = Math.max(0, activeHookDepth - 1);
       }
     }
 
@@ -260,18 +276,20 @@ function writerWithHooks(
         if (!newDoc) {
           return { result: undefined, queuedHooks: [] };
         }
+        const oldDocWithId = withPublicIdAlias(oldDoc as AnyRecord, id as any);
+        const newDocWithId = withPublicIdAlias(newDoc as AnyRecord, id as any);
 
         const change: OrmTriggerChange<AnyRecord> = {
           operation: 'update',
           id: id as any,
-          oldDoc: oldDoc as AnyRecord,
-          newDoc: newDoc as AnyRecord,
+          oldDoc: oldDocWithId,
+          newDoc: newDocWithId,
         };
 
         const queuedHooks: QueuedHook[] = [];
         if (tableHooks.update?.after) {
           queuedHooks.push(async () => {
-            await tableHooks.update?.after?.(newDoc as AnyRecord, hookCtx);
+            await tableHooks.update?.after?.(newDocWithId, hookCtx);
           });
         }
         if (tableHooks.change) {
@@ -339,18 +357,20 @@ function writerWithHooks(
         if (!newDoc) {
           return { result: undefined, queuedHooks: [] };
         }
+        const oldDocWithId = withPublicIdAlias(oldDoc as AnyRecord, id as any);
+        const newDocWithId = withPublicIdAlias(newDoc as AnyRecord, id as any);
 
         const change: OrmTriggerChange<AnyRecord> = {
           operation: 'update',
           id: id as any,
-          oldDoc: oldDoc as AnyRecord,
-          newDoc: newDoc as AnyRecord,
+          oldDoc: oldDocWithId,
+          newDoc: newDocWithId,
         };
 
         const queuedHooks: QueuedHook[] = [];
         if (tableHooks.update?.after) {
           queuedHooks.push(async () => {
-            await tableHooks.update?.after?.(newDoc as AnyRecord, hookCtx);
+            await tableHooks.update?.after?.(newDocWithId, hookCtx);
           });
         }
         if (tableHooks.change) {
@@ -396,12 +416,13 @@ function writerWithHooks(
           await innerDb.delete(tableName as any, id as any);
           return { result: undefined, queuedHooks: [] };
         }
+        const oldDocWithId = withPublicIdAlias(oldDoc as AnyRecord, id as any);
 
         await mergeBeforeData(
           tableName,
           'delete',
           tableHooks.delete?.before,
-          oldDoc as AnyRecord,
+          oldDocWithId,
           hookCtx
         );
 
@@ -410,14 +431,14 @@ function writerWithHooks(
         const change: OrmTriggerChange<AnyRecord> = {
           operation: 'delete',
           id: id as any,
-          oldDoc: oldDoc as AnyRecord,
+          oldDoc: oldDocWithId,
           newDoc: null,
         };
 
         const queuedHooks: QueuedHook[] = [];
         if (tableHooks.delete?.after) {
           queuedHooks.push(async () => {
-            await tableHooks.delete?.after?.(oldDoc as AnyRecord, hookCtx);
+            await tableHooks.delete?.after?.(oldDocWithId, hookCtx);
           });
         }
         if (tableHooks.change) {
@@ -460,18 +481,22 @@ function writerWithHooks(
           if (!newDoc) {
             return { result: id, queuedHooks: [] };
           }
+          const newDocWithId = withPublicIdAlias(
+            newDoc as AnyRecord,
+            id as any
+          );
 
           const change: OrmTriggerChange<AnyRecord> = {
             operation: 'insert',
             id: id as any,
             oldDoc: null,
-            newDoc: newDoc as AnyRecord,
+            newDoc: newDocWithId,
           };
 
           const queuedHooks: QueuedHook[] = [];
           if (tableHooks.create?.after) {
             queuedHooks.push(async () => {
-              await tableHooks.create?.after?.(newDoc as AnyRecord, hookCtx);
+              await tableHooks.create?.after?.(newDocWithId, hookCtx);
             });
           }
           if (tableHooks.change) {
@@ -538,6 +563,49 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
     }
 
     tableHooks.set(tableName, hooks);
+  }
+
+  for (const tableConfig of Object.values(schema)) {
+    if (!tableConfig?.table || !tableConfig?.name) {
+      continue;
+    }
+    const aggregateIndexes = getAggregateIndexDefinitions(tableConfig);
+    if (aggregateIndexes.length === 0) {
+      continue;
+    }
+
+    const existing = tableHooks.get(tableConfig.name) ?? {};
+    const existingChange = existing.change;
+
+    tableHooks.set(tableConfig.name, {
+      ...existing,
+      change: async (change, ctx) => {
+        if (change.operation === 'delete') {
+          await applyAggregateIndexesForChange(
+            ctx.db as GenericDatabaseWriter<any>,
+            tableConfig.name,
+            aggregateIndexes,
+            {
+              operation: 'delete',
+              id: change.id as any,
+            }
+          );
+        } else {
+          await applyAggregateIndexesForChange(
+            ctx.db as GenericDatabaseWriter<any>,
+            tableConfig.name,
+            aggregateIndexes,
+            {
+              operation: change.operation,
+              id: change.id as any,
+              newDoc: change.newDoc as Record<string, unknown>,
+            }
+          );
+        }
+
+        await existingChange?.(change, ctx);
+      },
+    });
   }
 
   if (tableHooks.size === 0) {

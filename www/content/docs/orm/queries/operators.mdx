@@ -22,39 +22,7 @@ await db.query.users.findMany({
 });
 ```
 
-### Supported Operators
-
-Here's the full list of operators you can use inside a `where` object:
-
-```ts showLineNumbers
-where: {
-  OR: [],
-  AND: [],
-  NOT: {},
-
-  // relations (filter by existence or nested filters)
-  posts: true,
-
-  // columns
-  age: 15,
-  age: { eq: 15 },
-  age: { ne: 15 },
-  age: { gt: 15 },
-  age: { gte: 15 },
-  age: { lt: 15 },
-  age: { lte: 15 },
-  age: { between: [18, 65] },
-  age: { notBetween: [18, 65] },
-  role: { in: ['admin', 'member'] },
-  role: { notIn: ['banned'] },
-  email: { isNull: true },
-  email: { isNotNull: true },
-}
-```
-
-<Callout icon={<InfoIcon />}>
-**Note:** `between` is inclusive (`>= min` and `<= max`). `notBetween` is strict outside-range (`< min` or `> max`).
-</Callout>
+For the full list of supported operators, see [API Reference](#supported-operators) below.
 
 ### String Operators (post-fetch)
 
@@ -107,17 +75,7 @@ await ctx.orm.update(users).set({ role: 'admin' }).where(
 );
 ```
 
-### Common Helpers
-
-Here's a reference of all available mutation/RLS operator helpers:
-
-| Category | Helpers |
-|----------|---------|
-| Comparison | `eq`, `ne`, `gt`, `gte`, `lt`, `lte` |
-| Range | `between`, `notBetween` |
-| Set | `inArray`, `notInArray` |
-| Logical | `and`, `or`, `not` |
-| Null | `isNull`, `isNotNull` |
+For the full list of mutation/RLS helpers, see [API Reference](#common-helpers) below.
 
 ## Unsupported SQL-only Features
 
@@ -142,6 +100,54 @@ await db.query.users.findMany({
 ```
 
 You now know how to filter data in both query and mutation contexts. Object filters give you a declarative syntax for relational queries, while operator helpers provide composable expressions for mutations and RLS rules.
+
+## API Reference
+
+### Supported Operators
+
+Here's the full list of operators you can use inside a `where` object:
+
+```ts showLineNumbers
+where: {
+  OR: [],
+  AND: [],
+  NOT: {},
+
+  // relations (filter by existence or nested filters)
+  posts: true,
+
+  // columns
+  age: 15,
+  age: { eq: 15 },
+  age: { ne: 15 },
+  age: { gt: 15 },
+  age: { gte: 15 },
+  age: { lt: 15 },
+  age: { lte: 15 },
+  age: { between: [18, 65] },
+  age: { notBetween: [18, 65] },
+  role: { in: ['admin', 'member'] },
+  role: { notIn: ['banned'] },
+  email: { isNull: true },
+  email: { isNotNull: true },
+}
+```
+
+<Callout icon={<InfoIcon />}>
+**Note:** `between` is inclusive (`>= min` and `<= max`). `notBetween` is strict outside-range (`< min` or `> max`).
+</Callout>
+
+### Common Helpers
+
+Here's a reference of all available mutation/RLS operator helpers:
+
+| Category | Helpers |
+|----------|---------|
+| Comparison | `eq`, `ne`, `gt`, `gte`, `lt`, `lte` |
+| Range | `between`, `notBetween` |
+| Set | `inArray`, `notInArray` |
+| Logical | `and`, `or`, `not` |
+| Null | `isNull`, `isNotNull` |
 
 ## Next Steps
 

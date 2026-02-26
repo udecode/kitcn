@@ -42,7 +42,7 @@ function dropAndStripSystemFields(
   };
 }
 
-describe('stream compatibility - reflection', () => {
+describe('stream reflection', () => {
   test('reflection', async () => {
     const t = convexTest(schema);
     await t.run(async (ctx) => {
@@ -81,7 +81,7 @@ describe('stream compatibility - reflection', () => {
   });
 });
 
-describe('stream compatibility', () => {
+describe('stream regression', () => {
   test('reflection as stream', async () => {
     const t = convexTest(schema);
     await t.run(async (ctx) => {
