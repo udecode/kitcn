@@ -1,21 +1,16 @@
 # better-convex
 
-## Unreleased
+## 0.6.4
 
-### Breaking Changes
+### Patch Changes
 
-- Auth triggers now hard-break to `defineTriggers` parity.
-- Removed generated auth trigger procedures (`beforeCreate`, `onCreate`, `beforeUpdate`, `onUpdate`, `beforeDelete`, `onDelete`).
-- Auth trigger callbacks now run inline in auth CRUD handlers with explicit callback ctx.
+- [#93](https://github.com/udecode/better-convex/pull/93) [`8153811`](https://github.com/udecode/better-convex/commit/81538110000a33855f1b5bb9b66f613604cd8388) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix `findFirst` now returns `null` instead of `undefined` when no result is found. Fix `.returning()` crash on nullable timestamp fields.
 
-| Old            | New                          |
-| -------------- | ---------------------------- |
-| `beforeCreate` | `create.before(data, ctx)`   |
-| `onCreate`     | `create.after(doc, ctx)`     |
-| `beforeUpdate` | `update.before(update, ctx)` |
-| `onUpdate`     | `update.after(newDoc, ctx)`  |
-| `beforeDelete` | `delete.before(doc, ctx)`    |
-| `onDelete`     | `delete.after(doc, ctx)`     |
+## 0.6.3
+
+### Patch Changes
+
+- [#88](https://github.com/udecode/better-convex/pull/88) [`207d62f`](https://github.com/udecode/better-convex/commit/207d62f19912ccf355ff4c5e9ec5fee56ecf58cb) Thanks [@zbeyens](https://github.com/zbeyens)! - ORM/RLS update: async policy callbacks, safe empty `inArray([])` handling in query + mutation paths, and runtime+types support for system fields (`t.id`) in `extraConfig` callbacks.
 
 ## 0.6.2
 
