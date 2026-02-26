@@ -141,6 +141,52 @@ describe('server/caller-factory', () => {
     expect(getToken.mock.calls[1]?.[2]?.forceRefresh).toBe(true);
   });
 
+  test('refreshes token and retries once on unauthorized errors when token is not fresh', async () => {
+    const fetchQuerySpy = spyOn(convexNextjs, 'fetchQuery').mockImplementation(
+      async (_fn: any, _args: any, opts: any) => {
+        if (opts?.token === 't0') {
+          throw Object.assign(new Error('unauthorized'), {
+            code: 'UNAUTHORIZED',
+          });
+        }
+        return 'ok';
+      }
+    );
+
+    const api = {
+      posts: { list: makeFunctionReference<'query'>('posts:list') },
+    };
+    const apiWithMeta = withQueryLeafMeta(api);
+
+    const getToken = mock(
+      async (_siteUrl: string, _headers: Headers, opts?: any) => {
+        if (opts?.forceRefresh) return { token: 't1', isFresh: true };
+        return { token: 't0', isFresh: false };
+      }
+    );
+
+    const { createContext } = createCallerFactory({
+      api: apiWithMeta,
+      convexSiteUrl: 'https://example.convex.site',
+      auth: {
+        getToken,
+        isUnauthorized: (e) =>
+          !!e &&
+          typeof e === 'object' &&
+          'code' in e &&
+          (e as any).code === 'UNAUTHORIZED',
+      },
+    });
+
+    const ctx = await createContext({ headers: new Headers() });
+    await expect(ctx.caller.posts.list({ tag: 'x' } as any)).resolves.toBe(
+      'ok'
+    );
+    expect(fetchQuerySpy.mock.calls.length).toBe(2);
+    expect(getToken.mock.calls.length).toBe(2);
+    expect(getToken.mock.calls[1]?.[2]?.forceRefresh).toBe(true);
+  });
+
   test('encodes Date args before fetch and decodes Date responses', async () => {
     const encoded = encodeWire({ at: new Date(1_700_000_000_000) });
     const fetchQuerySpy = spyOn(convexNextjs, 'fetchQuery').mockImplementation(

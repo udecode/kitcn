@@ -225,4 +225,64 @@ describe('getHeaders', () => {
     expect(headers.get('authorization')).toBe('Bearer abc');
     expect(headers.get('x-forwarded-for')).toBe('127.0.0.1');
   });
+
+  test('falls back to cookie-backed session when JWT identity is missing', async () => {
+    const ctx = {
+      auth: {
+        getUserIdentity: async () => null,
+      },
+      db: {
+        get: async () => null,
+      },
+      req: {
+        headers: new Headers({
+          cookie: 'better-auth.session_token=SESSION_TOKEN',
+        }),
+      },
+    };
+
+    const headers = await getHeaders(ctx as any);
+
+    expect(headers.get('authorization')).toBe('Bearer SESSION_TOKEN');
+  });
+
+  test('falls back to secure cookie-backed session token name in production', async () => {
+    const ctx = {
+      auth: {
+        getUserIdentity: async () => null,
+      },
+      db: {
+        get: async () => null,
+      },
+      req: {
+        headers: new Headers({
+          cookie: '__Secure-better-auth.session_token=SECURE_SESSION_TOKEN',
+        }),
+      },
+    };
+
+    const headers = await getHeaders(ctx as any);
+
+    expect(headers.get('authorization')).toBe('Bearer SECURE_SESSION_TOKEN');
+  });
+
+  test('falls back to custom-prefix session token cookie name', async () => {
+    const ctx = {
+      auth: {
+        getUserIdentity: async () => null,
+      },
+      db: {
+        get: async () => null,
+      },
+      req: {
+        headers: new Headers({
+          cookie: 'my-prefix.session_token=CUSTOM_PREFIX_TOKEN',
+        }),
+      },
+    };
+
+    const headers = await getHeaders(ctx as any);
+
+    expect(headers.get('authorization')).toBe('Bearer CUSTOM_PREFIX_TOKEN');
+  });
 });

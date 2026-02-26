@@ -116,17 +116,19 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
     tokenResult: TokenResult,
     headers: Headers
   ): Promise<FunctionReturnType<Fn> | null> => {
+    const shouldRetryWithFreshToken = !!opts.auth && !tokenResult.isFresh;
+
     try {
       return await fn(tokenResult.token);
     } catch (error) {
-      // Return null for auth errors instead of throwing
-      if (isUnauthorized?.(error)) {
-        return null;
-      }
-      // JWT cache refresh logic - skip if no auth or token is already fresh
-      if (!opts.auth || tokenResult.isFresh) {
+      // Only refresh when the initial token came from cache and may be stale.
+      if (!shouldRetryWithFreshToken) {
+        if (isUnauthorized?.(error)) {
+          return null;
+        }
         throw error;
       }
+
       // Force refresh token and retry
       const newToken = await getToken(siteUrl, headers, {
         ...opts,

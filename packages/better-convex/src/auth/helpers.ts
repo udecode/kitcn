@@ -18,6 +18,61 @@ type SessionResult<TCtx extends GenericQueryCtx<any>> = LookupByIdResultByCtx<
 type SessionLookupCtx<TCtx extends GenericQueryCtx<any>> =
   QueryCtxWithPreferredOrmQueryTable<TCtx, 'session'>;
 
+const SESSION_TOKEN_COOKIE_NAME = 'better-auth.session_token';
+
+const parseSessionTokenFromCookie = (cookieHeader: string | null) => {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const parts = cookieHeader.split(';');
+  for (const rawPart of parts) {
+    const part = rawPart.trim();
+    const equalsIndex = part.indexOf('=');
+    if (equalsIndex <= 0) {
+      continue;
+    }
+
+    const cookieName = part.slice(0, equalsIndex);
+    const normalizedCookieName = cookieName.startsWith('__Secure-')
+      ? cookieName.slice('__Secure-'.length)
+      : cookieName;
+    const isSessionTokenCookie =
+      normalizedCookieName === SESSION_TOKEN_COOKIE_NAME ||
+      normalizedCookieName.endsWith('.session_token') ||
+      normalizedCookieName === 'session_token';
+    if (!isSessionTokenCookie) {
+      continue;
+    }
+
+    const value = part.slice(equalsIndex + 1);
+    return value ? decodeURIComponent(value) : null;
+  }
+
+  return null;
+};
+
+const getCookieHeaderFromCtx = (ctx: unknown): string | null => {
+  const req = (ctx as { req?: { headers?: Headers | Record<string, string> } })
+    ?.req;
+  const headers = req?.headers;
+
+  if (!headers) {
+    return null;
+  }
+
+  if (headers instanceof Headers) {
+    return headers.get('cookie');
+  }
+
+  const cookie =
+    headers.cookie ??
+    headers.Cookie ??
+    headers['set-cookie'] ??
+    headers['Set-Cookie'];
+  return typeof cookie === 'string' ? cookie : null;
+};
+
 export const getAuthUserIdentity = async <DataModel extends GenericDataModel>(
   ctx: GenericQueryCtx<DataModel>
 ) => {
@@ -86,6 +141,14 @@ export const getHeaders = async <TCtx extends GenericQueryCtx<any>>(
   } | null;
 
   if (!resolvedSession) {
+    const sessionToken = parseSessionTokenFromCookie(
+      getCookieHeaderFromCtx(ctx)
+    );
+    if (sessionToken) {
+      return new Headers({
+        authorization: `Bearer ${sessionToken}`,
+      });
+    }
     return new Headers();
   }
 
