@@ -12,10 +12,12 @@
   "sideEffects": false,
   "type": "module",
   "exports": {
+    "./aggregate": "./dist/aggregate/index.js",
     "./auth": "./dist/auth/index.js",
-    "./auth-client": "./dist/auth-client/index.js",
-    "./auth-config": "./dist/auth-config/index.js",
-    "./auth-nextjs": "./dist/auth-nextjs/index.js",
+    "./auth/client": "./dist/auth/client/index.js",
+    "./auth/config": "./dist/auth/config/index.js",
+    "./auth/http": "./dist/auth/http/index.js",
+    "./auth/nextjs": "./dist/auth/nextjs/index.js",
     "./crpc": "./dist/crpc/index.js",
     "./orm": "./dist/orm/index.js",
     "./react": "./dist/react/index.js",
@@ -37,27 +39,29 @@
     "typecheck:types": "tsc --project ../../convex/test-types/tsconfig.json"
   },
   "dependencies": {
+    "@clack/prompts": "^0.11.0",
     "@convex-dev/better-auth": "^0.10.10",
     "chokidar": "^5.0.0",
     "common-tags": "^1.8.2",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.3.1",
+    "esbuild": "^0.27.3",
     "execa": "^9.6.1",
     "jiti": "^2.6.1",
-    "jotai": "^2.17.0",
+    "jotai": "^2.18.0",
     "jotai-x": "^2.3.3",
     "picocolors": "^1.1.1",
-    "remeda": "^2.33.4",
-    "type-fest": "^5.4.2"
+    "remeda": "^2.33.6",
+    "type-fest": "^5.4.4"
   },
   "devDependencies": {
     "@rollup/plugin-babel": "^6.1.0",
     "babel-plugin-react-compiler": "^1.0.0",
-    "tsdown": "^0.20.1"
+    "tsdown": "^0.20.3"
   },
   "peerDependencies": {
     "@tanstack/react-query": ">=5",
     "better-auth": ">=1.4.9",
-    "convex": ">=1.31",
+    "convex": ">=1.32",
     "hono": ">=4",
     "next": ">=14",
     "react": ">=18",

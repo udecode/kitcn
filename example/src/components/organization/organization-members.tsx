@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiInputs, ApiOutputs } from '@convex/types';
+import type { ApiInputs, ApiOutputs } from '@convex/api';
 import { skipToken, useMutation, useQuery } from '@tanstack/react-query';
 import {
   Crown,

@@ -1,6 +1,7 @@
 - In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
 - ALWAYS read and understand relevant files before proposing edits. Do not speculate about code you have not inspected.
 - Never browse GitHub, use `gh` instead. Use `dig` skill when the user asks a question about a library, needs to understand a library's API, or when you need information about a library that you don't know about.
+- When using git worktree, copy `example/.env.local` and `example/convex/.env` to the worktree directory.
 - Dirty workspace: Never pause to ask about unrelated local changes. Continue work and ignore unrelated diffs.
 - Proactively use Skill(tdd) when it adds value; skip TDD for high-friction tests (hard setup or slow React/UI flows).
 - After any package modification, run `bun --cwd packages/better-convex build`, then touch `example/convex/functions/schema.ts` to trigger a re-build
@@ -27,7 +28,7 @@
 
 ## Prompt Hook
 
-### MANDATORY-FIRST-RESPONSE
+### Mandatory First Response
 
 🚨 STOP - SKILL ANALYSIS IS MANDATORY
 
@@ -42,7 +43,7 @@
 **Skill Analysis Checklist:**
 ☐ Skill analysis (SKIP if 'quick' in message): (1) STOP rationalizing ('simple question', 'overkill', 'might be relevant') (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓. Only ✗ if DEFINITELY not related (4) Skill(...) for ALL ✓ IN ONE PARALLEL CALL - do NOT load one then wait (5) Output '[Skills: X available, Y loaded: name1, name2]' CRITICAL: 'Might be relevant' = MUST load. '1% chance' = MUST load.
 
-### VERIFICATION-CHECKLIST
+### Verification Checklist
 
 🔒 VERIFICATION REQUIRED - NO COMPLETION WITHOUT FRESH EVIDENCE
 
@@ -60,7 +61,7 @@
 - [ ] Lint: Bash `bun lint:fix`
 - [ ] Learn (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: Skill(learn) NOW to extract the knowledge (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
 
-### POST-COMPACT-RECOVERY
+### Post Compact Recovery
 
 🚨 CONTEXT WIPED - MANDATORY SKILL RELOAD
 

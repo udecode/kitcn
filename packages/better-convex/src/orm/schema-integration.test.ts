@@ -119,3 +119,16 @@ test('references rejects detached id(table) callbacks', () => {
 
   expect(() => getTableConfig(posts)).toThrow(/without table metadata/i);
 });
+
+test('defineSchema auto-injects internal count storage tables', () => {
+  const users = convexTable('count_schema_users', {
+    name: text().notNull(),
+  });
+
+  const schema = defineSchema({ users });
+
+  expect(schema.tables).toHaveProperty('aggregate_bucket');
+  expect(schema.tables).toHaveProperty('aggregate_member');
+  expect(schema.tables).toHaveProperty('aggregate_extrema');
+  expect(schema.tables).toHaveProperty('aggregate_state');
+});

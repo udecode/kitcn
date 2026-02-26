@@ -2,8 +2,7 @@ import { and, eq, unsetToken } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authMutation, authQuery, optionalAuthQuery } from '../lib/crpc';
-import type { Insert, Select } from '../shared/types';
-import { aggregateProjectMembers, aggregateTodosByProject } from './aggregates';
+import type { Insert, Select } from '../shared/api';
 import { projectMembersTable, projectsTable } from './schema';
 
 // Schema for project list items
@@ -34,50 +33,87 @@ export const list = optionalAuthQuery
   .query(async ({ ctx, input }) => {
     const getProjectStats = async (projectIds: string[]) => {
       if (!projectIds.length) {
-        return {
-          memberCounts: [],
-          todoCounts: [],
-          completedTodoCounts: [],
-        };
+        return new Map<
+          string,
+          {
+            memberCount: number;
+            todoCount: number;
+            completedTodoCount: number;
+          }
+        >();
       }
 
-      const [memberCounts, todoCounts, completedTodoCounts] = await Promise.all(
-        [
-          aggregateProjectMembers.countBatch(
-            ctx,
-            projectIds.map((projectId) => ({ namespace: projectId }))
-          ),
-          aggregateTodosByProject.countBatch(
-            ctx,
-            projectIds.map((projectId) => ({ namespace: projectId }))
-          ),
-          aggregateTodosByProject.countBatch(
-            ctx,
-            projectIds.map((projectId) => ({
-              namespace: projectId,
-              bounds: { prefix: [true] },
-            }))
-          ),
-        ]
-      );
+      const [memberCounts, todoCountsByCompletion] = await Promise.all([
+        ctx.orm.query.projectMembers.groupBy({
+          by: ['projectId'],
+          where: {
+            projectId: { in: projectIds },
+          },
+          _count: true,
+        }),
+        ctx.orm.query.todos.groupBy({
+          by: ['projectId', 'completed'],
+          where: {
+            projectId: { in: projectIds },
+            completed: { in: [true, false] },
+          },
+          _count: true,
+        }),
+      ]);
 
-      return { memberCounts, todoCounts, completedTodoCounts };
+      const statsByProject = new Map<
+        string,
+        {
+          memberCount: number;
+          todoCount: number;
+          completedTodoCount: number;
+        }
+      >();
+
+      for (const projectId of projectIds) {
+        statsByProject.set(projectId, {
+          memberCount: 0,
+          todoCount: 0,
+          completedTodoCount: 0,
+        });
+      }
+
+      for (const memberCount of memberCounts) {
+        const entry = statsByProject.get(memberCount.projectId);
+        if (!entry) continue;
+        entry.memberCount = memberCount._count;
+      }
+
+      for (const todoCount of todoCountsByCompletion) {
+        if (!todoCount.projectId) continue;
+        const entry = statsByProject.get(todoCount.projectId);
+        if (!entry) continue;
+        entry.todoCount += todoCount._count;
+        if (todoCount.completed) {
+          entry.completedTodoCount = todoCount._count;
+        }
+      }
+
+      return statsByProject;
     };
 
     const withProjectStats = ({
       projects,
-      stats,
+      statsByProject,
       currentUserId,
     }: {
       projects: ProjectRow[];
-      stats: {
-        memberCounts: number[];
-        todoCounts: number[];
-        completedTodoCounts: number[];
-      };
+      statsByProject: Map<
+        string,
+        {
+          memberCount: number;
+          todoCount: number;
+          completedTodoCount: number;
+        }
+      >;
       currentUserId: string | null;
     }) =>
-      projects.map((project, idx) => ({
+      projects.map((project) => ({
         id: project.id,
         createdAt: project.createdAt,
         name: project.name,
@@ -85,9 +121,10 @@ export const list = optionalAuthQuery
         ownerId: project.ownerId,
         isPublic: project.isPublic,
         archived: project.archived,
-        memberCount: stats.memberCounts[idx] ?? 0,
-        todoCount: stats.todoCounts[idx] ?? 0,
-        completedTodoCount: stats.completedTodoCounts[idx] ?? 0,
+        memberCount: statsByProject.get(project.id)?.memberCount ?? 0,
+        todoCount: statsByProject.get(project.id)?.todoCount ?? 0,
+        completedTodoCount:
+          statsByProject.get(project.id)?.completedTodoCount ?? 0,
         isOwner: currentUserId === project.ownerId,
       }));
 
@@ -103,13 +140,13 @@ export const list = optionalAuthQuery
       });
 
       const projectIds = results.page.map((p) => p.id);
-      const stats = await getProjectStats(projectIds);
+      const statsByProject = await getProjectStats(projectIds);
 
       return {
         ...results,
         page: withProjectStats({
           projects: results.page,
-          stats,
+          statsByProject,
           currentUserId: null,
         }),
       };
@@ -144,13 +181,13 @@ export const list = optionalAuthQuery
       });
 
     const projectIds = results.page.map((p) => p.id);
-    const stats = await getProjectStats(projectIds);
+    const statsByProject = await getProjectStats(projectIds);
 
     return {
       ...results,
       page: withProjectStats({
         projects: results.page,
-        stats,
+        statsByProject,
         currentUserId: userId,
       }),
     };
@@ -190,7 +227,12 @@ export const get = optionalAuthQuery
   .query(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirst({
       where: { id: input.projectId },
-      with: { owner: true },
+      with: {
+        owner: true,
+        _count: {
+          todos: true,
+        },
+      },
     });
     if (!project) {
       return null;
@@ -226,11 +268,24 @@ export const get = optionalAuthQuery
       });
     }
 
-    const memberRows = await ctx.orm.query.projectMembers.findMany({
-      where: { projectId: project.id },
-      limit: 1000,
-      with: { user: true },
-    });
+    const [memberRows, projectWithCompletedCount] = await Promise.all([
+      ctx.orm.query.projectMembers.findMany({
+        where: { projectId: project.id },
+        limit: 1000,
+        with: { user: true },
+      }),
+      ctx.orm.query.projects.findFirst({
+        where: { id: project.id },
+        columns: { id: true },
+        with: {
+          _count: {
+            todos: {
+              where: { completed: true },
+            },
+          },
+        },
+      }),
+    ]);
     const members = memberRows
       .map((member) => {
         const user = member.user;
@@ -245,15 +300,8 @@ export const get = optionalAuthQuery
       })
       .filter((r): r is NonNullable<typeof r> => !!r);
 
-    const todoCount = await aggregateTodosByProject.count(ctx, {
-      namespace: project.id,
-      bounds: {},
-    });
-
-    const completedTodoCount = await aggregateTodosByProject.count(ctx, {
-      namespace: project.id,
-      bounds: { prefix: [true] },
-    });
+    const todoCount = project._count?.todos ?? 0;
+    const completedTodoCount = projectWithCompletedCount?._count?.todos ?? 0;
 
     return {
       ...project,
@@ -307,7 +355,7 @@ export const update = authMutation
       isPublic: z.boolean().optional(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -329,14 +377,12 @@ export const update = authMutation
         isPublic: input.isPublic,
       })
       .where(eq(projectsTable.id, input.projectId));
-
-    return null;
   });
 
 export const archive = authMutation
   .meta({ rateLimit: 'project/update' })
   .input(z.object({ projectId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -353,14 +399,12 @@ export const archive = authMutation
       .update(projectsTable)
       .set({ archived: true })
       .where(eq(projectsTable.id, input.projectId));
-
-    return null;
   });
 
 export const restore = authMutation
   .meta({ rateLimit: 'project/update' })
   .input(z.object({ projectId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -377,8 +421,6 @@ export const restore = authMutation
       .update(projectsTable)
       .set({ archived: false })
       .where(eq(projectsTable.id, input.projectId));
-
-    return null;
   });
 
 export const addMember = authMutation
@@ -389,7 +431,7 @@ export const addMember = authMutation
       userEmail: z.email(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -427,8 +469,6 @@ export const addMember = authMutation
       projectId: input.projectId,
       userId: userToAdd.id,
     });
-
-    return null;
   });
 
 export const removeMember = authMutation
@@ -439,7 +479,7 @@ export const removeMember = authMutation
       userId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -459,14 +499,12 @@ export const removeMember = authMutation
     await ctx.orm
       .delete(projectMembersTable)
       .where(eq(projectMembersTable.id, member.id));
-
-    return null;
   });
 
 export const leave = authMutation
   .meta({ rateLimit: 'project/member' })
   .input(z.object({ projectId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const member = await ctx.orm.query.projectMembers.findFirstOrThrow({
       where: { projectId: input.projectId, userId: ctx.userId },
@@ -475,8 +513,6 @@ export const leave = authMutation
     await ctx.orm
       .delete(projectMembersTable)
       .where(eq(projectMembersTable.id, member.id));
-
-    return null;
   });
 
 export const transfer = authMutation
@@ -487,7 +523,7 @@ export const transfer = authMutation
       newOwnerId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const project = await ctx.orm.query.projects.findFirstOrThrow({
       where: { id: input.projectId },
@@ -530,8 +566,6 @@ export const transfer = authMutation
       .update(projectsTable)
       .set({ ownerId: input.newOwnerId })
       .where(eq(projectsTable.id, input.projectId));
-
-    return null;
   });
 
 export const listForDropdown = authQuery

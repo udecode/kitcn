@@ -11,7 +11,7 @@ In this guide, we'll explore better-convex's integration with Better Auth. You'l
 
 ## Overview
 
-better-convex provides a seamless integration between [Better Auth](https://better-auth.com) and Convex:
+better-convex integrates [Better Auth](https://better-auth.com) with Convex:
 
 | Feature | Description |
 |---------|-------------|
@@ -24,11 +24,11 @@ Let's understand the key concepts.
 
 ## Key Concepts
 
-### Local vs Component Installation
+### Local vs Legacy Component Installation
 
 | Approach | Schema Location | Database Access |
 |----------|-----------------|-----------------|
-| Component (`@convex-dev/better-auth`) | Component schema | Via `ctx.runQuery`/`ctx.runMutation` |
+| Legacy component adapter | Component schema | Via `ctx.runQuery`/`ctx.runMutation` |
 | **Local** (`better-convex/auth`) | Your app schema | ORM (`ctx.orm`) |
 
 better-convex uses the **local approach**:
@@ -44,7 +44,7 @@ Use one entrypoint everywhere:
 const auth = getAuth(ctx);
 ```
 
-`authClient.adapter(ctx, getAuthOptions)` automatically chooses:
+Use generated `getAuth(ctx)`; generated runtime handles context-aware adapter selection:
 - direct DB adapter for queries/mutations (`ctx.db` available)
 - HTTP adapter for actions/HTTP contexts (`ctx.runQuery`/`ctx.runMutation`)
 
@@ -327,6 +327,5 @@ That's the complete authentication flow. You now understand how JWT validation (
 <Cards>
   <Card title="Server" href="/docs/auth/server" />
   <Card title="Client" href="/docs/auth/client" />
-  <Card title="Triggers" href="/docs/auth/triggers" />
   <Card title="Organizations" href="/docs/auth/plugins/organizations" />
 </Cards>

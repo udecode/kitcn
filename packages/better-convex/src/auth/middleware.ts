@@ -17,18 +17,21 @@ export interface AuthMiddlewareOptions {
  * ```ts
  * import { Hono } from 'hono';
  * import { cors } from 'hono/cors';
- * import { authMiddleware } from 'better-convex/auth';
+ * import { authMiddleware } from 'better-convex/auth/http';
  * import { createHttpRouter } from 'better-convex/server';
  *
  * const app = new Hono();
  * app.use('/api/*', cors({ origin: process.env.SITE_URL, credentials: true }));
  * app.use(authMiddleware(getAuth));
  *
- * export default createHttpRouter(app, appRouter);
+ * export default createHttpRouter(app, httpRouter);
  * ```
  */
 export function authMiddleware(
-  getAuth: GetAuth,
+  getAuth: GetAuth<
+    unknown,
+    { handler: (request: Request) => Promise<Response> }
+  >,
   opts: AuthMiddlewareOptions = {}
 ): MiddlewareHandler {
   const basePath = opts.basePath ?? '/api/auth';

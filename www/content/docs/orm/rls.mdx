@@ -61,32 +61,24 @@ Each policy targets a specific operation via the `for` field:
 
 ### Enable RLS without policies
 
-You can also enable RLS on a table without adding any policies. This effectively locks the table -- no rows are accessible through `ctx.orm` until you add permissive policies.
+You can also enable RLS without adding policies. This effectively locks the table -- no rows are accessible through `ctx.orm` until you add permissive policies.
 
 ```ts showLineNumbers
-const secrets = convexTable('secrets', {
+const secrets = convexTable.withRLS('secrets', {
   value: text().notNull(),
-}).enableRLS();
+});
 ```
-
-<Callout icon={<AlertTriangle />}>
-**Important:** `enableRLS()` is deprecated (Drizzle parity). Prefer `convexTable.withRLS(...)` for new code.
-</Callout>
 
 ## Context Setup
 
 Before policies can run, you need to wire up the ORM with RLS enabled. Do this once in your context layer so every handler gets a policy-aware `ctx.orm`.
 
-```ts title="convex/lib/orm.ts" showLineNumbers {5}
+```ts title="convex/lib/crpc.ts" showLineNumbers {2,5}
 import type { GenericDatabaseWriter } from 'convex/server';
-import { createOrm } from 'better-convex/orm';
-import { relations } from '../schema';
-
-const orm = createOrm({ schema: relations });
+import { orm } from '../functions/generated/server';
 
 export const withOrm = <Ctx extends { db: GenericDatabaseWriter<any> }>(ctx: Ctx) => {
-  const ormDb = orm.db(ctx, { rls: { ctx } });
-  return { ...ctx, orm: ormDb };
+  return orm.with(ctx, { rls: { ctx } });
 };
 ```
 

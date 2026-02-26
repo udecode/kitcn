@@ -97,7 +97,7 @@ const db = orm.db(mockDb);
 
 // Test 8: executeAsync without returning matches execute() result type
 {
-  const result = await db.delete(users).executeAsync();
+  const result = await db.delete(users).allowFullScan().executeAsync();
 
   Expect<Equal<undefined, typeof result>>;
 }
@@ -106,6 +106,7 @@ const db = orm.db(mockDb);
 {
   const result = await db
     .delete(users)
+    .allowFullScan()
     .returning({
       name: users.name,
     })
@@ -122,6 +123,7 @@ const db = orm.db(mockDb);
 {
   const result = await db
     .delete(users)
+    .allowFullScan()
     .returning({
       name: users.name,
     })
@@ -184,10 +186,23 @@ const db = orm.db(mockDb);
 
 // execute(config) is not available on paginated delete builders
 {
-  db.delete(users)
-    .paginate({ cursor: null, limit: 10 })
-    // @ts-expect-error - execute config is not available after paginate()
-    .execute({ mode: 'async' });
+  const pagedDelete = db.delete(users).paginate({ cursor: null, limit: 10 });
+  // @ts-expect-error - execute config is not available after paginate()
+  pagedDelete.execute({ mode: 'async' });
+}
+
+// execute() requires where() or allowFullScan()
+{
+  const unsafeDelete = db.delete(users);
+  // @ts-expect-error - execute requires where() or allowFullScan()
+  unsafeDelete.execute();
+}
+
+// executeAsync() requires where() or allowFullScan()
+{
+  const unsafeDelete = db.delete(users);
+  // @ts-expect-error - executeAsync requires where() or allowFullScan()
+  unsafeDelete.executeAsync();
 }
 
 // returning selection must use column builders

@@ -62,25 +62,7 @@ const { data } = useQuery(
 );
 ```
 
-### Signature
-
-```ts showLineNumbers
-crpc.path.to.query.queryOptions(
-  args,      // Function arguments (or {} for no args)
-  options?   // TanStack Query options + cRPC options
-)
-```
-
-### Options
-
-cRPC extends TanStack Query options with:
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `skipUnauth` | `boolean` | Skip query when not authenticated |
-| `subscribe` | `boolean` | Enable real-time updates (default: `true`) |
-
-Plus all standard [TanStack Query options](https://tanstack.com/query/latest/docs/framework/react/reference/useQuery): `enabled`, `placeholderData`, `select`, `gcTime`, etc.
+See [API Reference](#queryoptions-1) for the full signature and options.
 
 ### With select
 
@@ -360,20 +342,7 @@ const handleClick = async () => {
 **Note:** `staticQueryOptions` doesn't include reactive auth state. Auth is handled at execution time by the `queryFn` - if the user isn't authenticated for a protected query, it will throw an `UNAUTHORIZED` error.
 </Callout>
 
-### Comparison
-
-| Method | Context | Caching | Use Case |
-|--------|---------|---------|----------|
-| `client.*.query()` | Anywhere | None | Direct calls without cache |
-| `crpc.*.queryOptions()` | Render only | Uses cache | Components (uses hooks) |
-| `crpc.*.staticQueryOptions()` | Anywhere | Uses cache | Prefetching, event handlers |
-
-<Callout icon={<InfoIcon />}>
-**When to use which:**
-- Use `queryOptions` in components for reactive auth handling
-- Use `staticQueryOptions` for prefetching in event handlers
-- Use `client.*.query()` when you don't need TanStack Query caching
-</Callout>
+See [API Reference](#method-comparison) for a method comparison table.
 
 ## Migrate from Convex
 
@@ -403,7 +372,7 @@ If you're coming from vanilla Convex, here's what changes.
     ```tsx showLineNumbers {1-2,5-6,8}
     import { useQuery } from '@tanstack/react-query';
     import { useCRPC } from '@/lib/convex/crpc';
-    import type { ApiOutputs } from '@convex/types';
+    import type { ApiOutputs } from '@convex/api';
 
     const crpc = useCRPC();
     const { data } = useQuery(crpc.user.list.queryOptions({}));
@@ -458,3 +427,31 @@ If you're coming from vanilla Convex, here's what changes.
   <Card title="HTTP Router" href="/docs/server/http" />
   <Card title="Type Inference" href="/docs/react/infer-types" />
 </Cards>
+
+## API Reference
+
+### queryOptions
+
+```ts showLineNumbers
+crpc.path.to.query.queryOptions(
+  args,      // Function arguments (or {} for no args)
+  options?   // TanStack Query options + cRPC options
+)
+```
+
+cRPC extends TanStack Query options with:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `skipUnauth` | `boolean` | Skip query when not authenticated |
+| `subscribe` | `boolean` | Enable real-time updates (default: `true`) |
+
+Plus all standard [TanStack Query options](https://tanstack.com/query/latest/docs/framework/react/reference/useQuery): `enabled`, `placeholderData`, `select`, `gcTime`, etc.
+
+### Method Comparison
+
+| Method | Context | Caching | Use Case |
+|--------|---------|---------|----------|
+| `client.*.query()` | Anywhere | None | Direct calls without cache |
+| `crpc.*.queryOptions()` | Render only | Uses cache | Components (uses hooks) |
+| `crpc.*.staticQueryOptions()` | Anywhere | Uses cache | Prefetching, event handlers |

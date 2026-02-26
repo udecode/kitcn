@@ -62,7 +62,7 @@ export const list = publicQuery
 
 ### Input Merging
 
-Here's where cRPC gets powerful. You can stack `.input()` calls to build complex types. This is especially useful when middleware needs to validate its own input:
+You can stack `.input()` calls to build complex types. This is especially useful when middleware needs to validate its own input:
 
 First, define a procedure that validates and fetches a target user:
 
@@ -114,7 +114,8 @@ export const getById = publicQuery
 ```
 
 <Callout icon={<InfoIcon />}>
-  **Note:** `z.void()` is not supported by Convex. For mutations that don't return a value, use `.output(z.null())`. Convex returns `null` by default, so an explicit `return null` is not required.
+  **Note:** For mutations/actions that do not return data, omit `.output(...)`.
+  `void`/`undefined` responses are serialized by Convex as `null`.
 </Callout>
 
 Output validation is recommended when using [static code generation](https://docs.convex.dev/production/project-configuration#using-static-code-generation-beta).
@@ -159,7 +160,7 @@ export const remove = publicMutation
 
 ### Actions
 
-Use `.action()` for side effects and external API calls. Actions can call queries and mutations via `ctx.runQuery` and `ctx.runMutation`.
+Use `.action()` for side effects and external API calls. Actions can call queries and mutations via [callers](#in-process-procedure-composition).
 
 ```ts showLineNumbers {3-6}
 export const sendWelcomeEmail = publicAction
@@ -169,6 +170,81 @@ export const sendWelcomeEmail = publicAction
     return { sent: true };
   });
 ```
+
+## In-Process Procedure Composition
+
+When one procedure needs to call another, use the module runtime factory from `convex/functions/generated/<module>.runtime.ts` (for example `createTeamsCaller(ctx)`). This gives you a type-safe proxy with full autocomplete — no more manually choosing between `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction`, and `ctx.scheduler`.
+
+<Callout icon={<InfoIcon />}>
+  **Breaking change:** runtime modules now export module-named factories (`create<Module>Caller` / `create<Module>Handler`), and `convex/functions/generated.ts` no longer exists.
+</Callout>
+
+```ts title="convex/functions/teams.ts" showLineNumbers {3,7-9}
+import { z } from 'zod';
+import { privateQuery } from '../lib/crpc';
+import { createTeamsCaller } from './generated/teams.runtime';
+
+export const getProjectAndOwner = privateQuery
+  .input(z.object({ projectId: z.string() }))
+  .query(async ({ ctx, input }) => {
+    const caller = createTeamsCaller(ctx);
+    const project = await caller.getProject({ projectId: input.projectId });
+    const owner = await caller.getOwner({ id: project.ownerId });
+    return { project, owner };
+  });
+```
+
+### How It Works
+
+`create<Module>Caller(ctx)` detects your context type and dispatches accordingly:
+
+- **`QueryCtx` / `MutationCtx`**: invokes the procedure handler directly — same transaction, no extra overhead.
+- **`ActionCtx`**: root calls dispatch via `ctx.runQuery` / `ctx.runMutation` automatically (separate transactions).
+- **`caller.actions.*`**: explicit action dispatch in `ActionCtx` via `ctx.runAction`.
+- **`caller.schedule.*`**: schedule mutation/action procedures via `ctx.scheduler`.
+
+See the [Allowed Call Matrix](#allowed-call-matrix) in API Reference for the full compatibility table.
+
+### Action and Schedule Namespaces
+
+```ts title="convex/functions/jobs.ts" showLineNumbers {7-8,10-12}
+const caller = createJobsCaller(ctx);
+
+// Direct action call (ActionCtx only)
+await caller.actions.reindex({ force: true });
+
+// Schedule mutation/action calls (MutationCtx + ActionCtx)
+await caller.schedule.now.enqueueReport({ reportId: 'r_1' });
+await caller.schedule.after(5000).reindex({ force: true });
+await caller.schedule.at(Date.now() + 60_000).reindex({ force: true });
+```
+
+<Callout icon={<InfoIcon />}>
+  **Note:** In actions, each `create<Module>Caller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
+</Callout>
+
+<Callout icon={<InfoIcon />}>
+  **Bundle size:** Each caller eagerly loads every procedure in its module — there is no lazy loading. If a module grows large, split it into smaller files so callers only pull in what they need.
+</Callout>
+
+### `create<Module>Handler(ctx)`
+
+For internal composition where the caller already validated inputs, use `create<Module>Handler(ctx)`. It bypasses input validation, middleware, and output validation — calling the raw handler directly.
+
+```ts title="convex/functions/organization.ts" showLineNumbers {3,7-8}
+import { z } from 'zod';
+import { authQuery } from '../lib/crpc';
+import { createOrganizationHandler } from './generated/organization.runtime';
+
+export const listOrganizations = authQuery
+  .query(async ({ ctx }) => {
+    const handler = createOrganizationHandler(ctx);
+    const orgs = await handler.listUserOrganizations();
+    return orgs;
+  });
+```
+
+`create<Module>Handler(ctx)` is query/mutation-only (no action context support).
 
 ### Paginated Queries
 
@@ -206,7 +282,7 @@ Use `privateMutation`, `privateQuery`, or `privateAction` for procedures only ca
 export const processJob = privateMutation
   .input(z.object({ data: z.string() }))
   .mutation(async ({ ctx, input }) => {
-    // Only callable via ctx.runMutation(internal.jobs.processJob, {...})
+    // Only callable via callers or ctx.scheduler
   });
 
 export const backfillData = privateMutation
@@ -265,21 +341,9 @@ export const update = publicMutation
   });
 ```
 
-## Zod vs Convex Validators
-
-cRPC uses Zod for validation instead of Convex's `v` validators. Here's a quick reference:
-
-| Zod | Convex `v` |
-|-----|------------|
-| `z.string()` | `v.string()` |
-| `z.number()` | `v.number()` |
-| `z.boolean()` | `v.boolean()` |
-| `z.array(z.string())` | `v.array(v.string())` |
-| `z.object({...})` | `v.object({...})` |
-| `z.string().optional()` | `v.optional(v.string())` |
-| `zid('tablename')` | `v.id('tablename')` |
-
 ## Migrate from Convex
+
+cRPC uses Zod for validation instead of Convex's `v` validators. See [Zod vs Convex Validators](#zod-vs-convex-validators) in API Reference for the full mapping table.
 
 If you're coming from vanilla Convex, here's what changes.
 
@@ -295,13 +359,11 @@ If you're coming from vanilla Convex, here's what changes.
     ```ts showLineNumbers
     import { query } from 'convex/server';
     import { v } from 'convex/values';
-    import { orm } from '../lib/orm';
 
     export const getById = query({
       args: { id: v.id('user') },
       handler: async (ctx, args) => {
-        const db = orm.db(ctx);
-        return db.query.user.findFirst({ where: { id: args.id } });
+        return ctx.db.get(args.id);
       },
     });
     ```
@@ -333,3 +395,25 @@ Key differences:
   <Card title="Middleware" href="/docs/server/middlewares" />
   <Card title="HTTP Router" href="/docs/server/http" />
 </Cards>
+
+## API Reference
+
+### Allowed Call Matrix
+
+| Caller context | Root query | Root mutation | Root action | `caller.actions.*` | `caller.schedule.*` |
+|----------------|------------|---------------|-------------|--------------------|---------------------|
+| `QueryCtx` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
+
+### Zod vs Convex Validators
+
+| Zod | Convex `v` |
+|-----|------------|
+| `z.string()` | `v.string()` |
+| `z.number()` | `v.number()` |
+| `z.boolean()` | `v.boolean()` |
+| `z.array(z.string())` | `v.array(v.string())` |
+| `z.object({...})` | `v.object({...})` |
+| `z.string().optional()` | `v.optional(v.string())` |
+| `zid('tablename')` | `v.id('tablename')` |

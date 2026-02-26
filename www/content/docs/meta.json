@@ -23,7 +23,6 @@
     "orm/queries",
     "orm/mutations",
     "orm/rls",
-    "orm/triggers",
     "orm/api-reference",
     "---Integrations---",
     "react",
@@ -33,7 +32,6 @@
     "auth/index",
     "auth/server",
     "auth/client",
-    "auth/triggers",
     "auth/plugins",
     "---Reference---",
     "cli"

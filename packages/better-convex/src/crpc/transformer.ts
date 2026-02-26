@@ -10,8 +10,8 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
  * Generic transformer contract (mirrors tRPC shape).
  */
 export interface DataTransformer {
-  serialize(object: any): any;
   deserialize(object: any): any;
+  serialize(object: any): any;
 }
 
 /**
@@ -31,10 +31,10 @@ export type DataTransformerOptions = CombinedDataTransformer | DataTransformer;
  * Extensible tagged wire codec.
  */
 export interface WireCodec {
-  readonly tag: `$${string}`;
-  isType(value: unknown): boolean;
-  encode(value: unknown): unknown;
   decode(value: unknown): unknown;
+  encode(value: unknown): unknown;
+  isType(value: unknown): boolean;
+  readonly tag: `$${string}`;
 }
 
 const CODEC_MARKER_KEY = '__crpc';

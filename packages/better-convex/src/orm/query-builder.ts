@@ -12,12 +12,16 @@
 import type { GenericDatabaseReader } from 'convex/server';
 import type { KnownKeysOnly } from '../internal/types';
 import type { EdgeMetadata } from './extractRelationsConfig';
-import { GelRelationalQuery } from './query';
+import { GelRankQuery, GelRelationalQuery } from './query';
 import { QueryPromise } from './query-promise';
 import type { RlsContext } from './rls/types';
 import type {
+  AggregateConfig,
+  AggregateResult,
   ApplyPipelineStage,
   BuildQueryResult,
+  CountConfig,
+  CountResult,
   DBQueryConfig,
   EnforceCursorMaxScan,
   EnforceNoAllowFullScanWhenIndexed,
@@ -28,6 +32,8 @@ import type {
   FindManyPipelineConfig,
   FindManyPipelineFlatMapConfig,
   FindManyUnionSource,
+  GroupByConfig,
+  GroupByResult,
   KeyPageResult,
   PaginatedResult,
   PredicateWhereIndexConfig,
@@ -63,6 +69,8 @@ type DisallowWithIndexSearchOrVector<THasIndex extends boolean> =
         vectorSearch?: never;
       }
     : unknown;
+
+type KnownKeysOnlyStrict<T, K> = 0 extends 1 & T ? never : KnownKeysOnly<T, K>;
 
 type PredicateIndexName<TTableConfig extends TableRelationalConfig> =
   PredicateWhereIndexConfig<TTableConfig> extends {
@@ -168,6 +176,33 @@ type FindManyResult<
   : TConfig extends { cursor: string | null }
     ? PaginatedResult<BuildQueryResult<TSchema, TTableConfig, TConfig>>
     : BuildQueryResult<TSchema, TTableConfig, TConfig>[];
+
+type RelationCountWithConfig<
+  TSchema extends TablesRelationalConfig,
+  TTableConfig extends TableRelationalConfig,
+> = Omit<DBQueryConfig<'many', true, TSchema, TTableConfig>, 'with'> & {
+  with: NonNullable<
+    DBQueryConfig<'many', true, TSchema, TTableConfig>['with']
+  > & {
+    _count: NonNullable<
+      NonNullable<
+        DBQueryConfig<'many', true, TSchema, TTableConfig>['with']
+      >['_count']
+    >;
+  };
+};
+
+type NonCursorConfigNoRelationCount<
+  TSchema extends TablesRelationalConfig,
+  TTableConfig extends TableRelationalConfig,
+> = Omit<NonCursorConfigNoSearch<TSchema, TTableConfig>, 'with'> & {
+  with?: Exclude<
+    NonCursorConfigNoSearch<TSchema, TTableConfig>['with'],
+    undefined
+  > extends infer TWith extends Record<string, unknown>
+    ? Omit<TWith, '_count'> & { _count?: never }
+    : never;
+};
 
 type CursorPaginatedConfig<
   TSchema extends TablesRelationalConfig,
@@ -309,7 +344,7 @@ type QueryFactory<
   TTableConfig extends TableRelationalConfig,
 > = <TResult>(
   config: DBQueryConfig<'many', true, TSchema, TTableConfig>,
-  mode: 'many' | 'first' | 'firstOrThrow',
+  mode: 'many' | 'first' | 'firstOrThrow' | 'count' | 'aggregate',
   configuredIndex?: PredicateWhereIndexConfig<TTableConfig>
 ) => GelRelationalQuery<TSchema, TTableConfig, TResult>;
 
@@ -606,7 +641,7 @@ export class RelationalQueryBuilder<
 
   private createQuery<TResult>(
     config: DBQueryConfig<'many', true, TSchema, TTableConfig>,
-    mode: 'many' | 'first' | 'firstOrThrow',
+    mode: 'many' | 'first' | 'firstOrThrow' | 'count' | 'aggregate' | 'groupBy',
     configuredIndex?: PredicateWhereIndexConfig<TTableConfig>
   ): GelRelationalQuery<TSchema, TTableConfig, TResult> {
     const effectiveIndex = configuredIndex ?? this.queryIndex;
@@ -665,6 +700,64 @@ export class RelationalQueryBuilder<
     );
   }
 
+  count(): GelRelationalQuery<TSchema, TTableConfig, number>;
+  count<TConfig extends CountConfig<TSchema, TTableConfig>>(
+    config: KnownKeysOnly<TConfig, CountConfig<TSchema, TTableConfig>>
+  ): GelRelationalQuery<
+    TSchema,
+    TTableConfig,
+    CountResult<TTableConfig, TConfig>
+  >;
+  count(
+    config?: CountConfig<TSchema, TTableConfig>
+  ): GelRelationalQuery<TSchema, TTableConfig, any> {
+    return this.createQuery<any>(
+      (config ?? {}) as DBQueryConfig<'many', true, TSchema, TTableConfig>,
+      'count'
+    );
+  }
+
+  aggregate<TConfig extends AggregateConfig<TSchema, TTableConfig>>(
+    config: KnownKeysOnly<TConfig, AggregateConfig<TSchema, TTableConfig>>
+  ): GelRelationalQuery<
+    TSchema,
+    TTableConfig,
+    AggregateResult<TTableConfig, TConfig>
+  > {
+    return this.createQuery<AggregateResult<TTableConfig, TConfig>>(
+      config as DBQueryConfig<'many', true, TSchema, TTableConfig>,
+      'aggregate'
+    );
+  }
+
+  groupBy<TConfig extends GroupByConfig<TSchema, TTableConfig>>(
+    config: KnownKeysOnly<TConfig, GroupByConfig<TSchema, TTableConfig>>
+  ): GelRelationalQuery<
+    TSchema,
+    TTableConfig,
+    GroupByResult<TTableConfig, TConfig>
+  > {
+    return this.createQuery<GroupByResult<TTableConfig, TConfig>>(
+      config as DBQueryConfig<'many', true, TSchema, TTableConfig>,
+      'groupBy'
+    );
+  }
+
+  rank(
+    indexName: string,
+    config?: {
+      where?: Record<string, unknown>;
+    }
+  ): GelRankQuery<TTableConfig> {
+    return new GelRankQuery<TTableConfig>(
+      this.db,
+      this.tableConfig,
+      indexName,
+      config,
+      this.rls
+    );
+  }
+
   /**
    * Find many rows matching the query configuration
    *
@@ -680,8 +773,25 @@ export class RelationalQueryBuilder<
    *   limit: 10
    * });
    */
+  findMany(
+    config: RelationCountWithConfig<TSchema, TTableConfig> &
+      EnforcedConfig<
+        RelationCountWithConfig<TSchema, TTableConfig>,
+        TTableConfig,
+        THasIndex
+      > &
+      DisallowWithIndexSearchOrVector<THasIndex>
+  ): GelRelationalQuery<
+    TSchema,
+    TTableConfig,
+    FindManyResult<
+      TSchema,
+      TTableConfig,
+      RelationCountWithConfig<TSchema, TTableConfig>
+    >
+  >;
   findMany<TConfig extends SearchPaginatedConfig<TSchema, TTableConfig>>(
-    config: KnownKeysOnly<
+    config: KnownKeysOnlyStrict<
       TConfig,
       SearchPaginatedConfig<TSchema, TTableConfig>
     > &
@@ -692,7 +802,7 @@ export class RelationalQueryBuilder<
     PaginatedResult<BuildQueryResult<TSchema, TTableConfig, TConfig>>
   >;
   findMany<TConfig extends SearchNonPaginatedConfig<TSchema, TTableConfig>>(
-    config: KnownKeysOnly<
+    config: KnownKeysOnlyStrict<
       TConfig,
       SearchNonPaginatedConfig<TSchema, TTableConfig>
     > &
@@ -703,7 +813,7 @@ export class RelationalQueryBuilder<
     BuildQueryResult<TSchema, TTableConfig, TConfig>[]
   >;
   findMany<TConfig extends VectorNonPaginatedConfig<TSchema, TTableConfig>>(
-    config: KnownKeysOnly<
+    config: KnownKeysOnlyStrict<
       TConfig,
       VectorNonPaginatedConfig<TSchema, TTableConfig>
     > &
@@ -716,7 +826,7 @@ export class RelationalQueryBuilder<
   findMany<
     TConfig extends CursorPaginatedConfigNoSearch<TSchema, TTableConfig>,
   >(
-    config: KnownKeysOnly<
+    config: KnownKeysOnlyStrict<
       TConfig,
       CursorPaginatedConfigNoSearch<TSchema, TTableConfig>
     > &
@@ -726,7 +836,9 @@ export class RelationalQueryBuilder<
     TTableConfig,
     PaginatedResult<BuildQueryResult<TSchema, TTableConfig, TConfig>>
   >;
-  findMany<TConfig extends NonCursorConfigNoSearch<TSchema, TTableConfig>>(
+  findMany<
+    TConfig extends NonCursorConfigNoRelationCount<TSchema, TTableConfig>,
+  >(
     config?: KnownKeysOnly<
       TConfig,
       NonCursorConfigNoSearch<TSchema, TTableConfig>
@@ -738,7 +850,7 @@ export class RelationalQueryBuilder<
     FindManyResult<TSchema, TTableConfig, TConfig>
   >;
   findMany<TConfig extends KeyPageConfig<TSchema, TTableConfig>>(
-    config: KnownKeysOnly<TConfig, KeyPageConfig<TSchema, TTableConfig>> &
+    config: KnownKeysOnlyStrict<TConfig, KeyPageConfig<TSchema, TTableConfig>> &
       EnforcedConfig<TConfig, TTableConfig, THasIndex>
   ): GelRelationalQuery<
     TSchema,
@@ -775,7 +887,7 @@ export class RelationalQueryBuilder<
    * });
    */
   findFirst<TConfig extends SearchFindFirstConfig<TSchema, TTableConfig>>(
-    config: KnownKeysOnly<
+    config: KnownKeysOnlyStrict<
       TConfig,
       SearchFindFirstConfig<TSchema, TTableConfig>
     > &
@@ -786,7 +898,7 @@ export class RelationalQueryBuilder<
     BuildQueryResult<TSchema, TTableConfig, TConfig> | null
   >;
   findFirst<TConfig extends FindFirstConfigNoSearch<TSchema, TTableConfig>>(
-    config?: KnownKeysOnly<
+    config?: KnownKeysOnlyStrict<
       TConfig,
       FindFirstConfigNoSearch<TSchema, TTableConfig>
     > &
@@ -823,7 +935,7 @@ export class RelationalQueryBuilder<
   findFirstOrThrow<
     TConfig extends SearchFindFirstConfig<TSchema, TTableConfig>,
   >(
-    config: KnownKeysOnly<
+    config: KnownKeysOnlyStrict<
       TConfig,
       SearchFindFirstConfig<TSchema, TTableConfig>
     > &
@@ -836,7 +948,7 @@ export class RelationalQueryBuilder<
   findFirstOrThrow<
     TConfig extends FindFirstConfigNoSearch<TSchema, TTableConfig>,
   >(
-    config?: KnownKeysOnly<
+    config?: KnownKeysOnlyStrict<
       TConfig,
       FindFirstConfigNoSearch<TSchema, TTableConfig>
     > &

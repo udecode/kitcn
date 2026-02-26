@@ -89,16 +89,16 @@ describe('createSchemaOrm', () => {
 
     // Relations are generated without onDelete action config.
     expect(result.code).toContain(
-      'userId: text().notNull().references(() => user["id"]),'
+      'userId: text().notNull().references(() => user.id),'
     );
     expect(result.code).not.toContain('onDelete');
     expect(result.code).not.toContain('cascade');
 
     // Manual + special index generation.
     expect(result.code).toContain(
-      'index("expiresAt_userId").on(session["expiresAt"], session["userId"])'
+      'index("expiresAt_userId").on(session.expiresAt, session.userId)'
     );
-    expect(result.code).toContain('index("userId").on(session["userId"])');
-    expect(result.code).toContain('index("token").on(session["token"])');
+    expect(result.code).toContain('index("userId").on(session.userId)');
+    expect(result.code).toContain('index("token").on(session.token)');
   });
 });

@@ -415,6 +415,140 @@ describe('M6.5 Phase 1: Relation Loading', () => {
     });
   });
 
+  describe('Predefined relation where filters (polymorphic parity)', () => {
+    const createPredefinedWhereArtifacts = () => {
+      const polyUsers = convexTable(
+        'poly_users',
+        {
+          name: text().notNull(),
+          status: text().notNull(),
+        },
+        (t) => [index('by_status').on(t.status)]
+      );
+
+      const polyPosts = convexTable(
+        'poly_posts',
+        {
+          title: text().notNull(),
+          visibility: text().notNull(),
+          authorId: id('poly_users').notNull(),
+        },
+        (t) => [index('by_author').on(t.authorId)]
+      );
+
+      const tables = {
+        poly_users: polyUsers,
+        poly_posts: polyPosts,
+      };
+
+      const schema = defineSchema(tables, {
+        defaults: {
+          defaultLimit: 1000,
+        },
+      });
+
+      const relations = defineRelations(tables, (r) => ({
+        poly_users: {
+          publishedPosts: r.many.poly_posts({
+            from: r.poly_users.id,
+            to: r.poly_posts.authorId,
+            where: { visibility: 'published' },
+            alias: 'published-posts',
+          }),
+        },
+        poly_posts: {
+          activeAuthor: r.one.poly_users({
+            from: r.poly_posts.authorId,
+            to: r.poly_users.id,
+            optional: false,
+            where: { status: 'active' },
+            alias: 'active-author',
+          }),
+        },
+      }));
+
+      return { schema, relations };
+    };
+
+    test('should filter many() relation rows using predefined where (publishedPosts only)', async () => {
+      const { schema, relations } = createPredefinedWhereArtifacts();
+
+      await withOrmCtx(schema, relations, async (ctx) => {
+        const userId = await ctx.db.insert('poly_users', {
+          name: 'Alice',
+          status: 'active',
+        });
+
+        await ctx.db.insert('poly_posts', {
+          title: 'Published post',
+          visibility: 'published',
+          authorId: userId,
+        });
+        await ctx.db.insert('poly_posts', {
+          title: 'Draft post',
+          visibility: 'draft',
+          authorId: userId,
+        });
+
+        const users = await ctx.orm.query.poly_users.findMany({
+          with: {
+            publishedPosts: true,
+          },
+        });
+
+        expect(users).toHaveLength(1);
+        expect(users[0].publishedPosts).toHaveLength(1);
+        expect(users[0].publishedPosts[0].title).toBe('Published post');
+      });
+    });
+
+    test('should null out one() relation after predefined where even when optional is false', async () => {
+      const { schema, relations } = createPredefinedWhereArtifacts();
+
+      await withOrmCtx(schema, relations, async (ctx) => {
+        const activeUserId = await ctx.db.insert('poly_users', {
+          name: 'Active user',
+          status: 'active',
+        });
+        const inactiveUserId = await ctx.db.insert('poly_users', {
+          name: 'Inactive user',
+          status: 'inactive',
+        });
+
+        await ctx.db.insert('poly_posts', {
+          title: 'Post by active user',
+          visibility: 'published',
+          authorId: activeUserId,
+        });
+        await ctx.db.insert('poly_posts', {
+          title: 'Post by inactive user',
+          visibility: 'published',
+          authorId: inactiveUserId,
+        });
+
+        const posts = await ctx.orm.query.poly_posts.findMany({
+          with: {
+            activeAuthor: true,
+          },
+        });
+
+        const activePost = posts.find(
+          (post) => post.title === 'Post by active user'
+        );
+        const inactivePost = posts.find(
+          (post) => post.title === 'Post by inactive user'
+        );
+
+        expect(activePost).toBeDefined();
+        expect(activePost?.activeAuthor).toBeDefined();
+        expect(activePost?.activeAuthor?.name).toBe('Active user');
+
+        expect(inactivePost).toBeDefined();
+        expect(inactivePost?.activeAuthor).toBeNull();
+      });
+    });
+  });
+
   describe('Many-to-One Relations (posts.author)', () => {
     test('should load user for single post', async ({ ctx }) => {
       // Create user and post

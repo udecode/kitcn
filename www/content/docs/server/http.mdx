@@ -143,23 +143,7 @@ export const router = c.router;
 
 ### GET Endpoints
 
-Use `.get()` with `.query()` for read operations. GET endpoints cannot have a request body.
-
-```ts title="convex/routers/health.ts" showLineNumbers
-import { z } from 'zod';
-import { publicRoute } from '../lib/crpc';
-
-export const health = publicRoute
-  .get('/api/health')
-  .output(z.object({
-    status: z.string(),
-    timestamp: z.number(),
-  }))
-  .query(async () => ({
-    status: 'ok',
-    timestamp: Date.now(),
-  }));
-```
+Use `.get()` with `.query()` for read operations. GET endpoints cannot have a request body — see the [health check example above](#anatomy).
 
 ### Search Parameters
 
@@ -168,6 +152,7 @@ Use `.searchParams()` for query string validation. Values come as strings, so us
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-8,11}
 import { z } from 'zod';
 import { publicRoute } from '../lib/crpc';
+import { createTodosCaller } from '../functions/generated/todos.runtime';
 
 export const list = publicRoute
   .get('/api/todos')
@@ -177,8 +162,8 @@ export const list = publicRoute
   }))
   .output(z.array(todoSchema))
   .query(async ({ ctx, searchParams }) => {
-    // searchParams.limit and searchParams.offset are typed as numbers
-    return ctx.runQuery(api.todos.list, {
+    const caller = createTodosCaller(ctx);
+    return caller.list({
       limit: searchParams.limit,
       offset: searchParams.offset,
     });
@@ -196,14 +181,15 @@ Use `.params()` for URL path parameters. Define placeholders with `:paramName` i
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-6,9}
 import { z } from 'zod';
 import { publicRoute } from '../lib/crpc';
+import { createTodosCaller } from '../functions/generated/todos.runtime';
 
 export const get = publicRoute
   .get('/api/todos/:id')
   .params(z.object({ id: z.string() }))
   .output(todoSchema.nullable())
   .query(async ({ ctx, params }) => {
-    // params.id is typed as Id<'todos'>
-    return ctx.runQuery(api.todos.get, { id: params.id });
+    const caller = createTodosCaller(ctx);
+    return caller.get({ id: params.id });
   });
 ```
 
@@ -214,6 +200,7 @@ Use `.post()` with `.input()` and `.mutation()` for create operations.
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-9,12-16}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
+import { createTodoInternalCaller } from '../functions/generated/todoInternal.runtime';
 
 export const create = authRoute
   .post('/api/todos')
@@ -223,9 +210,9 @@ export const create = authRoute
   }))
   .output(z.object({ id: z.string() }))
   .mutation(async ({ ctx, input }) => {
-    // input.title and input.description are validated
-    const id = await ctx.runMutation(internal.todos.create, {
-      userId: ctx.userId,  // From auth middleware
+    const caller = createTodoInternalCaller(ctx);
+    const id = await caller.create({
+      userId: ctx.userId,
       ...input,
     });
     return { id };
@@ -239,6 +226,7 @@ Use `.patch()` for partial updates. Combine `.params()` for the resource ID and 
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-11,14-18}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
+import { createTodoInternalCaller } from '../functions/generated/todoInternal.runtime';
 
 export const update = authRoute
   .patch('/api/todos/:id')
@@ -249,8 +237,8 @@ export const update = authRoute
   }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, params, input }) => {
-    // params.id is the resource, input contains update fields
-    await ctx.runMutation(internal.todos.update, {
+    const caller = createTodoInternalCaller(ctx);
+    await caller.update({
       id: params.id,
       ...input,
     });
@@ -265,13 +253,15 @@ Use `.delete()` for resource deletion. Typically only needs `.params()` for the 
 ```ts title="convex/routers/todos.ts" showLineNumbers {5-8,11-13}
 import { z } from 'zod';
 import { authRoute } from '../lib/crpc';
+import { createTodoInternalCaller } from '../functions/generated/todoInternal.runtime';
 
 export const deleteTodo = authRoute
   .delete('/api/todos/:id')
   .params(z.object({ id: z.string() }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, params }) => {
-    await ctx.runMutation(internal.todos.delete, { id: params.id });
+    const caller = createTodoInternalCaller(ctx);
+    await caller.deleteTodo({ id: params.id });
     return { success: true };
   });
 ```
@@ -328,7 +318,7 @@ import { todosRouter } from '../routers/todos';
 import { usersRouter } from '../routers/users';
 
 // Combine all routes into app router
-export const appRouter = router({
+export const httpRouter = router({
   health,
   todos: todosRouter,
   users: usersRouter,
@@ -344,14 +334,13 @@ bun add hono
 ```
 
 ```ts title="convex/functions/http.ts" showLineNumbers {1-6,8-18,20-24}
-import '../lib/http-polyfills';
-import { authMiddleware } from 'better-convex/auth';
+import { authMiddleware } from 'better-convex/auth/http';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { router } from '../lib/crpc';
 
-import { getAuth } from './auth';
+import { getAuth } from './generated/auth';
 import { health } from '../routers/health';
 import { todosRouter } from '../routers/todos';
 
@@ -372,12 +361,12 @@ app.use(
 app.use(authMiddleware(getAuth));
 
 // cRPC router
-export const appRouter = router({
+export const httpRouter = router({
   health,
   todos: todosRouter,
 });
 
-export default createHttpRouter(app, appRouter);
+export default createHttpRouter(app, httpRouter);
 ```
 
 ### Key Components
@@ -386,7 +375,7 @@ export default createHttpRouter(app, appRouter);
 |-----------|---------|
 | `Hono` | Route handling, middleware, CORS |
 | `authMiddleware(getAuth)` | Better Auth routes middleware |
-| `createHttpRouter(app, appRouter)` | Creates Convex HttpRouter with Hono + cRPC |
+| `createHttpRouter(app, httpRouter)` | Creates Convex HttpRouter with Hono + cRPC |
 
 ## CORS
 
@@ -407,21 +396,8 @@ app.use(
 );
 ```
 
-### CORS Options
-
-Hono's CORS middleware accepts these options:
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `origin` | `string \| string[]` | `'*'` | Allowed origin URLs or `'*'` for any |
-| `allowMethods` | `string[]` | `['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH']` | Allowed HTTP methods |
-| `allowHeaders` | `string[]` | `[]` | Allowed request headers |
-| `exposeHeaders` | `string[]` | `[]` | Headers exposed to the browser |
-| `credentials` | `boolean` | `false` | Allow cookies and auth headers |
-| `maxAge` | `number` | - | Preflight cache duration in seconds |
-
 <Callout icon={<InfoIcon />}>
-  **Note:** For Better Auth integration, include `'Better-Auth-Cookie'` in `allowHeaders` and `'Set-Better-Auth-Cookie'` in `exposeHeaders` to ensure auth cookies work correctly.
+  **Note:** For Better Auth integration, include `'Better-Auth-Cookie'` in `allowHeaders` and `'Set-Better-Auth-Cookie'` in `exposeHeaders` to ensure auth cookies work correctly. See [CORS Options](#cors-options) in the API Reference for all available parameters.
 </Callout>
 
 ## Error Handling
@@ -436,7 +412,8 @@ export const get = publicRoute
   .params(z.object({ id: z.string() }))
   .output(todoSchema)
   .query(async ({ ctx, params }) => {
-    const todo = await ctx.runQuery(api.todos.get, { id: params.id });
+    const caller = createTodosCaller(ctx);
+    const todo = await caller.get({ id: params.id });
 
     if (!todo) {
       throw new CRPCError({
@@ -489,7 +466,8 @@ export const download = authRoute
   .get('/api/todos/export/:format')
   .params(z.object({ format: z.enum(['json', 'csv']) }))
   .query(async ({ ctx, params, c }) => {
-    const todos = await ctx.runQuery(api.todos.list, { limit: 100 });
+    const caller = createTodosCaller(ctx);
+    const todos = await caller.list({ limit: 100 });
 
     c.header('Content-Disposition', `attachment; filename="todos.${params.format}"`);
     c.header('Cache-Control', 'no-cache');
@@ -513,16 +491,7 @@ export const redirect = publicRoute
   .query(async ({ c }) => c.redirect('/api/new-path', 301));
 ```
 
-### Hono Context Methods
-
-| Method | Description |
-|--------|-------------|
-| `c.json(data)` | Return JSON response |
-| `c.text(str)` | Return text response |
-| `c.redirect(url, status?)` | Return redirect response |
-| `c.header(name, value)` | Set response header |
-| `c.req.header(name)` | Get request header |
-| `c.req.text()` | Get raw request body as text |
+See [Hono Context Methods](#hono-context-methods) in the API Reference for all available `c` methods.
 
 ## Streaming
 
@@ -532,6 +501,7 @@ For Server-Sent Events (SSE) and AI streaming, use Hono's streaming helpers.
 
 ```ts title="convex/routers/stream.ts" showLineNumbers {1,6-8,10-16}
 import { streamText } from 'hono/streaming';
+import { createDataCaller } from '../functions/generated/data.runtime';
 
 export const events = publicRoute
   .get('/api/stream')
@@ -542,7 +512,8 @@ export const events = publicRoute
 
     return streamText(c, async (stream) => {
       for (let i = 0; i < 10; i++) {
-        const data = await ctx.runQuery(internal.data.getChunk, { index: i });
+        const caller = createDataCaller(ctx);
+        const data = await caller.getChunk({ index: i });
         await stream.write(`data: ${JSON.stringify(data)}\n\n`);
         await stream.sleep(1000);
       }
@@ -552,8 +523,9 @@ export const events = publicRoute
 
 ### AI Streaming
 
-```ts title="convex/routers/ai.ts" showLineNumbers {1,8-9,11-13}
+```ts title="convex/routers/ai.ts" showLineNumbers {1-2,9-12}
 import { stream } from 'hono/streaming';
+import { createAiCaller } from '../functions/generated/ai.runtime';
 
 export const chat = publicRoute
   .post('/api/ai/stream')
@@ -562,7 +534,8 @@ export const chat = publicRoute
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
 
-    const aiStream = await ctx.runAction(internal.ai.streamResponse, {
+    const ai = createAiCaller(ctx);
+    const aiStream = await ai.actions.streamResponse({
       prompt: input.prompt,
     });
 
@@ -576,9 +549,12 @@ export const chat = publicRoute
 
 Handle external service callbacks like Stripe or GitHub using cRPC routes. Always verify signatures before processing.
 
-```ts title="convex/routers/webhooks.ts" showLineNumbers {4-8,14-17,22-32}
+```ts title="convex/routers/webhooks.ts" showLineNumbers {3-5,15,20-23,27-32}
 import { CRPCError } from 'better-convex/server';
 import { publicRoute } from '../lib/crpc';
+import { createPaymentsCaller } from '../functions/generated/payments.runtime';
+import { createStripeCaller } from '../functions/generated/stripe.runtime';
+import { createSubscriptionsCaller } from '../functions/generated/subscriptions.runtime';
 
 export const stripe = publicRoute
   .post('/webhooks/stripe')
@@ -592,7 +568,8 @@ export const stripe = publicRoute
     const body = await c.req.text();
 
     // 2. Verify signature
-    const isValid = await ctx.runAction(internal.stripe.verify, {
+    const stripeCaller = createStripeCaller(ctx);
+    const isValid = await stripeCaller.actions.verify({
       body,
       signature,
     });
@@ -602,16 +579,18 @@ export const stripe = publicRoute
     }
 
     // 3. Process the webhook
+    const payments = createPaymentsCaller(ctx);
+    const subscriptions = createSubscriptionsCaller(ctx);
     const event = JSON.parse(body);
 
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await ctx.runMutation(internal.payments.markPaid, {
+        await payments.markPaid({
           paymentIntentId: event.data.object.id,
         });
         break;
       case 'customer.subscription.deleted':
-        await ctx.runMutation(internal.subscriptions.cancel, {
+        await subscriptions.cancel({
           subscriptionId: event.data.object.id,
         });
         break;
@@ -625,21 +604,7 @@ export const stripe = publicRoute
 
 Access HTTP endpoints on the client via `crpc.http.*`. The proxy uses a **hybrid API** that combines the best of both worlds: tRPC-style JSON body at root level with explicit `params`/`searchParams`/`form` for URL and form data.
 
-### Input Args
-
-The client uses a structured input format that separates concerns clearly. All options go in args (1st param):
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `params` | `Record<string, string>` | Path parameters (`:id` in `/users/:id`) |
-| `searchParams` | `Record<string, string \| string[]>` | Query string parameters |
-| `form` | `z.infer<TForm>` | Typed FormData (if server uses `.form()`) |
-| `fetch` | `typeof fetch` | Custom fetch function (per-call override) |
-| `init` | `RequestInit` | Standard fetch options (highest priority) |
-| `headers` | `Record<string, string> \| (() => ...)` | Request headers (incl. auth, cookies) |
-| `[key]` | `unknown` | JSON body fields at root level |
-
-JSON body fields are spread at the root level (tRPC-style), while URL-related data and client options use explicit keys.
+The client uses a structured input format that separates concerns clearly. All options go in args (1st param). JSON body fields are spread at the root level (tRPC-style), while URL-related data and client options use explicit keys. See [Input Args](#input-args) in the API Reference for the full property list.
 
 ### Setup
 
@@ -647,13 +612,10 @@ The HTTP proxy is automatically available when you set up cRPC.
 
 ```tsx title="lib/convex/crpc.tsx"
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import { createCRPCContext } from 'better-convex/react';
 
-export const { CRPCProvider, useCRPC } = createCRPCContext<Api>({
+export const { CRPCProvider, useCRPC } = createCRPCContext({
   api,
-  meta,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!, // Required for HTTP
 });
 ```
@@ -916,14 +878,7 @@ createTodo.mutate({
 });
 ```
 
-### Client API Reference
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `queryOptions` | `(args?, queryOpts?)` | Options for `useQuery`/`useSuspenseQuery`. `args` includes client opts, `queryOpts` is TanStack Query only |
-| `mutationOptions` | `(mutationOpts?)` | Options for `useMutation`. `mutationOpts` is TanStack Mutation only, client opts go in `mutate(args)` |
-| `queryKey` | `(args?)` | Get the query key for cache operations |
-| `queryFilter` | `(args?, filters?)` | Filter for `invalidateQueries`, etc. |
+See [Client API Reference](#client-api-reference) in the API Reference below for all available methods.
 
 <Callout icon={<InfoIcon />}>
   **Note:** For more React patterns including loading states, error handling, and conditional queries, see [Queries](/docs/react/queries) and [Mutations](/docs/react/mutations).
@@ -1028,7 +983,7 @@ export async function POST(request: Request) {
   // Create context with auth headers
   const ctx = await createContext({ headers: request.headers });
 
-  // Query using the caller (matches your appRouter structure)
+  // Query using the caller (matches your httpRouter structure)
   const todos = await ctx.caller.todos.list({ limit: 10 });
 
   // Mutations
@@ -1043,6 +998,59 @@ export async function POST(request: Request) {
 <Callout icon={<InfoIcon />}>
   **Note:** The caller provides full type safety and uses your cRPC router definitions. See [Server-Side Calls](/docs/server/server-side-calls) for complete setup.
 </Callout>
+
+## API Reference
+
+### CORS Options
+
+Hono's `cors()` middleware accepts these options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `origin` | `string \| string[]` | `'*'` | Allowed origin URLs or `'*'` for any |
+| `allowMethods` | `string[]` | `['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'PATCH']` | Allowed HTTP methods |
+| `allowHeaders` | `string[]` | `[]` | Allowed request headers |
+| `exposeHeaders` | `string[]` | `[]` | Headers exposed to the browser |
+| `credentials` | `boolean` | `false` | Allow cookies and auth headers |
+| `maxAge` | `number` | - | Preflight cache duration in seconds |
+
+### Hono Context Methods
+
+The `c` (Hono Context) object available in all handlers:
+
+| Method | Description |
+|--------|-------------|
+| `c.json(data)` | Return JSON response |
+| `c.text(str)` | Return text response |
+| `c.redirect(url, status?)` | Return redirect response |
+| `c.header(name, value)` | Set response header |
+| `c.req.header(name)` | Get request header |
+| `c.req.text()` | Get raw request body as text |
+
+### Input Args
+
+Structured input format for all client calls. All options go in the first argument:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `params` | `Record<string, string>` | Path parameters (`:id` in `/users/:id`) |
+| `searchParams` | `Record<string, string \| string[]>` | Query string parameters |
+| `form` | `z.infer<TForm>` | Typed FormData (if server uses `.form()`) |
+| `fetch` | `typeof fetch` | Custom fetch function (per-call override) |
+| `init` | `RequestInit` | Standard fetch options (highest priority) |
+| `headers` | `Record<string, string> \| (() => ...)` | Request headers (incl. auth, cookies) |
+| `[key]` | `unknown` | JSON body fields at root level |
+
+### Client API Reference
+
+Methods available on each route proxy (`crpc.http.*.*`):
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `queryOptions` | `(args?, queryOpts?)` | Options for `useQuery`/`useSuspenseQuery`. `args` includes client opts, `queryOpts` is TanStack Query only |
+| `mutationOptions` | `(mutationOpts?)` | Options for `useMutation`. `mutationOpts` is TanStack Mutation only, client opts go in `mutate(args)` |
+| `queryKey` | `(args?)` | Get the query key for cache operations |
+| `queryFilter` | `(args?, filters?)` | Filter for `invalidateQueries`, etc. |
 
 ## Next Steps
 

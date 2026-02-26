@@ -4,10 +4,8 @@ import {
   memberAc,
   ownerAc,
 } from 'better-auth/plugins/organization/access';
-import type { Doc } from '../functions/_generated/dataModel';
-// biome-ignore lint/style/noRestrictedImports: types
-import type { getAuth } from '../functions/auth';
-import type { Select } from './types';
+import type { getAuth } from '../functions/generated/auth';
+import type { Select } from './api';
 
 export type Auth = ReturnType<typeof getAuth>;
 
@@ -18,8 +16,7 @@ export type SessionUser = Select<'user'> & {
       })
     | null;
   isAdmin: boolean;
-  // Native Better Auth session document (used for auth header/session plumbing).
-  session: Doc<'session'>;
+  session: Select<'session'>;
   impersonatedBy?: string | null;
   plan?: 'premium' | 'team';
 };

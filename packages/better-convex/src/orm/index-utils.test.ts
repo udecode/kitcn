@@ -11,7 +11,7 @@ import {
 } from './index-utils';
 
 describe('index-utils', () => {
-  test('getIndexes prefers method and falls back to legacy field shape', () => {
+  test('getIndexes reads method output only', () => {
     const fromMethod = {
       getIndexes: () => [{ name: 'by_name', fields: ['name'] }],
     };
@@ -19,17 +19,13 @@ describe('index-utils', () => {
       { name: 'by_name', fields: ['name'] },
     ]);
 
-    const fromField = {
-      indexes: [{ indexDescriptor: 'by_email', fields: ['email'] }],
-    };
-    expect(getIndexes(fromField as any)).toEqual([
-      { name: 'by_email', fields: ['email'] },
-    ]);
-
-    expect(getIndexes({ indexes: null } as any)).toEqual([]);
+    expect(getIndexes({ getIndexes: () => null } as any)).toEqual([]);
+    expect(
+      getIndexes({ indexes: [{ indexDescriptor: 'by_email' }] } as any)
+    ).toEqual([]);
   });
 
-  test('getSearchIndexes supports method and field fallbacks', () => {
+  test('getSearchIndexes reads method output only', () => {
     const fromMethod = {
       getSearchIndexes: () => [
         { name: 'text_search', searchField: 'text', filterFields: ['type'] },
@@ -39,21 +35,23 @@ describe('index-utils', () => {
       { name: 'text_search', searchField: 'text', filterFields: ['type'] },
     ]);
 
-    const fromField = {
-      searchIndexes: [
-        {
-          indexDescriptor: 'text_search',
-          searchField: 'text',
-          filterFields: undefined,
-        },
-      ],
-    };
-    expect(getSearchIndexes(fromField as any)).toEqual([
-      { name: 'text_search', searchField: 'text', filterFields: [] },
-    ]);
+    expect(getSearchIndexes({ getSearchIndexes: () => null } as any)).toEqual(
+      []
+    );
+    expect(
+      getSearchIndexes({
+        searchIndexes: [
+          {
+            indexDescriptor: 'text_search',
+            searchField: 'text',
+            filterFields: undefined,
+          },
+        ],
+      } as any)
+    ).toEqual([]);
   });
 
-  test('getVectorIndexes supports method and field fallbacks', () => {
+  test('getVectorIndexes reads method output only', () => {
     const fromMethod = {
       getVectorIndexes: () => [
         {
@@ -73,24 +71,21 @@ describe('index-utils', () => {
       },
     ]);
 
-    const fromField = {
-      vectorIndexes: [
-        {
-          indexDescriptor: 'embedding_vec',
-          vectorField: 'embedding',
-          dimensions: 1536,
-          filterFields: undefined,
-        },
-      ],
-    };
-    expect(getVectorIndexes(fromField as any)).toEqual([
-      {
-        name: 'embedding_vec',
-        vectorField: 'embedding',
-        dimensions: 1536,
-        filterFields: [],
-      },
-    ]);
+    expect(getVectorIndexes({ getVectorIndexes: () => null } as any)).toEqual(
+      []
+    );
+    expect(
+      getVectorIndexes({
+        vectorIndexes: [
+          {
+            indexDescriptor: 'embedding_vec',
+            vectorField: 'embedding',
+            dimensions: 1536,
+            filterFields: undefined,
+          },
+        ],
+      } as any)
+    ).toEqual([]);
   });
 
   test('findSearchIndexByName and findVectorIndexByName return hit or null', () => {

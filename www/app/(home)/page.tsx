@@ -234,21 +234,14 @@ function Step2Code() {
       {'{ '}
       {pr('api')}
       {' }'} {kw('from ')}
-      {str("'@convex/_generated/api'")}
+      {str("'@convex/api'")}
       {';'}
       {'\n'}
       {kw('import ')}
       {'{ '}
-      {pr('meta')}
+      {fn('createCRPCContext')}
       {' }'} {kw('from ')}
-      {str("'@convex/meta'")}
-      {';'}
-      {'\n'}
-      {kw('import ')}
-      {'{ '}
-      {fn('createServerCRPCProxy')}
-      {' }'} {kw('from ')}
-      {str("'better-convex/server'")}
+      {str("'better-convex/react'")}
       {';'}
       {'\n'}
       {'\n'}
@@ -260,7 +253,7 @@ function Step2Code() {
         showPopover: true,
       })}
       {' }'} {op('=')} {fn('createCRPCContext')}({'{ '}
-      {pr('api')}, {pr('meta')}
+      {pr('api')}
       {' }'});{'\n'}
       <PopoverBox indent={16}>
         <div className="flex flex-col text-left text-[11px]">

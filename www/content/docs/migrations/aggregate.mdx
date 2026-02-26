@@ -1,0 +1,370 @@
+---
+title: From Aggregate Component
+description: Migrate from @convex-dev/aggregate components to ORM aggregate and rank APIs.
+---
+
+import { InfoIcon, AlertTriangle } from "lucide-react"
+
+This guide migrates from `@convex-dev/aggregate` component instances to ORM APIs:
+- **Scalar metrics** (`count`, `sum`, `avg`, `min`, `max`) → `aggregateIndex` + `count()` / `aggregate()` / `groupBy()`
+- **Ranked access** (`at`, `indexOf`, `paginate`, `min`, `max`, `random`) → `rankIndex` + `rank()`
+
+## Prerequisite
+
+<Callout icon={<InfoIcon />}>
+Complete [DB migration](/docs/migrations/db) first. This guide assumes your app already runs on Better Convex ORM runtime.
+</Callout>
+
+## Concept Mapping
+
+| `@convex-dev/aggregate` | ORM equivalent | Notes |
+|---|---|---|
+| `app.use(aggregate, { name })` | No component wiring | Schema-declared indexes only |
+| `namespace` | `aggregateIndex(...).on(...)` or `rankIndex(...).partitionBy(...)` | Each unique value combo = independent tree |
+| `sortKey: (doc) => doc.score` | `rankIndex(...).orderBy(t.score)` | Supports multi-column + direction |
+| `sumValue: (doc) => doc.score` | `rankIndex(...).sum(t.score)` | Optional weighted sum field |
+| `bounds: { prefix, eq, lower, upper }` | `where: { field: value }` | Object filters instead of manual bounds |
+| Manual `trigger()` wiring | Automatic | ORM lifecycle handles insert/update/delete |
+| `count(ctx, { namespace, bounds })` | `ctx.orm.query.table.count({ where })` | Backed by `aggregateIndex` |
+| `sum(ctx, { namespace, bounds })` | `ctx.orm.query.table.aggregate({ where, _sum })` | Backed by `aggregateIndex` |
+| `at(ctx, offset, { namespace })` | `ctx.orm.query.table.rank(index, { where }).at(offset)` | Backed by `rankIndex` |
+| `indexOf(ctx, key, { namespace })` | `ctx.orm.query.table.rank(index, { where }).indexOf({ id })` | Looks up by doc ID |
+| `paginate(ctx, { namespace, cursor, pageSize })` | `ctx.orm.query.table.rank(index, { where }).paginate({ cursor, limit })` | Same cursor model |
+| `min(ctx, { namespace })` | `rank(...).min()` | Shorthand for `at(0)` |
+| `max(ctx, { namespace })` | `rank(...).max()` | Shorthand for `at(-1)` |
+| `random(ctx, { namespace })` | `rank(...).random()` | Uniform sampling |
+| `paginateNamespaces(ctx)` | Not available | Query partition values from your table directly |
+| `clear(ctx)` / `clearAll(ctx)` | Not available | Use `aggregateBackfill --mode rebuild` |
+| `DirectAggregate` | Not available | Use `better-convex/aggregate` entrypoint if needed |
+
+## Step 1: Remove Component Wiring
+
+<Compare>
+  <CompareItem title="Before">
+    ```ts title="convex/convex.config.ts" showLineNumbers
+    import { defineApp } from 'convex/server';
+    import aggregate from '@convex-dev/aggregate/convex.config';
+
+    const app = defineApp();
+    app.use(aggregate, { name: 'aggregateByProject' });
+    app.use(aggregate, { name: 'leaderboard' });
+
+    export default app;
+    ```
+  </CompareItem>
+  <CompareItem title="After">
+    ```ts title="convex/convex.config.ts" showLineNumbers
+    import { defineApp } from 'convex/server';
+
+    const app = defineApp();
+
+    export default app;
+    ```
+  </CompareItem>
+</Compare>
+
+Remove `TableAggregate` / `DirectAggregate` instantiations and manual trigger wiring:
+
+<Compare>
+  <CompareItem title="Before">
+    ```ts title="convex/functions/aggregates.ts" showLineNumbers
+    import { TableAggregate } from '@convex-dev/aggregate';
+    import { components } from './_generated/api';
+    import { DataModel } from './_generated/dataModel';
+
+    export const leaderboard = new TableAggregate<{
+      Namespace: string;
+      Key: number;
+      DataModel: DataModel;
+      TableName: 'scores';
+    }>(components.leaderboard, {
+      namespace: (doc) => doc.gameId,
+      sortKey: (doc) => doc.score,
+      sumValue: (doc) => doc.score,
+    });
+
+    // Manual trigger wiring
+    triggers.register('scores', leaderboard.trigger());
+    ```
+  </CompareItem>
+  <CompareItem title="After">
+    ```ts title="convex/functions/schema.ts" showLineNumbers
+    // No trigger wiring needed — ORM handles it automatically
+    ```
+  </CompareItem>
+</Compare>
+
+## Step 2: Declare Indexes
+
+### Scalar metrics → `aggregateIndex`
+
+For `count()`, `sum()`, `avg()`, `min()`, `max()` reads:
+
+```ts title="convex/functions/schema.ts" showLineNumbers
+import {
+  aggregateIndex,
+  convexTable,
+  defineSchema,
+  integer,
+  text,
+} from 'better-convex/orm';
+
+export const todos = convexTable(
+  'todos',
+  {
+    projectId: text(),
+    status: text(),
+    effort: integer(),
+    priority: integer(),
+  },
+  (t) => [
+    // count-only (no metric fields needed)
+    aggregateIndex('by_project_status_count').on(t.projectId, t.status),
+
+    // full metric coverage
+    aggregateIndex('by_project_status')
+      .on(t.projectId, t.status)
+      .count(t.status)
+      .sum(t.effort)
+      .avg(t.effort)
+      .min(t.priority)
+      .max(t.priority),
+
+    // unfiltered (global) metrics
+    aggregateIndex('all_todos').all().sum(t.effort),
+  ]
+);
+```
+
+### Ranked access → `rankIndex`
+
+For `at()`, `indexOf()`, `paginate()`, `min()`, `max()`, `random()` reads:
+
+```ts title="convex/functions/schema.ts" showLineNumbers
+import {
+  rankIndex,
+  convexTable,
+  defineSchema,
+  id,
+  integer,
+  text,
+} from 'better-convex/orm';
+
+export const scores = convexTable(
+  'scores',
+  {
+    gameId: id('games'),
+    score: integer(),
+    playerId: id('users'),
+  },
+  (t) => [
+    // partitionBy = old "namespace", orderBy = old "sortKey"
+    rankIndex('leaderboard')
+      .partitionBy(t.gameId)
+      .orderBy(t.score)
+      .sum(t.score),
+
+    // global (no partition)
+    rankIndex('global_leaderboard')
+      .all()
+      .orderBy(t.score),
+  ]
+);
+
+export default defineSchema({ todos, scores });
+```
+
+<Callout icon={<AlertTriangle />}>
+`rankIndex` `orderBy()` supports `integer()`, `timestamp()`, and `date()` columns only.
+</Callout>
+
+## Step 3: Run Codegen
+
+```bash
+npx better-convex dev
+```
+
+Or scoped:
+
+```bash
+npx better-convex codegen --scope orm
+```
+
+## Step 4: Deploy (Backfill Runs Automatically)
+
+```bash
+npx better-convex deploy --prod
+```
+
+`better-convex deploy` runs `aggregateBackfill` in `resume` mode for both metric and rank indexes, then waits for all to report `READY`.
+
+`resume` is idempotent:
+- already-`READY` indexes are skipped
+- `BUILDING` indexes continue
+- metric/rank additions are backfilled automatically
+- metric removals are metadata-only updates
+- key shape changes require rebuild:
+
+```bash
+npx better-convex aggregate rebuild --prod
+```
+
+## Step 5: Switch Scalar Reads
+
+<Compare>
+  <CompareItem title="Before (component)">
+    ```ts
+    // Count
+    const total = await aggregateTodos.count(ctx, {
+      namespace: projectId,
+      bounds: { prefix: ['done'] },
+    });
+
+    // Sum
+    const effortSum = await aggregateTodos.sum(ctx, {
+      namespace: projectId,
+      bounds: { prefix: ['done'] },
+    });
+    ```
+  </CompareItem>
+  <CompareItem title="After (ORM)">
+    ```ts
+    // Count
+    const total = await ctx.orm.query.todos.count({
+      where: { projectId, status: 'done' },
+    });
+
+    // Aggregate (sum + avg + min + max in one call)
+    const stats = await ctx.orm.query.todos.aggregate({
+      where: { projectId, status: 'done' },
+      _sum: { effort: true },
+      _avg: { effort: true },
+      _min: { priority: true },
+      _max: { priority: true },
+      _count: { _all: true, status: true },
+    });
+    ```
+  </CompareItem>
+</Compare>
+
+## Step 6: Switch Ranked Reads
+
+<Compare>
+  <CompareItem title="Before (component)">
+    ```ts
+    // Top 10 leaderboard
+    const { page, cursor, isDone } = await leaderboard.paginate(ctx, {
+      namespace: gameId,
+      order: 'desc',
+      pageSize: 10,
+    });
+
+    // Player rank
+    const rank = await leaderboard.indexOf(ctx, playerScore, {
+      namespace: gameId,
+      id: playerId,
+      order: 'desc',
+    });
+
+    // Item at position
+    const third = await leaderboard.at(ctx, 2, { namespace: gameId });
+
+    // Random pick
+    const pick = await leaderboard.random(ctx, { namespace: gameId });
+
+    // Min / Max
+    const worst = await leaderboard.min(ctx, { namespace: gameId });
+    const best = await leaderboard.max(ctx, { namespace: gameId });
+
+    // Count / Sum
+    const count = await leaderboard.count(ctx, { namespace: gameId });
+    const total = await leaderboard.sum(ctx, { namespace: gameId });
+    ```
+  </CompareItem>
+  <CompareItem title="After (ORM)">
+    ```ts
+    const lb = ctx.orm.query.scores.rank('leaderboard', {
+      where: { gameId },
+    });
+
+    // Top 10 leaderboard
+    const { page, continueCursor, isDone } = await lb.paginate({
+      cursor: null,
+      limit: 10,
+    });
+
+    // Player rank
+    const rank = await lb.indexOf({ id: playerId });
+
+    // Item at position
+    const third = await lb.at(2);
+
+    // Random pick
+    const pick = await lb.random();
+
+    // Min / Max
+    const worst = await lb.min();
+    const best = await lb.max();
+
+    // Count / Sum
+    const count = await lb.count();
+    const total = await lb.sum();
+    ```
+  </CompareItem>
+</Compare>
+
+<Callout icon={<InfoIcon />}>
+`indexOf` now takes `{ id }` (document ID) instead of a key + id combo. The rank is always in the index's declared order direction.
+</Callout>
+
+## Step 7: Validate And Cut Over
+
+- Compare old component values vs new ORM values on sampled traffic
+- Wait for all required indexes to report `READY`
+- Switch read paths fully
+- Remove old `@convex-dev/aggregate` dependency and component instances
+- Remove `_components` from `convex.config.ts` if no other components remain
+
+## API Reference
+
+### Error Guidance
+
+- `COUNT_NOT_INDEXED`: add matching `aggregateIndex(...).on(...)`
+- `COUNT_INDEX_BUILDING`: continue backfill until `READY`
+- `COUNT_FILTER_UNSUPPORTED`: unsupported filter shape for `count`
+- `COUNT_RLS_UNSUPPORTED`: `count` blocked in RLS-restricted context (v1)
+- `AGGREGATE_NOT_INDEXED`: add matching `aggregateIndex(...).on(...)` metric coverage (or `.all()` for unfiltered)
+- `AGGREGATE_INDEX_BUILDING`: continue backfill until `READY`
+- `AGGREGATE_FILTER_UNSUPPORTED`: unsupported filter shape for `aggregate(...)`
+- `AGGREGATE_RLS_UNSUPPORTED`: `aggregate(...)` blocked in RLS-restricted context (v1)
+- `RANK_NOT_INDEXED`: add matching `rankIndex(...).partitionBy(...)` or `.all()`
+- `RANK_INDEX_BUILDING`: continue backfill until `READY`
+- `RANK_RLS_UNSUPPORTED`: `rank()` blocked in RLS-restricted context (v1)
+
+### Rank Return Shape
+
+Each rank query result item has:
+
+```ts
+{
+  id: string;       // document _id
+  key: unknown;     // decoded sort key (single value or array if multi-column)
+  sumValue: number; // sum field value (or 1 if no sumField declared)
+}
+```
+
+### Not Migrated
+
+These `@convex-dev/aggregate` features have no direct ORM equivalent:
+
+| Feature | Workaround |
+|---|---|
+| `DirectAggregate` (table-independent) | Use `better-convex/aggregate` entrypoint |
+| `paginateNamespaces` / `iterNamespaces` | Query partition values from your source table |
+| `iter` (async generator) | Loop `rank(...).paginate()` manually |
+| `countBatch` / `sumBatch` / `atBatch` | Call methods individually (batching not yet supported) |
+| `clear` / `clearAll` | `better-convex aggregate rebuild` |
+| `makeRootLazy` / `rootLazy` | Not applicable (ORM manages B-tree configuration) |
+| Negative `at(-1)` offsets | Not yet supported; use `max()` for last item |
+| `bounds` with `id` tie-breaker | Not supported; use cursor pagination |
+| `order: "desc"` on reads | Declare direction in `rankIndex(...).orderBy({ column, direction: 'desc' })` |

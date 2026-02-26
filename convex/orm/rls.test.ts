@@ -157,6 +157,29 @@ describe('RLS', () => {
     expect(rows[0].ownerId).toEqual(viewerId);
   });
 
+  it('throws COUNT_RLS_UNSUPPORTED for count() in RLS-restricted contexts', async ({
+    ctx,
+  }) => {
+    const viewerId = await ctx.db.insert('rls_users', { name: 'Viewer' });
+    const otherId = await ctx.db.insert('rls_users', { name: 'Other' });
+
+    await ctx.db.insert('rls_secrets', {
+      value: 'allowed',
+      ownerId: viewerId,
+    });
+    await ctx.db.insert('rls_secrets', {
+      value: 'allowed',
+      ownerId: otherId,
+    });
+
+    ctx.viewerId = viewerId;
+
+    const db = ctx.orm;
+    await expect(db.query.rls_secrets.count()).rejects.toThrow(
+      /COUNT_RLS_UNSUPPORTED/
+    );
+  });
+
   it('applies restrictive policies in addition to permissive', async ({
     ctx,
   }) => {

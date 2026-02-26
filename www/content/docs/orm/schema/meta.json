@@ -1,5 +1,5 @@
 {
   "title": "Schema",
   "defaultOpen": true,
-  "pages": ["column-types", "indexes-constraints", "relations"]
+  "pages": ["column-types", "indexes-constraints", "relations", "triggers"]
 }

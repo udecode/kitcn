@@ -109,6 +109,40 @@ test('select distinct supports pagination', async () => {
   });
 });
 
+test('findMany distinct is removed and throws deterministic error', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    await baseCtx.db.insert('users', {
+      name: 'A',
+      email: 'a-findmany@example.com',
+      status: 'active',
+    });
+    await baseCtx.db.insert('users', {
+      name: 'B',
+      email: 'b-findmany@example.com',
+      status: 'active',
+    });
+    await baseCtx.db.insert('users', {
+      name: 'C',
+      email: 'c-findmany@example.com',
+      status: 'pending',
+    });
+  });
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    await expect(
+      (ctx.orm.query.users.findMany as any)({
+        orderBy: { status: 'asc' },
+        distinct: ['status'],
+        limit: 10,
+        columns: { status: true },
+      })
+    ).rejects.toThrow(/DISTINCT_UNSUPPORTED/);
+  });
+});
+
 test('select flatMap includeParent=true returns parent/child rows', async () => {
   const t = convexTest(schema);
 

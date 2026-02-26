@@ -279,6 +279,42 @@ describe('server/builder', () => {
     );
   });
 
+  test('mutation context sanitizes runMutation args for Convex-safe values', async () => {
+    const runMutation = mock(async () => null);
+    const c = initCRPC.create({
+      query: queryGeneric,
+      mutation: mutationGeneric,
+    } as any);
+
+    const fn = c.mutation.mutation(async ({ ctx }) => {
+      await (ctx as any).runMutation('internal.auth.beforeCreate', {
+        data: {
+          createdAt: new Date(1_700_000_000_000),
+          image: undefined,
+          nested: {
+            optional: undefined,
+            updatedAt: new Date(1_700_000_000_100),
+          },
+          tags: [1, undefined, new Date(1_700_000_000_200)],
+        },
+      });
+
+      return null;
+    });
+
+    await (fn as any)._handler({ runMutation }, {});
+
+    expect(runMutation).toHaveBeenCalledWith('internal.auth.beforeCreate', {
+      data: {
+        createdAt: 1_700_000_000_000,
+        nested: {
+          updatedAt: 1_700_000_000_100,
+        },
+        tags: [1, null, 1_700_000_000_200],
+      },
+    });
+  });
+
   test('action.internal() is available by default', async () => {
     const c = initCRPC.create();
     const fn = c.action

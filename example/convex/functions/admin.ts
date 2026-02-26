@@ -3,7 +3,6 @@ import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 
 import { authMutation, authQuery } from '../lib/crpc';
-import { aggregateUsers } from './aggregates';
 import { userTable } from './schema';
 
 // Admin operations that work with our application's user role system
@@ -282,32 +281,16 @@ export const getDashboardStats = authQuery
       });
     }
 
-    // Count admins from last 100 users (representative sample)
-    const sampleUsers = toRows(
-      await ctx.orm.query.user.findMany({ limit: 100 })
-    );
-    let adminCount = 0;
-
-    for (const user of sampleUsers) {
-      if (user.role === 'admin') {
-        adminCount++;
-      }
-    }
-
-    // Get exact user count using aggregate - O(log n) performance!
-    const totalUsers = await aggregateUsers.count(ctx, {
-      bounds: {},
-      namespace: 'global',
-    });
-
-    // Estimate total admins based on sample
-    const estimatedAdmins = Math.round(
-      (adminCount / sampleUsers.length) * totalUsers
-    );
+    const [totalUsers, totalAdmins] = await Promise.all([
+      ctx.orm.query.user.count(),
+      ctx.orm.query.user.count({
+        where: { role: 'admin' },
+      }),
+    ]);
 
     return {
       recentUsers,
-      totalAdmins: estimatedAdmins,
+      totalAdmins,
       totalUsers,
       userGrowth,
     };

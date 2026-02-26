@@ -16,7 +16,9 @@ import {
   hydrateDateFieldsForRead,
   normalizeDateFieldsForWrite,
   selectReturningRowWithHydration,
+  splitReturningSelection,
 } from './mutation-utils';
+import { GelRelationalQuery } from './query';
 import { QueryPromise } from './query-promise';
 import { canInsertRow, evaluateUpdateDecision } from './rls/evaluator';
 import type { ConvexTable } from './table';
@@ -38,7 +40,6 @@ export type InsertOnConflictDoNothingConfig<_TTable extends ConvexTable<any>> =
 export type InsertOnConflictDoUpdateConfig<TTable extends ConvexTable<any>> = {
   target: ColumnBuilder<any, any, any> | ColumnBuilder<any, any, any>[];
   set: UpdateSet<TTable>;
-  where?: FilterExpression<boolean>;
   targetWhere?: FilterExpression<boolean>;
   setWhere?: FilterExpression<boolean>;
 };
@@ -72,6 +73,53 @@ export class ConvexInsertBuilder<
   private returningFields?: TReturning;
   private conflictConfig?: InsertConflictConfig<TTable>;
   private allowFullScanFlag = false;
+
+  private async _loadReturningCount(
+    row: Record<string, unknown>,
+    countSelection: Record<string, unknown>,
+    ormContext: ReturnType<typeof getOrmContext>
+  ): Promise<Record<string, number>> {
+    const schema = ormContext?.schema;
+    const edgeMetadata = ormContext?.edgeMetadata;
+    if (!schema || !edgeMetadata) {
+      throw new Error(
+        'returning({ _count }) requires orm.db(ctx) configured from createOrm({ schema, ... }).'
+      );
+    }
+
+    const tableName = getTableName(this.table);
+    const tableConfig = Object.values(schema).find(
+      (config) => config.name === tableName
+    );
+    if (!tableConfig) {
+      throw new Error(`Table config for '${tableName}' is not registered.`);
+    }
+    const tableEdges = edgeMetadata.filter(
+      (edge) => edge.sourceTable === tableName
+    );
+
+    const counted = await new GelRelationalQuery(
+      schema as any,
+      tableConfig as any,
+      tableEdges as any,
+      this.db as any,
+      {
+        where: {
+          id: row._id,
+        },
+        columns: {},
+        with: {
+          _count: countSelection,
+        },
+      } as any,
+      'first',
+      edgeMetadata as any,
+      ormContext?.rls,
+      ormContext?.relationLoading
+    ).execute();
+
+    return ((counted as any)?._count ?? {}) as Record<string, number>;
+  }
 
   constructor(
     private db: GenericDatabaseWriter<any>,
@@ -124,11 +172,6 @@ export class ConvexInsertBuilder<
   onConflictDoUpdate(
     config: InsertOnConflictDoUpdateConfig<TTable>
   ): ConvexInsertWithout<this, 'onConflictDoNothing' | 'onConflictDoUpdate'> {
-    if (config.where && (config.targetWhere || config.setWhere)) {
-      throw new Error(
-        'You cannot use both "where" and "targetWhere"/"setWhere" at the same time - "where" is deprecated, use "targetWhere" or "setWhere" instead.'
-      );
-    }
     this.conflictConfig = {
       action: 'update',
       config,
@@ -141,13 +184,19 @@ export class ConvexInsertBuilder<
       throw new Error('values() must be called before execute()');
     }
 
+    const ormContext = getOrmContext(this.db);
+    const returningSelection =
+      this.returningFields && this.returningFields !== true
+        ? splitReturningSelection(
+            this.returningFields as Record<string, unknown>
+          )
+        : undefined;
     const results: Record<string, unknown>[] = [];
     for (const value of this.valuesList) {
       const preparedValue = normalizeDateFieldsForWrite(
         this.table,
         applyDefaults(this.table, value as any)
       );
-      const ormContext = getOrmContext(this.db);
       const rls = ormContext?.rls;
       const tableName = getTableName(this.table);
 
@@ -171,7 +220,13 @@ export class ConvexInsertBuilder<
 
       if (conflictResult?.status === 'updated') {
         if (conflictResult.row && this.returningFields) {
-          results.push(this.resolveReturningRow(conflictResult.row));
+          results.push(
+            await this.resolveReturningRow(
+              conflictResult.row,
+              returningSelection,
+              ormContext
+            )
+          );
         }
         continue;
       }
@@ -191,7 +246,13 @@ export class ConvexInsertBuilder<
 
       const inserted = await this.db.get(id as any);
       if (inserted) {
-        results.push(this.resolveReturningRow(inserted as any));
+        results.push(
+          await this.resolveReturningRow(
+            inserted as any,
+            returningSelection,
+            ormContext
+          )
+        );
       }
     }
 
@@ -202,15 +263,29 @@ export class ConvexInsertBuilder<
     return results as MutationResult<TTable, TReturning>;
   }
 
-  private resolveReturningRow(row: Record<string, unknown>) {
+  private async resolveReturningRow(
+    row: Record<string, unknown>,
+    returningSelection: ReturnType<typeof splitReturningSelection> | undefined,
+    ormContext: ReturnType<typeof getOrmContext>
+  ) {
     if (this.returningFields === true) {
       return hydrateDateFieldsForRead(this.table, row);
     }
-    return selectReturningRowWithHydration(
-      this.table,
-      row,
-      this.returningFields as any
-    );
+    const selected = returningSelection?.columnSelection
+      ? selectReturningRowWithHydration(
+          this.table,
+          row,
+          returningSelection.columnSelection
+        )
+      : {};
+    if (returningSelection?.countSelection) {
+      selected._count = await this._loadReturningCount(
+        row,
+        returningSelection.countSelection,
+        ormContext
+      );
+    }
+    return selected;
   }
 
   private async handleConflict(value: InsertValue<TTable>): Promise<
@@ -258,10 +333,6 @@ export class ConvexInsertBuilder<
       !evaluateFilter(existing, updateConfig.targetWhere)
     ) {
       return;
-    }
-
-    if (updateConfig.where && !evaluateFilter(existing, updateConfig.where)) {
-      return { status: 'updated', row: null };
     }
 
     if (

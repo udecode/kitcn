@@ -82,26 +82,7 @@ await queryClient.prefetchQuery(
 );
 ```
 
-## Return Value
-
-Here's what `useInfiniteQuery` returns:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `data` | `T[]` | Flattened array of all loaded items |
-| `pages` | `T[][]` | Array of page arrays (raw, not flattened) |
-| `fetchNextPage` | `(limit?) => void` | Load next page |
-| `hasNextPage` | `boolean` | Whether more pages exist |
-| `isLoading` | `boolean` | Loading first page |
-| `isFetchingNextPage` | `boolean` | Loading additional pages |
-| `isFetchNextPageError` | `boolean` | Whether fetching next page failed |
-| `isPlaceholderData` | `boolean` | Showing placeholder data |
-| `status` | `PaginationStatus` | `'LoadingFirstPage' \| 'LoadingMore' \| 'CanLoadMore' \| 'Exhausted'` |
-| `error` | `Error \| null` | First error encountered |
-| `isFetching` | `boolean` | Any fetch in progress |
-| `isSuccess` | `boolean` | Query succeeded |
-
-Extends TanStack Query's `UseQueryResult`.
+See the [Return Value](#return-value) reference for a full list of properties returned by `useInfiniteQuery`.
 
 ## infiniteQueryOptions
 
@@ -254,67 +235,6 @@ const { data } = useInfiniteQuery(
 );
 ```
 
-## How It Works
-
-Let's understand how infinite queries work under the hood.
-
-### Pagination State Persistence
-
-Pagination state is stored in `queryClient` for scroll restoration across navigations:
-
-```
-Mount ──► Check queryClient for existing state
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-     State found         Not found
-          │                   │
-    Restore pages        Create initial state
-    Resume subscriptions Subscribe to first page
-          │                   │
-          └─────────┬─────────┘
-                    │
-            Navigate away
-                    │
-        ┌───────────┴───────────┐
-        │                       │
-   State persists          Subscriptions close
-   in queryClient          (after unsubscribeDelay)
-        │                       │
-        └───────────┬───────────┘
-                    │
-             Navigate back
-                    │
-          Instant cached data
-          + re-subscribe to pages
-```
-
-### Per-Page Subscriptions
-
-Each page maintains its own WebSocket subscription:
-
-```
-Page 0 ──► WebSocket subscription ──► Real-time updates
-Page 1 ──► WebSocket subscription ──► Real-time updates
-Page 2 ──► WebSocket subscription ──► Real-time updates
-               │
-               └─ All pages update independently
-```
-
-### Automatic Error Recovery
-
-The system handles errors gracefully:
-
-```
-InvalidCursor error ──► Reset pagination state
-                        Start fresh from page 0
-                        New subscriptions
-
-Page too large ──► splitCursor returned
-                   Automatically split page
-                   Maintain continuity
-```
-
 ## Migrate from Convex
 
 If you're coming from vanilla Convex, here's what changes.
@@ -390,3 +310,85 @@ Additional benefits:
   <Card title="Mutations" href="/docs/react/mutations" />
   <Card title="Error Handling" href="/docs/react/error-handling" />
 </Cards>
+
+## API Reference
+
+### Return Value
+
+Here's what `useInfiniteQuery` returns:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `data` | `T[]` | Flattened array of all loaded items |
+| `pages` | `T[][]` | Array of page arrays (raw, not flattened) |
+| `fetchNextPage` | `(limit?) => void` | Load next page |
+| `hasNextPage` | `boolean` | Whether more pages exist |
+| `isLoading` | `boolean` | Loading first page |
+| `isFetchingNextPage` | `boolean` | Loading additional pages |
+| `isFetchNextPageError` | `boolean` | Whether fetching next page failed |
+| `isPlaceholderData` | `boolean` | Showing placeholder data |
+| `status` | `PaginationStatus` | `'LoadingFirstPage' \| 'LoadingMore' \| 'CanLoadMore' \| 'Exhausted'` |
+| `error` | `Error \| null` | First error encountered |
+| `isFetching` | `boolean` | Any fetch in progress |
+| `isSuccess` | `boolean` | Query succeeded |
+
+Extends TanStack Query's `UseQueryResult`.
+
+### How It Works
+
+#### Pagination State Persistence
+
+Pagination state is stored in `queryClient` for scroll restoration across navigations:
+
+```
+Mount ──► Check queryClient for existing state
+                    │
+          ┌─────────┴─────────┐
+          │                   │
+     State found         Not found
+          │                   │
+    Restore pages        Create initial state
+    Resume subscriptions Subscribe to first page
+          │                   │
+          └─────────┬─────────┘
+                    │
+            Navigate away
+                    │
+        ┌───────────┴───────────┐
+        │                       │
+   State persists          Subscriptions close
+   in queryClient          (after unsubscribeDelay)
+        │                       │
+        └───────────┬───────────┘
+                    │
+             Navigate back
+                    │
+          Instant cached data
+          + re-subscribe to pages
+```
+
+#### Per-Page Subscriptions
+
+Each page maintains its own WebSocket subscription:
+
+```
+Page 0 ──► WebSocket subscription ──► Real-time updates
+Page 1 ──► WebSocket subscription ──► Real-time updates
+Page 2 ──► WebSocket subscription ──► Real-time updates
+               │
+               └─ All pages update independently
+```
+
+#### Automatic Error Recovery
+
+The system handles errors gracefully:
+
+```
+InvalidCursor error ──► Reset pagination state
+                        Start fresh from page 0
+                        New subscriptions
+
+Page too large ──► splitCursor returned
+                   Automatically split page
+                   Maintain continuity
+```

@@ -21,7 +21,12 @@ import type {
 import { ConvexDeleteBuilder } from './delete';
 import type { EdgeMetadata } from './extractRelationsConfig';
 import { ConvexInsertBuilder } from './insert';
-import { buildForeignKeyGraph, type OrmContextValue } from './mutation-utils';
+import { getOrmLifecycleInnerDb } from './lifecycle';
+import {
+  buildForeignKeyGraph,
+  type OrmContextValue,
+  resolveOrmRuntimeDefaults,
+} from './mutation-utils';
 import { RelationalQueryBuilder } from './query-builder';
 import type { TablesRelationalConfig } from './relations';
 import type { RlsContext } from './rls/types';
@@ -51,6 +56,9 @@ export type DatabaseWithQuery<TSchema extends TablesRelationalConfig> =
   // Expose raw system access for _storage and _scheduled_functions only.
   // This is the escape hatch for system tables, not app tables.
   Pick<GenericDatabaseReader<any>, 'system'> & {
+    withoutTriggers<TResult>(
+      callback: (orm: DatabaseWithQuery<TSchema>) => Promise<TResult>
+    ): Promise<TResult>;
     query: TSchema extends Record<string, never>
       ? { error: 'Schema is empty - did you forget to add tables?' }
       : {
@@ -60,6 +68,9 @@ export type DatabaseWithQuery<TSchema extends TablesRelationalConfig> =
 
 export type DatabaseWithMutations<TSchema extends TablesRelationalConfig> =
   DatabaseWithQuery<TSchema> & {
+    withoutTriggers<TResult>(
+      callback: (orm: DatabaseWithMutations<TSchema>) => Promise<TResult>
+    ): Promise<TResult>;
     insert<TTable extends ConvexTable<any>>(
       table: TTable
     ): ConvexInsertBuilder<TTable>;
@@ -142,14 +153,22 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
   const strict = schemaOptions?.strict ?? true;
   const defaults = schemaOptions?.defaults;
   const buildDatabase = (rls: RlsContext | undefined) => {
+    const resolvedDefaults = resolveOrmRuntimeDefaults(defaults, {
+      scheduler: options?.scheduler,
+      scheduledMutationBatch: options?.scheduledMutationBatch,
+    });
     const ormContext: OrmContextValue = {
       foreignKeyGraph: buildForeignKeyGraph(schema),
+      schema,
+      edgeMetadata,
+      relationLoading: options?.relationLoading,
       scheduler: options?.scheduler,
       scheduledDelete: options?.scheduledDelete,
       scheduledMutationBatch: options?.scheduledMutationBatch,
       rls,
       strict,
       defaults,
+      resolvedDefaults,
     };
 
     // Preserve the original `ctx.db` behavior without mutating it.
@@ -230,15 +249,42 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
       return new ConvexDeleteBuilder(baseDb, table);
     };
 
+    let currentDb:
+      | DatabaseWithQuery<TSchema>
+      | DatabaseWithMutations<TSchema>
+      | undefined;
+    let withoutTriggersDb:
+      | DatabaseWithQuery<TSchema>
+      | DatabaseWithMutations<TSchema>
+      | undefined;
+
+    const runWithoutTriggers = async <TResult>(
+      callback: (
+        orm: DatabaseWithQuery<TSchema> | DatabaseWithMutations<TSchema>
+      ) => Promise<TResult>
+    ): Promise<TResult> => {
+      const innerDb = getOrmLifecycleInnerDb(db);
+      if (!innerDb) {
+        return callback(currentDb as any);
+      }
+
+      withoutTriggersDb ??= createDatabase(innerDb, schema, edgeMetadata, {
+        ...options,
+        rls,
+      }) as any;
+      return callback(withoutTriggersDb as any);
+    };
+
     const base = {
       // Internal runtime config for mutation builders, scheduling, and FK actions.
       [OrmContext]: ormContext,
       // System tables escape hatch (raw Convex API).
       system: (db as GenericDatabaseReader<any>).system,
+      withoutTriggers: runWithoutTriggers,
       query,
     } as DatabaseWithQuery<TSchema>;
 
-    return isWriter
+    const built = isWriter
       ? ({
           ...base,
           insert,
@@ -246,6 +292,9 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
           delete: deleteBuilder,
         } as DatabaseWithMutations<TSchema>)
       : base;
+
+    currentDb = built;
+    return built;
   };
 
   const table = buildDatabase(options?.rls);

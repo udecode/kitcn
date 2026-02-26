@@ -1,11 +1,12 @@
 ---
-title: From Better Auth
+title: From Better Auth Component
 description: Migrate from @convex-dev/better-auth to better-convex.
 links:
   doc: https://github.com/get-convex/better-auth
 ---
 
 import { AlertTriangle, InfoIcon } from "lucide-react"
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion"
 
 In this guide, we'll migrate from `@convex-dev/better-auth` (the component-based auth package) to `better-convex`. You'll remove the component pattern, update imports, and configure the new trigger system.
 
@@ -17,8 +18,8 @@ The main differences between the packages:
 |--------|------------------------|---------------|
 | Architecture | Convex component pattern | Direct integration |
 | Triggers | Not built-in | `triggers: { user, session }` |
-| Client Creation | `createClient(components.betterAuth, {...})` | `createClient({ authFunctions, schema })` |
-| DB Adapter | `authComponent.adapter(ctx)` | `authClient.adapter(ctx, getAuthOptions)` |
+| Auth Contract | `createAuthOptions/getAuth` split | `default defineAuth((ctx) => ({ ...options, triggers }))` |
+| DB Adapter | `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` (context-aware adapter) |
 | Provider | `ConvexBetterAuthProvider` | `ConvexAuthProvider` |
 | React Utils | `AuthBoundary` | `createAuthMutations()`, auth store |
 
@@ -26,7 +27,7 @@ Let's migrate step by step.
 
 ## Step 1: Update Dependencies
 
-Install better-convex alongside the existing package (`@convex-dev/better-auth` remains a peer dependency).
+Install `better-convex`.
 
 ```bash
 bun add better-convex
@@ -40,112 +41,110 @@ Next, we'll remove the Convex component configuration. This is the biggest archi
 **Production only:** Run component-data migration only if this app already has production data in `_components/betterAuth`.
 </Callout>
 
-### Production only: Migrate component data to app namespace
+<Accordions type="single">
+  <Accordion id="production-only-migrate-component-data-to-app-namespace" title="Production only: Migrate component data to app namespace">
+    If you are not migrating existing production data, skip this sub-step and continue with file deletion below.
 
-If you are not migrating existing production data, skip this sub-step and continue with file deletion below.
+    <Callout icon={<AlertTriangle />}>
+    **Warning:** This ID remap flow is validated for the [latest Convex document ID format](https://github.com/get-convex/convex-backend/blob/main/crates/value/src/id_v6.rs). Older historical ID formats may exist and are not guaranteed by this script.
+    </Callout>
 
-<Callout icon={<AlertTriangle />}>
-**Warning:** This ID remap flow is validated for the [latest Convex document ID format](https://github.com/get-convex/convex-backend/blob/main/crates/value/src/id_v6.rs). Older historical ID formats may exist and are not guaranteed by this script.
-</Callout>
+    <Callout icon={<AlertTriangle />}>
+    **Test locally first:** Run this migration end-to-end against a local/dev copy before touching production. Convex internals can change over time, which can invalidate this migration.
+    </Callout>
 
-<Callout icon={<AlertTriangle />}>
-**Test locally first:** Run this migration end-to-end against a local/dev copy before touching production. Convex internals can change over time, which can invalidate this migration.
-</Callout>
+    <Callout icon={<AlertTriangle />}>
+    **IMPORTANT:** Importing with `--replace` is destructive and replaces all data in the target deployment.
+    </Callout>
 
-<Callout icon={<AlertTriangle />}>
-**IMPORTANT:** Importing with `--replace` is destructive and replaces all data in the target deployment.
-</Callout>
+    **Prerequisite**
+    - Push/deploy your new app schema first so destination auth tables exist in app namespace.
+    - If those tables do not exist yet, migration/import fails with missing table ID errors.
 
-**Prerequisite**
-- Push/deploy your new app schema first so destination auth tables exist in app namespace.
-- If those tables do not exist yet, migration/import fails with missing table ID errors.
+    **1) Export a backup zip**
 
-**1) Export a backup zip**
-
-```bash
-npx convex export --path ./snapshot.zip
-```
-
-**2) Download migration utility files**
-
-Create a local folder and download the migration utility files:
-
-```bash
-mkdir -p ./better-auth-component-migration
-curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/cli.ts -o ./better-auth-component-migration/cli.ts
-curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/id-v6.ts -o ./better-auth-component-migration/id-v6.ts
-curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/migrate-snapshot.ts -o ./better-auth-component-migration/migrate-snapshot.ts
-curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/zip.ts -o ./better-auth-component-migration/zip.ts
-```
-
-**3) Install migration zip dependencies**
-
-```bash
-npm i -D yazl yauzl
-```
-
-**4) Run the migration utility (creates a new `migration.zip`)**
-
-```bash
-node --experimental-strip-types ./better-auth-component-migration/cli.ts \
-  --snapshotZip ./snapshot.zip \
-  --outputZip ./migration.zip
-```
-
-Optional: migrate only specific tables:
-
-```bash
-node --experimental-strip-types ./better-auth-component-migration/cli.ts \
-  --snapshotZip ./snapshot.zip \
-  --outputZip ./migration.zip \
-  --filters=user,jwks
-```
-
-Optional: set a custom temp working directory:
-
-```bash
-node --experimental-strip-types ./better-auth-component-migration/cli.ts \
-  --snapshotZip ./snapshot.zip \
-  --outputZip ./migration.zip \
-  --workDir ./snapshot.temp
-```
-
-**5) Import manually**
-
-```bash
-npx convex import ./migration.zip --replace -y
-```
-
-**Files to delete:**
-- `convex/betterAuth/` folder (entire directory)
-- Remove `app.use(betterAuth)` from `convex/convex.config.ts`
-
-<Compare>
-  <CompareItem title="Before (convex/convex.config.ts)">
-    ```ts showLineNumbers {2,5}
-    import { defineApp } from "convex/server";
-    import betterAuth from "./betterAuth/convex.config";
-    import resend from "@convex-dev/resend/convex.config";
-
-    const app = defineApp();
-    app.use(betterAuth);  // Remove this line
-    app.use(resend);
-
-    export default app;
+    ```bash
+    npx convex export --path ./snapshot.zip
     ```
-  </CompareItem>
-  <CompareItem title="After (convex/convex.config.ts)">
-    ```ts showLineNumbers
-    import { defineApp } from "convex/server";
-    import resend from "@convex-dev/resend/convex.config";
 
-    const app = defineApp();
-    app.use(resend);  // Keep other components
+    **2) Download migration utility files**
 
-    export default app;
+    Create a local folder and download the migration utility files:
+
+    ```bash
+    mkdir -p ./better-auth-component-migration
+    curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/cli.ts -o ./better-auth-component-migration/cli.ts
+    curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/id-v6.ts -o ./better-auth-component-migration/id-v6.ts
+    curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/migrate-snapshot.ts -o ./better-auth-component-migration/migrate-snapshot.ts
+    curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/zip.ts -o ./better-auth-component-migration/zip.ts
     ```
-  </CompareItem>
-</Compare>
+
+    **3) Install migration zip dependencies**
+
+    ```bash
+    npm i -D yazl yauzl
+    ```
+
+    **4) Run the migration utility (creates a new `migration.zip`)**
+
+    ```bash
+    node --experimental-strip-types ./better-auth-component-migration/cli.ts \
+      --snapshotZip ./snapshot.zip \
+      --outputZip ./migration.zip
+    ```
+
+    Optional: migrate only specific tables:
+
+    ```bash
+    node --experimental-strip-types ./better-auth-component-migration/cli.ts \
+      --snapshotZip ./snapshot.zip \
+      --outputZip ./migration.zip \
+      --filters=user,jwks
+    ```
+
+    Optional: set a custom temp working directory:
+
+    ```bash
+    node --experimental-strip-types ./better-auth-component-migration/cli.ts \
+      --snapshotZip ./snapshot.zip \
+      --outputZip ./migration.zip \
+      --workDir ./snapshot.temp
+    ```
+
+    **5) Import manually**
+
+    ```bash
+    npx convex import ./migration.zip --replace -y
+    ```
+
+    **Files to delete:**
+    - `convex/betterAuth/` folder (entire directory)
+    - Remove `app.use(betterAuth)` from `convex/convex.config.ts`
+
+    <Compare>
+      <CompareItem title="Before (convex/convex.config.ts)">
+        ```ts showLineNumbers {2,5}
+        import { defineApp } from "convex/server";
+        import betterAuth from "./betterAuth/convex.config";
+
+        const app = defineApp();
+        app.use(betterAuth);  // Remove this line
+
+        export default app;
+        ```
+      </CompareItem>
+      <CompareItem title="After (convex/convex.config.ts)">
+        ```ts showLineNumbers
+        import { defineApp } from "convex/server";
+
+        const app = defineApp();
+
+        export default app;
+        ```
+      </CompareItem>
+    </Compare>
+  </Accordion>
+</Accordions>
 
 ## Step 3: Update auth.config.ts
 
@@ -164,7 +163,7 @@ The auth config stays similar. We just need to ensure we're passing the static J
   </CompareItem>
   <CompareItem title="After">
     ```ts showLineNumbers {4}
-    import { getAuthConfigProvider } from "@convex-dev/better-auth/auth-config";
+    import { getAuthConfigProvider } from "better-convex/auth/config";
     import type { AuthConfig } from "convex/server";
 
     export default {
@@ -175,12 +174,28 @@ The auth config stays similar. We just need to ensure we're passing the static J
 </Compare>
 
 <Callout icon={<InfoIcon />}>
-Passing a static JWKS avoids database queries during token verification. Run `npx better-convex env sync --auth` to generate it.
+Passing a static JWKS avoids database queries during token verification.
 </Callout>
 
-## Step 4: Migrate auth.ts
+## Step 4: Generate Runtime
 
-This is the main migration. We'll replace the component-based client with direct integration.
+If using cRPC, run `better-convex dev` (generates all runtime including cRPC modules):
+
+```bash
+npx better-convex dev
+```
+
+Otherwise, run a scoped generation pass:
+
+```bash
+npx better-convex codegen --scope auth
+```
+
+## Step 5: Migrate auth.ts
+
+This is the biggest change in the migration. We're replacing the component-based pattern — where you manually created a client, wired up adapters, and exported runtime helpers — with a single `defineAuth` contract. You declare your auth options and triggers in one place, and `better-convex` generates all the runtime for you.
+
+Here's what the before and after looks like:
 
 <Compare>
   <CompareItem title="Before (component pattern)">
@@ -217,155 +232,53 @@ This is the main migration. We'll replace the component-based client with direct
     ```
   </CompareItem>
   <CompareItem title="After (direct pattern)">
-    ```ts showLineNumbers title="convex/functions/auth.ts" {3,8,11-30,33,40-44,47}
-    import { convex } from "@convex-dev/better-auth/plugins";
-    import { betterAuth, type BetterAuthOptions } from "better-auth";
-    import { createApi, createClient, type AuthFunctions } from "better-convex/auth";
-    import { internal } from "./_generated/api";
-    import type { DataModel } from "./_generated/dataModel";
-    import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
-    import { withOrm } from "../lib/orm";
+    ```ts showLineNumbers title="convex/functions/auth.ts" {3,6-20}
+    import { admin } from "better-auth/plugins";
+    import { convex } from "better-convex/auth";
     import authConfig from "./auth.config";
-    import schema from "./schema";
+    import { defineAuth } from "./generated/auth";
 
-    type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
-
-    // Reference internal auth functions (generated after first `npx convex dev`)
-    const authFunctions: AuthFunctions = internal.auth;
-
-    // Create the auth client with triggers
-    export const authClient = createClient<DataModel, typeof schema>({
-      authFunctions,
-      schema,
-      context: withOrm, // Optional: enrich auth mutation + trigger ctx once
+    export default defineAuth((ctx) => ({
+      baseURL: process.env.SITE_URL!,
+      emailAndPassword: { enabled: true },
+      plugins: [
+        convex({
+          authConfig,
+          jwks: process.env.JWKS,
+        }),
+        admin(),
+      ],
       triggers: {
         user: {
-          beforeCreate: async (_ctx, data) => {
-            // Transform user data before creation
-            return data;
-          },
-          onCreate: async (ctx, user) => {
-            // Side effects after user creation
-            console.log("User created:", user.id);
-          },
-        },
-        session: {
-          onCreate: async (ctx, session) => {
-            // Side effects after session creation
+          create: {
+            before: async (data, triggerCtx) => {
+              return { data };
+            },
+            after: async (user, triggerCtx) => {
+            },
           },
         },
       },
-    });
-
-    // Auth options factory
-    const getAuthOptions = (ctx: GenericCtx) =>
-      ({
-        baseURL: process.env.SITE_URL!,
-        emailAndPassword: { enabled: true },
-        socialProviders: {
-          github: {
-            clientId: process.env.GITHUB_CLIENT_ID!,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-          },
-        },
-        plugins: [
-          convex({
-            authConfig,
-            jwks: process.env.JWKS,
-          }),
-        ],
-        database: authClient.adapter(ctx, getAuthOptions),
-      }) satisfies BetterAuthOptions;
-
-    // Single context-aware auth entrypoint
-    export const getAuth = (ctx: GenericCtx) =>
-      betterAuth(getAuthOptions(ctx));
-
-    // Generate internal CRUD functions
-    export const {
-      create,
-      deleteMany,
-      deleteOne,
-      findMany,
-      findOne,
-      updateMany,
-      updateOne,
-      getLatestJwks,
-      rotateKeys,
-    } = createApi(schema, getAuth, {
-      context: withOrm, // Optional: same context enrichment
-    });
-
-    // Generate trigger handlers
-    export const {
-      beforeCreate,
-      beforeDelete,
-      beforeUpdate,
-      onCreate,
-      onDelete,
-      onUpdate,
-    } = authClient.triggersApi();
-
-    // Export for Better Auth CLI
-    // biome-ignore lint/suspicious/noExplicitAny: Required for CLI
-    export const auth = betterAuth(getAuthOptions({} as any));
+    }));
     ```
   </CompareItem>
 </Compare>
 
-**Key changes:**
+Notice how much simpler the new version is.
 
-| Before | After |
-|--------|-------|
-| `createClient(components.betterAuth, {...})` | `createClient({ authFunctions, schema, triggers })` |
-| ORM context setup | `context` |
-| `authComponent.adapter(ctx)` | `authClient.adapter(ctx, getAuthOptions)` |
-| `authComponent.clientApi()` | `createApi()` generates internal functions |
-| No triggers | Built-in `triggers: { user, session }` |
+Here's a summary of what changed and why:
+
+| Before | After | Why |
+|--------|-------|-----|
+| `createAuthOptions`/`getAuth` split | Single `defineAuth((ctx) => ({ ... }))` | One contract, less boilerplate |
+| Runtime exports from `auth.ts` | Generated runtime in `convex/functions/generated.ts` | Codegen handles wiring for you |
+| `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` with context-aware adapter | Automatic direct DB in queries, HTTP adapter in actions |
+| Trigger signature `(ctx, ...)` | Trigger signatures `(..., ctx)` | Full parity with ORM `defineTriggers` callbacks |
+| Component namespace routing | Generated contract + `internal.generated.*` handlers | No more component indirection |
 
 <Callout icon={<InfoIcon />}>
-**Context-aware adapter:** `authClient.adapter(ctx, getAuthOptions)` automatically picks direct DB access in queries/mutations and HTTP adapter behavior in actions/HTTP contexts.
+**Context-aware adapter:** The generated `getAuth(ctx)` automatically picks the right adapter. In queries and mutations, it uses direct DB access for performance. In actions and HTTP contexts, it uses the HTTP adapter with `ctx.run*` APIs.
 </Callout>
-
-## Step 5: Add Polyfills
-
-Convex's runtime environment doesn't include `MessageChannel`, which Better Auth's HTTP handling requires. Create this polyfill file:
-
-```ts title="convex/lib/http-polyfills.ts" showLineNumbers
-// polyfill MessageChannel without using node:events
-if (typeof MessageChannel === 'undefined') {
-  class MockMessagePort {
-    onmessage: ((ev: MessageEvent) => void) | undefined;
-    onmessageerror: ((ev: MessageEvent) => void) | undefined;
-
-    addEventListener() {}
-    close() {}
-
-    dispatchEvent(_event: Event): boolean {
-      return false;
-    }
-
-    postMessage(_message: unknown, _transfer: Transferable[] = []) {}
-    removeEventListener() {}
-    start() {}
-  }
-
-  class MockMessageChannel {
-    port1: MockMessagePort;
-    port2: MockMessagePort;
-
-    constructor() {
-      this.port1 = new MockMessagePort();
-      this.port2 = new MockMessagePort();
-    }
-  }
-
-  globalThis.MessageChannel =
-    MockMessageChannel as unknown as typeof MessageChannel;
-}
-```
-
-Import this at the top of your HTTP file (before other imports).
 
 ## Step 6: Update http.ts
 
@@ -391,10 +304,9 @@ Use Hono only when you need cRPC or Hono middleware.
     <Tabs groupId="router" items={["Convex", "Hono", "cRPC"]} persist>
       <Tab value="Convex">
         ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
-        import '../lib/http-polyfills';
-        import { registerRoutes } from 'better-convex/auth';
+        import { registerRoutes } from 'better-convex/auth/http';
         import { httpRouter } from 'convex/server';
-        import { getAuth } from './auth';
+        import { getAuth } from './generated/auth';
 
         const http = httpRouter();
 
@@ -409,12 +321,11 @@ Use Hono only when you need cRPC or Hono middleware.
       </Tab>
       <Tab value="Hono">
         ```ts title="convex/functions/http.ts" showLineNumbers {1-5,9-18,21}
-        import '../lib/http-polyfills';
-        import { authMiddleware } from 'better-convex/auth';
+        import { authMiddleware } from 'better-convex/auth/http';
         import { HttpRouterWithHono } from 'better-convex/server';
         import { Hono } from 'hono';
         import { cors } from 'hono/cors';
-        import { getAuth } from './auth';
+        import { getAuth } from './generated/auth';
 
         const app = new Hono();
 
@@ -437,13 +348,12 @@ Use Hono only when you need cRPC or Hono middleware.
       </Tab>
       <Tab value="cRPC">
         ```ts title="convex/functions/http.ts" showLineNumbers {1-6,10-19,22}
-        import '../lib/http-polyfills';
-        import { authMiddleware } from 'better-convex/auth';
+        import { authMiddleware } from 'better-convex/auth/http';
         import { createHttpRouter } from 'better-convex/server';
         import { Hono } from 'hono';
         import { cors } from 'hono/cors';
         import { router } from '../lib/crpc';
-        import { getAuth } from './auth';
+        import { getAuth } from './generated/auth';
 
         const app = new Hono();
 
@@ -461,11 +371,11 @@ Use Hono only when you need cRPC or Hono middleware.
         // Better Auth middleware
         app.use(authMiddleware(getAuth));
 
-        export const appRouter = router({
+        export const httpRouter = router({
           // Add your routers here
         });
 
-        export default createHttpRouter(app, appRouter);
+        export default createHttpRouter(app, httpRouter);
         ```
 
       </Tab>
@@ -495,7 +405,7 @@ Now we'll update the client-side auth setup.
   </CompareItem>
   <CompareItem title="After (lib/convex/auth-client.ts)">
     ```ts showLineNumbers title="lib/convex/auth-client.ts" {3,12-16}
-    import { convexClient } from "@convex-dev/better-auth/client/plugins";
+    import { convexClient } from "better-convex/auth/client";
     import { createAuthClient } from "better-auth/react";
     import { createAuthMutations } from "better-convex/react";
 
@@ -553,7 +463,7 @@ Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
     "use client";
 
     import { ConvexReactClient } from "convex/react";
-    import { ConvexAuthProvider } from "better-convex/auth-client";
+    import { ConvexAuthProvider } from "better-convex/auth/client";
     import { authClient } from "@/lib/convex/auth-client";
     import { useRouter } from "next/navigation";
 
@@ -588,64 +498,60 @@ Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
 
 ## Step 9: Remove AuthBoundary
 
-If you were using `AuthBoundary`, you can now handle auth errors via provider callbacks instead.
-
-**If you used `AuthBoundary`:**
-```tsx showLineNumbers
-import { AuthBoundary } from "@convex-dev/better-auth/react";
-
-export const ClientAuthBoundary = ({ children }) => {
-  const router = useRouter();
-  return (
-    <AuthBoundary
-      authClient={authClient}
-      onUnauth={() => router.push("/sign-in")}
-      getAuthUserFn={api.auth.getAuthUser}
-      isAuthError={isAuthError}
-    >
-      {children}
-    </AuthBoundary>
-  );
-};
-```
-
 Remove `AuthBoundary` and use the provider's `onQueryUnauthorized` and `onMutationUnauthorized` callbacks instead (configured in Step 8).
 
 ## Step 10: Update Schema
 
 If you were using the auto-generated component schema, you'll now define auth tables in your main schema.
 
-<Tabs groupId="schema" items={["CLI Generate", "Manual"]} persist>
-  <Tab value="CLI Generate">
-    Generate auth tables using the Better Auth CLI:
+<Tabs groupId="schema-style" items={["ORM", "DB"]} persist>
+  <Tab value="ORM">
+    Generate auth tables:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/auth.ts
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+    ```
+
+    Merge generated auth tables into your ORM schema:
+
+    ```ts title="convex/functions/schema.ts" showLineNumbers
+    import { defineSchema } from 'better-convex/orm';
+    import { authSchema } from './authSchema';
+
+    export const tables = {
+      ...authSchema,
+      // ...your app convexTable definitions
+    };
+
+    export default defineSchema(tables, { strict: false });
     ```
 
     <Callout icon={<InfoIcon />}>
-    **Auto selection:** `authClient.adapter(...).createSchema` detects ORM schema metadata (`Symbol.for("better-convex:OrmSchemaOptions")`).
-    - With ORM metadata, CLI output uses `better-convex/orm` (`convexTable`, `defineSchema`) and includes `.unique()` plus `.references(...)`.
-    - Without ORM metadata, CLI output stays on the existing Convex `defineTable` format.
-    - ORM output intentionally does not emit `onDelete`/cascade action config.
+    CLI emits ORM-flavored output (`convexTable`, `defineSchema`) when ORM schema metadata is detected.
     </Callout>
+  </Tab>
+  <Tab value="DB">
+    Generate auth tables:
 
-    Then import in your schema:
+    ```bash
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+    ```
 
-    ```ts title="convex/functions/schema.ts" showLineNumbers {2,5}
+    Merge generated auth tables into your Convex schema:
+
+    ```ts title="convex/functions/schema.ts" showLineNumbers
     import { defineSchema } from 'convex/server';
     import { authSchema } from './authSchema';
 
     export default defineSchema({
       ...authSchema,
-      // Your other tables
+      // ...your app defineTable definitions
     });
     ```
   </Tab>
-  <Tab value="Manual">
-    See [Auth Server Setup](/docs/auth/server#3-update-schema) for the full schema definition.
-  </Tab>
 </Tabs>
+
+For fully manual table definitions, see [Auth Server Setup](/docs/auth/server#4-update-schema).
 
 ## Step 11: Migrate Helper Methods
 
@@ -718,7 +624,7 @@ The component pattern provided several helper methods on `authComponent`. These 
 
     // Option 2: Use Better Auth API directly
     const headers = await getHeaders(ctx);
-    const auth = getAuth(ctx); // Your getAuth function from auth.ts
+    const auth = getAuth(ctx); // generated getAuth from convex/functions/generated.ts
     const session = await auth.api.getSession({ headers });
     ```
   </CompareItem>
@@ -750,12 +656,13 @@ The component pattern provided several helper methods on `authComponent`. These 
 
 ## Migration Checklist
 
-- [ ] **Dependencies:** Remove `@convex-dev/better-auth`, install `better-convex`
+- [ ] **Dependencies:** Install `better-convex`
 - [ ] **convex.config.ts:** Remove `app.use(betterAuth)` line
 - [ ] **Component data:** Migrate `betterAuth` component data to app namespace before deletion
 - [ ] **betterAuth folder:** Delete the entire `convex/betterAuth/` directory
 - [ ] **auth.config.ts:** Add `jwks: process.env.JWKS` option
-- [ ] **auth.ts:** Rewrite using new `createClient` and `createApi` patterns
+- [ ] **Generated runtime:** Run `npx better-convex dev` so `convex/functions/generated.ts` exists
+- [ ] **auth.ts:** Rewrite to `export default defineAuth((ctx) => ({ ...options, triggers }))`
 - [ ] **auth-client.ts:** Add `createAuthMutations`, update imports
 - [ ] **Provider:** Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`
 - [ ] **AuthBoundary:** Remove and use provider callbacks
@@ -766,24 +673,30 @@ The component pattern provided several helper methods on `authComponent`. These 
 
 ## Next.js Migration
 
-If you're using Next.js with cRPC, migrate the server-side helpers.
+If you're using Next.js, you can migrate server-side auth helpers to `better-convex/auth/nextjs` even when you do **not** use cRPC.
+
+<Callout icon={<InfoIcon />}>
+If this app only uses Next.js auth helpers after migration, you can remove `@convex-dev/better-auth`.
+</Callout>
 
 ### Without cRPC
 
-If you're not using cRPC, keep using `@convex-dev/better-auth/nextjs` for server-side helpers. Still follow Steps 1-9 for the Convex backend and Step 7 for the provider migration.
+If you're not using cRPC, you can still use `better-convex/auth/nextjs`.
+Only `handler` and `createCaller().getToken()` are needed.
 
-**Server setup** (unchanged):
+**Server setup:**
 
 ```ts showLineNumbers title="lib/auth-server.ts"
-import { convexBetterAuthNextJs } from "@convex-dev/better-auth/nextjs";
+import { api } from "@convex/api";
+import { convexBetterAuth } from "better-convex/auth/nextjs";
 
-export const { handler, getToken } = convexBetterAuthNextJs({
-  convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL!,
+export const { createCaller, handler } = convexBetterAuth({
+  api,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
 });
 ```
 
-API route (unchanged):
+API route:
 
 ```ts showLineNumbers title="app/api/auth/[...all]/route.ts"
 import { handler } from "@/lib/auth-server";
@@ -791,14 +704,14 @@ import { handler } from "@/lib/auth-server";
 export const { GET, POST } = handler;
 ```
 
-Root layout (unchanged):
+Root layout:
 
 ```tsx showLineNumbers title="app/layout.tsx"
 import { ConvexClientProvider } from "./ConvexClientProvider";
-import { getToken } from "@/lib/auth-server";
+import { createCaller } from "@/lib/auth-server";
 
 export default async function RootLayout({ children }) {
-  const token = await getToken();
+  const token = await createCaller().getToken();
   return (
     <html lang="en">
       <body>
@@ -808,6 +721,10 @@ export default async function RootLayout({ children }) {
   );
 }
 ```
+
+<Callout icon={<InfoIcon />}>
+`better-convex/auth/nextjs` does not require cRPC. cRPC is only needed if you also use server callers beyond auth.
+</Callout>
 
 ### With cRPC
 
@@ -827,13 +744,11 @@ export default async function RootLayout({ children }) {
   <CompareItem title="After (lib/convex/server.ts)">
     ```ts showLineNumbers title="lib/convex/server.ts" {3,5}
     import { api } from '@convex/api';
-    import { meta } from '@convex/meta';
-    import { convexBetterAuth } from 'better-convex/auth-nextjs';
+    import { convexBetterAuth } from 'better-convex/auth/nextjs';
 
     export const { createContext, createCaller, handler } = convexBetterAuth({
       api,
       convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
-      meta,
     });
     ```
   </CompareItem>
@@ -969,7 +884,7 @@ import {
 } from '@tanstack/react-router';
 import { QueryClient } from '@tanstack/react-query';
 import { ConvexQueryClient } from '@convex-dev/react-query';
-import { ConvexAuthProvider } from 'better-convex/auth-client';
+import { ConvexAuthProvider } from 'better-convex/auth/client';
 import { authClient } from '@/lib/auth-client';
 import { createServerFn } from '@tanstack/react-start';
 import { getToken } from '@/lib/auth-server';
@@ -1073,24 +988,39 @@ export function SignOutButton() {
 
 ## Troubleshooting
 
-### "authFunctions is undefined"
+### "Auth runtime is disabled ..."
 
-Run `npx convex dev` first to generate the internal API, then reference it correctly:
+Generated runtime can be disabled when `convex/functions/auth.ts` is missing or lacks a default export.
 
 ```ts
-const authFunctions: AuthFunctions = internal.auth;
+import { defineAuth } from './generated/auth';
+
+export default defineAuth((ctx) => ({
+  // ...options
+}));
 ```
 
-### "Auth triggers not firing"
+Then run:
 
-Auth triggers must be defined in `createClient({ triggers: ... })`. They only fire through Better Auth flows, not direct database operations.
+```bash
+npx better-convex codegen
+```
+
+### Better Auth CLI says config is invalid / cannot read auth config
+
+Use generated config entrypoint (not `auth.ts`):
+
+```bash
+npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+```
+
+If it still fails, re-run `better-convex codegen` first so generated exports are up to date.
 
 ## Next Steps
 
 Done! Your auth is now migrated. Here's what to explore next:
 
 <Cards>
-  <Card title="Triggers" href="/docs/auth/triggers" description="Add user triggers" />
   <Card title="Organizations" href="/docs/auth/plugins/organizations" description="Multi-tenant support" />
   <Card title="Client Setup" href="/docs/auth/client" description="React hooks and utilities" />
 </Cards>

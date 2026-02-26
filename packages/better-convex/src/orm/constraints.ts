@@ -13,19 +13,19 @@ export type ConvexForeignKeyColumns = [
 ];
 
 export interface ConvexUniqueConstraintConfig {
-  name?: string;
   columns: ConvexConstraintColumn[];
+  name?: string;
   nullsNotDistinct: boolean;
 }
 
 export interface ConvexForeignKeyConfig<
   TColumns extends ConvexForeignKeyColumns = ConvexForeignKeyColumns,
 > {
-  name?: string;
   columns: TColumns;
   foreignColumns: { [K in keyof TColumns]: ConvexConstraintColumn };
-  onUpdate?: ForeignKeyAction;
+  name?: string;
   onDelete?: ForeignKeyAction;
+  onUpdate?: ForeignKeyAction;
 }
 
 export class ConvexUniqueConstraintBuilderOn {
@@ -105,8 +105,8 @@ export function foreignKey<TColumns extends ConvexForeignKeyColumns>(
 }
 
 export interface ConvexCheckConfig {
-  name: string;
   expression: FilterExpression<boolean>;
+  name: string;
 }
 
 export class ConvexCheckBuilder {

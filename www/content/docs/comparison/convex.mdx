@@ -5,8 +5,6 @@ links:
   doc: https://docs.convex.dev
 ---
 
-import { InfoIcon } from "lucide-react"
-
 ## Overview
 
 better-convex extends vanilla Convex with tRPC-style APIs and deep TanStack Query integration. It's not a replacement - it builds on Convex's real-time database:
@@ -19,6 +17,85 @@ better-convex extends vanilla Convex with tRPC-style APIs and deep TanStack Quer
 | Errors | `ConvexError` | `CRPCError` with HTTP codes |
 
 Let's explore each layer.
+
+## ORM vs Vanilla Convex (`ctx.orm` vs `ctx.db`)
+
+Vanilla Convex gives low-level document queries and writes. The ORM adds a relational builder surface plus runtime guardrails.
+
+### Read Query Surface
+
+| Capability | Vanilla Convex (`ctx.db`) | ORM (`ctx.orm`) | Notes |
+|---|---|---|---|
+| Relational query builder (`findMany` / `findFirst` / `with`) | No | Yes | Drizzle-style read surface |
+| `findFirstOrThrow()` | No | Yes | Throws when no row matches |
+| Object `where` filters | Manual query/filter code | Yes | Includes comparison/logical/string operators |
+| Callback `where` (`(table, ops) => ...`) | No equivalent | Yes | Drizzle-style callback helpers |
+| Explicit index anchoring (`withIndex(name, range?)`) | Manual low-level index API | Yes | Required for predicate `where`; available for index-first planning |
+| Predicate `where` with explicit `.withIndex(...)` | Manual only | Yes | Required for `ops.predicate(...)`; no implicit full scan fallback |
+| Relation filters (`where: { relation: ... }`) | No | Yes | Nested relation predicates in reads |
+| Eager relation loading (`with`) | Manual multi-query | Yes | Includes nested relation loading |
+| Bounded scan controls (`allowFullScan`, `maxScan`) | Manual scan control | Yes | Guardrails for fallback paths and full-scan opt-in |
+| Search index querying | Yes | Yes | ORM surface: `findMany({ search })` |
+| Vector index querying | Yes | Yes | ORM surface: `findMany({ vectorSearch })` |
+| Cursor pagination | Yes | Yes | ORM enforces typed `cursor + limit` usage |
+| Offset pagination | Yes | Yes | Supported, but deep offsets are still expensive |
+| Projection/computed fields (`columns`, `extras`) | Manual mapping | Yes | Computed/projection work runs post-fetch (no SQL computed columns) |
+| Multi-field `orderBy` | Manual sort logic | Yes | First field drives cursor stability; secondary fields may sort post-fetch |
+| Unsized non-paginated reads guardrail | No built-in ORM-style guardrail | Yes | Throws unless `limit`, cursor pagination, `defaultLimit`, or `allowFullScan` |
+| Relation fan-out key cap | No built-in ORM-style guardrail | Yes | `relationFanOutMaxKeys` fail-fast guardrail |
+| `findMany({ distinct })` | Manual dedup | No | Use `select().distinct({ fields })` pipeline when needed |
+
+### Aggregate and Count
+
+| Capability | Vanilla Convex (`ctx.db`) | ORM (`ctx.orm`) | Notes |
+|---|---|---|---|
+| `count()` | Manual/custom | Yes | Unfiltered path uses native Convex count syscall |
+| `count({ where })` | Manual/custom | Yes | Strict no-scan; requires matching `aggregateIndex` |
+| `count({ select: { _all, field } })` | No helper | Yes | Field counts require `.count(field)` metric declaration |
+| `count({ orderBy, skip, take, cursor })` | Manual/custom | Yes | Windowed count with ordering and pagination bounds |
+| `aggregate({ _count/_sum/_avg/_min/_max })` | No helper | Yes | Prisma-style aggregate blocks |
+| Scan fallback for aggregate/count | Manual implementation choice | No | ORM aggregate/count never fall back to collect/take scan paths |
+| Allowed aggregate/count filter subset | Manual/custom | `eq` / `in` / `isNull` / range + `AND` + finite safe `OR` rewrite | Strict no-scan v1 subset |
+| `OR` in aggregate/count `where` | Manual/custom | Yes | Safe finite OR rewrite when each branch is index-plannable |
+| Unsupported aggregate/count filters (`NOT` / string / relation) | Manual/custom | Blocked | Deterministic unsupported-filter errors |
+| `aggregate({ orderBy/take/skip/cursor })` | Manual/custom | Partial | `orderBy/cursor` supported; `skip/take` is `_count`-only in v1 |
+| Relation `_count` in `with` | No helper | Yes | `with: { _count: { relation: true } }` |
+| Relation `_count` nested relation filter | Manual/custom | No | Blocked in v1 (`RELATION_COUNT_FILTER_UNSUPPORTED`) |
+| Relation `_count` filtered `through()` relation | Manual/custom | Yes | Indexed lookups + no-scan-safe filter validation |
+| Mutation `returning({ _count })` | No | Yes | Split selection + relation count loading on insert/update/delete |
+| `groupBy({ by, _count/_sum/_avg/_min/_max })` | No | Yes | Finite-constrained `by` fields only; no `having`/`orderBy`/`skip`/`take` in v1 |
+| Window analytics (`having` / window functions) | No | No | Deferred |
+| Aggregate runtime (`better-convex/aggregate`) | Yes | Yes | Built-in `TableAggregate` for ranked/namespace use cases (no `@convex-dev/aggregate` dependency) |
+| Aggregate read path overhead | Component calls often cross `ctx.runQuery` boundary | Direct aggregate/count read in current query | ORM avoids extra component read boundary for scalar aggregate/count paths |
+
+### Mutations, Constraints, and Delete Modes
+
+| Capability | Vanilla Convex (`ctx.db`) | ORM (`ctx.orm`) | Notes |
+|---|---|---|---|
+| Builder API (`insert` / `update` / `delete`) | No | Yes | Drizzle-style mutation builders |
+| `.returning()` | No | Yes | Returns affected rows (always array) |
+| Upserts (`onConflictDoNothing` / `onConflictDoUpdate`) | No helper | Yes | Runtime-enforced against unique constraints/indexes |
+| Write safety guard (`update/delete` require `where`) | No | Yes | Must use `where` or opt in with `allowFullScan` |
+| Paginated update/delete batches (`.paginate`) | Manual | Yes | Cursor-based write batching |
+| Async mutation continuation scheduling | Manual | Yes | Large writes default to async continuation |
+| Sync mode override | Manual | Yes | `.execute({ mode: 'sync' })` or schema default |
+| Mutation safety/runtime defaults | Manual | Yes | `mutationBatchSize`, `mutationMaxRows`, schedule caps, byte budgets |
+| Delete modes (hard / soft / scheduled) | Manual | Yes | Per-query mode + table defaults via `deletion(...)` |
+| Runtime unique / FK / check enforcement | App code responsibility | Yes | Enforced for ORM mutations at runtime |
+| Foreign-key actions (`cascade` / `set null` / `set default`) | App code responsibility | Yes | Runtime fan-out behavior in ORM layer |
+
+### Access Control and Lifecycle Hooks
+
+| Capability | Vanilla Convex (`ctx.db`) | ORM (`ctx.orm`) | Notes |
+|---|---|---|---|
+| Table-level RLS policies | No | Yes | `rlsPolicy(...)` + `convexTable.withRLS(...)` |
+| Role-scoped RLS (`to` + `roleResolver`) | No | Yes | Role rules require resolver wiring |
+| Trusted bypass path | Direct access always bypasses ORM rules | `skipRules` and `ctx.db` bypass | Useful for admin/migration paths |
+| Schema-level triggers | No | Yes | `defineTriggers(...)` with create/update/delete/change hooks |
+| Trigger integration with aggregate runtime | Manual | Yes | Compose `TableAggregate.trigger(change, ctx)` |
+| Trigger recursion controls | Manual | Yes | `ctx.db` wrapped + `ctx.innerDb` raw escape hatch |
+| Cascade writes and child-table RLS re-check | Manual behavior | Not re-checked | ORM docs: cascade fan-out runs after root check and bypasses child-table RLS |
+| Aggregate/count in RLS-restricted contexts | Manual/custom | Explicitly blocked | `COUNT_RLS_UNSUPPORTED` / `AGGREGATE_RLS_UNSUPPORTED` |
 
 ## What Vanilla Convex Provides
 

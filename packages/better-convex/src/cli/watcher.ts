@@ -3,12 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { generateMeta, getConvexConfig } from './codegen.js';
 
 export function getWatchPatterns(functionsDir: string): string[] {
-  // Watch api.d.ts, http.ts, and routers/**/*.ts for HTTP route changes
-  // Note: routers/ is sibling to functions/, not inside it
+  // Watch function source files + HTTP route sources.
+  // Note: routers/ is sibling to functions/, not inside it.
   const convexDir = path.dirname(functionsDir);
   return [
-    path.join(functionsDir, '_generated', 'api.d.ts'),
-    path.join(functionsDir, 'http.ts'),
+    path.join(functionsDir, '**', '*.ts'),
     path.join(convexDir, 'routers', '**', '*.ts'),
   ];
 }
@@ -16,6 +15,8 @@ export function getWatchPatterns(functionsDir: string): string[] {
 export async function startWatcher(opts?: {
   outputDir?: string;
   debug?: boolean;
+  api?: boolean;
+  auth?: boolean;
   debounceMs?: number;
   watch?: (
     patterns: string[],
@@ -25,8 +26,18 @@ export async function startWatcher(opts?: {
   getConvexConfig?: typeof getConvexConfig;
 }) {
   const outputDir =
-    opts?.outputDir ?? (process.env.BETTER_CONVEX_OUTPUT_DIR || undefined);
+    opts?.outputDir ?? (process.env.BETTER_CONVEX_API_OUTPUT_DIR || undefined);
   const debug = opts?.debug ?? process.env.BETTER_CONVEX_DEBUG === '1';
+  const generateApi =
+    opts?.api ??
+    (process.env.BETTER_CONVEX_GENERATE_API
+      ? process.env.BETTER_CONVEX_GENERATE_API !== '0'
+      : true);
+  const generateAuth =
+    opts?.auth ??
+    (process.env.BETTER_CONVEX_GENERATE_AUTH
+      ? process.env.BETTER_CONVEX_GENERATE_AUTH !== '0'
+      : true);
   const debounceMs = opts?.debounceMs ?? 100;
   const resolveConfig = opts?.getConvexConfig ?? getConvexConfig;
   const runGenerateMeta = opts?.generateMeta ?? generateMeta;
@@ -42,7 +53,12 @@ export async function startWatcher(opts?: {
     .on('change', () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        runGenerateMeta(outputDir, { debug, silent: true });
+        runGenerateMeta(outputDir, {
+          debug,
+          silent: true,
+          api: generateApi,
+          auth: generateAuth,
+        });
       }, debounceMs);
     })
     .on('error', (err: unknown) => console.error('Watch error:', err));

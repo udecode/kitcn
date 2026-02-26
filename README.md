@@ -11,9 +11,9 @@ Type-safe Convex framework with a tRPC-style server API, Drizzle-style ORM, and 
 - cRPC procedure builder (`better-convex/server`)
 - Drizzle-style ORM for Convex (`better-convex/orm`)
 - React + TanStack Query integration with real-time updates (`better-convex/react`)
-- Next.js server helpers for RSC/auth (`better-convex/auth-nextjs`, `better-convex/rsc`)
-- Better Auth adapter utilities (`better-convex/auth`, `better-convex/auth-client`, `better-convex/auth-config`)
-- CLI metadata/codegen helpers (`better-convex` bin)
+- Next.js server helpers for RSC/auth (`better-convex/auth/nextjs`, `better-convex/rsc`)
+- Better Auth adapter utilities (`better-convex/auth`, `better-convex/auth/client`, `better-convex/auth/config`, `better-convex/auth/http`)
+- CLI metadata/codegen/runtime analysis helpers (`better-convex` bin)
 
 ## Quick Start
 

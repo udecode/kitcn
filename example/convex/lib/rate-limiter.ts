@@ -1,7 +1,7 @@
 import { MINUTE, RateLimiter } from '@convex-dev/rate-limiter';
 import { CRPCError } from 'better-convex/server';
 import { components } from '../functions/_generated/api';
-import type { ActionCtx, MutationCtx } from '../functions/_generated/server';
+import type { ActionCtx, MutationCtx } from '../functions/generated/server';
 import type { SessionUser } from '../shared/auth-shared';
 
 // Define rate limits - specific keys override defaults

@@ -32,11 +32,11 @@ Ensure you have [Auth Server](/docs/auth/server) set up before adding admin feat
 
 Add the admin plugin to your auth options:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {5-12}
+```ts title="convex/functions/auth.ts" showLineNumbers {2,5-13}
 import { admin } from 'better-auth/plugins';
+import { defineAuth } from './generated/auth';
 
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     // ... existing config
     plugins: [
       admin({
@@ -48,7 +48,7 @@ const getAuthOptions = (ctx: GenericCtx) =>
       }),
       // ... other plugins
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ### Admin Assignment via Environment
@@ -61,25 +61,27 @@ ADMIN=admin@example.com,other@example.com
 
 Assign admin role on user creation:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {5-15}
-export const authClient = createClient<DataModel, typeof schema>({
+```ts title="convex/functions/auth.ts" showLineNumbers {1,4-15}
+import { defineAuth } from './generated/auth';
+
+export default defineAuth((ctx) => ({
   // ... config
   triggers: {
     user: {
-      beforeCreate: async (_ctx, data) => {
-        const env = getEnv();
-        const adminEmails = env.ADMIN;
-
-        const role =
-          data.role !== 'admin' && adminEmails?.includes(data.email)
-            ? 'admin'
-            : data.role;
-
-        return { ...data, role };
+      create: {
+        before: async (data, triggerCtx) => {
+          const env = getEnv();
+          const adminEmails = env.ADMIN;
+          const role =
+            data.role !== 'admin' && adminEmails?.includes(data.email)
+              ? 'admin'
+              : data.role;
+          return { data: { ...data, role } };
+        },
       },
     },
   },
-});
+}));
 ```
 
 ## 2. Client Configuration
@@ -129,11 +131,9 @@ export default defineSchema(tables, { strict: false });
 Add role middleware to your cRPC setup:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {1-4,7-14,16-24}
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-  // ...
-};
+const c = initCRPC
+  .meta<{ auth?: 'optional' | 'required'; role?: 'admin' }>()
+  .create();
 
 /** Role middleware - checks admin role from meta after auth middleware */
 const roleMiddleware = c.middleware<object>(({ ctx, meta, next }) => {
@@ -450,10 +450,7 @@ export const getDashboardStats = authQuery
 
     const sampleUsers = toRows(await ctx.orm.query.user.findMany({ limit: 100 }));
     const adminCount = sampleUsers.filter((user) => user.role === 'admin').length;
-    const totalUsers = await aggregateUsers.count(ctx, {
-      bounds: {},
-      namespace: 'global',
-    });
+    const totalUsers = await ctx.orm.query.user.count();
     const totalAdmins = Math.round((adminCount / sampleUsers.length) * totalUsers);
 
     return { recentUsers, totalAdmins, totalUsers, userGrowth };

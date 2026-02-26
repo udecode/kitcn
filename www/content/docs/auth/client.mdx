@@ -29,7 +29,7 @@ Create an auth client with mutation hooks:
 ```ts title="src/lib/convex/auth-client.ts" showLineNumbers {4,8-9,12-16}
 import { inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'better-convex/auth-client';
+import { convexClient } from 'better-convex/auth/client';
 import { createAuthMutations } from 'better-convex/react';
 
 import type { Auth } from '@convex/auth-shared';
@@ -91,14 +91,15 @@ function LoginForm() {
 
 First enable email/password in your Convex auth config:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {3-5}
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
-    emailAndPassword: {
-      enabled: true,
-    },
-    // ... rest of config
-  }) satisfies BetterAuthOptions;
+```ts title="convex/functions/auth.ts" showLineNumbers {1,4-8}
+import { defineAuth } from './generated/auth';
+
+export default defineAuth((ctx) => ({
+  emailAndPassword: {
+    enabled: true,
+  },
+  // ... rest of config
+}));
 ```
 
 Then use the sign in/up hooks:
@@ -396,7 +397,7 @@ function App() {
 Configure auth callbacks in the provider:
 
 ```tsx title="src/app.tsx" showLineNumbers {1,5-14}
-import { ConvexAuthProvider } from 'better-convex/auth-client';
+import { ConvexAuthProvider } from 'better-convex/auth/client';
 
 function App() {
   return (
@@ -508,10 +509,3 @@ function App() {
 ```
 
 This enables `skipUnauth` queries, `useAuth`, and conditional rendering components to work with `@convex-dev/auth`.
-
-## Next Steps
-
-<Cards>
-  <Card title="Helpers" href="/docs/auth/server#helpers" />
-  <Card title="Triggers" href="/docs/auth/triggers" />
-</Cards>

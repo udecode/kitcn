@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/performance/useTopLevelRegex: inline regex assertions are intentional in tests. */
 import {
+  aggregateIndex,
   convexTable,
   defineSchema,
   index,
@@ -208,25 +209,6 @@ test('searchIndex validates table ownership for columns', () => {
   ).toThrow(/references column from 'users'/);
 });
 
-test('legacy chainable index APIs throw', () => {
-  const posts = convexTable('posts', { text: text().notNull() });
-
-  expect(() => (posts as any).index('by_text', ['text'])).toThrow(
-    /table.index\(\) is not supported/
-  );
-  expect(() =>
-    (posts as any).searchIndex('search_text', {
-      searchField: 'text',
-    })
-  ).toThrow(/table.searchIndex\(\) is not supported/);
-  expect(() =>
-    (posts as any).vectorIndex('vec', {
-      vectorField: 'text',
-      dimensions: 1536,
-    })
-  ).toThrow(/table.vectorIndex\(\) is not supported/);
-});
-
 test('createdAt index is forbidden because createdAt aliases _creationTime', () => {
   expect(() =>
     convexTable(
@@ -238,4 +220,116 @@ test('createdAt index is forbidden because createdAt aliases _creationTime', () 
       (t) => [index('by_created_at').on(t.createdAt)]
     )
   ).toThrow(/cannot use 'createdAt'/i);
+});
+
+test('aggregateIndex count-only usage exports and stores metadata', () => {
+  const users = convexTable(
+    'count_index_users',
+    {
+      orgId: text().notNull(),
+      status: text(),
+    },
+    (t) => [aggregateIndex('by_org_status').on(t.orgId, t.status)]
+  );
+
+  const config = (users as any).getAggregateIndexes?.();
+  expect(config).toEqual([
+    {
+      name: 'by_org_status',
+      fields: ['orgId', 'status'],
+      countFields: [],
+      sumFields: [],
+      avgFields: [],
+      minFields: [],
+      maxFields: [],
+    },
+  ]);
+});
+
+test('aggregateIndex requires .on(...) or .all()', () => {
+  expect(() =>
+    convexTable('count_index_missing_on', { orgId: text().notNull() }, () => [
+      aggregateIndex('missing_on') as any,
+    ])
+  ).toThrow(/Did you forget to call \.on\(\.\.\.\) or \.all\(\)/);
+});
+
+test('aggregateIndex builder exports and stores metric metadata', () => {
+  const metrics = convexTable(
+    'aggregate_index_metrics',
+    {
+      orgId: text().notNull(),
+      status: text(),
+      amount: integer(),
+      score: integer(),
+    },
+    (t) => [
+      aggregateIndex('all_metrics')
+        .all()
+        .count(t.status)
+        .sum(t.amount)
+        .avg(t.amount)
+        .min(t.score)
+        .max(t.score),
+      aggregateIndex('by_org_status')
+        .on(t.orgId, t.status)
+        .count(t.status)
+        .sum(t.amount)
+        .avg(t.amount)
+        .min(t.score)
+        .max(t.score),
+    ]
+  );
+
+  const config = (metrics as any).getAggregateIndexes?.();
+  expect(config).toEqual([
+    {
+      name: 'all_metrics',
+      fields: [],
+      countFields: ['status'],
+      sumFields: ['amount'],
+      avgFields: ['amount'],
+      minFields: ['score'],
+      maxFields: ['score'],
+    },
+    {
+      name: 'by_org_status',
+      fields: ['orgId', 'status'],
+      countFields: ['status'],
+      sumFields: ['amount'],
+      avgFields: ['amount'],
+      minFields: ['score'],
+      maxFields: ['score'],
+    },
+  ]);
+});
+
+test('aggregateIndex requires .on(...) or .all()', () => {
+  expect(() =>
+    convexTable(
+      'aggregate_index_missing_on',
+      { orgId: text().notNull() },
+      () => [aggregateIndex('missing_on') as any]
+    )
+  ).toThrow(/Did you forget to call \.on\(\.\.\.\) or \.all\(\)/);
+});
+
+test('aggregateIndex sum() validates numeric columns', () => {
+  expect(() =>
+    convexTable(
+      'aggregate_index_invalid_sum',
+      { orgId: text().notNull(), status: text() },
+      (t) => [aggregateIndex('by_org').on(t.orgId).sum(t.status)]
+    )
+  ).toThrow(/sum\(\) supports integer\(\)\/timestamp\(\) columns only/i);
+});
+
+test('aggregateIndex avg() validates numeric columns', () => {
+  expect(() =>
+    convexTable(
+      'aggregate_index_invalid_avg',
+      { orgId: text().notNull(), status: text() },
+      (t) => [aggregateIndex('by_org').on(t.orgId).avg(t.status)]
+    )
+  ).toThrow(/avg\(\) supports integer\(\)\/timestamp\(\) columns only/i);
 });

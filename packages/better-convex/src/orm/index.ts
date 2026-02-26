@@ -49,6 +49,11 @@ export type {
   GenericSchema,
   SchemaDefinition,
 } from 'convex/server';
+export type {
+  CountBackfillChunkArgs,
+  CountBackfillKickoffArgs,
+  CountBackfillStatusArgs,
+} from './aggregate-index/backfill';
 // M6: Column Builders (Drizzle-style)
 export type {
   AnyColumn,
@@ -173,8 +178,13 @@ export {
 } from './filter-expression';
 // M1: Index Builders (Drizzle-style)
 export {
+  aggregateIndex,
+  type ConvexAggregateIndexBuilder,
+  type ConvexAggregateIndexBuilderOn,
   type ConvexIndexBuilder,
   type ConvexIndexBuilderOn,
+  type ConvexRankIndexBuilder,
+  type ConvexRankIndexBuilderOn,
   type ConvexSearchIndexBuilder,
   type ConvexSearchIndexBuilderOn,
   type ConvexSearchIndexConfig,
@@ -182,6 +192,7 @@ export {
   type ConvexVectorIndexBuilderOn,
   type ConvexVectorIndexConfig,
   index,
+  rankIndex,
   searchIndex,
   uniqueIndex,
   vectorIndex,
@@ -193,6 +204,14 @@ export {
 } from './introspection';
 // M5: OrderBy
 export { asc, desc } from './order-by';
+export type {
+  DocByCtx,
+  LookupByIdResultByCtx,
+  QueryCtxWithOptionalOrmQueryTable,
+  QueryCtxWithOrmQueryTable,
+  QueryCtxWithPreferredOrmQueryTable,
+} from './query-context';
+export { getByIdWithOrmQueryFallback } from './query-context';
 export type {
   ExtractTablesWithRelations,
   ManyConfig,
@@ -233,23 +252,28 @@ export type { ConvexTable, TableConfig } from './table';
 export {
   type ConvexDeletionBuilder,
   type ConvexDeletionConfig,
-  type ConvexLifecycleBuilder,
   convexTable,
   deletion,
   type OrmLifecycleChange,
-  type OrmLifecycleConfig,
-  type OrmLifecycleHandler,
   type OrmLifecycleOperation,
-  type OrmTriggerLike,
-  onChange,
-  onDelete,
-  onInsert,
-  onUpdate,
 } from './table';
+export type {
+  OrmBeforeResult,
+  OrmTableTriggers,
+  OrmTriggerChange,
+  OrmTriggerContext,
+  OrmTriggers,
+} from './triggers';
+export { defineTriggers } from './triggers';
 // M3: Query Builder Types
 export type {
+  AggregateConfig,
+  AggregateFieldValue,
+  AggregateResult,
   BuildQueryResult,
   BuildRelationResult,
+  CountConfig,
+  CountResult,
   DBQueryConfig,
   FilterOperators,
   GetColumnData,
@@ -257,7 +281,6 @@ export type {
   InferModelFromColumns,
   InferSelectModel,
   InsertValue,
-  MutationAsyncConfig,
   MutationExecuteConfig,
   MutationExecuteResult,
   MutationExecutionMode,

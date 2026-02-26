@@ -1,0 +1,237 @@
+---
+title: Triggers
+description: Schema-level database hooks for insert/update/delete lifecycle.
+links:
+  doc: https://github.com/get-convex/better-convex
+---
+
+import { InfoIcon } from "lucide-react"
+
+Triggers are declared once in `schema.ts` and wired automatically when you export `triggers`.
+
+## Overview
+
+Use triggers for:
+
+- payload normalization before writes
+- audit/event side effects after writes
+- aggregate updates via `change`
+- write cancellation based on business rules
+
+Define them with:
+
+```ts
+import { defineTriggers } from "better-convex/orm";
+```
+
+## API Shape
+
+```ts title="convex/functions/schema.ts"
+export const triggers = defineTriggers(relations, {
+  todos: {
+    create: {
+      before: async (data, ctx) => {
+        return { data: { ...data, title: data.title.trim() } };
+      },
+      after: async (doc, ctx) => {},
+    },
+    update: {
+      before: async (data, ctx) => {},
+      after: async (doc, ctx) => {},
+    },
+    delete: {
+      before: async (doc, ctx) => {},
+      after: async (doc, ctx) => {},
+    },
+    change: async (change, ctx) => {},
+  },
+});
+```
+
+`change` runs for all operations and receives `{ id, operation, oldDoc, newDoc }`.
+
+For hook signatures and return types, see [API Reference](#api-reference) below.
+
+## Setup In Schema
+
+```ts title="convex/functions/schema.ts"
+import {
+  convexTable,
+  defineRelations,
+  defineTriggers,
+  text,
+} from "better-convex/orm";
+
+export const userTable = convexTable("user", {
+  name: text().notNull(),
+  email: text().notNull(),
+});
+
+export const relations = defineRelations({ user: userTable }, () => ({
+  user: {},
+}));
+
+export const triggers = defineTriggers(relations, {
+  user: {
+    create: {
+      before: async (data) => ({
+        data: { ...data, email: data.email.toLowerCase() },
+      }),
+      after: async (doc, ctx) => {
+        const caller = createUserCaller(ctx);
+        await caller.schedule.now.sendWelcomeEmail({
+          userId: doc._id,
+        });
+      },
+    },
+    change: async (change, ctx) => {
+      await ctx.orm.insert(auditLog).values({
+        table: "user",
+        operation: change.operation,
+        documentId: change.id,
+      });
+    },
+  },
+});
+```
+
+<Callout icon={<InfoIcon />}>
+Trigger definitions are schema-level only. `convexTable(..., extraConfig)` no longer accepts trigger callbacks.
+</Callout>
+
+## Aggregate Integration
+
+Compose aggregate handlers inside `change`:
+
+With `TableAggregate` from `better-convex/aggregate`, you can pass `aggregate.trigger` directly or call `aggregate.trigger(change, ctx)`.
+
+```ts title="convex/functions/schema.ts"
+export const triggers = defineTriggers(relations, {
+  todos: {
+    change: aggregateTodosByUser.trigger,
+  },
+  todoComments: {
+    change: async (change, ctx) => {
+      await aggregateTodosByUser.trigger(change, ctx);
+      await aggregateTodosByProject.trigger(change, ctx);
+    },
+  },
+});
+```
+
+No array API is needed; compose effects directly in one function.
+
+## Common Patterns
+
+### Validation + Cancellation
+
+```ts title="convex/functions/schema.ts"
+export const triggers = defineTriggers(relations, {
+  users: {
+    create: {
+      before: async (data) => {
+        if (!data.email.includes("@")) return false;
+      },
+    },
+    update: {
+      before: async (data) => {
+        if (data.email && !data.email.includes("@")) return false;
+      },
+    },
+  },
+});
+```
+
+### Payload Mutation
+
+```ts title="convex/functions/schema.ts"
+export const triggers = defineTriggers(relations, {
+  users: {
+    update: {
+      before: async (data) => ({
+        data: {
+          ...data,
+          updatedAt: Date.now(),
+        },
+      }),
+    },
+  },
+});
+```
+
+### Change Auditing
+
+```ts title="convex/functions/schema.ts"
+export const triggers = defineTriggers(relations, {
+  teams: {
+    change: async (change, ctx) => {
+      await ctx.orm.insert(auditLog).values({
+        table: "teams",
+        operation: change.operation,
+        documentId: change.id,
+        oldDoc: change.oldDoc,
+        newDoc: change.newDoc,
+      });
+    },
+  },
+});
+```
+
+For runtime behavior, see [API Reference](#api-reference) below.
+
+## Best Practices
+
+1. Keep hooks deterministic and table-local.
+2. Keep expensive work in `scheduler.runAfter`.
+3. Index every query path used inside hooks.
+4. Prefer `create/update/delete` for specific rules; use `change` for cross-operation logic.
+
+## API Reference
+
+### Hook Signatures
+
+- `create.before(data, ctx)`
+- `create.after(doc, ctx)`
+- `update.before(data, ctx)`
+- `update.after(doc, ctx)`
+- `delete.before(doc, ctx)`
+- `delete.after(doc, ctx)`
+- `change(change, ctx)`
+
+Context (`ctx`) includes:
+
+- `ctx.db`: wrapped writer (triggers enabled)
+- `ctx.innerDb`: raw writer (bypasses trigger recursion)
+- `ctx.orm`: typed ORM writer
+- your custom context fields (`scheduler`, request ids, etc.)
+
+### Before Return Behavior
+
+`before` hooks support exactly:
+
+- `void`: continue unchanged
+- `{ data }`: shallow-merge into the write payload
+- `false`: cancel write and throw `TriggerCancelledError`
+
+`after` hooks always return `void`.
+
+### `withoutTriggers`
+
+Bypass all trigger hooks for a block of operations. Useful for bulk resets, migrations, and data seeding where triggers would interfere or cause infinite recursion.
+
+```ts
+await ctx.orm.withoutTriggers(async (orm) => {
+  // These writes skip all before/after/change hooks
+  await orm.delete(todosTable).allowFullScan();
+  await orm.insert(todosTable).values({ title: "Seed", completed: false, userId });
+});
+```
+
+The callback receives a trigger-free ORM instance scoped to the same transaction. Reads and mutations work identically — only hook dispatch is disabled.
+
+### Runtime Guarantees
+
+1. Hooks run only for wrapped mutation contexts (`ctx.orm` / generated server context).
+2. Trigger errors fail the mutation.
+3. Recursive writes are queued deterministically.
+4. `ctx.innerDb` bypasses recursive dispatch (low-level; prefer `withoutTriggers` for most cases).

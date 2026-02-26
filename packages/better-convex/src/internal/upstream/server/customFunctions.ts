@@ -569,11 +569,12 @@ type Expand<ObjectType extends Record<any, any>> =
 type ArgsForHandlerType<
   OneOrZeroArgs extends [] | [Record<string, any>],
   CustomMadeArgs extends Record<string, any>,
-> = CustomMadeArgs extends Record<string, never>
-  ? OneOrZeroArgs
-  : OneOrZeroArgs extends [infer A]
-    ? [Expand<A & CustomMadeArgs>]
-    : [CustomMadeArgs];
+> =
+  CustomMadeArgs extends Record<string, never>
+    ? OneOrZeroArgs
+    : OneOrZeroArgs extends [infer A]
+      ? [Expand<A & CustomMadeArgs>]
+      : [CustomMadeArgs];
 
 /**
  * A builder that customizes a Convex function, whether or not it validates

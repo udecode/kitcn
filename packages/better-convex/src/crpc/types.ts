@@ -52,6 +52,7 @@ export type FnMeta = {
   rateLimit?: string;
   type?: 'query' | 'mutation' | 'action';
   limit?: number;
+  [key: string]: unknown;
 };
 
 /** Metadata for paginated functions (limit is required) */
@@ -496,7 +497,11 @@ export type VanillaAction<T extends FunctionReference<'action'>> = {
  * ```
  */
 export type VanillaCRPCClient<TApi> = {
-  [K in keyof TApi]: TApi[K] extends FunctionReference<'query'>
+  [K in keyof TApi as K extends string
+    ? K extends `_${string}`
+      ? never
+      : K
+    : K]: TApi[K] extends FunctionReference<'query'>
     ? VanillaQuery<TApi[K]>
     : TApi[K] extends FunctionReference<'mutation'>
       ? VanillaMutation<TApi[K]>
@@ -532,7 +537,11 @@ export type VanillaCRPCClient<TApi> = {
 type IsPaginated<T> = 'cursor' extends keyof T ? true : false;
 
 export type CRPCClient<TApi> = {
-  [K in keyof TApi]: TApi[K] extends FunctionReference<'query'>
+  [K in keyof TApi as K extends string
+    ? K extends `_${string}`
+      ? never
+      : K
+    : K]: TApi[K] extends FunctionReference<'query'>
     ? // Paginated queries get both regular and infinite query methods
       // Check if args have cursor and limit keys (works with optional types)
       IsPaginated<FunctionArgs<TApi[K]>> extends true

@@ -4,6 +4,7 @@ import type {
   SchemaDefinition,
 } from 'convex/server';
 import { defineSchema as defineConvexSchema } from 'convex/server';
+import { injectAggregateStorageTables } from './aggregate-index/schema';
 import type { OrmRuntimeDefaults } from './symbols';
 import { OrmSchemaDefinition, OrmSchemaOptions } from './symbols';
 
@@ -15,7 +16,10 @@ type BetterConvexSchemaOptions<StrictTableNameTypes extends boolean> =
 
 const DEFAULTS_NUMERIC_FIELDS = [
   'defaultLimit',
+  'countBackfillBatchSize',
   'relationFanOutMaxKeys',
+  'aggregateCartesianMaxKeys',
+  'aggregateWorkBudget',
   'mutationBatchSize',
   'mutationLeafBatchSize',
   'mutationMaxRows',
@@ -82,7 +86,15 @@ export function defineSchema<
 ): SchemaDefinition<TSchema, StrictTableNameTypes> {
   const strict = options?.strict ?? true;
   const defaults = normalizeDefaults(options?.defaults);
+  const schemaWithInternals = injectAggregateStorageTables(
+    schema as unknown as Record<string, unknown>
+  ) as TSchema;
+
   Object.defineProperty(schema, OrmSchemaOptions, {
+    value: { strict, defaults },
+    enumerable: false,
+  });
+  Object.defineProperty(schemaWithInternals, OrmSchemaOptions, {
     value: { strict, defaults },
     enumerable: false,
   });
@@ -93,7 +105,7 @@ export function defineSchema<
     ...convexOptions
   } = options ?? {};
   const convexSchema = defineConvexSchema(
-    schema,
+    schemaWithInternals as any,
     convexOptions as DefineSchemaOptions<StrictTableNameTypes>
   );
   Object.defineProperty(convexSchema as object, OrmSchemaOptions, {
@@ -101,6 +113,10 @@ export function defineSchema<
     enumerable: false,
   });
   Object.defineProperty(schema, OrmSchemaDefinition, {
+    value: convexSchema,
+    enumerable: false,
+  });
+  Object.defineProperty(schemaWithInternals, OrmSchemaDefinition, {
     value: convexSchema,
     enumerable: false,
   });

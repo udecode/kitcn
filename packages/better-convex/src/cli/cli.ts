@@ -1,9 +1,18 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
-import { generateMeta } from './codegen.js';
+import { createJiti } from 'jiti';
+import { getTableConfig } from '../orm/introspection.js';
+import { runAnalyze } from './analyze.js';
+import { generateMeta, getConvexConfig } from './codegen.js';
+import {
+  type AggregateBackfillConfig,
+  type BackfillEnabled,
+  loadBetterConvexConfig,
+} from './config.js';
 import { syncEnv } from './env.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -15,6 +24,15 @@ const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 const convexPkg = require.resolve('convex/package.json');
 const realConvex = join(dirname(convexPkg), 'bin/main.js');
+const MISSING_BACKFILL_FUNCTION_RE =
+  /could not find function|function .* was not found|unknown function/i;
+const GITIGNORE_CONVEX_ENTRY_RE = /(^|\r?\n)\.convex\/?\s*(\r?\n|$)/m;
+const AGGREGATE_STATE_RELATIVE_PATH = join(
+  '.convex',
+  'better-convex',
+  'aggregate-backfill-state.json'
+);
+const AGGREGATE_STATE_VERSION = 1;
 
 export type ParsedArgs = {
   command: string;
@@ -22,12 +40,18 @@ export type ParsedArgs = {
   convexArgs: string[];
   debug: boolean;
   outputDir?: string;
+  scope?: 'all' | 'auth' | 'orm';
+  configPath?: string;
 };
 
-// Parse args: better-convex [command] [--meta <dir>] [--debug] [...convex-args]
+const VALID_SCOPES = new Set(['all', 'auth', 'orm']);
+
+// Parse args: better-convex [command] [--api <dir>] [--scope <all|auth|orm>] [--config <path>] [--debug] [...convex-args]
 export function parseArgs(argv: string[]): ParsedArgs {
   let debug = false;
   let outputDir: string | undefined;
+  let scope: 'all' | 'auth' | 'orm' | undefined;
+  let configPath: string | undefined;
 
   const filtered: string[] = [];
   for (let i = 0; i < argv.length; i++) {
@@ -38,8 +62,34 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
-    if (a === '--meta') {
-      outputDir = argv[i + 1];
+    if (a === '--api') {
+      const value = argv[i + 1];
+      if (!value) {
+        throw new Error('Missing value for --api.');
+      }
+      outputDir = value;
+      i += 1; // skip value
+      continue;
+    }
+
+    if (a === '--scope') {
+      const value = argv[i + 1];
+      if (!value || !VALID_SCOPES.has(value)) {
+        throw new Error(
+          `Invalid --scope value "${value ?? ''}". Expected one of: all, auth, orm.`
+        );
+      }
+      scope = value as 'all' | 'auth' | 'orm';
+      i += 1; // skip value
+      continue;
+    }
+
+    if (a === '--config') {
+      const value = argv[i + 1];
+      if (!value) {
+        throw new Error('Missing value for --config.');
+      }
+      configPath = value;
       i += 1; // skip value
       continue;
     }
@@ -50,7 +100,259 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const command = filtered[0] || 'dev';
   const restArgs = filtered.slice(1);
 
-  return { command, restArgs, convexArgs: restArgs, debug, outputDir };
+  return {
+    command,
+    restArgs,
+    convexArgs: restArgs,
+    debug,
+    outputDir,
+    scope,
+    configPath,
+  };
+}
+
+type AggregateFingerprintState = {
+  version: number;
+  entries: Record<
+    string,
+    {
+      fingerprint: string;
+      updatedAt: number;
+    }
+  >;
+};
+
+const DEFAULT_AGGREGATE_FINGERPRINT_STATE: AggregateFingerprintState = {
+  version: AGGREGATE_STATE_VERSION,
+  entries: {},
+};
+
+function normalizeStringList(values: unknown): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      values.filter((value): value is string => typeof value === 'string')
+    ),
+  ].sort();
+}
+
+function readOptionalCliFlagValue(
+  args: string[],
+  flag: string
+): string | undefined {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === flag) {
+      const value = args[i + 1];
+      if (value) {
+        return value;
+      }
+      continue;
+    }
+    const withEquals = `${flag}=`;
+    if (arg.startsWith(withEquals)) {
+      const value = arg.slice(withEquals.length);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return;
+}
+
+function collectSchemaTables(schemaModule: Record<string, unknown>): unknown[] {
+  const allTables = new Set<unknown>();
+  const relations = schemaModule.relations;
+  if (relations && typeof relations === 'object' && !Array.isArray(relations)) {
+    for (const relationConfig of Object.values(
+      relations as Record<string, unknown>
+    )) {
+      const table = (relationConfig as { table?: unknown })?.table;
+      if (table) {
+        allTables.add(table);
+      }
+    }
+  }
+
+  const tables = schemaModule.tables;
+  if (tables && typeof tables === 'object' && !Array.isArray(tables)) {
+    for (const table of Object.values(tables as Record<string, unknown>)) {
+      if (table) {
+        allTables.add(table);
+      }
+    }
+  }
+
+  return [...allTables];
+}
+
+function buildAggregateFingerprintPayload(tables: unknown[]): Array<{
+  tableName: string;
+  aggregateIndexes: Array<{
+    name: string;
+    fields: string[];
+    countFields: string[];
+    sumFields: string[];
+    avgFields: string[];
+    minFields: string[];
+    maxFields: string[];
+  }>;
+}> {
+  return tables
+    .map((table) => getTableConfig(table as any))
+    .map((tableConfig) => ({
+      tableName: tableConfig.name,
+      aggregateIndexes: tableConfig.aggregateIndexes
+        .map((index) => ({
+          name: index.name,
+          fields: normalizeStringList(index.fields),
+          countFields: normalizeStringList(index.countFields),
+          sumFields: normalizeStringList(index.sumFields),
+          avgFields: normalizeStringList(index.avgFields),
+          minFields: normalizeStringList(index.minFields),
+          maxFields: normalizeStringList(index.maxFields),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => a.tableName.localeCompare(b.tableName));
+}
+
+async function computeAggregateIndexFingerprint(
+  functionsDir: string
+): Promise<string | null> {
+  const schemaPath = join(functionsDir, 'schema.ts');
+  if (!fs.existsSync(schemaPath)) {
+    return null;
+  }
+
+  const jiti = createJiti(process.cwd(), {
+    interopDefault: true,
+    moduleCache: false,
+  });
+  const schemaModule = await jiti.import(schemaPath);
+  if (!schemaModule || typeof schemaModule !== 'object') {
+    return null;
+  }
+
+  const tables = collectSchemaTables(schemaModule as Record<string, unknown>);
+  if (tables.length === 0) {
+    return null;
+  }
+
+  const payload = buildAggregateFingerprintPayload(tables);
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
+export function getDevAggregateBackfillStatePath(cwd = process.cwd()): string {
+  return join(cwd, AGGREGATE_STATE_RELATIVE_PATH);
+}
+
+function readAggregateFingerprintState(
+  statePath: string
+): AggregateFingerprintState {
+  if (!fs.existsSync(statePath)) {
+    return {
+      ...DEFAULT_AGGREGATE_FINGERPRINT_STATE,
+      entries: {},
+    };
+  }
+
+  try {
+    const raw = fs.readFileSync(statePath, 'utf8');
+    const parsed = JSON.parse(raw) as Partial<AggregateFingerprintState>;
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      typeof parsed.entries !== 'object' ||
+      parsed.entries === null
+    ) {
+      return {
+        ...DEFAULT_AGGREGATE_FINGERPRINT_STATE,
+        entries: {},
+      };
+    }
+    return {
+      version: AGGREGATE_STATE_VERSION,
+      entries: Object.fromEntries(
+        Object.entries(parsed.entries).filter(
+          ([, value]) =>
+            typeof value === 'object' &&
+            value !== null &&
+            typeof (value as any).fingerprint === 'string'
+        )
+      ) as AggregateFingerprintState['entries'],
+    };
+  } catch {
+    return {
+      ...DEFAULT_AGGREGATE_FINGERPRINT_STATE,
+      entries: {},
+    };
+  }
+}
+
+function writeAggregateFingerprintState(
+  statePath: string,
+  state: AggregateFingerprintState
+): void {
+  fs.mkdirSync(dirname(statePath), { recursive: true });
+  const tmpPath = `${statePath}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2));
+  fs.renameSync(tmpPath, statePath);
+}
+
+export function getAggregateBackfillDeploymentKey(args: string[]): string {
+  if (args.includes('--prod')) {
+    return 'prod';
+  }
+
+  const deploymentName = readOptionalCliFlagValue(args, '--deployment-name');
+  if (deploymentName) {
+    return `deployment:${deploymentName}`;
+  }
+
+  const previewName = readOptionalCliFlagValue(args, '--preview-name');
+  if (previewName) {
+    return `preview:${previewName}`;
+  }
+
+  return 'local';
+}
+
+export function ensureConvexGitignoreEntry(cwd = process.cwd()): void {
+  let currentDir = resolve(cwd);
+  let gitRoot: string | null = null;
+  while (true) {
+    if (fs.existsSync(join(currentDir, '.git'))) {
+      gitRoot = currentDir;
+      break;
+    }
+    const parent = dirname(currentDir);
+    if (parent === currentDir) {
+      break;
+    }
+    currentDir = parent;
+  }
+
+  if (!gitRoot) {
+    return;
+  }
+
+  const gitignorePath = join(gitRoot, '.gitignore');
+  const existing = fs.existsSync(gitignorePath)
+    ? fs.readFileSync(gitignorePath, 'utf8')
+    : '';
+
+  if (GITIGNORE_CONVEX_ENTRY_RE.test(existing)) {
+    return;
+  }
+
+  const normalized =
+    existing.endsWith('\n') || existing.length === 0
+      ? existing
+      : `${existing}\n`;
+  fs.writeFileSync(gitignorePath, `${normalized}.convex/\n`);
 }
 
 // Track child processes for cleanup
@@ -66,10 +368,669 @@ function cleanup() {
 
 export type RunDeps = {
   execa: typeof execa;
+  runAnalyze: typeof runAnalyze;
   generateMeta: typeof generateMeta;
+  getConvexConfig: typeof getConvexConfig;
   syncEnv: typeof syncEnv;
+  loadBetterConvexConfig: typeof loadBetterConvexConfig;
+  ensureConvexGitignoreEntry: typeof ensureConvexGitignoreEntry;
+  enableDevSchemaWatch: boolean;
   realConvex: string;
 };
+
+function deriveScopeFromToggles(
+  api: boolean,
+  auth: boolean
+): 'all' | 'auth' | 'orm' | null {
+  if (api && auth) return 'all';
+  if (!api && auth) return 'auth';
+  if (!api && !auth) return 'orm';
+  return null;
+}
+
+type BackfillCliOverrides = {
+  enabled?: BackfillEnabled;
+  wait?: boolean;
+  batchSize?: number;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+  strict?: boolean;
+};
+
+type ResetCliOptions = {
+  confirmed: boolean;
+  beforeHook?: string;
+  afterHook?: string;
+  remainingArgs: string[];
+};
+
+const VALID_BACKFILL_ENABLED = new Set<BackfillEnabled>(['auto', 'on', 'off']);
+
+function parsePositiveIntegerArg(flag: string, raw: string): number {
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${flag} expects a positive integer.`);
+  }
+  return parsed;
+}
+
+function readFlagValue(
+  args: string[],
+  index: number,
+  flag: string
+): { value: string; nextIndex: number } {
+  const value = args[index + 1];
+  if (!value) {
+    throw new Error(`Missing value for ${flag}.`);
+  }
+  return { value, nextIndex: index + 1 };
+}
+
+function extractBackfillCliOptions(args: string[]): {
+  remainingArgs: string[];
+  overrides: BackfillCliOverrides;
+} {
+  const remainingArgs: string[] = [];
+  const overrides: BackfillCliOverrides = {};
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--force') {
+      continue;
+    }
+    if (arg === '--backfill') {
+      const { value, nextIndex } = readFlagValue(args, i, '--backfill');
+      if (!VALID_BACKFILL_ENABLED.has(value as BackfillEnabled)) {
+        throw new Error('Invalid --backfill value. Expected auto, on, or off.');
+      }
+      overrides.enabled = value as BackfillEnabled;
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--backfill=')) {
+      const value = arg.slice('--backfill='.length);
+      if (!VALID_BACKFILL_ENABLED.has(value as BackfillEnabled)) {
+        throw new Error('Invalid --backfill value. Expected auto, on, or off.');
+      }
+      overrides.enabled = value as BackfillEnabled;
+      continue;
+    }
+    if (arg === '--backfill-mode') {
+      readFlagValue(args, i, '--backfill-mode');
+      throw new Error(
+        '`--backfill-mode` was removed. Use `better-convex aggregate rebuild`.'
+      );
+    }
+    if (arg.startsWith('--backfill-mode=')) {
+      throw new Error(
+        '`--backfill-mode` was removed. Use `better-convex aggregate rebuild`.'
+      );
+    }
+    if (arg === '--backfill-wait') {
+      overrides.wait = true;
+      continue;
+    }
+    if (arg === '--no-backfill-wait') {
+      overrides.wait = false;
+      continue;
+    }
+    if (arg === '--backfill-strict') {
+      overrides.strict = true;
+      continue;
+    }
+    if (arg === '--no-backfill-strict') {
+      overrides.strict = false;
+      continue;
+    }
+    if (arg === '--backfill-batch-size') {
+      const { value, nextIndex } = readFlagValue(
+        args,
+        i,
+        '--backfill-batch-size'
+      );
+      overrides.batchSize = parsePositiveIntegerArg(
+        '--backfill-batch-size',
+        value
+      );
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--backfill-batch-size=')) {
+      overrides.batchSize = parsePositiveIntegerArg(
+        '--backfill-batch-size',
+        arg.slice('--backfill-batch-size='.length)
+      );
+      continue;
+    }
+    if (arg === '--backfill-timeout-ms') {
+      const { value, nextIndex } = readFlagValue(
+        args,
+        i,
+        '--backfill-timeout-ms'
+      );
+      overrides.timeoutMs = parsePositiveIntegerArg(
+        '--backfill-timeout-ms',
+        value
+      );
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--backfill-timeout-ms=')) {
+      overrides.timeoutMs = parsePositiveIntegerArg(
+        '--backfill-timeout-ms',
+        arg.slice('--backfill-timeout-ms='.length)
+      );
+      continue;
+    }
+    if (arg === '--backfill-poll-ms') {
+      const { value, nextIndex } = readFlagValue(args, i, '--backfill-poll-ms');
+      overrides.pollIntervalMs = parsePositiveIntegerArg(
+        '--backfill-poll-ms',
+        value
+      );
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--backfill-poll-ms=')) {
+      overrides.pollIntervalMs = parsePositiveIntegerArg(
+        '--backfill-poll-ms',
+        arg.slice('--backfill-poll-ms='.length)
+      );
+      continue;
+    }
+    remainingArgs.push(arg);
+  }
+
+  return {
+    remainingArgs,
+    overrides,
+  };
+}
+
+function extractResetCliOptions(args: string[]): ResetCliOptions {
+  const remainingArgs: string[] = [];
+  let confirmed = false;
+  let beforeHook: string | undefined;
+  let afterHook: string | undefined;
+
+  const isBackfillFlag = (arg: string) =>
+    arg === '--backfill' ||
+    arg.startsWith('--backfill=') ||
+    arg.startsWith('--backfill-') ||
+    arg.startsWith('--no-backfill-');
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (isBackfillFlag(arg)) {
+      throw new Error(
+        '`better-convex reset` does not accept backfill flags. It always runs aggregateBackfill in resume mode.'
+      );
+    }
+    if (arg === '--yes') {
+      confirmed = true;
+      continue;
+    }
+    if (arg === '--before') {
+      const { value, nextIndex } = readFlagValue(args, i, '--before');
+      beforeHook = value;
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--before=')) {
+      const value = arg.slice('--before='.length);
+      if (!value) {
+        throw new Error('Missing value for --before.');
+      }
+      beforeHook = value;
+      continue;
+    }
+    if (arg === '--after') {
+      const { value, nextIndex } = readFlagValue(args, i, '--after');
+      afterHook = value;
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--after=')) {
+      const value = arg.slice('--after='.length);
+      if (!value) {
+        throw new Error('Missing value for --after.');
+      }
+      afterHook = value;
+      continue;
+    }
+    remainingArgs.push(arg);
+  }
+
+  return {
+    confirmed,
+    beforeHook,
+    afterHook,
+    remainingArgs,
+  };
+}
+
+function resolveBackfillConfig(
+  base: AggregateBackfillConfig | undefined,
+  overrides: BackfillCliOverrides
+): AggregateBackfillConfig {
+  const fallback: AggregateBackfillConfig = {
+    enabled: 'auto',
+    wait: true,
+    batchSize: 1000,
+    timeoutMs: 900_000,
+    pollIntervalMs: 1000,
+    strict: false,
+  };
+  const resolvedBase = base ?? fallback;
+  return {
+    ...resolvedBase,
+    enabled: overrides.enabled ?? resolvedBase.enabled,
+    wait: overrides.wait ?? resolvedBase.wait,
+    batchSize: overrides.batchSize ?? resolvedBase.batchSize,
+    timeoutMs: overrides.timeoutMs ?? resolvedBase.timeoutMs,
+    pollIntervalMs: overrides.pollIntervalMs ?? resolvedBase.pollIntervalMs,
+    strict: overrides.strict ?? resolvedBase.strict,
+  };
+}
+
+function extractRunDeploymentArgs(args: string[]): string[] {
+  const deploymentArgs: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--prod') {
+      deploymentArgs.push(arg);
+      continue;
+    }
+    if (
+      arg === '--preview-name' ||
+      arg === '--deployment-name' ||
+      arg === '--env-file' ||
+      arg === '--component'
+    ) {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error(`Missing value for ${arg}.`);
+      }
+      deploymentArgs.push(arg, value);
+      i += 1;
+      continue;
+    }
+    if (
+      arg.startsWith('--preview-name=') ||
+      arg.startsWith('--deployment-name=') ||
+      arg.startsWith('--env-file=') ||
+      arg.startsWith('--component=')
+    ) {
+      deploymentArgs.push(arg);
+    }
+  }
+  return deploymentArgs;
+}
+
+function isMissingBackfillFunctionOutput(output: string): boolean {
+  return MISSING_BACKFILL_FUNCTION_RE.test(output);
+}
+
+function parseConvexRunJson<T>(stdout: string): T {
+  const trimmed = stdout.trim();
+  if (trimmed.length === 0) {
+    return [] as T;
+  }
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    const lines = trimmed
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const line = lines[i];
+      try {
+        return JSON.parse(line) as T;
+      } catch {}
+    }
+  }
+  throw new Error(
+    `Failed to parse convex run output as JSON.\nOutput:\n${stdout.trim()}`
+  );
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    };
+    signal?.addEventListener('abort', onAbort);
+  });
+}
+
+async function runConvexFunction(
+  execaFn: typeof execa,
+  realConvexPath: string,
+  functionName: string,
+  args: Record<string, unknown>,
+  deploymentArgs: string[],
+  options?: {
+    echoOutput?: boolean;
+  }
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const result = await execaFn(
+    'node',
+    [
+      realConvexPath,
+      'run',
+      ...deploymentArgs,
+      functionName,
+      JSON.stringify(args),
+    ],
+    {
+      cwd: process.cwd(),
+      reject: false,
+      stdio: 'pipe',
+    }
+  );
+  const stdout =
+    typeof (result as any).stdout === 'string' ? (result as any).stdout : '';
+  const stderr =
+    typeof (result as any).stderr === 'string' ? (result as any).stderr : '';
+  if (options?.echoOutput !== false) {
+    if (stdout) {
+      process.stdout.write(stdout.endsWith('\n') ? stdout : `${stdout}\n`);
+    }
+    if (stderr) {
+      process.stderr.write(stderr.endsWith('\n') ? stderr : `${stderr}\n`);
+    }
+  }
+  return {
+    exitCode: result.exitCode ?? 1,
+    stdout,
+    stderr,
+  };
+}
+
+async function runAggregateBackfillFlow(params: {
+  execaFn: typeof execa;
+  realConvexPath: string;
+  backfillConfig: AggregateBackfillConfig;
+  mode: 'resume' | 'rebuild';
+  deploymentArgs: string[];
+  signal?: AbortSignal;
+  context: 'deploy' | 'dev' | 'aggregate';
+}): Promise<number> {
+  const {
+    execaFn,
+    realConvexPath,
+    backfillConfig,
+    mode,
+    deploymentArgs,
+    signal,
+    context,
+  } = params;
+  if (signal?.aborted) {
+    return 0;
+  }
+
+  if (backfillConfig.enabled === 'off') {
+    return 0;
+  }
+
+  const kickoff = await runConvexFunction(
+    execaFn,
+    realConvexPath,
+    'generated/server:aggregateBackfill',
+    {
+      mode,
+      batchSize: backfillConfig.batchSize,
+    },
+    deploymentArgs,
+    {
+      echoOutput: false,
+    }
+  );
+
+  if (kickoff.exitCode !== 0) {
+    const combinedOutput = `${kickoff.stdout}\n${kickoff.stderr}`;
+    if (
+      backfillConfig.enabled === 'auto' &&
+      isMissingBackfillFunctionOutput(combinedOutput)
+    ) {
+      if (context === 'deploy') {
+        console.info(
+          'ℹ️  aggregateBackfill not found in this deployment; skipping post-deploy backfill (auto mode).'
+        );
+      }
+      return 0;
+    }
+    return kickoff.exitCode;
+  }
+
+  type KickoffResult = {
+    targets?: number;
+    needsRebuild?: number;
+    scheduled?: number;
+    skippedReady?: number;
+    pruned?: number;
+    mode?: string;
+  };
+  const kickoffPayload = parseConvexRunJson<KickoffResult | unknown[]>(
+    kickoff.stdout
+  );
+  const needsRebuild =
+    typeof kickoffPayload === 'object' &&
+    kickoffPayload !== null &&
+    !Array.isArray(kickoffPayload) &&
+    typeof kickoffPayload.needsRebuild === 'number'
+      ? kickoffPayload.needsRebuild
+      : 0;
+  const scheduled =
+    typeof kickoffPayload === 'object' &&
+    kickoffPayload !== null &&
+    !Array.isArray(kickoffPayload) &&
+    typeof kickoffPayload.scheduled === 'number'
+      ? kickoffPayload.scheduled
+      : 0;
+  const targets =
+    typeof kickoffPayload === 'object' &&
+    kickoffPayload !== null &&
+    !Array.isArray(kickoffPayload) &&
+    typeof kickoffPayload.targets === 'number'
+      ? kickoffPayload.targets
+      : 0;
+  const pruned =
+    typeof kickoffPayload === 'object' &&
+    kickoffPayload !== null &&
+    !Array.isArray(kickoffPayload) &&
+    typeof kickoffPayload.pruned === 'number'
+      ? kickoffPayload.pruned
+      : 0;
+  if (pruned > 0) {
+    console.info(`ℹ️  aggregateBackfill pruned ${pruned} removed indexes`);
+  }
+  if (mode === 'resume' && needsRebuild > 0) {
+    const message = `Aggregate backfill found ${needsRebuild} index definitions that require rebuild. Run \`better-convex aggregate rebuild\` for this deployment.`;
+    if (backfillConfig.strict) {
+      console.error(`❌ ${message}`);
+      return 1;
+    }
+    console.warn(`⚠️  ${message}`);
+  } else if (scheduled > 0) {
+    console.info(
+      `ℹ️  aggregateBackfill scheduled ${scheduled}/${targets} target indexes`
+    );
+  }
+
+  if (!backfillConfig.wait || signal?.aborted) {
+    return 0;
+  }
+
+  const deadline = Date.now() + backfillConfig.timeoutMs;
+  let lastProgress = '';
+  while (!signal?.aborted) {
+    const statusResult = await runConvexFunction(
+      execaFn,
+      realConvexPath,
+      'generated/server:aggregateBackfillStatus',
+      {},
+      deploymentArgs,
+      {
+        echoOutput: false,
+      }
+    );
+    if (statusResult.exitCode !== 0) {
+      return statusResult.exitCode;
+    }
+
+    type BackfillStatusEntry = {
+      status: string;
+      tableName: string;
+      indexName: string;
+      lastError?: string | null;
+    };
+    const statuses = parseConvexRunJson<BackfillStatusEntry[]>(
+      statusResult.stdout
+    );
+    const failed = statuses.find((entry) => Boolean(entry.lastError));
+    if (failed) {
+      console.error(
+        `❌ Aggregate backfill failed for ${failed.tableName}.${failed.indexName}: ${failed.lastError}`
+      );
+      return backfillConfig.strict ? 1 : 0;
+    }
+
+    const total = statuses.length;
+    const ready = statuses.filter((entry) => entry.status === 'READY').length;
+    const progress = `${ready}/${total}`;
+    if (progress !== lastProgress) {
+      lastProgress = progress;
+      if (total > 0) {
+        console.info(`ℹ️  aggregateBackfill progress ${ready}/${total} READY`);
+      }
+    }
+
+    if (total === 0 || ready === total) {
+      return 0;
+    }
+    if (Date.now() > deadline) {
+      const timeoutMessage = `Aggregate backfill timed out after ${backfillConfig.timeoutMs}ms (${ready}/${total} READY).`;
+      if (backfillConfig.strict) {
+        console.error(`❌ ${timeoutMessage}`);
+        return 1;
+      }
+      console.warn(`⚠️  ${timeoutMessage}`);
+      return 0;
+    }
+    await sleep(backfillConfig.pollIntervalMs, signal);
+  }
+
+  return 0;
+}
+
+async function runAggregatePruneFlow(params: {
+  execaFn: typeof execa;
+  realConvexPath: string;
+  deploymentArgs: string[];
+}): Promise<number> {
+  const { execaFn, realConvexPath, deploymentArgs } = params;
+  const result = await runConvexFunction(
+    execaFn,
+    realConvexPath,
+    'generated/server:aggregateBackfill',
+    {
+      mode: 'prune',
+    },
+    deploymentArgs,
+    {
+      echoOutput: false,
+    }
+  );
+
+  if (result.exitCode !== 0) {
+    return result.exitCode;
+  }
+
+  type PruneResult = {
+    pruned?: number;
+  };
+  const payload = parseConvexRunJson<PruneResult | unknown[]>(result.stdout);
+  const pruned =
+    typeof payload === 'object' &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    typeof payload.pruned === 'number'
+      ? payload.pruned
+      : 0;
+
+  if (pruned > 0) {
+    console.info(`ℹ️  aggregateBackfill pruned ${pruned} removed indexes`);
+  } else {
+    console.info('ℹ️  aggregateBackfill prune no-op');
+  }
+
+  return 0;
+}
+
+async function runDevSchemaBackfillIfNeeded(params: {
+  execaFn: typeof execa;
+  realConvexPath: string;
+  backfillConfig: AggregateBackfillConfig;
+  functionsDir: string;
+  deploymentArgs: string[];
+  signal: AbortSignal;
+}): Promise<number> {
+  const {
+    execaFn,
+    realConvexPath,
+    backfillConfig,
+    functionsDir,
+    deploymentArgs,
+    signal,
+  } = params;
+  const fingerprint = await computeAggregateIndexFingerprint(functionsDir);
+  if (!fingerprint) {
+    return 0;
+  }
+
+  const deploymentKey = getAggregateBackfillDeploymentKey(deploymentArgs);
+  const statePath = getDevAggregateBackfillStatePath();
+  const state = readAggregateFingerprintState(statePath);
+  const existing = state.entries[deploymentKey];
+  if (existing?.fingerprint === fingerprint) {
+    return 0;
+  }
+
+  console.info(`ℹ️  aggregateBackfill resume (${deploymentKey} schema change)`);
+  const exitCode = await runAggregateBackfillFlow({
+    execaFn,
+    realConvexPath,
+    backfillConfig: {
+      ...backfillConfig,
+      enabled: 'on',
+    },
+    mode: 'resume',
+    deploymentArgs,
+    signal,
+    context: 'dev',
+  });
+  if (exitCode !== 0 || signal.aborted) {
+    return exitCode;
+  }
+
+  state.entries[deploymentKey] = {
+    fingerprint,
+    updatedAt: Date.now(),
+  };
+  writeAggregateFingerprintState(statePath, state);
+  return 0;
+}
 
 export async function run(
   argv: string[],
@@ -77,22 +1038,75 @@ export async function run(
 ): Promise<number> {
   const {
     execa: execaFn,
+    runAnalyze: runAnalyzeFn,
     generateMeta: generateMetaFn,
+    getConvexConfig: getConvexConfigFn,
     syncEnv: syncEnvFn,
+    loadBetterConvexConfig: loadBetterConvexConfigFn,
+    ensureConvexGitignoreEntry: ensureConvexGitignoreEntryFn,
+    enableDevSchemaWatch,
     realConvex: realConvexPath,
   } = {
     execa,
+    runAnalyze,
     generateMeta,
+    getConvexConfig,
     syncEnv,
+    loadBetterConvexConfig,
+    ensureConvexGitignoreEntry,
+    enableDevSchemaWatch: !deps,
     realConvex,
     ...deps,
   };
 
-  const { command, restArgs, convexArgs, debug, outputDir } = parseArgs(argv);
+  const {
+    command,
+    restArgs,
+    convexArgs,
+    debug: cliDebug,
+    outputDir: cliOutputDir,
+    scope: cliScope,
+    configPath,
+  } = parseArgs(argv);
 
   if (command === 'dev') {
+    if (cliScope) {
+      throw new Error(
+        '`--scope` is not supported for `better-convex dev`. Use `better-convex codegen --scope <all|auth|orm>` for scoped generation.'
+      );
+    }
+    const config = loadBetterConvexConfigFn(configPath);
+    const { remainingArgs: devCommandArgs, overrides: devBackfillOverrides } =
+      extractBackfillCliOptions(convexArgs);
+    const outputDir = cliOutputDir ?? config.outputDir;
+    const debug = cliDebug || config.dev.debug;
+    const generateApi = config.api;
+    const generateAuth = config.auth;
+    const convexDevArgs = [...config.dev.convexArgs, ...devCommandArgs];
+    const devBackfillConfig = resolveBackfillConfig(
+      config.dev.aggregateBackfill,
+      devBackfillOverrides
+    );
+    const { functionsDir } = getConvexConfigFn(outputDir);
+    const schemaPath = join(functionsDir, 'schema.ts');
+    const deploymentArgs = extractRunDeploymentArgs(convexDevArgs);
+
+    if (!deps) {
+      try {
+        ensureConvexGitignoreEntryFn(process.cwd());
+      } catch (error) {
+        console.warn(
+          `⚠️  Failed to ensure .convex/ is ignored in .gitignore: ${(error as Error).message}`
+        );
+      }
+    }
+
     // Initial codegen
-    await generateMetaFn(outputDir, { debug });
+    await generateMetaFn(outputDir, {
+      debug,
+      api: generateApi,
+      auth: generateAuth,
+    });
 
     // Spawn watcher as child process
     const isTs = __filename.endsWith('.ts');
@@ -106,8 +1120,10 @@ export async function run(
       cwd: process.cwd(),
       env: {
         ...process.env,
-        BETTER_CONVEX_OUTPUT_DIR: outputDir || '',
+        BETTER_CONVEX_API_OUTPUT_DIR: outputDir || '',
         BETTER_CONVEX_DEBUG: debug ? '1' : '',
+        BETTER_CONVEX_GENERATE_API: generateApi ? '1' : '0',
+        BETTER_CONVEX_GENERATE_AUTH: generateAuth ? '1' : '0',
       },
     });
     processes.push(watcherProcess);
@@ -115,7 +1131,7 @@ export async function run(
     // Spawn real convex dev
     const convexProcess = execaFn(
       'node',
-      [realConvexPath, 'dev', ...convexArgs],
+      [realConvexPath, 'dev', ...convexDevArgs],
       {
         stdio: 'inherit',
         cwd: process.cwd(),
@@ -124,13 +1140,132 @@ export async function run(
     );
     processes.push(convexProcess);
 
+    const backfillAbortController = new AbortController();
+    let schemaWatcher: {
+      close: () => Promise<void> | void;
+      on: (...args: any[]) => any;
+    } | null = null;
+    let schemaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let schemaBackfillInFlight: Promise<void> | null = null;
+    let schemaBackfillQueued = false;
+
+    const maybeRunSchemaBackfill = async () => {
+      try {
+        const exitCode = await runDevSchemaBackfillIfNeeded({
+          execaFn,
+          realConvexPath,
+          backfillConfig: devBackfillConfig,
+          functionsDir,
+          deploymentArgs,
+          signal: backfillAbortController.signal,
+        });
+        if (exitCode !== 0 && !backfillAbortController.signal.aborted) {
+          console.warn(
+            '⚠️  aggregateBackfill on schema update failed in dev (continuing without blocking).'
+          );
+        }
+      } catch (error) {
+        if (!backfillAbortController.signal.aborted) {
+          console.warn(
+            `⚠️  aggregateBackfill on schema update errored in dev: ${(error as Error).message}`
+          );
+        }
+      }
+    };
+
+    const queueSchemaBackfill = () => {
+      if (backfillAbortController.signal.aborted) {
+        return;
+      }
+      schemaBackfillQueued = true;
+      if (schemaBackfillInFlight) {
+        return;
+      }
+      schemaBackfillInFlight = (async () => {
+        while (
+          schemaBackfillQueued &&
+          !backfillAbortController.signal.aborted
+        ) {
+          schemaBackfillQueued = false;
+          await maybeRunSchemaBackfill();
+        }
+      })().finally(() => {
+        schemaBackfillInFlight = null;
+      });
+    };
+
+    if (devBackfillConfig.enabled !== 'off') {
+      void (async () => {
+        try {
+          const exitCode = await runAggregateBackfillFlow({
+            execaFn,
+            realConvexPath,
+            backfillConfig: devBackfillConfig,
+            mode: 'resume',
+            deploymentArgs,
+            signal: backfillAbortController.signal,
+            context: 'dev',
+          });
+          if (exitCode !== 0 && !backfillAbortController.signal.aborted) {
+            console.warn(
+              '⚠️  aggregateBackfill kickoff failed in dev (continuing without blocking).'
+            );
+          }
+        } catch (error) {
+          if (!backfillAbortController.signal.aborted) {
+            console.warn(
+              `⚠️  aggregateBackfill kickoff errored in dev: ${(error as Error).message}`
+            );
+          }
+        }
+      })();
+    }
+
+    if (
+      enableDevSchemaWatch &&
+      devBackfillConfig.enabled !== 'off' &&
+      fs.existsSync(schemaPath)
+    ) {
+      const { watch } = await import('chokidar');
+      const watchedSchema = watch(schemaPath, {
+        ignoreInitial: true,
+      }) as any;
+      schemaWatcher = watchedSchema;
+      watchedSchema
+        .on('change', () => {
+          if (schemaDebounceTimer) {
+            clearTimeout(schemaDebounceTimer);
+          }
+          schemaDebounceTimer = setTimeout(() => {
+            queueSchemaBackfill();
+          }, 200);
+        })
+        .on('error', (error: unknown) => {
+          if (!backfillAbortController.signal.aborted) {
+            console.warn(
+              `⚠️  schema watch error (aggregate backfill): ${(error as Error).message}`
+            );
+          }
+        });
+    }
+
     // Setup cleanup handlers
     process.on('exit', cleanup);
     process.on('SIGINT', () => {
+      backfillAbortController.abort();
+      if (schemaDebounceTimer) {
+        clearTimeout(schemaDebounceTimer);
+      }
+      void schemaWatcher?.close();
       cleanup();
       process.exit(0);
     });
     process.on('SIGTERM', () => {
+      backfillAbortController.abort();
+      if (schemaDebounceTimer) {
+        clearTimeout(schemaDebounceTimer);
+      }
+      void schemaWatcher?.close();
       cleanup();
       process.exit(0);
     });
@@ -140,17 +1275,41 @@ export async function run(
       watcherProcess.catch(() => ({ exitCode: 1 })),
       convexProcess,
     ]);
+    backfillAbortController.abort();
+    if (schemaDebounceTimer) {
+      clearTimeout(schemaDebounceTimer);
+    }
+    await schemaWatcher?.close();
     cleanup();
     return result.exitCode ?? 0;
   }
   if (command === 'codegen') {
+    const config = loadBetterConvexConfigFn(configPath);
+    const outputDir = cliOutputDir ?? config.outputDir;
+    const debug = cliDebug || config.codegen.debug;
+    const convexCodegenArgs = [...config.codegen.convexArgs, ...convexArgs];
+    const scope = cliScope ?? config.codegen.scope;
+
     // Run better-convex codegen first
-    await generateMetaFn(outputDir, { debug });
+    if (scope) {
+      await generateMetaFn(outputDir, { debug, scope });
+    } else {
+      const derivedScope = deriveScopeFromToggles(config.api, config.auth);
+      if (derivedScope) {
+        await generateMetaFn(outputDir, { debug, scope: derivedScope });
+      } else {
+        await generateMetaFn(outputDir, {
+          debug,
+          api: config.api,
+          auth: config.auth,
+        });
+      }
+    }
 
     // Then run real convex codegen
     const result = await execaFn(
       'node',
-      [realConvexPath, 'codegen', ...convexArgs],
+      [realConvexPath, 'codegen', ...convexCodegenArgs],
       {
         stdio: 'inherit',
         cwd: process.cwd(),
@@ -180,6 +1339,158 @@ export async function run(
       }
     );
     return result.exitCode ?? 0;
+  }
+  if (command === 'analyze') {
+    return runAnalyzeFn(restArgs);
+  }
+  if (command === 'reset') {
+    const {
+      confirmed,
+      beforeHook,
+      afterHook,
+      remainingArgs: resetCommandArgs,
+    } = extractResetCliOptions(convexArgs);
+    if (!confirmed) {
+      throw new Error(
+        '`better-convex reset` is destructive. Re-run with `--yes`.'
+      );
+    }
+
+    const config = loadBetterConvexConfigFn(configPath);
+    const resetArgs = [...config.deploy.convexArgs, ...resetCommandArgs];
+    const deploymentArgs = extractRunDeploymentArgs(resetArgs);
+
+    const runOptionalHook = async (functionName: string | undefined) => {
+      if (!functionName) {
+        return 0;
+      }
+      const result = await runConvexFunction(
+        execaFn,
+        realConvexPath,
+        functionName,
+        {},
+        deploymentArgs
+      );
+      return result.exitCode;
+    };
+
+    const beforeExitCode = await runOptionalHook(beforeHook);
+    if (beforeExitCode !== 0) {
+      return beforeExitCode;
+    }
+
+    const resetResult = await runConvexFunction(
+      execaFn,
+      realConvexPath,
+      'generated/server:reset',
+      {},
+      deploymentArgs
+    );
+    if (resetResult.exitCode !== 0) {
+      return resetResult.exitCode;
+    }
+
+    const backfillExitCode = await runAggregateBackfillFlow({
+      execaFn,
+      realConvexPath,
+      backfillConfig: {
+        enabled: 'on',
+        wait: true,
+        batchSize: 1000,
+        pollIntervalMs: 1000,
+        timeoutMs: 900_000,
+        strict: false,
+      },
+      mode: 'resume',
+      deploymentArgs,
+      context: 'aggregate',
+    });
+    if (backfillExitCode !== 0) {
+      return backfillExitCode;
+    }
+
+    return runOptionalHook(afterHook);
+  }
+  if (command === 'deploy') {
+    const config = loadBetterConvexConfigFn(configPath);
+    const {
+      remainingArgs: deployCommandArgs,
+      overrides: deployBackfillOverrides,
+    } = extractBackfillCliOptions(convexArgs);
+    const deployArgs = [...config.deploy.convexArgs, ...deployCommandArgs];
+    const deployResult = await execaFn(
+      'node',
+      [realConvexPath, 'deploy', ...deployArgs],
+      {
+        stdio: 'inherit',
+        cwd: process.cwd(),
+        reject: false,
+      }
+    );
+    if ((deployResult.exitCode ?? 1) !== 0) {
+      return deployResult.exitCode ?? 1;
+    }
+
+    const backfillConfig = resolveBackfillConfig(
+      config.deploy.aggregateBackfill,
+      deployBackfillOverrides
+    );
+    const deploymentArgs = extractRunDeploymentArgs(deployArgs);
+
+    return runAggregateBackfillFlow({
+      execaFn,
+      realConvexPath,
+      backfillConfig,
+      mode: 'resume',
+      deploymentArgs,
+      context: 'deploy',
+    });
+  }
+  if (command === 'aggregate') {
+    const subcommand = restArgs[0];
+    if (
+      subcommand !== 'rebuild' &&
+      subcommand !== 'backfill' &&
+      subcommand !== 'prune'
+    ) {
+      throw new Error(
+        'Unknown aggregate command. Use: `better-convex aggregate backfill`, `better-convex aggregate rebuild`, or `better-convex aggregate prune`.'
+      );
+    }
+
+    const config = loadBetterConvexConfigFn(configPath);
+    const {
+      remainingArgs: aggregateCommandArgs,
+      overrides: aggregateBackfillOverrides,
+    } = extractBackfillCliOptions(restArgs.slice(1));
+    const aggregateArgs = [
+      ...config.deploy.convexArgs,
+      ...aggregateCommandArgs,
+    ];
+    const backfillConfig = {
+      ...resolveBackfillConfig(
+        config.deploy.aggregateBackfill,
+        aggregateBackfillOverrides
+      ),
+      enabled: 'on' as const,
+    };
+    const deploymentArgs = extractRunDeploymentArgs(aggregateArgs);
+    if (subcommand === 'prune') {
+      return runAggregatePruneFlow({
+        execaFn,
+        realConvexPath,
+        deploymentArgs,
+      });
+    }
+
+    return runAggregateBackfillFlow({
+      execaFn,
+      realConvexPath,
+      backfillConfig,
+      mode: subcommand === 'rebuild' ? 'rebuild' : 'resume',
+      deploymentArgs,
+      context: 'aggregate',
+    });
   }
   // Pass through to real convex CLI
   const result = await execaFn(

@@ -7,8 +7,7 @@ import {
   privateMutation,
   publicQuery,
 } from '../lib/crpc';
-import type { OrmQueryCtx } from '../lib/orm';
-import { aggregateRepliesByParent } from './aggregates';
+import type { QueryCtx } from './generated/server';
 import { todoCommentsTable } from './schema';
 
 // Schema for comment list items
@@ -105,18 +104,29 @@ function chunk<T>(arr: T[], chunkSize: number): T[][] {
 }
 
 async function getReplyCountsByParentId(
-  ctx: Parameters<typeof aggregateRepliesByParent.countBatch>[0],
+  ctx: QueryCtx,
   parentIds: string[]
 ): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
 
   for (const ids of chunk(parentIds, 250)) {
-    const batch = await aggregateRepliesByParent.countBatch(
-      ctx,
-      ids.map((namespace) => ({ namespace, bounds: {} }))
-    );
-    for (let i = 0; i < ids.length; i++) {
-      counts.set(ids[i]!, batch[i] ?? 0);
+    const rows = await ctx.orm.query.todoComments.findMany({
+      where: { id: { in: ids } },
+      limit: ids.length,
+      columns: { id: true },
+      with: {
+        _count: {
+          replies: true,
+        },
+      },
+    });
+    for (const row of rows) {
+      counts.set(row.id, row._count?.replies ?? 0);
+    }
+    for (const id of ids) {
+      if (!counts.has(id)) {
+        counts.set(id, 0);
+      }
     }
   }
 
@@ -522,7 +532,7 @@ export const updateComment = authMutation
       content: z.string().min(1).max(1000),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const comment = await ctx.orm.query.todoComments.findFirstOrThrow({
       where: { id: input.commentId },
@@ -549,17 +559,21 @@ export const updateComment = authMutation
       .update(todoCommentsTable)
       .set({ content: input.content })
       .where(eq(todoCommentsTable.id, input.commentId));
-    return null;
   });
 
 // Delete comment
 export const deleteComment = authMutation
   .meta({ rateLimit: 'todoComment/update' }) // Using update rate limit for delete
   .input(z.object({ commentId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const comment = await ctx.orm.query.todoComments.findFirstOrThrow({
       where: { id: input.commentId },
+      with: {
+        _count: {
+          replies: true,
+        },
+      },
     });
 
     // Author or todo owner can delete
@@ -574,11 +588,7 @@ export const deleteComment = authMutation
     }
 
     // If has replies, just mark as deleted
-    const directReplyCount = await aggregateRepliesByParent.count(ctx, {
-      namespace: comment.id,
-      bounds: {},
-    });
-    const hasReplies = directReplyCount > 0;
+    const hasReplies = (comment._count?.replies ?? 0) > 0;
     if (hasReplies) {
       await ctx.orm
         .update(todoCommentsTable)
@@ -589,8 +599,6 @@ export const deleteComment = authMutation
         .delete(todoCommentsTable)
         .where(eq(todoCommentsTable.id, comment.id));
     }
-
-    return null;
   });
 
 // ============================================
@@ -635,7 +643,7 @@ export const cleanupOrphanedComments = privateMutation
 
 // Get comment depth in thread
 async function getCommentDepth(
-  ctx: OrmQueryCtx,
+  ctx: QueryCtx,
   commentId: string
 ): Promise<number> {
   let depth = 0;

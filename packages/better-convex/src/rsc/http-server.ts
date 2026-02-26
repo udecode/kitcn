@@ -15,8 +15,8 @@ import { decodeWire } from '../crpc/transformer';
 
 /** Metadata attached to HTTP query options for execution by QueryClient */
 export interface HttpQueryMeta {
-  path: string;
   method: string;
+  path: string;
 }
 
 /**

@@ -56,7 +56,7 @@ convex/
 ├── lib/                 # Server helpers (NOT deployed)
 │   └── crpc.ts          # cRPC builder
 └── shared/              # Client-importable
-    └── meta.ts          # Generated procedure metadata
+    └── api.ts          # Generated procedure metadata
 ```
 
 Create these folders:
@@ -74,7 +74,7 @@ Next, add these settings to your existing `tsconfig.json`:
     "strictFunctionTypes": false,
     "paths": {
       "@/*": ["./src/*"],
-      "@convex/*": ["./convex/functions/_generated/*", "./convex/shared/*"]
+      "@convex/*": ["./convex/shared/*"]
     }
   }
 }
@@ -82,6 +82,7 @@ Next, add these settings to your existing `tsconfig.json`:
 
 <Callout icon={<InfoIcon />}>
 `strictFunctionTypes: false` is required for middleware type inference to work correctly.
+Use relative imports for `convex/functions/_generated/*` inside backend Convex files.
 </Callout>
 
 See [Concepts](/docs/concepts) for detailed folder structure explanation.
@@ -137,10 +138,14 @@ Start the Better Convex dev server:
 bunx better-convex dev
 ```
 
-This generates `convex/functions/_generated/` (types) and `convex/shared/meta.ts` (procedure metadata). Keep it running in a separate terminal.
+This generates `convex/functions/_generated/` (types) and `convex/shared/api.ts` (procedure metadata). Keep it running in a separate terminal.
 
 <Callout icon={<InfoIcon />}>
 For one-time codegen without watch mode, use `bunx better-convex codegen`.
+</Callout>
+
+<Callout icon={<InfoIcon />}>
+For new local deployments, Convex stores backend data in `.convex/` at your project root. This gives each worktree/clone isolated local state.
 </Callout>
 
 ## Environment Variables
@@ -170,41 +175,17 @@ Create `.env.local` with your Convex URLs:
 
 ## 3. Create ORM + cRPC Builder
 
-First, attach the ORM to your context. Create `convex/lib/orm.ts`:
-
-```ts title="convex/lib/orm.ts" showLineNumbers {1-3,5-6,8-11}
-import { createOrm } from 'better-convex/orm';
-import type { MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { relations } from '../functions/schema';
-
-export const orm = createOrm({ schema: relations });
-
-export const withOrm = <Ctx extends QueryCtx | MutationCtx>(ctx: Ctx) => ({
-  ...ctx,
-  orm: orm.db(ctx),
-});
-```
+`convex/functions/generated.ts` is the generated canonical server contract. It includes `initCRPC` and ORM helpers when `relations` exists.
+For Better Auth setups, run codegen first, then define `convex/functions/auth.ts` with `defineAuth` imported from `./generated`; this file remains the canonical auth runtime contract (`authEnabled`, `getAuth`, CRUD/triggers, and `auth`).
+If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
 
 Now create the cRPC builder in `convex/lib/crpc.ts`:
 
-```ts title="convex/lib/crpc.ts" showLineNumbers {1,10-12,15-27,29-30}
-import { initCRPC } from 'better-convex/server';
-import type {
-  ActionCtx,
-  MutationCtx,
-  QueryCtx,
-} from '../functions/_generated/server';
-import type { DataModel } from '../functions/_generated/dataModel';
-import { withOrm } from './orm';
+```ts title="convex/lib/crpc.ts" showLineNumbers
+import { initCRPC } from '../functions/generated/server';
 
 
-const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .create();
+const c = initCRPC.create();
 
 export const publicQuery = c.query;
 export const publicMutation = c.mutation;
@@ -275,12 +256,10 @@ The `.output()` schema is required for proper TypeScript inference when using `s
 
 ```tsx title="src/lib/convex/crpc.tsx" showLineNumbers {1-3,5-8}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
 import { createCRPCContext } from 'better-convex/react';
 
-export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<typeof api>({
+export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
   api,
-  meta,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
 });
 ```
@@ -403,7 +382,7 @@ You have a working Better Convex app. Add more features:
 
 <Cards>
   <Card title="Add Auth" href="/docs/auth/server" />
-  <Card title="Add Triggers" href="/docs/orm/triggers" />
+  <Card title="Add Triggers" href="/docs/orm/schema/triggers" />
   <Card title="Add Rate Limiting" href="/docs/server/advanced/rate-limiting" />
   <Card title="Full Templates" href="/docs/templates" />
 </Cards>

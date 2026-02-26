@@ -1,12 +1,17 @@
 /** biome-ignore-all lint/performance/useTopLevelRegex: inline regex assertions are intentional in tests. */
+import { describe, expect, test, vi } from 'vitest';
 import { and, eq, gt, isNull, not, or } from './filter-expression';
-import { convexTable, date, integer, text, timestamp } from './index';
+import { convexTable, date, index, integer, text, timestamp } from './index';
 import {
   applyDefaults,
+  applyIncomingForeignKeyActionsOnDelete,
+  applyIncomingForeignKeyActionsOnUpdate,
+  collectMutationRowsBounded,
   decodeUndefinedDeep,
   deserializeFilterExpression,
   encodeUndefinedDeep,
   enforceCheckConstraints,
+  estimateMeasuredMutationRowBytes,
   evaluateCheckConstraintTriState,
   evaluateFilter,
   getMutationCollectionLimits,
@@ -43,6 +48,46 @@ const usersWithTimestampCreatedAt = convexTable(
     createdAt: timestamp().notNull().defaultNow(),
   }
 );
+
+const cascadeParent = convexTable('cascade_parent', {
+  slug: text().notNull(),
+});
+
+const cascadeChildA = convexTable(
+  'cascade_child_a',
+  {
+    parentSlug: text().notNull(),
+    deletionTime: integer(),
+  },
+  (t) => [index('by_parentSlug').on(t.parentSlug)]
+);
+
+const cascadeChildB = convexTable(
+  'cascade_child_b',
+  {
+    parentSlug: text().notNull(),
+    deletionTime: integer(),
+  },
+  (t) => [index('by_parentSlug').on(t.parentSlug)]
+);
+
+const getUtf8ByteLength = (value: string): number => {
+  let bytes = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x80) {
+      bytes += 1;
+    } else if (code < 0x800) {
+      bytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      bytes += 4;
+      i += 1;
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+};
 
 describe('mutation-utils', () => {
   test('encodeUndefinedDeep/decodeUndefinedDeep round-trip nested values', () => {
@@ -227,6 +272,32 @@ describe('mutation-utils', () => {
     expect(allRows.hitLimit).toBe(false);
   });
 
+  test('estimateMeasuredMutationRowBytes matches UTF-8 byte length for short and long strings', () => {
+    const shortRow = {
+      id: 1,
+      payload: 'héllo🙂',
+    };
+    const shortSerialized = JSON.stringify(shortRow);
+    const shortExpected = getUtf8ByteLength(shortSerialized) * 2;
+    const shortEncodeSpy = vi.spyOn(TextEncoder.prototype, 'encode');
+    expect(estimateMeasuredMutationRowBytes(shortRow as any)).toBe(
+      shortExpected
+    );
+    expect(shortEncodeSpy).not.toHaveBeenCalled();
+    shortEncodeSpy.mockRestore();
+
+    const longRow = {
+      id: 2,
+      payload: 'héllo🙂'.repeat(120),
+    };
+    const longExpected =
+      new TextEncoder().encode(JSON.stringify(longRow)).length * 2;
+    const longEncodeSpy = vi.spyOn(TextEncoder.prototype, 'encode');
+    expect(estimateMeasuredMutationRowBytes(longRow as any)).toBe(longExpected);
+    expect(longEncodeSpy).toHaveBeenCalled();
+    longEncodeSpy.mockRestore();
+  });
+
   test('getMutationCollectionLimits validates defaults', () => {
     const defaults = getMutationCollectionLimits(undefined);
     expect(defaults.batchSize).toBeGreaterThan(0);
@@ -376,5 +447,254 @@ describe('mutation-utils', () => {
     expect(selected.createdAt).toBe(1_700_000_000_000);
     expect(selected.birthday).toBeInstanceOf(Date);
     expect(selected.startsAt).toBeInstanceOf(Date);
+  });
+
+  test('collectMutationRowsBounded uses single bounded take and enforces maxRows', async () => {
+    const rows = [{ _id: 'r1' }, { _id: 'r2' }, { _id: 'r3' }, { _id: 'r4' }];
+    let takeArg = -1;
+
+    const query = {
+      take: async (limit: number) => {
+        takeArg = limit;
+        return rows.slice(0, limit);
+      },
+      paginate: async () => {
+        throw new Error('paginate should not be called');
+      },
+    };
+
+    const okRows = await collectMutationRowsBounded(() => query, {
+      operation: 'delete',
+      tableName: 'test_table',
+      batchSize: 2,
+      maxRows: 4,
+    });
+
+    expect(okRows).toHaveLength(4);
+    expect(takeArg).toBe(5);
+
+    await expect(
+      collectMutationRowsBounded(() => query, {
+        operation: 'delete',
+        tableName: 'test_table',
+        batchSize: 2,
+        maxRows: 3,
+      })
+    ).rejects.toThrow(/matched more than 3 rows/i);
+  });
+
+  test('async delete cascade uses take and schedules continuation without paginate', async () => {
+    const rowsByTable = {
+      cascade_child_a: [
+        { _id: 'a1', parentSlug: 'p1' },
+        { _id: 'a2', parentSlug: 'p1' },
+        { _id: 'a3', parentSlug: 'p1' },
+      ],
+      cascade_child_b: [{ _id: 'b1', parentSlug: 'p1' }],
+    } as const;
+
+    const runAfterCalls: unknown[] = [];
+    const deleted: string[] = [];
+
+    const db = {
+      delete: async (id: string) => {
+        deleted.push(id);
+      },
+      patch: async () => {
+        throw new Error('patch should not be called for hard cascade');
+      },
+      query: (tableName: keyof typeof rowsByTable) => ({
+        withIndex: (_indexName: string, build: (q: any) => any) => {
+          const eqChain = {
+            eq: (_fieldName: string, _value: unknown) => eqChain,
+          };
+          build(eqChain);
+          return {
+            take: async (limit: number) =>
+              rowsByTable[tableName].slice(0, limit),
+            paginate: async () => {
+              throw new Error('paginate should not be called');
+            },
+          };
+        },
+        first: async () => rowsByTable[tableName][0] ?? null,
+      }),
+    };
+
+    const graph = {
+      incomingByTable: new Map([
+        [
+          'cascade_parent',
+          [
+            {
+              sourceTable: cascadeChildA,
+              sourceTableName: 'cascade_child_a',
+              sourceColumns: ['parentSlug'],
+              targetTableName: 'cascade_parent',
+              targetColumns: ['slug'],
+              onDelete: 'cascade',
+            },
+            {
+              sourceTable: cascadeChildB,
+              sourceTableName: 'cascade_child_b',
+              sourceColumns: ['parentSlug'],
+              targetTableName: 'cascade_parent',
+              targetColumns: ['slug'],
+              onDelete: 'cascade',
+            },
+          ],
+        ],
+      ]),
+    };
+
+    await applyIncomingForeignKeyActionsOnDelete(
+      db as any,
+      cascadeParent,
+      { _id: 'p1', slug: 'p1' },
+      {
+        graph: graph as any,
+        deleteMode: 'hard',
+        cascadeMode: 'hard',
+        visited: new Set<string>(['cascade_parent:p1']),
+        batchSize: 2,
+        leafBatchSize: 2,
+        maxRows: 100,
+        maxBytesPerBatch: 1024 * 1024,
+        executionMode: 'async',
+        scheduler: {
+          runAfter: async (_delayMs: number, _fn: unknown, args: unknown) => {
+            runAfterCalls.push(args);
+            return 'job-id';
+          },
+        } as any,
+        scheduledMutationBatch: 'scheduledMutationBatch' as any,
+        scheduleState: {
+          remainingCalls: 10,
+          callCap: 10,
+        } as any,
+        delayMs: 0,
+      }
+    );
+
+    expect(deleted.sort()).toEqual(['a1', 'a2', 'b1']);
+    expect(runAfterCalls).toHaveLength(1);
+    expect(runAfterCalls[0]).toMatchObject({
+      workType: 'cascade-delete',
+      table: 'cascade_child_a',
+      cursor: null,
+    });
+  });
+
+  test('async update cascade uses take and schedules continuation without paginate', async () => {
+    const rowsByTable = {
+      cascade_child_a: [
+        { _id: 'a1', parentSlug: 'p1' },
+        { _id: 'a2', parentSlug: 'p1' },
+        { _id: 'a3', parentSlug: 'p1' },
+      ],
+      cascade_child_b: [{ _id: 'b1', parentSlug: 'p1' }],
+    } as const;
+
+    const patched: Array<{
+      id: string;
+      table: string;
+      patch: Record<string, unknown>;
+    }> = [];
+    const runAfterCalls: unknown[] = [];
+
+    const db = {
+      patch: async (
+        tableName: string,
+        id: string,
+        patch: Record<string, unknown>
+      ) => {
+        patched.push({ table: tableName, id, patch });
+      },
+      query: (tableName: keyof typeof rowsByTable) => ({
+        withIndex: (_indexName: string, build: (q: any) => any) => {
+          const eqChain = {
+            eq: (_fieldName: string, _value: unknown) => eqChain,
+          };
+          build(eqChain);
+          return {
+            take: async (limit: number) =>
+              rowsByTable[tableName].slice(0, limit),
+            paginate: async () => {
+              throw new Error('paginate should not be called');
+            },
+          };
+        },
+        first: async () => rowsByTable[tableName][0] ?? null,
+      }),
+    };
+
+    const graph = {
+      incomingByTable: new Map([
+        [
+          'cascade_parent',
+          [
+            {
+              sourceTable: cascadeChildA,
+              sourceTableName: 'cascade_child_a',
+              sourceColumns: ['parentSlug'],
+              targetTableName: 'cascade_parent',
+              targetColumns: ['slug'],
+              onUpdate: 'cascade',
+            },
+            {
+              sourceTable: cascadeChildB,
+              sourceTableName: 'cascade_child_b',
+              sourceColumns: ['parentSlug'],
+              targetTableName: 'cascade_parent',
+              targetColumns: ['slug'],
+              onUpdate: 'cascade',
+            },
+          ],
+        ],
+      ]),
+    };
+
+    await applyIncomingForeignKeyActionsOnUpdate(
+      db as any,
+      cascadeParent,
+      { _id: 'p1', slug: 'p1' },
+      { _id: 'p1', slug: 'p2' },
+      {
+        graph: graph as any,
+        batchSize: 4,
+        leafBatchSize: 2,
+        maxRows: 100,
+        maxBytesPerBatch: 1024 * 1024,
+        executionMode: 'async',
+        scheduler: {
+          runAfter: async (_delayMs: number, _fn: unknown, args: unknown) => {
+            runAfterCalls.push(args);
+            return 'job-id';
+          },
+        } as any,
+        scheduledMutationBatch: 'scheduledMutationBatch' as any,
+        scheduleState: {
+          remainingCalls: 10,
+          callCap: 10,
+        } as any,
+        delayMs: 0,
+      }
+    );
+
+    expect(
+      patched
+        .map(({ table, id, patch }) => ({ table, id, patch }))
+        .sort((a, b) => a.id.localeCompare(b.id))
+    ).toEqual([
+      { table: 'cascade_child_a', id: 'a1', patch: { parentSlug: 'p2' } },
+      { table: 'cascade_child_a', id: 'a2', patch: { parentSlug: 'p2' } },
+      { table: 'cascade_child_b', id: 'b1', patch: { parentSlug: 'p2' } },
+    ]);
+    expect(runAfterCalls).toHaveLength(1);
+    expect(runAfterCalls[0]).toMatchObject({
+      workType: 'cascade-update',
+      table: 'cascade_child_a',
+      cursor: null,
+    });
   });
 });

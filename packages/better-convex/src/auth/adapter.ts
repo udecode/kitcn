@@ -5,29 +5,19 @@ import {
   type DBAdapterDebugLogOption,
 } from 'better-auth/adapters';
 import { type BetterAuthDBSchema, getAuthTables } from 'better-auth/db';
-import {
-  createFunctionHandle,
-  type FunctionHandle,
-  type GenericDataModel,
-  type PaginationOptions,
-  type PaginationResult,
-  type SchemaDefinition,
+import type {
+  GenericDataModel,
+  PaginationOptions,
+  PaginationResult,
+  SchemaDefinition,
 } from 'convex/server';
 import { prop, sortBy, uniqueBy } from 'remeda';
 import type { SetOptional } from 'type-fest';
 import { asyncMap } from '../internal/upstream';
 import type { GenericCtx } from '../server/context-utils';
 import { isRunMutationCtx } from '../server/context-utils';
-import {
-  createHandler,
-  deleteManyHandler,
-  deleteOneHandler,
-  findManyHandler,
-  findOneHandler,
-  updateManyHandler,
-  updateOneHandler,
-} from './create-api';
-import type { AuthFunctions, Triggers } from './create-client';
+import { findManyHandler, findOneHandler } from './create-api';
+import type { AuthFunctions } from './create-client';
 
 export const handlePagination = async (
   next: ({
@@ -191,12 +181,10 @@ export const httpAdapter = <
     authFunctions,
     debugLogs,
     schema,
-    triggers,
   }: {
     authFunctions: AuthFunctions;
     debugLogs?: DBAdapterDebugLogOption;
     schema?: Schema;
-    triggers?: Triggers<DataModel, Schema>;
   }
 ) => {
   return createAdapterFactory({
@@ -205,9 +193,6 @@ export const httpAdapter = <
       debugLogs: debugLogs || false,
     },
     adapter: ({ options }) => {
-      const getTriggers = (model: string) =>
-        triggers?.[model as keyof Triggers<DataModel, Schema>];
-
       // Disable telemetry in all cases because it requires Node
       options.telemetry = { enabled: false };
 
@@ -250,24 +235,9 @@ export const httpAdapter = <
             throw new Error('ctx is not a mutation ctx');
           }
 
-          const onCreateHandle =
-            authFunctions.onCreate && getTriggers(model)?.onCreate
-              ? ((await createFunctionHandle(
-                  authFunctions.onCreate
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-          const beforeCreateHandle =
-            authFunctions.beforeCreate && getTriggers(model)?.beforeCreate
-              ? ((await createFunctionHandle(
-                  authFunctions.beforeCreate
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-
           return await ctx.runMutation(authFunctions.create, {
-            beforeCreateHandle,
             input: { data, model },
             select,
-            onCreateHandle,
           });
         },
         createSchema: async ({ file, tables }) =>
@@ -277,25 +247,11 @@ export const httpAdapter = <
             throw new Error('ctx is not a mutation ctx');
           }
 
-          const onDeleteHandle =
-            authFunctions.onDelete && getTriggers(data.model)?.onDelete
-              ? ((await createFunctionHandle(
-                  authFunctions.onDelete
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-          const beforeDeleteHandle =
-            authFunctions.beforeDelete && getTriggers(data.model)?.beforeDelete
-              ? ((await createFunctionHandle(
-                  authFunctions.beforeDelete
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
           await ctx.runMutation(authFunctions.deleteOne, {
-            beforeDeleteHandle,
             input: {
               model: data.model,
               where: parseWhere(data.where),
             },
-            onDeleteHandle,
           });
         },
         deleteMany: async (data) => {
@@ -303,28 +259,14 @@ export const httpAdapter = <
             throw new Error('ctx is not a mutation ctx');
           }
 
-          const onDeleteHandle =
-            authFunctions.onDelete && getTriggers(data.model)?.onDelete
-              ? ((await createFunctionHandle(
-                  authFunctions.onDelete
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-          const beforeDeleteHandle =
-            authFunctions.beforeDelete && getTriggers(data.model)?.beforeDelete
-              ? ((await createFunctionHandle(
-                  authFunctions.beforeDelete
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
           const result = await handlePagination(
             async ({ paginationOpts }) =>
               await ctx.runMutation(authFunctions.deleteMany, {
-                beforeDeleteHandle,
                 input: {
                   ...data,
                   where: parseWhere(data.where),
                 },
                 paginationOpts,
-                onDeleteHandle,
               })
           );
 
@@ -428,28 +370,12 @@ export const httpAdapter = <
               );
             }
 
-            const onUpdateHandle =
-              authFunctions.onUpdate && getTriggers(data.model)?.onUpdate
-                ? ((await createFunctionHandle(
-                    authFunctions.onUpdate
-                  )) as FunctionHandle<'mutation'>)
-                : undefined;
-            const beforeUpdateHandle =
-              authFunctions.beforeUpdate &&
-              getTriggers(data.model)?.beforeUpdate
-                ? ((await createFunctionHandle(
-                    authFunctions.beforeUpdate
-                  )) as FunctionHandle<'mutation'>)
-                : undefined;
-
             return await ctx.runMutation(authFunctions.updateOne, {
-              beforeUpdateHandle,
               input: {
                 model: data.model as any,
                 update: data.update as any,
                 where: parseWhere(data.where),
               },
-              onUpdateHandle,
             });
           }
 
@@ -460,29 +386,14 @@ export const httpAdapter = <
             throw new Error('ctx is not a mutation ctx');
           }
 
-          const onUpdateHandle =
-            authFunctions.onUpdate && getTriggers(data.model)?.onUpdate
-              ? ((await createFunctionHandle(
-                  authFunctions.onUpdate
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-          const beforeUpdateHandle =
-            authFunctions.beforeUpdate && getTriggers(data.model)?.beforeUpdate
-              ? ((await createFunctionHandle(
-                  authFunctions.beforeUpdate
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-
           const result = await handlePagination(
             async ({ paginationOpts }) =>
               await ctx.runMutation(authFunctions.updateMany, {
-                beforeUpdateHandle,
                 input: {
                   ...(data as any),
                   where: parseWhere(data.where),
                 },
                 paginationOpts,
-                onUpdateHandle,
               })
           );
 
@@ -503,12 +414,10 @@ export const dbAdapter = <
     authFunctions,
     debugLogs,
     schema,
-    triggers,
   }: {
     authFunctions: AuthFunctions;
     schema: Schema;
     debugLogs?: DBAdapterDebugLogOption;
-    triggers?: Triggers<DataModel, Schema>;
   }
 ) => {
   const betterAuthSchema = getAuthTables(getAuthOptions({} as any));
@@ -519,9 +428,6 @@ export const dbAdapter = <
       debugLogs: debugLogs || false,
     },
     adapter: ({ options }) => {
-      const getTriggers = (model: string) =>
-        triggers?.[model as keyof Triggers<DataModel, Schema>];
-
       // Disable telemetry in all cases because it requires Node
       options.telemetry = { enabled: false };
 
@@ -569,91 +475,43 @@ export const dbAdapter = <
           return result.docs.length;
         },
         create: async ({ data, model, select }): Promise<any> => {
-          const onCreateHandle =
-            authFunctions.onCreate && getTriggers(model)?.onCreate
-              ? ((await createFunctionHandle(
-                  authFunctions.onCreate
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-          const beforeCreateHandle =
-            authFunctions.beforeCreate && getTriggers(model)?.beforeCreate
-              ? ((await createFunctionHandle(
-                  authFunctions.beforeCreate
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
+          if (!('runMutation' in ctx)) {
+            throw new Error('ctx is not a mutation ctx');
+          }
 
-          return await createHandler(
-            ctx,
-            {
-              beforeCreateHandle,
-              input: { data, model },
-              select,
-              onCreateHandle,
-            },
-            schema,
-            betterAuthSchema
-          );
+          return await ctx.runMutation(authFunctions.create, {
+            input: { data, model },
+            select,
+          });
         },
         createSchema: async ({ file, tables }) =>
           createAuthSchema({ file, schema, tables }),
         delete: async (data) => {
-          const onDeleteHandle =
-            authFunctions.onDelete && getTriggers(data.model)?.onDelete
-              ? ((await createFunctionHandle(
-                  authFunctions.onDelete
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-          const beforeDeleteHandle =
-            authFunctions.beforeDelete && getTriggers(data.model)?.beforeDelete
-              ? ((await createFunctionHandle(
-                  authFunctions.beforeDelete
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
+          if (!('runMutation' in ctx)) {
+            throw new Error('ctx is not a mutation ctx');
+          }
 
-          await deleteOneHandler(
-            ctx,
-            {
-              beforeDeleteHandle,
-              input: {
-                model: data.model,
-                where: parseWhere(data.where),
-              },
-              onDeleteHandle,
+          await ctx.runMutation(authFunctions.deleteOne, {
+            input: {
+              model: data.model,
+              where: parseWhere(data.where),
             },
-            schema,
-            betterAuthSchema
-          );
+          });
         },
         deleteMany: async (data) => {
-          const onDeleteHandle =
-            authFunctions.onDelete && getTriggers(data.model)?.onDelete
-              ? ((await createFunctionHandle(
-                  authFunctions.onDelete
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-          const beforeDeleteHandle =
-            authFunctions.beforeDelete && getTriggers(data.model)?.beforeDelete
-              ? ((await createFunctionHandle(
-                  authFunctions.beforeDelete
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
+          if (!('runMutation' in ctx)) {
+            throw new Error('ctx is not a mutation ctx');
+          }
 
           const result = await handlePagination(
             async ({ paginationOpts }) =>
-              await deleteManyHandler(
-                ctx,
-                {
-                  beforeDeleteHandle,
-                  input: {
-                    ...data,
-                    where: parseWhere(data.where),
-                  },
-                  paginationOpts,
-                  onDeleteHandle,
+              await ctx.runMutation(authFunctions.deleteMany, {
+                input: {
+                  ...data,
+                  where: parseWhere(data.where),
                 },
-                schema,
-                betterAuthSchema
-              )
+                paginationOpts,
+              })
           );
 
           return result.count;
@@ -774,69 +632,35 @@ export const dbAdapter = <
                 `Multiple ${data.model} found matching criteria. Expected exactly 1.`
               );
             }
+            if (!('runMutation' in ctx)) {
+              throw new Error('ctx is not a mutation ctx');
+            }
 
-            const onUpdateHandle =
-              authFunctions.onUpdate && getTriggers(data.model)?.onUpdate
-                ? ((await createFunctionHandle(
-                    authFunctions.onUpdate
-                  )) as FunctionHandle<'mutation'>)
-                : undefined;
-            const beforeUpdateHandle =
-              authFunctions.beforeUpdate &&
-              getTriggers(data.model)?.beforeUpdate
-                ? ((await createFunctionHandle(
-                    authFunctions.beforeUpdate
-                  )) as FunctionHandle<'mutation'>)
-                : undefined;
-
-            return await updateOneHandler(
-              ctx,
-              {
-                beforeUpdateHandle,
-                input: {
-                  model: data.model as any,
-                  update: data.update as any,
-                  where: parseWhere(data.where),
-                },
-                onUpdateHandle,
+            return await ctx.runMutation(authFunctions.updateOne, {
+              input: {
+                model: data.model as any,
+                update: data.update as any,
+                where: parseWhere(data.where),
               },
-              schema,
-              betterAuthSchema
-            );
+            });
           }
 
           throw new Error('where clause not supported');
         },
         updateMany: async (data) => {
-          const onUpdateHandle =
-            authFunctions.onUpdate && getTriggers(data.model)?.onUpdate
-              ? ((await createFunctionHandle(
-                  authFunctions.onUpdate
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
-          const beforeUpdateHandle =
-            authFunctions.beforeUpdate && getTriggers(data.model)?.beforeUpdate
-              ? ((await createFunctionHandle(
-                  authFunctions.beforeUpdate
-                )) as FunctionHandle<'mutation'>)
-              : undefined;
+          if (!('runMutation' in ctx)) {
+            throw new Error('ctx is not a mutation ctx');
+          }
 
           const result = await handlePagination(
             async ({ paginationOpts }) =>
-              await updateManyHandler(
-                ctx,
-                {
-                  beforeUpdateHandle,
-                  input: {
-                    ...(data as any),
-                    where: parseWhere(data.where),
-                  },
-                  paginationOpts,
-                  onUpdateHandle,
+              await ctx.runMutation(authFunctions.updateMany, {
+                input: {
+                  ...(data as any),
+                  where: parseWhere(data.where),
                 },
-                schema,
-                betterAuthSchema
-              )
+                paginationOpts,
+              })
           );
 
           return result.count;

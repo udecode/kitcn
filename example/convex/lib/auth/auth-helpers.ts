@@ -1,14 +1,13 @@
 import { getSession } from 'better-convex/auth';
+import type { InferInsertModel } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
-
-import { internal } from '../../functions/_generated/api';
+import type { MutationCtx, QueryCtx } from '../../functions/generated/server';
 import { accountTable, userTable } from '../../functions/schema';
 import type { SessionUser } from '../../shared/auth-shared';
 import { productToPlan } from '../../shared/polar-shared';
 import type { AuthCtx } from '../crpc';
-import type { OrmMutationCtx, OrmQueryCtx } from '../orm';
 
-const getSessionData = async (ctx: OrmQueryCtx) => {
+const getSessionData = async (ctx: QueryCtx) => {
   const session = await getSession(ctx);
 
   if (!session) {
@@ -71,7 +70,7 @@ const getSessionData = async (ctx: OrmQueryCtx) => {
 
 // Query to fetch user data for session/auth checks
 export const getSessionUser = async (
-  ctx: OrmQueryCtx
+  ctx: QueryCtx
 ): Promise<SessionUser | null> => {
   const data = await getSessionData(ctx);
   if (!data) {
@@ -95,7 +94,7 @@ export const getSessionUser = async (
 };
 
 export const createUser = async (
-  ctx: OrmMutationCtx,
+  ctx: MutationCtx,
   args: {
     email: string;
     name: string;
@@ -106,38 +105,24 @@ export const createUser = async (
     role?: 'admin' | 'user';
   }
 ) => {
-  // WARNING: This bypasses Better Auth hooks including:
   const now = new Date();
-
-  const beforeCreateData = await ctx.runMutation(internal.auth.beforeCreate, {
-    data: {
-      bio: args.bio,
-      createdAt: now,
-      email: args.email,
-      emailVerified: false,
-      github: args.github,
-      image: args.image,
-      location: args.location,
-      name: args.name,
-      role: args.role ?? 'user',
-      updatedAt: now,
-    },
-    model: 'user',
-  });
+  const createData: Record<string, unknown> = {
+    bio: args.bio,
+    createdAt: now,
+    email: args.email,
+    emailVerified: false,
+    github: args.github,
+    image: args.image,
+    location: args.location,
+    name: args.name,
+    role: args.role ?? 'user',
+    updatedAt: now,
+  };
 
   const [{ id: userId }] = await ctx.orm
     .insert(userTable)
-    .values(beforeCreateData)
+    .values(createData as InferInsertModel<typeof userTable>)
     .returning({ id: userTable.id });
-
-  const user = await ctx.orm.query.user.findFirstOrThrow({
-    where: { id: { eq: userId } },
-  });
-
-  await ctx.runMutation(internal.auth.onCreate, {
-    doc: user,
-    model: 'user',
-  });
 
   // Create account record for credential provider
   await ctx.orm.insert(accountTable).values({

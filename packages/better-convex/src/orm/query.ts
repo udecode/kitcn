@@ -8,6 +8,40 @@
  */
 
 import type { GenericDatabaseReader } from 'convex/server';
+import {
+  compileRankPlan,
+  ensureRankAllowedForRls,
+  ensureRankIndexReady,
+  readRankAt,
+  readRankCount,
+  readRankIndexOf,
+  readRankMax,
+  readRankMin,
+  readRankPaginate,
+  readRankRandom,
+  readRankSum,
+} from './aggregate-index/rank-runtime';
+import type { PlanBucketReadCache } from './aggregate-index/runtime';
+import {
+  AGGREGATE_ERROR,
+  COUNT_ERROR,
+  compileAggregateQueryPlan,
+  compileCountFieldQueryPlan,
+  compileCountQueryPlan,
+  createAggregateError,
+  createCountError,
+  ensureAggregateAllowedForRls,
+  ensureAggregateIndexReady,
+  ensureCountAllowedForRls,
+  ensureCountIndexReady,
+  isAggregatePlanZero,
+  isIndexCountZero,
+  readAverageFromBuckets,
+  readCountFieldFromBuckets,
+  readCountFromBuckets,
+  readExtremaFromBuckets,
+  readSumFromBuckets,
+} from './aggregate-index/runtime';
 import { type ColumnBuilder, entityKind } from './builders/column-builder';
 import { OrmNotFoundError } from './errors';
 import type { EdgeMetadata } from './extractRelationsConfig';
@@ -54,6 +88,7 @@ import {
   getIndexes,
 } from './index-utils';
 import {
+  getOrmContext,
   hydrateDateFieldsForRead,
   normalizeTemporalComparableValue,
 } from './mutation-utils';
@@ -100,9 +135,21 @@ import {
 } from './where-clause-compiler';
 
 const DEFAULT_RELATION_FAN_OUT_MAX_KEYS = 1000;
+const DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS = 4096;
+const DEFAULT_AGGREGATE_WORK_BUDGET = 16_384;
 const PUBLIC_ID_FIELD = 'id';
 const INTERNAL_ID_FIELD = '_id';
 const ID_MIGRATION_MESSAGE = '`_id` is no longer public. Use `id` instead.';
+const RELATION_COUNT_ERROR = {
+  NOT_INDEXED: 'RELATION_COUNT_NOT_INDEXED',
+  FILTER_UNSUPPORTED: 'RELATION_COUNT_FILTER_UNSUPPORTED',
+} as const;
+
+type GroupByOrderSpec = {
+  direction: 'asc' | 'desc';
+  label: string;
+  path: string[];
+};
 
 class LimitedQueryStream<
   T extends NonNullable<unknown>,
@@ -159,6 +206,89 @@ class LimitedQueryStream<
   }
 }
 
+export class GelRankQuery<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> {
+  constructor(
+    private readonly db: GenericDatabaseReader<any>,
+    private readonly tableConfig: TTableConfig,
+    private readonly indexName: string,
+    private readonly config: {
+      where?: Record<string, unknown>;
+    } = {},
+    private readonly rls?: RlsContext
+  ) {}
+
+  private async _plan() {
+    ensureRankAllowedForRls(this.tableConfig, this.rls?.mode);
+    const plan = compileRankPlan(
+      this.tableConfig,
+      this.indexName,
+      this.config.where
+    );
+    await ensureRankIndexReady(this.db, this.tableConfig.name, this.indexName);
+    return plan;
+  }
+
+  async count(): Promise<number> {
+    const plan = await this._plan();
+    return await readRankCount(this.db, plan);
+  }
+
+  async sum(): Promise<number> {
+    const plan = await this._plan();
+    return await readRankSum(this.db, plan);
+  }
+
+  async at(
+    offset: number
+  ): Promise<{ id: string; key: unknown; sumValue: number } | null> {
+    const plan = await this._plan();
+    return await readRankAt(this.db, plan, offset);
+  }
+
+  async indexOf(args: { id: string }): Promise<number> {
+    const plan = await this._plan();
+    return await readRankIndexOf(this.db, plan, args);
+  }
+
+  async paginate(args: { cursor?: string | null; limit: number }): Promise<{
+    continueCursor: string;
+    isDone: boolean;
+    page: Array<{ id: string; key: unknown; sumValue: number }>;
+  }> {
+    if (!Number.isInteger(args.limit) || args.limit < 1) {
+      throw new Error('rank().paginate() requires a positive integer limit.');
+    }
+    const plan = await this._plan();
+    return await readRankPaginate(
+      this.db,
+      plan,
+      args.cursor ?? null,
+      args.limit
+    );
+  }
+
+  async min(): Promise<{ id: string; key: unknown; sumValue: number } | null> {
+    const plan = await this._plan();
+    return await readRankMin(this.db, plan);
+  }
+
+  async max(): Promise<{ id: string; key: unknown; sumValue: number } | null> {
+    const plan = await this._plan();
+    return await readRankMax(this.db, plan);
+  }
+
+  async random(): Promise<{
+    id: string;
+    key: unknown;
+    sumValue: number;
+  } | null> {
+    const plan = await this._plan();
+    return await readRankRandom(this.db, plan);
+  }
+}
+
 /**
  * Relational query builder with promise-based execution
  *
@@ -180,6 +310,11 @@ export class GelRelationalQuery<
     readonly result: TResult;
   };
   private allowFullScan: boolean;
+  private readonly _countIndexReadinessByKey = new Map<string, Promise<void>>();
+  private readonly _aggregateIndexReadinessByKey = new Map<
+    string,
+    Promise<void>
+  >();
 
   constructor(
     private schema: TSchema,
@@ -192,7 +327,13 @@ export class GelRelationalQuery<
       TSchema,
       TTableConfig
     >,
-    private mode: 'many' | 'first' | 'firstOrThrow',
+    private mode:
+      | 'many'
+      | 'first'
+      | 'firstOrThrow'
+      | 'count'
+      | 'aggregate'
+      | 'groupBy',
     private _allEdges?: EdgeMetadata[], // M6.5 Phase 2: All edges for nested loading
     private rls?: RlsContext,
     private relationLoading?: { concurrency?: number },
@@ -223,6 +364,16 @@ export class GelRelationalQuery<
     _tableConfig: TableRelationalConfig = this.tableConfig
   ): string {
     this._assertNoLegacyPublicFieldName(fieldName);
+    if (fieldName === PUBLIC_ID_FIELD) {
+      return INTERNAL_ID_FIELD;
+    }
+    if (fieldName === PUBLIC_CREATED_AT_FIELD) {
+      return INTERNAL_CREATION_TIME_FIELD;
+    }
+    return fieldName;
+  }
+
+  private _normalizeRelationFieldName(fieldName: string): string {
     if (fieldName === PUBLIC_ID_FIELD) {
       return INTERNAL_ID_FIELD;
     }
@@ -418,7 +569,10 @@ export class GelRelationalQuery<
 
   private _resolveNonPaginatedLimit(config: any): number | undefined {
     const explicitLimit = config.limit;
-    const defaultLimit = this.tableConfig.defaults?.defaultLimit;
+    const contextDefaultLimit = getOrmContext(this.db as any)?.resolvedDefaults
+      ?.defaultLimit;
+    const defaultLimit =
+      contextDefaultLimit ?? this.tableConfig.defaults?.defaultLimit;
     const resolvedLimit = explicitLimit ?? defaultLimit;
 
     if (resolvedLimit === undefined) {
@@ -1651,7 +1805,7 @@ export class GelRelationalQuery<
     let rowsWithRelations = rows;
     if (this.config.with) {
       rowsWithRelations = await this._loadRelations(
-        rows,
+        rowsWithRelations,
         this.config.with,
         0,
         3,
@@ -2114,12 +2268,2291 @@ export class GelRelationalQuery<
     return streamQuery;
   }
 
+  private async _tryNativeUnfilteredCount(): Promise<number | null> {
+    const query = this.db.query(this.tableConfig.name as any) as any;
+    if (typeof query?.count !== 'function') {
+      return null;
+    }
+    try {
+      return (await query.count()) as number;
+    } catch {
+      return null;
+    }
+  }
+
+  private _executeCountRequiresObjectWhere(where: unknown): void {
+    if (typeof where === 'function') {
+      throw createCountError(
+        COUNT_ERROR.FILTER_UNSUPPORTED,
+        'count() callback where is not supported in v1. Use object filters only.'
+      );
+    }
+  }
+
+  private _normalizeAggregateFieldName(
+    rawField: unknown,
+    methodName = 'aggregate()'
+  ): string {
+    if (typeof rawField !== 'string' || rawField.length === 0) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `${methodName} requires scalar field names.`
+      );
+    }
+    const field = this._normalizePublicFieldName(rawField);
+    const columnNames = new Set(
+      Object.keys((this.tableConfig.table as any)[Columns] ?? {})
+    );
+    if (!columnNames.has(field)) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `${methodName} field '${rawField}' is not a scalar column on '${this.tableConfig.name}'.`
+      );
+    }
+    return field;
+  }
+
+  private _isEmptyWhere(where: unknown): boolean {
+    return (
+      where === undefined ||
+      where === null ||
+      (typeof where === 'object' &&
+        !Array.isArray(where) &&
+        Object.keys(where as Record<string, unknown>).length === 0)
+    );
+  }
+
+  private _coerceAggregateReturnValue(
+    fieldName: string,
+    value: unknown
+  ): unknown | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    const hydrated = this._toPublicRow(
+      {
+        [fieldName]: value,
+      },
+      this.tableConfig
+    ) as Record<string, unknown>;
+    return hydrated[fieldName] ?? null;
+  }
+
+  private _coerceCountSelect(
+    select: unknown
+  ): { all: boolean; fields: string[] } | null {
+    if (select === undefined) {
+      return null;
+    }
+    if (!select || typeof select !== 'object' || Array.isArray(select)) {
+      throw createCountError(
+        COUNT_ERROR.FILTER_UNSUPPORTED,
+        'count({ select }) requires an object.'
+      );
+    }
+
+    let all = false;
+    const fields: string[] = [];
+    const scalarFields = new Set(
+      Object.keys((this.tableConfig.table as any)[Columns] ?? {})
+    );
+
+    for (const [key, value] of Object.entries(
+      select as Record<string, unknown>
+    )) {
+      if (value === undefined || value === false) {
+        continue;
+      }
+      if (value !== true) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          `count({ select }) key '${key}' must be true.`
+        );
+      }
+      if (key === '_all') {
+        all = true;
+        continue;
+      }
+      const normalizedKey = this._normalizePublicFieldName(key);
+      if (!scalarFields.has(normalizedKey)) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          `count({ select }) key '${key}' is not a scalar field on '${this.tableConfig.name}'.`
+        );
+      }
+      fields.push(normalizedKey);
+    }
+
+    return {
+      all,
+      fields: [...new Set(fields)],
+    };
+  }
+
+  private _coerceCountWindowConfig(config: any): {
+    where: unknown;
+    skip: number;
+    take: number | null;
+    hasWindowBounds: boolean;
+  } {
+    this._executeCountRequiresObjectWhere(config.where);
+
+    let where = this._isEmptyWhere(config.where) ? {} : config.where;
+
+    const skipRaw = config.skip;
+    const skip =
+      skipRaw === undefined || skipRaw === null ? 0 : Number(skipRaw);
+    if (!Number.isInteger(skip) || skip < 0) {
+      throw createCountError(
+        COUNT_ERROR.FILTER_UNSUPPORTED,
+        'count({ skip }) must be a non-negative integer.'
+      );
+    }
+
+    const takeRaw = config.take;
+    let take: number | null = null;
+    if (takeRaw !== undefined && takeRaw !== null) {
+      const parsedTake = Number(takeRaw);
+      if (!Number.isInteger(parsedTake) || parsedTake < 0) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          'count({ take }) must be a non-negative integer.'
+        );
+      }
+      take = parsedTake;
+    }
+
+    let resolvedOrderBy = config.orderBy;
+    if (typeof resolvedOrderBy === 'function') {
+      resolvedOrderBy = resolvedOrderBy(this.tableConfig.table as any, {
+        asc,
+        desc,
+      });
+    }
+    const orderSpecs =
+      resolvedOrderBy === undefined
+        ? []
+        : this._orderBySpecs(resolvedOrderBy, this.tableConfig);
+
+    if (config.cursor !== undefined) {
+      const cursor = config.cursor;
+      if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          'count({ cursor }) must be an object with one scalar field value.'
+        );
+      }
+      if (orderSpecs.length === 0) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          'count({ cursor }) requires count({ orderBy }).'
+        );
+      }
+      if (orderSpecs.length > 1) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          'count({ cursor }) supports exactly one orderBy field in v1.'
+        );
+      }
+
+      const entries = Object.entries(cursor as Record<string, unknown>).filter(
+        ([, value]) => value !== undefined
+      );
+      if (entries.length !== 1) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          'count({ cursor }) must specify exactly one field.'
+        );
+      }
+
+      const [rawCursorField, cursorValue] = entries[0]!;
+      if (
+        cursorValue === null ||
+        Array.isArray(cursorValue) ||
+        (typeof cursorValue === 'object' && cursorValue !== null)
+      ) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          'count({ cursor }) value must be a scalar (non-null) value.'
+        );
+      }
+
+      const cursorField = this._normalizePublicFieldName(rawCursorField);
+      const [{ field: orderField, direction }] = orderSpecs;
+      if (cursorField !== orderField) {
+        throw createCountError(
+          COUNT_ERROR.FILTER_UNSUPPORTED,
+          `count({ cursor }) field '${rawCursorField}' must match orderBy field '${orderField}'.`
+        );
+      }
+
+      const operator = direction === 'desc' ? 'lt' : 'gt';
+      const cursorWhere = {
+        [orderField]: {
+          [operator]: cursorValue,
+        },
+      };
+      where = this._isEmptyWhere(where)
+        ? cursorWhere
+        : {
+            AND: [where, cursorWhere],
+          };
+    }
+
+    return {
+      where,
+      skip,
+      take,
+      hasWindowBounds: skip > 0 || take !== null || config.cursor !== undefined,
+    };
+  }
+
+  private _coerceAggregateWindowConfig(config: any): {
+    where: unknown;
+    skip: number;
+    take: number | null;
+    hasWindowBounds: boolean;
+    hasSkipTakeBounds: boolean;
+    hasCursor: boolean;
+  } {
+    if (typeof config.where === 'function') {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        'aggregate() callback where is not supported in v1. Use object filters only.'
+      );
+    }
+
+    let where = this._isEmptyWhere(config.where) ? {} : config.where;
+
+    const skipRaw = config.skip;
+    const skip =
+      skipRaw === undefined || skipRaw === null ? 0 : Number(skipRaw);
+    if (!Number.isInteger(skip) || skip < 0) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'aggregate({ skip }) must be a non-negative integer.'
+      );
+    }
+
+    const takeRaw = config.take;
+    let take: number | null = null;
+    if (takeRaw !== undefined && takeRaw !== null) {
+      const parsedTake = Number(takeRaw);
+      if (!Number.isInteger(parsedTake) || parsedTake < 0) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'aggregate({ take }) must be a non-negative integer.'
+        );
+      }
+      take = parsedTake;
+    }
+
+    let resolvedOrderBy = config.orderBy;
+    if (typeof resolvedOrderBy === 'function') {
+      resolvedOrderBy = resolvedOrderBy(this.tableConfig.table as any, {
+        asc,
+        desc,
+      });
+    }
+    const orderSpecs =
+      resolvedOrderBy === undefined
+        ? []
+        : this._orderBySpecs(resolvedOrderBy, this.tableConfig);
+
+    const hasCursor = config.cursor !== undefined;
+    if (hasCursor) {
+      const cursor = config.cursor;
+      if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'aggregate({ cursor }) must be an object with one scalar field value.'
+        );
+      }
+      if (orderSpecs.length === 0) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'aggregate({ cursor }) requires aggregate({ orderBy }).'
+        );
+      }
+      if (orderSpecs.length > 1) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'aggregate({ cursor }) supports exactly one orderBy field in v1.'
+        );
+      }
+
+      const entries = Object.entries(cursor as Record<string, unknown>).filter(
+        ([, value]) => value !== undefined
+      );
+      if (entries.length !== 1) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'aggregate({ cursor }) must specify exactly one field.'
+        );
+      }
+
+      const [rawCursorField, cursorValue] = entries[0]!;
+      if (
+        cursorValue === null ||
+        Array.isArray(cursorValue) ||
+        (typeof cursorValue === 'object' && cursorValue !== null)
+      ) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'aggregate({ cursor }) value must be a scalar (non-null) value.'
+        );
+      }
+
+      const cursorField = this._normalizePublicFieldName(rawCursorField);
+      const [{ field: orderField, direction }] = orderSpecs;
+      if (cursorField !== orderField) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          `aggregate({ cursor }) field '${rawCursorField}' must match orderBy field '${orderField}'.`
+        );
+      }
+
+      const operator = direction === 'desc' ? 'lt' : 'gt';
+      const cursorWhere = {
+        [orderField]: {
+          [operator]: cursorValue,
+        },
+      };
+      where = this._isEmptyWhere(where)
+        ? cursorWhere
+        : {
+            AND: [where, cursorWhere],
+          };
+    }
+
+    const hasSkipTakeBounds = skip > 0 || take !== null;
+
+    return {
+      where,
+      skip,
+      take,
+      hasWindowBounds: hasSkipTakeBounds || hasCursor,
+      hasSkipTakeBounds,
+      hasCursor,
+    };
+  }
+
+  private _applyCountWindowBounds(
+    value: number,
+    window: {
+      skip: number;
+      take: number | null;
+    }
+  ): number {
+    let bounded = value;
+    if (window.skip > 0) {
+      bounded = Math.max(0, bounded - window.skip);
+    }
+    if (window.take !== null) {
+      bounded = Math.min(bounded, window.take);
+    }
+    return bounded;
+  }
+
+  private async _ensureCountIndexReadyOnce(
+    tableName: string,
+    indexName: string
+  ): Promise<void> {
+    const key = `${tableName}:${indexName}`;
+    const existing = this._countIndexReadinessByKey.get(key);
+    if (existing) {
+      await existing;
+      return;
+    }
+
+    const pending = ensureCountIndexReady(
+      this.db as any,
+      tableName,
+      indexName
+    ).catch((error) => {
+      this._countIndexReadinessByKey.delete(key);
+      throw error;
+    });
+
+    this._countIndexReadinessByKey.set(key, pending);
+    await pending;
+  }
+
+  private async _ensureAggregateIndexReadyOnce(
+    tableName: string,
+    indexName: string
+  ): Promise<void> {
+    const key = `${tableName}:${indexName}`;
+    const existing = this._aggregateIndexReadinessByKey.get(key);
+    if (existing) {
+      await existing;
+      return;
+    }
+
+    const pending = ensureAggregateIndexReady(
+      this.db as any,
+      tableName,
+      indexName
+    ).catch((error) => {
+      this._aggregateIndexReadinessByKey.delete(key);
+      throw error;
+    });
+
+    this._aggregateIndexReadinessByKey.set(key, pending);
+    await pending;
+  }
+
+  private _rethrowAggregateCountError(error: unknown): never {
+    const message = error instanceof Error ? error.message : String(error);
+    const remap = (
+      from: string,
+      to:
+        | (typeof AGGREGATE_ERROR)['FILTER_UNSUPPORTED']
+        | (typeof AGGREGATE_ERROR)['NOT_INDEXED']
+        | (typeof AGGREGATE_ERROR)['INDEX_BUILDING']
+        | (typeof AGGREGATE_ERROR)['RLS_UNSUPPORTED']
+    ) => {
+      if (message.startsWith(`${from}:`)) {
+        throw createAggregateError(
+          to,
+          message.slice(`${from}: `.length) || message
+        );
+      }
+    };
+
+    remap(COUNT_ERROR.FILTER_UNSUPPORTED, AGGREGATE_ERROR.FILTER_UNSUPPORTED);
+    remap(COUNT_ERROR.NOT_INDEXED, AGGREGATE_ERROR.NOT_INDEXED);
+    remap(COUNT_ERROR.INDEX_BUILDING, AGGREGATE_ERROR.INDEX_BUILDING);
+    remap(COUNT_ERROR.RLS_UNSUPPORTED, AGGREGATE_ERROR.RLS_UNSUPPORTED);
+
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(message);
+  }
+
+  private async _executeCountScalar(
+    where: unknown,
+    bucketCache?: PlanBucketReadCache
+  ): Promise<number> {
+    ensureCountAllowedForRls(this.tableConfig, this.rls?.mode as any);
+
+    if (this._isEmptyWhere(where)) {
+      const nativeCount = await this._tryNativeUnfilteredCount();
+      if (nativeCount !== null) {
+        return nativeCount;
+      }
+      throw createCountError(
+        COUNT_ERROR.FILTER_UNSUPPORTED,
+        `Native count() syscall unavailable for '${this.tableConfig.name}'.`
+      );
+    }
+
+    const plan = compileCountQueryPlan(this.tableConfig, where);
+    if (isIndexCountZero(plan)) {
+      return 0;
+    }
+    await this._ensureCountIndexReadyOnce(plan.tableName, plan.indexName);
+    return await readCountFromBuckets(this.db as any, plan, bucketCache);
+  }
+
+  private async _executeCount(
+    config: any
+  ): Promise<number | Record<string, number>> {
+    const windowConfig = this._coerceCountWindowConfig(config);
+    const normalizedWhere = this._isEmptyWhere(windowConfig.where)
+      ? {}
+      : windowConfig.where;
+    const select = this._coerceCountSelect(config.select);
+    if (!select) {
+      const total = await this._executeCountScalar(normalizedWhere);
+      return this._applyCountWindowBounds(total, windowConfig);
+    }
+
+    const result: Record<string, number> = {};
+    if (select.all) {
+      const total = await this._executeCountScalar(normalizedWhere);
+      result._all = this._applyCountWindowBounds(total, windowConfig);
+    }
+
+    if (windowConfig.hasWindowBounds && select.fields.length > 0) {
+      throw createCountError(
+        COUNT_ERROR.FILTER_UNSUPPORTED,
+        'count({ select: { field: true } }) does not support skip/take/cursor in v1. Use count() or count({ select: { _all: true } }).'
+      );
+    }
+
+    const fieldEntries = await Promise.all(
+      select.fields.map(async (field) => {
+        const plan = compileCountFieldQueryPlan(
+          this.tableConfig,
+          normalizedWhere,
+          field
+        );
+        if (isAggregatePlanZero(plan)) {
+          return [field, 0] as const;
+        }
+        await this._ensureCountIndexReadyOnce(plan.tableName, plan.indexName);
+        const value = await readCountFieldFromBuckets(this.db as any, plan);
+        return [field, value] as const;
+      })
+    );
+
+    for (const [field, value] of fieldEntries) {
+      result[field] = value;
+    }
+
+    return result;
+  }
+
+  private _coerceAggregateFieldSelection(
+    selection: unknown,
+    blockName: '_sum' | '_avg' | '_min' | '_max'
+  ): string[] {
+    if (
+      !selection ||
+      typeof selection !== 'object' ||
+      Array.isArray(selection)
+    ) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        `aggregate(${blockName}) requires an object selection.`
+      );
+    }
+
+    const fields: string[] = [];
+    for (const [key, value] of Object.entries(
+      selection as Record<string, unknown>
+    )) {
+      if (value === undefined || value === false) {
+        continue;
+      }
+      if (value !== true) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          `aggregate(${blockName}) key '${key}' must be true.`
+        );
+      }
+      fields.push(this._normalizeAggregateFieldName(key));
+    }
+    return [...new Set(fields)];
+  }
+
+  private _coerceAggregateCountSelection(
+    selection: unknown
+  ): true | { all: boolean; fields: string[] } | null {
+    if (selection === undefined) {
+      return null;
+    }
+    if (selection === true) {
+      return true;
+    }
+    if (
+      !selection ||
+      typeof selection !== 'object' ||
+      Array.isArray(selection)
+    ) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'aggregate({ _count }) must be true or an object.'
+      );
+    }
+
+    let all = false;
+    const fields: string[] = [];
+    const scalarFields = new Set(
+      Object.keys((this.tableConfig.table as any)[Columns] ?? {})
+    );
+    for (const [key, value] of Object.entries(
+      selection as Record<string, unknown>
+    )) {
+      if (value === undefined || value === false) {
+        continue;
+      }
+      if (value !== true) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          `aggregate(_count.${key}) must be true.`
+        );
+      }
+      if (key === '_all') {
+        all = true;
+        continue;
+      }
+      const normalizedKey = this._normalizePublicFieldName(key);
+      if (!scalarFields.has(normalizedKey)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          `aggregate(_count) field '${key}' is not a scalar column on '${this.tableConfig.name}'.`
+        );
+      }
+      fields.push(normalizedKey);
+    }
+
+    return {
+      all,
+      fields: [...new Set(fields)],
+    };
+  }
+
+  private _coerceAggregateConfig(config: any): {
+    where: unknown;
+    window: {
+      skip: number;
+      take: number | null;
+      hasWindowBounds: boolean;
+      hasSkipTakeBounds: boolean;
+      hasCursor: boolean;
+    };
+    count: true | { all: boolean; fields: string[] } | null;
+    sumFields: string[];
+    avgFields: string[];
+    minFields: string[];
+    maxFields: string[];
+  } {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'aggregate(...) requires an object config.'
+      );
+    }
+
+    const allowedKeys = new Set([
+      'where',
+      'orderBy',
+      'skip',
+      'take',
+      'cursor',
+      '_count',
+      '_sum',
+      '_avg',
+      '_min',
+      '_max',
+    ]);
+    for (const [key, value] of Object.entries(
+      config as Record<string, unknown>
+    )) {
+      if (!allowedKeys.has(key) && value !== undefined) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          `aggregate(...) does not support '${key}' in v1.`
+        );
+      }
+    }
+
+    const window = this._coerceAggregateWindowConfig(config);
+
+    const normalized = {
+      where: this._isEmptyWhere(window.where) ? {} : window.where,
+      window,
+      count: this._coerceAggregateCountSelection(config._count),
+      sumFields:
+        config._sum === undefined
+          ? []
+          : this._coerceAggregateFieldSelection(config._sum, '_sum'),
+      avgFields:
+        config._avg === undefined
+          ? []
+          : this._coerceAggregateFieldSelection(config._avg, '_avg'),
+      minFields:
+        config._min === undefined
+          ? []
+          : this._coerceAggregateFieldSelection(config._min, '_min'),
+      maxFields:
+        config._max === undefined
+          ? []
+          : this._coerceAggregateFieldSelection(config._max, '_max'),
+    };
+
+    if (
+      !normalized.count &&
+      normalized.sumFields.length === 0 &&
+      normalized.avgFields.length === 0 &&
+      normalized.minFields.length === 0 &&
+      normalized.maxFields.length === 0
+    ) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'aggregate(...) requires at least one of _count/_sum/_avg/_min/_max.'
+      );
+    }
+
+    const hasNonCountMetrics =
+      normalized.sumFields.length > 0 ||
+      normalized.avgFields.length > 0 ||
+      normalized.minFields.length > 0 ||
+      normalized.maxFields.length > 0;
+    if (normalized.window.hasSkipTakeBounds && hasNonCountMetrics) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'aggregate({ skip/take }) is only supported for _count in v1.'
+      );
+    }
+
+    if (
+      normalized.window.hasWindowBounds &&
+      normalized.count &&
+      normalized.count !== true &&
+      normalized.count.fields.length > 0
+    ) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'aggregate({ _count: { field: true }, skip/take/cursor }) is not supported in v1. Use aggregate({ _count: true }) or aggregate({ _count: { _all: true } }).'
+      );
+    }
+
+    return normalized;
+  }
+
+  private async _executeAggregate(
+    config: any
+  ): Promise<Record<string, unknown>> {
+    const normalized = this._coerceAggregateConfig(config);
+    ensureAggregateAllowedForRls(
+      this.tableConfig,
+      this.rls?.mode as any,
+      'aggregate()'
+    );
+
+    const result: Record<string, unknown> = {};
+    const tasks: Promise<void>[] = [];
+    const bucketReadCache: PlanBucketReadCache = new Map();
+
+    if (normalized.count) {
+      if (normalized.count === true) {
+        tasks.push(
+          (async () => {
+            try {
+              const total = await this._executeCountScalar(
+                normalized.where,
+                bucketReadCache
+              );
+              result._count = this._applyCountWindowBounds(
+                total,
+                normalized.window
+              );
+            } catch (error) {
+              this._rethrowAggregateCountError(error);
+            }
+          })()
+        );
+      } else {
+        const countSelection = normalized.count;
+        tasks.push(
+          (async () => {
+            const countResult: Record<string, number> = {};
+            const countTasks: Promise<void>[] = [];
+
+            if (countSelection.all) {
+              countTasks.push(
+                (async () => {
+                  try {
+                    const total = await this._executeCountScalar(
+                      normalized.where,
+                      bucketReadCache
+                    );
+                    countResult._all = this._applyCountWindowBounds(
+                      total,
+                      normalized.window
+                    );
+                  } catch (error) {
+                    this._rethrowAggregateCountError(error);
+                  }
+                })()
+              );
+            }
+
+            countTasks.push(
+              ...countSelection.fields.map(async (field) => {
+                const plan = compileAggregateQueryPlan(
+                  this.tableConfig,
+                  normalized.where,
+                  { kind: 'countField', field }
+                );
+                if (isAggregatePlanZero(plan)) {
+                  countResult[field] = 0;
+                  return;
+                }
+                await this._ensureAggregateIndexReadyOnce(
+                  plan.tableName,
+                  plan.indexName
+                );
+                countResult[field] = await readCountFieldFromBuckets(
+                  this.db as any,
+                  plan,
+                  bucketReadCache
+                );
+              })
+            );
+
+            await Promise.all(countTasks);
+            result._count = countResult;
+          })()
+        );
+      }
+    }
+
+    if (normalized.sumFields.length > 0) {
+      tasks.push(
+        (async () => {
+          const sumEntries = await Promise.all(
+            normalized.sumFields.map(async (field) => {
+              const plan = compileAggregateQueryPlan(
+                this.tableConfig,
+                normalized.where,
+                { kind: 'sum', field }
+              );
+              if (isAggregatePlanZero(plan)) {
+                return [field, null] as const;
+              }
+              await this._ensureAggregateIndexReadyOnce(
+                plan.tableName,
+                plan.indexName
+              );
+              const value = await readSumFromBuckets(
+                this.db as any,
+                plan,
+                bucketReadCache
+              );
+              return [field, value] as const;
+            })
+          );
+          result._sum = Object.fromEntries(sumEntries);
+        })()
+      );
+    }
+
+    if (normalized.avgFields.length > 0) {
+      tasks.push(
+        (async () => {
+          const avgEntries = await Promise.all(
+            normalized.avgFields.map(async (field) => {
+              const plan = compileAggregateQueryPlan(
+                this.tableConfig,
+                normalized.where,
+                { kind: 'avg', field }
+              );
+              if (isAggregatePlanZero(plan)) {
+                return [field, null] as const;
+              }
+              await this._ensureAggregateIndexReadyOnce(
+                plan.tableName,
+                plan.indexName
+              );
+              const value = await readAverageFromBuckets(
+                this.db as any,
+                plan,
+                bucketReadCache
+              );
+              return [field, value] as const;
+            })
+          );
+          result._avg = Object.fromEntries(avgEntries);
+        })()
+      );
+    }
+
+    if (normalized.minFields.length > 0) {
+      tasks.push(
+        (async () => {
+          const minEntries = await Promise.all(
+            normalized.minFields.map(async (field) => {
+              const plan = compileAggregateQueryPlan(
+                this.tableConfig,
+                normalized.where,
+                { kind: 'min', field }
+              );
+              if (isAggregatePlanZero(plan)) {
+                return [field, null] as const;
+              }
+              await this._ensureAggregateIndexReadyOnce(
+                plan.tableName,
+                plan.indexName
+              );
+              const value = await readExtremaFromBuckets(
+                this.db as any,
+                plan,
+                bucketReadCache
+              );
+              return [
+                field,
+                this._coerceAggregateReturnValue(field, value),
+              ] as const;
+            })
+          );
+          result._min = Object.fromEntries(minEntries);
+        })()
+      );
+    }
+
+    if (normalized.maxFields.length > 0) {
+      tasks.push(
+        (async () => {
+          const maxEntries = await Promise.all(
+            normalized.maxFields.map(async (field) => {
+              const plan = compileAggregateQueryPlan(
+                this.tableConfig,
+                normalized.where,
+                { kind: 'max', field }
+              );
+              if (isAggregatePlanZero(plan)) {
+                return [field, null] as const;
+              }
+              await this._ensureAggregateIndexReadyOnce(
+                plan.tableName,
+                plan.indexName
+              );
+              const value = await readExtremaFromBuckets(
+                this.db as any,
+                plan,
+                bucketReadCache
+              );
+              return [
+                field,
+                this._coerceAggregateReturnValue(field, value),
+              ] as const;
+            })
+          );
+          result._max = Object.fromEntries(maxEntries);
+        })()
+      );
+    }
+
+    await Promise.all(tasks);
+
+    return result;
+  }
+
+  private _getAggregateCartesianMaxKeys(): number {
+    const value = this.tableConfig.defaults?.aggregateCartesianMaxKeys;
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS;
+    }
+    if (value <= 0) {
+      return 1;
+    }
+    return Math.floor(value);
+  }
+
+  private _getAggregateWorkBudget(): number {
+    const value = this.tableConfig.defaults?.aggregateWorkBudget;
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return DEFAULT_AGGREGATE_WORK_BUDGET;
+    }
+    if (value <= 0) {
+      return 1;
+    }
+    return Math.floor(value);
+  }
+
+  private _serializeGroupByValue(value: unknown): string {
+    if (value === undefined) {
+      return '__betterConvexUndefined';
+    }
+    return JSON.stringify(value);
+  }
+
+  private _pushGroupByConstraint(
+    constraints: Map<string, Map<string, unknown>>,
+    fieldName: string,
+    values: unknown[]
+  ): void {
+    const incoming = new Map<string, unknown>();
+    for (const value of values) {
+      incoming.set(this._serializeGroupByValue(value), value);
+    }
+
+    const existing = constraints.get(fieldName);
+    if (!existing) {
+      constraints.set(fieldName, incoming);
+      return;
+    }
+
+    const intersected = new Map<string, unknown>();
+    for (const [stableKey, value] of existing.entries()) {
+      if (incoming.has(stableKey)) {
+        intersected.set(stableKey, value);
+      }
+    }
+    constraints.set(fieldName, intersected);
+  }
+
+  private _parseGroupByFieldConstraint(
+    fieldName: string,
+    value: unknown,
+    constraints: Map<string, Map<string, unknown>>
+  ): void {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      this._pushGroupByConstraint(constraints, fieldName, [value]);
+      return;
+    }
+
+    const filter = value as Record<string, unknown>;
+    if (
+      Object.hasOwn(filter, 'OR') ||
+      Object.hasOwn(filter, 'NOT') ||
+      Object.hasOwn(filter, 'RAW')
+    ) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `groupBy() only supports eq/in/isNull constraints for 'by' field '${fieldName}'.`
+      );
+    }
+
+    if (Object.hasOwn(filter, 'AND')) {
+      const andEntries = filter.AND;
+      if (!Array.isArray(andEntries)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          `groupBy() field '${fieldName}' AND must be an array.`
+        );
+      }
+      for (const entry of andEntries) {
+        this._parseGroupByFieldConstraint(fieldName, entry, constraints);
+      }
+    }
+
+    let hasRecognized = false;
+    if (Object.hasOwn(filter, 'eq')) {
+      hasRecognized = true;
+      this._pushGroupByConstraint(constraints, fieldName, [filter.eq]);
+    }
+
+    if (Object.hasOwn(filter, 'in')) {
+      hasRecognized = true;
+      const inValues = filter.in;
+      if (!Array.isArray(inValues)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          `groupBy() field '${fieldName}'.in must be an array.`
+        );
+      }
+      this._pushGroupByConstraint(constraints, fieldName, inValues);
+    }
+
+    if (Object.hasOwn(filter, 'isNull')) {
+      hasRecognized = true;
+      if (filter.isNull !== true) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          `groupBy() field '${fieldName}'.isNull only supports true.`
+        );
+      }
+      this._pushGroupByConstraint(constraints, fieldName, [null]);
+    }
+
+    if (
+      Object.hasOwn(filter, 'gt') ||
+      Object.hasOwn(filter, 'gte') ||
+      Object.hasOwn(filter, 'lt') ||
+      Object.hasOwn(filter, 'lte')
+    ) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `groupBy() requires finite eq/in/isNull constraints for 'by' field '${fieldName}'. Range operators are unsupported for group keys.`
+      );
+    }
+
+    const unsupportedKeys = Object.keys(filter).filter(
+      (key) =>
+        !['AND', 'eq', 'in', 'isNull'].includes(key) &&
+        filter[key] !== undefined
+    );
+    if (unsupportedKeys.length > 0) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `groupBy() does not support operators [${unsupportedKeys.join(', ')}] for 'by' field '${fieldName}'.`
+      );
+    }
+
+    if (!hasRecognized && !Object.hasOwn(filter, 'AND')) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `groupBy() field '${fieldName}' filter is unsupported.`
+      );
+    }
+  }
+
+  private _collectGroupByFieldValues(
+    where: unknown,
+    byFields: string[]
+  ): Record<string, unknown[]> {
+    if (this._isEmptyWhere(where)) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'groupBy() requires finite eq/in/isNull constraints for every by field in where.'
+      );
+    }
+    if (!where || typeof where !== 'object' || Array.isArray(where)) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        'groupBy() where must be an object filter.'
+      );
+    }
+
+    const scalarFields = new Set(
+      Object.keys((this.tableConfig.table as any)[Columns] ?? {})
+    );
+    const relationFields = new Set(
+      Object.keys(this.tableConfig.relations ?? {})
+    );
+    const byFieldSet = new Set(byFields);
+    const constraints = new Map<string, Map<string, unknown>>();
+
+    const visit = (node: Record<string, unknown>) => {
+      if (
+        Object.hasOwn(node, 'OR') ||
+        Object.hasOwn(node, 'NOT') ||
+        Object.hasOwn(node, 'RAW')
+      ) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          'groupBy() only supports conjunction filters (object fields + AND) in v1.'
+        );
+      }
+
+      if (Object.hasOwn(node, 'AND')) {
+        const andEntries = node.AND;
+        if (!Array.isArray(andEntries)) {
+          throw createAggregateError(
+            AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+            'groupBy() AND must be an array.'
+          );
+        }
+        for (const entry of andEntries) {
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            throw createAggregateError(
+              AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+              'groupBy() AND entries must be objects.'
+            );
+          }
+          visit(entry as Record<string, unknown>);
+        }
+      }
+
+      for (const [rawField, value] of Object.entries(node)) {
+        if (rawField === 'AND') {
+          continue;
+        }
+
+        const fieldName = this._normalizePublicFieldName(rawField);
+        if (!scalarFields.has(fieldName)) {
+          if (relationFields.has(rawField)) {
+            throw createAggregateError(
+              AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+              `groupBy() does not support relation filters ('${rawField}') in v1.`
+            );
+          }
+          throw createAggregateError(
+            AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+            `groupBy() filter field '${rawField}' is not recognized.`
+          );
+        }
+
+        if (!byFieldSet.has(fieldName)) {
+          continue;
+        }
+
+        this._parseGroupByFieldConstraint(fieldName, value, constraints);
+      }
+    };
+
+    visit(where as Record<string, unknown>);
+
+    const output: Record<string, unknown[]> = {};
+    for (const field of byFields) {
+      const values = constraints.get(field);
+      if (!values) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          `groupBy() requires finite constraints for by field '${field}'. Add where.${field} with eq/in/isNull.`
+        );
+      }
+      output[field] = [...values.values()];
+    }
+
+    return output;
+  }
+
+  private _buildGroupByCandidates(
+    byFields: string[],
+    byFieldValues: Record<string, unknown[]>
+  ): Record<string, unknown>[] {
+    if (byFields.length === 0) {
+      return [];
+    }
+
+    const output: Record<string, unknown>[] = [];
+    const current: Record<string, unknown> = {};
+    const build = (index: number) => {
+      if (index >= byFields.length) {
+        output.push({ ...current });
+        return;
+      }
+      const field = byFields[index]!;
+      const values = byFieldValues[field] ?? [];
+      for (const value of values) {
+        current[field] = value;
+        build(index + 1);
+      }
+      delete current[field];
+    };
+    build(0);
+    return output;
+  }
+
+  private _coerceGroupByByFields(
+    by: unknown
+  ): Array<{ raw: string; field: string }> {
+    const rawEntries = Array.isArray(by) ? by : [by];
+    if (rawEntries.length === 0) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'groupBy({ by }) requires at least one field.'
+      );
+    }
+
+    const deduped = new Map<string, { raw: string; field: string }>();
+    for (const rawEntry of rawEntries) {
+      if (typeof rawEntry !== 'string') {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'groupBy({ by }) must be a string or string[] of scalar fields.'
+        );
+      }
+      const field = this._normalizeAggregateFieldName(rawEntry);
+      if (!deduped.has(field)) {
+        deduped.set(field, { raw: rawEntry, field });
+      }
+    }
+
+    return [...deduped.values()];
+  }
+
+  private _isGroupByOrderDirection(value: unknown): value is 'asc' | 'desc' {
+    return value === 'asc' || value === 'desc';
+  }
+
+  private _groupByOrderPathLabel(path: string[]): string {
+    return path.join('.');
+  }
+
+  private _readGroupByPathValue(
+    source: unknown,
+    path: string[]
+  ): { hasValue: boolean; value: unknown } {
+    let current = source as unknown;
+    for (const segment of path) {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) {
+        return { hasValue: false, value: undefined };
+      }
+      if (!Object.hasOwn(current as Record<string, unknown>, segment)) {
+        return { hasValue: false, value: undefined };
+      }
+      current = (current as Record<string, unknown>)[segment];
+    }
+    return {
+      hasValue: current !== undefined,
+      value: current,
+    };
+  }
+
+  private _compareGroupByValues(
+    left: unknown,
+    right: unknown,
+    direction: 'asc' | 'desc'
+  ): number {
+    if (left === null || left === undefined) {
+      if (right === null || right === undefined) return 0;
+      return 1;
+    }
+    if (right === null || right === undefined) {
+      return -1;
+    }
+
+    if (left < right) {
+      return direction === 'asc' ? -1 : 1;
+    }
+    if (left > right) {
+      return direction === 'asc' ? 1 : -1;
+    }
+    return 0;
+  }
+
+  private _compareGroupByRows(
+    left: Record<string, unknown>,
+    right: Record<string, unknown>,
+    specs: GroupByOrderSpec[]
+  ): number {
+    for (const spec of specs) {
+      const leftValue = this._readGroupByPathValue(left, spec.path).value;
+      const rightValue = this._readGroupByPathValue(right, spec.path).value;
+      const compared = this._compareGroupByValues(
+        leftValue,
+        rightValue,
+        spec.direction
+      );
+      if (compared !== 0) {
+        return compared;
+      }
+    }
+    return 0;
+  }
+
+  private _coerceGroupByOrderSpecs(
+    rawOrderBy: unknown,
+    by: Array<{ raw: string; field: string }>,
+    aggregate: {
+      count: true | { all: boolean; fields: string[] } | null;
+      sumFields: string[];
+      avgFields: string[];
+      minFields: string[];
+      maxFields: string[];
+    }
+  ): GroupByOrderSpec[] {
+    if (rawOrderBy === undefined || rawOrderBy === null) {
+      return [];
+    }
+    if (typeof rawOrderBy === 'function') {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'groupBy({ orderBy }) callback syntax is not supported in v1. Use object syntax.'
+      );
+    }
+
+    const byFieldToOutputKey = new Map<string, string>(
+      by.map((entry) => [entry.field, entry.raw])
+    );
+    const byFields = new Set(by.map((entry) => entry.field));
+    const explicitSpecs: GroupByOrderSpec[] = [];
+    const seenLabels = new Set<string>();
+    const pushSpec = (spec: GroupByOrderSpec) => {
+      const label = this._groupByOrderPathLabel(spec.path);
+      if (seenLabels.has(label)) {
+        return;
+      }
+      seenLabels.add(label);
+      explicitSpecs.push(spec);
+    };
+
+    const parseDirection = (value: unknown, label: string): 'asc' | 'desc' => {
+      if (!this._isGroupByOrderDirection(value)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          `groupBy({ orderBy }) '${label}' must be 'asc' or 'desc'.`
+        );
+      }
+      return value;
+    };
+
+    const orderEntries = Array.isArray(rawOrderBy) ? rawOrderBy : [rawOrderBy];
+    for (const entry of orderEntries) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'groupBy({ orderBy }) entries must be objects.'
+        );
+      }
+
+      for (const [rawKey, rawValue] of Object.entries(
+        entry as Record<string, unknown>
+      )) {
+        if (rawValue === undefined) {
+          continue;
+        }
+
+        if (rawKey === '_count') {
+          if (this._isGroupByOrderDirection(rawValue)) {
+            if (aggregate.count === true) {
+              pushSpec({
+                direction: rawValue,
+                label: '_count',
+                path: ['_count'],
+              });
+              continue;
+            }
+            if (aggregate.count?.all) {
+              pushSpec({
+                direction: rawValue,
+                label: '_count._all',
+                path: ['_count', '_all'],
+              });
+              continue;
+            }
+            throw createAggregateError(
+              AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+              "groupBy({ orderBy: { _count: '...' } }) requires _count: true or _count: { _all: true }."
+            );
+          }
+
+          if (
+            !rawValue ||
+            typeof rawValue !== 'object' ||
+            Array.isArray(rawValue)
+          ) {
+            throw createAggregateError(
+              AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+              'groupBy({ orderBy: { _count } }) must be a direction or object.'
+            );
+          }
+
+          for (const [rawCountField, rawCountDirection] of Object.entries(
+            rawValue as Record<string, unknown>
+          )) {
+            if (rawCountDirection === undefined) {
+              continue;
+            }
+            const direction = parseDirection(
+              rawCountDirection,
+              `_count.${rawCountField}`
+            );
+            if (rawCountField === '_all') {
+              if (aggregate.count !== true && !aggregate.count?.all) {
+                throw createAggregateError(
+                  AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+                  'groupBy({ orderBy: { _count: { _all: ... } } }) requires selecting _count._all.'
+                );
+              }
+              pushSpec({
+                direction,
+                label: '_count._all',
+                path:
+                  aggregate.count === true ? ['_count'] : ['_count', '_all'],
+              });
+              continue;
+            }
+
+            const normalizedCountField = this._normalizeAggregateFieldName(
+              rawCountField,
+              'groupBy(orderBy._count)'
+            );
+            if (
+              aggregate.count === true ||
+              !aggregate.count?.fields.includes(normalizedCountField)
+            ) {
+              throw createAggregateError(
+                AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+                `groupBy({ orderBy: { _count: { ${rawCountField}: ... } } }) requires selecting _count.${normalizedCountField}.`
+              );
+            }
+            pushSpec({
+              direction,
+              label: `_count.${normalizedCountField}`,
+              path: ['_count', normalizedCountField],
+            });
+          }
+          continue;
+        }
+
+        if (
+          rawKey === '_sum' ||
+          rawKey === '_avg' ||
+          rawKey === '_min' ||
+          rawKey === '_max'
+        ) {
+          if (
+            !rawValue ||
+            typeof rawValue !== 'object' ||
+            Array.isArray(rawValue)
+          ) {
+            throw createAggregateError(
+              AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+              `groupBy({ orderBy.${rawKey} }) must be an object.`
+            );
+          }
+
+          const selectedFields =
+            rawKey === '_sum'
+              ? aggregate.sumFields
+              : rawKey === '_avg'
+                ? aggregate.avgFields
+                : rawKey === '_min'
+                  ? aggregate.minFields
+                  : aggregate.maxFields;
+
+          for (const [rawMetricField, rawDirection] of Object.entries(
+            rawValue as Record<string, unknown>
+          )) {
+            if (rawDirection === undefined) {
+              continue;
+            }
+            const direction = parseDirection(
+              rawDirection,
+              `${rawKey}.${rawMetricField}`
+            );
+            const normalizedMetricField = this._normalizeAggregateFieldName(
+              rawMetricField,
+              `groupBy(orderBy.${rawKey})`
+            );
+            if (!selectedFields.includes(normalizedMetricField)) {
+              throw createAggregateError(
+                AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+                `groupBy({ orderBy: { ${rawKey}: { ${rawMetricField}: ... } } }) requires selecting ${rawKey}.${normalizedMetricField}.`
+              );
+            }
+            pushSpec({
+              direction,
+              label: `${rawKey}.${normalizedMetricField}`,
+              path: [rawKey, normalizedMetricField],
+            });
+          }
+          continue;
+        }
+
+        const normalizedByField = this._normalizePublicFieldName(rawKey);
+        if (!byFields.has(normalizedByField)) {
+          throw createAggregateError(
+            AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+            `groupBy({ orderBy }) field '${rawKey}' must be present in by.`
+          );
+        }
+        pushSpec({
+          direction: parseDirection(rawValue, rawKey),
+          label: rawKey,
+          path: [byFieldToOutputKey.get(normalizedByField)!],
+        });
+      }
+    }
+
+    const output = [...explicitSpecs];
+    const outputPathSet = new Set(output.map((spec) => spec.path.join('.')));
+    for (const entry of by) {
+      const tiePath = [entry.raw];
+      const tieKey = tiePath.join('.');
+      if (outputPathSet.has(tieKey)) {
+        continue;
+      }
+      output.push({
+        direction: 'asc',
+        label: entry.raw,
+        path: tiePath,
+      });
+      outputPathSet.add(tieKey);
+    }
+    return output;
+  }
+
+  private _coerceGroupByWindowConfig(
+    config: Record<string, unknown>,
+    orderSpecs: GroupByOrderSpec[]
+  ): {
+    skip: number;
+    take: number | null;
+    hasWindowBounds: boolean;
+    hasCursor: boolean;
+    cursorValues: unknown[] | null;
+  } {
+    const skipRaw = config.skip;
+    const skip =
+      skipRaw === undefined || skipRaw === null ? 0 : Number(skipRaw);
+    if (!Number.isInteger(skip) || skip < 0) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'groupBy({ skip }) must be a non-negative integer.'
+      );
+    }
+
+    const takeRaw = config.take;
+    let take: number | null = null;
+    if (takeRaw !== undefined && takeRaw !== null) {
+      const parsedTake = Number(takeRaw);
+      if (!Number.isInteger(parsedTake) || parsedTake < 0) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'groupBy({ take }) must be a non-negative integer.'
+        );
+      }
+      take = parsedTake;
+    }
+
+    const hasCursor = config.cursor !== undefined;
+    const hasWindowBounds = hasCursor || skip > 0 || take !== null;
+    if (hasWindowBounds && config.orderBy === undefined) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'groupBy({ skip/take/cursor }) requires groupBy({ orderBy }).'
+      );
+    }
+
+    let cursorValues: unknown[] | null = null;
+    if (hasCursor) {
+      if (orderSpecs.length === 0) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'groupBy({ cursor }) requires at least one orderBy key.'
+        );
+      }
+      const cursor = config.cursor;
+      if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          'groupBy({ cursor }) must be an object.'
+        );
+      }
+      cursorValues = orderSpecs.map((spec) => {
+        const resolved = this._readGroupByPathValue(cursor, spec.path);
+        if (!resolved.hasValue) {
+          throw createAggregateError(
+            AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+            `groupBy({ cursor }) must include '${this._groupByOrderPathLabel(spec.path)}'.`
+          );
+        }
+        return resolved.value;
+      });
+    }
+
+    return {
+      skip,
+      take,
+      hasWindowBounds,
+      hasCursor,
+      cursorValues,
+    };
+  }
+
+  private _isGroupByHavingValueOperatorObject(
+    value: Record<string, unknown>
+  ): boolean {
+    return (
+      Object.hasOwn(value, 'eq') ||
+      Object.hasOwn(value, 'in') ||
+      Object.hasOwn(value, 'isNull') ||
+      Object.hasOwn(value, 'gt') ||
+      Object.hasOwn(value, 'gte') ||
+      Object.hasOwn(value, 'lt') ||
+      Object.hasOwn(value, 'lte') ||
+      Object.hasOwn(value, 'AND')
+    );
+  }
+
+  private _matchesGroupByHavingValuePredicate(
+    actual: unknown,
+    predicate: unknown,
+    label: string
+  ): boolean {
+    if (
+      predicate === null ||
+      typeof predicate !== 'object' ||
+      Array.isArray(predicate)
+    ) {
+      return actual === predicate;
+    }
+
+    const filter = predicate as Record<string, unknown>;
+    if (
+      Object.hasOwn(filter, 'OR') ||
+      Object.hasOwn(filter, 'NOT') ||
+      Object.hasOwn(filter, 'RAW')
+    ) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `groupBy({ having }) does not support OR/NOT/RAW for '${label}'.`
+      );
+    }
+
+    if (Object.hasOwn(filter, 'AND')) {
+      const andEntries = filter.AND;
+      if (!Array.isArray(andEntries)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          `groupBy({ having }) AND for '${label}' must be an array.`
+        );
+      }
+      for (const entry of andEntries) {
+        if (!this._matchesGroupByHavingValuePredicate(actual, entry, label)) {
+          return false;
+        }
+      }
+    }
+
+    let hasRecognized = false;
+    if (Object.hasOwn(filter, 'eq')) {
+      hasRecognized = true;
+      if (actual !== filter.eq) {
+        return false;
+      }
+    }
+
+    if (Object.hasOwn(filter, 'in')) {
+      hasRecognized = true;
+      const inValues = filter.in;
+      if (!Array.isArray(inValues)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          `groupBy({ having }) '${label}.in' must be an array.`
+        );
+      }
+      if (!inValues.some((value) => value === actual)) {
+        return false;
+      }
+    }
+
+    if (Object.hasOwn(filter, 'isNull')) {
+      hasRecognized = true;
+      if (filter.isNull !== true) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          `groupBy({ having }) '${label}.isNull' only supports true.`
+        );
+      }
+      if (actual !== null && actual !== undefined) {
+        return false;
+      }
+    }
+
+    if (Object.hasOwn(filter, 'gt')) {
+      hasRecognized = true;
+      const gtValue = filter.gt as any;
+      if (actual === null || actual === undefined || !(actual > gtValue)) {
+        return false;
+      }
+    }
+
+    if (Object.hasOwn(filter, 'gte')) {
+      hasRecognized = true;
+      const gteValue = filter.gte as any;
+      if (actual === null || actual === undefined || !(actual >= gteValue)) {
+        return false;
+      }
+    }
+
+    if (Object.hasOwn(filter, 'lt')) {
+      hasRecognized = true;
+      const ltValue = filter.lt as any;
+      if (actual === null || actual === undefined || !(actual < ltValue)) {
+        return false;
+      }
+    }
+
+    if (Object.hasOwn(filter, 'lte')) {
+      hasRecognized = true;
+      const lteValue = filter.lte as any;
+      if (actual === null || actual === undefined || !(actual <= lteValue)) {
+        return false;
+      }
+    }
+
+    const unsupportedKeys = Object.keys(filter).filter(
+      (key) =>
+        !['AND', 'eq', 'in', 'isNull', 'gt', 'gte', 'lt', 'lte'].includes(
+          key
+        ) && filter[key] !== undefined
+    );
+    if (unsupportedKeys.length > 0) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `groupBy({ having }) does not support operators [${unsupportedKeys.join(', ')}] for '${label}'.`
+      );
+    }
+
+    if (!hasRecognized && !Object.hasOwn(filter, 'AND')) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `groupBy({ having }) '${label}' filter is unsupported.`
+      );
+    }
+
+    return true;
+  }
+
+  private _evaluateGroupByHaving(
+    having: unknown,
+    row: Record<string, unknown>,
+    byOutputKeys: Set<string>
+  ): boolean {
+    if (having === undefined) {
+      return true;
+    }
+    if (!having || typeof having !== 'object' || Array.isArray(having)) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        'groupBy({ having }) must be an object.'
+      );
+    }
+
+    const node = having as Record<string, unknown>;
+    if (
+      Object.hasOwn(node, 'OR') ||
+      Object.hasOwn(node, 'NOT') ||
+      Object.hasOwn(node, 'RAW')
+    ) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        'groupBy({ having }) only supports conjunction filters (object fields + AND) in v1.'
+      );
+    }
+
+    if (Object.hasOwn(node, 'AND')) {
+      const andEntries = node.AND;
+      if (!Array.isArray(andEntries)) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+          'groupBy({ having }).AND must be an array.'
+        );
+      }
+      for (const entry of andEntries) {
+        if (!this._evaluateGroupByHaving(entry, row, byOutputKeys)) {
+          return false;
+        }
+      }
+    }
+
+    for (const [rawKey, predicate] of Object.entries(node)) {
+      if (rawKey === 'AND') {
+        continue;
+      }
+
+      if (byOutputKeys.has(rawKey)) {
+        if (
+          !this._matchesGroupByHavingValuePredicate(
+            row[rawKey],
+            predicate,
+            rawKey
+          )
+        ) {
+          return false;
+        }
+        continue;
+      }
+
+      if (rawKey === '_count') {
+        const countValue = row._count;
+        if (countValue === undefined) {
+          throw createAggregateError(
+            AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+            "groupBy({ having: { _count: ... } }) requires selecting '_count'."
+          );
+        }
+
+        if (
+          predicate &&
+          typeof predicate === 'object' &&
+          !Array.isArray(predicate) &&
+          !this._isGroupByHavingValueOperatorObject(
+            predicate as Record<string, unknown>
+          )
+        ) {
+          const countObject = countValue as Record<string, unknown>;
+          for (const [rawCountKey, rawCountPredicate] of Object.entries(
+            predicate as Record<string, unknown>
+          )) {
+            if (rawCountPredicate === undefined) {
+              continue;
+            }
+            const countKey =
+              rawCountKey === '_all'
+                ? '_all'
+                : this._normalizePublicFieldName(rawCountKey);
+            const countPath =
+              typeof countValue === 'number'
+                ? rawCountKey === '_all'
+                  ? '_count'
+                  : null
+                : `_count.${countKey}`;
+            if (!countPath) {
+              throw createAggregateError(
+                AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+                `groupBy({ having: { _count: { ${rawCountKey}: ... } } }) requires selecting _count.${countKey}.`
+              );
+            }
+
+            const actualCountValue =
+              typeof countValue === 'number'
+                ? countValue
+                : countObject[countKey];
+            if (actualCountValue === undefined) {
+              throw createAggregateError(
+                AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+                `groupBy({ having: { _count: { ${rawCountKey}: ... } } }) requires selecting _count.${countKey}.`
+              );
+            }
+            if (
+              !this._matchesGroupByHavingValuePredicate(
+                actualCountValue,
+                rawCountPredicate,
+                countPath
+              )
+            ) {
+              return false;
+            }
+          }
+          continue;
+        }
+
+        const totalCount =
+          typeof countValue === 'number'
+            ? countValue
+            : (countValue as Record<string, unknown>)._all;
+        if (totalCount === undefined) {
+          throw createAggregateError(
+            AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+            'groupBy({ having: { _count: ... } }) requires _count: true or _count: { _all: true }.'
+          );
+        }
+        if (
+          !this._matchesGroupByHavingValuePredicate(
+            totalCount,
+            predicate,
+            '_count'
+          )
+        ) {
+          return false;
+        }
+        continue;
+      }
+
+      if (
+        rawKey === '_sum' ||
+        rawKey === '_avg' ||
+        rawKey === '_min' ||
+        rawKey === '_max'
+      ) {
+        const block = row[rawKey];
+        if (!block || typeof block !== 'object' || Array.isArray(block)) {
+          throw createAggregateError(
+            AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+            `groupBy({ having: { ${rawKey}: ... } }) requires selecting '${rawKey}'.`
+          );
+        }
+        if (
+          !predicate ||
+          typeof predicate !== 'object' ||
+          Array.isArray(predicate)
+        ) {
+          throw createAggregateError(
+            AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+            `groupBy({ having: { ${rawKey}: ... } }) must be an object.`
+          );
+        }
+        for (const [rawMetricField, metricPredicate] of Object.entries(
+          predicate as Record<string, unknown>
+        )) {
+          if (metricPredicate === undefined) {
+            continue;
+          }
+          const normalizedMetricField = this._normalizeAggregateFieldName(
+            rawMetricField,
+            `groupBy(having.${rawKey})`
+          );
+          const metricValue = (block as Record<string, unknown>)[
+            normalizedMetricField
+          ];
+          if (metricValue === undefined) {
+            throw createAggregateError(
+              AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+              `groupBy({ having: { ${rawKey}: { ${rawMetricField}: ... } } }) requires selecting ${rawKey}.${normalizedMetricField}.`
+            );
+          }
+          if (
+            !this._matchesGroupByHavingValuePredicate(
+              metricValue,
+              metricPredicate,
+              `${rawKey}.${normalizedMetricField}`
+            )
+          ) {
+            return false;
+          }
+        }
+        continue;
+      }
+
+      throw createAggregateError(
+        AGGREGATE_ERROR.FILTER_UNSUPPORTED,
+        `groupBy({ having }) key '${rawKey}' is unsupported.`
+      );
+    }
+
+    return true;
+  }
+
+  private _coerceGroupByConfig(config: any): {
+    by: Array<{ raw: string; field: string }>;
+    candidates: Record<string, unknown>[];
+    orderSpecs: GroupByOrderSpec[];
+    having: unknown;
+    window: {
+      skip: number;
+      take: number | null;
+      hasWindowBounds: boolean;
+      hasCursor: boolean;
+      cursorValues: unknown[] | null;
+    };
+    aggregate: {
+      where: unknown;
+      window: {
+        skip: number;
+        take: number | null;
+        hasWindowBounds: boolean;
+        hasSkipTakeBounds: boolean;
+        hasCursor: boolean;
+      };
+      count: true | { all: boolean; fields: string[] } | null;
+      sumFields: string[];
+      avgFields: string[];
+      minFields: string[];
+      maxFields: string[];
+    };
+  } {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'groupBy(...) requires an object config.'
+      );
+    }
+
+    const allowedKeys = new Set([
+      'by',
+      'where',
+      '_count',
+      '_sum',
+      '_avg',
+      '_min',
+      '_max',
+      'orderBy',
+      'skip',
+      'take',
+      'cursor',
+      'having',
+    ]);
+    for (const [key, value] of Object.entries(
+      config as Record<string, unknown>
+    )) {
+      if (!allowedKeys.has(key) && value !== undefined) {
+        throw createAggregateError(
+          AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+          `groupBy(...) does not support '${key}' in v1.`
+        );
+      }
+    }
+
+    if (!Object.hasOwn(config, 'by') || config.by === undefined) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        'groupBy({ by }) is required.'
+      );
+    }
+
+    const by = this._coerceGroupByByFields(config.by);
+    const aggregate = this._coerceAggregateConfig({
+      where: config.where,
+      _count: config._count,
+      _sum: config._sum,
+      _avg: config._avg,
+      _min: config._min,
+      _max: config._max,
+    });
+
+    const byFields = by.map((entry) => entry.field);
+    const byFieldValues = this._collectGroupByFieldValues(
+      aggregate.where,
+      byFields
+    );
+    const candidates = this._buildGroupByCandidates(byFields, byFieldValues);
+    const orderSpecs = this._coerceGroupByOrderSpecs(
+      config.orderBy,
+      by,
+      aggregate
+    );
+    const window = this._coerceGroupByWindowConfig(config, orderSpecs);
+
+    const maxKeys = this._getAggregateCartesianMaxKeys();
+    if (candidates.length > maxKeys) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        `groupBy() expands to ${candidates.length} groups, exceeding aggregateCartesianMaxKeys (${maxKeys}). Reduce IN fan-out or increase defineSchema(..., { defaults: { aggregateCartesianMaxKeys } }).`
+      );
+    }
+
+    const metricReads =
+      (aggregate.count === true
+        ? 1
+        : aggregate.count
+          ? (aggregate.count.all ? 1 : 0) + aggregate.count.fields.length
+          : 0) +
+      aggregate.sumFields.length +
+      aggregate.avgFields.length +
+      aggregate.minFields.length +
+      aggregate.maxFields.length;
+    const estimatedWork = candidates.length * Math.max(1, metricReads);
+    const workBudget = this._getAggregateWorkBudget();
+    if (estimatedWork > workBudget) {
+      throw createAggregateError(
+        AGGREGATE_ERROR.ARGS_UNSUPPORTED,
+        `groupBy() estimated work is ${estimatedWork} units, exceeding aggregateWorkBudget (${workBudget}). Reduce group fan-out or increase defineSchema(..., { defaults: { aggregateWorkBudget } }).`
+      );
+    }
+
+    return {
+      by,
+      candidates,
+      orderSpecs,
+      having: config.having,
+      window,
+      aggregate,
+    };
+  }
+
+  private _buildAggregateMetricConfig(aggregate: {
+    count: true | { all: boolean; fields: string[] } | null;
+    sumFields: string[];
+    avgFields: string[];
+    minFields: string[];
+    maxFields: string[];
+  }): Record<string, unknown> {
+    const config: Record<string, unknown> = {};
+
+    if (aggregate.count) {
+      if (aggregate.count === true) {
+        config._count = true;
+      } else {
+        const selection: Record<string, true> = {};
+        if (aggregate.count.all) {
+          selection._all = true;
+        }
+        for (const field of aggregate.count.fields) {
+          selection[field] = true;
+        }
+        config._count = selection;
+      }
+    }
+
+    if (aggregate.sumFields.length > 0) {
+      config._sum = Object.fromEntries(
+        aggregate.sumFields.map((field) => [field, true])
+      );
+    }
+
+    if (aggregate.avgFields.length > 0) {
+      config._avg = Object.fromEntries(
+        aggregate.avgFields.map((field) => [field, true])
+      );
+    }
+
+    if (aggregate.minFields.length > 0) {
+      config._min = Object.fromEntries(
+        aggregate.minFields.map((field) => [field, true])
+      );
+    }
+
+    if (aggregate.maxFields.length > 0) {
+      config._max = Object.fromEntries(
+        aggregate.maxFields.map((field) => [field, true])
+      );
+    }
+
+    return config;
+  }
+
+  private async _executeGroupBy(
+    config: any
+  ): Promise<Record<string, unknown>[]> {
+    const normalized = this._coerceGroupByConfig(config);
+    ensureAggregateAllowedForRls(
+      this.tableConfig,
+      this.rls?.mode as any,
+      'groupBy()'
+    );
+
+    if (normalized.candidates.length === 0) {
+      return [];
+    }
+
+    const metricConfig = this._buildAggregateMetricConfig(normalized.aggregate);
+    const byOutputKeys = new Set(normalized.by.map((entry) => entry.raw));
+    let rows = await this._mapWithConcurrency(
+      normalized.candidates,
+      async (candidate) => {
+        const groupWhere = this._isEmptyWhere(normalized.aggregate.where)
+          ? candidate
+          : {
+              AND: [normalized.aggregate.where, candidate],
+            };
+
+        const aggregateRow = await this._executeAggregate({
+          ...metricConfig,
+          where: groupWhere,
+        });
+
+        const groupFields = Object.fromEntries(
+          normalized.by.map((entry) => [
+            entry.raw,
+            this._coerceAggregateReturnValue(
+              entry.field,
+              candidate[entry.field]
+            ),
+          ])
+        );
+
+        return {
+          ...groupFields,
+          ...aggregateRow,
+        };
+      }
+    );
+
+    if (normalized.having !== undefined) {
+      rows = rows.filter((row) =>
+        this._evaluateGroupByHaving(normalized.having, row, byOutputKeys)
+      );
+    }
+
+    if (normalized.orderSpecs.length > 0) {
+      rows = [...rows].sort((left, right) =>
+        this._compareGroupByRows(left, right, normalized.orderSpecs)
+      );
+    }
+
+    const groupByCursorValues = normalized.window.cursorValues;
+    if (normalized.window.hasCursor && groupByCursorValues) {
+      rows = rows.filter((row) => {
+        for (let index = 0; index < normalized.orderSpecs.length; index += 1) {
+          const spec = normalized.orderSpecs[index]!;
+          const rowValue = this._readGroupByPathValue(row, spec.path).value;
+          const cursorValue = groupByCursorValues[index];
+          const compared = this._compareGroupByValues(
+            rowValue,
+            cursorValue,
+            spec.direction
+          );
+          if (compared !== 0) {
+            return compared > 0;
+          }
+        }
+        return false;
+      });
+    }
+
+    if (normalized.window.skip > 0) {
+      rows = rows.slice(normalized.window.skip);
+    }
+    if (normalized.window.take !== null) {
+      rows = rows.slice(0, normalized.window.take);
+    }
+
+    return rows;
+  }
+
   /**
    * Execute the query and return results
    * Phase 4 implementation with WhereClauseCompiler integration
    */
   async execute(): Promise<TResult> {
     const config = this.config as any;
+    if (this.mode === 'count') {
+      return (await this._executeCount(config)) as TResult;
+    }
+    if (this.mode === 'aggregate') {
+      return (await this._executeAggregate(config)) as TResult;
+    }
+    if (this.mode === 'groupBy') {
+      return (await this._executeGroupBy(config)) as TResult;
+    }
+    if (config.distinct !== undefined) {
+      throw new Error(
+        'DISTINCT_UNSUPPORTED: findMany({ distinct }) is not available under strict no-scan semantics. Use select().distinct({ fields }) when deduplication is required.'
+      );
+    }
+
     const cursor = config.cursor as string | null | undefined;
     const isCursorPaginated = cursor !== undefined;
     const endCursor = config.endCursor as string | null | undefined;
@@ -2862,7 +5295,7 @@ export class GelRelationalQuery<
         let pageWithRelations = pageRows;
         if (this.config.with) {
           pageWithRelations = await this._loadRelations(
-            pageRows,
+            pageWithRelations,
             this.config.with,
             0,
             3,
@@ -2948,7 +5381,7 @@ export class GelRelationalQuery<
       let rowsWithRelations = rows;
       if (this.config.with) {
         rowsWithRelations = await this._loadRelations(
-          rows,
+          rowsWithRelations,
           this.config.with,
           0,
           3,
@@ -3061,7 +5494,7 @@ export class GelRelationalQuery<
       let rowsWithRelations = rows;
       if (this.config.with) {
         rowsWithRelations = await this._loadRelations(
-          rows,
+          rowsWithRelations,
           this.config.with,
           0,
           3,
@@ -3174,7 +5607,7 @@ export class GelRelationalQuery<
           let pageWithRelations = pageRows;
           if (this.config.with) {
             pageWithRelations = await this._loadRelations(
-              pageRows,
+              pageWithRelations,
               this.config.with,
               0,
               3,
@@ -3288,7 +5721,7 @@ export class GelRelationalQuery<
           let pageWithRelations = pageRows;
           if (this.config.with) {
             pageWithRelations = await this._loadRelations(
-              pageRows,
+              pageWithRelations,
               this.config.with,
               0,
               3,
@@ -3397,7 +5830,7 @@ export class GelRelationalQuery<
       let pageWithRelations = pageRows;
       if (this.config.with) {
         pageWithRelations = await this._loadRelations(
-          pageRows,
+          pageWithRelations,
           this.config.with,
           0,
           3,
@@ -3510,7 +5943,7 @@ export class GelRelationalQuery<
     let rowsWithRelations = rows;
     if (this.config.with) {
       rowsWithRelations = await this._loadRelations(
-        rows,
+        rowsWithRelations,
         this.config.with,
         0,
         3,
@@ -3913,7 +6346,9 @@ export class GelRelationalQuery<
   }
 
   private _getRelationFanOutKeyCap(tableConfig: TableRelationalConfig): number {
-    const value = tableConfig.defaults?.relationFanOutMaxKeys;
+    const contextCap = getOrmContext(this.db as any)?.resolvedDefaults
+      ?.relationFanOutMaxKeys;
+    const value = contextCap ?? tableConfig.defaults?.relationFanOutMaxKeys;
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return DEFAULT_RELATION_FAN_OUT_MAX_KEYS;
     }
@@ -4003,9 +6438,14 @@ export class GelRelationalQuery<
       return rows;
     }
 
+    const relationCountConfig = (withConfig as any)._count;
+    const relationEntries = Object.entries(withConfig).filter(
+      ([relationName]) => relationName !== '_count'
+    );
+
     // Load all relations in parallel to avoid sequential N+1 queries
     await Promise.all(
-      Object.entries(withConfig).map(([relationName, relationConfig]) =>
+      relationEntries.map(([relationName, relationConfig]) =>
         this._loadSingleRelation(
           rows,
           relationName,
@@ -4017,6 +6457,15 @@ export class GelRelationalQuery<
         )
       )
     );
+
+    if (relationCountConfig !== undefined) {
+      await this._loadRelationCounts(
+        rows,
+        relationCountConfig,
+        targetTableEdges,
+        tableConfig
+      );
+    }
 
     return rows;
   }
@@ -4067,6 +6516,424 @@ export class GelRelationalQuery<
         tableConfig
       );
     }
+  }
+
+  private _createRelationCountError(
+    code: (typeof RELATION_COUNT_ERROR)[keyof typeof RELATION_COUNT_ERROR],
+    message: string
+  ): Error {
+    return new Error(`${code}: ${message}`);
+  }
+
+  private _remapRelationCountError(
+    error: unknown,
+    relationPath: string
+  ): Error {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith(`${COUNT_ERROR.NOT_INDEXED}:`)) {
+      return this._createRelationCountError(
+        RELATION_COUNT_ERROR.NOT_INDEXED,
+        `${relationPath} ${message.slice(`${COUNT_ERROR.NOT_INDEXED}: `.length)}`
+      );
+    }
+    if (message.startsWith(`${COUNT_ERROR.FILTER_UNSUPPORTED}:`)) {
+      return this._createRelationCountError(
+        RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+        `${relationPath} ${message.slice(`${COUNT_ERROR.FILTER_UNSUPPORTED}: `.length)}`
+      );
+    }
+    return error instanceof Error ? error : new Error(message);
+  }
+
+  private _coerceRelationCountWhere(
+    relationName: string,
+    config: unknown
+  ): unknown {
+    if (config === true || config === undefined) {
+      return;
+    }
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      throw this._createRelationCountError(
+        RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+        `with._count.${relationName} must be true or { where }`
+      );
+    }
+
+    const record = config as Record<string, unknown>;
+    for (const [key, value] of Object.entries(record)) {
+      if (key !== 'where' && value !== undefined) {
+        throw this._createRelationCountError(
+          RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+          `with._count.${relationName} does not support '${key}'`
+        );
+      }
+    }
+    if (typeof record.where === 'function') {
+      throw this._createRelationCountError(
+        RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+        `with._count.${relationName}.where callback is unsupported in v1`
+      );
+    }
+    return record.where;
+  }
+
+  private _normalizeRelationCountCacheValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map((entry) =>
+        this._normalizeRelationCountCacheValue(entry)
+      );
+    }
+    if (value && typeof value === 'object') {
+      const normalized: Record<string, unknown> = {};
+      const entries = Object.entries(value as Record<string, unknown>).sort(
+        ([left], [right]) => left.localeCompare(right)
+      );
+      for (const [key, entry] of entries) {
+        normalized[key] = this._normalizeRelationCountCacheValue(entry);
+      }
+      return normalized;
+    }
+    return value;
+  }
+
+  private _getRelationCountParentKey(
+    row: any,
+    edge: EdgeMetadata
+  ): string | null {
+    const sourceFields =
+      edge.sourceFields.length > 0 ? edge.sourceFields : [edge.fieldName];
+    const values: unknown[] = [];
+    for (const sourceFieldName of sourceFields) {
+      const sourceField = this._normalizeRelationFieldName(sourceFieldName);
+      const value = row[sourceField];
+      if (value === null || value === undefined) {
+        return null;
+      }
+      values.push(value);
+    }
+    return JSON.stringify(values);
+  }
+
+  private _buildRelationCountExecutionKey(
+    relationName: string,
+    where: unknown,
+    parentKey: string
+  ): string {
+    return JSON.stringify({
+      relationName,
+      where: this._normalizeRelationCountCacheValue(where ?? null),
+      parentKey,
+    });
+  }
+
+  private async _readIndexedRelationCount(
+    tableConfig: TableRelationalConfig,
+    where: Record<string, unknown>,
+    relationPath: string
+  ): Promise<number> {
+    ensureCountAllowedForRls(tableConfig, this.rls?.mode as any);
+    try {
+      const plan = compileCountQueryPlan(tableConfig, where);
+      if (isIndexCountZero(plan)) {
+        return 0;
+      }
+      await this._ensureCountIndexReadyOnce(plan.tableName, plan.indexName);
+      return await readCountFromBuckets(this.db as any, plan);
+    } catch (error) {
+      throw this._remapRelationCountError(error, relationPath);
+    }
+  }
+
+  private async _countRelationForRow(
+    row: any,
+    relationName: string,
+    edge: EdgeMetadata,
+    where: unknown,
+    tableConfig: TableRelationalConfig
+  ): Promise<number> {
+    const relationPath = `${tableConfig.name}.${relationName}`;
+
+    if (edge.through) {
+      const throughTableConfig = this._getTableConfigByDbName(
+        edge.through.table
+      );
+      if (!throughTableConfig) {
+        throw this._createRelationCountError(
+          RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+          `${relationPath} through table '${edge.through.table}' is not registered`
+        );
+      }
+      ensureCountAllowedForRls(throughTableConfig, this.rls?.mode as any);
+
+      const sourceValues: unknown[] = [];
+      const throughWhere: Record<string, unknown> = {};
+      for (let i = 0; i < edge.through.sourceFields.length; i += 1) {
+        const sourceField = this._normalizeRelationFieldName(
+          edge.sourceFields[i]
+        );
+        const throughField = this._normalizeRelationFieldName(
+          edge.through.sourceFields[i]
+        );
+        const value = row[sourceField];
+        if (value === null || value === undefined) {
+          return 0;
+        }
+        throughWhere[throughField] = value;
+        sourceValues.push(value);
+      }
+
+      if (this._isEmptyWhere(where) || where === undefined) {
+        return await this._readIndexedRelationCount(
+          throughTableConfig,
+          throughWhere,
+          relationPath
+        );
+      }
+
+      const targetTableConfig = this._getTableConfigByDbName(edge.targetTable);
+      if (!targetTableConfig) {
+        throw this._createRelationCountError(
+          RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+          `${relationPath} target table '${edge.targetTable}' is not registered`
+        );
+      }
+      ensureCountAllowedForRls(targetTableConfig, this.rls?.mode as any);
+
+      const whereRecord = where as Record<string, unknown>;
+      try {
+        const filterPlan = compileCountQueryPlan(
+          targetTableConfig,
+          whereRecord
+        );
+        if (isIndexCountZero(filterPlan)) {
+          return 0;
+        }
+        await this._ensureCountIndexReadyOnce(
+          filterPlan.tableName,
+          filterPlan.indexName
+        );
+      } catch (error) {
+        throw this._remapRelationCountError(error, relationPath);
+      }
+
+      const strict = tableConfig.strict !== false;
+      const throughIndexName = findRelationIndex(
+        throughTableConfig.table as any,
+        edge.through.sourceFields,
+        relationPath,
+        edge.through.table,
+        strict,
+        this.allowFullScan
+      );
+
+      const throughRows = await this._queryByFields(
+        this.db.query(edge.through.table),
+        edge.through.sourceFields,
+        sourceValues,
+        throughIndexName
+      ).collect();
+      if (throughRows.length === 0) {
+        return 0;
+      }
+
+      const targetFields =
+        edge.targetFields.length > 0 ? edge.targetFields : ['_id'];
+      const targetKeyCounts = new Map<
+        string,
+        { values: unknown[]; occurrences: number }
+      >();
+      for (const throughRow of throughRows) {
+        const values = edge.through.targetFields.map(
+          (field) => throughRow[field]
+        );
+        if (values.some((value) => value === null || value === undefined)) {
+          continue;
+        }
+        const key = JSON.stringify(values);
+        const existing = targetKeyCounts.get(key);
+        if (existing) {
+          existing.occurrences += 1;
+          continue;
+        }
+        targetKeyCounts.set(key, { values, occurrences: 1 });
+      }
+      if (targetKeyCounts.size === 0) {
+        return 0;
+      }
+
+      const useGetById = targetFields.length === 1 && targetFields[0] === '_id';
+      const targetIndexName = useGetById
+        ? null
+        : findRelationIndex(
+            targetTableConfig.table as any,
+            targetFields,
+            relationPath,
+            edge.targetTable,
+            strict,
+            this.allowFullScan
+          );
+
+      const targetEntries = Array.from(targetKeyCounts.values());
+      const matchedCounts = await this._mapWithConcurrency(
+        targetEntries,
+        async ({ values, occurrences }) => {
+          let target: any | null = null;
+          if (useGetById) {
+            target = await this.db.get(values[0] as any);
+          } else {
+            const query = this._queryByFields(
+              this.db.query(edge.targetTable),
+              targetFields,
+              values,
+              targetIndexName
+            );
+            target = await query.first();
+          }
+          if (!target) {
+            return 0;
+          }
+          return this._evaluateTableFilter(
+            target,
+            targetTableConfig,
+            whereRecord
+          )
+            ? occurrences
+            : 0;
+        }
+      );
+
+      return matchedCounts.reduce((sum, value) => sum + value, 0);
+    }
+
+    const targetTableConfig = this._getTableConfigByDbName(edge.targetTable);
+    if (!targetTableConfig) {
+      throw this._createRelationCountError(
+        RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+        `${relationPath} target table '${edge.targetTable}' is not registered`
+      );
+    }
+
+    const relationWhere: Record<string, unknown> = {};
+    const sourceFields =
+      edge.sourceFields.length > 0 ? edge.sourceFields : [edge.fieldName];
+    const targetFields =
+      edge.targetFields.length > 0 ? edge.targetFields : ['_id'];
+
+    for (let i = 0; i < sourceFields.length; i += 1) {
+      const sourceField = this._normalizeRelationFieldName(sourceFields[i]);
+      const targetField = this._normalizeRelationFieldName(targetFields[i]);
+      const value = row[sourceField];
+      if (value === null || value === undefined) {
+        return 0;
+      }
+      relationWhere[targetField] = value;
+    }
+
+    const mergedWhere =
+      this._isEmptyWhere(where) || where === undefined
+        ? relationWhere
+        : {
+            AND: [relationWhere, where],
+          };
+
+    return await this._readIndexedRelationCount(
+      targetTableConfig,
+      mergedWhere,
+      relationPath
+    );
+  }
+
+  private async _loadRelationCounts(
+    rows: any[],
+    relationCountConfig: unknown,
+    targetTableEdges: EdgeMetadata[],
+    tableConfig: TableRelationalConfig
+  ): Promise<void> {
+    if (
+      !relationCountConfig ||
+      typeof relationCountConfig !== 'object' ||
+      Array.isArray(relationCountConfig)
+    ) {
+      throw this._createRelationCountError(
+        RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+        `with._count on '${tableConfig.name}' requires an object of relation names`
+      );
+    }
+
+    if ('select' in (relationCountConfig as Record<string, unknown>)) {
+      throw this._createRelationCountError(
+        RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+        'with._count.select is removed. Use with._count.<relation> instead'
+      );
+    }
+
+    for (const row of rows) {
+      row._count ??= {};
+    }
+
+    const relationEntries = Object.entries(
+      relationCountConfig as Record<string, unknown>
+    ).filter(
+      ([, relationSelection]) =>
+        relationSelection !== undefined && relationSelection !== false
+    );
+
+    await this._mapWithConcurrency(
+      relationEntries,
+      async ([relationName, relationSelection]) => {
+        const edge = targetTableEdges.find(
+          (entry) => entry.edgeName === relationName
+        );
+        if (!edge) {
+          throw this._createRelationCountError(
+            RELATION_COUNT_ERROR.FILTER_UNSUPPORTED,
+            `with._count.${relationName} is not a relation on '${tableConfig.name}'`
+          );
+        }
+
+        const where = this._coerceRelationCountWhere(
+          relationName,
+          relationSelection
+        );
+        const relationCountExecutionCache = new Map<string, Promise<number>>();
+
+        const counts = await this._mapWithConcurrency(rows, async (row) => {
+          const parentKey = this._getRelationCountParentKey(row, edge);
+          if (parentKey === null) {
+            return 0;
+          }
+
+          const executionKey = this._buildRelationCountExecutionKey(
+            relationName,
+            where,
+            parentKey
+          );
+          const existing = relationCountExecutionCache.get(executionKey);
+          if (existing) {
+            return await existing;
+          }
+
+          const pending = this._countRelationForRow(
+            row,
+            relationName,
+            edge,
+            where,
+            tableConfig
+          );
+          relationCountExecutionCache.set(executionKey, pending);
+          try {
+            return await pending;
+          } catch (error) {
+            relationCountExecutionCache.delete(executionKey);
+            throw error;
+          }
+        });
+
+        for (let i = 0; i < rows.length; i += 1) {
+          rows[i]._count[relationName] = counts[i];
+        }
+      }
+    );
   }
 
   /**
@@ -4340,7 +7207,9 @@ export class GelRelationalQuery<
         ? (relationConfig as any).limit
         : undefined;
     const effectivePerParentLimit =
-      perParentLimit ?? tableConfig.defaults?.defaultLimit;
+      perParentLimit ??
+      getOrmContext(this.db as any)?.resolvedDefaults?.defaultLimit ??
+      tableConfig.defaults?.defaultLimit;
     if (
       effectivePerParentLimit !== undefined &&
       (!Number.isInteger(effectivePerParentLimit) ||

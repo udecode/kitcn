@@ -105,7 +105,6 @@ First, create a caller factory for Better Auth:
 
 ```ts title="src/lib/convex/server.ts"
 import { api } from "@convex/api";
-import { meta } from "@convex/meta";
 import { createCallerFactory } from "better-convex/server";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { getToken } from "./auth/auth-server";
@@ -113,7 +112,6 @@ import { getToken } from "./auth/auth-server";
 const { createContext, createCaller } = createCallerFactory({
   api,
   convexSiteUrl: process.env.VITE_CONVEX_SITE_URL!,
-  meta,
   auth: {
     getToken: async () => {
       return {
@@ -256,19 +254,17 @@ Here, `initCRPC` is imported from `src/lib/convex/crpc.tsx` and defined as:
 
 ```tsx title="src/lib/convex/crpc.tsx"
 import { api } from "@convex/api";
-import { meta } from "@convex/meta";
 import { createCRPCContext } from "better-convex/react";
 import type { ComponentProps } from "react";
 
-type CRPCContext = ReturnType<typeof createCRPCContext<typeof api>>;
+type CRPCContext = ReturnType<typeof createCRPCContext>;
 
 let crpcContext: CRPCContext | null = null;
 
 export function initCRPC(convexSiteUrl: string) {
   if (!crpcContext) {
-    crpcContext = createCRPCContext<typeof api>({
+    crpcContext = createCRPCContext({
       api,
-      meta,
       convexSiteUrl,
     });
   }
@@ -370,7 +366,7 @@ So now we have access to the token in the `beforeLoad` function, and we can get 
 ```tsx title="src/lib/convex/convex-provider.tsx"
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { ConvexAuthProvider } from "better-convex/auth-client";
+import { ConvexAuthProvider } from "better-convex/auth/client";
 import { CRPCProvider } from "@/lib/convex/crpc";
 import { authClient } from "./auth/auth-client";
 

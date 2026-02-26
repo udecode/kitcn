@@ -1,6 +1,6 @@
 import { getAuthTables } from 'better-auth/db';
 import {
-  type FunctionHandle,
+  type GenericDataModel,
   internalActionGeneric,
   internalMutationGeneric,
   internalQueryGeneric,
@@ -14,7 +14,8 @@ import {
   customMutation,
 } from '../internal/upstream/server/customFunctions';
 import { partial } from '../internal/upstream/validators';
-import { eq, unsetToken } from '../orm';
+import { eq } from '../orm/filter-expression';
+import { unsetToken } from '../orm/unset-token';
 import {
   adapterWhereValidator,
   checkUniqueFields,
@@ -23,9 +24,55 @@ import {
   paginate,
   selectFields,
 } from './adapter-utils';
+import type {
+  GenericAuthBeforeResult,
+  GenericAuthTriggerChange,
+  GenericAuthTriggers,
+} from './define-auth';
 import type { GetAuth } from './types';
 
 type Schema = SchemaDefinition<any, any>;
+type MaybePromise<T> = T | Promise<T>;
+type RuntimeBeforeResult = GenericAuthBeforeResult<Record<string, unknown>>;
+type RuntimeTriggerChange = GenericAuthTriggerChange<Record<string, unknown>>;
+type RuntimeTableTriggers = {
+  change?: (change: RuntimeTriggerChange, ctx: unknown) => MaybePromise<void>;
+  create?: {
+    after?: (doc: Record<string, unknown>, ctx: unknown) => MaybePromise<void>;
+    before?: (
+      data: Record<string, unknown>,
+      ctx: unknown
+    ) => MaybePromise<RuntimeBeforeResult>;
+  };
+  delete?: {
+    after?: (doc: Record<string, unknown>, ctx: unknown) => MaybePromise<void>;
+    before?: (
+      doc: Record<string, unknown>,
+      ctx: unknown
+    ) => MaybePromise<RuntimeBeforeResult>;
+  };
+  update?: {
+    after?: (doc: Record<string, unknown>, ctx: unknown) => MaybePromise<void>;
+    before?: (
+      update: Record<string, unknown>,
+      ctx: unknown
+    ) => MaybePromise<RuntimeBeforeResult>;
+  };
+};
+const AUTH_TABLE_TRIGGER_KEYS = new Set([
+  'create',
+  'update',
+  'delete',
+  'change',
+]);
+const LEGACY_AUTH_TRIGGER_KEYS = new Set([
+  'beforeCreate',
+  'beforeDelete',
+  'beforeUpdate',
+  'onCreate',
+  'onDelete',
+  'onUpdate',
+]);
 
 const whereValidator = (schema: Schema, tableName: keyof Schema['tables']) =>
   v.object({
@@ -147,9 +194,14 @@ const ormDelete = async (ctx: any, table: any, id: GenericId<string>) => {
   await ctx.orm.delete(table).where(eq(table._id, id));
 };
 
-const withBothIdFields = <T extends Record<string, unknown>>(doc: T): T => {
-  const existingUnderscoreId = doc._id as GenericId<string> | undefined;
-  const existingId = doc.id as GenericId<string> | undefined;
+const withBothIdFields = <T>(doc: T): T => {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+    return doc;
+  }
+
+  const record = doc as Record<string, unknown>;
+  const existingUnderscoreId = record._id as GenericId<string> | undefined;
+  const existingId = record.id as GenericId<string> | undefined;
   const id = existingUnderscoreId ?? existingId;
 
   if (!id) {
@@ -157,7 +209,7 @@ const withBothIdFields = <T extends Record<string, unknown>>(doc: T): T => {
   }
 
   return {
-    ...doc,
+    ...record,
     _id: existingUnderscoreId ?? id,
     id: existingId ?? id,
   } as T;
@@ -165,6 +217,127 @@ const withBothIdFields = <T extends Record<string, unknown>>(doc: T): T => {
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
+
+const isBeforeDataResult = (
+  value: RuntimeBeforeResult
+): value is { data: Partial<Record<string, unknown>> } =>
+  isPlainObject(value) && 'data' in value && isPlainObject(value.data);
+
+const ensureRuntimeTableTriggers = (
+  model: string,
+  value: unknown
+): RuntimeTableTriggers | undefined => {
+  if (value === undefined) {
+    return;
+  }
+
+  if (!isPlainObject(value)) {
+    throw new Error(
+      `Invalid auth triggers for '${model}'. Expected an object with create/update/delete/change keys.`
+    );
+  }
+
+  for (const key of Object.keys(value)) {
+    if (LEGACY_AUTH_TRIGGER_KEYS.has(key)) {
+      throw new Error(
+        `Invalid auth trigger key '${key}' for '${model}'. Auth triggers now use { create, update, delete, change } shape.`
+      );
+    }
+
+    if (!AUTH_TABLE_TRIGGER_KEYS.has(key)) {
+      throw new Error(
+        `Invalid auth trigger key '${key}' for '${model}'. Allowed keys: create, update, delete, change.`
+      );
+    }
+  }
+
+  const create = (value as RuntimeTableTriggers).create;
+  const update = (value as RuntimeTableTriggers).update;
+  const del = (value as RuntimeTableTriggers).delete;
+  const change = (value as RuntimeTableTriggers).change;
+
+  const validateOperationHook = (
+    operation: 'create' | 'update' | 'delete',
+    operationHooks: unknown
+  ) => {
+    if (operationHooks === undefined) {
+      return;
+    }
+
+    if (!isPlainObject(operationHooks)) {
+      throw new Error(
+        `Invalid auth trigger '${operation}' for '${model}'. Expected an object with optional before/after handlers.`
+      );
+    }
+
+    if (
+      operationHooks.before !== undefined &&
+      typeof operationHooks.before !== 'function'
+    ) {
+      throw new Error(
+        `Invalid auth trigger '${operation}.before' for '${model}'. Expected a function.`
+      );
+    }
+    if (
+      operationHooks.after !== undefined &&
+      typeof operationHooks.after !== 'function'
+    ) {
+      throw new Error(
+        `Invalid auth trigger '${operation}.after' for '${model}'. Expected a function.`
+      );
+    }
+  };
+
+  validateOperationHook('create', create);
+  validateOperationHook('update', update);
+  validateOperationHook('delete', del);
+
+  if (change !== undefined && typeof change !== 'function') {
+    throw new Error(
+      `Invalid auth trigger 'change' for '${model}'. Expected a function.`
+    );
+  }
+
+  return {
+    ...(create ? { create } : {}),
+    ...(update ? { update } : {}),
+    ...(del ? { delete: del } : {}),
+    ...(change ? { change } : {}),
+  };
+};
+
+const applyBeforeHook = async (
+  model: string,
+  operation: 'create' | 'update' | 'delete',
+  data: Record<string, unknown>,
+  beforeHook:
+    | ((
+        data: Record<string, unknown>,
+        ctx: unknown
+      ) => MaybePromise<RuntimeBeforeResult>)
+    | undefined,
+  triggerCtx: unknown
+): Promise<Record<string, unknown>> => {
+  if (!beforeHook) {
+    return data;
+  }
+
+  const result = await beforeHook(data, triggerCtx);
+  if (result === false) {
+    throw new Error(`Auth trigger cancelled ${operation} on '${model}'.`);
+  }
+  if (isBeforeDataResult(result)) {
+    return {
+      ...data,
+      ...result.data,
+    };
+  }
+
+  return data;
+};
+
+const getDocId = (doc: Record<string, unknown>) =>
+  (doc._id ?? doc.id) as GenericId<string>;
 
 const serializeDatesForConvex = (value: unknown): unknown => {
   if (value instanceof Date) {
@@ -221,29 +394,26 @@ export const createHandler = async (
       data: any;
       model: string;
     };
-    beforeCreateHandle?: string;
     select?: string[];
-    skipBeforeHooks?: boolean;
-    onCreateHandle?: string;
+    tableTriggers?: RuntimeTableTriggers;
+    triggerCtx?: unknown;
   },
   schema: Schema,
   betterAuthSchema: any
 ) => {
-  let data = args.input.data;
-
-  if (!args.skipBeforeHooks && args.beforeCreateHandle) {
-    const transformedData = await ctx.runMutation(
-      args.beforeCreateHandle as FunctionHandle<'mutation'>,
-      serializeDatesForConvex({
-        data,
-        model: args.input.model,
-      })
-    );
-
-    if (transformedData !== undefined) {
-      data = transformedData;
-    }
-  }
+  const triggerCtx = args.triggerCtx ?? ctx;
+  const tableTriggers = args.tableTriggers;
+  const transformedData = await applyBeforeHook(
+    args.input.model,
+    'create',
+    args.input.data,
+    tableTriggers?.create?.before,
+    triggerCtx
+  );
+  const data = serializeDatesForConvex(transformedData) as Record<
+    string,
+    unknown
+  >;
 
   await checkUniqueFields(
     ctx,
@@ -269,19 +439,24 @@ export const createHandler = async (
     throw new Error(`Failed to create ${args.input.model}`);
   }
 
-  const normalizedDoc = ormTable ? withBothIdFields(doc) : doc;
+  const normalizedDoc = withBothIdFields(doc);
   const result = await selectFields(normalizedDoc, args.select);
+  const hookDoc = serializeDatesForConvex(normalizedDoc) as Record<
+    string,
+    unknown
+  >;
+  const id = getDocId(hookDoc);
 
-  if (args.onCreateHandle) {
-    const hookDoc = normalizedDoc;
-    await ctx.runMutation(
-      args.onCreateHandle as FunctionHandle<'mutation'>,
-      serializeDatesForConvex({
-        doc: hookDoc,
-        model: args.input.model,
-      })
-    );
-  }
+  await tableTriggers?.create?.after?.(hookDoc, triggerCtx);
+  await tableTriggers?.change?.(
+    {
+      id,
+      newDoc: hookDoc,
+      oldDoc: null,
+      operation: 'insert',
+    },
+    triggerCtx
+  );
 
   return toConvexSafe(result);
 };
@@ -322,34 +497,31 @@ export const updateOneHandler = async (
       update: any;
       where?: any[];
     };
-    beforeUpdateHandle?: string;
-    onUpdateHandle?: string;
+    tableTriggers?: RuntimeTableTriggers;
+    triggerCtx?: unknown;
   },
   schema: Schema,
   betterAuthSchema: any
 ) => {
+  const triggerCtx = args.triggerCtx ?? ctx;
+  const tableTriggers = args.tableTriggers;
   const doc = await listOne(ctx, schema, betterAuthSchema, args.input);
 
   if (!doc) {
     throw new Error(`Failed to update ${args.input.model}`);
   }
-
-  let update = args.input.update;
-
-  if (args.beforeUpdateHandle) {
-    const transformedUpdate = await ctx.runMutation(
-      args.beforeUpdateHandle as FunctionHandle<'mutation'>,
-      serializeDatesForConvex({
-        doc,
-        model: args.input.model,
-        update,
-      })
-    );
-
-    if (transformedUpdate !== undefined) {
-      update = transformedUpdate;
-    }
-  }
+  const normalizedDoc = withBothIdFields(doc);
+  const transformedUpdate = await applyBeforeHook(
+    args.input.model,
+    'update',
+    args.input.update,
+    tableTriggers?.update?.before,
+    triggerCtx
+  );
+  const update = serializeDatesForConvex(transformedUpdate) as Record<
+    string,
+    unknown
+  >;
 
   await checkUniqueFields(
     ctx,
@@ -357,7 +529,7 @@ export const updateOneHandler = async (
     betterAuthSchema,
     args.input.model,
     update,
-    doc
+    normalizedDoc
   );
   const ormTable = resolveOrmTable(
     ctx,
@@ -369,32 +541,41 @@ export const updateOneHandler = async (
     ? await ormUpdate(
         ctx,
         ormTable.table,
-        doc._id as GenericId<string>,
+        (normalizedDoc as any)._id as GenericId<string>,
         update as Record<string, unknown>
       )
     : await (async () => {
-        await ctx.db.patch(doc._id as GenericId<string>, update as any);
-        return ctx.db.get(doc._id as GenericId<string>);
+        await ctx.db.patch(
+          (normalizedDoc as any)._id as GenericId<string>,
+          update as any
+        );
+        return ctx.db.get((normalizedDoc as any)._id as GenericId<string>);
       })();
 
   if (!updatedDoc) {
     throw new Error(`Failed to update ${args.input.model}`);
   }
-  const normalizedUpdatedDoc = ormTable
-    ? withBothIdFields(updatedDoc)
-    : updatedDoc;
+  const normalizedUpdatedDoc = withBothIdFields(updatedDoc);
+  const hookNewDoc = serializeDatesForConvex(normalizedUpdatedDoc) as Record<
+    string,
+    unknown
+  >;
+  const hookOldDoc = serializeDatesForConvex(normalizedDoc) as Record<
+    string,
+    unknown
+  >;
+  const id = getDocId(hookNewDoc);
 
-  if (args.onUpdateHandle) {
-    const hookNewDoc = normalizedUpdatedDoc;
-    await ctx.runMutation(
-      args.onUpdateHandle as FunctionHandle<'mutation'>,
-      serializeDatesForConvex({
-        model: args.input.model,
-        newDoc: hookNewDoc,
-        oldDoc: doc,
-      })
-    );
-  }
+  await tableTriggers?.update?.after?.(hookNewDoc, triggerCtx);
+  await tableTriggers?.change?.(
+    {
+      id,
+      newDoc: hookNewDoc,
+      oldDoc: hookOldDoc,
+      operation: 'update',
+    },
+    triggerCtx
+  );
 
   return toConvexSafe(normalizedUpdatedDoc);
 };
@@ -408,12 +589,14 @@ export const updateManyHandler = async (
       where?: any[];
     };
     paginationOpts: any;
-    beforeUpdateHandle?: string;
-    onUpdateHandle?: string;
+    tableTriggers?: RuntimeTableTriggers;
+    triggerCtx?: unknown;
   },
   schema: Schema,
   betterAuthSchema: any
 ) => {
+  const triggerCtx = args.triggerCtx ?? ctx;
+  const tableTriggers = args.tableTriggers;
   const { page, ...result } = await paginate(ctx, schema, betterAuthSchema, {
     ...args.input,
     paginationOpts: args.paginationOpts,
@@ -440,22 +623,18 @@ export const updateManyHandler = async (
     }
 
     await asyncMap(page, async (doc: any) => {
-      let update = args.input.update;
-
-      if (args.beforeUpdateHandle) {
-        const transformedUpdate = await ctx.runMutation(
-          args.beforeUpdateHandle as FunctionHandle<'mutation'>,
-          serializeDatesForConvex({
-            doc,
-            model: args.input.model,
-            update,
-          })
-        );
-
-        if (transformedUpdate !== undefined) {
-          update = transformedUpdate;
-        }
-      }
+      const normalizedDoc = withBothIdFields(doc);
+      const transformedUpdate = await applyBeforeHook(
+        args.input.model,
+        'update',
+        args.input.update ?? {},
+        tableTriggers?.update?.before,
+        triggerCtx
+      );
+      const update = serializeDatesForConvex(transformedUpdate) as Record<
+        string,
+        unknown
+      >;
 
       await checkUniqueFields(
         ctx,
@@ -463,38 +642,49 @@ export const updateManyHandler = async (
         betterAuthSchema,
         args.input.model,
         update ?? {},
-        doc
+        normalizedDoc
       );
       const newDoc = ormTable
         ? await ormUpdate(
             ctx,
             ormTable.table,
-            doc._id as GenericId<string>,
+            (normalizedDoc as any)._id as GenericId<string>,
             (update ?? {}) as Record<string, unknown>
           )
         : await (async () => {
-            await ctx.db.patch(doc._id as GenericId<string>, update as any);
-            return ctx.db.get(doc._id as GenericId<string>);
+            await ctx.db.patch(
+              (normalizedDoc as any)._id as GenericId<string>,
+              update as any
+            );
+            return ctx.db.get((normalizedDoc as any)._id as GenericId<string>);
           })();
 
-      if (args.onUpdateHandle) {
-        const hookNewDoc = ormTable ? withBothIdFields(newDoc) : newDoc;
-        await ctx.runMutation(
-          args.onUpdateHandle as FunctionHandle<'mutation'>,
-          serializeDatesForConvex({
-            model: args.input.model,
-            newDoc: hookNewDoc,
-            oldDoc: doc,
-          })
-        );
-      }
+      const hookNewDoc = serializeDatesForConvex(
+        withBothIdFields(newDoc)
+      ) as Record<string, unknown>;
+      const hookOldDoc = serializeDatesForConvex(normalizedDoc) as Record<
+        string,
+        unknown
+      >;
+      const id = getDocId(hookNewDoc);
+
+      await tableTriggers?.update?.after?.(hookNewDoc, triggerCtx);
+      await tableTriggers?.change?.(
+        {
+          id,
+          newDoc: hookNewDoc,
+          oldDoc: hookOldDoc,
+          operation: 'update',
+        },
+        triggerCtx
+      );
     });
   }
 
   return toConvexSafe({
     ...result,
     count: page.length,
-    ids: page.map((doc: any) => doc._id),
+    ids: page.map((doc: any) => (withBothIdFields(doc) as any)._id),
   });
 };
 
@@ -505,34 +695,31 @@ export const deleteOneHandler = async (
       model: string;
       where?: any[];
     };
-    beforeDeleteHandle?: string;
-    skipBeforeHooks?: boolean;
-    onDeleteHandle?: string;
+    tableTriggers?: RuntimeTableTriggers;
+    triggerCtx?: unknown;
   },
   schema: Schema,
   betterAuthSchema: any
 ) => {
+  const triggerCtx = args.triggerCtx ?? ctx;
+  const tableTriggers = args.tableTriggers;
   const doc = await listOne(ctx, schema, betterAuthSchema, args.input);
 
   if (!doc) {
     return;
   }
-
-  let hookDoc = doc;
-
-  if (!args.skipBeforeHooks && args.beforeDeleteHandle) {
-    const transformedDoc = await ctx.runMutation(
-      args.beforeDeleteHandle as FunctionHandle<'mutation'>,
-      serializeDatesForConvex({
-        doc,
-        model: args.input.model,
-      })
-    );
-
-    if (transformedDoc !== undefined) {
-      hookDoc = transformedDoc;
-    }
-  }
+  const normalizedDoc = withBothIdFields(doc);
+  const transformedDoc = await applyBeforeHook(
+    args.input.model,
+    'delete',
+    normalizedDoc,
+    tableTriggers?.delete?.before,
+    triggerCtx
+  );
+  const hookDoc = withBothIdFields(
+    serializeDatesForConvex(transformedDoc)
+  ) as Record<string, unknown>;
+  const id = getDocId(normalizedDoc as Record<string, unknown>);
 
   const ormTable = resolveOrmTable(
     ctx,
@@ -541,22 +728,26 @@ export const deleteOneHandler = async (
     args.input.model
   );
   if (ormTable) {
-    await ormDelete(ctx, ormTable.table, doc._id as GenericId<string>);
-  } else {
-    await ctx.db.delete(doc._id as GenericId<string>);
-  }
-
-  if (args.onDeleteHandle) {
-    await ctx.runMutation(
-      args.onDeleteHandle as FunctionHandle<'mutation'>,
-      serializeDatesForConvex({
-        doc: hookDoc,
-        model: args.input.model,
-      })
+    await ormDelete(
+      ctx,
+      ormTable.table,
+      (normalizedDoc as any)._id as GenericId<string>
     );
+  } else {
+    await ctx.db.delete((normalizedDoc as any)._id as GenericId<string>);
   }
+  await tableTriggers?.delete?.after?.(hookDoc, triggerCtx);
+  await tableTriggers?.change?.(
+    {
+      id,
+      newDoc: null,
+      oldDoc: hookDoc,
+      operation: 'delete',
+    },
+    triggerCtx
+  );
 
-  return toConvexSafe(hookDoc);
+  return toConvexSafe(withBothIdFields(hookDoc));
 };
 
 export const deleteManyHandler = async (
@@ -567,13 +758,14 @@ export const deleteManyHandler = async (
       where?: any[];
     };
     paginationOpts: any;
-    beforeDeleteHandle?: string;
-    skipBeforeHooks?: boolean;
-    onDeleteHandle?: string;
+    tableTriggers?: RuntimeTableTriggers;
+    triggerCtx?: unknown;
   },
   schema: Schema,
   betterAuthSchema: any
 ) => {
+  const triggerCtx = args.triggerCtx ?? ctx;
+  const tableTriggers = args.tableTriggers;
   const { page, ...result } = await paginate(ctx, schema, betterAuthSchema, {
     ...args.input,
     paginationOpts: args.paginationOpts,
@@ -585,67 +777,102 @@ export const deleteManyHandler = async (
     args.input.model
   );
   await asyncMap(page, async (doc: any) => {
-    let hookDoc = doc;
-
-    if (!args.skipBeforeHooks && args.beforeDeleteHandle) {
-      const transformedDoc = await ctx.runMutation(
-        args.beforeDeleteHandle as FunctionHandle<'mutation'>,
-        serializeDatesForConvex({
-          doc,
-          model: args.input.model,
-        })
-      );
-
-      if (transformedDoc !== undefined) {
-        hookDoc = transformedDoc;
-      }
-    }
+    const normalizedDoc = withBothIdFields(doc);
+    const transformedDoc = await applyBeforeHook(
+      args.input.model,
+      'delete',
+      normalizedDoc,
+      tableTriggers?.delete?.before,
+      triggerCtx
+    );
+    const hookDoc = withBothIdFields(
+      serializeDatesForConvex(transformedDoc)
+    ) as Record<string, unknown>;
+    const id = getDocId(normalizedDoc as Record<string, unknown>);
 
     if (ormTable) {
-      await ormDelete(ctx, ormTable.table, doc._id as GenericId<string>);
-    } else {
-      await ctx.db.delete(doc._id as GenericId<string>);
-    }
-
-    if (args.onDeleteHandle) {
-      await ctx.runMutation(
-        args.onDeleteHandle as FunctionHandle<'mutation'>,
-        serializeDatesForConvex({
-          doc: hookDoc,
-          model: args.input.model,
-        })
+      await ormDelete(
+        ctx,
+        ormTable.table,
+        (normalizedDoc as any)._id as GenericId<string>
       );
+    } else {
+      await ctx.db.delete((normalizedDoc as any)._id as GenericId<string>);
     }
+    await tableTriggers?.delete?.after?.(hookDoc, triggerCtx);
+    await tableTriggers?.change?.(
+      {
+        id,
+        newDoc: null,
+        oldDoc: hookDoc,
+        operation: 'delete',
+      },
+      triggerCtx
+    );
   });
 
   return toConvexSafe({
     ...result,
     count: page.length,
-    ids: page.map((doc: any) => doc._id),
+    ids: page.map((doc: any) => (withBothIdFields(doc) as any)._id),
   });
 };
 
-export const createApi = <Schema extends SchemaDefinition<any, any>>(
+export const createApi = <
+  Schema extends SchemaDefinition<any, any>,
+  DataModel extends GenericDataModel = GenericDataModel,
+  Ctx = unknown,
+  TriggerCtx = Ctx,
+  Auth = unknown,
+>(
   schema: Schema,
-  getAuth: GetAuth,
+  getAuth: GetAuth<Ctx, Auth>,
   options?: {
     internalMutation?: typeof internalMutationGeneric;
-    context?: (ctx: any) => any | Promise<any>;
-    /** Skip input validation for smaller generated types. Since these are internal functions, validation is optional. */
-    skipValidation?: boolean;
+    context?: (ctx: any) => TriggerCtx | Promise<TriggerCtx>;
+    triggers?:
+      | GenericAuthTriggers<DataModel, Schema, TriggerCtx>
+      | ((
+          ctx: TriggerCtx
+        ) => GenericAuthTriggers<DataModel, Schema, TriggerCtx> | undefined);
+    /** Validate input validators against auth table schemas. Defaults to false for smaller generated types. */
+    validateInput?: boolean;
   }
 ) => {
-  const betterAuthSchema = getAuthTables(getAuth({} as any).options);
-  const { internalMutation, skipValidation, context } = options ?? {};
+  const {
+    internalMutation,
+    validateInput = false,
+    context,
+    triggers,
+  } = options ?? {};
+  let betterAuthSchema: ReturnType<typeof getAuthTables> | undefined;
+  const getBetterAuthSchema = () => {
+    betterAuthSchema ??= getAuthTables((getAuth({} as Ctx) as any).options);
+    return betterAuthSchema;
+  };
   const mutationBuilderBase = internalMutation ?? internalMutationGeneric;
-  const mutationBuilder = context
-    ? customMutation(
-        mutationBuilderBase,
-        customCtx(async (ctx) => (await context?.(ctx)) ?? ctx)
-      )
-    : mutationBuilderBase;
+  const mutationBuilder = (
+    context
+      ? customMutation(
+          mutationBuilderBase,
+          customCtx(
+            async (ctx) => (await context?.(ctx)) ?? (ctx as TriggerCtx)
+          )
+        )
+      : mutationBuilderBase
+  ) as typeof internalMutationGeneric;
+  const resolveTableTriggers = (
+    model: string,
+    triggerCtx: TriggerCtx
+  ): RuntimeTableTriggers | undefined => {
+    const resolvedTriggers =
+      typeof triggers === 'function' ? triggers(triggerCtx) : triggers;
+    const tableTriggers =
+      resolvedTriggers?.[model as keyof typeof resolvedTriggers];
+    return ensureRuntimeTableTriggers(model, tableTriggers);
+  };
 
-  // Generic validators for skipValidation mode (much smaller generated types)
+  // Generic validators for non-validated mode (much smaller generated types)
   const anyInput = v.object({
     data: v.any(),
     model: v.string(),
@@ -661,15 +888,17 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
   });
 
   // Typed validators (only auth tables)
-  const authTableNames = new Set(Object.keys(betterAuthSchema));
+  const authSchemaForValidation = validateInput
+    ? getBetterAuthSchema()
+    : ({} as ReturnType<typeof getAuthTables>);
+  const authTableNames = new Set(Object.keys(authSchemaForValidation));
   const authTables = Object.entries(schema.tables).filter(([name]) =>
     authTableNames.has(name)
   );
   const authTableKeys = authTables.map(([name]) => name);
 
-  const createInput = skipValidation
-    ? anyInput
-    : v.union(
+  const createInput = validateInput
+    ? v.union(
         ...authTables.map(([model, table]) => {
           const fields = partial((table as any).validator.fields);
           return v.object({
@@ -677,11 +906,11 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
             model: v.literal(model),
           });
         })
-      );
+      )
+    : anyInput;
 
-  const deleteInput = skipValidation
-    ? anyInputWithWhere
-    : v.union(
+  const deleteInput = validateInput
+    ? v.union(
         ...authTableKeys.map((tableName) =>
           v.object({
             model: v.literal(tableName),
@@ -692,15 +921,15 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
             ),
           })
         )
-      );
+      )
+    : anyInputWithWhere;
 
-  const modelValidator = skipValidation
-    ? v.string()
-    : v.union(...authTableKeys.map((model) => v.literal(model)));
+  const modelValidator = validateInput
+    ? v.union(...authTableKeys.map((model) => v.literal(model)))
+    : v.string();
 
-  const updateInput = skipValidation
-    ? anyInputWithUpdate
-    : v.union(
+  const updateInput = validateInput
+    ? v.union(
         ...authTables.map(
           ([tableName, table]: [string, Schema['tables'][string]]) => {
             const fields = partial(table.validator.fields);
@@ -711,37 +940,67 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
             });
           }
         )
-      );
+      )
+    : anyInputWithUpdate;
 
   return {
     create: mutationBuilder({
       args: {
-        beforeCreateHandle: v.optional(v.string()),
         input: createInput,
         select: v.optional(v.array(v.string())),
-        onCreateHandle: v.optional(v.string()),
       },
-      handler: async (ctx, args) =>
-        createHandler(ctx, args, schema, betterAuthSchema),
+      handler: async (ctx, args) => {
+        const triggerCtx = ctx as TriggerCtx;
+        return createHandler(
+          ctx,
+          {
+            input: args.input,
+            select: args.select,
+            tableTriggers: resolveTableTriggers(args.input.model, triggerCtx),
+            triggerCtx,
+          },
+          schema,
+          getBetterAuthSchema()
+        );
+      },
     }),
     deleteMany: mutationBuilder({
       args: {
-        beforeDeleteHandle: v.optional(v.string()),
         input: deleteInput,
         paginationOpts: paginationOptsValidator,
-        onDeleteHandle: v.optional(v.string()),
       },
-      handler: async (ctx, args) =>
-        deleteManyHandler(ctx, args, schema, betterAuthSchema),
+      handler: async (ctx, args) => {
+        const triggerCtx = ctx as TriggerCtx;
+        return deleteManyHandler(
+          ctx,
+          {
+            input: args.input,
+            paginationOpts: args.paginationOpts,
+            tableTriggers: resolveTableTriggers(args.input.model, triggerCtx),
+            triggerCtx,
+          },
+          schema,
+          getBetterAuthSchema()
+        );
+      },
     }),
     deleteOne: mutationBuilder({
       args: {
-        beforeDeleteHandle: v.optional(v.string()),
         input: deleteInput,
-        onDeleteHandle: v.optional(v.string()),
       },
-      handler: async (ctx, args) =>
-        deleteOneHandler(ctx, args, schema, betterAuthSchema),
+      handler: async (ctx, args) => {
+        const triggerCtx = ctx as TriggerCtx;
+        return deleteOneHandler(
+          ctx,
+          {
+            input: args.input,
+            tableTriggers: resolveTableTriggers(args.input.model, triggerCtx),
+            triggerCtx,
+          },
+          schema,
+          getBetterAuthSchema()
+        );
+      },
     }),
     findMany: internalQueryGeneric({
       args: {
@@ -759,7 +1018,7 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         join: v.optional(v.any()),
       },
       handler: async (ctx, args) =>
-        findManyHandler(ctx, args, schema, betterAuthSchema),
+        findManyHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     findOne: internalQueryGeneric({
       args: {
@@ -769,41 +1028,64 @@ export const createApi = <Schema extends SchemaDefinition<any, any>>(
         join: v.optional(v.any()),
       },
       handler: async (ctx, args) =>
-        findOneHandler(ctx, args, schema, betterAuthSchema),
+        findOneHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     updateMany: mutationBuilder({
       args: {
-        beforeUpdateHandle: v.optional(v.string()),
         input: updateInput,
         paginationOpts: paginationOptsValidator,
-        onUpdateHandle: v.optional(v.string()),
       },
-      handler: async (ctx, args) =>
-        updateManyHandler(ctx, args, schema, betterAuthSchema),
+      handler: async (ctx, args) => {
+        const triggerCtx = ctx as TriggerCtx;
+        return updateManyHandler(
+          ctx,
+          {
+            input: args.input,
+            paginationOpts: args.paginationOpts,
+            tableTriggers: resolveTableTriggers(args.input.model, triggerCtx),
+            triggerCtx,
+          },
+          schema,
+          getBetterAuthSchema()
+        );
+      },
     }),
     updateOne: mutationBuilder({
       args: {
-        beforeUpdateHandle: v.optional(v.string()),
         input: updateInput,
-        onUpdateHandle: v.optional(v.string()),
       },
-      handler: async (ctx, args) =>
-        updateOneHandler(ctx, args, schema, betterAuthSchema),
+      handler: async (ctx, args) => {
+        const triggerCtx = ctx as TriggerCtx;
+        return updateOneHandler(
+          ctx,
+          {
+            input: args.input,
+            tableTriggers: resolveTableTriggers(args.input.model, triggerCtx),
+            triggerCtx,
+          },
+          schema,
+          getBetterAuthSchema()
+        );
+      },
     }),
     getLatestJwks: internalActionGeneric({
       args: {},
       handler: async (ctx) => {
-        const auth = getAuth(ctx);
+        const auth = getAuth(ctx as Ctx) as {
+          api: { getLatestJwks: () => unknown };
+        };
 
-        return (auth.api as any).getLatestJwks();
+        return auth.api.getLatestJwks();
       },
     }),
     rotateKeys: internalActionGeneric({
       args: {},
       handler: async (ctx) => {
-        const auth = getAuth(ctx);
+        const auth = getAuth(ctx as Ctx) as {
+          api: { rotateKeys: () => unknown };
+        };
 
-        return (auth.api as any).rotateKeys();
+        return auth.api.rotateKeys();
       },
     }),
   };

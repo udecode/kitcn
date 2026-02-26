@@ -1,64 +1,126 @@
-import { getFunctionMeta, getFunctionType, type Meta } from './meta-utils';
+import type { FunctionReference } from 'convex/server';
+import {
+  buildMetaIndex,
+  getFuncRef,
+  getFunctionMeta,
+  getFunctionType,
+  getHttpRoutes,
+} from './meta-utils';
 
-const testMeta: Meta = {
-  todos: {
-    create: { type: 'mutation' },
-    list: { type: 'query' },
-  },
-  'items/queries': {
-    list: { type: 'query' },
-    get: { type: 'query' },
-  },
-  'deep/nested/path': {
-    action: { type: 'action' },
-  },
-};
+const asRef = (
+  value: Record<string, unknown>
+): FunctionReference<'query' | 'mutation' | 'action'> =>
+  value as unknown as FunctionReference<'query' | 'mutation' | 'action'>;
 
-describe('getFunctionType', () => {
-  it('returns type for flat namespace', () => {
-    expect(getFunctionType(['todos', 'create'], testMeta)).toBe('mutation');
-    expect(getFunctionType(['todos', 'list'], testMeta)).toBe('query');
-  });
+describe('buildMetaIndex', () => {
+  it('indexes merged api leaves and http routes', () => {
+    const listRef = asRef({ ref: 'todos:list' });
+    const createRef = asRef({ ref: 'todos:create' });
 
-  it('returns type for nested namespace', () => {
-    expect(getFunctionType(['items', 'queries', 'list'], testMeta)).toBe(
-      'query'
-    );
-    expect(getFunctionType(['items', 'queries', 'get'], testMeta)).toBe(
-      'query'
-    );
-  });
+    const api = {
+      todos: {
+        list: Object.assign(listRef, {
+          type: 'query',
+          auth: 'optional',
+          functionRef: listRef,
+        }),
+        create: Object.assign(createRef, {
+          type: 'mutation',
+          auth: 'required',
+          role: 'admin',
+          functionRef: createRef,
+        }),
+      },
+      _http: {
+        'todos.list': { path: '/api/todos', method: 'GET' },
+      },
+    } as const;
 
-  it('returns type for deeply nested namespace', () => {
-    expect(
-      getFunctionType(['deep', 'nested', 'path', 'action'], testMeta)
-    ).toBe('action');
-  });
+    const meta = buildMetaIndex(api as unknown as Record<string, unknown>);
 
-  it('returns query for unknown function', () => {
-    expect(getFunctionType(['unknown', 'fn'], testMeta)).toBe('query');
-  });
-
-  it('returns query for path too short', () => {
-    expect(getFunctionType(['single'], testMeta)).toBe('query');
-    expect(getFunctionType([], testMeta)).toBe('query');
+    expect(meta.todos?.list).toEqual({
+      type: 'query',
+      auth: 'optional',
+    });
+    expect(meta.todos?.create).toEqual({
+      type: 'mutation',
+      auth: 'required',
+      role: 'admin',
+    });
+    expect(meta._http).toEqual({
+      'todos.list': { path: '/api/todos', method: 'GET' },
+    });
   });
 });
 
-describe('getFunctionMeta', () => {
-  it('returns meta for flat namespace', () => {
-    expect(getFunctionMeta(['todos', 'create'], testMeta)).toEqual({
-      type: 'mutation',
-    });
+describe('getFunctionType/getFunctionMeta', () => {
+  const api = {
+    items: {
+      queries: {
+        list: { type: 'query', auth: 'optional' },
+      },
+    },
+    todos: {
+      create: { type: 'mutation', auth: 'required' },
+    },
+  } as const;
+
+  it('resolves function type from merged api object', () => {
+    expect(getFunctionType(['items', 'queries', 'list'], api as any)).toBe(
+      'query'
+    );
+    expect(getFunctionType(['todos', 'create'], api as any)).toBe('mutation');
   });
 
-  it('returns meta for nested namespace', () => {
-    expect(getFunctionMeta(['items', 'queries', 'list'], testMeta)).toEqual({
+  it('resolves function metadata from merged api object', () => {
+    expect(getFunctionMeta(['items', 'queries', 'list'], api as any)).toEqual({
       type: 'query',
+      auth: 'optional',
     });
   });
 
-  it('returns undefined for unknown function', () => {
-    expect(getFunctionMeta(['unknown', 'fn'], testMeta)).toBeUndefined();
+  it('returns query/defaults for unknown paths', () => {
+    expect(getFunctionType(['missing', 'fn'], api as any)).toBe('query');
+    expect(getFunctionMeta(['missing', 'fn'], api as any)).toBeUndefined();
+  });
+});
+
+describe('getFuncRef', () => {
+  it('returns functionRef when present on merged leaf', () => {
+    const functionRef = asRef({ ref: 'posts:list' });
+    const api = {
+      posts: {
+        list: {
+          type: 'query',
+          functionRef,
+        },
+      },
+    };
+
+    expect(getFuncRef(api as any, ['posts', 'list'])).toBe(functionRef);
+  });
+
+  it('falls back to raw function reference leaf', () => {
+    const functionRef = asRef({ ref: 'posts:get' });
+    const api = {
+      posts: {
+        get: functionRef,
+      },
+    };
+
+    expect(getFuncRef(api as any, ['posts', 'get'])).toBe(functionRef);
+  });
+});
+
+describe('getHttpRoutes', () => {
+  it('reads normalized route map from api._http', () => {
+    const api = {
+      _http: {
+        health: { path: '/api/health', method: 'GET' },
+      },
+    };
+    expect(getHttpRoutes(api)).toEqual({
+      health: { path: '/api/health', method: 'GET' },
+    });
   });
 });

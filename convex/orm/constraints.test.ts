@@ -1,4 +1,5 @@
 import {
+  and,
   check,
   convexTable,
   type DatabaseWithMutations,
@@ -7,9 +8,13 @@ import {
   eq,
   extractRelationsConfig,
   gte,
+  id,
   inArray,
   index,
   integer,
+  isNotNull,
+  isNull,
+  or,
   text,
   unique,
   unsetToken,
@@ -82,6 +87,42 @@ const uniqueNullsStrict = convexTable(
   (t) => [unique().on(t.code).nullsNotDistinct()]
 );
 
+const polymorphicPosts = convexTable('polymorphic_posts', {
+  title: text().notNull(),
+});
+
+const polymorphicVideos = convexTable('polymorphic_videos', {
+  title: text().notNull(),
+});
+
+const polymorphicComments = convexTable(
+  'polymorphic_comments',
+  {
+    body: text().notNull(),
+    targetType: text().notNull(),
+    postId: id('polymorphic_posts').references(() => polymorphicPosts.id),
+    videoId: id('polymorphic_videos').references(() => polymorphicVideos.id),
+  },
+  (t) => [
+    index('by_post').on(t.postId),
+    index('by_video').on(t.videoId),
+    check(
+      'exactly_one_target',
+      or(
+        and(isNotNull(t.postId), isNull(t.videoId)),
+        and(isNull(t.postId), isNotNull(t.videoId))
+      )!
+    ),
+    check(
+      'target_type_matches_id',
+      or(
+        and(eq(t.targetType, 'post'), isNotNull(t.postId), isNull(t.videoId)),
+        and(eq(t.targetType, 'video'), isNotNull(t.videoId), isNull(t.postId))
+      )!
+    ),
+  ]
+);
+
 const rawSchema = {
   default_users: defaultUsers,
   hook_users: hookUsers,
@@ -90,6 +131,9 @@ const rawSchema = {
   unique_table_users: uniqueTableUsers,
   unique_nulls: uniqueNulls,
   unique_nulls_strict: uniqueNullsStrict,
+  polymorphic_posts: polymorphicPosts,
+  polymorphic_videos: polymorphicVideos,
+  polymorphic_comments: polymorphicComments,
 };
 
 const schema = defineSchema(rawSchema);
@@ -99,6 +143,8 @@ const edges = extractRelationsConfig(relations);
 const withCtx = async <T>(
   fn: (ctx: { orm: DatabaseWithMutations<typeof relations> }) => Promise<T>
 ) => withOrmCtx(schema, relations, async ({ orm }) => fn({ orm }));
+
+const asAnyId = (value: unknown) => value as any;
 
 describe('defaults enforcement', () => {
   it('applies defaults when value is undefined', async () =>
@@ -369,5 +415,96 @@ describe('unique constraints enforcement', () => {
           handle: null,
         })
       ).rejects.toThrow(/unique/i);
+    }));
+});
+
+describe('strict polymorphic constraint pattern', () => {
+  it('rejects insert when both polymorphic targets are null', async () =>
+    withCtx(async ({ orm }) => {
+      await expect(
+        orm.insert(polymorphicComments).values({
+          body: 'No target set',
+          targetType: 'post',
+        })
+      ).rejects.toThrow(/check/i);
+    }));
+
+  it('rejects insert when both polymorphic targets are set', async () =>
+    withCtx(async ({ orm }) => {
+      const [post] = await orm
+        .insert(polymorphicPosts)
+        .values({ title: 'Post target' })
+        .returning();
+      const [video] = await orm
+        .insert(polymorphicVideos)
+        .values({ title: 'Video target' })
+        .returning();
+
+      await expect(
+        orm.insert(polymorphicComments).values({
+          body: 'Both targets',
+          targetType: 'post',
+          postId: asAnyId(post.id),
+          videoId: asAnyId(video.id),
+        })
+      ).rejects.toThrow(/check/i);
+    }));
+
+  it('rejects insert when discriminator does not match selected target', async () =>
+    withCtx(async ({ orm }) => {
+      const [post] = await orm
+        .insert(polymorphicPosts)
+        .values({ title: 'Post target' })
+        .returning();
+
+      await expect(
+        orm.insert(polymorphicComments).values({
+          body: 'Mismatched discriminator',
+          targetType: 'video',
+          postId: asAnyId(post.id),
+        })
+      ).rejects.toThrow(/check/i);
+    }));
+
+  it('accepts valid post target rows', async () =>
+    withCtx(async ({ orm }) => {
+      const [post] = await orm
+        .insert(polymorphicPosts)
+        .values({ title: 'Valid post target' })
+        .returning();
+
+      const [comment] = await orm
+        .insert(polymorphicComments)
+        .values({
+          body: 'Valid post comment',
+          targetType: 'post',
+          postId: asAnyId(post.id),
+        })
+        .returning();
+
+      expect(comment.postId).toBe(post.id);
+      expect(comment.videoId).toBeUndefined();
+      expect(comment.targetType).toBe('post');
+    }));
+
+  it('accepts valid video target rows', async () =>
+    withCtx(async ({ orm }) => {
+      const [video] = await orm
+        .insert(polymorphicVideos)
+        .values({ title: 'Valid video target' })
+        .returning();
+
+      const [comment] = await orm
+        .insert(polymorphicComments)
+        .values({
+          body: 'Valid video comment',
+          targetType: 'video',
+          videoId: asAnyId(video.id),
+        })
+        .returning();
+
+      expect(comment.videoId).toBe(video.id);
+      expect(comment.postId).toBeUndefined();
+      expect(comment.targetType).toBe('video');
     }));
 });

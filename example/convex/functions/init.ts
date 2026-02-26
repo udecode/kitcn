@@ -1,8 +1,7 @@
-import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
-import { internal } from './_generated/api';
+import { createSeedCaller } from './generated/seed.runtime';
 
 /**
  * Initialize the database on startup. This function runs automatically when
@@ -11,14 +10,14 @@ import { internal } from './_generated/api';
  */
 export default privateMutation
   .meta({ dev: true })
-  .output(z.null())
+
   .mutation(async ({ ctx }) => {
     // Initialize admin user if configured
     const env = getEnv();
     const adminEmails = env.ADMIN;
 
     if (!adminEmails || adminEmails.length === 0) {
-      return null;
+      return;
     }
 
     let isFirstInit = true;
@@ -33,7 +32,7 @@ export default privateMutation
         isFirstInit = false;
       } else {
         // Better Auth will link to this when they sign in
-        const _userId = await createUser(ctx, {
+        await createUser(ctx, {
           email: adminEmail,
           name: 'Admin',
           role: 'admin',
@@ -43,8 +42,7 @@ export default privateMutation
 
     if (isFirstInit && getEnv().DEPLOY_ENV === 'development') {
       // Run the seed function
-      await ctx.runMutation(internal.seed.seed, {});
+      const caller = createSeedCaller(ctx);
+      await caller.seed();
     }
-
-    return null;
   });

@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, you'll find production-ready templates for every layer of a Better Convex application. Copy the files you need and customize them for your project.
+Copy-paste production files for your project.
 
 ## Overview
 
@@ -22,11 +22,9 @@ In this guide, you'll find production-ready templates for every layer of a Bette
 | **Database Utilities** | ORM, triggers, rate limiting |
 | **Dev Scripts** | Reset, init, package.json scripts |
 
-Pick only the features you need. Let's start with the project structure.
-
 ## Project Structure
 
-Monolithic structure with two apps in one repo (simpler HMR than monorepo):
+Monolithic layout — two apps in one repo (simpler HMR than monorepo):
 
 ```plaintext showLineNumbers {1-2,3-6}
 ├── src/              # Next.js app (React client)
@@ -48,8 +46,6 @@ Monolithic structure with two apps in one repo (simpler HMR than monorepo):
 
 ## Environment Variables
 
-Required environment variables for better-convex:
-
 <Tabs groupId="env" items={["Local", "Cloud"]} persist>
   <Tab value="Local">
     ```bash title=".env.local" showLineNumbers {2,5,8}
@@ -63,9 +59,7 @@ Required environment variables for better-convex:
     NEXT_PUBLIC_SITE_URL=http://localhost:3000
     ```
 
-    <Callout icon={<InfoIcon />}>
-    Port 3210 is for WebSocket connections, port 3211 is for HTTP actions (auth routes).
-    </Callout>
+    Port 3210 = WebSocket, port 3211 = HTTP actions (auth routes).
   </Tab>
   <Tab value="Cloud">
     ```bash title=".env.local" showLineNumbers {3,6,9}
@@ -86,8 +80,6 @@ Required environment variables for better-convex:
 ## TypeScript Config
 
 ### tsconfig.json
-
-Root TypeScript configuration with path aliases for `@convex/*` imports.
 
 ```json title="tsconfig.json" showLineNumbers {3-4,19-22}
 {
@@ -111,7 +103,7 @@ Root TypeScript configuration with path aliases for `@convex/*` imports.
     "resolveJsonModule": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@convex/*": ["./convex/functions/_generated/*", "./convex/shared/*"]
+      "@convex/*": ["./convex/shared/*"]
     },
     "types": ["bun-types"],
     "allowJs": true,
@@ -131,11 +123,9 @@ Root TypeScript configuration with path aliases for `@convex/*` imports.
 
 ## Server
 
-Required files for any better-convex project.
-
 ### schema.ts
 
-Database schema definition. This example shows Better Auth tables with the admin plugin.
+Better Auth tables with admin plugin:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-96}
 import {
@@ -231,56 +221,25 @@ export const relations = defineRelations(tables);
 export default schema;
 ```
 
-### orm.ts
-
-Attach the ORM to your context as `ctx.orm` (once).
-
-```ts title="convex/lib/orm.ts" showLineNumbers {1-3,5-10}
-import { createOrm, type GenericOrmCtx } from 'better-convex/orm';
-
-import type { MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { relations } from '../functions/schema';
-
-const orm = createOrm({ schema: relations });
-
-export type OrmCtx<Ctx extends QueryCtx | MutationCtx = QueryCtx> =
-  GenericOrmCtx<Ctx, typeof relations>;
-
-export type OrmQueryCtx = OrmCtx<QueryCtx>;
-export type OrmMutationCtx = OrmCtx<MutationCtx>;
-
-export function withOrm<Ctx extends QueryCtx | MutationCtx>(ctx: Ctx) {
-  return orm.with(ctx) as OrmCtx<Ctx>;
-}
-```
-
-Recommended default for ORM + cRPC: declare `createdAt: timestamp().notNull().defaultNow()` on tables where you want Date values.
-
-Native (number timestamp) mode:
-
-```ts title="convex/lib/orm.ts"
-const orm = createOrm({ schema: relations });
-```
-
-In native mode (no explicit `createdAt` column), system `createdAt` remains `number`.
-
 ### crpc.ts
-
-The cRPC builder with auth middleware and procedure variants.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
 import { getHeaders } from 'better-convex/auth';
-import { CRPCError, initCRPC } from 'better-convex/server';
+import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
 
-import { api } from '../functions/_generated/api';
-import type { DataModel } from '../functions/_generated/dataModel';
-import type { ActionCtx, MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { getAuth } from '../functions/auth';
+import { getAuth } from '../functions/generated/auth';
+import {
+  type ActionCtx,
+  initCRPC,
+  type MutationCtx,
+  type OrmCtx,
+  type QueryCtx,
+} from '../functions/generated/server';
+import { createUserCaller } from '../functions/generated/user.runtime';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
-import { type OrmCtx, withOrm } from './orm';
 import { rateLimitGuard } from './rate-limiter';
 
 /** Context with optional auth - user/userId may be null */
@@ -305,20 +264,13 @@ export type AuthActionCtx = ActionCtx & {
   userId: string;
 };
 
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-  rateLimit?: string;
-  dev?: boolean;
-};
-
 const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .meta<Meta>()
+  .meta<{
+    auth?: 'optional' | 'required';
+    role?: 'admin';
+    rateLimit?: string;
+    dev?: boolean;
+  }>()
   .create();
 
 const devMiddleware = c.middleware<object>(({ meta, next, ctx }) => {
@@ -452,13 +404,14 @@ export const authMutation = c.mutation
   .use(rateLimitMiddleware);
 
 export const publicAction = c.action.use(devMiddleware);
-export const privateAction = c.action.internal();
+export const privateAction = c.action.use(devMiddleware).internal();
 
 export const authAction = c.action
   .meta({ auth: 'required' })
   .use(devMiddleware)
   .use(async ({ ctx, next }) => {
-    const user = requireAuth(await ctx.runQuery(api.user.getSessionUser));
+    const caller = createUserCaller(ctx);
+    const user = requireAuth(await caller.getSessionUser());
 
     return next({ ctx: { ...ctx, user, userId: user.id } });
   });
@@ -507,87 +460,20 @@ export const router = c.router;
 ```
 
 
-### types.ts
-
-Type utilities for API inference and ORM model types.
-
-```ts title="convex/shared/types.ts" showLineNumbers
-import type { InferInsertModel, InferSelectModel } from 'better-convex/orm';
-import type {
-  inferApiInputs,
-  inferApiOutputs,
-  WithHttpRouter,
-} from 'better-convex/server';
-
-import type { api } from '../functions/_generated/api';
-// biome-ignore lint/style/noRestrictedImports: type
-import type { appRouter } from '../functions/http';
-// biome-ignore lint/style/noRestrictedImports: type
-import type { tables } from '../functions/schema';
-
-export type TableName = keyof typeof tables;
-export type Select<T extends TableName> = InferSelectModel<(typeof tables)[T]>;
-export type Insert<T extends TableName> = InferInsertModel<(typeof tables)[T]>;
-
-export type Api = WithHttpRouter<typeof api, typeof appRouter>;
-
-export type ApiInputs = inferApiInputs<Api>;
-export type ApiOutputs = inferApiOutputs<Api>;
-```
-
-### meta.ts
-
-Generated by the CLI. Contains procedure metadata for auth-aware query handling.
-
-```bash showLineNumbers
-bunx better-convex dev
-```
-
----
 
 ## Better Auth
 
-Optional - only needed if using Better Auth for authentication.
-
 ### auth.ts
 
-Better Auth client setup with Convex adapter.
-
 ```ts title="convex/functions/auth.ts" showLineNumbers
-import { type BetterAuthOptions, betterAuth } from 'better-auth';
 import { admin } from 'better-auth/plugins';
-import {
-  type AuthFunctions,
-  convex,
-  createApi,
-  createClient,
-} from 'better-convex/auth';
-
-import { type OrmMutationCtx, withOrm } from '../lib/orm';
-import { internal } from './_generated/api';
-import type { DataModel } from './_generated/dataModel';
-import type { ActionCtx, MutationCtx, QueryCtx } from './_generated/server';
+import { convex } from 'better-convex/auth';
 import authConfig from './auth.config';
-import schema from './schema';
+import { defineAuth } from './generated/auth';
 
-type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
-
-const authFunctions: AuthFunctions = internal.auth;
-
-export const authClient = createClient<
-  DataModel,
-  typeof schema,
-  OrmMutationCtx
->({
-  authFunctions,
-  schema,
-  context: withOrm,
-});
-
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => {
+  return {
     baseURL: process.env.SITE_URL!,
-    database: authClient.adapter(ctx, getAuthOptions),
     plugins: [
       admin(),
       convex({
@@ -600,47 +486,22 @@ const getAuthOptions = (ctx: GenericCtx) =>
       updateAge: 60 * 60 * 24 * 15,
     },
     trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
-  }) satisfies BetterAuthOptions;
-
-export const getAuth = (ctx: GenericCtx) => betterAuth(getAuthOptions(ctx));
-
-export const {
-  beforeCreate,
-  beforeDelete,
-  beforeUpdate,
-  onCreate,
-  onDelete,
-  onUpdate,
-} = authClient.triggersApi();
-
-export const {
-  create,
-  deleteMany,
-  deleteOne,
-  findMany,
-  findOne,
-  updateMany,
-  updateOne,
-  getLatestJwks,
-  rotateKeys,
-} = createApi(schema, getAuth, {
-  context: withOrm,
-  skipValidation: true,
+    triggers: {
+      // optional Better Auth trigger hooks
+    },
+  };
 });
-
-// biome-ignore lint/suspicious/noExplicitAny: Required for CLI
-export const auth = betterAuth(getAuthOptions({} as any));
 ```
+
+Run `better-convex dev` first, then create `auth.ts` — runtime auth exports in `convex/functions/generated/auth.ts` will regenerate automatically.
 
 
 See [Auth Server documentation](/docs/auth/server) for detailed configuration.
 
 ### auth.config.ts
 
-Auth configuration provider for Convex.
-
 ```ts title="convex/functions/auth.config.ts" showLineNumbers {5-6}
-import { getAuthConfigProvider } from 'better-convex/auth-config';
+import { getAuthConfigProvider } from 'better-convex/auth/config';
 import type { AuthConfig } from 'convex/server';
 
 export default {
@@ -648,61 +509,18 @@ export default {
 } satisfies AuthConfig;
 ```
 
-### http-polyfills.ts
-
-Convex's runtime environment doesn't include `MessageChannel`, which Better Auth's HTTP handling requires.
-
-```ts title="convex/lib/http-polyfills.ts" showLineNumbers
-// polyfill MessageChannel without using node:events
-if (typeof MessageChannel === 'undefined') {
-  class MockMessagePort {
-    onmessage: ((ev: MessageEvent) => void) | undefined;
-    onmessageerror: ((ev: MessageEvent) => void) | undefined;
-
-    addEventListener() {}
-    close() {}
-
-    dispatchEvent(_event: Event): boolean {
-      return false;
-    }
-
-    postMessage(_message: unknown, _transfer: Transferable[] = []) {}
-    removeEventListener() {}
-    start() {}
-  }
-
-  class MockMessageChannel {
-    port1: MockMessagePort;
-    port2: MockMessagePort;
-
-    constructor() {
-      this.port1 = new MockMessagePort();
-      this.port2 = new MockMessagePort();
-    }
-  }
-
-  globalThis.MessageChannel =
-    MockMessageChannel as unknown as typeof MessageChannel;
-}
-```
-
-Import this at the top of your HTTP file (before other imports).
-
 ### http.ts
-
-HTTP routes for Better Auth.
 
 <Tabs groupId="templates-http" items={["cRPC", "Convex"]} persist>
   <Tab value="cRPC">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-6,10-19,22,25-27}
-    import '../lib/http-polyfills';
-    import { authMiddleware } from 'better-convex/auth';
+    import { authMiddleware } from 'better-convex/auth/http';
     import { createHttpRouter } from 'better-convex/server';
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
     import { router } from '../lib/crpc';
     // Import your routers from convex/routers/
-    import { getAuth } from './auth';
+    import { getAuth } from './generated/auth';
 
     const app = new Hono();
 
@@ -721,19 +539,18 @@ HTTP routes for Better Auth.
     app.use(authMiddleware(getAuth));
 
     // HTTP API router (tRPC-style)
-    export const appRouter = router({
+    export const httpRouter = router({
       // Add your routers here
     });
 
-    export default createHttpRouter(app, appRouter);
+    export default createHttpRouter(app, httpRouter);
     ```
   </Tab>
   <Tab value="Convex">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
-    import '../lib/http-polyfills';
-    import { registerRoutes } from 'better-convex/auth';
+    import { registerRoutes } from 'better-convex/auth/http';
     import { httpRouter } from 'convex/server';
-    import { getAuth } from './auth';
+    import { getAuth } from './generated/auth';
 
     const http = httpRouter();
 
@@ -751,8 +568,6 @@ HTTP routes for Better Auth.
 See [HTTP Router documentation](/docs/server/http) for route examples.
 
 ### user.ts
-
-User queries including `getSessionUser` for auth state caching.
 
 ```ts title="convex/functions/user.ts" showLineNumbers {6-17,18-29}
 import { z } from 'zod';
@@ -795,20 +610,16 @@ export const getIsAuthenticated = publicQuery
 
 ### auth-shared.ts
 
-Session user type for auth context. Customize based on your user table fields.
-
-```ts title="convex/shared/auth-shared.ts" showLineNumbers {3-9}
-import type { Doc } from '../functions/_generated/dataModel';
+```ts title="convex/shared/auth-shared.ts" showLineNumbers {3-15}
 // biome-ignore lint/style/noRestrictedImports: types
-import type { getAuth } from '../functions/auth';
-import type { Select } from './types';
+import type { getAuth } from '../functions/generated/auth';
+import type { Select } from './api';
 
 export type Auth = ReturnType<typeof getAuth>;
 
 export type SessionUser = Select<'user'> & {
   isAdmin: boolean;
-  // Native Better Auth session document (used for auth header/session plumbing).
-  session: Doc<'session'>;
+  session: Select<'session'>;
   impersonatedBy?: string | null;
   plan?: 'premium' | 'team';
 };
@@ -816,13 +627,11 @@ export type SessionUser = Select<'user'> & {
 
 ### auth-client.ts
 
-Better Auth client for React with plugins.
-
 ```ts title="src/lib/convex/auth-client.ts" showLineNumbers {10-16,21-27}
 import type { Auth } from '@convex/auth-shared';
 import { adminClient, inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'better-convex/auth-client';
+import { convexClient } from 'better-convex/auth/client';
 import { createAuthMutations } from 'better-convex/react';
 
 export const authClient = createAuthClient({
@@ -833,8 +642,6 @@ export const authClient = createAuthClient({
   },
   plugins: [inferAdditionalFields<Auth>(), adminClient(), convexClient()],
 });
-
-export const { useActiveOrganization, useListOrganizations } = authClient;
 
 export const {
   useSignOutMutationOptions,
@@ -848,17 +655,13 @@ export const {
 
 ## React Client
 
-Optional - needed for React apps using TanStack Query integration.
-
 ### convex-provider.tsx
-
-Convex provider with TanStack Query integration.
 
 ```tsx title="src/lib/convex/convex-provider.tsx" showLineNumbers
 'use client';
 
 import { QueryClientProvider as TanstackQueryClientProvider } from '@tanstack/react-query';
-import { ConvexAuthProvider } from 'better-convex/auth-client';
+import { ConvexAuthProvider } from 'better-convex/auth/client';
 import {
   ConvexReactClient,
   getConvexQueryClientSingleton,
@@ -926,8 +729,6 @@ function QueryClientProvider({ children }: { children: ReactNode }) {
 ```
 
 ### query-client.ts
-
-QueryClient configuration with hydration and error handling.
 
 ```ts title="src/lib/convex/query-client.ts" showLineNumbers
 import {
@@ -1008,17 +809,12 @@ export function createQueryClient() {
 
 ### crpc.tsx
 
-CRPC context provider for React with HTTP router support.
-
 ```tsx title="src/lib/convex/crpc.tsx" showLineNumbers {7-10}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import { createCRPCContext } from 'better-convex/react';
 
-export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<Api>({
+export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
   api,
-  meta,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
 });
 ```
@@ -1027,34 +823,24 @@ export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext<Api>({
 
 ## Next.js RSC
 
-Optional - needed for React Server Components prefetching.
-
 ### server.ts
-
-Server-side utilities for Next.js RSC.
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {5-9}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import { convexBetterAuth } from 'better-convex/auth-nextjs';
+import { convexBetterAuth } from 'better-convex/auth/nextjs';
 
 export const { createContext, createCaller, handler } = convexBetterAuth({
   api,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
-  meta,
 });
 ```
 
 ### rsc.tsx
 
-React Server Components utilities with prefetching.
-
 ```tsx title="src/lib/convex/rsc.tsx" showLineNumbers
 import 'server-only';
 
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
-import type { Api } from '@convex/types';
 import type { FetchQueryOptions } from '@tanstack/react-query';
 import {
   dehydrate,
@@ -1080,7 +866,7 @@ const createRSCContext = cache(async () =>
 
 export const caller = createCaller(createRSCContext);
 
-export const crpc = createServerCRPCProxy<Api>({ api, meta });
+export const crpc = createServerCRPCProxy({ api });
 
 function createServerQueryClient() {
   return new QueryClient({
@@ -1098,8 +884,8 @@ export const getQueryClient = cache(createServerQueryClient);
 
 export function prefetch<T extends { queryKey: readonly unknown[] }>(
   queryOptions: T
-): void {
-  void getQueryClient().prefetchQuery(queryOptions);
+) {
+  getQueryClient().prefetchQuery(queryOptions);
 }
 
 export function preloadQuery<
@@ -1127,35 +913,29 @@ export function HydrateClient({ children }: { children: React.ReactNode }) {
 
 ## Database Utilities
 
-Optional utilities for triggers and rate limiting.
-
 ### schema triggers
 
-Define side effects directly in `convex/functions/schema.ts`.
-
-```ts title="convex/functions/schema.ts" showLineNumbers {1-2,6-7}
-import { convexTable, onChange } from 'better-convex/orm';
+```ts title="convex/functions/schema.ts" showLineNumbers {1-2,5-8}
+import { defineTriggers } from 'better-convex/orm';
 import { aggregatePostCount } from './aggregates';
+import { relations } from './schema';
 
-export const postsTable = convexTable('posts', {/* columns */}, () => [
-  aggregatePostCount.trigger(),
-  onChange(async (_ctx, change) => {
-    console.log('Post changed:', change.operation, change.id);
-  }),
-]);
+export const triggers = defineTriggers(relations, {
+  posts: {
+    change: aggregatePostCount.trigger,
+  },
+});
 ```
 
-See [Triggers documentation](/docs/orm/triggers) for patterns.
+See [Triggers documentation](/docs/orm/schema/triggers) for patterns.
 
 ### rate-limiter.ts
-
-Rate limiting configuration with tiered access.
 
 ```ts title="convex/lib/rate-limiter.ts" showLineNumbers
 import { MINUTE, RateLimiter } from '@convex-dev/rate-limiter';
 import { CRPCError } from 'better-convex/server';
 import { components } from '../functions/_generated/api';
-import type { ActionCtx, MutationCtx } from '../functions/_generated/server';
+import type { ActionCtx, MutationCtx } from '../functions/generated/server';
 import type { SessionUser } from '../shared/auth-shared';
 
 const rateLimitConfig = {
@@ -1224,120 +1004,67 @@ See [Rate Limiting documentation](/docs/server/advanced/rate-limiting) for setup
 
 ## Dev Scripts
 
-Optional scripts for development workflow.
-
 ### reset.ts
 
-Development-only database reset.
-
 ```ts title="convex/functions/reset.ts" showLineNumbers
-/** biome-ignore-all lint/suspicious/noExplicitAny: dev */
-import { eq } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { privateAction, privateMutation } from '../lib/crpc';
-import { getEnv } from '../lib/get-env';
-import { internal } from './_generated/api';
 import type { TableNames } from './_generated/dataModel';
+import { createResetCaller } from './generated/reset.runtime';
 import schema, { tables } from './schema';
 
-const DELETE_BATCH_SIZE = 64;
+// Clear all of the tables except...
 const excludedTables = new Set<TableNames>();
 
-const assertDevOnly = () => {
-  if (getEnv().DEPLOY_ENV === 'production') {
-    throw new CRPCError({
-      code: 'FORBIDDEN',
-      message: 'This function is only available in development',
-    });
-  }
-};
+export const reset = privateAction
+  .meta({ dev: true })
+  .action(async ({ ctx }) => {
+    const caller = createResetCaller(ctx);
 
-export const reset = privateAction.output(z.null()).action(async ({ ctx }) => {
-  assertDevOnly();
+    for (const tableName of Object.keys(schema.tables)) {
+      if (excludedTables.has(tableName as TableNames)) {
+        continue;
+      }
 
-  for (const tableName of Object.keys(schema.tables)) {
-    if (excludedTables.has(tableName as TableNames)) {
-      continue;
+      await caller.schedule.now.deleteTable({
+        cursor: null,
+        tableName,
+      });
     }
+  });
 
-    await ctx.scheduler.runAfter(0, internal.reset.deletePage, {
-      cursor: null,
-      tableName,
-    });
-  }
-
-  return null;
-});
-
-export const deletePage = privateMutation
+export const deleteTable = privateMutation
+  .meta({ dev: true })
   .input(
     z.object({
       cursor: z.union([z.string(), z.null()]),
       tableName: z.string(),
     })
   )
-  .output(z.null())
   .mutation(async ({ ctx, input }) => {
-    assertDevOnly();
-
+    // biome-ignore lint/suspicious/noExplicitAny: generic
     const table = (tables as Record<string, any>)[input.tableName];
-    if (!table) {
-      throw new CRPCError({
-        code: 'BAD_REQUEST',
-        message: `Unknown table: ${input.tableName}`,
-      });
-    }
 
-    const query = (ctx.orm.query as Record<string, any>)[input.tableName];
-    if (!query || typeof query.findMany !== 'function') {
-      throw new CRPCError({
-        code: 'BAD_REQUEST',
-        message: `Unknown query table: ${input.tableName}`,
-      });
-    }
-
-    const results = await query.findMany({
-      cursor: input.cursor,
-      limit: DELETE_BATCH_SIZE,
-    });
-
-    for (const row of results.page) {
-      try {
-        await ctx.orm.delete(table).where(eq(table.id, (row as any).id));
-      } catch {
-        // Document might have been deleted by a trigger or concurrent process
-      }
-    }
-
-    if (!results.isDone) {
-      await ctx.scheduler.runAfter(0, internal.reset.deletePage, {
-        cursor: results.continueCursor,
-        tableName: input.tableName,
-      });
-    }
-
-    return null;
+    // full-table reset is intentional; strict mode requires explicit opt-in
+    await ctx.orm.delete(table).allowFullScan();
   });
 ```
 
 ### init.ts
-
-Development initialization that runs on `convex dev --run init`.
 
 ```ts title="convex/functions/init.ts" showLineNumbers {8-18}
 import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
-import { internal } from './_generated/api';
+import { createSeedCaller } from './generated/seed.runtime';
 
 /**
  * Initialize the database on startup. This runs with: convex dev --run init
  */
 export default privateMutation
   .meta({ dev: true })
-  .output(z.null())
+  
   .mutation(async ({ ctx }) => {
     const env = getEnv();
     const adminEmails = env.ADMIN;
@@ -1366,7 +1093,8 @@ export default privateMutation
     }
 
     if (isFirstInit && getEnv().DEPLOY_ENV === 'development') {
-      await ctx.runMutation(internal.seed.seed, {});
+      const caller = createSeedCaller(ctx);
+      await caller.seed({});
     }
 
     return null;
@@ -1374,8 +1102,6 @@ export default privateMutation
 ```
 
 ### package.json scripts
-
-Common scripts for development workflow:
 
 ```json title="package.json" showLineNumbers {3-7}
 {
@@ -1401,11 +1127,18 @@ Common scripts for development workflow:
 
 ## Biome
 
-Import boundary enforcement with [Ultracite](https://github.com/12peanuts/ultracite):
+Import boundaries with [Ultracite](https://github.com/12peanuts/ultracite):
 
 ```jsonc title="biome.jsonc" showLineNumbers
 {
   "extends": ["ultracite/core", "ultracite/react", "ultracite/next"],
+  "files": {
+    "includes": [
+      "!**/_generated",
+      "!**/generated",
+      "!**/convex/shared/api.ts"
+    ]
+  },
   "overrides": [
     {
       // src/ cannot import from convex/* packages directly
@@ -1422,7 +1155,7 @@ Import boundary enforcement with [Ultracite](https://github.com/12peanuts/ultrac
                     "message": "Use CRPCError from 'better-convex/crpc' instead."
                   },
                   "convex/react": "Use useCRPC from '@/lib/convex/crpc' instead.",
-                  "convex/nextjs": "Use caller from '@/lib/convex/rsc' instead."
+                  "convex/nextjs": "Use caller from '@/lib/convex/rsc' or createContext({ headers }).caller from '@/lib/convex/server' instead."
                 },
                 "patterns": [{
                   "group": ["**/../convex/**"],
@@ -1435,7 +1168,7 @@ Import boundary enforcement with [Ultracite](https://github.com/12peanuts/ultrac
       }
     },
     {
-      // convex/ cannot import from src/
+      // convex/ cannot import from src/ or _generated/server
       "includes": ["convex/**/*.ts*"],
       "linter": {
         "rules": {
@@ -1443,10 +1176,22 @@ Import boundary enforcement with [Ultracite](https://github.com/12peanuts/ultrac
             "noRestrictedImports": {
               "level": "error",
               "options": {
-                "patterns": [{
-                  "group": ["@/*", "**/src/**"],
-                  "message": "Convex files cannot import from src/."
-                }]
+                "paths": {
+                  "convex/values": {
+                    "importNames": ["ConvexError"],
+                    "message": "Use CRPCError from 'better-convex/crpc' instead."
+                  }
+                },
+                "patterns": [
+                  {
+                    "group": ["@/*", "**/src/**"],
+                    "message": "Convex files cannot import from src/."
+                  },
+                  {
+                    "group": ["**/_generated/server*"],
+                    "message": "Use convex/functions/generated/server instead of _generated/server."
+                  }
+                ]
               }
             }
           }
@@ -1462,10 +1207,28 @@ Import boundary enforcement with [Ultracite](https://github.com/12peanuts/ultrac
             "noRestrictedImports": {
               "level": "error",
               "options": {
-                "patterns": [{
-                  "group": ["**/convex/lib/**"],
-                  "message": "convex/shared cannot import from convex/lib."
-                }]
+                "patterns": [
+                  {
+                    "group": ["@/*", "**/src/**"],
+                    "message": "Convex files cannot import from src/."
+                  },
+                  {
+                    "group": ["**/convex/lib/**", "../lib/**"],
+                    "message": "convex/shared cannot import from convex/lib."
+                  },
+                  {
+                    "group": ["**/convex/routers/**", "../routers/**"],
+                    "message": "convex/shared cannot import from convex/routers."
+                  },
+                  {
+                    "group": ["**/_generated/server*"],
+                    "message": "Use convex/functions/generated/server instead of _generated/server."
+                  },
+                  {
+                    "group": ["**/../functions/*"],
+                    "message": "convex/shared cannot import from convex/functions."
+                  }
+                ]
               }
             }
           }

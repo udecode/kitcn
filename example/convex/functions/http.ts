@@ -1,5 +1,4 @@
-import '../lib/http-polyfills';
-import { authMiddleware } from 'better-convex/auth';
+import { authMiddleware } from 'better-convex/auth/http';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -8,7 +7,7 @@ import { getEnv } from '../lib/get-env';
 import { examplesRouter } from '../routers/examples';
 import { health } from '../routers/health';
 import { todosRouter } from '../routers/todos';
-import { getAuth } from './auth';
+import { getAuth } from './generated/auth';
 
 const app = new Hono();
 
@@ -24,10 +23,10 @@ app.use(
 
 app.use(authMiddleware(getAuth));
 
-export const appRouter = router({
+export const httpRouter = router({
   health,
   todos: todosRouter,
   examples: examplesRouter,
 });
 
-export default createHttpRouter(app, appRouter);
+export default createHttpRouter(app, httpRouter);

@@ -84,15 +84,7 @@ For more on `allowFullScan` and index compilation, see [Querying Data](/docs/orm
 **Important:** Convex mutations are atomic -- all changes in a single mutation call succeed or fail together.
 </Callout>
 
-### Safety Limits
-
-The ORM enforces runtime limits on how many rows a single mutation can touch. The key defaults are:
-
-- `mutationBatchSize`: `100` (page size for collecting matched rows)
-- `mutationMaxRows`: `1000` (sync-mode hard cap)
-- `mutationLeafBatchSize`: `900` (async FK fan-out batch size)
-
-You can customize these in your schema definition. For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
+The ORM enforces runtime limits on how many rows a single mutation can touch. See [API Reference -- Safety Limits](#safety-limits) for defaults and override syntax.
 
 ## Insert
 
@@ -181,36 +173,9 @@ The paginated result includes:
 
 ## Async Mutation Batching
 
-When a mutation can affect large sets of rows, use async mode. The first batch runs in the current mutation, then remaining batches are scheduled automatically through the Convex scheduler.
+Mutations that affect large sets of rows run in **async mode by default**. The first batch runs in the current mutation, then remaining batches are scheduled automatically through the Convex scheduler.
 
-You can enable async mode in three ways:
-
-- **Per call:** `.execute({ mode: 'async' })`
-- **Convenience alias:** `.executeAsync()`
-- **Global default:** `defineSchema(..., { defaults: { mutationExecutionMode: 'async' } })`
-
-### Wiring Setup
-
-Async execution requires wiring `ormFunctions` and `scheduledMutationBatch` into your ORM setup. Here's how to extend the module from [Quickstart](/docs/quickstart#orm-setup):
-
-```ts showLineNumbers title="convex/lib/orm.ts" {4,9}
-import { createOrm } from 'better-convex/orm';
-import { internal } from '../_generated/api';
-import { internalMutation } from '../functions';
-import { relations } from '../schema';
-
-export const orm = createOrm({
-  schema: relations,
-  ormFunctions: internal.orm,
-  internalMutation,
-});
-
-export const { scheduledMutationBatch, scheduledDelete } = orm.api();
-```
-
-Then use `ctx.orm` as usual in your handlers:
-
-```ts showLineNumbers title="convex/functions/users.ts" {7-8}
+```ts showLineNumbers title="convex/functions/users.ts" {7}
 import { eq } from 'better-convex/orm';
 import { publicMutation } from '../lib/crpc';
 import { users } from '../schema';
@@ -219,16 +184,42 @@ export const renameUsers = publicMutation.mutation(async ({ ctx }) => {
   await ctx.orm
     .update(users)
     .set({ name: 'Updated' })
-    .where(eq(users.role, 'pending')) // requires index('by_role').on(t.role)
-    .execute({ mode: 'async', batchSize: 200, delayMs: 0 });
+    .where(eq(users.role, 'pending')); // async by default
 });
 ```
 
-<Callout icon={<InfoIcon />}>
-**Tip:** Both `update()` and `delete()` share the same async wiring. Set it up once and it works for all mutation types.
-</Callout>
+You can customize batch size and delay per call:
+
+```ts showLineNumbers
+await ctx.orm
+  .update(users)
+  .set({ name: 'Updated' })
+  .where(eq(users.role, 'pending'))
+  .execute({ batchSize: 200, delayMs: 0 });
+```
+
+### Sync Mode
+
+To force all rows to be processed in a single transaction (no scheduling), opt into sync mode:
+
+- **Per call:** `.execute({ mode: 'sync' })`
+- **Global default:** `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`
+
+Sync mode throws if matched rows exceed `mutationMaxRows`.
 
 You now have all the building blocks for writing data. Dive into the sub-pages below for detailed coverage of each mutation type.
+
+## API Reference
+
+### Safety Limits
+
+The ORM enforces runtime limits on how many rows a single mutation can touch. The key defaults are:
+
+- `mutationBatchSize`: `400` (page size for collecting matched rows)
+- `mutationMaxRows`: `10000` (sync-mode hard cap)
+- `mutationLeafBatchSize`: `1600` (async FK fan-out batch size)
+
+You can customize these in your schema definition. For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
 
 ## Next Steps
 

@@ -125,7 +125,13 @@ export const tables = {
 export default defineSchema(tables, {
   defaults: {
     defaultLimit: 1000,
+    mutationExecutionMode: 'async',
+    mutationBatchSize: 400,
+    mutationLeafBatchSize: 1600,
     mutationMaxRows: 10000,
+    mutationMaxBytesPerBatch: 2_097_152,
+    mutationScheduleCallCap: 800,
+    mutationAsyncDelayMs: 0,
   },
 });
 

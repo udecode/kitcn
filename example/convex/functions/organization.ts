@@ -2,16 +2,115 @@ import { eq } from 'better-convex/orm';
 import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { hasPermission } from '../lib/auth/auth-helpers';
-import { type AuthCtx, authMutation, authQuery } from '../lib/crpc';
-import { listUserOrganizations } from '../lib/organization-helpers';
-import type { MutationCtx } from './_generated/server';
-import { invitationTable } from './schema';
+import {
+  type AuthCtx,
+  authMutation,
+  authQuery,
+  privateMutation,
+} from '../lib/crpc';
+import { createOrganizationHandler } from './generated/organization.runtime';
+import type { MutationCtx } from './generated/server';
+import {
+  invitationTable,
+  memberTable,
+  organizationTable,
+  userTable,
+} from './schema';
 
 // Maximum members per organization (including pending invitations)
 const MEMBER_LIMIT = 5;
 // Default limit for listing operations to prevent unbounded queries
 const DEFAULT_LIST_LIMIT = 100;
 const DEFAULT_PLAN = 'free';
+
+export const createPersonalOrganization = privateMutation
+  .input(
+    z.object({
+      image: z.string().nullish(),
+      name: z.string(),
+      userId: z.string(),
+    })
+  )
+  .output(z.object({ id: z.string(), slug: z.string() }).nullable())
+  .mutation(async ({ ctx, input }) => {
+    const user = await ctx.orm.query.user.findFirstOrThrow({
+      where: { id: input.userId },
+    });
+
+    if (user.personalOrganizationId) {
+      return null;
+    }
+
+    const slug = `personal-${input.userId.slice(-8)}`;
+
+    const [org] = await ctx.orm
+      .insert(organizationTable)
+      .values({
+        logo: input.image ?? null,
+        monthlyCredits: 0,
+        name: `${input.name}'s Organization`,
+        slug,
+        createdAt: new Date(),
+      })
+      .returning();
+    const orgId = org.id;
+
+    await ctx.orm.insert(memberTable).values({
+      createdAt: new Date(),
+      role: 'owner',
+      organizationId: orgId,
+      userId: input.userId,
+    });
+
+    await ctx.orm
+      .update(userTable)
+      .set({
+        lastActiveOrganizationId: orgId,
+        personalOrganizationId: orgId,
+      })
+      .where(eq(userTable.id, input.userId));
+
+    return {
+      id: orgId,
+      slug,
+    };
+  });
+
+export const listUserOrganizations = authQuery
+  .output(
+    z.array(
+      z.object({
+        createdAt: z.date(),
+        id: z.string(),
+        logo: z.string().nullish(),
+        name: z.string(),
+        role: z.string(),
+        slug: z.string(),
+      })
+    )
+  )
+  .query(async ({ ctx }) => {
+    const memberships = await ctx.orm.query.member.findMany({
+      where: { userId: { eq: ctx.userId } },
+      orderBy: { createdAt: 'asc' },
+      with: { organization: true },
+    });
+
+    if (!memberships.length) {
+      return [];
+    }
+
+    return memberships.map((membership) => {
+      const organization = membership.organization;
+      if (!organization) {
+        throw new CRPCError({
+          code: 'NOT_FOUND',
+          message: 'Membership organization not found',
+        });
+      }
+      return { ...organization, role: membership.role || 'member' };
+    });
+  });
 
 // List all organizations for current user (excluding active organization)
 export const listOrganizations = authQuery
@@ -32,8 +131,8 @@ export const listOrganizations = authQuery
     })
   )
   .query(async ({ ctx }) => {
-    // Get all organizations for user using helper
-    const orgs = await listUserOrganizations(ctx, ctx.userId);
+    const handler = createOrganizationHandler(ctx);
+    const orgs = await handler.listUserOrganizations();
 
     if (!orgs || orgs.length === 0) {
       return {
@@ -138,7 +237,7 @@ export const updateOrganization = authMutation
       slug: z.string().optional(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -183,8 +282,6 @@ export const updateOrganization = authMutation
       body: { data, organizationId: input.organizationId },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 const slugSchema = z
@@ -256,21 +353,19 @@ const setActiveOrganizationHandler = async (
 
   // Skip updating lastActiveOrganizationId to avoid aggregate issues
   // The active organization is already tracked in the session
-
-  return null;
 };
 
 // Set active organization
 export const setActiveOrganization = authMutation
   .meta({ rateLimit: 'organization/setActive' })
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => setActiveOrganizationHandler(ctx, input));
 
 // Accept invitation
 export const acceptInvitation = authMutation
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -296,15 +391,13 @@ export const acceptInvitation = authMutation
       body: { invitationId: input.invitationId },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Reject invitation
 export const rejectInvitation = authMutation
   .meta({ rateLimit: 'organization/rejectInvite' })
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -330,15 +423,13 @@ export const rejectInvitation = authMutation
       body: { invitationId: input.invitationId },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Remove member from organization
 export const removeMember = authMutation
   .meta({ rateLimit: 'organization/removeMember' })
   .input(z.object({ memberId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const member = await ctx.orm.query.member.findFirstOrThrow({
       where: { id: input.memberId },
@@ -357,15 +448,13 @@ export const removeMember = authMutation
       },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Leave organization (self-leave)
 export const leaveOrganization = authMutation
   .meta({ rateLimit: 'organization/leave' })
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -421,8 +510,6 @@ export const leaveOrganization = authMutation
         organizationId: user.personalOrganizationId!,
       });
     }
-
-    return null;
   });
 
 // Update member role
@@ -434,7 +521,7 @@ export const updateMemberRole = authMutation
       role: z.enum(['owner', 'member']),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const member = await ctx.orm.query.member.findFirstOrThrow({
       where: { id: input.memberId },
@@ -454,14 +541,12 @@ export const updateMemberRole = authMutation
       },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Delete organization (owner only)
 export const deleteOrganization = authMutation
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const user = ctx.user;
 
@@ -492,8 +577,6 @@ export const deleteOrganization = authMutation
       body: { organizationId: input.organizationId },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });
 
 // Get organization details by slug
@@ -521,22 +604,20 @@ export const getOrganization = authQuery
     // Get organization by slug using index
     const org = await ctx.orm.query.organization.findFirst({
       where: { slug: input.slug },
+      with: {
+        _count: {
+          members: true,
+        },
+      },
     });
 
     if (!org) {
       return null;
     }
 
-    const [currentMember, memberRows] = await Promise.all([
-      ctx.orm.query.member.findFirst({
-        where: { organizationId: org.id, userId: ctx.userId },
-      }),
-      ctx.orm.query.member.findMany({
-        where: { organizationId: org.id },
-        limit: DEFAULT_LIST_LIMIT,
-        columns: { id: true },
-      }),
-    ]);
+    const currentMember = await ctx.orm.query.member.findFirst({
+      where: { organizationId: org.id, userId: ctx.userId },
+    });
 
     const plan = DEFAULT_PLAN;
 
@@ -546,7 +627,7 @@ export const getOrganization = authQuery
       isActive: org.id === user.activeOrganization?.id,
       isPersonal: org.id === user.personalOrganizationId,
       logo: org.logo || null,
-      membersCount: memberRows.length || 1,
+      membersCount: org._count?.members || 1,
       name: org.name,
       plan,
       role: currentMember?.role,
@@ -600,6 +681,11 @@ export const getOrganizationOverview = authQuery
     // Get organization details
     const org = await ctx.orm.query.organization.findFirst({
       where: { slug: input.slug },
+      with: {
+        _count: {
+          members: true,
+        },
+      },
     });
 
     if (!org) {
@@ -608,16 +694,9 @@ export const getOrganizationOverview = authQuery
 
     // Get current membership (fast) + member count.
     // Avoid relying on the active organization: we're scoping by the org in the URL.
-    const [currentMember, memberRows] = await Promise.all([
-      ctx.orm.query.member.findFirst({
-        where: { organizationId: org.id, userId: ctx.userId },
-      }),
-      ctx.orm.query.member.findMany({
-        where: { organizationId: org.id },
-        limit: DEFAULT_LIST_LIMIT,
-        columns: { id: true },
-      }),
-    ]);
+    const currentMember = await ctx.orm.query.member.findFirst({
+      where: { organizationId: org.id, userId: ctx.userId },
+    });
 
     const organizationData = {
       id: org.id,
@@ -625,7 +704,7 @@ export const getOrganizationOverview = authQuery
       isActive: user.activeOrganization?.id === org.id,
       isPersonal: org.id === user.personalOrganizationId,
       logo: org.logo,
-      membersCount: memberRows.length || 1,
+      membersCount: org._count?.members || 1,
       name: org.name,
       plan: undefined,
       role: currentMember?.role,
@@ -813,7 +892,7 @@ export const inviteMember = authMutation
       role: z.enum(['owner', 'member']),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     // Premium guard for invitations
     // premiumGuard(ctx.user);
@@ -917,15 +996,13 @@ export const inviteMember = authMutation
         message: `Failed to send invitation: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
     }
-
-    return null;
   });
 
 // Cancel invitation
 export const cancelInvitation = authMutation
   .meta({ rateLimit: 'organization/cancelInvite' })
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     const invitation = await ctx.orm.query.invitation.findFirstOrThrow({
       where: { id: input.invitationId },
@@ -959,8 +1036,6 @@ export const cancelInvitation = authMutation
 
     // Note: Email cancellation through Resend is non-critical
     // The invitation being cancelled is the primary action
-
-    return null;
   });
 
 // Check if slug is available
@@ -1063,7 +1138,7 @@ export const addMember = authMutation
       userId: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, { permissions: { member: ['create'] } });
 
@@ -1075,6 +1150,4 @@ export const addMember = authMutation
       },
       headers: ctx.auth.headers,
     });
-
-    return null;
   });

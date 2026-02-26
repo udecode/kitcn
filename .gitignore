@@ -92,3 +92,4 @@ yarn-error.log*
 .cache/
 
 *.local*
+.convex/

@@ -9,7 +9,9 @@
  */
 
 import {
+  aggregateIndex,
   convexTable,
+  createOrm,
   defineRelations,
   defineSchema,
   deletion,
@@ -61,6 +63,36 @@ const baseUser = {
 const scheduledMutationBatchRef = anyApi.orm
   .scheduledMutationBatch as SchedulableFunctionReference;
 
+const relationCountSchedulerStub = {
+  runAfter: vi.fn(async () => undefined),
+};
+
+const passthroughInternalMutation = ((definition: unknown) =>
+  definition) as never;
+
+const runBackfillToReady = async (api: any, ctx: { db: any }) => {
+  await (api as any).aggregateBackfill.handler(
+    { db: ctx.db, scheduler: relationCountSchedulerStub },
+    {}
+  );
+
+  for (let i = 0; i < 20; i += 1) {
+    const status = await (api as any).aggregateBackfillStatus.handler(
+      { db: ctx.db, scheduler: relationCountSchedulerStub },
+      {}
+    );
+    if (status.every((entry: any) => entry.status === 'READY')) {
+      return;
+    }
+    await (api as any).aggregateBackfillChunk.handler(
+      { db: ctx.db, scheduler: relationCountSchedulerStub },
+      {}
+    );
+  }
+
+  throw new Error('aggregateBackfill did not reach READY state in time.');
+};
+
 describe('M7 Mutations', () => {
   it('should insert and return full row', async ({ ctx }) => {
     const db = ctx.orm;
@@ -70,6 +102,123 @@ describe('M7 Mutations', () => {
     expect(user.name).toBe('Alice');
     expect(user.email).toBe('alice@example.com');
     expect(user.id).toBeDefined();
+  });
+
+  it('should support returning({ _count }) on update and delete', async () => {
+    const mutationCountUsers = convexTable('mutationCountUsers', {
+      name: text().notNull(),
+    });
+    const mutationCountPosts = convexTable(
+      'mutationCountPosts',
+      {
+        authorId: text().notNull(),
+        status: text().notNull(),
+      },
+      (t) => [
+        aggregateIndex('by_author').on(t.authorId),
+        aggregateIndex('by_author_status').on(t.authorId, t.status),
+      ]
+    );
+
+    const customSchema = defineSchema({
+      mutationCountUsers,
+      mutationCountPosts,
+    });
+    const customRelations = defineRelations(
+      { mutationCountUsers, mutationCountPosts },
+      (r) => ({
+        mutationCountUsers: {
+          posts: r.many.mutationCountPosts({
+            from: r.mutationCountUsers.id,
+            to: r.mutationCountPosts.authorId,
+          }),
+        },
+        mutationCountPosts: {
+          author: r.one.mutationCountUsers({
+            from: r.mutationCountPosts.authorId,
+            to: r.mutationCountUsers.id,
+          }),
+        },
+      })
+    );
+
+    const t = convexTest(customSchema);
+    await t.run(async (baseCtx) => {
+      const ormClient = createOrm({
+        schema: customRelations,
+        ormFunctions: {
+          scheduledDelete: {} as any,
+          scheduledMutationBatch: {} as any,
+        },
+        internalMutation: passthroughInternalMutation,
+      });
+      const ctx = ormClient.with({
+        db: baseCtx.db,
+        scheduler: relationCountSchedulerStub as any,
+      });
+      const api = ormClient.api();
+
+      const userId = await ctx.db.insert('mutationCountUsers', {
+        name: 'Alice',
+      });
+      await ctx.db.insert('mutationCountPosts', {
+        authorId: userId,
+        status: 'published',
+      });
+      await ctx.db.insert('mutationCountPosts', {
+        authorId: userId,
+        status: 'published',
+      });
+      await ctx.db.insert('mutationCountPosts', {
+        authorId: userId,
+        status: 'draft',
+      });
+
+      await runBackfillToReady(api as any, baseCtx as any);
+
+      const updated = await ctx.orm
+        .update(mutationCountUsers)
+        .set({ name: 'Alice Updated' })
+        .where(eq(mutationCountUsers.id, userId))
+        .returning({
+          name: mutationCountUsers.name,
+          _count: {
+            posts: {
+              where: {
+                status: 'published',
+              },
+            },
+          },
+        });
+
+      expect(updated).toEqual([
+        {
+          name: 'Alice Updated',
+          _count: {
+            posts: 2,
+          },
+        },
+      ]);
+
+      const deleted = await ctx.orm
+        .delete(mutationCountUsers)
+        .where(eq(mutationCountUsers.id, userId))
+        .returning({
+          name: mutationCountUsers.name,
+          _count: {
+            posts: true,
+          },
+        });
+
+      expect(deleted).toEqual([
+        {
+          name: 'Alice Updated',
+          _count: {
+            posts: 3,
+          },
+        },
+      ]);
+    });
   });
 
   it('should insert and return partial fields', async ({ ctx }) => {
@@ -563,6 +712,181 @@ describe('M7 Mutations', () => {
     });
   });
 
+  it('should delete with two cascade edges without triggering multi-paginate failures', async () => {
+    const cascadeParent = convexTable(
+      'cascade_parent_delete',
+      {
+        slug: text().notNull(),
+      },
+      (t) => [index('by_slug').on(t.slug)]
+    );
+    const cascadeChildA = convexTable(
+      'cascade_child_delete_a',
+      {
+        label: text().notNull(),
+        parentSlug: text()
+          .references(() => cascadeParent.slug, { onDelete: 'cascade' })
+          .notNull(),
+      },
+      (t) => [index('by_parentSlug').on(t.parentSlug)]
+    );
+    const cascadeChildB = convexTable(
+      'cascade_child_delete_b',
+      {
+        label: text().notNull(),
+        parentSlug: text()
+          .references(() => cascadeParent.slug, { onDelete: 'cascade' })
+          .notNull(),
+      },
+      (t) => [index('by_parentSlug').on(t.parentSlug)]
+    );
+    const tables = {
+      cascade_child_delete_a: cascadeChildA,
+      cascade_child_delete_b: cascadeChildB,
+      cascade_parent_delete: cascadeParent,
+    };
+    const cascadeSchema = defineSchema(tables);
+    const cascadeRelations = defineRelations(tables);
+
+    await withOrmCtx(cascadeSchema, cascadeRelations, async (ctx) => {
+      await ctx.db.insert('cascade_parent_delete', { slug: 'p1' });
+      await ctx.db.insert('cascade_parent_delete', { slug: 'p2' });
+
+      await ctx.db.insert('cascade_child_delete_a', {
+        label: 'a-p1',
+        parentSlug: 'p1',
+      });
+      await ctx.db.insert('cascade_child_delete_a', {
+        label: 'a-p2',
+        parentSlug: 'p2',
+      });
+      await ctx.db.insert('cascade_child_delete_b', {
+        label: 'b-p1',
+        parentSlug: 'p1',
+      });
+      await ctx.db.insert('cascade_child_delete_b', {
+        label: 'b-p2',
+        parentSlug: 'p2',
+      });
+
+      await ctx.orm
+        .delete(cascadeParent)
+        .where(eq(cascadeParent.slug, 'p1'))
+        .execute();
+
+      const remainingParentP1 = await ctx.db
+        .query('cascade_parent_delete')
+        .withIndex('by_slug', (q) => q.eq('slug', 'p1'))
+        .collect();
+      const remainingChildAP1 = await ctx.db
+        .query('cascade_child_delete_a')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p1'))
+        .collect();
+      const remainingChildBP1 = await ctx.db
+        .query('cascade_child_delete_b')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p1'))
+        .collect();
+      const remainingChildAP2 = await ctx.db
+        .query('cascade_child_delete_a')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p2'))
+        .collect();
+      const remainingChildBP2 = await ctx.db
+        .query('cascade_child_delete_b')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p2'))
+        .collect();
+
+      expect(remainingParentP1).toHaveLength(0);
+      expect(remainingChildAP1).toHaveLength(0);
+      expect(remainingChildBP1).toHaveLength(0);
+      expect(remainingChildAP2).toHaveLength(1);
+      expect(remainingChildBP2).toHaveLength(1);
+    });
+  });
+
+  it('should update with two cascade edges without triggering multi-paginate failures', async () => {
+    const cascadeParent = convexTable(
+      'cascade_parent_update',
+      {
+        slug: text().notNull(),
+      },
+      (t) => [index('by_slug').on(t.slug)]
+    );
+    const cascadeChildA = convexTable(
+      'cascade_child_update_a',
+      {
+        label: text().notNull(),
+        parentSlug: text()
+          .references(() => cascadeParent.slug, {
+            onDelete: 'cascade',
+            onUpdate: 'cascade',
+          })
+          .notNull(),
+      },
+      (t) => [index('by_parentSlug').on(t.parentSlug)]
+    );
+    const cascadeChildB = convexTable(
+      'cascade_child_update_b',
+      {
+        label: text().notNull(),
+        parentSlug: text()
+          .references(() => cascadeParent.slug, {
+            onDelete: 'cascade',
+            onUpdate: 'cascade',
+          })
+          .notNull(),
+      },
+      (t) => [index('by_parentSlug').on(t.parentSlug)]
+    );
+    const tables = {
+      cascade_child_update_a: cascadeChildA,
+      cascade_child_update_b: cascadeChildB,
+      cascade_parent_update: cascadeParent,
+    };
+    const cascadeSchema = defineSchema(tables);
+    const cascadeRelations = defineRelations(tables);
+
+    await withOrmCtx(cascadeSchema, cascadeRelations, async (ctx) => {
+      await ctx.db.insert('cascade_parent_update', { slug: 'p1' });
+
+      await ctx.db.insert('cascade_child_update_a', {
+        label: 'a-p1',
+        parentSlug: 'p1',
+      });
+      await ctx.db.insert('cascade_child_update_b', {
+        label: 'b-p1',
+        parentSlug: 'p1',
+      });
+
+      await ctx.orm
+        .update(cascadeParent)
+        .set({ slug: 'p2' })
+        .where(eq(cascadeParent.slug, 'p1'))
+        .execute();
+
+      const oldChildAP1 = await ctx.db
+        .query('cascade_child_update_a')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p1'))
+        .collect();
+      const oldChildBP1 = await ctx.db
+        .query('cascade_child_update_b')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p1'))
+        .collect();
+      const newChildAP2 = await ctx.db
+        .query('cascade_child_update_a')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p2'))
+        .collect();
+      const newChildBP2 = await ctx.db
+        .query('cascade_child_update_b')
+        .withIndex('by_parentSlug', (q) => q.eq('parentSlug', 'p2'))
+        .collect();
+
+      expect(oldChildAP1).toHaveLength(0);
+      expect(oldChildBP1).toHaveLength(0);
+      expect(newChildAP2).toHaveLength(1);
+      expect(newChildBP2).toHaveLength(1);
+    });
+  });
+
   it('should reject paginated update/delete for multi-probe filters', async ({
     ctx,
   }) => {
@@ -909,11 +1233,12 @@ describe('M7 Mutations', () => {
     ctx,
   }) => {
     await expect(
-      ctx.orm
-        .update(users)
-        .set({ role: 'editor' })
-        .paginate({ cursor: null, limit: 10 })
-        .executeAsync(undefined as never)
+      (
+        ctx.orm
+          .update(users)
+          .set({ role: 'editor' })
+          .paginate({ cursor: null, limit: 10 }) as any
+      ).executeAsync(undefined as never)
     ).rejects.toThrow(/cannot be combined with paginate/i);
   });
 

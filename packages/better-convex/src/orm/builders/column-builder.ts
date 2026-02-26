@@ -37,8 +37,8 @@ export type ForeignKeyAction =
 
 export interface ColumnReferenceConfig {
   name?: string;
-  onUpdate?: ForeignKeyAction;
   onDelete?: ForeignKeyAction;
+  onUpdate?: ForeignKeyAction;
 }
 
 /**
@@ -50,12 +50,12 @@ export interface ColumnBuilderBaseConfig<
   TDataType extends ColumnDataType,
   TColumnType extends string,
 > {
-  name: string;
-  dataType: TDataType; // 'string' | 'number' | 'boolean' | 'bigint' | 'vector'
   columnType: TColumnType; // 'ConvexText' | 'ConvexInteger' | etc.
   data: unknown; // Actual TypeScript type (string, number, boolean, bigint)
+  dataType: TDataType; // 'string' | 'number' | 'boolean' | 'bigint' | 'vector'
   driverParam: unknown; // Driver-specific parameter type (for Drizzle compatibility)
   enumValues: string[] | undefined; // Enum values if applicable
+  name: string;
 }
 
 /**
@@ -63,25 +63,25 @@ export interface ColumnBuilderBaseConfig<
  * Updated by chaining methods (.notNull(), .default(), etc.)
  */
 export interface ColumnBuilderRuntimeConfig<TData> {
-  name: string;
-  tableName?: string;
-  table?: unknown;
-  referenceTable?: string;
-  notNull: boolean;
+  columnType: string;
+  dataType: string;
   default: TData | undefined;
   defaultFn?: (() => unknown) | undefined;
-  onUpdateFn?: (() => unknown) | undefined;
-  hasDefault: boolean;
-  primaryKey: boolean;
-  isUnique: boolean;
-  uniqueName?: string;
-  uniqueNulls?: 'distinct' | 'not distinct';
   foreignKeyConfigs: {
     ref: () => ColumnBuilderBase;
     config: ColumnReferenceConfig;
   }[];
-  dataType: string;
-  columnType: string;
+  hasDefault: boolean;
+  isUnique: boolean;
+  name: string;
+  notNull: boolean;
+  onUpdateFn?: (() => unknown) | undefined;
+  primaryKey: boolean;
+  referenceTable?: string;
+  table?: unknown;
+  tableName?: string;
+  uniqueName?: string;
+  uniqueNulls?: 'distinct' | 'not distinct';
 }
 
 /**

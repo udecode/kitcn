@@ -1,8 +1,7 @@
 import { eq } from 'better-convex/orm';
 import { z } from 'zod';
 import { privateAction, privateMutation, privateQuery } from '../lib/crpc';
-import { internal } from './_generated/api';
-import { aggregateTodosByStatus, aggregateTodosByUser } from './aggregates';
+import { createTodoInternalCaller } from './generated/todoInternal.runtime';
 import { todosTable } from './schema';
 
 // ============================================
@@ -131,47 +130,61 @@ export const getSystemStats = privateQuery
     todayStart.setHours(0, 0, 0, 0);
 
     // User stats
-    const allUsers = await ctx.orm.query.user.findMany({ limit: 1000 });
+    const allUsers = await ctx.orm.query.user.findMany({
+      limit: 1000,
+      with: {
+        _count: {
+          todos: {
+            where: {
+              deletionTime: { isNull: true },
+            },
+          },
+        },
+      },
+    });
     // For active users, check by creation time since _lastModified doesn't exist
     const activeUsers = allUsers.filter(
       (u) => u.createdAt.getTime() > thirtyDaysAgo
     );
 
-    // Count users with todos using aggregates (exclude soft-deleted)
-    const activeTodoCounts = allUsers.length
-      ? await aggregateTodosByUser.countBatch(
-          ctx,
-          allUsers.map((user) => ({
-            namespace: user.id,
-            bounds: {
-              lower: { key: ['high', false, false], inclusive: true },
-              upper: { key: ['none', true, false], inclusive: true },
-            },
-          }))
-        )
-      : [];
-    const usersWithTodos = activeTodoCounts.filter((count) => count > 0).length;
+    const usersWithTodos = allUsers.filter(
+      (user) => (user._count?.todos ?? 0) > 0
+    ).length;
 
-    // Todo stats (only count active todos, not soft-deleted)
-    const totalTodos = await aggregateTodosByStatus.count(ctx, {
-      bounds: {
-        lower: { key: [false, 'high', 0, false], inclusive: true },
-        upper: {
-          key: [true, 'none', Number.POSITIVE_INFINITY, false],
-          inclusive: true,
-        },
-      },
-    });
-    // Count completed active todos
-    const completedTodos = await aggregateTodosByStatus.count(ctx, {
-      bounds: {
-        lower: { key: [true, 'high', 0, false], inclusive: true },
-        upper: {
-          key: [true, 'none', Number.POSITIVE_INFINITY, false],
-          inclusive: true,
-        },
-      },
-    });
+    const [todosByCompletion, todosByPriority, todosWithNoPriority] =
+      await Promise.all([
+        ctx.orm.query.todos.groupBy({
+          by: ['completed'],
+          where: {
+            completed: { in: [true, false] },
+            deletionTime: { isNull: true },
+          },
+          _count: true,
+        }),
+        ctx.orm.query.todos.groupBy({
+          by: ['priority'],
+          where: {
+            priority: { in: ['low', 'medium', 'high'] },
+            deletionTime: { isNull: true },
+          },
+          _count: true,
+        }),
+        ctx.orm.query.todos.groupBy({
+          by: ['priority'],
+          where: {
+            priority: { isNull: true },
+            deletionTime: { isNull: true },
+          },
+          _count: true,
+        }),
+      ]);
+
+    const totalTodos = todosByCompletion.reduce(
+      (sum, group) => sum + group._count,
+      0
+    );
+    const completedTodos =
+      todosByCompletion.find((group) => group.completed === true)?._count ?? 0;
 
     // Count overdue (exclude soft-deleted)
     const overdueTodos = (
@@ -185,27 +198,22 @@ export const getSystemStats = privateQuery
       })
     ).length;
 
-    // Priority breakdown (exclude soft-deleted)
     const byPriority: Record<'low' | 'medium' | 'high' | 'none', number> = {
       low: 0,
       medium: 0,
       high: 0,
       none: 0,
     };
-    for (const priority of ['low', 'medium', 'high'] as const) {
-      byPriority[priority] = (
-        await ctx.orm.query.todos.findMany({
-          where: { priority, deletionTime: { isNull: true } },
-          limit: 1000,
-        })
-      ).length;
+    for (const group of todosByPriority) {
+      if (
+        group.priority === 'low' ||
+        group.priority === 'medium' ||
+        group.priority === 'high'
+      ) {
+        byPriority[group.priority] = group._count;
+      }
     }
-    byPriority.none = (
-      await ctx.orm.query.todos.findMany({
-        where: { priority: { isNull: true }, deletionTime: { isNull: true } },
-        limit: 1000,
-      })
-    ).length;
+    byPriority.none = todosWithNoPriority[0]?._count ?? 0;
 
     // Project stats
     const projects = await ctx.orm.query.projects.findMany({ limit: 1000 });
@@ -360,68 +368,41 @@ export const recalculateUserStats = privateMutation
     })
   )
   .mutation(async ({ ctx, input }) => {
+    // Calculate streak (consecutive days with completed todos, exclude soft-deleted)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     await ctx.orm.query.user.findFirstOrThrow({
       where: { id: input.userId },
+      columns: { id: true },
     });
 
-    // Get todo counts from aggregates (exclude soft-deleted)
-    const totalTodos = await aggregateTodosByUser.count(ctx, {
-      namespace: input.userId,
-      bounds: {
-        lower: { key: ['high', false, false], inclusive: true },
-        upper: { key: ['none', true, false], inclusive: true },
-      },
-    });
-
-    // Count completed todos (exclude soft-deleted)
-    const completedCounts = await Promise.all([
-      aggregateTodosByUser.count(ctx, {
-        namespace: input.userId,
-        bounds: {
-          lower: { key: ['low', true, false], inclusive: true },
-          upper: { key: ['low', true, false], inclusive: true },
+    const [todosByCompletion, recentCompleted] = await Promise.all([
+      ctx.orm.query.todos.groupBy({
+        by: ['completed'],
+        where: {
+          userId: input.userId,
+          completed: { in: [true, false] },
+          deletionTime: { isNull: true },
         },
+        _count: true,
       }),
-      aggregateTodosByUser.count(ctx, {
-        namespace: input.userId,
-        bounds: {
-          lower: { key: ['medium', true, false], inclusive: true },
-          upper: { key: ['medium', true, false], inclusive: true },
+      ctx.orm.query.todos.findMany({
+        where: {
+          userId: input.userId,
+          completed: true,
+          createdAt: { gte: thirtyDaysAgo },
+          deletionTime: { isNull: true },
         },
-      }),
-      aggregateTodosByUser.count(ctx, {
-        namespace: input.userId,
-        bounds: {
-          lower: { key: ['high', true, false], inclusive: true },
-          upper: { key: ['high', true, false], inclusive: true },
-        },
-      }),
-      aggregateTodosByUser.count(ctx, {
-        namespace: input.userId,
-        bounds: {
-          lower: { key: ['none', true, false], inclusive: true },
-          upper: { key: ['none', true, false], inclusive: true },
-        },
+        orderBy: { createdAt: 'desc' },
+        limit: 1000,
       }),
     ]);
 
-    const completedTodos = completedCounts.reduce(
-      (sum, count) => sum + count,
+    const totalTodos = todosByCompletion.reduce(
+      (sum, group) => sum + group._count,
       0
     );
-
-    // Calculate streak (consecutive days with completed todos, exclude soft-deleted)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const recentCompleted = await ctx.orm.query.todos.findMany({
-      where: {
-        userId: input.userId,
-        completed: true,
-        createdAt: { gte: thirtyDaysAgo },
-        deletionTime: { isNull: true },
-      },
-      orderBy: { createdAt: 'desc' },
-      limit: 1000,
-    });
+    const completedTodos =
+      todosByCompletion.find((group) => group.completed === true)?._count ?? 0;
 
     // Calculate streak
     let streak = 0;
@@ -468,14 +449,13 @@ export const processDailySummaries = privateAction
     })
   )
   .action(async ({ ctx }) => {
+    const caller = createTodoInternalCaller(ctx);
+
     // Get users with overdue todos
-    const usersToNotify = await ctx.runQuery(
-      internal.todoInternal.getUsersWithOverdueTodos,
-      {
-        hoursOverdue: 24,
-        limit: 100,
-      }
-    );
+    const usersToNotify = await caller.getUsersWithOverdueTodos({
+      hoursOverdue: 24,
+      limit: 100,
+    });
 
     let sent = 0;
     let failed = 0;
@@ -516,15 +496,13 @@ export const generateWeeklyReport = privateAction
   .action(async ({ ctx, input }) => {
     const now = Date.now();
     const weekStart = now - 7 * 24 * 60 * 60 * 1000;
+    const caller = createTodoInternalCaller(ctx);
 
     // Get user's todos from the past week
-    const weekTodos = await ctx.runQuery(
-      internal.todoInternal.getUserWeeklyActivity,
-      {
-        userId: input.userId,
-        weekStart,
-      }
-    );
+    const weekTodos = await caller.getUserWeeklyActivity({
+      userId: input.userId,
+      weekStart,
+    });
 
     // Calculate stats
     const todosCreated = weekTodos.created.length;
@@ -680,7 +658,7 @@ export const update = privateMutation
       description: z.string().max(1000).optional(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await ctx.orm.query.todos.findFirstOrThrow({
       where: { id: input.id, userId: input.userId },
@@ -694,7 +672,6 @@ export const update = privateMutation
         description: input.description,
       })
       .where(eq(todosTable.id, input.id));
-    return null;
   });
 
 /** Delete - called by HTTP actions after auth is verified */
@@ -705,7 +682,7 @@ export const deleteTodo = privateMutation
       id: z.string(),
     })
   )
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     await ctx.orm.query.todos.findFirstOrThrow({
       where: { id: input.id, userId: input.userId },
@@ -715,5 +692,4 @@ export const deleteTodo = privateMutation
       .update(todosTable)
       .set({ deletionTime: new Date() })
       .where(eq(todosTable.id, input.id));
-    return null;
   });

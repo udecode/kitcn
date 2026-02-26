@@ -491,6 +491,160 @@ const db = orm.db(mockDb);
   Expect<Equal<Post, ExpectedPost>>;
 }
 
+// Test 12e: predefined where alias on many() keeps relation shape
+{
+  const polyUsers = convexTable('poly_users_types', {
+    name: text().notNull(),
+  });
+
+  const polyPosts = convexTable('poly_posts_types', {
+    title: text().notNull(),
+    status: text().notNull(),
+    authorId: id('poly_users_types').notNull(),
+  });
+
+  const polyRelations = defineRelations({ polyUsers, polyPosts }, (r) => ({
+    polyUsers: {
+      publishedPosts: r.many.polyPosts({
+        from: r.polyUsers.id,
+        to: r.polyPosts.authorId,
+        where: { status: 'published' },
+        alias: 'published-posts',
+      }),
+    },
+    polyPosts: {
+      author: r.one.polyUsers({
+        from: r.polyPosts.authorId,
+        to: r.polyUsers.id,
+      }),
+    },
+  }));
+
+  const polyOrm = createOrm({ schema: polyRelations });
+  const polyDb = polyOrm.db(mockDb);
+
+  const result = await polyDb.query.polyUsers.findMany({
+    with: {
+      publishedPosts: true,
+    },
+  });
+
+  type PolyPostRow = InferSelectModel<typeof polyPosts>;
+  type Row = (typeof result)[number];
+  type PublishedPosts = Row['publishedPosts'];
+
+  Expect<Equal<PublishedPosts, PolyPostRow[]>>;
+}
+
+// Test 12f: strict polymorphic dual-target relations stay nullable in result
+{
+  const strictPosts = convexTable('strict_posts_types', {
+    title: text().notNull(),
+    kind: text().notNull(),
+  });
+
+  const strictVideos = convexTable('strict_videos_types', {
+    title: text().notNull(),
+    kind: text().notNull(),
+  });
+
+  const strictComments = convexTable('strict_comments_types', {
+    body: text().notNull(),
+    postId: id('strict_posts_types'),
+    videoId: id('strict_videos_types'),
+  });
+
+  const strictRelations = defineRelations(
+    { strictPosts, strictVideos, strictComments },
+    (r) => ({
+      strictComments: {
+        post: r.one.strictPosts({
+          from: r.strictComments.postId,
+          to: r.strictPosts.id,
+          where: { kind: 'post' },
+        }),
+        video: r.one.strictVideos({
+          from: r.strictComments.videoId,
+          to: r.strictVideos.id,
+          where: { kind: 'video' },
+        }),
+      },
+    })
+  );
+
+  const strictOrm = createOrm({ schema: strictRelations });
+  const strictDb = strictOrm.db(mockDb);
+
+  const result = await strictDb.query.strictComments.findMany({
+    with: {
+      post: true,
+      video: true,
+    },
+  });
+
+  type StrictPostRow = InferSelectModel<typeof strictPosts>;
+  type StrictVideoRow = InferSelectModel<typeof strictVideos>;
+  type Row = (typeof result)[number];
+
+  Expect<Equal<Row['post'], StrictPostRow | null>>;
+  Expect<Equal<Row['video'], StrictVideoRow | null>>;
+}
+
+// Test 12g: nested with + relation where remains type-safe
+{
+  const nestedUsers = convexTable('nested_users_types', {
+    name: text().notNull(),
+  });
+
+  const nestedPosts = convexTable('nested_posts_types', {
+    title: text().notNull(),
+    status: text().notNull(),
+    authorId: id('nested_users_types').notNull(),
+  });
+
+  const nestedRelations = defineRelations(
+    { nestedUsers, nestedPosts },
+    (r) => ({
+      nestedUsers: {
+        publishedPosts: r.many.nestedPosts({
+          from: r.nestedUsers.id,
+          to: r.nestedPosts.authorId,
+          where: { status: 'published' },
+          alias: 'published-posts',
+        }),
+      },
+      nestedPosts: {
+        author: r.one.nestedUsers({
+          from: r.nestedPosts.authorId,
+          to: r.nestedUsers.id,
+        }),
+      },
+    })
+  );
+
+  const nestedOrm = createOrm({ schema: nestedRelations });
+  const nestedDb = nestedOrm.db(mockDb);
+
+  const result = await nestedDb.query.nestedUsers.findMany({
+    with: {
+      publishedPosts: {
+        where: { status: 'published' },
+        with: {
+          author: {
+            where: { name: 'Alice' },
+          },
+        },
+      },
+    },
+  });
+
+  type NestedUserRow = InferSelectModel<typeof nestedUsers>;
+  type Row = (typeof result)[number];
+  type Author = Row['publishedPosts'][number]['author'];
+
+  Expect<Equal<Author, NestedUserRow | null>>;
+}
+
 // ============================================================================
 // FINDFIRST RESULT TYPE TESTS
 // ============================================================================

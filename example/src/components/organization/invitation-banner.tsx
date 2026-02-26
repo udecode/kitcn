@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiOutputs } from '@convex/types';
+import type { ApiOutputs } from '@convex/api';
 import { useMutation } from '@tanstack/react-query';
 import { Check, Mail, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';

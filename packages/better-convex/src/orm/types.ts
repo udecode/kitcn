@@ -284,6 +284,83 @@ export type GetColumnData<
             : TColumn['_']['data'])
         | null; // Query mode, nullable: add null
 
+type AggregateIndexMap<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> =
+  TTableConfig['table'] extends ConvexTable<
+    any,
+    any,
+    any,
+    any,
+    infer TAggregateIndexes extends Record<string, string>
+  >
+    ? TAggregateIndexes
+    : Record<string, string>;
+
+type AggregateIndexedFieldName<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> = Extract<
+  {
+    [K in keyof AggregateIndexMap<TTableConfig>]: AggregateIndexMap<TTableConfig>[K];
+  }[keyof AggregateIndexMap<TTableConfig>],
+  string
+>;
+
+type AggregateScalarFieldName<TTableConfig extends TableRelationalConfig> =
+  Extract<keyof TTableConfig['table']['_']['columns'], string>;
+
+type AggregateWhereFieldName<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> = AggregateIndexedFieldName<TTableConfig>;
+
+type AggregateWhereFieldValue<
+  TTableConfig extends TableRelationalConfig,
+  TFieldName extends string,
+> = TFieldName extends keyof TTableConfig['table']['_']['columns']
+  ? TTableConfig['table']['_']['columns'][TFieldName] extends ColumnBuilder<
+      any,
+      any,
+      any
+    >
+    ? GetColumnData<TTableConfig['table']['_']['columns'][TFieldName], 'query'>
+    : unknown
+  : unknown;
+
+type AggregateWhereFieldFilter<TValue> =
+  | TValue
+  | {
+      eq?: TValue | undefined;
+      in?: readonly TValue[] | undefined;
+      isNull?: true | undefined;
+      gt?: TValue | undefined;
+      gte?: TValue | undefined;
+      lt?: TValue | undefined;
+      lte?: TValue | undefined;
+    };
+
+type AggregateNoScanWhereBase<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> = {
+  [K in AggregateWhereFieldName<TTableConfig>]?: AggregateWhereFieldFilter<
+    AggregateWhereFieldValue<TTableConfig, K>
+  >;
+};
+
+export type AggregateNoScanWhere<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> = Simplify<
+  AggregateNoScanWhereBase<TTableConfig> & {
+    AND?: AggregateNoScanWhereBase<TTableConfig>[] | undefined;
+    OR?: AggregateNoScanWhereBase<TTableConfig>[] | undefined;
+  }
+>;
+
+type AggregateNoScanWhereArg<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> = [AggregateWhereFieldName<TTableConfig>] extends [never]
+  ? never
+  : AggregateNoScanWhere<TTableConfig>;
+
 // ============================================================================
 // M3 Query Builder Types
 // ============================================================================
@@ -331,8 +408,28 @@ export type DBQueryConfig<
                 >
               >
             | undefined;
+        } & {
+          _count?:
+            | {
+                [K in keyof TTableConfig['relations']]?:
+                  | true
+                  | {
+                      where?:
+                        | AggregateNoScanWhereArg<
+                            FindTableByDBName<
+                              TSchema,
+                              Extract<
+                                TTableConfig['relations'][K]['targetTableName'],
+                                string
+                              >
+                            >
+                          >
+                        | undefined;
+                    };
+              }
+            | undefined;
         },
-        TTableConfig['relations']
+        TTableConfig['relations'] & { _count?: unknown }
       >
     | undefined;
   /**
@@ -419,6 +516,389 @@ export type DBQueryConfig<
     allowFullScan?: boolean | undefined;
   };
 
+export type CountConfig<
+  _TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> = {
+  where?: AggregateNoScanWhereArg<TTableConfig> | undefined;
+  orderBy?: DBQueryConfigOrderBy<TTableConfig> | undefined;
+  skip?: number | undefined;
+  take?: number | undefined;
+  cursor?:
+    | {
+        [K in Extract<keyof TTableConfig['table']['_']['columns'], string>]?:
+          | GetColumnData<TableColumns<TTableConfig>[K], 'query'>
+          | undefined;
+      }
+    | undefined;
+  select?:
+    | ({
+        _all?: true | undefined;
+      } & {
+        [K in Extract<keyof TTableConfig['table']['_']['columns'], string>]?:
+          | true
+          | undefined;
+      })
+    | undefined;
+};
+
+type AggregateNumericFieldName<TTableConfig extends TableRelationalConfig> = {
+  [K in AggregateScalarFieldName<TTableConfig>]: NonNullable<
+    GetColumnData<TableColumns<TTableConfig>[K], 'query'>
+  > extends number
+    ? K
+    : never;
+}[AggregateScalarFieldName<TTableConfig>];
+
+export type AggregateFieldValue<
+  TTableConfig extends TableRelationalConfig,
+  TField extends AggregateScalarFieldName<TTableConfig>,
+> = GetColumnData<TableColumns<TTableConfig>[TField], 'query'>;
+
+export type AggregateConfig<
+  _TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> = {
+  where?: AggregateNoScanWhereArg<TTableConfig> | undefined;
+  orderBy?: DBQueryConfigOrderBy<TTableConfig> | undefined;
+  skip?: number | undefined;
+  take?: number | undefined;
+  cursor?:
+    | {
+        [K in Extract<keyof TTableConfig['table']['_']['columns'], string>]?:
+          | GetColumnData<TableColumns<TTableConfig>[K], 'query'>
+          | undefined;
+      }
+    | undefined;
+  _count?:
+    | true
+    | ({
+        _all?: true | undefined;
+      } & {
+        [K in AggregateScalarFieldName<TTableConfig>]?: true | undefined;
+      })
+    | undefined;
+  _sum?:
+    | {
+        [K in AggregateNumericFieldName<TTableConfig>]?: true | undefined;
+      }
+    | undefined;
+  _avg?:
+    | {
+        [K in AggregateNumericFieldName<TTableConfig>]?: true | undefined;
+      }
+    | undefined;
+  _min?:
+    | {
+        [K in AggregateScalarFieldName<TTableConfig>]?: true | undefined;
+      }
+    | undefined;
+  _max?:
+    | {
+        [K in AggregateScalarFieldName<TTableConfig>]?: true | undefined;
+      }
+    | undefined;
+};
+
+export type GroupByByInput<
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> =
+  | AggregateWhereFieldName<TTableConfig>
+  | readonly AggregateWhereFieldName<TTableConfig>[];
+
+type GroupBySelectedFields<TBy> = TBy extends readonly (infer TField)[]
+  ? Extract<TField, string>
+  : Extract<TBy, string>;
+
+type GroupByByResult<
+  TTableConfig extends TableRelationalConfig,
+  TBy,
+> = Simplify<{
+  [K in GroupBySelectedFields<TBy> &
+    AggregateScalarFieldName<TTableConfig>]: AggregateFieldValue<
+    TTableConfig,
+    K
+  >;
+}>;
+
+type GroupByOrderDirection = 'asc' | 'desc';
+
+type GroupByByOrderBy<TBy> = Partial<
+  Record<GroupBySelectedFields<TBy>, GroupByOrderDirection>
+>;
+
+type GroupByMetricOrderBy<TTableConfig extends TableRelationalConfig> = {
+  _count?:
+    | GroupByOrderDirection
+    | ({
+        _all?: GroupByOrderDirection | undefined;
+      } & {
+        [K in AggregateScalarFieldName<TTableConfig>]?:
+          | GroupByOrderDirection
+          | undefined;
+      })
+    | undefined;
+  _sum?:
+    | {
+        [K in AggregateNumericFieldName<TTableConfig>]?:
+          | GroupByOrderDirection
+          | undefined;
+      }
+    | undefined;
+  _avg?:
+    | {
+        [K in AggregateNumericFieldName<TTableConfig>]?:
+          | GroupByOrderDirection
+          | undefined;
+      }
+    | undefined;
+  _min?:
+    | {
+        [K in AggregateScalarFieldName<TTableConfig>]?:
+          | GroupByOrderDirection
+          | undefined;
+      }
+    | undefined;
+  _max?:
+    | {
+        [K in AggregateScalarFieldName<TTableConfig>]?:
+          | GroupByOrderDirection
+          | undefined;
+      }
+    | undefined;
+};
+
+type GroupByOrderBy<
+  TTableConfig extends TableRelationalConfig,
+  TBy,
+> = ValueOrArray<GroupByByOrderBy<TBy> | GroupByMetricOrderBy<TTableConfig>>;
+
+type GroupByHavingValue<TValue> =
+  | TValue
+  | {
+      eq?: TValue | undefined;
+      in?: readonly TValue[] | undefined;
+      isNull?: true | undefined;
+      gt?: TValue | undefined;
+      gte?: TValue | undefined;
+      lt?: TValue | undefined;
+      lte?: TValue | undefined;
+    };
+
+type GroupByHaving<TTableConfig extends TableRelationalConfig, TBy> = Simplify<
+  {
+    [K in GroupBySelectedFields<TBy>]?: GroupByHavingValue<
+      AggregateFieldValue<
+        TTableConfig,
+        Extract<K, AggregateScalarFieldName<TTableConfig>>
+      >
+    >;
+  } & {
+    _count?:
+      | GroupByHavingValue<number>
+      | ({
+          _all?: GroupByHavingValue<number> | undefined;
+        } & {
+          [K in AggregateScalarFieldName<TTableConfig>]?:
+            | GroupByHavingValue<number>
+            | undefined;
+        })
+      | undefined;
+    _sum?:
+      | {
+          [K in AggregateNumericFieldName<TTableConfig>]?:
+            | GroupByHavingValue<number | null>
+            | undefined;
+        }
+      | undefined;
+    _avg?:
+      | {
+          [K in AggregateNumericFieldName<TTableConfig>]?:
+            | GroupByHavingValue<number | null>
+            | undefined;
+        }
+      | undefined;
+    _min?:
+      | {
+          [K in AggregateScalarFieldName<TTableConfig>]?:
+            | GroupByHavingValue<AggregateFieldValue<TTableConfig, K> | null>
+            | undefined;
+        }
+      | undefined;
+    _max?:
+      | {
+          [K in AggregateScalarFieldName<TTableConfig>]?:
+            | GroupByHavingValue<AggregateFieldValue<TTableConfig, K> | null>
+            | undefined;
+        }
+      | undefined;
+    AND?: GroupByHaving<TTableConfig, TBy>[] | undefined;
+  }
+>;
+
+export type GroupByConfig<
+  _TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
+> = {
+  by: GroupByByInput<TTableConfig>;
+  where?: AggregateNoScanWhereArg<TTableConfig> | undefined;
+  orderBy?:
+    | GroupByOrderBy<TTableConfig, GroupByByInput<TTableConfig>>
+    | undefined;
+  skip?: number | undefined;
+  take?: number | undefined;
+  cursor?: Record<string, unknown> | undefined;
+  having?:
+    | GroupByHaving<TTableConfig, GroupByByInput<TTableConfig>>
+    | undefined;
+  _count?:
+    | true
+    | ({
+        _all?: true | undefined;
+      } & {
+        [K in AggregateScalarFieldName<TTableConfig>]?: true | undefined;
+      })
+    | undefined;
+  _sum?:
+    | {
+        [K in AggregateNumericFieldName<TTableConfig>]?: true | undefined;
+      }
+    | undefined;
+  _avg?:
+    | {
+        [K in AggregateNumericFieldName<TTableConfig>]?: true | undefined;
+      }
+    | undefined;
+  _min?:
+    | {
+        [K in AggregateScalarFieldName<TTableConfig>]?: true | undefined;
+      }
+    | undefined;
+  _max?:
+    | {
+        [K in AggregateScalarFieldName<TTableConfig>]?: true | undefined;
+      }
+    | undefined;
+};
+
+type SelectedTrueKeys<TSelection> = Extract<
+  {
+    [K in keyof TSelection]-?: TSelection[K] extends true ? K : never;
+  }[keyof TSelection],
+  string
+>;
+
+type CountSelectResult<
+  TTableConfig extends TableRelationalConfig,
+  TSelect extends Record<string, unknown>,
+> = Simplify<
+  (TSelect extends { _all: true } ? { _all: number } : {}) & {
+    [K in SelectedTrueKeys<TSelect> &
+      AggregateScalarFieldName<TTableConfig>]: number;
+  }
+>;
+
+type AggregateCountResult<
+  TTableConfig extends TableRelationalConfig,
+  TCount,
+> = TCount extends true
+  ? number
+  : TCount extends Record<string, unknown>
+    ? CountSelectResult<TTableConfig, TCount>
+    : never;
+
+type AggregateNumericNullableResult<TSelect> = Simplify<{
+  [K in SelectedTrueKeys<NonNullable<TSelect>>]: number | null;
+}>;
+
+type AggregateComparableResult<
+  TTableConfig extends TableRelationalConfig,
+  TSelect,
+> = Simplify<{
+  [K in SelectedTrueKeys<NonNullable<TSelect>> &
+    AggregateScalarFieldName<TTableConfig>]: AggregateFieldValue<
+    TTableConfig,
+    K
+  > | null;
+}>;
+
+export type CountResult<
+  TTableConfig extends TableRelationalConfig,
+  TConfig extends CountConfig<any, TTableConfig> | undefined,
+> = TConfig extends {
+  select: infer TSelect extends Record<string, unknown>;
+}
+  ? CountSelectResult<TTableConfig, TSelect>
+  : number;
+
+export type AggregateResult<
+  TTableConfig extends TableRelationalConfig,
+  TConfig extends AggregateConfig<any, TTableConfig>,
+> = Simplify<
+  (TConfig extends { _count: infer TCount }
+    ? {
+        _count: AggregateCountResult<TTableConfig, TCount>;
+      }
+    : {}) &
+    (TConfig extends { _sum: infer TSum extends Record<string, unknown> }
+      ? {
+          _sum: AggregateNumericNullableResult<TSum>;
+        }
+      : {}) &
+    (TConfig extends { _avg: infer TAvg extends Record<string, unknown> }
+      ? {
+          _avg: AggregateNumericNullableResult<TAvg>;
+        }
+      : {}) &
+    (TConfig extends { _min: infer TMin extends Record<string, unknown> }
+      ? {
+          _min: AggregateComparableResult<TTableConfig, TMin>;
+        }
+      : {}) &
+    (TConfig extends { _max: infer TMax extends Record<string, unknown> }
+      ? {
+          _max: AggregateComparableResult<TTableConfig, TMax>;
+        }
+      : {})
+>;
+
+type GroupByRowResult<
+  TTableConfig extends TableRelationalConfig,
+  TConfig extends GroupByConfig<any, TTableConfig>,
+> = Simplify<
+  GroupByByResult<TTableConfig, TConfig['by']> &
+    (TConfig extends { _count: infer TCount }
+      ? {
+          _count: AggregateCountResult<TTableConfig, TCount>;
+        }
+      : {}) &
+    (TConfig extends { _sum: infer TSum extends Record<string, unknown> }
+      ? {
+          _sum: AggregateNumericNullableResult<TSum>;
+        }
+      : {}) &
+    (TConfig extends { _avg: infer TAvg extends Record<string, unknown> }
+      ? {
+          _avg: AggregateNumericNullableResult<TAvg>;
+        }
+      : {}) &
+    (TConfig extends { _min: infer TMin extends Record<string, unknown> }
+      ? {
+          _min: AggregateComparableResult<TTableConfig, TMin>;
+        }
+      : {}) &
+    (TConfig extends { _max: infer TMax extends Record<string, unknown> }
+      ? {
+          _max: AggregateComparableResult<TTableConfig, TMax>;
+        }
+      : {})
+>;
+
+export type GroupByResult<
+  TTableConfig extends TableRelationalConfig,
+  TConfig extends GroupByConfig<any, TTableConfig>,
+> = GroupByRowResult<TTableConfig, TConfig>[];
+
 export type PredicateWhereClause<TTableConfig extends TableRelationalConfig> = {
   readonly __kind: 'predicate';
   readonly predicate: (
@@ -442,11 +922,12 @@ type PredicateWhereIndexName<TTableConfig extends TableRelationalConfig> =
 type PredicateWhereNamedIndex<
   TTableConfig extends TableRelationalConfig,
   TIndexName extends string,
-> = TIndexName extends PredicateWhereIndexName<TTableConfig>
-  ? PredicateWhereIndexMap<TTableConfig>[TIndexName] extends GenericIndexFields
-    ? PredicateWhereIndexMap<TTableConfig>[TIndexName]
-    : GenericIndexFields
-  : GenericIndexFields;
+> =
+  TIndexName extends PredicateWhereIndexName<TTableConfig>
+    ? PredicateWhereIndexMap<TTableConfig>[TIndexName] extends GenericIndexFields
+      ? PredicateWhereIndexMap<TTableConfig>[TIndexName]
+      : GenericIndexFields
+    : GenericIndexFields;
 
 export type PredicateWhereIndexConfig<
   TTableConfig extends TableRelationalConfig = TableRelationalConfig,
@@ -490,11 +971,12 @@ type SearchIndexConfigByName<
 type SearchFilterFieldNames<
   TTableConfig extends TableRelationalConfig,
   TIndexName extends SearchIndexName<TTableConfig>,
-> = SearchIndexConfigByName<TTableConfig, TIndexName> extends {
-  filterFields: infer TFilterFields extends string;
-}
-  ? TFilterFields
-  : never;
+> =
+  SearchIndexConfigByName<TTableConfig, TIndexName> extends {
+    filterFields: infer TFilterFields extends string;
+  }
+    ? TFilterFields
+    : never;
 
 type SearchFilterValueForField<
   TTableConfig extends TableRelationalConfig,
@@ -551,11 +1033,12 @@ type VectorIndexConfigByName<
 type VectorFilterFieldNames<
   TTableConfig extends TableRelationalConfig,
   TIndexName extends VectorIndexName<TTableConfig>,
-> = VectorIndexConfigByName<TTableConfig, TIndexName> extends {
-  filterFields: infer TFilterFields extends string;
-}
-  ? TFilterFields
-  : never;
+> =
+  VectorIndexConfigByName<TTableConfig, TIndexName> extends {
+    filterFields: infer TFilterFields extends string;
+  }
+    ? TFilterFields
+    : never;
 
 type VectorFilterForIndex<
   TTableConfig extends TableRelationalConfig,
@@ -665,6 +1148,17 @@ type ReturnsPredicateClause<TWhere> = TWhere extends (
     : true
   : false;
 
+export type EnforceWithIndexForPredicateWhere<
+  TConfig,
+  THasIndex extends boolean,
+> = THasIndex extends true
+  ? TConfig
+  : TConfig extends { where: infer TWhere }
+    ? ReturnsPredicateClause<TWhere> extends true
+      ? never
+      : TConfig
+    : TConfig;
+
 export type EnforceWithIndexForWhere<
   TConfig,
   _TTableConfig extends TableRelationalConfig,
@@ -760,18 +1254,38 @@ export interface FilterOperators<
     ...expressions: (FilterExpression<boolean> | undefined)[]
   ): FilterExpression<boolean> | undefined;
 
-  or(
-    ...expressions: (FilterExpression<boolean> | undefined)[]
-  ): FilterExpression<boolean> | undefined;
-
-  not(expression: FilterExpression<boolean>): FilterExpression<boolean>;
-
-  eq<TBuilder extends ColumnBuilder<any, any, any>>(
+  arrayContained<TBuilder extends ColumnBuilder<any, any, any>>(
     field: TBuilder,
-    value: GetColumnData<TBuilder, 'raw'>
+    values: readonly GetColumnData<TBuilder, 'raw'>[]
   ): FilterExpression<boolean>;
 
-  ne<TBuilder extends ColumnBuilder<any, any, any>>(
+  arrayContains<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    values: readonly GetColumnData<TBuilder, 'raw'>[]
+  ): FilterExpression<boolean>;
+
+  arrayOverlaps<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    values: readonly GetColumnData<TBuilder, 'raw'>[]
+  ): FilterExpression<boolean>;
+
+  between<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    min: GetColumnData<TBuilder, 'raw'>,
+    max: GetColumnData<TBuilder, 'raw'>
+  ): FilterExpression<boolean>;
+
+  contains<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    substring: string
+  ): FilterExpression<boolean>;
+
+  endsWith<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    suffix: string
+  ): FilterExpression<boolean>;
+
+  eq<TBuilder extends ColumnBuilder<any, any, any>>(
     field: TBuilder,
     value: GetColumnData<TBuilder, 'raw'>
   ): FilterExpression<boolean>;
@@ -786,6 +1300,30 @@ export interface FilterOperators<
     value: GetColumnData<TBuilder, 'raw'>
   ): FilterExpression<boolean>;
 
+  ilike<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    pattern: string
+  ): FilterExpression<boolean>;
+
+  inArray<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    values: readonly GetColumnData<TBuilder, 'raw'>[]
+  ): FilterExpression<boolean>;
+
+  isNotNull<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder
+  ): FilterExpression<boolean>;
+
+  isNull<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder extends { _: { notNull: true } } ? never : TBuilder
+  ): FilterExpression<boolean>;
+
+  // M5 String Operators (Post-Fetch)
+  like<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    pattern: string
+  ): FilterExpression<boolean>;
+
   lt<TBuilder extends ColumnBuilder<any, any, any>>(
     field: TBuilder,
     value: GetColumnData<TBuilder, 'raw'>
@@ -796,11 +1334,12 @@ export interface FilterOperators<
     value: GetColumnData<TBuilder, 'raw'>
   ): FilterExpression<boolean>;
 
-  between<TBuilder extends ColumnBuilder<any, any, any>>(
+  ne<TBuilder extends ColumnBuilder<any, any, any>>(
     field: TBuilder,
-    min: GetColumnData<TBuilder, 'raw'>,
-    max: GetColumnData<TBuilder, 'raw'>
+    value: GetColumnData<TBuilder, 'raw'>
   ): FilterExpression<boolean>;
+
+  not(expression: FilterExpression<boolean>): FilterExpression<boolean>;
 
   notBetween<TBuilder extends ColumnBuilder<any, any, any>>(
     field: TBuilder,
@@ -808,9 +1347,9 @@ export interface FilterOperators<
     max: GetColumnData<TBuilder, 'raw'>
   ): FilterExpression<boolean>;
 
-  inArray<TBuilder extends ColumnBuilder<any, any, any>>(
+  notIlike<TBuilder extends ColumnBuilder<any, any, any>>(
     field: TBuilder,
-    values: readonly GetColumnData<TBuilder, 'raw'>[]
+    pattern: string
   ): FilterExpression<boolean>;
 
   notInArray<TBuilder extends ColumnBuilder<any, any, any>>(
@@ -818,70 +1357,25 @@ export interface FilterOperators<
     values: readonly GetColumnData<TBuilder, 'raw'>[]
   ): FilterExpression<boolean>;
 
-  arrayContains<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    values: readonly GetColumnData<TBuilder, 'raw'>[]
-  ): FilterExpression<boolean>;
-
-  arrayContained<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    values: readonly GetColumnData<TBuilder, 'raw'>[]
-  ): FilterExpression<boolean>;
-
-  arrayOverlaps<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    values: readonly GetColumnData<TBuilder, 'raw'>[]
-  ): FilterExpression<boolean>;
-
-  isNull<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder extends { _: { notNull: true } } ? never : TBuilder
-  ): FilterExpression<boolean>;
-
-  isNotNull<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder
-  ): FilterExpression<boolean>;
-
-  // M5 String Operators (Post-Fetch)
-  like<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    pattern: string
-  ): FilterExpression<boolean>;
-
-  ilike<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    pattern: string
-  ): FilterExpression<boolean>;
-
   notLike<TBuilder extends ColumnBuilder<any, any, any>>(
     field: TBuilder,
     pattern: string
   ): FilterExpression<boolean>;
 
-  notIlike<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    pattern: string
-  ): FilterExpression<boolean>;
-
-  startsWith<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    prefix: string
-  ): FilterExpression<boolean>;
-
-  endsWith<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    suffix: string
-  ): FilterExpression<boolean>;
-
-  contains<TBuilder extends ColumnBuilder<any, any, any>>(
-    field: TBuilder,
-    substring: string
-  ): FilterExpression<boolean>;
+  or(
+    ...expressions: (FilterExpression<boolean> | undefined)[]
+  ): FilterExpression<boolean> | undefined;
 
   predicate(
     predicate: (
       row: InferModelFromColumns<TableColumns<TTableConfig>>
     ) => boolean | Promise<boolean>
   ): PredicateWhereClause<TTableConfig>;
+
+  startsWith<TBuilder extends ColumnBuilder<any, any, any>>(
+    field: TBuilder,
+    prefix: string
+  ): FilterExpression<boolean>;
 }
 
 /**
@@ -990,46 +1484,47 @@ export type BuildQueryResult<
   TSchema extends TablesRelationalConfig,
   TTableConfig extends TableRelationalConfig,
   TFullSelection,
-> = Equal<TFullSelection, true> extends true
-  ? InferModelFromColumns<TableColumns<TTableConfig>>
-  : TFullSelection extends Record<string, unknown>
-    ? Simplify<
-        InferRelationalQueryTableResult<
-          InferModelFromColumns<TableColumns<TTableConfig>>,
-          TFullSelection['columns'] extends Record<string, unknown>
-            ? TFullSelection['columns']
-            : 'Full'
-        > &
-          (Exclude<TFullSelection['extras'], undefined> extends
-            | Record<string, unknown>
-            | ((...args: any[]) => Record<string, unknown>)
-            ? ReturnTypeOrValue<
-                Exclude<TFullSelection['extras'], undefined>
-              > extends infer TExtras extends Record<string, unknown>
-              ? {
-                  [K in NonUndefinedKeysOnly<TExtras>]: ReturnTypeOrValue<
-                    TExtras[K]
-                  >;
-                }
-              : {}
-            : {}) &
-          (Exclude<TFullSelection['with'], undefined> extends Record<
-            string,
-            unknown
-          >
-            ? BuildRelationResult<
-                TSchema,
-                Exclude<TFullSelection['with'], undefined>,
-                TTableConfig['relations']
-              >
-            : {}) &
-          (TFullSelection extends { vectorSearch: infer TVectorSearch }
-            ? [TVectorSearch] extends [undefined]
-              ? {}
-              : { _score?: number }
-            : {})
-      >
-    : never;
+> =
+  Equal<TFullSelection, true> extends true
+    ? InferModelFromColumns<TableColumns<TTableConfig>>
+    : TFullSelection extends Record<string, unknown>
+      ? Simplify<
+          InferRelationalQueryTableResult<
+            InferModelFromColumns<TableColumns<TTableConfig>>,
+            TFullSelection['columns'] extends Record<string, unknown>
+              ? TFullSelection['columns']
+              : 'Full'
+          > &
+            (Exclude<TFullSelection['extras'], undefined> extends
+              | Record<string, unknown>
+              | ((...args: any[]) => Record<string, unknown>)
+              ? ReturnTypeOrValue<
+                  Exclude<TFullSelection['extras'], undefined>
+                > extends infer TExtras extends Record<string, unknown>
+                ? {
+                    [K in NonUndefinedKeysOnly<TExtras>]: ReturnTypeOrValue<
+                      TExtras[K]
+                    >;
+                  }
+                : {}
+              : {}) &
+            (Exclude<TFullSelection['with'], undefined> extends Record<
+              string,
+              unknown
+            >
+              ? BuildRelationResult<
+                  TSchema,
+                  Exclude<TFullSelection['with'], undefined>,
+                  TTableConfig['relations']
+                >
+              : {}) &
+            (TFullSelection extends { vectorSearch: infer TVectorSearch }
+              ? [TVectorSearch] extends [undefined]
+                ? {}
+                : { _score?: number }
+              : {})
+        >
+      : never;
 
 /**
  * Build relation result types from `with` configuration
@@ -1066,7 +1561,17 @@ export type BuildRelationResult<
         : TResult[]
       : never
     : never;
-};
+} & (TInclude extends {
+  _count: infer TCountConfig;
+}
+  ? TCountConfig extends Record<string, unknown>
+    ? {
+        _count: {
+          [K in NonUndefinedKeysOnly<TCountConfig> & keyof TRelations]: number;
+        };
+      }
+    : {}
+  : {});
 
 /**
  * Extract TypeScript types from column validators
@@ -1091,20 +1596,18 @@ export type InferModelFromColumns<TColumns> =
  *
  * CRITICAL: No extends constraint on TColumns to avoid type widening
  */
-export type PickColumns<
-  TColumns,
-  TSelection extends Record<string, unknown>,
-> = TColumns extends Record<string, ColumnBuilder<any, any, any>>
-  ? Simplify<{
-      [K in keyof TSelection as K extends keyof TColumns
-        ? TSelection[K] extends true
-          ? K
-          : never
-        : never]: K extends keyof TColumns
-        ? GetColumnData<TColumns[K], 'query'>
-        : never;
-    }>
-  : never;
+export type PickColumns<TColumns, TSelection extends Record<string, unknown>> =
+  TColumns extends Record<string, ColumnBuilder<any, any, any>>
+    ? Simplify<{
+        [K in keyof TSelection as K extends keyof TColumns
+          ? TSelection[K] extends true
+            ? K
+            : never
+          : never]: K extends keyof TColumns
+          ? GetColumnData<TColumns[K], 'query'>
+          : never;
+      }>
+    : never;
 
 /**
  * Extract union of all values from an object type
@@ -1163,20 +1666,21 @@ export type ApplyPipelineStage<
   TStage,
   TSchema extends TablesRelationalConfig,
   TTableConfig extends TableRelationalConfig,
-> = TStage extends FindManyPipelineFilterWithStage<any>
-  ? TCurrentRow
-  : TStage extends { map: (...args: any[]) => infer TMapOutput }
-    ? NonNullable<Awaited<TMapOutput>>
-    : TStage extends FindManyPipelineDistinctStage
-      ? TCurrentRow
-      : TStage extends { flatMap: infer TFlatMapConfig }
-        ? PipelineFlatMapOutput<
-            TCurrentRow,
-            TFlatMapConfig,
-            TSchema,
-            TTableConfig
-          >
-        : TCurrentRow;
+> =
+  TStage extends FindManyPipelineFilterWithStage<any>
+    ? TCurrentRow
+    : TStage extends { map: (...args: any[]) => infer TMapOutput }
+      ? NonNullable<Awaited<TMapOutput>>
+      : TStage extends FindManyPipelineDistinctStage
+        ? TCurrentRow
+        : TStage extends { flatMap: infer TFlatMapConfig }
+          ? PipelineFlatMapOutput<
+              TCurrentRow,
+              TFlatMapConfig,
+              TSchema,
+              TTableConfig
+            >
+          : TCurrentRow;
 
 export type ApplyPipelineStages<
   TInitialRow,
@@ -1232,26 +1736,44 @@ type TableColumnsForTable<TTable extends ConvexTable<any>> =
     SystemFields<TTable['_']['name']> &
     SystemFieldAliases<TTable['_']['name'], TTable['_']['columns']>;
 
-export type ReturningSelection<TTable extends ConvexTable<any>> = Record<
+type MutationReturningCountSelection = Record<
   string,
-  TableColumnsForTable<TTable>[keyof TableColumnsForTable<TTable>]
+  | true
+  | {
+      where?: Record<string, unknown> | undefined;
+    }
+  | undefined
 >;
 
-export type ReturningResult<
-  TSelection extends Record<string, ColumnBuilder<any, any, any>>,
-> = Simplify<{
-  [K in keyof TSelection]: TSelection[K] extends ColumnBuilder<any, any, any>
-    ? GetColumnData<TSelection[K], 'query'>
-    : never;
-}>;
+export type ReturningSelection<TTable extends ConvexTable<any>> = Record<
+  string,
+  | TableColumnsForTable<TTable>[keyof TableColumnsForTable<TTable>]
+  | MutationReturningCountSelection
+>;
+
+export type ReturningResult<TSelection extends Record<string, unknown>> =
+  Simplify<
+    {
+      [K in keyof TSelection as K extends '_count'
+        ? never
+        : K]: TSelection[K] extends ColumnBuilder<any, any, any>
+        ? GetColumnData<TSelection[K], 'query'>
+        : never;
+    } & (TSelection extends { _count: infer TCount }
+      ? TCount extends Record<string, unknown>
+        ? {
+            _count: {
+              [K in NonUndefinedKeysOnly<TCount> & string]: number;
+            };
+          }
+        : {}
+      : {})
+  >;
 
 export type ReturningAll<TTable extends ConvexTable<any>> =
   InferSelectModel<TTable>;
 
-export type MutationReturning =
-  | true
-  | Record<string, ColumnBuilder<any, any, any>>
-  | undefined;
+export type MutationReturning = true | Record<string, unknown> | undefined;
 
 export type MutationResult<
   TTable extends ConvexTable<any>,
@@ -1274,9 +1796,6 @@ export type MutationExecuteConfig = {
   batchSize?: number;
   delayMs?: number;
 };
-
-// Backwards-compatible alias used by executeAsync(...).
-export type MutationAsyncConfig = Omit<MutationExecuteConfig, 'mode'>;
 
 export type MutationExecutionMode = 'single' | 'paged';
 

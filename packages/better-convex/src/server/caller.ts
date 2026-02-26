@@ -20,7 +20,7 @@ type FnMeta = {
 /** Metadata for all functions in a module */
 type ModuleMeta = Record<string, FnMeta>;
 
-/** Metadata for all modules - from generated `@convex/meta` */
+/** Metadata for all modules - from generated `@convex/api` */
 export type CallerMeta = Record<string, ModuleMeta>;
 
 /** Options for individual caller function calls */
@@ -57,34 +57,38 @@ type ResolvedCreateCallerOptions = Omit<CreateCallerOptions, 'transformer'> & {
 };
 
 // Helper type for optional args when empty
-type ServerCallerFn<
-  TApi,
-  K extends keyof TApi,
-> = TApi[K] extends FunctionReference<infer T, 'public'>
-  ? T extends 'query' | 'mutation' | 'action'
-    ? keyof TApi[K]['_args'] extends never
-      ? // No args defined → optional
-        <Opts extends CallerOpts | undefined = undefined>(
-          args?: EmptyObject,
-          opts?: Opts
-        ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
-      : EmptyObject extends TApi[K]['_args']
-        ? // All args optional → optional
+type ServerCallerFn<TApi, K extends keyof TApi> =
+  TApi[K] extends FunctionReference<infer T, 'public'>
+    ? T extends 'query' | 'mutation' | 'action'
+      ? keyof TApi[K]['_args'] extends never
+        ? // No args defined → optional
           <Opts extends CallerOpts | undefined = undefined>(
-            args?: TApi[K]['_args'],
+            args?: EmptyObject,
             opts?: Opts
           ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
-        : // Has required args → required
-          <Opts extends CallerOpts | undefined = undefined>(
-            args: TApi[K]['_args'],
-            opts?: Opts
-          ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
-    : never
-  : ServerCaller<TApi[K]>;
+        : EmptyObject extends TApi[K]['_args']
+          ? // All args optional → optional
+            <Opts extends CallerOpts | undefined = undefined>(
+              args?: TApi[K]['_args'],
+              opts?: Opts
+            ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
+          : // Has required args → required
+            <Opts extends CallerOpts | undefined = undefined>(
+              args: TApi[K]['_args'],
+              opts?: Opts
+            ) => Promise<CallerReturn<FunctionReturnType<TApi[K]>, Opts>>
+      : never
+    : ServerCaller<TApi[K]>;
 
 // Recursive type for the caller proxy
 export type ServerCaller<TApi> = {
-  [K in keyof TApi]: ServerCallerFn<TApi, K>;
+  [K in keyof TApi as K extends string
+    ? K extends `_${string}`
+      ? never
+      : K extends 'http'
+        ? never
+        : K
+    : K]: ServerCallerFn<TApi, K>;
 };
 
 function createRecursiveProxy(

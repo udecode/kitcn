@@ -27,7 +27,7 @@ describe('server/http-router', () => {
       ping: makeHttpProc({ path: '/api/ping', method: 'GET' }),
     });
 
-    const appRouter = router({
+    const httpRouter = router({
       health,
       nested,
       deep: {
@@ -35,7 +35,7 @@ describe('server/http-router', () => {
       },
     });
 
-    expect(Object.keys(appRouter._def.procedures).sort()).toEqual([
+    expect(Object.keys(httpRouter._def.procedures).sort()).toEqual([
       'deep.ok',
       'health',
       'nested.ping',

@@ -32,12 +32,12 @@ Ensure you have [Auth Server](/docs/auth/server) set up before adding organizati
 
 Add the organization plugin to your auth options:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {5-32}
+```ts title="convex/functions/auth.ts" showLineNumbers {3,7-33}
 import { organization } from 'better-auth/plugins';
-import type { ActionCtx } from './_generated/server';
+import type { ActionCtx } from './generated/server';
+import { defineAuth } from './generated/auth';
 
-export const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     // ... existing config
     plugins: [
       convex({ authConfig, jwks: process.env.JWKS }),
@@ -71,7 +71,7 @@ export const getAuthOptions = (ctx: GenericCtx) =>
         },
       }),
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ## 2. Client Configuration
@@ -527,7 +527,7 @@ export const updateOrganization = authMutation
       slug: z.string().optional(),
     })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, {
       organizationId: input.organizationId,
@@ -568,7 +568,7 @@ export const updateOrganization = authMutation
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-6,9-16,19-26,29-33}
 export const deleteOrganization = authMutation
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, {
       organizationId: input.organizationId,
@@ -603,7 +603,7 @@ export const deleteOrganization = authMutation
 export const setActiveOrganization = authMutation
   .meta({ rateLimit: 'organization/setActive' })
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => setActiveOrganizationHandler(ctx, input));
 ```
 
@@ -621,7 +621,7 @@ export const inviteMember = authMutation
       role: z.enum(['owner', 'member']),
     })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, {
       organizationId: input.organizationId,
@@ -668,7 +668,7 @@ export const inviteMember = authMutation
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-7,10-18,21-24}
 export const acceptInvitation = authMutation
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const invitation = await ctx.orm.query.invitation
       .findFirstOrThrow({
@@ -703,7 +703,7 @@ export const acceptInvitation = authMutation
 export const rejectInvitation = authMutation
   .meta({ rateLimit: 'organization/rejectInvite' })
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const invitation = await ctx.orm.query.invitation
       .findFirstOrThrow({
@@ -738,7 +738,7 @@ export const rejectInvitation = authMutation
 export const cancelInvitation = authMutation
   .meta({ rateLimit: 'organization/cancelInvite' })
   .input(z.object({ invitationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const invitation = await ctx.orm.query.invitation.findFirstOrThrow({
       where: { id: input.invitationId },
@@ -924,7 +924,7 @@ export const addMember = authMutation
       userId: z.string(),
     })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     await hasPermission(ctx, { permissions: { member: ['create'] } });
 
@@ -1028,7 +1028,7 @@ export const updateMemberRole = authMutation
       role: z.enum(['owner', 'member']),
     })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const member = await ctx.orm.query.member.findFirstOrThrow({
       where: { id: input.memberId },
@@ -1058,7 +1058,7 @@ export const updateMemberRole = authMutation
 export const removeMember = authMutation
   .meta({ rateLimit: 'organization/removeMember' })
   .input(z.object({ memberId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const member = await ctx.orm.query.member.findFirstOrThrow({
       where: { id: input.memberId },
@@ -1087,7 +1087,7 @@ export const removeMember = authMutation
 export const leaveOrganization = authMutation
   .meta({ rateLimit: 'organization/leave' })
   .input(z.object({ organizationId: z.string() }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     if (input.organizationId === ctx.user.personalOrganizationId) {
       throw new CRPCError({
@@ -1169,103 +1169,6 @@ const members = await ctx.auth.api.listTeamMembers({
   body: { teamId },
   headers: ctx.auth.headers,
 });
-```
-
-## Hooks
-
-Hooks allow custom logic during organization lifecycle events.
-
-### Organization Hooks
-
-```ts title="convex/functions/auth.ts" showLineNumbers {2-14}
-organization({
-  // Organization creation
-  organizationCreation: {
-    beforeCreate: async ({ organization, user }) => {
-      // Validate or modify before creation
-      return { data: organization };
-    },
-    afterCreate: async ({ organization, member, user }) => {
-      // Setup default resources, create initial data
-    },
-  },
-
-  // Organization deletion
-  organizationDeletion: {
-    beforeDelete: async (data) => {
-      // Cleanup related resources before deletion
-    },
-    afterDelete: async (data) => {
-      // Post-deletion cleanup
-    },
-  },
-}),
-```
-
-### Member Hooks
-
-```ts title="convex/functions/auth.ts" showLineNumbers {2-20}
-organization({
-  membershipManagement: {
-    beforeAddMember: async ({ organization, member, user }) => {
-      // Validate member addition
-      return { data: member };
-    },
-    afterAddMember: async ({ organization, member, user }) => {
-      // Post-addition logic (notifications, etc.)
-    },
-    beforeRemoveMember: async ({ organization, member, user }) => {
-      // Cleanup before removal
-    },
-    afterRemoveMember: async ({ organization, member, user }) => {
-      // Post-removal logic
-    },
-    beforeUpdateRole: async ({ organization, member, role }) => {
-      return { data: { role } };
-    },
-    afterUpdateRole: async ({ organization, member, role }) => {
-      // Role change notifications
-    },
-  },
-}),
-```
-
-### Invitation Hooks
-
-```ts title="convex/functions/auth.ts" showLineNumbers {2-15}
-organization({
-  invitationManagement: {
-    beforeCreateInvitation: async ({ invitation, organization, inviter }) => {
-      return { data: invitation };
-    },
-    afterCreateInvitation: async ({ invitation, organization, inviter }) => {
-      // Send custom notification
-    },
-    beforeAcceptInvitation: async ({ invitation, user }) => {
-      return { data: invitation };
-    },
-    afterAcceptInvitation: async ({ invitation, member, user }) => {
-      // Welcome logic
-    },
-  },
-}),
-```
-
-### Team Hooks
-
-```ts title="convex/functions/auth.ts" showLineNumbers {2-12}
-organization({
-  teamManagement: {
-    beforeCreateTeam: async ({ team, organization }) => {
-      return { data: team };
-    },
-    afterCreateTeam: async ({ team, organization }) => {},
-    beforeAddTeamMember: async ({ team, user }) => {
-      return { data: { team, user } };
-    },
-    afterAddTeamMember: async ({ team, user }) => {},
-  },
-}),
 ```
 
 ## Client Usage
@@ -1388,6 +1291,103 @@ await authClient.organization.setActiveTeam({
 });
 ```
 
+## Hooks
+
+Hooks allow custom logic during organization lifecycle events.
+
+### Organization Hooks
+
+```ts title="convex/functions/auth.ts" showLineNumbers {2-14}
+organization({
+  // Organization creation
+  organizationCreation: {
+    beforeCreate: async ({ organization, user }) => {
+      // Validate or modify before creation
+      return { data: organization };
+    },
+    afterCreate: async ({ organization, member, user }) => {
+      // Setup default resources, create initial data
+    },
+  },
+
+  // Organization deletion
+  organizationDeletion: {
+    beforeDelete: async (data) => {
+      // Cleanup related resources before deletion
+    },
+    afterDelete: async (data) => {
+      // Post-deletion cleanup
+    },
+  },
+}),
+```
+
+### Member Hooks
+
+```ts title="convex/functions/auth.ts" showLineNumbers {2-20}
+organization({
+  membershipManagement: {
+    beforeAddMember: async ({ organization, member, user }) => {
+      // Validate member addition
+      return { data: member };
+    },
+    afterAddMember: async ({ organization, member, user }) => {
+      // Post-addition logic (notifications, etc.)
+    },
+    beforeRemoveMember: async ({ organization, member, user }) => {
+      // Cleanup before removal
+    },
+    afterRemoveMember: async ({ organization, member, user }) => {
+      // Post-removal logic
+    },
+    beforeUpdateRole: async ({ organization, member, role }) => {
+      return { data: { role } };
+    },
+    afterUpdateRole: async ({ organization, member, role }) => {
+      // Role change notifications
+    },
+  },
+}),
+```
+
+### Invitation Hooks
+
+```ts title="convex/functions/auth.ts" showLineNumbers {2-15}
+organization({
+  invitationManagement: {
+    beforeCreateInvitation: async ({ invitation, organization, inviter }) => {
+      return { data: invitation };
+    },
+    afterCreateInvitation: async ({ invitation, organization, inviter }) => {
+      // Send custom notification
+    },
+    beforeAcceptInvitation: async ({ invitation, user }) => {
+      return { data: invitation };
+    },
+    afterAcceptInvitation: async ({ invitation, member, user }) => {
+      // Welcome logic
+    },
+  },
+}),
+```
+
+### Team Hooks
+
+```ts title="convex/functions/auth.ts" showLineNumbers {2-12}
+organization({
+  teamManagement: {
+    beforeCreateTeam: async ({ team, organization }) => {
+      return { data: team };
+    },
+    afterCreateTeam: async ({ team, organization }) => {},
+    beforeAddTeamMember: async ({ team, user }) => {
+      return { data: { team, user } };
+    },
+    afterAddTeamMember: async ({ team, user }) => {},
+  },
+}),
+```
+
 ## API Reference
 
 | Operation | Method | Multi-table |
@@ -1419,5 +1419,4 @@ Use Better Auth API for operations that modify multiple tables. Use direct table
 <Cards>
   <Card title="Templates" href="/docs/templates" />
   <Card title="Auth Server" href="/docs/auth/server" />
-  <Card title="Triggers" href="/docs/auth/triggers" />
 </Cards>

@@ -79,33 +79,29 @@ export default defineSchema({ users, posts });
 
 This mirrors native Convex indexing discipline: index the fields you filter and sort by.
 
+### Generate Runtime
+
+If using cRPC, run `better-convex dev` (generates all runtime including cRPC modules):
+
+```bash
+npx better-convex dev
+```
+
+Otherwise, run a scoped generation pass:
+
+```bash
+npx better-convex codegen --scope orm
+```
+
 ### Attach ORM to context once
 
-```ts title="convex/lib/orm.ts" showLineNumbers {2-3,6-9}
-import type { GenericDatabaseReader, GenericDatabaseWriter } from 'convex/server';
-import { createOrm } from 'better-convex/orm';
-import { relations } from '../schema';
+`convex/functions/generated/server.ts` exports `initCRPC` pre-wired with ORM context:
 
-const orm = createOrm({ schema: relations });
-
-export const withOrm = <Ctx extends {
-  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>;
-}>(ctx: Ctx) => {
-  return { ...ctx, orm: orm.db(ctx) };
-};
+```ts title="convex/lib/crpc.ts" showLineNumbers {1}
+import { initCRPC } from '../functions/generated/server';
 ```
 
-```ts title="convex/lib/crpc.ts" showLineNumbers {3-4}
-const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .create();
-```
-
-Done once, every handler can read through `ctx.orm`.
+Every handler can now read through `ctx.orm`.
 
 Use `createdAt: timestamp().notNull().defaultNow()` on tables where your ORM rows should expose `createdAt: Date`. Without an explicit column, system `createdAt` stays `number`.
 
@@ -471,8 +467,8 @@ Vector search in native Convex is action-only. The migration keeps that shape: r
   <CompareItem title="After (ORM + cRPC)">
     ```ts title="convex/functions/posts.ts" showLineNumbers {2-7,16-28}
     import { z } from 'zod';
-    import { internal } from './_generated/api';
     import { publicAction, privateQuery } from '../lib/crpc';
+    import { createPostsCaller } from './generated/posts.runtime';
 
     export const fetchByIds = privateQuery
       .input(z.object({ ids: z.array(z.string()) }))
@@ -493,7 +489,8 @@ Vector search in native Convex is action-only. The migration keeps that shape: r
           filter: (q) => q.eq('type', 'news'),
         });
 
-        const rows = await ctx.runQuery(internal.posts.fetchByIds, {
+        const caller = createPostsCaller(ctx);
+        const rows = await caller.fetchByIds({
           ids: hits.map((h) => h.id),
         });
 

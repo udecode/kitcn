@@ -147,56 +147,11 @@ The `strict` flag controls how aggressively the ORM enforces index usage:
 
 ### Runtime Defaults
 
-You can set global runtime guardrails via the `defaults` option. These control limits for queries, relation loading, and mutation batching:
-
-```ts showLineNumbers {3-13}
-export default defineSchema({ users, posts }, {
-  strict: true,
-  defaults: {
-    defaultLimit: 100,             // non-paginated findMany() fallback
-    relationFanOutMaxKeys: 1000,   // max unique relation lookup keys per relation load
-    mutationBatchSize: 100,        // update/delete batch size
-    mutationLeafBatchSize: 900,    // async non-recursive FK fan-out batch size
-    mutationMaxRows: 1000,         // sync-mode hard cap
-    mutationMaxBytesPerBatch: 2_097_152, // async measured-byte budget
-    mutationScheduleCallCap: 100,  // async schedule calls allowed per mutation
-    mutationExecutionMode: 'sync', // or 'async'
-    mutationAsyncDelayMs: 0,       // scheduler delay between async batches
-  },
-});
-```
-
-Here's what each option does:
-
-- `defaults.defaultLimit` -- used when `findMany()` is non-paginated and `limit` is omitted. No implicit built-in fallback is applied when this is unset.
-- `defaults.relationFanOutMaxKeys` -- maximum unique relation lookup keys allowed per relation-load step before fail-fast. Built-in fallback: `1000`.
-- `defaults.mutationBatchSize` -- page size used to collect rows for `update()`/`delete()`. Built-in fallback: `100`.
-- `defaults.mutationLeafBatchSize` -- async batch size for non-recursive FK fan-out actions (`set null`, `set default`, non-recursive update fan-out). Built-in fallback: `900`.
-- `defaults.mutationMaxRows` -- sync-mode hard cap for matched rows in `update()`/`delete()`. Built-in fallback: `1000`.
-- `defaults.mutationMaxBytesPerBatch` -- async measured-byte budget per continuation batch. Built-in fallback: `2_097_152` bytes.
-- `defaults.mutationScheduleCallCap` -- async schedule calls allowed from one mutation invocation before throwing. Built-in fallback: `100`.
-- `defaults.mutationExecutionMode` -- default execution mode for non-paginated `execute()` calls (`'sync'` or `'async'`). Built-in fallback: `'sync'`.
-- `defaults.mutationAsyncDelayMs` -- default scheduler delay used by async mutation continuation. Built-in fallback: `0`.
-
-<Callout icon={<InfoIcon />}>
-**Note:** Numeric defaults must be integers. `mutationAsyncDelayMs` allows `0`; all others must be `>= 1`.
-</Callout>
+You can set global runtime guardrails via the `defaults` option. These control limits for queries, relation loading, and mutation batching. For the full list of options and their built-in fallback values, see [API Reference](#runtime-defaults) below.
 
 ### Strict Policy (Guardrails)
 
-Strict guardrails cover relation indexes, relation fan-out cardinality, predicate `where()`, and unbounded `update`/`delete`. Here's the full behavior matrix:
-
-| Area | Current (2026-02-06) | Strict `true` | Strict `false` |
-|---|---|---|---|
-| Relation loading missing index | throws unless `allowFullScan` | throws unless `allowFullScan`; warns when scanning | throws unless `allowFullScan`; no strict warning |
-| Predicate `where` | requires explicit `.withIndex(name, range?)` (no `allowFullScan` fallback) | same | same |
-| Object/callback expression `where` not index-compiled | allowed as bounded scan (subject to sizing rules) | same | same |
-| Pagination orderBy missing index | strict `true` throws; strict `false` warns + falls back to `createdAt` | throws (add index or disable strict) | warns + falls back to `createdAt` |
-| Unsized non-paginated `findMany()` | throws unless `limit`/cursor pagination (`cursor` + `limit`)/`defaultLimit`/`allowFullScan` | same | same |
-| `many()` relation without per-parent limit | throws unless relation `limit`/`defaultLimit`/`allowFullScan` | same | same |
-| Relation lookup fan-out keys exceed cap | throws unless `allowFullScan` (`defaults.relationFanOutMaxKeys`, default `1000`) | throws unless `allowFullScan`; warns when scanning | throws unless `allowFullScan`; no strict warning |
-| Update/delete without `where()` | throws unless `allowFullScan` | throws unless `allowFullScan`; warns when scanning | throws unless `allowFullScan`; no strict warning |
-| Update/delete row count exceeds `mutationMaxRows` | sync mode throws; async mode schedules continuation | sync mode throws; async mode schedules continuation | sync mode throws; async mode schedules continuation |
+Strict guardrails cover relation indexes, relation fan-out cardinality, predicate `where()`, and unbounded `update`/`delete`. For the full behavior matrix, see [API Reference](#strict-policy-guardrails) below.
 
 ## Indexes
 
@@ -254,7 +209,7 @@ const posts = convexTable(
 );
 ```
 
-The ORM mirrors Convex's vector search API with Drizzle-style builders. Use `vector(dimensions)` for embedding fields.
+Use `vector(dimensions)` for embedding fields.
 
 <Callout icon={<AlertTriangle />}>
 **Important:** Missing `.on(...)` throws "Did you forget to call .on(...)?" and missing `.dimensions(n)` on vector indexes throws "missing dimensions".
@@ -286,6 +241,61 @@ Here's a quick reference for common schema issues:
 | Slow ordering | Add `index('...').on(t.field)` for the primary `orderBy` field |
 
 You now have a fully defined schema with tables, relations, indexes, and guardrails. From here, you can start querying data or set up mutations.
+
+## API Reference
+
+### Runtime Defaults
+
+You can set global runtime guardrails via the `defaults` option passed to `defineSchema`. These control limits for queries, relation loading, and mutation batching:
+
+```ts showLineNumbers {3-13}
+export default defineSchema({ users, posts }, {
+  strict: true,
+  defaults: {
+    defaultLimit: 1000,            // non-paginated findMany() fallback
+    relationFanOutMaxKeys: 1000,   // max unique relation lookup keys per relation load
+    mutationBatchSize: 400,        // update/delete batch size
+    mutationLeafBatchSize: 1600,   // async non-recursive FK fan-out batch size
+    mutationMaxRows: 10000,        // sync-mode hard cap
+    mutationMaxBytesPerBatch: 2_097_152, // async measured-byte budget
+    mutationScheduleCallCap: 800,  // async schedule calls allowed per mutation
+    mutationExecutionMode: 'async', // or 'sync'
+    mutationAsyncDelayMs: 0,       // scheduler delay between async batches
+  },
+});
+```
+
+Here's what each option does:
+
+- `defaults.defaultLimit` -- used when `findMany()` is non-paginated and `limit` is omitted. No implicit built-in fallback is applied when this is unset.
+- `defaults.relationFanOutMaxKeys` -- maximum unique relation lookup keys allowed per relation-load step before fail-fast. Built-in fallback: `1000`.
+- `defaults.mutationBatchSize` -- page size used to collect rows for `update()`/`delete()`. Built-in fallback: `400`.
+- `defaults.mutationLeafBatchSize` -- async batch size for non-recursive FK fan-out actions (`set null`, `set default`, non-recursive update fan-out). Built-in fallback: `1600`.
+- `defaults.mutationMaxRows` -- sync-mode hard cap for matched rows in `update()`/`delete()`. Built-in fallback: `10000`.
+- `defaults.mutationMaxBytesPerBatch` -- async measured-byte budget per continuation batch. Built-in fallback: `2_097_152` bytes.
+- `defaults.mutationScheduleCallCap` -- async schedule calls allowed from one mutation invocation before throwing. Built-in fallback: `800`.
+- `defaults.mutationExecutionMode` -- default execution mode for non-paginated `execute()` calls (`'sync'` or `'async'`). `'async'` requires scheduling wiring (`scheduler` + `scheduledMutationBatch`); without wiring, default-mode execution falls back to `'sync'`. Built-in fallback is `'async'` when scheduling is wired, otherwise `'sync'`.
+- `defaults.mutationAsyncDelayMs` -- default scheduler delay used by async mutation continuation. Built-in fallback: `0`.
+
+<Callout icon={<InfoIcon />}>
+**Note:** Numeric defaults must be integers. `mutationAsyncDelayMs` allows `0`; all others must be `>= 1`.
+</Callout>
+
+### Strict Policy (Guardrails)
+
+Strict guardrails cover relation indexes, relation fan-out cardinality, predicate `where()`, and unbounded `update`/`delete`. Here's the full behavior matrix:
+
+| Area | Current (2026-02-06) | Strict `true` | Strict `false` |
+|---|---|---|---|
+| Relation loading missing index | throws unless `allowFullScan` | throws unless `allowFullScan`; warns when scanning | throws unless `allowFullScan`; no strict warning |
+| Predicate `where` | requires explicit `.withIndex(name, range?)` (no `allowFullScan` fallback) | same | same |
+| Object/callback expression `where` not index-compiled | allowed as bounded scan (subject to sizing rules) | same | same |
+| Pagination orderBy missing index | strict `true` throws; strict `false` warns + falls back to `createdAt` | throws (add index or disable strict) | warns + falls back to `createdAt` |
+| Unsized non-paginated `findMany()` | throws unless `limit`/cursor pagination (`cursor` + `limit`)/`defaultLimit`/`allowFullScan` | same | same |
+| `many()` relation without per-parent limit | throws unless relation `limit`/`defaultLimit`/`allowFullScan` | same | same |
+| Relation lookup fan-out keys exceed cap | throws unless `allowFullScan` (`defaults.relationFanOutMaxKeys`, default `1000`) | throws unless `allowFullScan`; warns when scanning | throws unless `allowFullScan`; no strict warning |
+| Update/delete without `where()` | throws unless `allowFullScan` | throws unless `allowFullScan`; warns when scanning | throws unless `allowFullScan`; no strict warning |
+| Update/delete row count exceeds `mutationMaxRows` | sync mode throws; async mode schedules continuation | sync mode throws; async mode schedules continuation | sync mode throws; async mode schedules continuation |
 
 ## Next Steps
 

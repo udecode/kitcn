@@ -467,9 +467,53 @@ describe('dbAdapter', () => {
 
   test('create/update/delete use handler implementations (happy path)', async () => {
     const { ctx, store } = createMemoryCtx({});
+    const authFunctions = {
+      create: 'create',
+      deleteOne: 'deleteOne',
+      updateOne: 'updateOne',
+    } as any;
+    ctx.runMutation = mock(async (handle: string, args: any) => {
+      if (handle === authFunctions.create) {
+        const id = `user-${store.size + 1}`;
+        const next = { _id: id, ...(args.input.data ?? {}) };
+        store.set(id, next);
+        return args.select?.length
+          ? Object.fromEntries(
+              args.select.map((field: string) => [
+                field,
+                (next as Record<string, unknown>)[field],
+              ])
+            )
+          : next;
+      }
+
+      if (handle === authFunctions.updateOne) {
+        const id = args.input.where?.[0]?.value as string | undefined;
+        if (!id) {
+          return null;
+        }
+        const existing = store.get(id);
+        if (!existing) {
+          return null;
+        }
+        const next = { ...existing, ...(args.input.update ?? {}) };
+        store.set(id, next);
+        return { ...next, id };
+      }
+
+      if (handle === authFunctions.deleteOne) {
+        const id = args.input.where?.[0]?.value as string | undefined;
+        if (id) {
+          store.delete(id);
+        }
+        return null;
+      }
+
+      return undefined;
+    });
 
     const adapterFactory = dbAdapter(ctx, () => ({}) as any, {
-      authFunctions: {} as any,
+      authFunctions,
       schema,
     });
     const adapter = adapterFactory({} as any);

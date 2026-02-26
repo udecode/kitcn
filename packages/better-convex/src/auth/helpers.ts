@@ -3,6 +3,20 @@ import type {
   GenericDataModel,
   GenericQueryCtx,
 } from 'convex/server';
+import {
+  type DocByCtx,
+  getByIdWithOrmQueryFallback,
+  type LookupByIdResultByCtx,
+  type QueryCtxWithPreferredOrmQueryTable,
+} from '../orm/query-context';
+
+type SessionDoc<TCtx extends GenericQueryCtx<any>> = DocByCtx<TCtx, 'session'>;
+type SessionResult<TCtx extends GenericQueryCtx<any>> = LookupByIdResultByCtx<
+  TCtx,
+  'session'
+>;
+type SessionLookupCtx<TCtx extends GenericQueryCtx<any>> =
+  QueryCtxWithPreferredOrmQueryTable<TCtx, 'session'>;
 
 export const getAuthUserIdentity = async <DataModel extends GenericDataModel>(
   ctx: GenericQueryCtx<DataModel>
@@ -35,11 +49,11 @@ export const getAuthUserId = async <DataModel extends GenericDataModel>(
   return identity.subject;
 };
 
-export const getSession = async <DataModel extends GenericDataModel>(
-  ctx: GenericQueryCtx<DataModel>,
-  _sessionId?: DocumentByName<DataModel, 'session'>['_id']
-) => {
-  let sessionId: any = _sessionId;
+export async function getSession<TCtx extends GenericQueryCtx<any>>(
+  ctx: TCtx & SessionLookupCtx<TCtx>,
+  _sessionId?: SessionDoc<TCtx>['_id']
+): Promise<SessionResult<TCtx>> {
+  let sessionId = _sessionId;
 
   if (!sessionId) {
     const identity = await getAuthUserIdentity(ctx);
@@ -55,17 +69,21 @@ export const getSession = async <DataModel extends GenericDataModel>(
     return null;
   }
 
-  return (await ctx.db.get(sessionId)) as DocumentByName<
-    DataModel,
-    'session'
-  > | null;
-};
+  return await getByIdWithOrmQueryFallback<TCtx, 'session'>(
+    ctx,
+    'session',
+    sessionId
+  );
+}
 
-export const getHeaders = async <DataModel extends GenericDataModel>(
-  ctx: GenericQueryCtx<DataModel>,
-  session?: DocumentByName<DataModel, 'session'> | null
+export const getHeaders = async <TCtx extends GenericQueryCtx<any>>(
+  ctx: TCtx & QueryCtxWithPreferredOrmQueryTable<TCtx, 'session'>,
+  session?: SessionResult<TCtx> | null
 ) => {
-  const resolvedSession = session ?? (await getSession(ctx));
+  const resolvedSession = (session ?? (await getSession<TCtx>(ctx))) as {
+    ipAddress?: string | null;
+    token?: string | null;
+  } | null;
 
   if (!resolvedSession) {
     return new Headers();

@@ -72,7 +72,7 @@ if (!identity) {
 
 ## Extending Context with Middleware
 
-Here's where cRPC shines. Use middleware to add custom data to context - the authenticated user, feature flags, rate limit info, anything your procedures need.
+Use middleware to add custom data to context - the authenticated user, feature flags, rate limit info, anything your procedures need.
 
 The pattern is simple: fetch what you need, then call `next()` with the extended context.
 
@@ -127,10 +127,10 @@ export const create = authMutation
 
 ## Context in Actions
 
-Actions have a different context. Instead of direct database access, they use `runQuery` and `runMutation` to call other procedures.
+Actions have a different context. Instead of direct database access, they call other procedures. Use the module runtime caller (for example `createUserCaller(ctx)`) for type-safe dispatch with full autocomplete:
 
-```ts showLineNumbers {8-10}
-import { internal } from './_generated/api';
+```ts showLineNumbers {1,7-8,14}
+import { createUserCaller } from './generated/user.runtime';
 
 export const processAndSave = publicAction
   .input(z.object({ data: z.string() }))
@@ -142,14 +142,15 @@ export const processAndSave = publicAction
     });
 
     // Call a mutation to save results
-    await ctx.runMutation(internal.user.updateProfile, {
-      data: await result.json()
-    });
+    const caller = createUserCaller(ctx);
+    await caller.updateProfile({ data: await result.json() });
+    await caller.actions.syncExternalAnalytics({ userId: 'u_1' });
+    await caller.schedule.now.sendFollowUpEmail({ userId: 'u_1' });
   });
 ```
 
 <Callout icon={<InfoIcon />}>
-  **Note:** Actions can't access the database directly. Use `ctx.runQuery` to read data and `ctx.runMutation` to write data. This ensures all database operations are transactional.
+  **Note:** Actions can't access the database directly. Module runtime callers (like `createUserCaller(ctx)`) dispatch root calls via `ctx.runQuery` / `ctx.runMutation`, action calls via `caller.actions.*` (which uses `ctx.runAction`), and scheduling via `caller.schedule.*` (which uses `ctx.scheduler`).
 </Callout>
 
 ## Migrate from Convex
@@ -162,8 +163,8 @@ Base context properties work identically:
 - `ctx.orm` - Database access (queries + mutations)
 - `ctx.auth` - Authentication
 - `ctx.storage` - File storage
-- `ctx.scheduler` - Scheduler (mutations only)
-- `ctx.runQuery` / `ctx.runMutation` - Call procedures (actions only)
+- `ctx.scheduler` - Scheduler (mutations + actions)
+- `ctx.runQuery` / `ctx.runMutation` / `ctx.runAction` - Call procedures (actions only)
 
 ### What's new
 

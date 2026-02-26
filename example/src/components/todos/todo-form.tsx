@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiInputs } from '@convex/types';
+import type { ApiInputs } from '@convex/api';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { CalendarIcon, Plus } from 'lucide-react';

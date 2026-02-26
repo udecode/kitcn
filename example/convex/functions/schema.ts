@@ -1,10 +1,13 @@
 import {
   type AnyColumn,
+  aggregateIndex,
   boolean,
   convexTable,
   custom,
   defineRelations,
   defineSchema,
+  defineTriggers,
+  eq,
   index,
   integer,
   searchIndex,
@@ -14,16 +17,7 @@ import {
   uniqueIndex,
 } from 'better-convex/orm';
 import { v } from 'convex/values';
-import {
-  aggregateCommentsByTodo,
-  aggregateProjectMembers,
-  aggregateRepliesByParent,
-  aggregateTagUsage,
-  aggregateTodosByProject,
-  aggregateTodosByStatus,
-  aggregateTodosByUser,
-  aggregateUsers,
-} from './aggregates';
+import { getEnv } from '../lib/get-env';
 
 // =============================================================================
 // Tables
@@ -135,6 +129,7 @@ export const memberTable = convexTable(
   },
   (t) => [
     index('role').on(t.role),
+    aggregateIndex('by_organization').on(t.organizationId),
     index('organizationId_userId').on(t.organizationId, t.userId),
     index('organizationId_role').on(t.organizationId, t.role),
     index('userId').on(t.userId),
@@ -223,15 +218,15 @@ export const userTable = convexTable(
     index('customerId').on(t.customerId),
     index('email_name').on(t.email, t.name),
     index('name').on(t.name),
+    aggregateIndex('by_role').on(t.role),
     index('username').on(t.username),
     index('personalOrganizationId').on(t.personalOrganizationId),
     index('lastActiveOrganizationId').on(t.lastActiveOrganizationId),
-    aggregateUsers.trigger(),
   ]
 );
 
 // --------------------
-// Polar Payment Tables
+// Payment Tables
 // --------------------
 
 export const subscriptionsTable = convexTable(
@@ -303,12 +298,31 @@ export const todosTable = convexTable(
     index('user_completed').on(t.userId, t.completed),
     index('userId').on(t.userId),
     index('projectId').on(t.projectId),
+    aggregateIndex('by_user').on(t.userId),
+    aggregateIndex('by_project').on(t.projectId),
+    aggregateIndex('by_project_completed').on(t.projectId, t.completed),
+    aggregateIndex('by_deletion_time').on(t.deletionTime),
+    aggregateIndex('by_completed_deletion_time').on(
+      t.completed,
+      t.deletionTime
+    ),
+    aggregateIndex('by_priority_deletion_time').on(t.priority, t.deletionTime),
+    aggregateIndex('by_user_deletion_time').on(t.userId, t.deletionTime),
+    aggregateIndex('by_user_completed_deletion_time').on(
+      t.userId,
+      t.completed,
+      t.deletionTime
+    ),
+    aggregateIndex('metrics_by_user_deletion_time')
+      .on(t.userId, t.deletionTime)
+      .count(t.dueDate, t.priority)
+      .sum(t.dueDate)
+      .avg(t.dueDate)
+      .min(t.dueDate)
+      .max(t.dueDate),
     searchIndex('search_title_description')
       .on(t.title)
       .filter(t.userId, t.completed, t.projectId),
-    aggregateTodosByUser.trigger(),
-    aggregateTodosByProject.trigger(),
-    aggregateTodosByStatus.trigger(),
   ]
 );
 
@@ -332,6 +346,7 @@ export const projectsTable = convexTable(
     index('isPublic').on(t.isPublic),
     index('archived').on(t.archived),
     index('ownerId').on(t.ownerId),
+    aggregateIndex('by_owner').on(t.ownerId),
     searchIndex('search_name_description')
       .on(t.name)
       .filter(t.isPublic, t.archived),
@@ -352,7 +367,11 @@ export const tagsTable = convexTable(
       .references(() => userTable.id, { onDelete: 'cascade' })
       .notNull(),
   },
-  (t) => [index('name').on(t.name), index('createdBy').on(t.createdBy)]
+  (t) => [
+    index('name').on(t.name),
+    index('createdBy').on(t.createdBy),
+    aggregateIndex('by_created_by').on(t.createdBy),
+  ]
 );
 
 // --------------------
@@ -378,8 +397,9 @@ export const todoCommentsTable = convexTable(
     index('parentId').on(t.parentId),
     index('todoId').on(t.todoId),
     index('userId').on(t.userId),
-    aggregateCommentsByTodo.trigger(),
-    aggregateRepliesByParent.trigger(),
+    aggregateIndex('by_parent').on(t.parentId),
+    aggregateIndex('by_todo').on(t.todoId),
+    aggregateIndex('by_user').on(t.userId),
   ]
 );
 
@@ -403,7 +423,7 @@ export const projectMembersTable = convexTable(
     index('userId').on(t.userId),
     index('projectId_userId').on(t.projectId, t.userId),
     index('userId_projectId').on(t.userId, t.projectId),
-    aggregateProjectMembers.trigger(),
+    aggregateIndex('by_project').on(t.projectId),
   ]
 );
 
@@ -423,7 +443,7 @@ export const todoTagsTable = convexTable(
     index('tagId').on(t.tagId),
     index('todoId_tagId').on(t.todoId, t.tagId),
     index('tagId_todoId').on(t.tagId, t.todoId),
-    aggregateTagUsage.trigger(),
+    aggregateIndex('by_tag').on(t.tagId),
   ]
 );
 
@@ -446,6 +466,100 @@ export const commentRepliesTable = convexTable(
   ]
 );
 
+export const aggregateDemoRunTable = convexTable(
+  'aggregateDemoRun',
+  {
+    createdAt: timestamp().notNull().defaultNow(),
+    userId: text()
+      .references(() => userTable.id, { onDelete: 'cascade' })
+      .notNull(),
+    active: boolean().notNull(),
+    seed: integer().notNull(),
+    projects: custom(v.array(v.string())).notNull(),
+    todos: custom(v.array(v.string())).notNull(),
+    tags: custom(v.array(v.string())).notNull(),
+    todoTags: custom(v.array(v.string())).notNull(),
+    projectMembers: custom(v.array(v.string())).notNull(),
+    todoComments: custom(v.array(v.string())).notNull(),
+  },
+  (t) => [
+    index('userId').on(t.userId),
+    index('userId_active').on(t.userId, t.active),
+  ]
+);
+
+export const triggerDemoRecordTable = convexTable(
+  'triggerDemoRecord',
+  {
+    createdAt: timestamp().notNull().defaultNow(),
+    updatedAt: timestamp().notNull(),
+    runId: text().notNull(),
+    ownerId: text()
+      .references(() => userTable.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: text().notNull(),
+    email: text().notNull(),
+    status: textEnum(['draft', 'active', 'archived'] as const),
+    deleteGuard: boolean().notNull(),
+    lifecycleTag: text(),
+    recursivePatchCount: integer().notNull(),
+  },
+  (t) => [
+    index('ownerId').on(t.ownerId),
+    index('runId').on(t.runId),
+    index('ownerId_runId').on(t.ownerId, t.runId),
+  ]
+);
+
+export const triggerDemoAuditTable = convexTable(
+  'triggerDemoAudit',
+  {
+    createdAt: timestamp().notNull().defaultNow(),
+    runId: text().notNull(),
+    ownerId: text()
+      .references(() => userTable.id, { onDelete: 'cascade' })
+      .notNull(),
+    recordId: text(),
+    hook: text().notNull(),
+    operation: text().notNull(),
+    message: text(),
+  },
+  (t) => [
+    index('runId').on(t.runId),
+    index('ownerId').on(t.ownerId),
+    index('ownerId_runId').on(t.ownerId, t.runId),
+  ]
+);
+
+export const triggerDemoStatsTable = convexTable(
+  'triggerDemoStats',
+  {
+    createdAt: timestamp().notNull().defaultNow(),
+    updatedAt: timestamp().notNull(),
+    runId: text().notNull(),
+    ownerId: text()
+      .references(() => userTable.id, { onDelete: 'cascade' })
+      .notNull(),
+    createCount: integer().notNull(),
+    updateCount: integer().notNull(),
+    deleteCount: integer().notNull(),
+    changeCount: integer().notNull(),
+  },
+  (t) => [uniqueIndex('runId').on(t.runId), index('ownerId').on(t.ownerId)]
+);
+
+export const triggerDemoRunTable = convexTable(
+  'triggerDemoRun',
+  {
+    createdAt: timestamp().notNull().defaultNow(),
+    ownerId: text()
+      .references(() => userTable.id, { onDelete: 'cascade' })
+      .notNull(),
+    summary: custom(v.any()).notNull(),
+  },
+  (t) => [index('ownerId').on(t.ownerId)]
+);
+
 export const tables = {
   session: sessionTable,
   account: accountTable,
@@ -463,6 +577,11 @@ export const tables = {
   projectMembers: projectMembersTable,
   todoTags: todoTagsTable,
   commentReplies: commentRepliesTable,
+  aggregateDemoRun: aggregateDemoRunTable,
+  triggerDemoRecord: triggerDemoRecordTable,
+  triggerDemoAudit: triggerDemoAuditTable,
+  triggerDemoStats: triggerDemoStatsTable,
+  triggerDemoRun: triggerDemoRunTable,
 };
 
 export default defineSchema(tables, {
@@ -568,6 +687,22 @@ export const relations = defineRelations(tables, (r) => ({
       to: r.organization.id,
       optional: true,
     }),
+    triggerDemoRecords: r.many.triggerDemoRecord({
+      from: r.user.id,
+      to: r.triggerDemoRecord.ownerId,
+    }),
+    triggerDemoAudits: r.many.triggerDemoAudit({
+      from: r.user.id,
+      to: r.triggerDemoAudit.ownerId,
+    }),
+    triggerDemoStatsRuns: r.many.triggerDemoStats({
+      from: r.user.id,
+      to: r.triggerDemoStats.ownerId,
+    }),
+    triggerDemoRuns: r.many.triggerDemoRun({
+      from: r.user.id,
+      to: r.triggerDemoRun.ownerId,
+    }),
   },
   subscriptions: {
     organization: r.one.organization({
@@ -671,4 +806,350 @@ export const relations = defineRelations(tables, (r) => ({
       to: r.todoComments.id,
     }),
   },
+  triggerDemoRecord: {
+    owner: r.one.user({
+      from: r.triggerDemoRecord.ownerId,
+      to: r.user.id,
+    }),
+  },
+  triggerDemoAudit: {
+    owner: r.one.user({
+      from: r.triggerDemoAudit.ownerId,
+      to: r.user.id,
+    }),
+  },
+  triggerDemoStats: {
+    owner: r.one.user({
+      from: r.triggerDemoStats.ownerId,
+      to: r.user.id,
+    }),
+  },
+  triggerDemoRun: {
+    owner: r.one.user({
+      from: r.triggerDemoRun.ownerId,
+      to: r.user.id,
+    }),
+  },
 }));
+
+type TriggerDemoStatsDelta = {
+  create?: number;
+  update?: number;
+  delete?: number;
+  change?: number;
+};
+
+type TriggerDemoStatsRow = {
+  id: string;
+  createCount: number;
+  updateCount: number;
+  deleteCount: number;
+  changeCount: number;
+};
+
+type TriggerDemoHookCtx = {
+  orm: {
+    insert: (table: unknown) => {
+      values: (value: Record<string, unknown>) => Promise<unknown>;
+    };
+    update: (table: unknown) => {
+      set: (value: Record<string, unknown>) => {
+        where: (clause: unknown) => Promise<unknown>;
+      };
+    };
+    query: {
+      triggerDemoStats: {
+        findFirst: (input: {
+          where: { runId: string };
+        }) => Promise<TriggerDemoStatsRow | null>;
+      };
+    };
+  };
+};
+
+async function appendTriggerDemoAudit(
+  ctx: unknown,
+  input: {
+    runId: string;
+    ownerId: string;
+    recordId: string | null;
+    hook: string;
+    operation: string;
+    message?: string | null;
+  }
+) {
+  const triggerCtx = ctx as TriggerDemoHookCtx;
+  await triggerCtx.orm.insert(triggerDemoAuditTable).values({
+    runId: input.runId,
+    ownerId: input.ownerId,
+    recordId: input.recordId ?? null,
+    hook: input.hook,
+    operation: input.operation,
+    message: input.message ?? null,
+  });
+}
+
+async function bumpTriggerDemoStats(
+  ctx: unknown,
+  input: {
+    runId: string;
+    ownerId: string;
+    delta: TriggerDemoStatsDelta;
+  }
+) {
+  const triggerCtx = ctx as TriggerDemoHookCtx;
+  const existing = await triggerCtx.orm.query.triggerDemoStats.findFirst({
+    where: { runId: input.runId },
+  });
+
+  if (existing) {
+    await triggerCtx.orm
+      .update(triggerDemoStatsTable)
+      .set({
+        updatedAt: new Date(),
+        createCount: existing.createCount + (input.delta.create ?? 0),
+        updateCount: existing.updateCount + (input.delta.update ?? 0),
+        deleteCount: existing.deleteCount + (input.delta.delete ?? 0),
+        changeCount: existing.changeCount + (input.delta.change ?? 0),
+      })
+      .where(eq(triggerDemoStatsTable.id, existing.id));
+    return;
+  }
+
+  await triggerCtx.orm.insert(triggerDemoStatsTable).values({
+    runId: input.runId,
+    ownerId: input.ownerId,
+    updatedAt: new Date(),
+    createCount: input.delta.create ?? 0,
+    updateCount: input.delta.update ?? 0,
+    deleteCount: input.delta.delete ?? 0,
+    changeCount: input.delta.change ?? 0,
+  });
+}
+
+export const triggers = defineTriggers(relations, {
+  user: {
+    create: {
+      before: async (data) => {
+        const role =
+          data.role !== 'admin' && getEnv().ADMIN.includes(data.email)
+            ? 'admin'
+            : data.role;
+
+        return {
+          data: {
+            ...data,
+            role,
+          },
+        };
+      },
+      after: async (user, ctx) => {
+        if (user.personalOrganizationId) {
+          return;
+        }
+
+        const userId = user.id;
+        const slug = `personal-${userId.slice(-8)}`;
+        const [organization] = await ctx.orm
+          .insert(organizationTable)
+          .values({
+            logo: user.image ?? null,
+            monthlyCredits: 0,
+            name: `${user.name}'s Organization`,
+            slug,
+            createdAt: new Date(),
+          })
+          .returning();
+        const organizationId = organization.id;
+
+        await ctx.orm.insert(memberTable).values({
+          createdAt: new Date(),
+          role: 'owner',
+          organizationId,
+          userId,
+        });
+
+        await ctx.orm
+          .update(userTable)
+          .set({
+            lastActiveOrganizationId: organizationId,
+            personalOrganizationId: organizationId,
+          })
+          .where(eq(userTable.id, userId));
+      },
+    },
+  },
+  session: {
+    create: {
+      after: async (session, ctx) => {
+        if (session.activeOrganizationId) {
+          return;
+        }
+
+        const user = await ctx.orm.query.user.findFirst({
+          where: { id: session.userId },
+        });
+        if (!user) {
+          return;
+        }
+
+        const activeOrganizationId =
+          user.lastActiveOrganizationId ?? user.personalOrganizationId ?? null;
+        const sessionId = session.id;
+
+        await ctx.orm
+          .update(sessionTable)
+          .set({ activeOrganizationId })
+          .where(eq(sessionTable.id, sessionId));
+      },
+    },
+  },
+  triggerDemoRecord: {
+    create: {
+      before: async (data) => {
+        const name = data.name.trim();
+        if (!name) {
+          return false;
+        }
+
+        return {
+          data: {
+            ...data,
+            name,
+            email: data.email.toLowerCase(),
+            status: data.status ?? 'active',
+            deleteGuard: data.deleteGuard ?? false,
+            recursivePatchCount: data.recursivePatchCount ?? 0,
+          },
+        };
+      },
+      after: async (doc, ctx) => {
+        await appendTriggerDemoAudit(ctx, {
+          runId: doc.runId,
+          ownerId: doc.ownerId,
+          recordId: doc.id,
+          hook: 'create.after',
+          operation: 'insert',
+          message: 'create side effect applied',
+        });
+
+        await bumpTriggerDemoStats(ctx, {
+          runId: doc.runId,
+          ownerId: doc.ownerId,
+          delta: { create: 1 },
+        });
+
+        const rawId = (doc as { _id?: string; id?: string })._id ?? doc.id;
+
+        const innerDb = ctx.innerDb as unknown as {
+          patch: (
+            tableName: string,
+            id: string,
+            patchValue: Record<string, unknown>
+          ) => Promise<void>;
+        };
+        await innerDb.patch('triggerDemoRecord', rawId, {
+          lifecycleTag: 'innerdb-patched',
+        });
+
+        if (doc.recursivePatchCount === 0) {
+          const db = ctx.db as unknown as {
+            patch: (
+              tableName: string,
+              id: string,
+              patchValue: Record<string, unknown>
+            ) => Promise<void>;
+          };
+          await db.patch('triggerDemoRecord', rawId, {
+            recursivePatchCount: 1,
+          });
+        }
+      },
+    },
+    update: {
+      before: async (data) => {
+        const nextData = { ...data };
+
+        if (nextData.name !== undefined) {
+          const name = nextData.name.trim();
+          if (!name) {
+            return false;
+          }
+          nextData.name = name;
+        }
+
+        if (nextData.email !== undefined) {
+          nextData.email = nextData.email.toLowerCase();
+        }
+
+        return {
+          data: {
+            ...nextData,
+          },
+        };
+      },
+      after: async (doc, ctx) => {
+        await appendTriggerDemoAudit(ctx, {
+          runId: doc.runId,
+          ownerId: doc.ownerId,
+          recordId: doc.id,
+          hook: 'update.after',
+          operation: 'update',
+          message: 'update side effect applied',
+        });
+
+        await bumpTriggerDemoStats(ctx, {
+          runId: doc.runId,
+          ownerId: doc.ownerId,
+          delta: { update: 1 },
+        });
+      },
+    },
+    delete: {
+      before: async (doc) => {
+        if (doc.deleteGuard) {
+          return false;
+        }
+      },
+      after: async (doc, ctx) => {
+        await appendTriggerDemoAudit(ctx, {
+          runId: doc.runId,
+          ownerId: doc.ownerId,
+          recordId: doc.id,
+          hook: 'delete.after',
+          operation: 'delete',
+          message: 'delete side effect applied',
+        });
+
+        await bumpTriggerDemoStats(ctx, {
+          runId: doc.runId,
+          ownerId: doc.ownerId,
+          delta: { delete: 1 },
+        });
+      },
+    },
+    change: async (change, ctx) => {
+      const ownerId = change.newDoc?.ownerId ?? change.oldDoc?.ownerId;
+      const runId = change.newDoc?.runId ?? change.oldDoc?.runId;
+
+      if (!ownerId || !runId) {
+        return;
+      }
+
+      await appendTriggerDemoAudit(ctx, {
+        runId,
+        ownerId,
+        recordId: change.id ?? null,
+        hook: 'change',
+        operation: change.operation,
+        message: 'change hook observed operation',
+      });
+
+      await bumpTriggerDemoStats(ctx, {
+        runId,
+        ownerId,
+        delta: { change: 1 },
+      });
+    },
+  },
+});

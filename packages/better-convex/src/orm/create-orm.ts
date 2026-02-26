@@ -1,11 +1,13 @@
 import {
   type GenericDatabaseReader,
   type GenericDatabaseWriter,
+  internalActionGeneric,
   internalMutationGeneric,
   type SchedulableFunctionReference,
   type Scheduler,
 } from 'convex/server';
 import { v } from 'convex/values';
+import { createCountBackfillHandlers } from './aggregate-index/backfill';
 import {
   type CreateDatabaseOptions,
   createDatabase,
@@ -17,14 +19,17 @@ import { createOrmDbLifecycle, type OrmDbLifecycle } from './lifecycle';
 import type { TablesRelationalConfig } from './relations';
 import { scheduledDeleteFactory } from './scheduled-delete';
 import { scheduledMutationBatchFactory } from './scheduled-mutation-batch';
+import type { OrmTriggers } from './triggers';
 import type { VectorSearchProvider } from './types';
 
 export type OrmFunctions = {
   scheduledMutationBatch: SchedulableFunctionReference;
   scheduledDelete: SchedulableFunctionReference;
+  aggregateBackfillChunk?: SchedulableFunctionReference;
+  resetChunk?: SchedulableFunctionReference;
 };
 
-export type CreateOrmOptions = Omit<CreateDatabaseOptions, never>;
+export type CreateOrmOptions = CreateDatabaseOptions;
 
 type OrmWriterCtx = {
   db: GenericDatabaseWriter<any>;
@@ -65,6 +70,7 @@ type GenericOrmCtx<
 
 type CreateOrmConfigBase<TSchema extends TablesRelationalConfig> = {
   schema: TSchema;
+  triggers?: OrmTriggers<TSchema, any>;
   internalMutation?: typeof internalMutationGeneric;
 };
 
@@ -88,6 +94,11 @@ type OrmFactory<TSchema extends TablesRelationalConfig> = <
 type OrmApiResult = {
   scheduledMutationBatch: ReturnType<typeof internalMutationGeneric>;
   scheduledDelete: ReturnType<typeof internalMutationGeneric>;
+  aggregateBackfill: ReturnType<typeof internalMutationGeneric>;
+  aggregateBackfillChunk: ReturnType<typeof internalMutationGeneric>;
+  aggregateBackfillStatus: ReturnType<typeof internalMutationGeneric>;
+  resetChunk: ReturnType<typeof internalMutationGeneric>;
+  reset: ReturnType<typeof internalActionGeneric>;
 };
 
 type OrmClientBase<TSchema extends TablesRelationalConfig> = {
@@ -132,14 +143,19 @@ function createDbFactory<TSchema extends TablesRelationalConfig>(
       db: rawDb,
     }) as OrmReaderCtx | OrmWriterCtx;
     const wrappedCtx = dbLifecycle.wrapDB(lifecycleSource);
-
-    return createDatabase(wrappedCtx.db, schema, edgeMetadata, {
+    const orm = createDatabase(wrappedCtx.db, schema, edgeMetadata, {
       ...options,
       scheduler,
       vectorSearch,
       scheduledDelete,
       scheduledMutationBatch,
     }) as OrmResult<TSource, TSchema>;
+
+    // Make orm available in trigger context for both orm.with(ctx) and orm.db(writer) paths.
+    (lifecycleSource as Record<string, unknown>).orm = orm as unknown;
+    (wrappedCtx as Record<string, unknown>).orm = orm as unknown;
+
+    return orm;
   }) as OrmFactory<TSchema>;
 }
 
@@ -154,7 +170,7 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
     | CreateOrmConfigWithFunctions<TSchema>
     | CreateOrmConfigWithoutFunctions<TSchema>
 ): OrmClientBase<TSchema> | OrmClientWithApi<TSchema> {
-  const dbLifecycle = createOrmDbLifecycle(config.schema);
+  const dbLifecycle = createOrmDbLifecycle(config.schema, config.triggers);
   const edgeMetadata = extractRelationsConfig(
     config.schema as TablesRelationalConfig
   );
@@ -184,24 +200,128 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
   return {
     db,
     with: withContext,
-    api: () => ({
-      scheduledMutationBatch: mutationBuilder({
+    api: () => {
+      let aggregateBackfillChunkRef: SchedulableFunctionReference | undefined =
+        config.ormFunctions.aggregateBackfillChunk;
+      let resetChunkRef: SchedulableFunctionReference | undefined =
+        config.ormFunctions.resetChunk;
+      const countBackfillHandlers = createCountBackfillHandlers(
+        config.schema,
+        () => aggregateBackfillChunkRef
+      );
+      const aggregateBackfillChunk = mutationBuilder({
         args: v.any(),
-        handler: scheduledMutationBatchFactory(
-          config.schema,
-          edgeMetadata,
-          config.ormFunctions.scheduledMutationBatch
-        ) as any,
-      }),
-      scheduledDelete: mutationBuilder({
-        args: v.any(),
-        handler: scheduledDeleteFactory(
-          config.schema,
-          edgeMetadata,
-          config.ormFunctions.scheduledMutationBatch
-        ) as any,
-      }),
-    }),
+        handler: countBackfillHandlers.chunk as any,
+      });
+      if (!aggregateBackfillChunkRef) {
+        aggregateBackfillChunkRef = aggregateBackfillChunk as any;
+      }
+      const resetChunk = mutationBuilder({
+        args: v.object({
+          tableName: v.string(),
+          cursor: v.union(v.string(), v.null()),
+        }),
+        handler: async (
+          ctx: { db: GenericDatabaseWriter<any> },
+          args: { tableName: string; cursor: string | null }
+        ) => {
+          const page = await (
+            ctx.db.query(args.tableName as any) as any
+          ).paginate({
+            cursor: args.cursor,
+            numItems: 256,
+          });
+          const docs = Array.isArray(page?.page)
+            ? (page.page as Array<{ _id?: string }>)
+            : [];
+          let deleted = 0;
+          for (const doc of docs) {
+            if (!doc?._id) {
+              continue;
+            }
+            await ctx.db.delete(args.tableName as any, doc._id as any);
+            deleted += 1;
+          }
+          return {
+            cursor: page?.isDone
+              ? null
+              : ((page?.continueCursor ?? null) as string | null),
+            deleted,
+            isDone: Boolean(page?.isDone),
+          };
+        },
+      });
+      if (!resetChunkRef) {
+        resetChunkRef = resetChunk as unknown as SchedulableFunctionReference;
+      }
+
+      return {
+        scheduledMutationBatch: mutationBuilder({
+          args: v.any(),
+          handler: scheduledMutationBatchFactory(
+            config.schema,
+            edgeMetadata,
+            config.ormFunctions.scheduledMutationBatch
+          ) as any,
+        }),
+        scheduledDelete: mutationBuilder({
+          args: v.any(),
+          handler: scheduledDeleteFactory(
+            config.schema,
+            edgeMetadata,
+            config.ormFunctions.scheduledMutationBatch
+          ) as any,
+        }),
+        aggregateBackfill: mutationBuilder({
+          args: v.any(),
+          handler: countBackfillHandlers.kickoff as any,
+        }),
+        aggregateBackfillChunk,
+        aggregateBackfillStatus: mutationBuilder({
+          args: v.any(),
+          handler: countBackfillHandlers.status as any,
+        }),
+        resetChunk,
+        reset: internalActionGeneric({
+          args: v.any(),
+          handler: async (ctx: any) => {
+            const tableNames = [
+              ...new Set(
+                Object.values(config.schema).map(
+                  (tableConfig) => tableConfig.name
+                )
+              ),
+            ];
+            let deleted = 0;
+
+            for (const tableName of tableNames) {
+              let cursor: string | null = null;
+              while (true) {
+                const chunk = (await ctx.runMutation(resetChunkRef, {
+                  tableName,
+                  cursor,
+                })) as {
+                  cursor: string | null;
+                  deleted: number;
+                  isDone: boolean;
+                };
+                deleted += chunk.deleted;
+                if (chunk.isDone) {
+                  break;
+                }
+                cursor = chunk.cursor;
+              }
+            }
+
+            return {
+              status: 'ok' as const,
+              tables: tableNames.length,
+              deleted,
+            };
+          },
+        }),
+      };
+    },
   };
 }
 

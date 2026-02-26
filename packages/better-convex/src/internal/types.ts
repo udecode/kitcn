@@ -39,6 +39,51 @@ export type KnownKeysOnly<T, K> = {
 };
 
 /**
+ * Deep variant of KnownKeysOnly.
+ * Unknown nested keys are mapped to never to preserve strictness
+ * even through generic inference.
+ */
+export type KnownKeysOnlyDeep<T, K> = T extends (...args: any[]) => any
+  ? T
+  : T extends readonly (infer TItem)[]
+    ? K extends readonly (infer KItem)[]
+      ? readonly KnownKeysOnlyDeep<TItem, KItem>[]
+      : never
+    : T extends object
+      ? K extends object
+        ? {
+            [P in keyof T]: P extends keyof K
+              ? KnownKeysOnlyDeep<T[P], K[P]>
+              : never;
+          }
+        : never
+      : T;
+
+/**
+ * Deep exact type check.
+ * Rejects unknown nested keys by mapping them to never.
+ */
+export type Exact<TExpected, TActual> = TActual extends TExpected
+  ? TExpected extends (...args: any[]) => any
+    ? TActual
+    : TExpected extends readonly (infer TExpectedItem)[]
+      ? TActual extends readonly (infer TActualItem)[]
+        ? readonly Exact<TExpectedItem, TActualItem>[]
+        : never
+      : TExpected extends object
+        ? TActual extends object
+          ? {
+              [K in keyof TActual]: K extends keyof TExpected
+                ? Exact<TExpected[K], TActual[K]>
+                : never;
+            } & {
+              [K in Exclude<keyof TExpected, keyof TActual>]?: never;
+            }
+          : never
+        : TActual
+  : never;
+
+/**
  * Narrow a type to an expected shape without losing inference.
  * Pattern from Drizzle ORM: drizzle-orm/src/utils.ts
  * @public

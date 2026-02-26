@@ -20,29 +20,23 @@ cRPC gives you a fluent, type-safe API for building Convex procedures. Instead o
 | Middleware system | Reusable auth, rate limiting, logging |
 | Procedure variants | `publicQuery`, `authMutation`, `adminQuery` patterns |
 
-## Initialize cRPC
+## Generate Runtime
 
-Let's start by creating the cRPC instance. You only need to do this **once** per backend.
+Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
 
-Create a file at `convex/lib/crpc.ts`. This is where all your procedure builders will live.
-
-```ts title="convex/lib/crpc.ts" showLineNumbers {12-22}
-import { initCRPC } from 'better-convex/server';
-import type { DataModel } from '../functions/_generated/dataModel';
-
-const c = initCRPC
-  .dataModel<DataModel>()
-  .create();
+```bash
+npx better-convex dev
 ```
 
-<Callout icon={<InfoIcon />}>
-These import paths assume `convex.json` has `"functions": "convex/functions"`. If using a different folder structure, adjust paths accordingly.
-</Callout>
+## Initialize cRPC
 
-The `initCRPC` builder chains configuration methods:
+`convex/functions/generated.ts` is the canonical server contract — it exports `initCRPC` (with ORM pre-wired when `relations` exists) and `defineAuth` for auth.
 
-1. **`.dataModel<DataModel>()`** - Enables type-safe data model types (table names, `Id<'table'>`) on `ctx`
-2. **`.create()`** - Uses default Convex generic builders (override only when needed)
+```ts title="convex/lib/crpc.ts" showLineNumbers
+import { initCRPC } from '../functions/generated/server';
+
+const c = initCRPC.create();
+```
 
 ### Payload Transformer (Optional)
 
@@ -55,16 +49,13 @@ cRPC serializes inputs/outputs through a transformer at the procedure boundary.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
 import { createTaggedTransformer } from 'better-convex/crpc';
-import { initCRPC } from 'better-convex/server';
-import type { DataModel } from '../functions/_generated/dataModel';
+import { initCRPC } from '../functions/generated/server';
 
 const transformer = createTaggedTransformer([
   // Add custom codecs here (Date is already built-in)
 ]);
 
-const c = initCRPC
-  .dataModel<DataModel>()
-  .create({ transformer });
+const c = initCRPC.create({ transformer });
 ```
 
 `create({ transformer })` accepts either:
@@ -92,10 +83,8 @@ export const router = c.router;
 ```
 
 <Callout icon={<InfoIcon />}>
-  **Note:** Internal procedures use `.internal()` which prevents them from being called directly from the client. Use these for scheduled functions, webhooks, and server-to-server calls.
+`.internal()` prevents client access — use for scheduled functions, webhooks, and server-to-server calls.
 </Callout>
-
-That's it for the basic setup! You can now use `publicQuery`, `publicMutation`, etc. to define your procedures.
 
 ## Define Your Schema
 
@@ -137,37 +126,25 @@ export const relations = defineRelations(tables, (r) => ({
 }));
 ```
 
-Now attach the ORM to your context once. Create `convex/lib/orm.ts`:
-
-```ts title="convex/lib/orm.ts" showLineNumbers {1-3,5-6,8-11}
-import { createOrm } from 'better-convex/orm';
-import type { MutationCtx, QueryCtx } from '../functions/_generated/server';
-import { relations } from '../functions/schema';
-
-export const orm = createOrm({ schema: relations });
-
-export const withOrm = <Ctx extends QueryCtx | MutationCtx>(ctx: Ctx) => ({
-  ...ctx,
-  orm: orm.db(ctx),
-});
-```
+<Callout icon={<InfoIcon />}>
+Without codegen, use `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
+</Callout>
 
 ## Your First Procedure
-
-Now let's use our builders to create a simple query. Here's the before and after:
 
 <Compare>
   <CompareItem title="Before (vanilla Convex)">
     ```ts title="convex/functions/user.ts" showLineNumbers
     import { query } from 'convex/server';
     import { v } from 'convex/values';
-    import { orm } from '../lib/orm';
 
     export const list = query({
       args: { limit: v.number() },
       handler: async (ctx, args) => {
-        const db = orm.db(ctx);
-        return db.query.user.findMany({ limit: args.limit });
+        return ctx.db
+          .query('user')
+          .order('desc')
+          .take(args.limit);
       },
     });
     ```
@@ -186,14 +163,7 @@ Now let's use our builders to create a simple query. Here's the before and after
   </CompareItem>
 </Compare>
 
-The key differences:
-- **Fluent API** - Chain `.input()` and `.query()` instead of object config
-- **Zod validation** - Use `z.object()` instead of `v` validators for richer validation
-- **Destructured params** - Access `{ ctx, input }` instead of separate `(ctx, args)`
-
 ## Procedure Types
-
-cRPC provides builders for each Convex function type:
 
 | Type | Builder | Use For |
 |------|---------|---------|
@@ -204,9 +174,7 @@ cRPC provides builders for each Convex function type:
 
 ## Adding Middleware
 
-Middleware lets you add reusable logic to your procedures. Let's add authentication.
-
-First, define a middleware that checks auth and adds the user to context:
+Define a middleware that checks auth and adds the user to context:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {1-12}
 const authMiddleware = c.middleware(async ({ ctx, next }) => {
@@ -225,14 +193,14 @@ const authMiddleware = c.middleware(async ({ ctx, next }) => {
 });
 ```
 
-Now create an authenticated procedure variant:
+Create authenticated procedure variants:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {1-2}
 export const authQuery = c.query.use(authMiddleware);
 export const authMutation = c.mutation.use(authMiddleware);
 ```
 
-When you use `authQuery`, the middleware runs first. If auth fails, it throws. If it succeeds, `ctx.user` is available in your handler:
+`ctx.user` is now available in handlers:
 
 ```ts title="convex/functions/user.ts" showLineNumbers {4}
 export const me = authQuery
@@ -244,22 +212,17 @@ export const me = authQuery
 
 ## Adding Metadata
 
-Sometimes you need procedure-level configuration that middleware can read. Define a meta type:
-
 ```ts title="convex/lib/crpc.ts" showLineNumbers {1-5,9}
-type Meta = {
-  auth?: 'optional' | 'required';
-  role?: 'admin';
-  rateLimit?: string;
-};
-
 const c = initCRPC
-  .dataModel<DataModel>()
-  .meta<Meta>()
+  .meta<{
+    auth?: 'optional' | 'required';
+    role?: 'admin';
+    rateLimit?: string;
+  }>()
   .create();
 ```
 
-Now middleware can check metadata:
+Middleware reads metadata:
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {1-6}
 const roleMiddleware = c.middleware(({ ctx, meta, next }) => {
@@ -277,25 +240,9 @@ export const adminQuery = c.query
 
 ## Customizing Context
 
-You can add custom properties to the base context. The most common is attaching the ORM as `ctx.orm`:
-
-```ts title="convex/lib/crpc.ts" showLineNumbers {1,4-9}
-import { withOrm } from './orm';
-
-const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
-  .create();
-```
-
-Now all your procedures have `ctx.orm` available automatically.
+With generated `initCRPC`, ORM context is already wired. Chain `.use()` for additional context (e.g. auth middleware).
 
 ## Common Procedure Variants
-
-Here's a summary of the procedure variants you'll typically create:
 
 | Variant | Description | Middleware |
 |---------|-------------|------------|
@@ -309,7 +256,7 @@ See [Templates](/docs/templates) for complete implementations with rate limiting
 
 ## File Organization
 
-cRPC uses file-based organization. Each file in `convex/functions/` becomes a namespace:
+Each file in `convex/functions/` becomes a namespace:
 
 ```
 convex/
@@ -317,15 +264,15 @@ convex/
 │   ├── schema.ts     # Database schema
 │   ├── user.ts       # → crpc.user.list, crpc.user.create
 │   ├── session.ts    # → crpc.session.getByToken
-│   └── account.ts    # → crpc.account.list, crpc.account.delete
+│   ├── account.ts    # → crpc.account.list, crpc.account.delete
+│   └── generated.ts  # Generated server contract (ORM + initCRPC + auth runtime)
 ├── lib/
-│   ├── orm.ts        # Attach ORM once (ctx.orm)
 │   └── crpc.ts       # Setup + procedure variants
 └── shared/           # Client-importable
-    └── meta.ts       # Generated procedure metadata
+    └── api.ts       # Generated procedure metadata
 ```
 
-On the client, the proxy mirrors this structure:
+Client proxy mirrors this:
 
 ```ts title="src/components/example.tsx" showLineNumbers
 // File: convex/functions/user.ts, export: list
@@ -347,36 +294,6 @@ If you're coming from vanilla Convex, here's what changes.
 
 ### What's new
 
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```ts title="convex/functions/user.ts" showLineNumbers
-    import { query } from 'convex/server';
-    import { v } from 'convex/values';
-    import { orm } from '../lib/orm';
-
-    export const list = query({
-      args: { limit: v.number() },
-      handler: async (ctx, args) => {
-        const db = orm.db(ctx);
-        return db.query.user.findMany({ limit: args.limit });
-      },
-    });
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```ts title="convex/functions/user.ts" showLineNumbers {4-7}
-    import { publicQuery } from '../lib/crpc';
-    import { z } from 'zod';
-
-    export const list = publicQuery
-      .input(z.object({ limit: z.number() }))
-      .query(async ({ ctx, input }) => {
-        return ctx.orm.query.user.findMany({ limit: input.limit });
-      });
-    ```
-  </CompareItem>
-</Compare>
-
 Key differences:
 - Fluent builder API instead of object config
 - Zod validation instead of `v` validators
@@ -384,8 +301,6 @@ Key differences:
 - Reusable procedure variants with built-in middleware
 
 ## Full Template
-
-For the complete `crpc.ts` setup file with auth middleware, rate limiting, and procedure variants:
 
 <Cards>
   <Card title="Templates" href="/docs/templates#crpcts" />

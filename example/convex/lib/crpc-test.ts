@@ -9,6 +9,19 @@
 
 /* biome-ignore-all lint: type test file with intentional expressions */
 import { z } from 'zod';
+import {
+  createGeneratedAuthCaller,
+  createGeneratedAuthHandler,
+} from '../functions/generated/auth.runtime';
+import {
+  createProjectsCaller,
+  createProjectsHandler,
+} from '../functions/generated/projects.runtime';
+import {
+  type ActionCtx,
+  type MutationCtx,
+  type QueryCtx,
+} from '../functions/generated/server';
 import type { SessionUser } from '../shared/auth-shared';
 import {
   authMutation,
@@ -157,7 +170,7 @@ export const public_mutation = publicMutation.mutation(async ({ ctx }) => {
 // 2.2 mutation - with input and output
 export const public_mutation_io = publicMutation
   .input(z.object({ id: z.string(), name: z.string() }))
-  .output(z.null())
+
   .mutation(async ({ ctx, input }) => {
     // Verify types are correct
     const id: string = input.id;
@@ -609,9 +622,8 @@ export const inferred_return = publicQuery.query(async ({ ctx }) => {
   return users.map((u) => u.id); // Return type inferred to string[]
 });
 
-// 13.3 Void return with z.null()
+// 13.3 Void return without explicit output schema
 export const void_return = publicMutation
-  .output(z.null())
   .input(z.object({ userId: z.string() }))
   .mutation(async ({ ctx, input }) => {
     // Verify types are correct
@@ -1306,3 +1318,55 @@ export const error_middleware_chained_forward_ref = publicQuery
     return next({ ctx: { ...ctx, secondProp: 42 } });
   })
   .query(async () => null);
+
+// ============================================================================
+// Section 23: module runtime createCaller(ctx) matrix typing
+// ============================================================================
+
+const projectsQueryCaller = createProjectsCaller({} as QueryCtx);
+const projectsMutationCaller = createProjectsCaller({} as MutationCtx);
+const projectsActionCaller = createProjectsCaller({} as ActionCtx);
+const projectsQueryHandler = createProjectsHandler({} as QueryCtx);
+const projectsMutationHandler = createProjectsHandler({} as MutationCtx);
+const generatedActionCaller = createGeneratedAuthCaller({} as ActionCtx);
+const generatedQueryHandler = createGeneratedAuthHandler({} as QueryCtx);
+const generatedMutationHandler = createGeneratedAuthHandler({} as MutationCtx);
+
+projectsQueryCaller.list;
+// @ts-expect-error query caller excludes mutations
+projectsQueryCaller.create;
+
+projectsMutationCaller.list;
+projectsMutationCaller.create;
+projectsActionCaller.list;
+projectsActionCaller.create;
+projectsQueryHandler.list;
+// @ts-expect-error query handler excludes mutations
+projectsQueryHandler.create;
+
+projectsMutationHandler.list;
+projectsMutationHandler.create;
+generatedMutationHandler.create;
+generatedMutationHandler.deleteOne;
+generatedMutationHandler.findOne;
+generatedMutationHandler.updateOne;
+// @ts-expect-error query handler excludes generated mutations
+generatedQueryHandler.create;
+generatedQueryHandler.findOne;
+generatedActionCaller.findOne;
+generatedActionCaller.create;
+generatedActionCaller.actions.getLatestJwks;
+generatedActionCaller.actions.rotateKeys;
+generatedActionCaller.schedule.now.create;
+generatedActionCaller.schedule.now.rotateKeys;
+// @ts-expect-error schedule excludes queries
+generatedActionCaller.schedule.now.findOne;
+// @ts-expect-error action caller excludes actions on root
+generatedActionCaller.rotateKeys;
+
+type _generatedQueryCallerListInput = Parameters<
+  typeof projectsQueryCaller.list
+>[0];
+type _generatedMutationCallerCreateInput = Parameters<
+  typeof projectsMutationCaller.create
+>[0];

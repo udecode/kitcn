@@ -1,103 +1,93 @@
 ---
 name: simulate
-description: "Command: simulate"
+description: 'Command: simulate'
 ---
 
 Use this as your battle-test prompt:
 
 ```md
-Simulate a brand-new user onboarding to better-convex and execute end-to-end in 2 phases.
+I want you to simulate onboarding for a brand-new better-convex app and ship a full-stack demo app in 4 hard-gated phases.
 
-Hard rules:
+Important framing:
+- Simulate a real new user who does not know better-convex internals.
+- Use `skills/convex/SKILL.md` for all better-convex-specific setup/implementation details.
+- Keep this runbook outcome-focused; avoid hardcoding low-level framework internals here.
 
-1. Use only this skill:
-   - `skills/convex/SKILL.md`
-2. No other implementation skills unless blocked; if blocked, log it as a skill gap.
-3. No git commit/push/PR.
-4. Keep all tracking artifacts updated continuously.
-5. No cheating: do not read existing implementation files from this repo.
-   Allowed reads are docs/skills and files you create in the simulation workspace.
-6. Be realistic:
-   - If Convex bootstrap is missing, do not fake generated files.
-   - Try non-interactive bootstrap first:
-     `bunx convex dev --once --configure new --team <team_slug> --project <project_slug> --dev-deployment local`
-   - If team/project info is unavailable or bootstrap still blocks, ask the user to run `better-convex dev` interactively, then continue after confirmation.
-7. Do not declare success until verification is green (or an explicit blocker is logged with evidence).
+## Global Rules
 
-Planning/tracking:
+1. Work in a brand-new repository at `/tmp/simulation-1` (create if missing).
+2. All code, planning files, and verification artifacts must live under `/tmp/simulation-1`.
+3. Do **not** read or modify the current repository.
+4. Use `.codex/skills/planning-with-files/planning-with-files.mdc` for tracking/reporting.
+5. Keep `task_plan.md`, `progress.md`, and `findings.md` updated continuously.
+6. In `findings.md`, log blockers/friction with: severity, phase, source file/section, issue, proposed fix.
+7. Do not use `@ts-nocheck`.
+8. No subscriptions in this simulation (no subscriptions table, feature paths, or billing flow).
+9. Headed `agent-browser` is required at each phase gate.
+10. Fail-fast sequencing: never start phase N+1 before phase N gate fully passes.
+11. Use the actual running dev server URL/port for browser smoke (port may not be 3000).
 
-- Initialize and maintain:
-  - `task_plan.md`
-  - `progress.md`
-  - `findings.md`
-- If files already exist, append a new run section. Do not erase prior history.
-- In `findings.md`, log every friction point with:
-  - `severity: blocker|major|minor`
-  - `phase: 1|2`
-  - `source: absolute file path + section`
-  - `issue`
-  - `proposed fix`
+## Phase 1: Public CRUD Foundation (No Auth)
 
-Phase 1 (setup only):
+Scope:
+- Bootstrap app foundation.
+- Implement public CRUD for core entities (projects/todos/tags/comments).
+- Add basic public API demo endpoints (`/api/health`, `/api/demo/echo`).
+- Add seed/reset skeleton.
 
-- Start by asking the exact intake questions expected by:
-  - `www/content/docs/index.mdx`
-  - `skills/convex/references/setup.md`
-- Then run setup using these choices:
-  - Approach: Top-down
-  - Framework: Next.js App Router
-  - Database: ORM (`ctx.orm`)
-  - Auth: Better Auth
-  - SSR/RSC: Yes
-  - Triggers: Yes
-  - Aggregates: No
-  - Rate Limiting: Yes
-  - Scheduling: No
-  - HTTP router: Yes
-  - RLS: No
-  - Auth plugins: none
-- Deliver a working baseline app per setup docs.
-  - Baseline must include `withOrm` using `orm.with(ctx)` from setup docs.
-  - Baseline must include provider composition so `useCRPC` runs under `CRPCProvider` (no runtime provider crash).
+## Phase 2: Auth + Org/Admin
 
-Phase 2 (feature):
+Scope:
+- Add auth end-to-end in one phase, including org/admin capabilities.
+- Add auth UX routes and one protected mutation flow.
+- Confirm signed-in success and signed-out protection.
 
-- Add a real feature: “Projects + Tasks”
-  - cRPC coverage in `convex/lib/crpc.ts` must include:
-    - `publicQuery`
-    - `optionalAuthQuery`
-    - `authQuery`
-    - `publicMutation`
-    - `optionalAuthMutation`
-    - `authMutation`
-  - Schema: `project`, `task`
-  - Procedures: create/list project, create/list/toggle task
-  - Auth-protected writes with `.meta({ rateLimit: ... })`
-  - `CRPCError` for expected failures (`UNAUTHORIZED`, `NOT_FOUND`)
-  - Trigger: keep `project.updatedAt` and `project.openTaskCount` in sync from task changes
-  - React page using `useCRPC` + TanStack Query
-  - One HTTP route exposing project tasks
-- Add focused validation/tests for:
-  - auth rejection
-  - not-found path
-  - trigger side effect correctness
+## Phase 3: Full Product Surface (No Subscriptions)
 
-Verification required before final output:
+Scope:
+- Expand to full domain surface (users/orgs/todos/projects/tags/comments).
+- Deepen relation handling and ownership/org scoping.
+- Expand RSC + React Query usage across key flows.
+- Expand HTTP router coverage for domain use cases.
 
-- `bunx better-convex codegen`
-- `bunx tsc --noEmit`
-- `bun test`
-- Browser smoke using `agent-browser` (headed) on `http://localhost:3000`:
-  - root route renders without application error/HTTP 500
-  - at least one interactive element appears in snapshot
-- If any check fails, fix and re-run. Only stop when all pass or a hard blocker is documented.
+## Phase 4: Full Coverage Hardening
 
-Final output:
+Scope:
+- Complete hardening and integrity features (aggregates, triggers, rate limiting, ORM safety behavior).
+- Finalize seed/reset robustness.
+- Prepare doc patch suggestions from findings.
 
-- Summary of what worked
-- Top 10 skill/doc improvements
-- Exact patch suggestions (target file + replacement text) for:
-  - `skills/convex/SKILL.md`
-  - `skills/convex/references/setup.md`
-  - any other impacted doc in `www/content/docs/`
+## Per-Phase Gate (required after every phase)
+
+1. Run `bunx better-convex dev --once --typecheck disable` (preferred; includes codegen).
+2. Run `bun run typecheck` (fallback `bunx tsc --noEmit`).
+3. Run `bun test`.
+4. Run `bun run build`.
+5. Run headed `agent-browser` smoke for the phase route set.
+6. Save evidence under `/tmp/simulation-1/evidence/phase-N/`.
+7. If any check fails, fix in-phase and rerun gate. Do not continue.
+
+## Route Smoke Matrix
+
+- Phase 1: `/`, `/todos`, `/projects`, `/tags`, `/http-demo`
+- Phase 2: `/auth`, `/org`, plus one protected mutation flow
+- Phase 3: `/`, `/auth`, `/todos`, `/projects`, `/tags`, `/org`, `/http-demo`
+- Phase 4: full matrix from Phase 3 plus final API smoke
+
+## Mandatory Validation Focus
+
+- Phase 1: public CRUD happy path, not-found path, public HTTP checks.
+- Phase 2: unauthenticated rejection, forbidden admin path, org membership guard, successful sign-in check.
+- Phase 3: relation-depth reads, ownership/org scoping, RSC prefetch + hydrate behavior.
+- Phase 4: trigger side-effect correctness, aggregate consistency, rate-limit enforcement, full-route browser smoke, final API smoke.
+
+## Final Report Requirements
+
+Final output must include:
+1. What worked.
+2. Blockers/friction encountered.
+3. Evidence paths for each phase gate.
+4. Concrete doc patch suggestions.
+5. Confirmation that all 4 phase gates passed in order.
 ```
+

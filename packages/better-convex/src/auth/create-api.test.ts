@@ -54,10 +54,18 @@ const createMemoryCtx = (docsById: Record<string, any>) => {
 };
 
 describe('createHandler', () => {
-  test('runs beforeCreate hook, inserts document, applies select, and runs onCreate hook', async () => {
-    const mutationCalls: Array<{ args: any; handle: string }> = [];
+  test('runs create.before/create.after/change triggers inline', async () => {
     const insertCalls: any[] = [];
+    const before = mock(async (data: any) => ({
+      data: {
+        ...data,
+        email: 'updated@site.com',
+      },
+    }));
+    const after = mock(async () => undefined);
+    const change = mock(async () => undefined);
 
+    const triggerCtx = { orm: true };
     const ctx = {
       db: {
         get: async (_id: string) => ({
@@ -70,27 +78,24 @@ describe('createHandler', () => {
           return 'user-1';
         },
       },
-      runMutation: async (handle: string, args: any) => {
-        mutationCalls.push({ args, handle });
-        if (handle === 'before-hook') {
-          return {
-            ...args.data,
-            email: 'updated@site.com',
-          };
-        }
-      },
     };
 
     const result = await createHandler(
       ctx as any,
       {
-        beforeCreateHandle: 'before-hook',
         input: {
           data: { email: 'original@site.com', name: 'alice' },
           model: 'users',
         },
-        onCreateHandle: 'on-create-hook',
         select: ['email'],
+        tableTriggers: {
+          change,
+          create: {
+            after,
+            before,
+          },
+        } as any,
+        triggerCtx,
       },
       schema,
       betterAuthSchema
@@ -102,12 +107,36 @@ describe('createHandler', () => {
         name: 'alice',
       },
     ]);
-    expect(mutationCalls[0]).toMatchObject({
-      handle: 'before-hook',
-    });
-    expect(mutationCalls[1]).toMatchObject({
-      handle: 'on-create-hook',
-    });
+    expect(before).toHaveBeenCalledWith(
+      {
+        email: 'original@site.com',
+        name: 'alice',
+      },
+      triggerCtx
+    );
+    expect(after).toHaveBeenCalledWith(
+      {
+        _id: 'user-1',
+        email: 'updated@site.com',
+        id: 'user-1',
+        name: 'alice',
+      },
+      triggerCtx
+    );
+    expect(change).toHaveBeenCalledWith(
+      {
+        id: 'user-1',
+        newDoc: {
+          _id: 'user-1',
+          email: 'updated@site.com',
+          id: 'user-1',
+          name: 'alice',
+        },
+        oldDoc: null,
+        operation: 'insert',
+      },
+      triggerCtx
+    );
     expect(result).toEqual({ email: 'updated@site.com' });
   });
 
@@ -119,7 +148,6 @@ describe('createHandler', () => {
             get: async () => null,
             insert: async () => 'user-1',
           },
-          runMutation: async () => undefined,
         } as any,
         {
           input: {
@@ -133,35 +161,30 @@ describe('createHandler', () => {
     ).rejects.toThrow('Failed to create users');
   });
 
-  test('skips beforeCreate hook when skipBeforeHooks is true', async () => {
-    const runMutation = spyOn(
-      {
-        fn: async () => undefined,
-      },
-      'fn'
-    );
-
-    await createHandler(
-      {
-        db: {
-          get: async () => ({ _id: 'user-1', email: 'a@b.com' }),
-          insert: async () => 'user-1',
+  test('throws when create.before returns false', async () => {
+    await expect(
+      createHandler(
+        {
+          db: {
+            get: async () => ({ _id: 'user-1', email: 'a@b.com' }),
+            insert: async () => 'user-1',
+          },
+        } as any,
+        {
+          input: {
+            data: { email: 'a@b.com' },
+            model: 'users',
+          },
+          tableTriggers: {
+            create: {
+              before: async () => false,
+            },
+          } as any,
         },
-        runMutation,
-      } as any,
-      {
-        beforeCreateHandle: 'before-hook',
-        input: {
-          data: { email: 'a@b.com' },
-          model: 'users',
-        },
-        skipBeforeHooks: true,
-      },
-      schema,
-      betterAuthSchema
-    );
-
-    expect(runMutation).not.toHaveBeenCalled();
+        schema,
+        betterAuthSchema
+      )
+    ).rejects.toThrow("Auth trigger cancelled create on 'users'.");
   });
 });
 
@@ -171,7 +194,7 @@ describe('updateOneHandler', () => {
 
     await expect(
       updateOneHandler(
-        { db, runMutation: mock(async () => undefined) } as any,
+        { db } as any,
         {
           input: {
             model: 'users',
@@ -185,44 +208,61 @@ describe('updateOneHandler', () => {
     ).rejects.toThrow('Failed to update users');
   });
 
-  test('applies beforeUpdate hook, patches doc, and runs onUpdate hook', async () => {
+  test('applies update.before and runs update.after/change', async () => {
     const { db, store } = createMemoryCtx({
       'user-1': { _id: 'user-1', email: 'a@b.com', name: 'alice' },
     });
 
-    const mutationCalls: Array<{ args: any; handle: string }> = [];
-    const runMutation = mock(async (handle: string, args: any) => {
-      mutationCalls.push({ args, handle });
-      if (handle === 'before-update') {
-        return { ...args.update, name: 'bob' };
-      }
-    });
+    const before = mock(async (update: any) => ({
+      data: {
+        ...update,
+        name: 'bob',
+      },
+    }));
+    const after = mock(async () => undefined);
+    const change = mock(async () => undefined);
 
     const updated = await updateOneHandler(
-      { db, runMutation } as any,
+      { db } as any,
       {
-        beforeUpdateHandle: 'before-update',
         input: {
           model: 'users',
           update: { name: 'ignored' },
           where: [{ field: '_id', operator: 'eq', value: 'user-1' }],
         },
-        onUpdateHandle: 'on-update',
+        tableTriggers: {
+          change,
+          update: {
+            after,
+            before,
+          },
+        } as any,
       },
       schema,
       betterAuthSchema
     );
 
-    expect(updated).toMatchObject({ _id: 'user-1', name: 'bob' });
+    expect(updated).toMatchObject({ _id: 'user-1', id: 'user-1', name: 'bob' });
     expect(store.get('user-1')).toMatchObject({ _id: 'user-1', name: 'bob' });
-
-    expect(mutationCalls[0]).toMatchObject({ handle: 'before-update' });
-    expect(mutationCalls[1]).toMatchObject({ handle: 'on-update' });
-    expect(mutationCalls[1]?.args).toMatchObject({
-      model: 'users',
-      newDoc: updated,
-      oldDoc: { _id: 'user-1', email: 'a@b.com', name: 'alice' },
-    });
+    expect(before).toHaveBeenCalledWith({ name: 'ignored' }, expect.anything());
+    expect(after).toHaveBeenCalledWith(
+      { _id: 'user-1', email: 'a@b.com', id: 'user-1', name: 'bob' },
+      expect.anything()
+    );
+    expect(change).toHaveBeenCalledWith(
+      {
+        id: 'user-1',
+        newDoc: { _id: 'user-1', email: 'a@b.com', id: 'user-1', name: 'bob' },
+        oldDoc: {
+          _id: 'user-1',
+          email: 'a@b.com',
+          id: 'user-1',
+          name: 'alice',
+        },
+        operation: 'update',
+      },
+      expect.anything()
+    );
   });
 });
 
@@ -235,7 +275,7 @@ describe('updateManyHandler', () => {
 
     await expect(
       updateManyHandler(
-        { db, runMutation: mock(async () => undefined) } as any,
+        { db } as any,
         {
           input: {
             model: 'users',
@@ -258,8 +298,11 @@ describe('updateManyHandler', () => {
       'user-2': { _id: 'user-2', email: 'c@d.com', name: 'bob' },
     });
 
+    const after = mock(async () => undefined);
+    const change = mock(async () => undefined);
+
     const result = await updateManyHandler(
-      { db, runMutation: mock(async () => undefined) } as any,
+      { db } as any,
       {
         input: {
           model: 'users',
@@ -269,6 +312,12 @@ describe('updateManyHandler', () => {
           ],
         },
         paginationOpts: { cursor: null, numItems: 100 },
+        tableTriggers: {
+          change,
+          update: {
+            after,
+          },
+        } as any,
       },
       schema,
       betterAuthSchemaUniqueEmail
@@ -276,80 +325,82 @@ describe('updateManyHandler', () => {
 
     expect(store.get('user-1')?.name).toBe('updated');
     expect(store.get('user-2')?.name).toBe('updated');
+    expect(after).toHaveBeenCalledTimes(2);
+    expect(change).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({
       count: 2,
       ids: ['user-1', 'user-2'],
       isDone: true,
     });
   });
-
-  test('does not patch when input.update is missing', async () => {
-    const { db, store } = createMemoryCtx({
-      'user-1': { _id: 'user-1', email: 'a@b.com', name: 'alice' },
-      'user-2': { _id: 'user-2', email: 'c@d.com', name: 'bob' },
-    });
-    const patchSpy = spyOn(db, 'patch');
-
-    const result = await updateManyHandler(
-      { db, runMutation: mock(async () => undefined) } as any,
-      {
-        input: {
-          model: 'users',
-          where: [
-            { field: '_id', operator: 'in', value: ['user-1', 'user-2'] },
-          ],
-        },
-        paginationOpts: { cursor: null, numItems: 100 },
-      },
-      schema,
-      betterAuthSchemaUniqueEmail
-    );
-
-    expect(patchSpy).not.toHaveBeenCalled();
-    expect(store.get('user-1')?.name).toBe('alice');
-    expect(store.get('user-2')?.name).toBe('bob');
-    expect(result).toMatchObject({ count: 2, ids: ['user-1', 'user-2'] });
-  });
 });
 
 describe('deleteOneHandler', () => {
-  test('runs hooks and returns the hookDoc that was deleted', async () => {
+  test('runs delete.before/delete.after/change and returns deleted hook doc', async () => {
     const { db, store } = createMemoryCtx({
       'user-1': { _id: 'user-1', email: 'a@b.com', name: 'alice' },
     });
 
-    const mutationCalls: Array<{ args: any; handle: string }> = [];
-    const runMutation = mock(async (handle: string, args: any) => {
-      mutationCalls.push({ args, handle });
-      if (handle === 'before-delete') {
-        return { ...args.doc, name: 'transformed' };
-      }
-    });
+    const before = mock(async (doc: any) => ({
+      data: { ...doc, name: 'transformed' },
+    }));
+    const after = mock(async () => undefined);
+    const change = mock(async () => undefined);
 
     const deleted = await deleteOneHandler(
-      { db, runMutation } as any,
+      { db } as any,
       {
-        beforeDeleteHandle: 'before-delete',
         input: {
           model: 'users',
           where: [{ field: '_id', operator: 'eq', value: 'user-1' }],
         },
-        onDeleteHandle: 'on-delete',
+        tableTriggers: {
+          change,
+          delete: {
+            after,
+            before,
+          },
+        } as any,
       },
       schema,
       betterAuthSchema
     );
 
-    expect(deleted).toMatchObject({ _id: 'user-1', name: 'transformed' });
+    expect(deleted).toMatchObject({
+      _id: 'user-1',
+      id: 'user-1',
+      name: 'transformed',
+    });
     expect(store.get('user-1')).toBeUndefined();
-    expect(mutationCalls[0]).toMatchObject({ handle: 'before-delete' });
-    expect(mutationCalls[1]).toMatchObject({ handle: 'on-delete' });
+    expect(after).toHaveBeenCalledWith(
+      {
+        _id: 'user-1',
+        email: 'a@b.com',
+        id: 'user-1',
+        name: 'transformed',
+      },
+      expect.anything()
+    );
+    expect(change).toHaveBeenCalledWith(
+      {
+        id: 'user-1',
+        newDoc: null,
+        oldDoc: {
+          _id: 'user-1',
+          email: 'a@b.com',
+          id: 'user-1',
+          name: 'transformed',
+        },
+        operation: 'delete',
+      },
+      expect.anything()
+    );
   });
 
   test('returns undefined when no document matches', async () => {
     const { db } = createMemoryCtx({});
     const deleted = await deleteOneHandler(
-      { db, runMutation: mock(async () => undefined) } as any,
+      { db } as any,
       {
         input: {
           model: 'users',
@@ -371,8 +422,11 @@ describe('deleteManyHandler', () => {
       'user-2': { _id: 'user-2', email: 'c@d.com', name: 'bob' },
     });
 
+    const after = mock(async () => undefined);
+    const change = mock(async () => undefined);
+
     const result = await deleteManyHandler(
-      { db, runMutation: mock(async () => undefined) } as any,
+      { db } as any,
       {
         input: {
           model: 'users',
@@ -381,12 +435,20 @@ describe('deleteManyHandler', () => {
           ],
         },
         paginationOpts: { cursor: null, numItems: 100 },
+        tableTriggers: {
+          change,
+          delete: {
+            after,
+          },
+        } as any,
       },
       schema,
       betterAuthSchema
     );
 
     expect(store.size).toBe(0);
+    expect(after).toHaveBeenCalledTimes(2);
+    expect(change).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({
       count: 2,
       ids: ['user-1', 'user-2'],

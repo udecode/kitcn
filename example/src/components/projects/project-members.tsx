@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiOutputs } from '@convex/types';
+import type { ApiOutputs } from '@convex/api';
 import { useMutation } from '@tanstack/react-query';
 import {
   Crown,
@@ -240,7 +240,10 @@ export function ProjectMembers({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground text-xs">
-                Joined {new Date(member.joinedAt).toLocaleDateString()}
+                Joined{' '}
+                {member.joinedAt
+                  ? new Date(member.joinedAt).toLocaleDateString()
+                  : 'Unknown'}
               </span>
               {isOwner && (
                 <DropdownMenu>

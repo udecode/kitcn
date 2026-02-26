@@ -233,9 +233,10 @@ function createRecursiveProxy(
  * @example
  * ```tsx
  * import { api } from '@convex/api';
- * import { meta } from '@convex/meta';
  *
- * const crpc = createCRPCOptionsProxy(api, meta);
+ * // Usually you should use createCRPCContext({ api }) instead.
+ * // createCRPCOptionsProxy is a low-level helper.
+ * const crpc = createCRPCOptionsProxy(api, {} as any);
  *
  * function MyComponent() {
  *   const { data } = useQuery(crpc.user.get.queryOptions({ id }));

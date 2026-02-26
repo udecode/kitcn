@@ -11,7 +11,7 @@ import type { HttpProcedure } from './http-types';
  * ```ts
  * import type { WithHttpRouter } from 'better-convex/server';
  *
- * export type AppRouter = WithHttpRouter<typeof api, typeof appRouter>;
+ * export type AppRouter = WithHttpRouter<typeof api, typeof httpRouter>;
  * export type ApiInputs = inferApiInputs<AppRouter>;
  * // ApiInputs['http']['todos']['create'] works
  * ```
@@ -20,6 +20,11 @@ export type WithHttpRouter<TApi, TRouter> = TApi & { http?: TRouter };
 
 /** Helper to unwrap optional/nullable types for inference */
 type UnwrapOptional<T> = T extends undefined ? never : NonNullable<T>;
+type PublicApiKey<K> = K extends string
+  ? K extends `_${string}`
+    ? never
+    : K
+  : K;
 
 /** Recursive output inference that handles optional properties */
 type InferOutputsRecursive<T> =
@@ -42,7 +47,7 @@ type InferOutputsRecursive<T> =
  * import { api } from '@convex/api';
  * import type { inferApiOutputs } from 'better-convex/server';
  *
- * type AppRouter = typeof api & { http?: typeof appRouter };
+ * type AppRouter = typeof api & { http?: typeof httpRouter };
  * type ApiOutputs = inferApiOutputs<AppRouter>;
  *
  * type LinkData = ApiOutputs['scraper']['scrapeLink'];
@@ -50,7 +55,9 @@ type InferOutputsRecursive<T> =
  * ```
  */
 export type inferApiOutputs<TApi> = {
-  [K in keyof TApi]-?: InferOutputsRecursive<UnwrapOptional<TApi[K]>>;
+  [K in keyof TApi as PublicApiKey<K>]-?: InferOutputsRecursive<
+    UnwrapOptional<TApi[K]>
+  >;
 };
 
 /** Recursive input inference that handles optional properties */
@@ -74,7 +81,7 @@ type InferInputsRecursive<T> =
  * import { api } from '@convex/api';
  * import type { inferApiInputs } from 'better-convex/server';
  *
- * type AppRouter = typeof api & { http?: typeof appRouter };
+ * type AppRouter = typeof api & { http?: typeof httpRouter };
  * type ApiInputs = inferApiInputs<AppRouter>;
  *
  * type ScrapeLinkInput = ApiInputs['scraper']['scrapeLink'];
@@ -82,5 +89,7 @@ type InferInputsRecursive<T> =
  * ```
  */
 export type inferApiInputs<TApi> = {
-  [K in keyof TApi]-?: InferInputsRecursive<UnwrapOptional<TApi[K]>>;
+  [K in keyof TApi as PublicApiKey<K>]-?: InferInputsRecursive<
+    UnwrapOptional<TApi[K]>
+  >;
 };

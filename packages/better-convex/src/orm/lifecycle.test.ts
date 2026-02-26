@@ -1,9 +1,11 @@
 import type { GenericDatabaseWriter } from 'convex/server';
 import { describe, expect, test } from 'vitest';
+import { createAggregate } from './aggregate';
 import { text } from './builders/text';
 import { createOrm } from './create-orm';
 import { defineRelations } from './relations';
-import { convexTable, onChange, onDelete, onInsert, onUpdate } from './table';
+import { convexTable } from './table';
+import { defineTriggers, TriggerCancelledError } from './triggers';
 
 const createWriter = () => {
   const docs = new Map<string, Record<string, unknown>>();
@@ -61,34 +63,49 @@ const createWriter = () => {
   };
 };
 
+const createUsersSchema = (
+  tableName: string,
+  columns: Record<string, unknown>,
+  hooks: Record<string, unknown>
+) => {
+  const users = convexTable(tableName, columns as any);
+  const schema = defineRelations({ users });
+  const triggers = defineTriggers(schema, {
+    users: hooks as any,
+  });
+  return { users, schema, triggers };
+};
+
 describe('orm lifecycle hooks', () => {
-  test('orm.with(ctx) wraps raw db writes and dispatches lifecycle hooks', async () => {
+  test('orm.with(ctx) wraps raw db writes and dispatches operation hooks', async () => {
     const events: string[] = [];
 
-    const users = convexTable(
+    const { schema, triggers } = createUsersSchema(
       'users_lifecycle_test',
+      { name: text().notNull() },
       {
-        name: text().notNull(),
-      },
-      () => [
-        onInsert(async (_ctx, change) => {
-          events.push(`insert:${change.newDoc.name}`);
-        }),
-        onUpdate(async (_ctx, change) => {
-          events.push(`update:${change.newDoc.name}`);
-        }),
-        onDelete(async (_ctx, change) => {
-          events.push(`delete:${change.oldDoc.name}`);
-        }),
-        onChange(async (_ctx, change) => {
+        create: {
+          after: async (doc: { name: string }) => {
+            events.push(`create:${doc.name}`);
+          },
+        },
+        update: {
+          after: async (doc: { name: string }) => {
+            events.push(`update:${doc.name}`);
+          },
+        },
+        delete: {
+          after: async (doc: { name: string }) => {
+            events.push(`delete:${doc.name}`);
+          },
+        },
+        change: async (change: { operation: string }) => {
           events.push(`change:${change.operation}`);
-        }),
-      ]
+        },
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
-
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -103,7 +120,7 @@ describe('orm lifecycle hooks', () => {
     await ctx.db.delete('users_lifecycle_test', id as any);
 
     expect(events).toEqual([
-      'insert:Ada',
+      'create:Ada',
       'change:insert',
       'update:Grace',
       'change:update',
@@ -112,24 +129,126 @@ describe('orm lifecycle hooks', () => {
     ]);
   });
 
-  test('orm.db(ctx) runs lifecycle hooks for ORM writes', async () => {
+  test('orm.withoutTriggers bypasses trigger hooks for scoped writes', async () => {
     const events: string[] = [];
-
-    const users = convexTable(
-      'users_lifecycle_orm_write_test',
+    const { users, schema, triggers } = createUsersSchema(
+      'users_lifecycle_without_triggers_test',
+      { name: text().notNull() },
       {
-        name: text().notNull(),
-      },
-      () => [
-        onInsert(async (_ctx, change) => {
-          events.push(`insert:${change.newDoc.name}`);
-        }),
-      ]
+        create: {
+          after: async (doc: { name: string }) => {
+            events.push(`create:${doc.name}`);
+          },
+        },
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    const orm = createOrm({ schema, triggers });
+    const { writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
 
+    await ctx.orm.insert(users).values({ name: 'with-triggers' }).returning();
+    expect(events).toEqual(['create:with-triggers']);
+
+    await ctx.orm.withoutTriggers(async (ormNoTriggers: typeof ctx.orm) => {
+      await ormNoTriggers
+        .insert(users)
+        .values({ name: 'without-triggers' })
+        .returning();
+    });
+
+    expect(events).toEqual(['create:with-triggers']);
+  });
+
+  test('hook docs include public id alias when storage only exposes _id', async () => {
+    const events: Array<{ hook: string; id: unknown; _id: unknown }> = [];
+
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_public_id_alias_test',
+      { name: text().notNull() },
+      {
+        create: {
+          after: async (doc: { id?: string; _id?: string }) => {
+            events.push({ hook: 'create', id: doc.id, _id: doc._id });
+          },
+        },
+        update: {
+          after: async (doc: { id?: string; _id?: string }) => {
+            events.push({ hook: 'update', id: doc.id, _id: doc._id });
+          },
+        },
+        delete: {
+          after: async (doc: { id?: string; _id?: string }) => {
+            events.push({ hook: 'delete', id: doc.id, _id: doc._id });
+          },
+        },
+        change: async (change: {
+          operation: 'insert' | 'update' | 'delete';
+          oldDoc: { id?: string; _id?: string } | null;
+          newDoc: { id?: string; _id?: string } | null;
+        }) => {
+          if (change.operation === 'delete') {
+            events.push({
+              hook: 'change:delete',
+              id: change.oldDoc?.id,
+              _id: change.oldDoc?._id,
+            });
+            return;
+          }
+          events.push({
+            hook: `change:${change.operation}`,
+            id: change.newDoc?.id,
+            _id: change.newDoc?._id,
+          });
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
+    const { writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    const id = await ctx.db.insert('users_lifecycle_public_id_alias_test', {
+      name: 'Ada',
+    } as any);
+    await ctx.db.patch(
+      'users_lifecycle_public_id_alias_test',
+      id as any,
+      { name: 'Grace' } as any
+    );
+    await ctx.db.delete('users_lifecycle_public_id_alias_test', id as any);
+
+    expect(events).toEqual([
+      { hook: 'create', id, _id: id },
+      { hook: 'change:insert', id, _id: id },
+      { hook: 'update', id, _id: id },
+      { hook: 'change:update', id, _id: id },
+      { hook: 'delete', id, _id: id },
+      { hook: 'change:delete', id, _id: id },
+    ]);
+  });
+
+  test('orm.db(ctx) runs hooks for ORM writes and forwards ctx.orm', async () => {
+    let seenOrm = false;
+    const events: string[] = [];
+
+    const { users, schema, triggers } = createUsersSchema(
+      'users_lifecycle_orm_write_test',
+      { name: text().notNull() },
+      {
+        create: {
+          after: async (
+            doc: { name: string },
+            ctx: Record<string, unknown>
+          ) => {
+            seenOrm = !!ctx.orm;
+            events.push(`create:${doc.name}`);
+          },
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const db = orm.db(writer as unknown as GenericDatabaseWriter<any>);
 
@@ -138,118 +257,220 @@ describe('orm lifecycle hooks', () => {
       .values({ name: 'Ada' } as any)
       .execute();
 
-    expect(events).toEqual(['insert:Ada']);
+    expect(events).toEqual(['create:Ada']);
+    expect(seenOrm).toBe(true);
   });
 
-  test('trigger-like callback dispatches insert/update/delete lifecycle changes', async () => {
+  test('ctx.orm writes inside hooks do not deadlock', async () => {
     const events: string[] = [];
 
-    const users = convexTable(
-      'users_lifecycle_trigger_like_test',
+    const { users, schema, triggers } = createUsersSchema(
+      'users_lifecycle_ctx_orm_nested_write_test',
+      { name: text().notNull() },
       {
-        name: text().notNull(),
-      },
-      () => [
-        async (_ctx: unknown, change: any) => {
-          events.push(change.operation);
-          if (change.operation === 'insert') {
-            events.push(`new:${change.newDoc?.name}`);
-          }
-          if (change.operation === 'update') {
-            events.push(
-              `update:${change.oldDoc?.name}->${change.newDoc?.name}`
-            );
-          }
-          if (change.operation === 'delete') {
-            events.push(`old:${change.oldDoc?.name}`);
-          }
+        create: {
+          after: async (
+            doc: { id: string; name: string },
+            ctx: Record<string, unknown>
+          ) => {
+            events.push(`create:${doc.name}`);
+            if (doc.name !== 'Ada') {
+              return;
+            }
+            await (ctx.orm as any).insert(users).values({
+              name: 'Grace',
+            });
+          },
         },
-      ]
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    const orm = createOrm({ schema, triggers });
+    const { docs, writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    await ctx.db.insert('users_lifecycle_ctx_orm_nested_write_test', {
+      name: 'Ada',
+    } as any);
+
+    expect(events).toEqual(['create:Ada', 'create:Grace']);
+    expect(docs.size).toBe(2);
+  });
+
+  test('create.before can merge insert payload', async () => {
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_before_create_merge_test',
+      {
+        name: text().notNull(),
+        email: text(),
+      },
+      {
+        create: {
+          before: async (data: { name: string; email?: string }) => ({
+            data: {
+              name: data.name.trim(),
+              email: 'trimmed@example.com',
+            },
+          }),
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
-    const id = await ctx.db.insert('users_lifecycle_trigger_like_test', {
+    const id = await ctx.db.insert('users_lifecycle_before_create_merge_test', {
+      name: '  Ada  ',
+    } as any);
+    const inserted = await writer.get(
+      'users_lifecycle_before_create_merge_test',
+      id as any
+    );
+
+    expect(inserted).toMatchObject({
+      _id: id,
+      name: 'Ada',
+      email: 'trimmed@example.com',
+    });
+  });
+
+  test('update.before can merge patch payload', async () => {
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_before_update_merge_test',
+      {
+        name: text().notNull(),
+        touched: text(),
+      },
+      {
+        update: {
+          before: async (data: { name?: string; touched?: string }) => ({
+            data: {
+              name: data.name?.toUpperCase(),
+              touched: 'yes',
+            },
+          }),
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
+    const { writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    const id = await ctx.db.insert('users_lifecycle_before_update_merge_test', {
       name: 'Ada',
     } as any);
     await ctx.db.patch(
-      'users_lifecycle_trigger_like_test',
+      'users_lifecycle_before_update_merge_test',
       id as any,
-      { name: 'Grace' } as any
+      { name: 'grace' } as any
     );
-    await ctx.db.delete('users_lifecycle_trigger_like_test', id as any);
+    const updated = await writer.get(
+      'users_lifecycle_before_update_merge_test',
+      id as any
+    );
 
-    expect(events).toEqual([
-      'insert',
-      'new:Ada',
-      'update',
-      'update:Ada->Grace',
-      'delete',
-      'old:Grace',
-    ]);
+    expect(updated).toMatchObject({
+      _id: id,
+      name: 'GRACE',
+      touched: 'yes',
+    });
   });
 
-  test('supports multiple trigger-like callbacks on the same table', async () => {
-    const events: string[] = [];
-
-    const users = convexTable(
-      'users_lifecycle_multi_trigger_like_test',
+  test('create.before can cancel writes by returning false', async () => {
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_before_create_cancel_test',
+      { name: text().notNull() },
       {
-        name: text().notNull(),
-      },
-      () => [
-        async (_ctx: unknown, change: { operation: string }) => {
-          events.push(`a:${change.operation}`);
+        create: {
+          before: async () => false,
         },
-        async (_ctx: unknown, change: { operation: string }) => {
-          events.push(`b:${change.operation}`);
-        },
-      ]
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    const orm = createOrm({ schema, triggers });
+    const { docs, writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    await expect(
+      ctx.db.insert('users_lifecycle_before_create_cancel_test', {
+        name: 'Ada',
+      } as any)
+    ).rejects.toBeInstanceOf(TriggerCancelledError);
+    expect(docs.size).toBe(0);
+  });
+
+  test('update.before can cancel writes by returning false', async () => {
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_before_update_cancel_test',
+      { name: text().notNull() },
+      {
+        update: {
+          before: async () => false,
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
-    const id = await ctx.db.insert('users_lifecycle_multi_trigger_like_test', {
-      name: 'Ada',
-    } as any);
-    await ctx.db.delete('users_lifecycle_multi_trigger_like_test', id as any);
-
-    expect(events).toEqual(['a:insert', 'b:insert', 'a:delete', 'b:delete']);
-  });
-
-  test('raw db writes do not run hooks without orm.with(ctx)', async () => {
-    const events: string[] = [];
-
-    const users = convexTable(
-      'users_lifecycle_unwrapped_test',
+    const id = await ctx.db.insert(
+      'users_lifecycle_before_update_cancel_test',
       {
-        name: text().notNull(),
-      },
-      () => [
-        onInsert(async (_ctx, change) => {
-          events.push(`insert:${change.newDoc.name}`);
-        }),
-      ]
+        name: 'Ada',
+      } as any
     );
 
-    const schema = defineRelations({ users });
-    createOrm({ schema });
+    await expect(
+      ctx.db.patch(
+        'users_lifecycle_before_update_cancel_test',
+        id as any,
+        { name: 'Grace' } as any
+      )
+    ).rejects.toBeInstanceOf(TriggerCancelledError);
 
-    const { writer } = createWriter();
-    await writer.insert('users_lifecycle_unwrapped_test', {
-      name: 'Ada',
-    } as any);
-
-    expect(events).toEqual([]);
+    const doc = await writer.get(
+      'users_lifecycle_before_update_cancel_test',
+      id as any
+    );
+    expect(doc).toMatchObject({ _id: id, name: 'Ada' });
   });
 
-  test('onChange receives operation-aware payload shape and stable id', async () => {
+  test('delete.before can cancel writes by returning false', async () => {
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_before_delete_cancel_test',
+      { name: text().notNull() },
+      {
+        delete: {
+          before: async () => false,
+        },
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
+    const { writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    const id = await ctx.db.insert(
+      'users_lifecycle_before_delete_cancel_test',
+      {
+        name: 'Ada',
+      } as any
+    );
+    await expect(
+      ctx.db.delete('users_lifecycle_before_delete_cancel_test', id as any)
+    ).rejects.toBeInstanceOf(TriggerCancelledError);
+
+    const doc = await writer.get(
+      'users_lifecycle_before_delete_cancel_test',
+      id as any
+    );
+    expect(doc).toMatchObject({ _id: id, name: 'Ada' });
+  });
+
+  test('change receives operation-aware payload shape and stable id', async () => {
     const changes: Array<{
       id: unknown;
       operation: 'insert' | 'update' | 'delete';
@@ -257,20 +478,17 @@ describe('orm lifecycle hooks', () => {
       newDoc: any;
     }> = [];
 
-    const users = convexTable(
+    const { schema, triggers } = createUsersSchema(
       'users_lifecycle_change_shape_test',
+      { name: text().notNull() },
       {
-        name: text().notNull(),
-      },
-      () => [
-        onChange(async (_ctx, change) => {
-          changes.push(change as any);
-        }),
-      ]
+        change: async (change: any) => {
+          changes.push(change);
+        },
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -305,7 +523,56 @@ describe('orm lifecycle hooks', () => {
     });
   });
 
-  test('forwards scheduler and custom context fields to triggers', async () => {
+  test('wrapped aggregate trigger can be used directly as change hook', async () => {
+    const events: string[] = [];
+
+    const aggregate = createAggregate({
+      trigger:
+        () =>
+        async (
+          _ctx: { db: unknown },
+          change: { operation: 'insert' | 'update' | 'delete' }
+        ) => {
+          events.push(`aggregate:${change.operation}`);
+        },
+    });
+
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_wrapped_aggregate_trigger_test',
+      { name: text().notNull() },
+      {
+        change: aggregate.trigger,
+      }
+    );
+
+    const orm = createOrm({ schema, triggers });
+    const { writer } = createWriter();
+    const ctx = orm.with({ db: writer } as any);
+
+    const id = await ctx.db.insert(
+      'users_lifecycle_wrapped_aggregate_trigger_test',
+      {
+        name: 'Ada',
+      } as any
+    );
+    await ctx.db.patch(
+      'users_lifecycle_wrapped_aggregate_trigger_test',
+      id as any,
+      { name: 'Grace' } as any
+    );
+    await ctx.db.delete(
+      'users_lifecycle_wrapped_aggregate_trigger_test',
+      id as any
+    );
+
+    expect(events).toEqual([
+      'aggregate:insert',
+      'aggregate:update',
+      'aggregate:delete',
+    ]);
+  });
+
+  test('forwards scheduler and custom context fields to hooks', async () => {
     const runAfterCalls: Array<{ delayMs: number; payload: unknown }> = [];
     const scheduler = {
       runAfter: async (
@@ -317,27 +584,28 @@ describe('orm lifecycle hooks', () => {
       },
     };
 
-    const users = convexTable(
+    const { schema, triggers } = createUsersSchema(
       'users_lifecycle_scheduler_test',
       {
         name: text().notNull(),
       },
-      () => [
-        onInsert(async (ctx, change) => {
-          expect((ctx as any).requestId).toBe('req-1');
-          await (ctx as any).scheduler.runAfter(
-            0,
-            'internal.user.sendWelcomeEmail',
-            {
-              userId: change.id,
-            }
-          );
-        }),
-      ]
+      {
+        create: {
+          after: async (doc: { _id: string }, ctx: Record<string, unknown>) => {
+            expect(ctx.requestId).toBe('req-1');
+            await (ctx.scheduler as any).runAfter(
+              0,
+              'internal.user.sendWelcomeEmail',
+              {
+                userId: doc._id,
+              }
+            );
+          },
+        },
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer, requestId: 'req-1', scheduler } as any);
 
@@ -353,51 +621,50 @@ describe('orm lifecycle hooks', () => {
     ]);
   });
 
-  test('forwards ctx.orm to trigger handlers on orm.with(ctx)', async () => {
-    let seenOrm = false;
+  test('raw db writes do not run hooks without orm.with(ctx)', async () => {
+    const events: string[] = [];
 
-    const users = convexTable(
-      'users_lifecycle_ctx_orm_test',
+    const { schema, triggers } = createUsersSchema(
+      'users_lifecycle_unwrapped_test',
       {
         name: text().notNull(),
       },
-      () => [
-        onInsert(async (ctx) => {
-          seenOrm = !!(ctx as any).orm;
-        }),
-      ]
+      {
+        create: {
+          after: async (doc: { name: string }) => {
+            events.push(`create:${doc.name}`);
+          },
+        },
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    createOrm({ schema, triggers });
     const { writer } = createWriter();
-    const ctx = orm.with({ db: writer } as any);
-
-    await ctx.db.insert('users_lifecycle_ctx_orm_test', {
+    await writer.insert('users_lifecycle_unwrapped_test', {
       name: 'Ada',
     } as any);
 
-    expect(seenOrm).toBe(true);
+    expect(events).toEqual([]);
   });
 
-  test('trigger errors propagate to caller', async () => {
-    const users = convexTable(
+  test('hook errors propagate to caller', async () => {
+    const { schema, triggers } = createUsersSchema(
       'users_lifecycle_validation_test',
       {
         email: text().notNull(),
       },
-      () => [
-        onInsert(async (_ctx, change) => {
-          const email = (change.newDoc as { email: string }).email;
-          if (!email.includes('@')) {
-            throw new Error(`Invalid email: ${email}`);
-          }
-        }),
-      ]
+      {
+        create: {
+          before: async (data: { email: string }) => {
+            if (!data.email.includes('@')) {
+              throw new Error(`Invalid email: ${data.email}`);
+            }
+          },
+        },
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -408,35 +675,40 @@ describe('orm lifecycle hooks', () => {
     ).rejects.toThrow('Invalid email: invalid-email');
   });
 
-  test('innerDb is available for direct writes without recursive trigger dispatch', async () => {
+  test('innerDb is available for direct writes without recursive hook dispatch', async () => {
     const events: string[] = [];
 
-    const users = convexTable(
+    const { schema, triggers } = createUsersSchema(
       'users_lifecycle_innerdb_test',
       {
         name: text().notNull(),
         touched: text(),
       },
-      () => [
-        onInsert(async (ctx, change) => {
-          events.push('insert');
-          await (ctx as any).innerDb.patch(
-            'users_lifecycle_innerdb_test',
-            change.id as any,
-            { touched: 'yes' } as any
-          );
-        }),
-        onUpdate(async () => {
-          events.push('update');
-        }),
-        onChange(async (_ctx, change) => {
+      {
+        create: {
+          after: async (doc: { _id: string }, ctx: Record<string, unknown>) => {
+            events.push('create');
+            await (ctx.innerDb as any).patch(
+              'users_lifecycle_innerdb_test',
+              doc._id,
+              {
+                touched: 'yes',
+              }
+            );
+          },
+        },
+        update: {
+          after: async () => {
+            events.push('update');
+          },
+        },
+        change: async (change: { operation: string }) => {
           events.push(`change:${change.operation}`);
-        }),
-      ]
+        },
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -446,37 +718,45 @@ describe('orm lifecycle hooks', () => {
     const doc = await writer.get('users_lifecycle_innerdb_test', id as any);
 
     expect(doc).toMatchObject({ _id: id, name: 'Ada', touched: 'yes' });
-    expect(events).toEqual(['insert', 'change:insert']);
+    expect(events).toEqual(['create', 'change:insert']);
   });
 
-  test('trigger handlers can enqueue recursive writes for cascade-style updates', async () => {
+  test('hooks can enqueue recursive writes with stable queue order', async () => {
     const events: string[] = [];
 
-    const users = convexTable(
+    const { schema, triggers } = createUsersSchema(
       'users_lifecycle_recursive_test',
       {
         name: text().notNull(),
       },
-      () => [
-        onInsert(async (ctx, change) => {
-          events.push(`insert:${change.newDoc.name}`);
-          await (ctx as any).db.patch(
-            'users_lifecycle_recursive_test',
-            change.id as any,
-            { name: 'Grace' } as any
-          );
-        }),
-        onUpdate(async (_ctx, change) => {
-          events.push(`update:${change.oldDoc.name}->${change.newDoc.name}`);
-        }),
-        onChange(async (_ctx, change) => {
+      {
+        create: {
+          after: async (
+            doc: { _id: string; name: string },
+            ctx: Record<string, unknown>
+          ) => {
+            events.push(`create:${doc.name}`);
+            await (ctx.db as any).patch(
+              'users_lifecycle_recursive_test',
+              doc._id,
+              {
+                name: 'Grace',
+              }
+            );
+          },
+        },
+        update: {
+          after: async (doc: { name: string }) => {
+            events.push(`update:${doc.name}`);
+          },
+        },
+        change: async (change: any) => {
           events.push(`change:${change.operation}`);
-        }),
-      ]
+        },
+      }
     );
 
-    const schema = defineRelations({ users });
-    const orm = createOrm({ schema });
+    const orm = createOrm({ schema, triggers });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -485,9 +765,9 @@ describe('orm lifecycle hooks', () => {
     } as any);
 
     expect(events).toEqual([
-      'insert:Ada',
+      'create:Ada',
       'change:insert',
-      'update:Ada->Grace',
+      'update:Grace',
       'change:update',
     ]);
   });

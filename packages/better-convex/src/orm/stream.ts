@@ -479,6 +479,27 @@ export abstract class QueryStream<T extends GenericStreamItem>
  */
 export interface GenericOrderedQuery<T> extends AsyncIterable<T> {
   /**
+   * Execute the query and return all of the results as an array.
+   *
+   * Note: when processing a query with a lot of results, it's often better to use the `Query` as an
+   * `AsyncIterable` instead.
+   *
+   * @returns - An array of all of the query's results.
+   */
+  collect(): Promise<T[]>;
+
+  /**
+   * Not supported. Use `filterWith` instead.
+   */
+  filter(predicate: any): this;
+
+  /**
+   * Execute the query and return the first result if there is one.
+   *
+   * @returns - The first value of the query or `null` if the query returned no results.
+   */
+  first(): Promise<T | null>;
+  /**
    * Load a page of `n` results and obtain a {@link Cursor} for loading more.
    *
    * Note: If this is called from a reactive query function the number of
@@ -496,16 +517,6 @@ export interface GenericOrderedQuery<T> extends AsyncIterable<T> {
   paginate(paginationOpts: StreamPaginateOptions): Promise<PaginationResult<T>>;
 
   /**
-   * Execute the query and return all of the results as an array.
-   *
-   * Note: when processing a query with a lot of results, it's often better to use the `Query` as an
-   * `AsyncIterable` instead.
-   *
-   * @returns - An array of all of the query's results.
-   */
-  collect(): Promise<T[]>;
-
-  /**
    * Execute the query and return the first `n` results.
    *
    * @param n - The number of items to take.
@@ -515,24 +526,12 @@ export interface GenericOrderedQuery<T> extends AsyncIterable<T> {
   take(n: number): Promise<T[]>;
 
   /**
-   * Execute the query and return the first result if there is one.
-   *
-   * @returns - The first value of the query or `null` if the query returned no results.
-   */
-  first(): Promise<T | null>;
-
-  /**
    * Execute the query and return the singular result if there is one.
    *
    * @returns - The single result returned from the query or null if none exists.
    * @throws  Will throw an error if the query returns more than one result.
    */
   unique(): Promise<T | null>;
-
-  /**
-   * Not supported. Use `filterWith` instead.
-   */
-  filter(predicate: any): this;
 }
 
 export class StreamDatabaseReader<

@@ -8,7 +8,6 @@
 import { type GetTokenOptions, getToken } from '@convex-dev/better-auth/utils';
 
 import { defaultIsUnauthorized } from '../crpc/error';
-import type { CallerMeta } from '../server/caller';
 import { createCallerFactory } from '../server/caller-factory';
 
 const handler = (request: Request, siteUrl: string) => {
@@ -40,7 +39,6 @@ type ConvexBetterAuthOptions<TApi> = Omit<GetTokenOptions, 'jwtCache'> & {
   convexSiteUrl: string;
   /** Auth options. JWT caching is enabled by default (set `auth.jwtCache: false` to disable). */
   auth?: AuthOptions;
-  meta: CallerMeta;
 };
 
 /**
@@ -52,7 +50,6 @@ type ConvexBetterAuthOptions<TApi> = Omit<GetTokenOptions, 'jwtCache'> & {
  * export const { createContext, createCaller, handler } = convexBetterAuth({
  *   api,
  *   convexSiteUrl: env.NEXT_PUBLIC_CONVEX_SITE_URL,
- *   meta,
  * }); // JWT caching enabled by default
  *
  * // rsc.tsx
@@ -90,7 +87,6 @@ export function convexBetterAuth<TApi extends Record<string, unknown>>(
           isUnauthorized: auth.isUnauthorized ?? defaultIsUnauthorized,
         }
       : undefined,
-    meta: opts.meta,
   });
 
   return {

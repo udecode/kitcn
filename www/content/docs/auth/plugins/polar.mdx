@@ -15,7 +15,7 @@ Payment and subscription system with [Better Auth's Polar plugin](https://www.be
 
 | Feature | Description |
 |---------|-------------|
-| Checkout | Seamless payment flows |
+| Checkout | Payment flows |
 | Subscriptions | Recurring billing management |
 | Portal | Customer self-service |
 | Usage billing | Event-based metering |
@@ -62,17 +62,17 @@ export const getPolarClient = () =>
 
 ### Better Auth with Polar Plugin
 
-```ts title="convex/functions/auth.ts" showLineNumbers {2,5-6,11-53}
+```ts title="convex/functions/auth.ts" showLineNumbers {2,7-8,10-53}
 // IMPORTANT: Import polyfills FIRST
 import '../lib/polar-polyfills';
 
 import { checkout, polar, portal, usage, webhooks } from '@polar-sh/better-auth';
 import { Polar } from '@polar-sh/sdk';
-import type { ActionCtx } from './_generated/server';
-import { internal } from './_generated/api';
+import { createPolarCustomerCaller } from './generated/polarCustomer.runtime';
+import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
+import { defineAuth } from './generated/auth';
 
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+export default defineAuth((ctx) => ({
     // ... existing config
     plugins: [
       polar({
@@ -100,54 +100,60 @@ const getAuthOptions = (ctx: GenericCtx) =>
               const userId = payload?.data.externalId;
               if (!userId) return;
 
-              await (ctx as ActionCtx).runMutation(
-                internal.polarCustomer.updateUserPolarCustomerId,
-                { customerId: payload.data.id, userId }
-              );
+              const caller = createPolarCustomerCaller(ctx);
+              await caller.updateUserPolarCustomerId({
+                customerId: payload.data.id, userId,
+              });
             },
             onSubscriptionCreated: async (payload) => {
               if (!payload.data.customer.externalId) return;
 
-              await (ctx as ActionCtx).runMutation(
-                internal.polarSubscription.createSubscription,
-                { subscription: convertToDatabaseSubscription(payload.data) }
-              );
+              const caller = createPolarSubscriptionCaller(ctx);
+              await caller.createSubscription({
+                subscription: convertToDatabaseSubscription(payload.data),
+              });
             },
             onSubscriptionUpdated: async (payload) => {
               if (!payload.data.customer.externalId) return;
 
-              await (ctx as ActionCtx).runMutation(
-                internal.polarSubscription.updateSubscription,
-                { subscription: convertToDatabaseSubscription(payload.data) }
-              );
+              const caller = createPolarSubscriptionCaller(ctx);
+              await caller.updateSubscription({
+                subscription: convertToDatabaseSubscription(payload.data),
+              });
             },
           }),
         ],
       }),
     ],
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ### Customer Creation via Trigger
 
 Create Polar customer asynchronously when user signs up:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {5-11}
-export const authClient = createClient<DataModel, typeof schema>({
+```ts title="convex/functions/auth.ts" showLineNumbers {1-2,7-12}
+import { defineAuth } from './generated/auth';
+import { createPolarCustomerCaller } from './generated/polarCustomer.runtime';
+
+export default defineAuth((ctx) => ({
   // ... config
   triggers: {
     user: {
-      onCreate: async (ctx, user) => {
-        // Create Polar customer via scheduler
-        await ctx.scheduler.runAfter(0, internal.polarCustomer.createCustomer, {
-          email: user.email,
-          name: user.name || user.username,
-          userId: user.id,
-        });
+      create: {
+        after: async (user, triggerCtx) => {
+          // Create Polar customer via caller from defineAuth closure ctx
+          const caller = createPolarCustomerCaller(ctx);
+          await caller.schedule.now.createCustomer({
+            email: user.email,
+            name: user.name || user.username,
+            userId: user.id,
+          });
+        },
       },
     },
   },
-});
+}));
 ```
 
 ## 3. Client Configuration
@@ -262,7 +268,7 @@ export const convertToDatabaseSubscription = (
 
 ## Checkout Plugin
 
-Enable seamless checkout integration:
+Configure checkout:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {1-9}
 checkout({
@@ -426,54 +432,9 @@ const { data: customerMeters } = await authClient.usage.meters.list({
 
 ## Webhooks Plugin
 
-Handle all Polar webhook events:
+The `webhooks()` plugin verifies Polar webhook signatures and routes events to typed handler callbacks. Pass it your `POLAR_WEBHOOK_SECRET` and implement any of the ~20 available event handlers.
 
-```ts title="convex/functions/auth.ts" showLineNumbers {1-2,5-12,15-21,24-35,38-42}
-webhooks({
-  secret: process.env.POLAR_WEBHOOK_SECRET!,
-
-  // Checkout
-  onCheckoutCreated: (payload) => {},
-  onCheckoutUpdated: (payload) => {},
-
-  // Orders
-  onOrderCreated: (payload) => {},
-  onOrderPaid: (payload) => {},
-  onOrderRefunded: (payload) => {},
-
-  // Refunds
-  onRefundCreated: (payload) => {},
-  onRefundUpdated: (payload) => {},
-
-  // Subscriptions
-  onSubscriptionCreated: (payload) => {},
-  onSubscriptionUpdated: (payload) => {},
-  onSubscriptionActive: (payload) => {},
-  onSubscriptionCanceled: (payload) => {},
-  onSubscriptionRevoked: (payload) => {},
-  onSubscriptionUncanceled: (payload) => {},
-
-  // Products
-  onProductCreated: (payload) => {},
-  onProductUpdated: (payload) => {},
-
-  // Benefits
-  onBenefitCreated: (payload) => {},
-  onBenefitUpdated: (payload) => {},
-  onBenefitGrantCreated: (payload) => {},
-  onBenefitGrantUpdated: (payload) => {},
-  onBenefitGrantRevoked: (payload) => {},
-
-  // Customers
-  onCustomerCreated: (payload) => {},
-  onCustomerUpdated: (payload) => {},
-  onCustomerDeleted: (payload) => {},
-  onCustomerStateChanged: (payload) => {},
-
-  // Catch-all
-  onPayload: (payload) => {},
-}),
-```
+For the full list of webhook events, see [API Reference](#webhook-events) below.
 
 ## Convex Functions
 
@@ -491,7 +452,7 @@ import { z } from 'zod';
 import { privateAction, privateMutation } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
 
-// Create Polar customer (called from user.onCreate trigger)
+// Create Polar customer (called from user.create.after trigger)
 export const createCustomer = privateAction
   .input(
     z.object({
@@ -500,7 +461,7 @@ export const createCustomer = privateAction
       userId: z.string(),
     })
   )
-  .output(z.null())
+  
   .action(async ({ input: args }) => {
     const polar = getPolarClient();
 
@@ -525,7 +486,7 @@ export const updateUserPolarCustomerId = privateMutation
       userId: z.string(),
     })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input: args }) => {
     const targetUser = await ctx.orm.query.user.findFirst({
       where: { id: args.userId },
@@ -561,12 +522,12 @@ import { CRPCError } from 'better-convex/server';
 import { z } from 'zod';
 import { authAction, privateMutation, privateQuery } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
-import { internal } from './_generated/api';
+import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
 
 // Create subscription (called from webhook)
 export const createSubscription = privateMutation
   .input(z.object({ subscription: subscriptionSchema }))
-  .output(z.null())
+  
   .mutation(async ({ ctx, input: args }) => {
     const existing = await ctx.orm.query.subscriptions.findFirst({
       where: { subscriptionId: args.subscription.subscriptionId },
@@ -624,10 +585,8 @@ export const cancelSubscription = authAction
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
 
-    const subscription = await ctx.runQuery(
-      internal.polarSubscription.getActiveSubscription,
-      { userId: ctx.userId! }
-    );
+    const caller = createPolarSubscriptionCaller(ctx);
+    const subscription = await caller.getActiveSubscription({ userId: ctx.userId! });
 
     if (!subscription) {
       throw new CRPCError({
@@ -650,10 +609,8 @@ export const resumeSubscription = authAction
   .action(async ({ ctx }) => {
     const polar = getPolarClient();
 
-    const subscription = await ctx.runQuery(
-      internal.polarSubscription.getActiveSubscription,
-      { userId: ctx.userId! }
-    );
+    const caller = createPolarSubscriptionCaller(ctx);
+    const subscription = await caller.getActiveSubscription({ userId: ctx.userId! });
 
     if (!subscription) {
       throw new CRPCError({
@@ -675,9 +632,10 @@ export const resumeSubscription = authAction
 
 Sync user deletion with Polar:
 
-```ts title="convex/functions/auth.ts" showLineNumbers {3-10}
-const getAuthOptions = (ctx: GenericCtx) =>
-  ({
+```ts title="convex/functions/auth.ts" showLineNumbers {1,4-14}
+import { defineAuth } from './generated/auth';
+
+export default defineAuth((ctx) => ({
     user: {
       deleteUser: {
         enabled: true,
@@ -689,7 +647,7 @@ const getAuthOptions = (ctx: GenericCtx) =>
         },
       },
     },
-  }) satisfies BetterAuthOptions;
+  }));
 ```
 
 ## Environment Variables
@@ -752,6 +710,59 @@ const isPremium = !!subscription;
 ```
 
 ## API Reference
+
+### Webhook Events
+
+All events are passed to `webhooks({ secret, ...handlers })` inside the `use: []` array of the `polar()` plugin.
+
+```ts title="convex/functions/auth.ts"
+webhooks({
+  secret: process.env.POLAR_WEBHOOK_SECRET!,
+
+  // Checkout
+  onCheckoutCreated: (payload) => {},
+  onCheckoutUpdated: (payload) => {},
+
+  // Orders
+  onOrderCreated: (payload) => {},
+  onOrderPaid: (payload) => {},
+  onOrderRefunded: (payload) => {},
+
+  // Refunds
+  onRefundCreated: (payload) => {},
+  onRefundUpdated: (payload) => {},
+
+  // Subscriptions
+  onSubscriptionCreated: (payload) => {},
+  onSubscriptionUpdated: (payload) => {},
+  onSubscriptionActive: (payload) => {},
+  onSubscriptionCanceled: (payload) => {},
+  onSubscriptionRevoked: (payload) => {},
+  onSubscriptionUncanceled: (payload) => {},
+
+  // Products
+  onProductCreated: (payload) => {},
+  onProductUpdated: (payload) => {},
+
+  // Benefits
+  onBenefitCreated: (payload) => {},
+  onBenefitUpdated: (payload) => {},
+  onBenefitGrantCreated: (payload) => {},
+  onBenefitGrantUpdated: (payload) => {},
+  onBenefitGrantRevoked: (payload) => {},
+
+  // Customers
+  onCustomerCreated: (payload) => {},
+  onCustomerUpdated: (payload) => {},
+  onCustomerDeleted: (payload) => {},
+  onCustomerStateChanged: (payload) => {},
+
+  // Catch-all
+  onPayload: (payload) => {},
+}),
+```
+
+### Operations
 
 | Operation | Method | Type |
 |-----------|--------|------|

@@ -208,21 +208,58 @@ export interface HttpProcedureBuilder<
     TForm
   >;
 
-  /** Add middleware to the procedure */
-  use<$ContextOverridesOut extends object>(
-    middlewareOrBuilder:
-      | MiddlewareFunction<
-          TCtx,
-          TMeta,
-          UnsetMarker,
-          $ContextOverridesOut,
-          unknown
-        >
-      | MiddlewareBuilder<TInitialCtx, TMeta, $ContextOverridesOut, unknown>
+  /** DELETE endpoint (Hono-style) */
+  delete(
+    path: string
   ): HttpProcedureBuilder<
     TInitialCtx,
-    Overwrite<TCtx, $ContextOverridesOut>,
+    TCtx,
     TInput,
+    TOutput,
+    TParams,
+    TQuery,
+    TMeta,
+    'DELETE',
+    TForm
+  >;
+
+  /** Define form data schema (for multipart/form-data uploads) */
+  form<TSchema extends z.ZodTypeAny>(
+    schema: TSchema
+  ): HttpProcedureBuilder<
+    TInitialCtx,
+    TCtx,
+    TInput,
+    TOutput,
+    TParams,
+    TQuery,
+    TMeta,
+    TMethod,
+    TSchema
+  >;
+
+  /** GET endpoint (Hono-style) */
+  get(
+    path: string
+  ): HttpProcedureBuilder<
+    TInitialCtx,
+    TCtx,
+    TInput,
+    TOutput,
+    TParams,
+    TQuery,
+    TMeta,
+    'GET',
+    TForm
+  >;
+
+  /** Define request body schema (for POST/PUT/PATCH) */
+  input<TSchema extends z.ZodTypeAny>(
+    schema: TSchema
+  ): HttpProcedureBuilder<
+    TInitialCtx,
+    TCtx,
+    TSchema,
     TOutput,
     TParams,
     TQuery,
@@ -246,24 +283,51 @@ export interface HttpProcedureBuilder<
     TForm
   >;
 
-  /** Define the route path and HTTP method */
-  route<M extends HttpMethod>(
-    path: string,
-    method: M
+  /**
+   * Define the handler for POST/PUT/PATCH/DELETE endpoints (maps to useMutation on client).
+   * Handler receives Hono Context `c` for Response helpers (c.json, c.body, c.text).
+   * Return Response for custom responses, or plain object for auto JSON serialization.
+   */
+  mutation<TResult>(
+    handler: (
+      opts: HttpHandlerOpts<TCtx, TInput, TParams, TQuery, TForm>
+    ) => Promise<
+      Response | (TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult)
+    >
+  ): HttpProcedure<TInput, TOutput, TParams, TQuery, TMethod, TForm>;
+
+  /** Define response schema */
+  output<TSchema extends z.ZodTypeAny>(
+    schema: TSchema
+  ): HttpProcedureBuilder<
+    TInitialCtx,
+    TCtx,
+    TInput,
+    TSchema,
+    TParams,
+    TQuery,
+    TMeta,
+    TMethod,
+    TForm
+  >;
+
+  /** Define path parameter schema (for :param in path) */
+  params<TSchema extends z.ZodTypeAny>(
+    schema: TSchema
   ): HttpProcedureBuilder<
     TInitialCtx,
     TCtx,
     TInput,
     TOutput,
-    TParams,
+    TSchema,
     TQuery,
     TMeta,
-    M,
+    TMethod,
     TForm
   >;
 
-  /** GET endpoint (Hono-style) */
-  get(
+  /** PATCH endpoint (Hono-style) */
+  patch(
     path: string
   ): HttpProcedureBuilder<
     TInitialCtx,
@@ -273,7 +337,7 @@ export interface HttpProcedureBuilder<
     TParams,
     TQuery,
     TMeta,
-    'GET',
+    'PATCH',
     TForm
   >;
 
@@ -307,9 +371,23 @@ export interface HttpProcedureBuilder<
     TForm
   >;
 
-  /** PATCH endpoint (Hono-style) */
-  patch(
-    path: string
+  /**
+   * Define the handler for GET endpoints (maps to useQuery on client).
+   * Handler receives Hono Context `c` for Response helpers (c.json, c.body, c.text).
+   * Return Response for custom responses, or plain object for auto JSON serialization.
+   */
+  query<TResult>(
+    handler: (
+      opts: HttpHandlerOpts<TCtx, TInput, TParams, TQuery, TForm>
+    ) => Promise<
+      Response | (TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult)
+    >
+  ): HttpProcedure<TInput, TOutput, TParams, TQuery, TMethod, TForm>;
+
+  /** Define the route path and HTTP method */
+  route<M extends HttpMethod>(
+    path: string,
+    method: M
   ): HttpProcedureBuilder<
     TInitialCtx,
     TCtx,
@@ -318,37 +396,7 @@ export interface HttpProcedureBuilder<
     TParams,
     TQuery,
     TMeta,
-    'PATCH',
-    TForm
-  >;
-
-  /** DELETE endpoint (Hono-style) */
-  delete(
-    path: string
-  ): HttpProcedureBuilder<
-    TInitialCtx,
-    TCtx,
-    TInput,
-    TOutput,
-    TParams,
-    TQuery,
-    TMeta,
-    'DELETE',
-    TForm
-  >;
-
-  /** Define path parameter schema (for :param in path) */
-  params<TSchema extends z.ZodTypeAny>(
-    schema: TSchema
-  ): HttpProcedureBuilder<
-    TInitialCtx,
-    TCtx,
-    TInput,
-    TOutput,
-    TSchema,
-    TQuery,
-    TMeta,
-    TMethod,
+    M,
     TForm
   >;
 
@@ -367,13 +415,21 @@ export interface HttpProcedureBuilder<
     TForm
   >;
 
-  /** Define request body schema (for POST/PUT/PATCH) */
-  input<TSchema extends z.ZodTypeAny>(
-    schema: TSchema
+  /** Add middleware to the procedure */
+  use<$ContextOverridesOut extends object>(
+    middlewareOrBuilder:
+      | MiddlewareFunction<
+          TCtx,
+          TMeta,
+          UnsetMarker,
+          $ContextOverridesOut,
+          unknown
+        >
+      | MiddlewareBuilder<TInitialCtx, TMeta, $ContextOverridesOut, unknown>
   ): HttpProcedureBuilder<
     TInitialCtx,
-    TCtx,
-    TSchema,
+    Overwrite<TCtx, $ContextOverridesOut>,
+    TInput,
     TOutput,
     TParams,
     TQuery,
@@ -381,62 +437,6 @@ export interface HttpProcedureBuilder<
     TMethod,
     TForm
   >;
-
-  /** Define response schema */
-  output<TSchema extends z.ZodTypeAny>(
-    schema: TSchema
-  ): HttpProcedureBuilder<
-    TInitialCtx,
-    TCtx,
-    TInput,
-    TSchema,
-    TParams,
-    TQuery,
-    TMeta,
-    TMethod,
-    TForm
-  >;
-
-  /** Define form data schema (for multipart/form-data uploads) */
-  form<TSchema extends z.ZodTypeAny>(
-    schema: TSchema
-  ): HttpProcedureBuilder<
-    TInitialCtx,
-    TCtx,
-    TInput,
-    TOutput,
-    TParams,
-    TQuery,
-    TMeta,
-    TMethod,
-    TSchema
-  >;
-
-  /**
-   * Define the handler for GET endpoints (maps to useQuery on client).
-   * Handler receives Hono Context `c` for Response helpers (c.json, c.body, c.text).
-   * Return Response for custom responses, or plain object for auto JSON serialization.
-   */
-  query<TResult>(
-    handler: (
-      opts: HttpHandlerOpts<TCtx, TInput, TParams, TQuery, TForm>
-    ) => Promise<
-      Response | (TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult)
-    >
-  ): HttpProcedure<TInput, TOutput, TParams, TQuery, TMethod, TForm>;
-
-  /**
-   * Define the handler for POST/PUT/PATCH/DELETE endpoints (maps to useMutation on client).
-   * Handler receives Hono Context `c` for Response helpers (c.json, c.body, c.text).
-   * Return Response for custom responses, or plain object for auto JSON serialization.
-   */
-  mutation<TResult>(
-    handler: (
-      opts: HttpHandlerOpts<TCtx, TInput, TParams, TQuery, TForm>
-    ) => Promise<
-      Response | (TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult)
-    >
-  ): HttpProcedure<TInput, TOutput, TParams, TQuery, TMethod, TForm>;
 }
 
 // Any-typed builder for internal use

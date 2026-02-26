@@ -172,17 +172,7 @@ const page = await db.query.users
   .paginate({ cursor: null, limit: 20 });
 ```
 
-### Composition limitations
-
-| Combination | Status |
-|---|---|
-| Composition entrypoint | `select()` chain only |
-| `select() + search` | Not supported |
-| `select() + vectorSearch` | Not supported |
-| `select() + offset` | Not supported |
-| `select() + with` | Not supported |
-| `select() + extras` | Not supported |
-| `select() + columns` | Not supported |
+See [API Reference -- Composition Limitations](#composition-limitations) for a full list of unsupported `select()` combinations.
 
 ## Key-Based Paging (`pageByKey`)
 
@@ -242,3 +232,19 @@ If you previously used stream helpers directly, map them to `findMany` like this
 <Callout icon={<AlertTriangle />}>
 Keep the query shape stable between calls when paginating. Changing indexes/order/filters between page requests invalidates cursor continuity.
 </Callout>
+
+## API Reference
+
+### Composition Limitations
+
+The following `select()` combinations are not supported:
+
+| Combination | Status |
+|---|---|
+| Composition entrypoint | `select()` chain only |
+| `select() + search` | Not supported |
+| `select() + vectorSearch` | Not supported |
+| `select() + offset` | Not supported |
+| `select() + with` | Not supported |
+| `select() + extras` | Not supported |
+| `select() + columns` | Not supported |

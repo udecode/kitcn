@@ -5,9 +5,27 @@ import { toAuthErrorResponse } from './error-response';
 
 import type { GetAuth } from './types';
 
+type AuthRouteContract = {
+  $context: Promise<{
+    options: {
+      trustedOrigins?:
+        | string[]
+        | ((request: Request) => Promise<string[]> | string[]);
+    };
+  }>;
+  handler: (request: Request) => Promise<Response>;
+  options: {
+    basePath?: string;
+    baseURL?: string;
+    trustedOrigins?:
+      | string[]
+      | ((request: Request) => Promise<string[]> | string[]);
+  };
+};
+
 export const registerRoutes = (
   http: HttpRouter,
-  getAuth: GetAuth,
+  getAuth: GetAuth<unknown, AuthRouteContract>,
   opts: {
     cors?:
       | {

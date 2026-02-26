@@ -1,26 +1,45 @@
 import type {
   GenericDatabaseReader,
   GenericDatabaseWriter,
-  GenericDataModel,
 } from 'convex/server';
-import { Triggers } from '../internal/upstream/server/triggers';
+import {
+  applyRankIndexesForChange,
+  getRankIndexDefinitions,
+} from './aggregate-index/rank-runtime';
+import {
+  applyAggregateIndexesForChange,
+  getAggregateIndexDefinitions,
+} from './aggregate-index/runtime';
 import type { TablesRelationalConfig } from './relations';
 import {
-  getTableLifecycleHooks,
-  type OrmLifecycleConfig,
-  type OrmLifecycleOperation,
-} from './table';
+  type NormalizedOrmTableTriggers,
+  normalizeOrmTriggers,
+  type OrmBeforeResult,
+  type OrmTriggerChange,
+  type OrmTriggers,
+  TriggerCancelledError,
+} from './triggers';
 
 const ORMLIFECYCLE_WRAPPED_DB = Symbol.for(
   'better-convex:OrmLifecycleWrappedDB'
 );
+const ORMLIFECYCLE_INNER_DB = Symbol.for('better-convex:OrmLifecycleInnerDB');
 
+type AnyRecord = Record<string, unknown>;
 type AnyCtx = {
   db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>;
-} & Record<string, unknown>;
+} & AnyRecord;
 type AnyMutationCtx = {
   db: GenericDatabaseWriter<any>;
-} & Record<string, unknown>;
+} & AnyRecord;
+type HookMap = Map<string, NormalizedOrmTableTriggers<AnyRecord>>;
+type HookOperation = 'create' | 'update' | 'delete';
+type QueuedHook = () => Promise<void>;
+
+type HookExecutionResult<R> = {
+  result: R;
+  queuedHooks: QueuedHook[];
+};
 
 const isWriterDb = (
   db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>
@@ -47,10 +66,482 @@ const markLifecycleWrappedDb = <TDb extends GenericDatabaseWriter<any>>(
   return db;
 };
 
-const shouldRun = (
-  config: OrmLifecycleConfig,
-  operation: OrmLifecycleOperation
-): boolean => config.operation === 'change' || config.operation === operation;
+export const getOrmLifecycleInnerDb = (
+  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>
+): GenericDatabaseWriter<any> | undefined => {
+  const inner = (db as any)[ORMLIFECYCLE_INNER_DB];
+  if (!inner || !isWriterDb(inner)) {
+    return undefined;
+  }
+  return inner;
+};
+
+const isBeforeDataResult = (
+  value: OrmBeforeResult<AnyRecord>
+): value is { data: Partial<AnyRecord> } =>
+  typeof value === 'object' && value !== null && 'data' in value;
+
+class Lock {
+  promise: Promise<void> | null = null;
+  resolve: (() => void) | null = null;
+
+  async withLock<R>(fn: () => Promise<R>): Promise<R> {
+    const unlock = await this.acquire();
+    try {
+      return await fn();
+    } finally {
+      unlock();
+    }
+  }
+
+  private async acquire(): Promise<() => void> {
+    while (this.promise !== null) {
+      await this.promise;
+    }
+
+    let resolve!: () => void;
+    this.promise = new Promise<void>((res) => {
+      resolve = res;
+    });
+    this.resolve = resolve;
+
+    return () => {
+      this.promise = null;
+      this.resolve?.();
+    };
+  }
+}
+
+const innerWriteLock = new Lock();
+const outerWriteLock = new Lock();
+const hookQueue: QueuedHook[] = [];
+let activeHookDepth = 0;
+
+const createHookCtx = (
+  ctx: AnyMutationCtx,
+  innerDb: GenericDatabaseWriter<any>,
+  hooksByTable: HookMap
+): AnyRecord => ({
+  ...ctx,
+  db: writerWithHooks(ctx, innerDb, hooksByTable, true),
+  innerDb,
+});
+
+const mergeBeforeData = async (
+  tableName: string,
+  operation: HookOperation,
+  beforeHook:
+    | ((
+        data: AnyRecord,
+        ctx: AnyRecord
+      ) => Promise<OrmBeforeResult<AnyRecord>> | OrmBeforeResult<AnyRecord>)
+    | undefined,
+  data: AnyRecord,
+  hookCtx: AnyRecord
+): Promise<AnyRecord> => {
+  if (!beforeHook) {
+    return data;
+  }
+
+  const result = await beforeHook(data, hookCtx);
+  if (result === false) {
+    throw new TriggerCancelledError(tableName, operation);
+  }
+  if (isBeforeDataResult(result)) {
+    return {
+      ...data,
+      ...(result.data as AnyRecord),
+    };
+  }
+  return data;
+};
+
+const withPublicIdAlias = (doc: AnyRecord, id: string): AnyRecord =>
+  doc.id !== undefined
+    ? doc
+    : {
+        ...doc,
+        id,
+      };
+
+const tableNameFromId = (
+  db: GenericDatabaseReader<any>,
+  hooksByTable: HookMap,
+  id: string
+): string | null => {
+  for (const tableName of hooksByTable.keys()) {
+    if (db.normalizeId(tableName as any, id as any)) {
+      return tableName;
+    }
+  }
+  return null;
+};
+
+const queueOperationHooks = async <R>(
+  ctx: AnyMutationCtx,
+  innerDb: GenericDatabaseWriter<any>,
+  hooksByTable: HookMap,
+  execute: (hookCtx: AnyRecord) => Promise<HookExecutionResult<R>>
+): Promise<R> =>
+  innerWriteLock.withLock(async () => {
+    const hookCtx = createHookCtx(ctx, innerDb, hooksByTable);
+    const { result, queuedHooks } = await execute(hookCtx);
+    for (const hook of queuedHooks) {
+      hookQueue.push(hook);
+    }
+    return result;
+  });
+
+const executeThenDrainHooks = async <R>(
+  ctx: AnyMutationCtx,
+  innerDb: GenericDatabaseWriter<any>,
+  hooksByTable: HookMap,
+  isWithinHook: boolean,
+  execute: (hookCtx: AnyRecord) => Promise<HookExecutionResult<R>>
+): Promise<R> => {
+  if (isWithinHook || activeHookDepth > 0) {
+    return queueOperationHooks(ctx, innerDb, hooksByTable, execute);
+  }
+
+  return outerWriteLock.withLock(async () => {
+    const result = await queueOperationHooks(
+      ctx,
+      innerDb,
+      hooksByTable,
+      execute
+    );
+    let firstError: unknown | null = null;
+
+    while (hookQueue.length > 0) {
+      const hook = hookQueue.shift();
+      if (!hook) {
+        continue;
+      }
+      try {
+        activeHookDepth += 1;
+        await hook();
+      } catch (error) {
+        if (firstError === null) {
+          firstError = error;
+        } else {
+          console.error(error);
+        }
+      } finally {
+        activeHookDepth = Math.max(0, activeHookDepth - 1);
+      }
+    }
+
+    if (firstError !== null) {
+      throw firstError;
+    }
+    return result;
+  });
+};
+
+function writerWithHooks(
+  ctx: AnyMutationCtx,
+  innerDb: GenericDatabaseWriter<any>,
+  hooksByTable: HookMap,
+  isWithinHook = false
+): GenericDatabaseWriter<any> {
+  const patch: {
+    (table: string, id: string, value: AnyRecord): Promise<void>;
+    (id: string, value: AnyRecord): Promise<void>;
+  } = async (arg0: string, arg1: string | AnyRecord, arg2?: AnyRecord) => {
+    const [tableName, id, value] =
+      arg2 !== undefined
+        ? [arg0, arg1 as string, arg2]
+        : [
+            tableNameFromId(innerDb, hooksByTable, arg0),
+            arg0,
+            arg1 as AnyRecord,
+          ];
+
+    if (!tableName) {
+      return innerDb.patch(id as any, value as any);
+    }
+
+    const tableHooks = hooksByTable.get(tableName);
+    if (!tableHooks) {
+      return innerDb.patch(tableName as any, id as any, value as any);
+    }
+
+    return executeThenDrainHooks(
+      ctx,
+      innerDb,
+      hooksByTable,
+      isWithinHook,
+      async (hookCtx) => {
+        const oldDoc = await innerDb.get(tableName as any, id as any);
+        const updatePayload = await mergeBeforeData(
+          tableName,
+          'update',
+          tableHooks.update?.before,
+          value,
+          hookCtx
+        );
+
+        await innerDb.patch(tableName as any, id as any, updatePayload as any);
+
+        if (!oldDoc) {
+          return { result: undefined, queuedHooks: [] };
+        }
+
+        const newDoc = await innerDb.get(tableName as any, id as any);
+        if (!newDoc) {
+          return { result: undefined, queuedHooks: [] };
+        }
+        const oldDocWithId = withPublicIdAlias(oldDoc as AnyRecord, id as any);
+        const newDocWithId = withPublicIdAlias(newDoc as AnyRecord, id as any);
+
+        const change: OrmTriggerChange<AnyRecord> = {
+          operation: 'update',
+          id: id as any,
+          oldDoc: oldDocWithId,
+          newDoc: newDocWithId,
+        };
+
+        const queuedHooks: QueuedHook[] = [];
+        if (tableHooks.update?.after) {
+          queuedHooks.push(async () => {
+            await tableHooks.update?.after?.(newDocWithId, hookCtx);
+          });
+        }
+        if (tableHooks.change) {
+          queuedHooks.push(async () => {
+            await tableHooks.change?.(change, hookCtx);
+          });
+        }
+
+        return {
+          result: undefined,
+          queuedHooks,
+        };
+      }
+    );
+  };
+
+  const replace: {
+    (table: string, id: string, value: AnyRecord): Promise<void>;
+    (id: string, value: AnyRecord): Promise<void>;
+  } = async (arg0: string, arg1: string | AnyRecord, arg2?: AnyRecord) => {
+    const [tableName, id, value] =
+      arg2 !== undefined
+        ? [arg0, arg1 as string, arg2]
+        : [
+            tableNameFromId(innerDb, hooksByTable, arg0),
+            arg0,
+            arg1 as AnyRecord,
+          ];
+
+    if (!tableName) {
+      return innerDb.replace(id as any, value as any);
+    }
+
+    const tableHooks = hooksByTable.get(tableName);
+    if (!tableHooks) {
+      return innerDb.replace(tableName as any, id as any, value as any);
+    }
+
+    return executeThenDrainHooks(
+      ctx,
+      innerDb,
+      hooksByTable,
+      isWithinHook,
+      async (hookCtx) => {
+        const oldDoc = await innerDb.get(tableName as any, id as any);
+        const updatePayload = await mergeBeforeData(
+          tableName,
+          'update',
+          tableHooks.update?.before,
+          value,
+          hookCtx
+        );
+
+        await innerDb.replace(
+          tableName as any,
+          id as any,
+          updatePayload as any
+        );
+
+        if (!oldDoc) {
+          return { result: undefined, queuedHooks: [] };
+        }
+
+        const newDoc = await innerDb.get(tableName as any, id as any);
+        if (!newDoc) {
+          return { result: undefined, queuedHooks: [] };
+        }
+        const oldDocWithId = withPublicIdAlias(oldDoc as AnyRecord, id as any);
+        const newDocWithId = withPublicIdAlias(newDoc as AnyRecord, id as any);
+
+        const change: OrmTriggerChange<AnyRecord> = {
+          operation: 'update',
+          id: id as any,
+          oldDoc: oldDocWithId,
+          newDoc: newDocWithId,
+        };
+
+        const queuedHooks: QueuedHook[] = [];
+        if (tableHooks.update?.after) {
+          queuedHooks.push(async () => {
+            await tableHooks.update?.after?.(newDocWithId, hookCtx);
+          });
+        }
+        if (tableHooks.change) {
+          queuedHooks.push(async () => {
+            await tableHooks.change?.(change, hookCtx);
+          });
+        }
+
+        return {
+          result: undefined,
+          queuedHooks,
+        };
+      }
+    );
+  };
+
+  const delete_: (table: string, id?: string) => Promise<void> = async (
+    arg0: string,
+    arg1?: string
+  ) => {
+    const [tableName, id] =
+      arg1 !== undefined
+        ? [arg0, arg1]
+        : [tableNameFromId(innerDb, hooksByTable, arg0), arg0];
+
+    if (!tableName) {
+      return innerDb.delete(id as any);
+    }
+
+    const tableHooks = hooksByTable.get(tableName);
+    if (!tableHooks) {
+      return innerDb.delete(tableName as any, id as any);
+    }
+
+    return executeThenDrainHooks(
+      ctx,
+      innerDb,
+      hooksByTable,
+      isWithinHook,
+      async (hookCtx) => {
+        const oldDoc = await innerDb.get(tableName as any, id as any);
+        if (!oldDoc) {
+          await innerDb.delete(tableName as any, id as any);
+          return { result: undefined, queuedHooks: [] };
+        }
+        const oldDocWithId = withPublicIdAlias(oldDoc as AnyRecord, id as any);
+
+        await mergeBeforeData(
+          tableName,
+          'delete',
+          tableHooks.delete?.before,
+          oldDocWithId,
+          hookCtx
+        );
+
+        await innerDb.delete(tableName as any, id as any);
+
+        const change: OrmTriggerChange<AnyRecord> = {
+          operation: 'delete',
+          id: id as any,
+          oldDoc: oldDocWithId,
+          newDoc: null,
+        };
+
+        const queuedHooks: QueuedHook[] = [];
+        if (tableHooks.delete?.after) {
+          queuedHooks.push(async () => {
+            await tableHooks.delete?.after?.(oldDocWithId, hookCtx);
+          });
+        }
+        if (tableHooks.change) {
+          queuedHooks.push(async () => {
+            await tableHooks.change?.(change, hookCtx);
+          });
+        }
+
+        return {
+          result: undefined,
+          queuedHooks,
+        };
+      }
+    );
+  };
+
+  const wrappedDb = {
+    insert: async (table: string, value: AnyRecord): Promise<any> => {
+      const tableHooks = hooksByTable.get(table);
+      if (!tableHooks) {
+        return innerDb.insert(table as any, value as any);
+      }
+
+      return executeThenDrainHooks(
+        ctx,
+        innerDb,
+        hooksByTable,
+        isWithinHook,
+        async (hookCtx) => {
+          const insertPayload = await mergeBeforeData(
+            table,
+            'create',
+            tableHooks.create?.before,
+            value,
+            hookCtx
+          );
+          const id = await innerDb.insert(table as any, insertPayload as any);
+          const newDoc = await innerDb.get(table as any, id);
+
+          if (!newDoc) {
+            return { result: id, queuedHooks: [] };
+          }
+          const newDocWithId = withPublicIdAlias(
+            newDoc as AnyRecord,
+            id as any
+          );
+
+          const change: OrmTriggerChange<AnyRecord> = {
+            operation: 'insert',
+            id: id as any,
+            oldDoc: null,
+            newDoc: newDocWithId,
+          };
+
+          const queuedHooks: QueuedHook[] = [];
+          if (tableHooks.create?.after) {
+            queuedHooks.push(async () => {
+              await tableHooks.create?.after?.(newDocWithId, hookCtx);
+            });
+          }
+          if (tableHooks.change) {
+            queuedHooks.push(async () => {
+              await tableHooks.change?.(change, hookCtx);
+            });
+          }
+
+          return { result: id, queuedHooks };
+        }
+      );
+    },
+    patch,
+    replace,
+    delete: delete_,
+    system: innerDb.system,
+    get: innerDb.get.bind(innerDb),
+    query: innerDb.query.bind(innerDb),
+    normalizeId: innerDb.normalizeId.bind(innerDb),
+  };
+
+  Object.defineProperty(wrappedDb, ORMLIFECYCLE_INNER_DB, {
+    configurable: false,
+    enumerable: false,
+    value: innerDb,
+    writable: false,
+  });
+
+  return wrappedDb;
+}
 
 export type OrmDbLifecycle = {
   enabled: boolean;
@@ -62,13 +553,14 @@ const createNoopLifecycle = (): OrmDbLifecycle => ({
   wrapDB: <Ctx extends AnyCtx>(ctx: Ctx): Ctx => ctx,
 });
 
-export function createOrmDbLifecycle<
-  TSchema extends TablesRelationalConfig,
-  DataModel extends GenericDataModel = GenericDataModel,
->(schema: TSchema): OrmDbLifecycle {
-  const tableHooks = new Map<string, OrmLifecycleConfig[]>();
+export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
+  schema: TSchema,
+  triggerDefinitions?: OrmTriggers<TSchema, any>
+): OrmDbLifecycle {
+  const tableNameBySchemaKey = new Map<string, string>();
+  const tableNames = new Set<string>();
 
-  for (const tableConfig of Object.values(schema)) {
+  for (const [schemaKey, tableConfig] of Object.entries(schema)) {
     if (!tableConfig?.table) {
       continue;
     }
@@ -76,27 +568,100 @@ export function createOrmDbLifecycle<
       (tableConfig.table as any).tableName ??
       (tableConfig.table as any)?._?.name ??
       tableConfig.name;
-    const hooks = getTableLifecycleHooks(tableConfig.table as any);
-    if (hooks.length > 0) {
-      tableHooks.set(tableName, hooks);
+    tableNameBySchemaKey.set(schemaKey, tableName);
+    tableNames.add(tableName);
+  }
+
+  const tableHooks = new Map<string, NormalizedOrmTableTriggers<AnyRecord>>();
+  const normalizedTriggers = normalizeOrmTriggers(triggerDefinitions);
+
+  for (const [triggerKey, hooks] of normalizedTriggers.entries()) {
+    const tableName =
+      tableNameBySchemaKey.get(triggerKey) ??
+      (tableNames.has(triggerKey) ? triggerKey : undefined);
+
+    if (!tableName) {
+      throw new Error(
+        `Unknown trigger table '${triggerKey}'. Export triggers with defineTriggers(relations, { ... }) using keys from your relations export.`
+      );
     }
+
+    tableHooks.set(tableName, hooks);
+  }
+
+  for (const tableConfig of Object.values(schema)) {
+    if (!tableConfig?.table || !tableConfig?.name) {
+      continue;
+    }
+    const aggregateIndexes = getAggregateIndexDefinitions(tableConfig);
+    const rankIndexes = getRankIndexDefinitions(tableConfig);
+    if (aggregateIndexes.length === 0 && rankIndexes.length === 0) {
+      continue;
+    }
+
+    const existing = tableHooks.get(tableConfig.name) ?? {};
+    const existingChange = existing.change;
+
+    tableHooks.set(tableConfig.name, {
+      ...existing,
+      change: async (change, ctx) => {
+        if (change.operation === 'delete') {
+          if (aggregateIndexes.length > 0) {
+            await applyAggregateIndexesForChange(
+              ctx.db as GenericDatabaseWriter<any>,
+              tableConfig.name,
+              aggregateIndexes,
+              {
+                operation: 'delete',
+                id: change.id as any,
+              }
+            );
+          }
+          if (rankIndexes.length > 0) {
+            await applyRankIndexesForChange(
+              ctx.db as GenericDatabaseWriter<any>,
+              tableConfig.name,
+              rankIndexes,
+              {
+                operation: 'delete',
+                id: change.id as any,
+              }
+            );
+          }
+        } else {
+          if (aggregateIndexes.length > 0) {
+            await applyAggregateIndexesForChange(
+              ctx.db as GenericDatabaseWriter<any>,
+              tableConfig.name,
+              aggregateIndexes,
+              {
+                operation: change.operation,
+                id: change.id as any,
+                newDoc: change.newDoc as Record<string, unknown>,
+              }
+            );
+          }
+          if (rankIndexes.length > 0) {
+            await applyRankIndexesForChange(
+              ctx.db as GenericDatabaseWriter<any>,
+              tableConfig.name,
+              rankIndexes,
+              {
+                operation: change.operation,
+                id: change.id as any,
+                newDoc: change.newDoc as Record<string, unknown>,
+              }
+            );
+          }
+        }
+
+        await existingChange?.(change, ctx);
+      },
+    });
   }
 
   if (tableHooks.size === 0) {
     return createNoopLifecycle();
-  }
-
-  const triggers = new Triggers<DataModel, AnyMutationCtx>();
-
-  for (const [tableName, hooks] of tableHooks.entries()) {
-    for (const config of hooks) {
-      triggers.register(tableName as any, async (ctx, change) => {
-        if (!shouldRun(config, change.operation)) {
-          return;
-        }
-        await config.handler(ctx as any, change as any);
-      });
-    }
   }
 
   return {
@@ -105,13 +670,18 @@ export function createOrmDbLifecycle<
       if (!isWriterDb(ctx.db) || isLifecycleWrappedDb(ctx.db)) {
         return ctx;
       }
-      const wrapped = triggers.wrapDB(ctx as AnyMutationCtx) as Ctx;
+
+      const wrappedDb = writerWithHooks(
+        ctx as unknown as AnyMutationCtx,
+        ctx.db as GenericDatabaseWriter<any>,
+        tableHooks,
+        false
+      );
+
       return {
-        ...wrapped,
-        db: markLifecycleWrappedDb(
-          wrapped.db as GenericDatabaseWriter<any>
-        ) as Ctx['db'],
-      };
+        ...ctx,
+        db: markLifecycleWrappedDb(wrappedDb),
+      } as Ctx;
     },
   };
 }

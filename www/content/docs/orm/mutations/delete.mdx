@@ -50,26 +50,7 @@ const ids = await ctx.orm
   .returning({ id: users.id });
 ```
 
-## Safety Limits
-
-The ORM collects matching rows in bounded pages before applying writes. The key defaults are:
-
-- `mutationBatchSize`: `100`
-- `mutationMaxRows`: `1000`
-- `mutationLeafBatchSize`: `900` (async FK fan-out)
-
-If matched rows exceed `mutationMaxRows`, the delete throws. You can customize these values in your schema:
-
-```ts showLineNumbers {2-3}
-export default defineSchema({ users, posts }, {
-  defaults: {
-    mutationBatchSize: 200,
-    mutationMaxRows: 5000,
-  },
-});
-```
-
-For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
+The ORM collects matching rows in bounded pages before applying writes. See [API Reference -- Safety Limits](#safety-limits) for defaults and override syntax.
 
 ## Paginated Delete Execution
 
@@ -106,36 +87,21 @@ Each page returns:
 
 ## Async Batched Delete
 
-When a delete can affect large sets of rows, use async mode. The first batch runs in the current mutation, then remaining batches are scheduled automatically.
+Deletes run in **async mode by default**. The first batch runs in the current mutation, then remaining batches are scheduled automatically.
 
-You can enable async mode in three ways:
-
-- **Per call:** `.execute({ mode: 'async' })`
-- **Convenience alias:** `.executeAsync()`
-- **Global default:** `defineSchema(..., { defaults: { mutationExecutionMode: 'async' } })`
-
-Here's an async delete with custom batch size:
+Customize batch size and delay per call:
 
 ```ts showLineNumbers {5}
 const firstBatch = await ctx.orm
   .delete(users)
   .where(eq(users.role, 'inactive'))
   .returning({ id: users.id })
-  .execute({ mode: 'async', batchSize: 200, delayMs: 0 });
+  .execute({ batchSize: 200, delayMs: 0 });
 ```
 
-Key behaviors to keep in mind:
+See [API Reference -- Async Batched Delete Behaviors](#async-batched-delete-behaviors) for resolution precedence details.
 
-- `execute()` in async mode returns the same shape as sync mode (with `.returning()`, you get rows from the first batch only)
-- Remaining batches are scheduled asynchronously
-- Async APIs (`execute({ mode: 'async' })` / `executeAsync()`) cannot be combined with `.paginate()` or resolved scheduled delete mode (`.scheduled(...)` or table-level `deletion('scheduled')`)
-- `batchSize` resolves as: per-call `batchSize` > `defaults.mutationBatchSize` > `100`
-- `delayMs` resolves as: per-call `delayMs` > `defaults.mutationAsyncDelayMs` > `0`
-- FK/cascade async fan-out uses `mutationBatchSize` for recursive delete cascade (`onDelete: 'cascade'`) and `mutationLeafBatchSize` for non-recursive actions (`set null`, `set default`)
-
-<Callout icon={<AlertTriangle />}>
-**Important:** Async execution requires wiring `ormFunctions` and `scheduledMutationBatch` in your ORM setup. See [Mutations -- Async Wiring Setup](/docs/orm/mutations#wiring-setup) for the setup steps.
-</Callout>
+To force sync execution (all rows in a single transaction), use `.execute({ mode: 'sync' })` or set `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`.
 
 ## Table Default Delete Mode
 
@@ -184,6 +150,37 @@ A few SQL-only features from Drizzle are not applicable in Convex:
 </Callout>
 
 You now have everything you need to delete data -- hard, soft, and scheduled modes with full cascade support.
+
+## API Reference
+
+### Safety Limits
+
+The ORM collects matching rows in bounded pages before applying writes. The key defaults are:
+
+- `mutationBatchSize`: `400`
+- `mutationMaxRows`: `10000`
+- `mutationLeafBatchSize`: `1600` (async FK fan-out)
+
+If matched rows exceed `mutationMaxRows`, the delete throws. You can customize these values in your schema:
+
+```ts showLineNumbers {2-3}
+export default defineSchema({ users, posts }, {
+  defaults: {
+    mutationBatchSize: 200,
+    mutationMaxRows: 5000,
+  },
+});
+```
+
+For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
+
+### Async Batched Delete Behaviors
+
+- With `.returning()`, you get rows from the first batch only — remaining batches are scheduled
+- Async mode cannot be combined with `.paginate()` or resolved scheduled delete mode (`.scheduled(...)` or table-level `deletion('scheduled')`)
+- `batchSize` resolves as: per-call `batchSize` > `defaults.mutationBatchSize` > `400`
+- `delayMs` resolves as: per-call `delayMs` > `defaults.mutationAsyncDelayMs` > `0`
+- FK/cascade async fan-out uses `mutationBatchSize` for recursive delete cascade (`onDelete: 'cascade'`) and `mutationLeafBatchSize` for non-recursive actions (`set null`, `set default`)
 
 ## Next Steps
 

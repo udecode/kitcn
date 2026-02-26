@@ -1,6 +1,6 @@
 import { fetchAction, fetchQuery } from 'convex/nextjs';
 import type { FunctionReference } from 'convex/server';
-
+import { defaultIsUnauthorized } from '../crpc/error';
 import {
   type DataTransformerOptions,
   getTransformer,
@@ -93,19 +93,26 @@ export function getServerQueryClientOptions({
 
         // Use convex fetch directly - works for public queries too
         const opts = token ? { token } : undefined;
-        return transformer.output.deserialize(
-          type === 'convexQuery'
-            ? await fetchQuery(
-                funcRef as FunctionReference<'query'>,
-                wireArgs as any,
-                opts
-              )
-            : await fetchAction(
-                funcRef as FunctionReference<'action'>,
-                wireArgs as any,
-                opts
-              )
-        );
+        try {
+          return transformer.output.deserialize(
+            type === 'convexQuery'
+              ? await fetchQuery(
+                  funcRef as FunctionReference<'query'>,
+                  wireArgs as any,
+                  opts
+                )
+              : await fetchAction(
+                  funcRef as FunctionReference<'action'>,
+                  wireArgs as any,
+                  opts
+                )
+          );
+        } catch (error) {
+          if ((skipUnauth || authRequired) && defaultIsUnauthorized(error)) {
+            return null;
+          }
+          throw error;
+        }
       },
       queryKeyHashFn: createHashFn(),
     },

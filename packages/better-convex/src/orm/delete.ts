@@ -19,13 +19,14 @@ import {
   selectReturningRowWithHydration,
   serializeFilterExpression,
   softDeleteRow,
+  splitReturningSelection,
   toConvexFilter,
 } from './mutation-utils';
+import { GelRelationalQuery } from './query';
 import { QueryPromise } from './query-promise';
 import { canDeleteRow } from './rls/evaluator';
 import type { ConvexTable } from './table';
 import type {
-  MutationAsyncConfig,
   MutationExecuteConfig,
   MutationExecuteResult,
   MutationExecutionMode,
@@ -61,20 +62,36 @@ const applyIndexFilter = (query: any, filter: FilterExpression<boolean>) => {
 };
 
 export type ConvexDeleteWithout<
-  T extends ConvexDeleteBuilder<any, any, any>,
+  T extends ConvexDeleteBuilder<any, any, any, any>,
   K extends string,
 > = Omit<T, K>;
+
+type ConvexDeleteExecutableThis<
+  TTable extends ConvexTable<any>,
+  TReturning extends MutationReturning,
+  TMode extends MutationExecutionMode,
+> = {
+  _: {
+    table: TTable;
+    returning: TReturning;
+    mode: TMode;
+    result: MutationExecuteResult<TTable, TReturning, TMode>;
+    hasWhereOrAllowFullScan: true;
+  };
+};
 
 export class ConvexDeleteBuilder<
   TTable extends ConvexTable<any>,
   TReturning extends MutationReturning = undefined,
   TMode extends MutationExecutionMode = 'single',
+  THasWhereOrAllowFullScan extends boolean = false,
 > extends QueryPromise<MutationExecuteResult<TTable, TReturning, TMode>> {
   declare readonly _: {
     readonly table: TTable;
     readonly returning: TReturning;
     readonly mode: TMode;
     readonly result: MutationExecuteResult<TTable, TReturning, TMode>;
+    readonly hasWhereOrAllowFullScan: THasWhereOrAllowFullScan;
   };
 
   private whereExpression?: FilterExpression<boolean>;
@@ -86,6 +103,53 @@ export class ConvexDeleteBuilder<
   private executionModeOverride?: 'sync' | 'async';
   private paginateConfig?: MutationPaginateConfig;
 
+  private async _loadReturningCount(
+    row: Record<string, unknown>,
+    countSelection: Record<string, unknown>,
+    ormContext: ReturnType<typeof getOrmContext>
+  ): Promise<Record<string, number>> {
+    const schema = ormContext?.schema;
+    const edgeMetadata = ormContext?.edgeMetadata;
+    if (!schema || !edgeMetadata) {
+      throw new Error(
+        'returning({ _count }) requires orm.db(ctx) configured from createOrm({ schema, ... }).'
+      );
+    }
+
+    const tableName = getTableName(this.table);
+    const tableConfig = Object.values(schema).find(
+      (config) => config.name === tableName
+    );
+    if (!tableConfig) {
+      throw new Error(`Table config for '${tableName}' is not registered.`);
+    }
+    const tableEdges = edgeMetadata.filter(
+      (edge) => edge.sourceTable === tableName
+    );
+
+    const counted = await new GelRelationalQuery(
+      schema as any,
+      tableConfig as any,
+      tableEdges as any,
+      this.db as any,
+      {
+        where: {
+          id: row._id,
+        },
+        columns: {},
+        with: {
+          _count: countSelection,
+        },
+      } as any,
+      'first',
+      edgeMetadata as any,
+      ormContext?.rls,
+      ormContext?.relationLoading
+    ).execute();
+
+    return ((counted as any)?._count ?? {}) as Record<string, number>;
+  }
+
   constructor(
     private db: GenericDatabaseWriter<any>,
     private table: TTable
@@ -93,25 +157,32 @@ export class ConvexDeleteBuilder<
     super();
   }
 
-  where(expression: FilterExpression<boolean>): this {
+  where(
+    expression: FilterExpression<boolean>
+  ): ConvexDeleteBuilder<TTable, TReturning, TMode, true> {
     this.whereExpression = expression;
-    return this;
+    return this as any;
   }
 
   returning(): ConvexDeleteWithout<
-    ConvexDeleteBuilder<TTable, true, TMode>,
+    ConvexDeleteBuilder<TTable, true, TMode, THasWhereOrAllowFullScan>,
     'returning'
   >;
   returning<TSelection extends ReturningSelection<TTable>>(
     fields: TSelection
   ): ConvexDeleteWithout<
-    ConvexDeleteBuilder<TTable, TSelection, TMode>,
+    ConvexDeleteBuilder<TTable, TSelection, TMode, THasWhereOrAllowFullScan>,
     'returning'
   >;
   returning(
     fields?: ReturningSelection<TTable>
   ): ConvexDeleteWithout<
-    ConvexDeleteBuilder<TTable, MutationReturning, TMode>,
+    ConvexDeleteBuilder<
+      TTable,
+      MutationReturning,
+      TMode,
+      THasWhereOrAllowFullScan
+    >,
     'returning'
   > {
     this.returningFields = (fields ?? true) as TReturning;
@@ -121,7 +192,7 @@ export class ConvexDeleteBuilder<
   paginate(
     config: MutationPaginateConfig
   ): ConvexDeleteWithout<
-    ConvexDeleteBuilder<TTable, TReturning, 'paged'>,
+    ConvexDeleteBuilder<TTable, TReturning, 'paged', THasWhereOrAllowFullScan>,
     'paginate'
   > {
     if (!Number.isInteger(config.limit) || config.limit < 1) {
@@ -131,9 +202,9 @@ export class ConvexDeleteBuilder<
     return this as any;
   }
 
-  allowFullScan(): this {
+  allowFullScan(): ConvexDeleteBuilder<TTable, TReturning, TMode, true> {
     this.allowFullScanFlag = true;
-    return this;
+    return this as any;
   }
 
   private getIdEquality():
@@ -204,22 +275,44 @@ export class ConvexDeleteBuilder<
     return this;
   }
 
+  executeAsync(
+    this: ConvexDeleteExecutableThis<TTable, TReturning, TMode>,
+    ...args: TMode extends 'single'
+      ? [config?: Omit<MutationExecuteConfig, 'mode'>]
+      : [config: never]
+  ): Promise<
+    TMode extends 'single'
+      ? MutationExecuteResult<TTable, TReturning, 'single'>
+      : never
+  >;
   async executeAsync(
     ...args: TMode extends 'single'
-      ? [config?: MutationAsyncConfig]
+      ? [config?: Omit<MutationExecuteConfig, 'mode'>]
       : [config: never]
   ): Promise<
     TMode extends 'single'
       ? MutationExecuteResult<TTable, TReturning, 'single'>
       : never
   > {
-    const config = args[0] as MutationAsyncConfig | undefined;
-    return this.execute({
+    const config = args[0] as Omit<MutationExecuteConfig, 'mode'> | undefined;
+    const executable = this as unknown as ConvexDeleteBuilder<
+      TTable,
+      TReturning,
+      TMode,
+      true
+    >;
+    return executable.execute({
       ...config,
       mode: 'async',
     } as never) as any;
   }
 
+  execute(
+    this: ConvexDeleteExecutableThis<TTable, TReturning, TMode>,
+    ...args: TMode extends 'single'
+      ? [config?: MutationExecuteConfig]
+      : [config?: never]
+  ): Promise<MutationExecuteResult<TTable, TReturning, TMode>>;
   async execute(
     ...args: TMode extends 'single'
       ? [config?: MutationExecuteConfig]
@@ -228,6 +321,12 @@ export class ConvexDeleteBuilder<
     const config = args[0] as MutationExecuteConfig | undefined;
     const tableName = getTableName(this.table);
     const ormContext = getOrmContext(this.db);
+    const returningSelection =
+      this.returningFields && this.returningFields !== true
+        ? splitReturningSelection(
+            this.returningFields as Record<string, unknown>
+          )
+        : undefined;
     const strict = ormContext?.strict ?? true;
     const allowFullScan = this.allowFullScanFlag;
     const pagination = this.paginateConfig;
@@ -242,12 +341,18 @@ export class ConvexDeleteBuilder<
       maxBytesPerBatch,
       scheduleCallCap,
     } = getMutationCollectionLimits(ormContext);
-    const resolvedMode = getMutationExecutionMode(
-      ormContext,
-      config?.mode ?? this.executionModeOverride
-    );
+    const modeOverride = config?.mode ?? this.executionModeOverride;
+    const requestedModeIsExplicit = modeOverride !== undefined;
+    let resolvedMode = getMutationExecutionMode(ormContext, modeOverride);
     const delayMs = getMutationAsyncDelayMs(ormContext, config?.delayMs);
     const { deleteMode, scheduledDelayMs } = this.resolveDeleteModeAndDelay();
+    if (
+      !requestedModeIsExplicit &&
+      resolvedMode === 'async' &&
+      deleteMode === 'scheduled'
+    ) {
+      resolvedMode = 'sync';
+    }
 
     if (!isPaginated && resolvedMode === 'async') {
       if (deleteMode === 'scheduled') {
@@ -276,7 +381,13 @@ export class ConvexDeleteBuilder<
       this.executionModeOverride = 'async';
 
       try {
-        const firstBatch = (await this.execute()) as unknown as {
+        const executable = this as unknown as ConvexDeleteBuilder<
+          TTable,
+          TReturning,
+          TMode,
+          true
+        >;
+        const firstBatch = (await executable.execute()) as unknown as {
           continueCursor: string | null;
           isDone: boolean;
           numAffected: number;
@@ -525,13 +636,21 @@ export class ConvexDeleteBuilder<
         if (this.returningFields === true) {
           results.push(hydrateDateFieldsForRead(this.table, row as any));
         } else {
-          results.push(
-            selectReturningRowWithHydration(
-              this.table,
+          const nextRow = returningSelection?.columnSelection
+            ? selectReturningRowWithHydration(
+                this.table,
+                row as any,
+                returningSelection.columnSelection
+              )
+            : {};
+          if (returningSelection?.countSelection) {
+            nextRow._count = await this._loadReturningCount(
               row as any,
-              this.returningFields as any
-            )
-          );
+              returningSelection.countSelection,
+              ormContext
+            );
+          }
+          results.push(nextRow);
         }
       }
 

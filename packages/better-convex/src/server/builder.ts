@@ -69,6 +69,14 @@ const paginatedSchemaForTypes = z.object({
 /** Paginated schema type - both cursor and limit are required after .paginated() */
 type PaginatedInputSchema = typeof paginatedSchemaForTypes;
 
+/** Paginated schema type for external callers - both fields are optional due defaults. */
+const paginatedSchemaForClientTypes = z.object({
+  cursor: z.union([z.string(), z.null()]).optional(),
+  limit: z.number().optional(),
+});
+
+type PaginatedClientInputSchema = typeof paginatedSchemaForClientTypes;
+
 /**
  * Infer input type from ZodObject schema (for handlers)
  */
@@ -76,6 +84,16 @@ type InferInput<T> = T extends UnsetMarker
   ? Record<string, never>
   : T extends z.ZodObject<any>
     ? z.infer<T>
+    : never;
+
+/**
+ * Infer raw client input before defaults/transforms.
+ * Used for generated API arg typing.
+ */
+type InferClientInput<T> = T extends UnsetMarker
+  ? Record<string, never>
+  : T extends z.ZodObject<any>
+    ? z.input<T>
     : never;
 
 /**
@@ -87,6 +105,20 @@ type InferMiddlewareInput<T> = T extends UnsetMarker
   : T extends z.ZodObject<any>
     ? z.infer<T>
     : unknown;
+
+/**
+ * Static-only type hint attached to cRPC exports.
+ *
+ * Convex validators can widen unsupported types (like Date) to `any`.
+ * Codegen can read this hint from `typeof import(...).fn` to recover precise
+ * TypeScript input/output types for generated client API refs.
+ */
+export type CRPCFunctionTypeHint<TArgs, TReturns> = {
+  readonly __betterConvexTypeHint?: {
+    readonly args: TArgs;
+    readonly returns: TReturns;
+  };
+};
 
 // =============================================================================
 // Types for Configuration
@@ -272,6 +304,155 @@ async function executeMiddlewares(
     input: currentInput,
   };
 }
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  !!value &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  !(value instanceof Date);
+
+const toConvexSafeValue = (value: unknown): unknown => {
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (Array.isArray(value)) {
+    let serialized: unknown[] | undefined;
+    for (let index = 0; index < value.length; index += 1) {
+      const nested = value[index];
+      const encoded = toConvexSafeValue(nested);
+      const normalized = encoded === undefined ? null : encoded;
+      if (normalized !== nested) {
+        if (!serialized) {
+          serialized = value.slice();
+        }
+        serialized[index] = normalized;
+      }
+    }
+    return serialized ?? value;
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  let serialized: Record<string, unknown> | undefined;
+  for (const key in value) {
+    if (!Object.hasOwn(value, key)) {
+      continue;
+    }
+
+    const nested = value[key];
+    const encoded = toConvexSafeValue(nested);
+
+    if (encoded === undefined) {
+      if (!serialized) {
+        serialized = { ...value };
+      }
+      delete serialized[key];
+      continue;
+    }
+
+    if (encoded !== nested) {
+      if (!serialized) {
+        serialized = { ...value };
+      }
+      serialized[key] = encoded;
+    }
+  }
+
+  return serialized ?? value;
+};
+
+const wrapTwoArgRunner = (
+  runner: unknown,
+  owner: unknown
+): ((functionReference: unknown, args: unknown) => unknown) | undefined => {
+  if (typeof runner !== 'function') {
+    return;
+  }
+
+  return (functionReference: unknown, args: unknown) =>
+    Reflect.apply(runner, owner, [functionReference, toConvexSafeValue(args)]);
+};
+
+const wrapSchedulerRunner = (
+  runner: unknown,
+  owner: unknown
+):
+  | ((first: unknown, functionReference: unknown, args: unknown) => unknown)
+  | undefined => {
+  if (typeof runner !== 'function') {
+    return;
+  }
+
+  return (first: unknown, functionReference: unknown, args: unknown) =>
+    Reflect.apply(runner, owner, [
+      first,
+      functionReference,
+      toConvexSafeValue(args),
+    ]);
+};
+
+const withConvexSafeRunners = <TCtx>(ctx: TCtx): TCtx => {
+  if (!ctx || typeof ctx !== 'object') {
+    return ctx;
+  }
+
+  const contextObject = ctx as Record<string, unknown>;
+  let changed = false;
+  const wrappedContext: Record<string, unknown> = { ...contextObject };
+
+  const runMutation = wrapTwoArgRunner(
+    contextObject.runMutation,
+    contextObject
+  );
+  if (runMutation) {
+    wrappedContext.runMutation = runMutation;
+    changed = true;
+  }
+
+  const runQuery = wrapTwoArgRunner(contextObject.runQuery, contextObject);
+  if (runQuery) {
+    wrappedContext.runQuery = runQuery;
+    changed = true;
+  }
+
+  const runAction = wrapTwoArgRunner(contextObject.runAction, contextObject);
+  if (runAction) {
+    wrappedContext.runAction = runAction;
+    changed = true;
+  }
+
+  const scheduler = contextObject.scheduler;
+  if (scheduler && typeof scheduler === 'object') {
+    const schedulerObject = scheduler as Record<string, unknown>;
+    let schedulerChanged = false;
+    const wrappedScheduler: Record<string, unknown> = { ...schedulerObject };
+
+    const runAfter = wrapSchedulerRunner(
+      schedulerObject.runAfter,
+      schedulerObject
+    );
+    if (runAfter) {
+      wrappedScheduler.runAfter = runAfter;
+      schedulerChanged = true;
+    }
+
+    const runAt = wrapSchedulerRunner(schedulerObject.runAt, schedulerObject);
+    if (runAt) {
+      wrappedScheduler.runAt = runAt;
+      schedulerChanged = true;
+    }
+
+    if (schedulerChanged) {
+      wrappedContext.scheduler = wrappedScheduler;
+      changed = true;
+    }
+  }
+
+  return (changed ? wrappedContext : contextObject) as TCtx;
+};
 
 // =============================================================================
 // Procedure Builder
@@ -536,7 +717,9 @@ export class ProcedureBuilder<
     // Use customCtx for initial context transformation only
     const customFunction = customFn(
       baseFunction,
-      customCtx(async (_ctx) => functionConfig.createContext(_ctx))
+      customCtx(async (_ctx) =>
+        withConvexSafeRunners(await functionConfig.createContext(_ctx))
+      )
     );
     const returnsSchema = resolveConvexReturnsSchema(outputSchema);
     const typedReturnsSchema = returnsSchema as
@@ -601,6 +784,11 @@ export class ProcedureBuilder<
       internal: isInternal ?? false,
       ...meta,
     };
+    (fn as any).__betterConvexTransformer = functionConfig.transformer;
+    (fn as any).__betterConvexRawHandler = (opts: {
+      ctx: unknown;
+      input: unknown;
+    }) => handler(opts);
 
     return fn;
   }
@@ -619,6 +807,7 @@ export class QueryProcedureBuilder<
   TContext,
   TContextOverrides extends UnsetMarker | object = UnsetMarker,
   TInput extends UnsetMarker | z.ZodObject<any> = UnsetMarker,
+  TClientInput extends UnsetMarker | z.ZodObject<any> = TInput,
   TOutput extends UnsetMarker | z.ZodTypeAny = UnsetMarker,
   TMeta extends object = object,
 > extends ProcedureBuilder<
@@ -654,6 +843,7 @@ export class QueryProcedureBuilder<
     TContext,
     Overwrite<TContextOverrides, $ContextOverridesOut>,
     TInput,
+    TClientInput,
     TOutput,
     TMeta
   > {
@@ -668,6 +858,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     TInput,
+    TClientInput,
     TOutput,
     TMeta
   > {
@@ -682,6 +873,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     IntersectIfDefined<TInput, TNewInput>,
+    IntersectIfDefined<TClientInput, TNewInput>,
     TOutput,
     TMeta
   > {
@@ -705,6 +897,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     IntersectIfDefined<TInput, PaginatedInputSchema>,
+    IntersectIfDefined<TClientInput, PaginatedClientInputSchema>,
     z.ZodObject<{
       continueCursor: z.ZodUnion<[z.ZodString, z.ZodNull]>;
       isDone: z.ZodBoolean;
@@ -750,6 +943,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     TInput,
+    TClientInput,
     TNewOutput,
     TMeta
   > {
@@ -763,12 +957,17 @@ export class QueryProcedureBuilder<
       input: InferInput<TInput>;
     }) => Promise<TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult>
   ) {
-    return this._createFunction(
+    const fn = this._createFunction(
       handler,
       this._def.functionConfig.base,
       zCustomQuery,
       'query'
     );
+    return fn as typeof fn &
+      CRPCFunctionTypeHint<
+        InferClientInput<TClientInput>,
+        TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult
+      >;
   }
 
   /** Mark as internal - returns chainable builder using internal function */
@@ -777,6 +976,7 @@ export class QueryProcedureBuilder<
     TContext,
     TContextOverrides,
     TInput,
+    TClientInput,
     TOutput,
     TMeta
   > {
@@ -898,12 +1098,17 @@ export class MutationProcedureBuilder<
       input: InferInput<TInput>;
     }) => Promise<TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult>
   ) {
-    return this._createFunction(
+    const fn = this._createFunction(
       handler,
       this._def.functionConfig.base,
       zCustomMutation,
       'mutation'
     );
+    return fn as typeof fn &
+      CRPCFunctionTypeHint<
+        InferClientInput<TInput>,
+        TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult
+      >;
   }
 
   /** Mark as internal - returns chainable builder using internal function */
@@ -1029,12 +1234,17 @@ export class ActionProcedureBuilder<
       input: InferInput<TInput>;
     }) => Promise<TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult>
   ) {
-    return this._createFunction(
+    const fn = this._createFunction(
       handler,
       this._def.functionConfig.base,
       zCustomAction,
       'action'
     );
+    return fn as typeof fn &
+      CRPCFunctionTypeHint<
+        InferClientInput<TInput>,
+        TOutput extends z.ZodTypeAny ? z.infer<TOutput> : TResult
+      >;
   }
 
   /** Mark as internal - returns chainable builder using internal function */
@@ -1077,6 +1287,7 @@ type CRPCInstance<
   query: QueryProcedureBuilder<
     TQueryCtx,
     TQueryCtx,
+    UnsetMarker,
     UnsetMarker,
     UnsetMarker,
     UnsetMarker,
@@ -1187,6 +1398,7 @@ class CRPCBuilderWithContext<
       query: new QueryProcedureBuilder<
         TQueryCtx,
         TQueryCtx,
+        UnsetMarker,
         UnsetMarker,
         UnsetMarker,
         UnsetMarker,

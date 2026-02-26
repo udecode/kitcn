@@ -20,8 +20,6 @@ This guide covers how to call cRPC procedures from server-side code. You'll lear
 
 Let's explore the setup and usage patterns.
 
-The caller lets you invoke cRPC procedures directly from server-side code. No HTTP roundtrip - direct function calls with full type safety.
-
 ## Environment Setup
 
 The caller requires the Convex **site URL** (for HTTP actions), which is different from the real-time URL.
@@ -57,19 +55,17 @@ The caller requires the Convex **site URL** (for HTTP actions), which is differe
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {4-8}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
 import { createCallerFactory } from 'better-convex/server';
 
 export const { createContext, createCaller } = createCallerFactory({
   api,
   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
-  meta,
 });
 ```
 
 ### Better Auth (Next.js)
 
-For Better Auth with Next.js, see [Next.js Setup](/docs/nextjs) which uses `convexBetterAuth` from `better-convex/auth-nextjs`.
+For Better Auth with Next.js, see [Next.js Setup](/docs/nextjs) which uses `convexBetterAuth` from `better-convex/auth/nextjs`.
 
 ### Custom Auth
 
@@ -77,7 +73,6 @@ Use `createCallerFactory` with a custom `getToken` function.
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {7-11}
 import { api } from '@convex/api';
-import { meta } from '@convex/meta';
 import { createCallerFactory } from 'better-convex/server';
 
 export const { createContext, createCaller } = createCallerFactory({
@@ -90,12 +85,11 @@ export const { createContext, createCaller } = createCallerFactory({
       return { token };
     },
   },
-  meta,
 });
 ```
 
 <Callout icon={<InfoIcon />}>
-  **Note:** The `meta` parameter is generated via CLI. See [Metadata](/docs/server/metadata) for setup.
+  **Note:** The generated `api` object already includes cRPC metadata. No separate `meta` parameter is needed.
 </Callout>
 
 If you customize `transformer`, use the same transformer in:
@@ -105,6 +99,39 @@ If you customize `transformer`, use the same transformer in:
 - `getServerQueryClientOptions({ transformer })`
 
 `Date` support stays always on; custom transformer is additive only.
+
+## `createCallerFactory` vs `create<Module>Caller(ctx)`
+
+There are two caller APIs, each for a different context:
+
+| API | Location | When to use | Transport |
+|-----|----------|-------------|-----------|
+| `createCallerFactory` | `better-convex/server` | Server-side HTTP calls (Next.js API routes, RSC) | Convex fetch APIs |
+| `create<Module>Caller(ctx)` | `convex/functions/generated/<module>.runtime.ts` | In-process composition inside Convex handlers | Direct handler, `runQuery`/`runMutation`, `runAction`, and `scheduler` |
+
+Use `create<Module>Caller(ctx)` when you're already inside a Convex handler and want to call other cRPC procedures with type-safe autocomplete — no need to manually choose between `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction`, and `ctx.scheduler`.
+
+
+```ts title="convex/functions/teams.ts" showLineNumbers {3,7-9}
+import { z } from 'zod';
+import { privateQuery } from '../lib/crpc';
+import { createTeamsCaller } from './generated/teams.runtime';
+
+export const getTeamAndOwner = privateQuery
+  .input(z.object({ teamId: z.string() }))
+  .query(async ({ ctx, input }) => {
+    const caller = createTeamsCaller(ctx);
+    const team = await caller.getTeam({ teamId: input.teamId });
+    const owner = await caller.getOwner({ id: team.ownerId });
+    return { team, owner };
+  });
+```
+
+<Callout icon={<InfoIcon />}>
+  **Note:** In actions, each `create<Module>Caller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
+</Callout>
+
+For the full call matrix and type definitions, see [API Reference](#api-reference) below. For more details on composition, see [In-Process Procedure Composition](/docs/server/procedures#in-process-procedure-composition).
 
 ## Usage
 
@@ -187,6 +214,16 @@ Key differences:
 
 ## API Reference
 
+### Call Matrix
+
+What each caller context can invoke via `create<Module>Caller(ctx)`:
+
+| Caller context | Root query | Root mutation | Root action | `caller.actions.*` | `caller.schedule.*` |
+|----------------|------------|---------------|-------------|--------------------|---------------------|
+| `QueryCtx` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
+| `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
+
 ### createCallerFactory
 
 Creates a caller factory with token management and retry logic.
@@ -203,7 +240,6 @@ type CreateCallerFactoryOptions<TApi> = {
     ) => Promise<{ token?: string; isFresh?: boolean }>;
     isUnauthorized?: (error: unknown) => boolean;
   };
-  meta: CallerMeta;
   // Additive only. Built-in Date transformer remains enabled.
   transformer?: DataTransformer | { input: DataTransformer; output: DataTransformer };
 };
@@ -225,6 +261,6 @@ type ConvexContext<TApi> = {
 ## Next Steps
 
 <Cards>
-  <Card title="Metadata" href="/docs/server/metadata" />
+  <Card title="Metadata" href="/docs/server/apidata" />
   <Card title="RSC" href="/docs/nextjs/rsc" />
 </Cards>

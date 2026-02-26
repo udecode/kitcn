@@ -70,7 +70,7 @@ import type {
   FunctionReference,
   FunctionReturnType,
 } from 'convex/server';
-import { CRPCClientError } from '../crpc/error';
+import { CRPCClientError, defaultIsUnauthorized } from '../crpc/error';
 import {
   type CombinedDataTransformer,
   type DataTransformerOptions,
@@ -119,17 +119,20 @@ export interface ConvexQueryClientOptions extends ConvexReactClientOptions {
   /** Auth store for checking auth state in queryFn */
   authStore?: AuthStore;
 
+  /**
+   * Opt out of consistent SSR queries for faster performance.
+   * Trade-off: queries may return results from different timestamps.
+   */
+  dangerouslyUseInconsistentQueriesDuringSSR?: boolean;
+
   /** TanStack QueryClient. Can also be set later via .connect(queryClient) */
   queryClient?: QueryClient;
 
   /** Custom fetch for SSR. Avoid bundling on client. */
   serverFetch?: typeof globalThis.fetch;
 
-  /**
-   * Opt out of consistent SSR queries for faster performance.
-   * Trade-off: queries may return results from different timestamps.
-   */
-  dangerouslyUseInconsistentQueriesDuringSSR?: boolean;
+  /** Optional payload transformer (always composed with built-in Date support). */
+  transformer?: DataTransformerOptions;
 
   /**
    * Delay in ms before unsubscribing when a query has no observers.
@@ -138,9 +141,6 @@ export interface ConvexQueryClientOptions extends ConvexReactClientOptions {
    * @default 3000
    */
   unsubscribeDelay?: number;
-
-  /** Optional payload transformer (always composed with built-in Date support). */
-  transformer?: DataTransformerOptions;
 }
 
 // ============================================================================
@@ -739,11 +739,15 @@ export class ConvexQueryClient {
       if (isConvexQuery(queryKey)) {
         const [, funcName, args] = queryKey;
         const wireArgs = this.transformer.input.serialize(args);
+        const skipUnauth = meta?.skipUnauth ?? false;
 
         // Check auth via authStore if authType in meta
         if (meta?.authType === 'required' && !isServer && this.authStore) {
           const authState = this.getAuthState();
           if (authState && !authState.isLoading && !authState.isAuthenticated) {
+            if (skipUnauth) {
+              return null as FunctionReturnType<T>;
+            }
             authState.onUnauthorized({ queryName: funcName });
             throw new CRPCClientError({
               code: 'UNAUTHORIZED',
@@ -752,41 +756,52 @@ export class ConvexQueryClient {
           }
         }
 
-        // Execute query: HTTP on server, WebSocket on client
-        if (isServer) {
-          if (this.ssrQueryMode === 'consistent') {
+        try {
+          // Execute query: HTTP on server, WebSocket on client
+          if (isServer) {
+            if (this.ssrQueryMode === 'consistent') {
+              return this.transformer.output.deserialize(
+                await this.serverHttpClient!.consistentQuery(
+                  funcName as unknown as FunctionReference<'query'>,
+                  wireArgs as any
+                )
+              ) as FunctionReturnType<T>;
+            }
             return this.transformer.output.deserialize(
-              await this.serverHttpClient!.consistentQuery(
+              await this.serverHttpClient!.query(
                 funcName as unknown as FunctionReference<'query'>,
                 wireArgs as any
               )
             ) as FunctionReturnType<T>;
           }
+
           return this.transformer.output.deserialize(
-            await this.serverHttpClient!.query(
+            await this.convexClient.query(
               funcName as unknown as FunctionReference<'query'>,
               wireArgs as any
             )
           ) as FunctionReturnType<T>;
+        } catch (error) {
+          if (skipUnauth && defaultIsUnauthorized(error)) {
+            return null as FunctionReturnType<T>;
+          }
+          throw error;
         }
-
-        return this.transformer.output.deserialize(
-          await this.convexClient.query(
-            funcName as unknown as FunctionReference<'query'>,
-            wireArgs as any
-          )
-        ) as FunctionReturnType<T>;
       }
 
       // Handle Convex actions (same pattern as queries)
       if (isConvexAction(queryKey)) {
         const [, funcName, args] = queryKey;
         const wireArgs = this.transformer.input.serialize(args);
+        const skipUnauth = meta?.skipUnauth ?? false;
 
         // Check auth via authStore if authType in meta
         if (meta?.authType === 'required' && !isServer && this.authStore) {
           const authState = this.getAuthState();
           if (authState && !authState.isLoading && !authState.isAuthenticated) {
+            if (skipUnauth) {
+              return null as FunctionReturnType<T>;
+            }
             authState.onUnauthorized({ queryName: funcName });
             throw new CRPCClientError({
               code: 'UNAUTHORIZED',
@@ -795,21 +810,28 @@ export class ConvexQueryClient {
           }
         }
 
-        if (isServer) {
+        try {
+          if (isServer) {
+            return this.transformer.output.deserialize(
+              await this.serverHttpClient!.action(
+                funcName as unknown as FunctionReference<'action'>,
+                wireArgs as any
+              )
+            ) as FunctionReturnType<T>;
+          }
+
           return this.transformer.output.deserialize(
-            await this.serverHttpClient!.action(
+            await this.convexClient.action(
               funcName as unknown as FunctionReference<'action'>,
               wireArgs as any
             )
           ) as FunctionReturnType<T>;
+        } catch (error) {
+          if (skipUnauth && defaultIsUnauthorized(error)) {
+            return null as FunctionReturnType<T>;
+          }
+          throw error;
         }
-
-        return this.transformer.output.deserialize(
-          await this.convexClient.action(
-            funcName as unknown as FunctionReference<'action'>,
-            wireArgs as any
-          )
-        ) as FunctionReturnType<T>;
       }
 
       // Fallback to other queryFn for non-Convex queries

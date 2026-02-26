@@ -8,6 +8,7 @@ import type {
   ColumnBuilder,
   ForeignKeyAction,
 } from './builders/column-builder';
+import type { EdgeMetadata } from './extractRelationsConfig';
 import type {
   BinaryExpression,
   ExpressionVisitor,
@@ -60,15 +61,34 @@ export type ForeignKeyGraph = {
 
 export type OrmContextValue = {
   foreignKeyGraph?: ForeignKeyGraph;
+  schema?: TablesRelationalConfig;
+  edgeMetadata?: EdgeMetadata[];
+  relationLoading?: { concurrency?: number };
   scheduler?: Scheduler;
   scheduledDelete?: SchedulableFunctionReference;
   scheduledMutationBatch?: SchedulableFunctionReference;
   rls?: RlsContext;
   strict?: boolean;
   defaults?: OrmRuntimeDefaults;
+  resolvedDefaults?: ResolvedOrmRuntimeDefaults;
 };
 
 export type MutationRunMode = 'sync' | 'async';
+
+export type ResolvedOrmRuntimeDefaults = {
+  defaultLimit?: number;
+  countBackfillBatchSize: number;
+  relationFanOutMaxKeys: number;
+  aggregateCartesianMaxKeys: number;
+  aggregateWorkBudget: number;
+  mutationBatchSize: number;
+  mutationLeafBatchSize: number;
+  mutationMaxRows: number;
+  mutationMaxBytesPerBatch: number;
+  mutationScheduleCallCap: number;
+  mutationExecutionMode: MutationRunMode;
+  mutationAsyncDelayMs: number;
+};
 
 const UNDEFINED_SENTINEL_KEY = '__betterConvexUndefined';
 const INTERNAL_ID_FIELD = '_id';
@@ -562,19 +582,84 @@ export const deserializeFilterExpression = (
   return createUnaryExpression(unary.operator, nested);
 };
 
-const DEFAULT_MUTATION_BATCH_SIZE = 100;
-const DEFAULT_MUTATION_LEAF_BATCH_SIZE = 900;
-const DEFAULT_MUTATION_MAX_ROWS = 1000;
+const DEFAULT_MUTATION_BATCH_SIZE = 400;
+const DEFAULT_MUTATION_LEAF_BATCH_SIZE = 1600;
+const DEFAULT_MUTATION_MAX_ROWS = 10_000;
 const DEFAULT_MUTATION_MAX_BYTES_PER_BATCH = 2_097_152;
-const DEFAULT_MUTATION_SCHEDULE_CALL_CAP = 100;
+const DEFAULT_MUTATION_SCHEDULE_CALL_CAP = 800;
 const DEFAULT_MUTATION_ASYNC_DELAY_MS = 0;
+const DEFAULT_COUNT_BACKFILL_BATCH_SIZE = 1000;
+const DEFAULT_RELATION_FAN_OUT_MAX_KEYS = 1000;
+const DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS = 4096;
+const DEFAULT_AGGREGATE_WORK_BUDGET = 16_384;
 const MEASURED_BYTE_SAFETY_MULTIPLIER = 2;
+const UTF8_LENGTH_THRESHOLD = 500;
+const UTF8_ENCODER = new TextEncoder();
+
+const getUtf8ByteLength = (value: string): number => {
+  if (value.length > UTF8_LENGTH_THRESHOLD) {
+    return UTF8_ENCODER.encode(value).length;
+  }
+
+  let bytes = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x80) {
+      bytes += 1;
+    } else if (code < 0x8_00) {
+      bytes += 2;
+    } else if (code >= 0xd8_00 && code <= 0xdb_ff) {
+      bytes += 4;
+      i += 1;
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+};
+
+export const resolveOrmRuntimeDefaults = (
+  defaults: OrmRuntimeDefaults | undefined,
+  runtime: {
+    scheduler?: Scheduler;
+    scheduledMutationBatch?: SchedulableFunctionReference;
+  } = {}
+): ResolvedOrmRuntimeDefaults => {
+  const inferredMode: MutationRunMode =
+    runtime.scheduler && runtime.scheduledMutationBatch ? 'async' : 'sync';
+  return {
+    defaultLimit: defaults?.defaultLimit,
+    countBackfillBatchSize:
+      defaults?.countBackfillBatchSize ?? DEFAULT_COUNT_BACKFILL_BATCH_SIZE,
+    relationFanOutMaxKeys:
+      defaults?.relationFanOutMaxKeys ?? DEFAULT_RELATION_FAN_OUT_MAX_KEYS,
+    aggregateCartesianMaxKeys:
+      defaults?.aggregateCartesianMaxKeys ??
+      DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS,
+    aggregateWorkBudget:
+      defaults?.aggregateWorkBudget ?? DEFAULT_AGGREGATE_WORK_BUDGET,
+    mutationBatchSize:
+      defaults?.mutationBatchSize ?? DEFAULT_MUTATION_BATCH_SIZE,
+    mutationLeafBatchSize:
+      defaults?.mutationLeafBatchSize ?? DEFAULT_MUTATION_LEAF_BATCH_SIZE,
+    mutationMaxRows: defaults?.mutationMaxRows ?? DEFAULT_MUTATION_MAX_ROWS,
+    mutationMaxBytesPerBatch:
+      defaults?.mutationMaxBytesPerBatch ??
+      DEFAULT_MUTATION_MAX_BYTES_PER_BATCH,
+    mutationScheduleCallCap:
+      defaults?.mutationScheduleCallCap ?? DEFAULT_MUTATION_SCHEDULE_CALL_CAP,
+    mutationExecutionMode: defaults?.mutationExecutionMode ?? inferredMode,
+    mutationAsyncDelayMs:
+      defaults?.mutationAsyncDelayMs ?? DEFAULT_MUTATION_ASYNC_DELAY_MS,
+  };
+};
 
 export const estimateMeasuredMutationRowBytes = (
   row: Record<string, unknown>
-): number =>
-  Buffer.byteLength(JSON.stringify(row), 'utf8') *
-  MEASURED_BYTE_SAFETY_MULTIPLIER;
+): number => {
+  const serializedRow = JSON.stringify(row);
+  return getUtf8ByteLength(serializedRow) * MEASURED_BYTE_SAFETY_MULTIPLIER;
+};
 
 export const takeRowsWithinByteBudget = (
   rows: Record<string, unknown>[],
@@ -609,19 +694,15 @@ export const getMutationCollectionLimits = (
   maxBytesPerBatch: number;
   scheduleCallCap: number;
 } => {
-  const batchSize =
-    context?.defaults?.mutationBatchSize ?? DEFAULT_MUTATION_BATCH_SIZE;
+  const defaults = context?.resolvedDefaults ?? context?.defaults;
+  const batchSize = defaults?.mutationBatchSize ?? DEFAULT_MUTATION_BATCH_SIZE;
   const leafBatchSize =
-    context?.defaults?.mutationLeafBatchSize ??
-    DEFAULT_MUTATION_LEAF_BATCH_SIZE;
-  const maxRows =
-    context?.defaults?.mutationMaxRows ?? DEFAULT_MUTATION_MAX_ROWS;
+    defaults?.mutationLeafBatchSize ?? DEFAULT_MUTATION_LEAF_BATCH_SIZE;
+  const maxRows = defaults?.mutationMaxRows ?? DEFAULT_MUTATION_MAX_ROWS;
   const maxBytesPerBatch =
-    context?.defaults?.mutationMaxBytesPerBatch ??
-    DEFAULT_MUTATION_MAX_BYTES_PER_BATCH;
+    defaults?.mutationMaxBytesPerBatch ?? DEFAULT_MUTATION_MAX_BYTES_PER_BATCH;
   const scheduleCallCap =
-    context?.defaults?.mutationScheduleCallCap ??
-    DEFAULT_MUTATION_SCHEDULE_CALL_CAP;
+    defaults?.mutationScheduleCallCap ?? DEFAULT_MUTATION_SCHEDULE_CALL_CAP;
 
   if (!Number.isInteger(batchSize) || batchSize < 1) {
     throw new Error('mutationBatchSize must be a positive integer.');
@@ -669,14 +750,35 @@ const consumeScheduleCall = (state: MutationScheduleState | undefined) => {
 export const getMutationExecutionMode = (
   context?: OrmContextValue,
   override?: MutationRunMode
-): MutationRunMode =>
-  override ?? context?.defaults?.mutationExecutionMode ?? 'sync';
+): MutationRunMode => {
+  const requestedMode =
+    override ??
+    context?.resolvedDefaults?.mutationExecutionMode ??
+    context?.defaults?.mutationExecutionMode;
+  if (requestedMode === 'sync') {
+    return 'sync';
+  }
+  if (requestedMode === 'async') {
+    if (override === 'async') {
+      return 'async';
+    }
+    if (context?.scheduler && context?.scheduledMutationBatch) {
+      return 'async';
+    }
+    return 'sync';
+  }
+  if (context?.scheduler && context?.scheduledMutationBatch) {
+    return 'async';
+  }
+  return 'sync';
+};
 
 export const getMutationAsyncDelayMs = (
   context?: OrmContextValue,
   override?: number
 ): number =>
   override ??
+  context?.resolvedDefaults?.mutationAsyncDelayMs ??
   context?.defaults?.mutationAsyncDelayMs ??
   DEFAULT_MUTATION_ASYNC_DELAY_MS;
 
@@ -689,30 +791,19 @@ export const collectMutationRowsBounded = async (
     maxRows: number;
   }
 ): Promise<Record<string, unknown>[]> => {
-  let cursor: string | null = null;
-  const rows: Record<string, unknown>[] = [];
+  const rows = (await buildQuery().take(options.maxRows + 1)) as Record<
+    string,
+    unknown
+  >[];
 
-  while (true) {
-    const page: {
-      page: Record<string, unknown>[];
-      continueCursor: string | null;
-      isDone: boolean;
-    } = await buildQuery().paginate({
-      cursor,
-      numItems: options.batchSize,
-    });
-    rows.push(...(page.page as Record<string, unknown>[]));
-    if (rows.length > options.maxRows) {
-      throw new Error(
-        `${options.operation} matched more than ${options.maxRows} rows on "${options.tableName}". ` +
-          'Narrow the filter or increase defineSchema(..., { defaults: { mutationMaxRows } }).'
-      );
-    }
-    if (page.isDone) {
-      return rows;
-    }
-    cursor = page.continueCursor;
+  if (rows.length > options.maxRows) {
+    throw new Error(
+      `${options.operation} matched more than ${options.maxRows} rows on "${options.tableName}". ` +
+        'Narrow the filter or increase defineSchema(..., { defaults: { mutationMaxRows } }).'
+    );
   }
+
+  return rows;
 };
 
 type ForeignKeyDefinition = {
@@ -1172,6 +1263,24 @@ async function collectReferencingRows(
   );
 }
 
+async function collectAsyncCascadeRowsBounded(
+  buildQuery: () => any,
+  batchSize: number,
+  maxBytesPerBatch: number
+): Promise<{ rows: Record<string, unknown>[]; needsContinuation: boolean }> {
+  const rows = (await buildQuery().take(batchSize + 1)) as Record<
+    string,
+    unknown
+  >[];
+  const hasMoreRows = rows.length > batchSize;
+  const batchRows = hasMoreRows ? rows.slice(0, batchSize) : rows;
+  const bounded = takeRowsWithinByteBudget(batchRows, maxBytesPerBatch);
+  return {
+    rows: bounded.rows,
+    needsContinuation: hasMoreRows || bounded.hitLimit,
+  };
+}
+
 async function hasReferencingRow(
   db: GenericDatabaseWriter<any>,
   foreignKey: IncomingForeignKeyDefinition,
@@ -1291,22 +1400,17 @@ export async function applyIncomingForeignKeyActionsOnDelete(
     if (options.executionMode === 'async') {
       const asyncBatchSize =
         action === 'cascade' ? options.batchSize : options.leafBatchSize;
-      const page: {
-        page: Record<string, unknown>[];
-        continueCursor: string | null;
-        isDone: boolean;
-      } = await db
-        .query(foreignKey.sourceTableName)
-        .withIndex(indexName, (q: any) =>
-          buildIndexPredicate(q, foreignKey.sourceColumns, targetValues)
-        )
-        .paginate({ cursor: null, numItems: asyncBatchSize });
-      const bounded = takeRowsWithinByteBudget(
-        page.page as Record<string, unknown>[],
+      const { rows, needsContinuation } = await collectAsyncCascadeRowsBounded(
+        () =>
+          db
+            .query(foreignKey.sourceTableName)
+            .withIndex(indexName, (q: any) =>
+              buildIndexPredicate(q, foreignKey.sourceColumns, targetValues)
+            ),
+        asyncBatchSize,
         options.maxBytesPerBatch
       );
-      referencingRows = bounded.rows;
-      const needsContinuation = bounded.hitLimit || !page.isDone;
+      referencingRows = rows;
       if (needsContinuation) {
         if (!options.scheduler || !options.scheduledMutationBatch) {
           throw new Error(
@@ -1492,22 +1596,17 @@ export async function applyIncomingForeignKeyActionsOnUpdate(
     let referencingRows: Record<string, unknown>[];
     if (options.executionMode === 'async') {
       const asyncBatchSize = options.leafBatchSize;
-      const page: {
-        page: Record<string, unknown>[];
-        continueCursor: string | null;
-        isDone: boolean;
-      } = await db
-        .query(foreignKey.sourceTableName)
-        .withIndex(indexName, (q: any) =>
-          buildIndexPredicate(q, foreignKey.sourceColumns, oldValues)
-        )
-        .paginate({ cursor: null, numItems: asyncBatchSize });
-      const bounded = takeRowsWithinByteBudget(
-        page.page as Record<string, unknown>[],
+      const { rows, needsContinuation } = await collectAsyncCascadeRowsBounded(
+        () =>
+          db
+            .query(foreignKey.sourceTableName)
+            .withIndex(indexName, (q: any) =>
+              buildIndexPredicate(q, foreignKey.sourceColumns, oldValues)
+            ),
+        asyncBatchSize,
         options.maxBytesPerBatch
       );
-      referencingRows = bounded.rows;
-      const needsContinuation = bounded.hitLimit || !page.isDone;
+      referencingRows = rows;
       if (needsContinuation) {
         if (!options.scheduler || !options.scheduledMutationBatch) {
           throw new Error(
@@ -1621,6 +1720,83 @@ export function getSelectionColumnName(value: unknown): string {
     }
   }
   throw new Error('Returning selection must reference a column');
+}
+
+export type MutationReturningCountSelection = Record<
+  string,
+  | true
+  | {
+      where?: Record<string, unknown> | undefined;
+    }
+  | undefined
+>;
+
+export function splitReturningSelection(fields: Record<string, unknown>): {
+  columnSelection: Record<string, unknown> | undefined;
+  countSelection: MutationReturningCountSelection | undefined;
+} {
+  const columnSelection: Record<string, unknown> = {};
+  let countSelection: MutationReturningCountSelection | undefined;
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (key !== '_count') {
+      getSelectionColumnName(value);
+      columnSelection[key] = value;
+      continue;
+    }
+
+    if (value === undefined) {
+      continue;
+    }
+    if (!isPlainObject(value)) {
+      throw new Error('returning({ _count }) requires an object.');
+    }
+
+    const nextCountSelection: MutationReturningCountSelection = {};
+    for (const [relationName, relationSelection] of Object.entries(value)) {
+      if (relationSelection === undefined || relationSelection === false) {
+        continue;
+      }
+      if (relationSelection === true) {
+        nextCountSelection[relationName] = true;
+        continue;
+      }
+      if (!isPlainObject(relationSelection)) {
+        throw new Error(
+          `returning({ _count.${relationName} }) must be true or { where }`
+        );
+      }
+      if ('select' in relationSelection) {
+        throw new Error(
+          `returning({ _count.${relationName}.select }) is removed. Use returning({ _count: { ${relationName}: true } })`
+        );
+      }
+      for (const [optionKey, optionValue] of Object.entries(
+        relationSelection
+      )) {
+        if (optionKey !== 'where' && optionValue !== undefined) {
+          throw new Error(
+            `returning({ _count.${relationName} }) does not support '${optionKey}'`
+          );
+        }
+      }
+      if (typeof relationSelection.where === 'function') {
+        throw new Error(
+          `returning({ _count.${relationName}.where }) callback is unsupported in v1`
+        );
+      }
+      nextCountSelection[relationName] = {
+        where: relationSelection.where as Record<string, unknown> | undefined,
+      };
+    }
+    countSelection = nextCountSelection;
+  }
+
+  return {
+    columnSelection:
+      Object.keys(columnSelection).length > 0 ? columnSelection : undefined,
+    countSelection,
+  };
 }
 
 export function selectReturningRow(

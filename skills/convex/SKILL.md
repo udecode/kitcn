@@ -7,8 +7,8 @@ description: ALWAYS use this skill when working with convex or better-convex. Co
 
 Use this file first for everyday feature delivery in an already configured better-convex app.
 
-- If setup/bootstrap/env/auth wiring or project structure mirroring is missing, use `references/setup.md`.
-- If the task is advanced or niche, load only the specific reference listed at the end.
+- If setup/bootstrap/env/auth wiring or project structure mirroring is missing, use `references/setup/index.md` (then the relevant setup file).
+- If the task is advanced or niche, load only the specific feature reference listed at the end.
 
 ## Scope
 
@@ -33,6 +33,7 @@ Out of scope:
 4. Use `CRPCError` for expected failures.
 5. Prefer schema triggers for cross-row invariants, but move invariant maintenance to explicit mutation helpers if trigger execution is unstable (for example init/seed hangs or recursive write paths).
 6. Keep auth/rate-limit checks server-side.
+7. **Inter-procedure calls**: `create<Module>Handler(ctx)` in queries/mutations (zero overhead) unless validation is relevant, `create<Module>Caller(ctx)` in actions/HTTP routes. In action context use `caller.actions.*` for action procedures and `caller.schedule.*` for scheduling. Import from `./generated/<module>.runtime`. Never call `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly for module procedures.
 
 ## Shortcut Mode (tRPC + Drizzle Mental Model)
 
@@ -44,10 +45,10 @@ Default assumption:
 Only remember these non-parity deltas:
 
 1. Procedure input root must be `z.object(...)` (no primitive root args).
-2. No `z.void()` outputs; use `.output(z.null())` for no-value mutations.
+2. No `z.void()` outputs; omit `.output(...)` for no-value mutations.
 3. Stacked `.input(...)` calls merge input shapes.
 4. `.paginated({ limit, item })` must be before `.query()` and auto-adds `input.cursor` + `input.limit`, output `{ page, continueCursor, isDone }`.
-5. Metadata is codegen’d to client (`@convex/meta`) so never put secrets in `.meta(...)`; chaining `.meta(...)` is shallow merge and supports `defaultMeta`.
+5. Metadata is codegen’d onto `@convex/api` leaves (`api.namespace.fn.meta`) so never put secrets in `.meta(...)`; chaining `.meta(...)` is shallow merge and supports `defaultMeta`.
 6. Auth metadata drives client behavior: `auth: "optional"` waits for auth load then runs, `auth: "required"` waits then skips when logged out.
 7. `ctx.orm` enforces constraints + RLS; `ctx.db` bypasses them.
 8. Non-paginated `findMany()` must be explicitly sized (`limit`, cursor mode, schema `defaultLimit`, or explicit `allowFullScan`).
@@ -57,22 +58,33 @@ Only remember these non-parity deltas:
 12. String operators / `columns` projection / many-relation subfilters can run post-fetch; bound result size early.
 13. Search mode is relevance-ordered and does not support `orderBy`; vector mode has stricter limits (no cursor/offset/top-level where/order).
 14. Update/delete without `where` throws unless `allowFullScan()`.
-15. cRPC React queries are real-time by default (`subscribe: true`); never use `queryClient.invalidateQueries` for these subscribed paths.
-16. In RSC, `prefetch` hydrates client, `caller` is server-only and not hydrated, `preloadQuery` hydrates but can cause stale split ownership if also rendered client-side.
-17. Better Auth Next.js shortcut is `convexBetterAuth(...)`; generic server-only shortcut is `createCallerFactory(...)`.
-18. Use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out.
+15. `count()`, `aggregate()`, and `groupBy()` require a matching `aggregateIndex`. Use `groupBy({ by, _count, _sum })` instead of multiple `.count()` calls or `findMany` + manual JS grouping. Every `by` field must be finite-constrained (`eq`/`in`/`isNull`) in `where`. See `references/features/aggregates.md`.
+16. cRPC React queries are real-time by default (`subscribe: true`); never use `queryClient.invalidateQueries` for these subscribed paths.
+17. In RSC, `prefetch` hydrates client, `caller` is server-only and not hydrated, `preloadQuery` hydrates but can cause stale split ownership if also rendered client-side.
+18. Better Auth Next.js shortcut is `convexBetterAuth(...)`; generic server-only shortcut is `createCallerFactory(...)`.
+19. Use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out.
+20. **NEVER** use `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly for module-to-module calls. Use `create<Module>Handler(ctx)` or `create<Module>Caller(ctx)` from `convex/functions/generated/<module>.runtime` instead.
+21. **`create<Module>Handler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only. Import from `./generated/<module>.runtime`.
+22. **`create<Module>Caller(ctx)`** — use in actions and HTTP routes (where handler is unavailable). Goes through validation + middleware. Root caller exposes query+mutation procedures. In `ActionCtx`, action procedures are under `caller.actions.*`; scheduling is under `caller.schedule.now|after|at` with `caller.schedule.cancel(id)`. Import from `./generated/<module>.runtime`. Each caller/handler eagerly loads every procedure in its module (no lazy loading) — split large modules to keep bundles lean.
+23. API types (`Api`, `ApiInputs`, `ApiOutputs`, `Select`, `Insert`, `TableName`) import from `@convex/api` — no manual `inferApiInputs<typeof api>`.
+23. HTTP router must export as `httpRouter` (not `appRouter`) for codegen.
+24. Server wiring imports come from `convex/functions/generated/` directory: `getAuth`, `defineAuth` from `generated/auth`; `initCRPC`, `QueryCtx`, `MutationCtx`, `OrmCtx` from `generated/server`; `create<Module>Caller`, `create<Module>Handler` from `generated/<module>.runtime`. No manual `convex/lib/orm.ts`.
+25. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
+26. Internal auth functions at `internal.generated.*` (not `internal.auth.*`).
+27. Async mutation batching is the default (codegen wires it). Customize per call: `execute({ batchSize, delayMs })`. Opt into sync: `execute({ mode: 'sync' })` or `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`. Relevant defaults: `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
 
 ## Directory Boundary (Important)
 
 This skill is directory-scoped. Do not depend on reading files outside `skills/convex/**`.
 
-Use `references/setup.md` when the task needs:
+Use `references/setup/` when the task needs:
 
-1. Project/file structure setup.
-2. Canonical template mirroring.
-3. Scaffolding that should match the canonical template structure documented in `references/setup.md`.
+1. Project/file structure setup → `setup/index.md` + `setup/server.md`
+2. Auth bootstrap → `setup/auth.md`
+3. Client/provider wiring → `setup/react.md`
+4. Framework-specific setup → `setup/next.md` or `setup/start.md`
 
-For full template-level recreation: start with `references/setup.md`, then load only selected deep refs (`auth-admin.md`, `auth-organizations.md`, `aggregates.md`, `http.md`, `scheduling.md`, `testing.md`).
+For full template-level recreation: start with `setup/index.md`, then load relevant setup files, then load selected feature refs.
 
 ## First-Pass Feature Intake (Do This Before Edits)
 
@@ -107,28 +119,6 @@ Typical feature touches:
 5. Optional: HTTP route(s), scheduling hooks.
 6. Tests for auth/error/trigger behavior.
 
-## One-Shot Simulation Guardrails
-
-When the task is simulation-heavy, follow these conventions first:
-
-1. cRPC context: use typed split context (`MaybeAuthCtx`, `AuthCtx`) + a single session resolver helper (for example `getSessionUser`).
-2. Pagination: prefer `.paginated({ limit, item })` for list endpoints consumed by infinite queries.
-3. `orderBy` shape: always object form (`orderBy: { updatedAt: "desc" }`), never array form.
-4. Aggregates feature gate:
-   - If `Aggregates: Yes`, wire component + helper + schema triggers together.
-   - If `Aggregates: No`, remove all aggregate imports, helper modules, component config, and schema trigger hooks in the same edit.
-5. Rate limiter component: use static `components` import in `rate-limiter.ts`. Never use lazy imports in Convex code.
-6. Not-found tests: do not fabricate Convex document IDs; use real inserted IDs or semantic lookup keys (slug/name/email).
-7. Bootstrap smoke must pass before feature polish:
-   - `bunx convex run internal.seed.seed`
-   - `bunx convex run internal.init.default`
-   - one public query + one auth-protected query.
-8. Never index `createdAt`; use `updatedAt` (or another explicit sortable column) for index definitions.
-9. If `internal.seed.seed` / `internal.init.default` hangs with `Returned promise will never resolve`, trace trigger recursion or stale component wiring, move invariant/counter sync out of recursive trigger paths into explicit mutation helpers, then rerun codegen and bootstrap smoke checks.
-10. Keep one-time setup/bootstrap/codegen/env instructions in `references/setup.md` (do not duplicate here).
-
----
-
 ## Core Patterns
 
 ### 1) Schema + Relations + Trigger
@@ -139,10 +129,10 @@ import {
   convexTable,
   defineRelations,
   defineSchema,
+  defineTriggers,
   id,
   integer,
   index,
-  onChange,
   text,
   timestamp,
 } from "better-convex/orm";
@@ -178,7 +168,24 @@ export const task = convexTable(
   (t) => [
     index("projectId_updatedAt").on(t.projectId, t.updatedAt),
     index("projectId_status").on(t.projectId, t.status),
-    onChange(async (ctx, change) => {
+  ]
+);
+
+const tables = { project, task };
+export default defineSchema(tables, { strict: false });
+
+export const relations = defineRelations(tables, (r) => ({
+  project: {
+    tasks: r.many.task(),
+  },
+  task: {
+    project: r.one.project({ from: r.task.projectId, to: r.project.id }),
+  },
+}));
+
+export const triggers = defineTriggers(relations, {
+  task: {
+    change: async (change, ctx) => {
       const projectId = change.newDoc?.projectId ?? change.oldDoc?.projectId;
       if (!projectId) return;
       // Keep invariants bounded and idempotent.
@@ -194,21 +201,9 @@ export const task = convexTable(
           openTaskCount: open.length,
         })
         .where(eq(project.id, projectId));
-    }),
-  ]
-);
-
-const tables = { project, task };
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  project: {
-    tasks: r.many.task(),
+    },
   },
-  task: {
-    project: r.one.project({ from: r.task.projectId, to: r.project.id }),
-  },
-}));
+});
 ```
 
 Schema rules that matter:
@@ -223,16 +218,11 @@ Schema rules that matter:
 ```ts
 // convex/lib/crpc.ts (shape reference only)
 import { getHeaders } from "better-convex/auth";
-import { CRPCError, initCRPC } from "better-convex/server";
-import { getAuth } from "../functions/auth";
-import { withOrm } from "./orm";
+import { CRPCError } from "better-convex/server";
+import { getAuth } from "../functions/generated/auth";
+import { initCRPC } from "../functions/generated/server";
 
 const c = initCRPC
-  .dataModel<DataModel>()
-  .context({
-    query: (ctx) => withOrm(ctx),
-    mutation: (ctx) => withOrm(ctx),
-  })
   .meta<{
     auth?: "optional" | "required";
     role?: "admin";
@@ -360,7 +350,7 @@ export const toggleTask = authMutation
   .input(
     z.object({ projectId: z.string(), taskId: z.string(), done: z.boolean() })
   )
-  .output(z.null())
+  
   .mutation(async ({ ctx, input }) => {
     const ownedProject = await ctx.orm.query.project.findFirst({
       where: { id: input.projectId, ownerId: ctx.userId },
@@ -395,9 +385,56 @@ Procedure rules that matter:
 3. Throw `CRPCError` for expected runtime outcomes.
 4. Keep list queries bounded (`limit` and/or cursor).
 5. Root input must be `z.object(...)`.
-6. Use `.output(z.null())` (not `z.void()`) for no-value mutations.
+6. Omit `.output(...)` (not `z.void()`) for no-value mutations.
 7. Stack `.input(...)` for reusable procedure composition when needed.
 8. Use `.paginated(...)` for infinite-query endpoints instead of hand-rolling pagination output.
+
+### 3b) Inter-Procedure Composition
+
+When one procedure calls another, use `create<Module>Handler(ctx)` (queries/mutations) or `create<Module>Caller(ctx)` (actions/HTTP). Import from `./generated/<module>.runtime`. In action context use `caller.actions.*` and `caller.schedule.*` instead of `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction`.
+
+```ts
+import { createOrganizationHandler } from "./generated/organization.runtime";
+import { createSeedHandler } from "./generated/seed.runtime";
+import { createAnalyticsCaller } from "./generated/analytics.runtime";
+import { createReportsCaller } from "./generated/reports.runtime";
+
+// Query/mutation → createHandler (zero overhead, bypasses validation)
+export const listOrganizations = authQuery
+  .query(async ({ ctx }) => {
+    const handler = createOrganizationHandler(ctx);
+    const orgs = await handler.listUserOrganizations();
+    return orgs;
+  });
+
+// Mutation → createHandler for sub-procedure calls
+export const seed = privateMutation
+  
+  .mutation(async ({ ctx }) => {
+    const handler = createSeedHandler(ctx);
+    await handler.cleanupSeedData();
+    await handler.seedUsers();
+    return null;
+  });
+
+// Action → createCaller (handler unavailable)
+export const generateReport = privateAction
+  
+  .action(async ({ ctx }) => {
+    const analyticsCaller = createAnalyticsCaller(ctx);
+    const reportsCaller = createReportsCaller(ctx);
+    const stats = await analyticsCaller.actions.getDailyStats({});
+    await reportsCaller.schedule.now.create({ type: "daily", data: stats });
+    return null;
+  });
+```
+
+| Context | Use | Why |
+|---------|-----|-----|
+| `QueryCtx` | `create<Module>Handler(ctx)` | Zero overhead, direct handler call |
+| `MutationCtx` | `create<Module>Handler(ctx)` | Zero overhead, same transaction |
+| `ActionCtx` | `create<Module>Caller(ctx)` | Root caller = query/mutation, `caller.actions.*` = action, `caller.schedule.*` = scheduled mutation/action |
+| HTTP routes | `create<Module>Caller(ctx)` | Action-like context |
 
 ### 4) Query Modes (Use The Right One)
 
@@ -526,13 +563,14 @@ Large update/delete workloads:
 await ctx.orm
   .delete(task)
   .where(eq(task.status, "done"))
-  .execute({ mode: "async", batchSize: 200, delayMs: 0 });
+  .execute({ batchSize: 200, delayMs: 0 }); // async by default
 ```
 
 Notes:
 
-1. Async mutation batching needs ORM scheduled batch wiring.
-2. Async `execute({ mode: "async" })` and builder `.paginate(...)` are separate strategies; do not combine in one call.
+1. Async is the default — codegen wires scheduling automatically.
+2. Async execution and builder `.paginate(...)` are separate strategies; do not combine in one call.
+3. Use `.execute({ mode: 'sync' })` to force all rows in a single transaction.
 
 ### 6) Error Model
 
@@ -562,9 +600,10 @@ Required test pairing:
 
 Preconditions (must be true before writing/using `useCRPC()` code paths):
 
-1. Generated imports exist (`@convex/api`, `@convex/meta`) from setup bootstrap.
+1. Generated imports exist (`@convex/api`) from setup bootstrap.
 2. Provider chain is mounted (`CRPCProvider` inside QueryClient + Convex provider flow).
-3. If bootstrap/provider prerequisites are missing, stop feature work and complete `references/setup.md` (Sections 5.5, 7.4, 8.A.4) first.
+3. If bootstrap/provider prerequisites are missing, stop feature work and complete `references/setup/` first.
+4. Backend state is project-local in `.convex/` (per worktree/clone), so debug state in the current repo instead of `~/.convex`.
 
 `useCRPC()` pattern:
 
@@ -579,10 +618,10 @@ const createProject = useMutation(crpc.project.createProject.mutationOptions());
 // No invalidateQueries: subscribed queries update via Convex real-time.
 ```
 
-If generated API/meta imports are missing (`@convex/api`, `@convex/meta`):
+If generated API import is missing (`@convex/api`):
 
 1. Stop feature coding and finish bootstrap first.
-2. Follow `references/setup.md` Section 5.5 for exact setup/bootstrap commands and recovery steps.
+2. Follow `references/setup/server.md` Section 5.5 for exact setup/bootstrap commands and recovery steps.
 3. Continue only after generated artifacts exist.
 
 Key client defaults/deltas:
@@ -623,13 +662,16 @@ Hydration rule:
 
 ```ts
 // router endpoint example
+import { createTaskCaller } from "../functions/generated/task.runtime";
+
 export const createTaskRoute = authRoute
   .post("/api/projects/:projectId/tasks")
   .params(z.object({ projectId: z.string() }))
   .input(z.object({ title: z.string().min(1) }))
   .output(z.object({ id: z.string() }))
   .mutation(async ({ ctx, params, input }) => {
-    const id = await ctx.runMutation(internal.task.createFromHttp, {
+    const caller = createTaskCaller(ctx);
+    const id = await caller.createFromHttp({
       projectId: params.projectId,
       title: input.title,
       userId: ctx.userId,
@@ -653,7 +695,8 @@ HTTP-specific rules:
 Immediate side effect after commit:
 
 ```ts
-await ctx.scheduler.runAfter(0, internal.notifications.sendTaskCreated, {
+const caller = createTaskCaller(ctx);
+await caller.schedule.now.sendTaskCreated({
   taskId: created.id,
   userId: ctx.userId,
 });
@@ -662,7 +705,8 @@ await ctx.scheduler.runAfter(0, internal.notifications.sendTaskCreated, {
 Future execution:
 
 ```ts
-await ctx.scheduler.runAt(input.sendAt, internal.reminders.send, {
+const caller = createTaskCaller(ctx);
+await caller.schedule.at(input.sendAt).sendReminder({
   taskId: input.taskId,
   userId: ctx.userId,
 });
@@ -675,6 +719,7 @@ Scheduling rules:
 3. Store returned job IDs when cancellation is required.
 4. Scheduling inside actions is not atomic with action failure.
 5. Cron schedules run in UTC.
+6. Use `ctx.scheduler.*` directly only when you must schedule non-procedure `internal.*` functions.
 
 ### 11) Testing Baseline (High Signal)
 
@@ -723,6 +768,7 @@ Before calling a feature done:
 9. `ctx.db` is not used on paths that rely on ORM constraints/RLS.
 10. Paginated endpoints use `.paginated(...)` + ORM cursor flow (not ad-hoc wrappers).
 11. For any predicate/full-scan-like path, `.withIndex(...)` + bound (`limit`/`maxScan`) is explicit.
+12. NEVER use `@ts-nocheck`, no global lint-rule downgrades, no unresolved lint warnings in touched files.
 
 ## Common Mistakes (And Fixes)
 
@@ -736,23 +782,36 @@ Before calling a feature done:
 | Throwing generic `Error` for expected outcomes      | Throw `CRPCError` with explicit code                                                     |
 | Infinite list with TanStack native hook directly    | Use `useInfiniteQuery` from `better-convex/react`                                        |
 | Primitive root input (`z.string()`)                 | Use root `z.object(...)` input schema                                                    |
-| Returning nothing with `z.void()`                   | Use `.output(z.null())` or omit explicit output                                          |
+| Returning nothing with `z.void()`                   | Omit explicit output                                                     |
 | Manual pagination wrappers for infinite endpoints   | Use `.paginated({ limit, item })`                                                        |
 | Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                 |
-| Aggregates disabled but helper/config still present | Remove aggregate helper + schema hooks + app config together                             |
+| Aggregates disabled but helper/config still present | Remove aggregate helper + `defineTriggers` handlers + app config together                |
 | Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                             |
+| Using `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly | Use `create<Module>Handler(ctx)` in queries/mutations, `create<Module>Caller(ctx)` in actions/HTTP with `caller.actions.*` / `caller.schedule.*` (from `generated/<module>.runtime`) |
+| Using `createCaller` in query/mutation context      | Use `create<Module>Handler(ctx)` — zero overhead, bypasses redundant validation          |
+| Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup/`  |
+| Relaxing lint rules to pass checks                  | Keep baseline lint config; fix code-level warnings/errors instead                        |
 
 ## Reference Escalation Map (Load Only If Needed)
 
-- `references/setup.md`: setup/bootstrap/env/framework wiring
-- `references/orm.md`: full ORM API, constraints, RLS, advanced mutations
-- `references/filters.md`: advanced filtering/search/composition/pagination modes
-- `references/react.md`: full client, RSC, hydration, error handling matrix
-- `references/http.md`: typed REST routes, webhooks, streaming
-- `references/scheduling.md`: cron + delayed job patterns
-- `references/testing.md`: deeper testing scenarios
-- `references/aggregates.md`: aggregate component patterns
-- `references/auth.md`: full Better Auth core flow
-- `references/auth-admin.md`: admin plugin details
-- `references/auth-organizations.md`: org/multi-tenant plugin details
-- `references/doc-guidelines.md`: skill/docs sync contract
+**Setup (once per project):**
+
+- `references/setup/index.md`: bootstrap, env, decision intake, gates, checklist, troubleshooting
+- `references/setup/server.md`: core backend (schema, ORM, cRPC) + optional module gates
+- `references/setup/auth.md`: auth core bootstrap + plugin setup
+- `references/setup/react.md`: client core (QueryClient, provider, cRPC context)
+- `references/setup/next.md`: Next.js App Router setup
+- `references/setup/start.md`: TanStack Start setup
+- `references/setup/doc-guidelines.md`: skill/docs sync contract
+
+**Features (per session, self-contained):**
+
+- `references/features/orm.md`: full ORM API, constraints, RLS, advanced mutations, filtering/search/composition/pagination
+- `references/features/react.md`: full client, RSC, hydration, error handling matrix
+- `references/features/http.md`: typed REST routes, webhooks, streaming
+- `references/features/scheduling.md`: cron + delayed job patterns
+- `references/features/testing.md`: deeper testing scenarios
+- `references/features/aggregates.md`: aggregate component patterns
+- `references/features/auth.md`: full Better Auth core flow
+- `references/features/auth-admin.md`: admin plugin details
+- `references/features/auth-organizations.md`: org/multi-tenant plugin details

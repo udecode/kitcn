@@ -10,11 +10,11 @@
     "types:check": "bun typecheck"
   },
   "dependencies": {
-    "fumadocs-core": "16.4.10",
-    "fumadocs-mdx": "14.2.6",
-    "fumadocs-ui": "16.4.10",
-    "geist": "^1.5.1",
-    "lucide-react": "^0.563.0"
+    "fumadocs-core": "16.6.5",
+    "fumadocs-mdx": "14.2.8",
+    "fumadocs-ui": "16.6.5",
+    "geist": "^1.7.0",
+    "lucide-react": "^0.575.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",

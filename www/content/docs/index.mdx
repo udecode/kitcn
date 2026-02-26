@@ -16,9 +16,7 @@ Better Convex is a complete framework for Convex. It brings tRPC-style APIs, Tan
 
 ## Philosophy
 
-We didn't reinvent the wheel. Better Convex integrates battle-tested tools - Convex for realtime data, TanStack Query for caching, and Better Auth for authentication - behind a consistent API.
-
-Instead of assembling these yourself with custom glue code, you get:
+Better Convex integrates Convex for realtime data, TanStack Query for caching, and Better Auth for authentication behind a consistent API:
 
 - **Type safety end-to-end** - From schema to procedures to client, with full inference
 - **Real-time by default** - WebSocket subscriptions flow into TanStack Query cache
@@ -52,16 +50,7 @@ export const list = authQuery
 const { data: posts } = useQuery(crpc.posts.list.queryOptions({ limit: 10 }));
 ```
 
-## Packages
-
-| Export | Description |
-|--------|-------------|
-| `better-convex/server` | cRPC builder, middleware, server caller |
-| `better-convex/orm` | Drizzle-style ORM schema and query helpers |
-| `better-convex/react` | React client, providers, auth hooks |
-| `better-convex/rsc` | RSC prefetching, hydration |
-| `better-convex/auth` | Better Auth adapter |
-| `better-convex/auth-nextjs` | Better Auth Next.js adapter |
+See [Packages](#packages) for the full list of package exports.
 
 ## Requirements
 
@@ -114,8 +103,9 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 4. In non-interactive terminals, bootstrap explicitly with:
    `bunx convex dev --once --configure new --team <team_slug> --project <project_slug> --dev-deployment local`
 5. If bootstrap fails with `Cannot prompt for input in non-interactive terminals`, re-run with explicit `--team` and `--project` values.
-6. If `better-convex codegen` fails with `Local backend isn't running`, start `bunx better-convex dev` in another terminal and retry.
-7. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
+6. `better-convex codegen` runs standalone (no `better-convex dev` needed). If it fails with missing schema, ensure `convex/functions/schema.ts` exists.
+7. For new local deployments, backend data is project-local in `.convex/`, so each worktree/clone has isolated state.
+8. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
 
 **Bottom-up approach:**
 1. Follow [Quickstart](/docs/quickstart) for initial setup
@@ -134,8 +124,6 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 ---
 
 ## Documentation Map
-
-Complete reference for all documentation pages.
 
 ### Getting Started
 
@@ -163,8 +151,8 @@ Complete reference for all documentation pages.
 | Page | When to Use |
 |------|-------------|
 | [ORM](/docs/orm) | Drizzle-style schema, queries, mutations, RLS, runtime constraints via `ctx.orm`. |
-| [Triggers](/docs/orm/triggers) | Automatic side effects on insert/update/delete with schema triggers. |
-| [Aggregates](/docs/server/advanced/aggregates) | O(log n) counts and sums with `@convex-dev/aggregate`. Leaderboards, running totals. |
+| [Triggers](/docs/orm/schema/triggers) | Automatic side effects on insert/update/delete with schema triggers. |
+| [Aggregates](/docs/orm/queries/aggregates) | Scalar metrics (`count`, `aggregate`) and ranked aggregate runtime. |
 
 ### React (Client)
 
@@ -191,7 +179,6 @@ Complete reference for all documentation pages.
 | [Auth Overview](/docs/auth) | Architecture overview. When to use Better Auth vs other auth solutions. |
 | [Auth Server](/docs/auth/server) | Complete Better Auth setup: schema, adapters, HTTP routes, helpers. |
 | [Auth Client](/docs/auth/client) | `useAuth`, `Authenticated`/`Unauthenticated` components. |
-| [Auth Triggers](/docs/auth/triggers) | User triggers: `beforeCreate`, `onCreate`, `onDelete`. |
 
 ### Reference
 
@@ -215,9 +202,27 @@ Complete reference for all documentation pages.
 
 **Add database features:**
 1. [ORM](/docs/orm) → schema + queries via `ctx.orm`
-2. [Triggers](/docs/orm/triggers) → automatic side effects
-3. [Aggregates](/docs/server/advanced/aggregates) → counts and sums
+2. [Triggers](/docs/orm/schema/triggers) → automatic side effects
+3. [Aggregates](/docs/orm/queries/aggregates) → counts and sums
 
 **Server components (RSC):**
 1. [Next.js Setup](/docs/nextjs) → configure caller
 2. [RSC](/docs/nextjs/rsc) → prefetch and hydrate
+
+---
+
+## API Reference
+
+### Packages
+
+| Export | Description |
+|--------|-------------|
+| `better-convex/server` | cRPC builder, middleware, server caller |
+| `better-convex/orm` | Drizzle-style ORM schema and query helpers |
+| `better-convex/react` | React client, providers, auth hooks |
+| `better-convex/rsc` | RSC prefetching, hydration |
+| `better-convex/auth` | Better Auth adapter |
+| `better-convex/auth/client` | Better Auth client plugins |
+| `better-convex/auth/config` | Convex auth config provider |
+| `better-convex/auth/http` | Auth HTTP helpers |
+| `better-convex/auth/nextjs` | Better Auth Next.js adapter |

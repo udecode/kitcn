@@ -1,0 +1,35 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "better-convex",
+  "owner": {
+    "name": "zbeyens"
+  },
+  "metadata": {
+    "description": "Better Convex development skills",
+    "version": "0.6.2"
+  },
+  "plugins": [
+    {
+      "name": "better-convex",
+      "description": "Better Convex development skills",
+      "version": "0.6.2",
+      "source": "./",
+      "strict": false,
+      "author": {
+        "name": "zbeyens"
+      },
+      "homepage": "https://github.com/udecode/better-convex",
+      "repository": "https://github.com/udecode/better-convex",
+      "license": "MIT",
+      "keywords": [
+        "convex",
+        "crpc",
+        "orm",
+        "better-convex",
+        "auth",
+        "triggers"
+      ],
+      "category": "development"
+    }
+  ]
+}

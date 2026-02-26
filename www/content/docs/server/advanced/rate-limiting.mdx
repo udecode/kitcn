@@ -11,7 +11,7 @@ In this guide, we'll implement rate limiting for your Convex functions. You'll l
 
 ## Overview
 
-[@convex-dev/rate-limiter](https://www.convex.dev/components/rate-limiter) provides powerful rate limiting for Convex functions:
+[@convex-dev/rate-limiter](https://www.convex.dev/components/rate-limiter) provides rate limiting for Convex functions:
 
 | Feature | Description |
 |---------|-------------|
@@ -49,7 +49,7 @@ Now let's create the rate limiter configuration. We'll extract the config to a c
 import { HOUR, MINUTE, RateLimiter, SECOND } from '@convex-dev/rate-limiter';
 import { CRPCError } from 'better-convex/server';
 import { components } from '../functions/_generated/api';
-import type { MutationCtx } from '../functions/_generated/server';
+import type { MutationCtx } from '../functions/generated/server';
 
 // Extract config for key checking in getRateLimitKey
 const rateLimitConfig = {
@@ -234,43 +234,7 @@ export const create = authMutation
 
 ## Complete Configuration
 
-Here's a full rate limiter configuration with tiered limits for various operations:
-
-```ts title="convex/lib/rate-limiter.ts" showLineNumbers {4-6,9-12,15-16,19-20,23-24,27-29}
-import { HOUR, MINUTE, RateLimiter, SECOND } from '@convex-dev/rate-limiter';
-
-const rateLimitConfig = {
-  // AI operations (token bucket for smooth limiting)
-  'ai:free': { kind: 'token bucket', period: 10 * SECOND, rate: 10 },
-  'ai:premium': { kind: 'token bucket', period: 10 * SECOND, rate: 50 },
-  'ai:public': { kind: 'token bucket', period: 10 * SECOND, rate: 20 },
-
-  // CRUD operations
-  'post/create:free': { kind: 'fixed window', period: MINUTE, rate: 5 },
-  'post/create:premium': { kind: 'fixed window', period: MINUTE, rate: 20 },
-  'post/update:free': { kind: 'fixed window', period: MINUTE, rate: 20 },
-  'post/update:premium': { kind: 'fixed window', period: MINUTE, rate: 60 },
-
-  // Message operations
-  'message/create:free': { kind: 'fixed window', period: MINUTE, rate: 30 },
-  'message/create:premium': { kind: 'fixed window', period: MINUTE, rate: 100 },
-
-  // Export/Import (longer periods)
-  'export:free': { kind: 'fixed window', period: 10 * MINUTE, rate: 5 },
-  'export:premium': { kind: 'fixed window', period: 10 * MINUTE, rate: 15 },
-
-  // Organization operations
-  'organization/invite:free': { kind: 'fixed window', period: HOUR, rate: 5 },
-  'organization/invite:premium': { kind: 'fixed window', period: HOUR, rate: 25 },
-
-  // Default fallbacks (used when specific key not defined)
-  'default:free': { kind: 'fixed window', period: MINUTE, rate: 30 },
-  'default:premium': { kind: 'fixed window', period: MINUTE, rate: 100 },
-  'default:public': { kind: 'fixed window', period: MINUTE, rate: 20 },
-} as const;
-
-export const rateLimiter = new RateLimiter(components.rateLimiter, rateLimitConfig);
-```
+Extend the [Setup](#setup) config with more feature-specific keys following the [Tiered Limits](#tiered-limits) pattern. Add `'feature:tier'` entries for each operation (`post/update`, `message/create`, `export`, `organization/invite`, etc.) and the `default:*` fallbacks handle everything else.
 
 ## Next Steps
 

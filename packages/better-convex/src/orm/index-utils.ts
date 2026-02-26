@@ -1,6 +1,24 @@
 import type { ConvexTable } from './table';
 
 export type TableIndex = { name: string; fields: string[] };
+export type TableAggregateIndex = {
+  name: string;
+  fields: string[];
+  countFields: string[];
+  sumFields: string[];
+  avgFields: string[];
+  minFields: string[];
+  maxFields: string[];
+};
+export type TableRankIndex = {
+  name: string;
+  partitionFields: string[];
+  orderFields: Array<{
+    field: string;
+    direction: 'asc' | 'desc';
+  }>;
+  sumField?: string;
+};
 export type TableSearchIndex = {
   name: string;
   searchField: string;
@@ -16,44 +34,25 @@ export type TableVectorIndex = {
 export function getIndexes(
   table: ConvexTable<any>
 ): { name: string; fields: string[] }[] {
-  const fromMethod = (table as any).getIndexes?.();
-  if (Array.isArray(fromMethod)) {
-    return fromMethod;
-  }
-  const fromField = (table as any).indexes;
-  if (!Array.isArray(fromField)) {
-    return [];
-  }
-  return fromField.map(
-    (entry: { indexDescriptor: string; fields: string[] }) => ({
-      name: entry.indexDescriptor,
-      fields: entry.fields,
-    })
-  );
+  const indexes = (table as any).getIndexes?.();
+  return Array.isArray(indexes) ? indexes : [];
+}
+
+export function getAggregateIndexes(
+  table: ConvexTable<any>
+): TableAggregateIndex[] {
+  const indexes = (table as any).getAggregateIndexes?.();
+  return Array.isArray(indexes) ? indexes : [];
+}
+
+export function getRankIndexes(table: ConvexTable<any>): TableRankIndex[] {
+  const indexes = (table as any).getRankIndexes?.();
+  return Array.isArray(indexes) ? indexes : [];
 }
 
 export function getSearchIndexes(table: ConvexTable<any>): TableSearchIndex[] {
-  const fromMethod = (table as any).getSearchIndexes?.();
-  if (Array.isArray(fromMethod)) {
-    return fromMethod;
-  }
-
-  const fromField = (table as any).searchIndexes;
-  if (!Array.isArray(fromField)) {
-    return [];
-  }
-
-  return fromField.map(
-    (entry: {
-      indexDescriptor: string;
-      searchField: string;
-      filterFields: string[];
-    }) => ({
-      name: entry.indexDescriptor,
-      searchField: entry.searchField,
-      filterFields: entry.filterFields ?? [],
-    })
-  );
+  const indexes = (table as any).getSearchIndexes?.();
+  return Array.isArray(indexes) ? indexes : [];
 }
 
 export function findSearchIndexByName(
@@ -66,29 +65,8 @@ export function findSearchIndexByName(
 }
 
 export function getVectorIndexes(table: ConvexTable<any>): TableVectorIndex[] {
-  const fromMethod = (table as any).getVectorIndexes?.();
-  if (Array.isArray(fromMethod)) {
-    return fromMethod;
-  }
-
-  const fromField = (table as any).vectorIndexes;
-  if (!Array.isArray(fromField)) {
-    return [];
-  }
-
-  return fromField.map(
-    (entry: {
-      indexDescriptor: string;
-      vectorField: string;
-      dimensions: number;
-      filterFields: string[];
-    }) => ({
-      name: entry.indexDescriptor,
-      vectorField: entry.vectorField,
-      dimensions: entry.dimensions,
-      filterFields: entry.filterFields ?? [],
-    })
-  );
+  const indexes = (table as any).getVectorIndexes?.();
+  return Array.isArray(indexes) ? indexes : [];
 }
 
 export function findVectorIndexByName(
