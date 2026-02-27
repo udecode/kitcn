@@ -18,6 +18,9 @@ type MigrationStateRow = {
   status?: string | null;
 } & Record<string, unknown>;
 
+const EMPTY_RUNS: MigrationRunRow[] = [];
+const EMPTY_STATES: MigrationStateRow[] = [];
+
 function JsonBox({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="rounded-xl bg-zinc-950 p-3 text-xs text-zinc-100 shadow-inner">
@@ -83,8 +86,8 @@ export default function MigrationsPage() {
     })
   );
 
-  const runs = (statusQuery.data?.runs ?? []) as MigrationRunRow[];
-  const states = (statusQuery.data?.states ?? []) as MigrationStateRow[];
+  const runs = (statusQuery.data?.runs ?? EMPTY_RUNS) as MigrationRunRow[];
+  const states = (statusQuery.data?.states ?? EMPTY_STATES) as MigrationStateRow[];
   const latestRun = runs[0] ?? null;
   const activeRun = (statusQuery.data?.activeRun ??
     null) as MigrationRunRow | null;

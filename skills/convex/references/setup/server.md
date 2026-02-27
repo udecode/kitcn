@@ -255,17 +255,14 @@ Enable only selected modules.
 
 ### 9.0 Component composition rule (`convex/functions/convex.config.ts`)
 
-When multiple components are enabled, register all in one `defineApp()` file:
+When components are enabled, register them in one `defineApp()` file:
 
 ```ts
-import rateLimiter from "@convex-dev/rate-limiter/convex.config";
 import resend from "@convex-dev/resend/convex.config";
 import { defineApp } from "convex/server";
 
 const app = defineApp();
 
-// Enable only selected components:
-app.use(rateLimiter);
 app.use(resend);
 
 export default app;
@@ -345,43 +342,31 @@ If Aggregates are **disabled**, remove `aggregateIndex`/`rankIndex` declarations
 
 ### 9.4 Rate limiting gate
 
-Install and register component:
+Use the built-in package module (no component registration):
 
 ```bash
-bun add @convex-dev/rate-limiter
-```
-
-```ts
-// convex/functions/convex.config.ts
-import rateLimiter from "@convex-dev/rate-limiter/convex.config";
-import { defineApp } from "convex/server";
-
-const app = defineApp();
-app.use(rateLimiter);
-export default app;
+bun add better-convex
 ```
 
 Create `convex/lib/rate-limiter.ts` and call guard from mutation middleware using `.meta({ rateLimit: 'scope/action' })`.
 
-Use static `_generated/api` imports in Convex rate-limiter code:
+Use `Ratelimit` from `better-convex/ratelimit`:
 
 ```ts
-import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
+import { MINUTE, Ratelimit } from "better-convex/ratelimit";
 import { CRPCError } from "better-convex/server";
-import { components } from "../functions/_generated/api";
-
-import type { ActionCtx, MutationCtx } from "../functions/generated/server";
+import type { MutationCtx } from "../functions/generated/server";
 import type { SessionUser } from "../shared/auth-shared";
 
-const rateLimitConfig = {
-  "default:free": { kind: "fixed window", period: MINUTE, rate: 60 },
-  "default:premium": { kind: "fixed window", period: MINUTE, rate: 200 },
-  "default:public": { kind: "fixed window", period: MINUTE, rate: 30 },
-  "todo/create:free": { kind: "fixed window", period: MINUTE, rate: 20 },
-  "todo/create:premium": { kind: "fixed window", period: MINUTE, rate: 60 },
-} as const;
+const fixed = (rate: number) => Ratelimit.fixedWindow(rate, MINUTE);
 
-const rateLimiter = new RateLimiter(components.rateLimiter, rateLimitConfig);
+const rateLimitConfig = {
+  "default:free": fixed(60),
+  "default:premium": fixed(200),
+  "default:public": fixed(30),
+  "todo/create:free": fixed(20),
+  "todo/create:premium": fixed(60),
+} as const;
 
 export function getRateLimitKey(
   baseKey: string,
@@ -406,7 +391,7 @@ export function getUserTier(
 }
 
 export async function rateLimitGuard(
-  ctx: (ActionCtx | MutationCtx) & {
+  ctx: MutationCtx & {
     rateLimitKey: string;
     user: Pick<SessionUser, "id" | "plan"> | null;
   }
@@ -415,9 +400,17 @@ export async function rateLimitGuard(
   const limitKey = getRateLimitKey(ctx.rateLimitKey, tier);
   const identifier = ctx.user?.id ?? "anonymous";
 
-  const status = await rateLimiter.limit(ctx, limitKey, { key: identifier });
+  const limiter = new Ratelimit({
+    db: ctx.db,
+    prefix: `app:${limitKey}`,
+    limiter: rateLimitConfig[limitKey],
+    failureMode: "closed",
+    enableProtection: true,
+    denyListThreshold: 30,
+  });
+  const status = await limiter.limit(identifier);
 
-  if (!status.ok) {
+  if (!status.success) {
     throw new CRPCError({
       code: "TOO_MANY_REQUESTS",
       message: "Rate limit exceeded. Please try again later.",

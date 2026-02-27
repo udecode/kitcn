@@ -621,6 +621,83 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
+  ratelimit_dynamic_limit: {
+    document: {
+      limit: number;
+      prefix: string;
+      updatedAt: number;
+      _id: Id<"ratelimit_dynamic_limit">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "limit" | "prefix" | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_prefix: ["prefix", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  ratelimit_protection_hit: {
+    document: {
+      blockedUntil?: null | number;
+      hits: number;
+      kind: "identifier" | "ip" | "userAgent" | "country";
+      prefix: string;
+      updatedAt: number;
+      value: string;
+      _id: Id<"ratelimit_protection_hit">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "blockedUntil"
+      | "hits"
+      | "kind"
+      | "prefix"
+      | "updatedAt"
+      | "value";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_prefix: ["prefix", "_creationTime"];
+      by_prefix_value_kind: ["prefix", "value", "kind", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  ratelimit_state: {
+    document: {
+      auxTs?: null | number;
+      auxValue?: null | number;
+      key?: null | string;
+      name: string;
+      shard: number;
+      ts: number;
+      value: number;
+      _id: Id<"ratelimit_state">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "auxTs"
+      | "auxValue"
+      | "key"
+      | "name"
+      | "shard"
+      | "ts"
+      | "value";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_name_key: ["name", "key", "_creationTime"];
+      by_name_key_shard: ["name", "key", "shard", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   session: {
     document: {
       activeOrganizationId?: null | string;
@@ -628,7 +705,6 @@ export type DataModel = {
       expiresAt: number;
       impersonatedBy?: null | string;
       ipAddress?: null | string;
-      test: string;
       token: string;
       updatedAt: number;
       userAgent?: null | string;
@@ -644,7 +720,6 @@ export type DataModel = {
       | "expiresAt"
       | "impersonatedBy"
       | "ipAddress"
-      | "test"
       | "token"
       | "updatedAt"
       | "userAgent"

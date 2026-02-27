@@ -17,6 +17,7 @@ export default defineConfig([
     entry: {
       'auth/client/index': 'src/auth-client/index.ts',
       'react/index': 'src/react/index.ts',
+      'ratelimit/react/index': 'src/ratelimit/react/index.ts',
     },
     platform: 'neutral',
     target: 'esnext',
@@ -36,6 +37,7 @@ export default defineConfig([
       'auth/index': 'src/auth/index.ts',
       'auth/nextjs/index': 'src/auth-nextjs/index.ts',
       'crpc/index': 'src/crpc/index.ts',
+      'ratelimit/index': 'src/ratelimit/index.ts',
       'rsc/index': 'src/rsc/index.ts',
       'server/index': 'src/server/index.ts',
       'orm/index': 'src/orm/index.ts',

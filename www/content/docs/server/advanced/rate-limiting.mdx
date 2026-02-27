@@ -1,161 +1,64 @@
 ---
 title: Rate Limiting
-description: Tiered rate limiting with user-based access levels.
+description: Upstash-style rate limiting with Convex-first storage and middleware-friendly DX.
 links:
-  doc: https://www.convex.dev/components/rate-limiter
+  doc: /docs/server/advanced/rate-limiting
 ---
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll implement rate limiting for your Convex functions. You'll learn to set up the rate limiter, configure tiered limits for different user types, and integrate it with cRPC middleware.
+In this guide, we'll set up `better-convex/ratelimit` with an Upstash-parity API, Convex-first storage, and a UI-friendly hook.
 
-## Overview
+We'll keep it practical: a reusable server guard, middleware wiring, algorithm choices, and client-side button disabling with live countdowns.
 
-[@convex-dev/rate-limiter](https://www.convex.dev/components/rate-limiter) provides rate limiting for Convex functions:
+## Why this package
 
-| Feature | Description |
-|---------|-------------|
-| Token bucket | Smooth rate limiting with burst capacity |
-| Fixed window | Strict limits per time period |
-| Tiered access | Different limits for free/premium users |
-| Per-user or global | Limit by user ID, IP, or globally |
+`better-convex/ratelimit` is designed as a hard cutover from component-driven APIs.
 
-Let's set it up.
+| What you get | Why it matters |
+| --- | --- |
+| Upstash-style API | Easier migration if your team already knows Upstash (`limit`, `check`, `getRemaining`, `resetUsedTokens`, `blockUntilReady`) |
+| Convex-first tables | No component registration and no component migration path to manage |
+| Read dedupe helpers | Common repeated reads may reuse cached results and reduce duplicate DB fetches |
+| React hook support | `hookAPI()` + `useRateLimit()` gives accurate client countdown and button states |
+| Fail-closed default | Safer behavior under pressure (`failureMode: "closed"`) |
 
-## Installation
-
-First, install the rate limiter package:
+## Install
 
 ```bash
-bun add @convex-dev/rate-limiter
+bun add better-convex
 ```
 
-Then add it to your Convex config:
+That's it. You do not install or register `@convex-dev/rate-limiter`.
 
-```ts title="convex/functions/convex.config.ts" showLineNumbers {1,4-5}
-import rateLimiter from '@convex-dev/rate-limiter/convex.config';
-import { defineApp } from 'convex/server';
+## Create a reusable guard
 
-const app = defineApp();
-app.use(rateLimiter);
-export default app;
-```
+We'll start with a shared guard function so all mutations enforce rate limits consistently.
 
-## Setup
-
-Now let's create the rate limiter configuration. We'll extract the config to a const so `getRateLimitKey` can check if keys exist:
-
-```ts title="convex/lib/rate-limiter.ts" showLineNumbers {6-17,19}
-import { HOUR, MINUTE, RateLimiter, SECOND } from '@convex-dev/rate-limiter';
+```ts title="convex/lib/rate-limiter.ts" showLineNumbers {1-2,18-28,43-59}
+import { MINUTE, Ratelimit } from 'better-convex/ratelimit';
 import { CRPCError } from 'better-convex/server';
-import { components } from '../functions/_generated/api';
 import type { MutationCtx } from '../functions/generated/server';
+import type { SessionUser } from '../shared/auth-shared';
 
-// Extract config for key checking in getRateLimitKey
+const fixed = (rate: number) => Ratelimit.fixedWindow(rate, MINUTE);
+
 const rateLimitConfig = {
-  // Token bucket: smooth limiting with burst capacity
-  'ai:free': { kind: 'token bucket', period: 10 * SECOND, rate: 10 },
-  'ai:premium': { kind: 'token bucket', period: 10 * SECOND, rate: 50 },
-
-  // Fixed window: strict limits per period
-  'post/create:free': { kind: 'fixed window', period: MINUTE, rate: 5 },
-  'post/create:premium': { kind: 'fixed window', period: MINUTE, rate: 20 },
-
-  // Default fallbacks (used when specific key not defined)
-  'default:free': { kind: 'fixed window', period: MINUTE, rate: 30 },
-  'default:premium': { kind: 'fixed window', period: MINUTE, rate: 100 },
-  'default:public': { kind: 'fixed window', period: MINUTE, rate: 20 },
+  'default:free': fixed(60),
+  'default:premium': fixed(200),
+  'default:public': fixed(30),
+  'todo/create:free': fixed(20),
+  'todo/create:premium': fixed(60),
 } as const;
 
-export const rateLimiter = new RateLimiter(components.rateLimiter, rateLimitConfig);
-```
-
-## Rate Limit Types
-
-The rate limiter supports two algorithms. Choose based on your use case.
-
-### Token Bucket
-
-Token bucket allows bursts up to the rate, then refills over time. Great for APIs where occasional bursts are acceptable:
-
-```ts showLineNumbers {2-3}
-{
-  kind: 'token bucket',
-  period: 10 * SECOND,  // Refill period
-  rate: 10,             // Tokens per period
-}
-// User can burst 10 requests, then ~1 per second
-```
-
-### Fixed Window
-
-Fixed window enforces strict limits per time window. Use this when you need predictable quotas:
-
-```ts showLineNumbers {2-3}
-{
-  kind: 'fixed window',
-  period: MINUTE,
-  rate: 30,
-}
-// Exactly 30 requests per minute, resets at window boundary
-```
-
-## Tiered Limits
-
-Here's the pattern for free/premium/public tiers. Define specific limits for features, with fallbacks to defaults:
-
-```ts title="convex/lib/rate-limiter.ts" showLineNumbers {2-4,6-7,10-12}
-const rateLimitConfig = {
-  // Feature-specific limits (override defaults)
-  'post/create:free': { kind: 'fixed window', period: MINUTE, rate: 5 },
-  'post/create:premium': { kind: 'fixed window', period: MINUTE, rate: 20 },
-  'post/create:public': { kind: 'fixed window', period: MINUTE, rate: 3 },
-
-  'comment/create:free': { kind: 'fixed window', period: MINUTE, rate: 30 },
-  'comment/create:premium': { kind: 'fixed window', period: MINUTE, rate: 100 },
-
-  // Default fallbacks (used when specific key not defined)
-  'default:free': { kind: 'fixed window', period: MINUTE, rate: 30 },
-  'default:premium': { kind: 'fixed window', period: MINUTE, rate: 100 },
-  'default:public': { kind: 'fixed window', period: MINUTE, rate: 20 },
-} as const;
-
-export const rateLimiter = new RateLimiter(components.rateLimiter, rateLimitConfig);
-```
-
-## Helper Functions
-
-Next, we'll create helper functions to determine user tiers and build rate limit keys:
-
-```ts title="convex/lib/rate-limiter.ts" showLineNumbers {4-8,12-20,23-35}
-type SessionUser = { id: string; plan?: 'premium' | null; isAdmin?: boolean };
-
-/** Get user tier based on subscription */
-export function getUserTier(
-  user: Pick<SessionUser, 'plan' | 'isAdmin'> | null
+function getUserTier(
+  user: { isAdmin?: boolean; plan?: SessionUser['plan'] } | null
 ): 'free' | 'premium' | 'public' {
   if (!user) return 'public';
-  if (user.isAdmin) return 'premium';
-  if (user.plan) return 'premium';
+  if (user.isAdmin || user.plan) return 'premium';
   return 'free';
 }
 
-/** Build rate limit key with tier suffix, falls back to default */
-export function getRateLimitKey(
-  baseKey: string,
-  tier: 'free' | 'premium' | 'public'
-) {
-  const specificKey = `${baseKey}:${tier}`;
-
-  // Use specific key if defined, otherwise fall back to default
-  if (specificKey in rateLimitConfig) {
-    return specificKey;
-  }
-
-  return `default:${tier}`;
-}
-
-/** Check rate limit and throw if exceeded */
 export async function rateLimitGuard(
   ctx: MutationCtx & {
     rateLimitKey: string;
@@ -163,14 +66,20 @@ export async function rateLimitGuard(
   }
 ) {
   const tier = getUserTier(ctx.user);
-  const limitKey = getRateLimitKey(ctx.rateLimitKey, tier);
-  const identifier = ctx.user?.id ?? 'anonymous';
+  const limitKey = `${ctx.rateLimitKey}:${tier}` as keyof typeof rateLimitConfig;
+  const resolved = limitKey in rateLimitConfig ? limitKey : (`default:${tier}` as const);
 
-  const status = await rateLimiter.limit(ctx, limitKey, {
-    key: identifier,
+  const limiter = new Ratelimit({
+    db: ctx.db,
+    prefix: `example:${resolved}`,
+    limiter: rateLimitConfig[resolved],
+    failureMode: 'closed',
+    enableProtection: true,
+    denyListThreshold: 30,
   });
 
-  if (!status.ok) {
+  const status = await limiter.limit(ctx.user?.id ?? 'anonymous');
+  if (!status.success) {
     throw new CRPCError({
       code: 'TOO_MANY_REQUESTS',
       message: 'Rate limit exceeded. Please try again later.',
@@ -179,17 +88,15 @@ export async function rateLimitGuard(
 }
 ```
 
-The `rateLimitGuard` function ties everything together - it determines the user's tier, builds the rate limit key, and throws a `CRPCError` if the limit is exceeded.
+Now you have one place to tune plan limits, prefixes, and protection defaults.
 
-## cRPC Integration
+## Wire it into middleware
 
-Now let's add rate limiting middleware to your cRPC setup:
+Next, apply the guard from cRPC middleware so your handlers stay focused on business logic.
 
-```ts title="convex/lib/crpc.ts" showLineNumbers {3-10,13,16-17}
-import { rateLimitGuard } from './rate-limiter';
-
+```ts title="convex/lib/crpc.ts" showLineNumbers {1,5-13}
 const rateLimitMiddleware = c.middleware<
-  MutationCtx & { user?: { id: string; plan?: string } | null }
+  MutationCtx & { user?: Pick<SessionUser, 'id' | 'plan'> | null }
 >(async ({ ctx, meta, next }) => {
   await rateLimitGuard({
     ...ctx,
@@ -199,47 +106,537 @@ const rateLimitMiddleware = c.middleware<
   return next({ ctx });
 });
 
-// Apply to mutations
-export const publicMutation = c.mutation.use(rateLimitMiddleware);
-
 export const authMutation = c.mutation
+  .meta({ auth: 'required' })
   .use(authMiddleware)
   .use(rateLimitMiddleware);
 ```
 
-<Callout icon={<InfoIcon />}>
-**Note:** The middleware reads `meta.rateLimit` from [procedure metadata](/docs/server/metadata). If not set, it falls back to `'default'`.
-</Callout>
+Then set per-procedure keys with metadata:
 
-## Usage in Procedures
-
-Set custom rate limit keys via [metadata](/docs/server/metadata):
-
-```ts title="convex/functions/posts.ts" showLineNumbers {2,8}
-// Uses default rate limit
-export const createPost = authMutation
-  .input(z.object({ title: z.string() }))
+```ts showLineNumbers
+export const createTodo = authMutation
+  .meta({ rateLimit: 'todo/create' })
+  .input(z.object({ title: z.string().min(1) }))
   .mutation(async ({ ctx, input }) => {
-    // Rate limited with 'default:free' or 'default:premium'
-  });
-
-// Uses specific rate limit
-export const create = authMutation
-  .meta({ rateLimit: 'post/create' })
-  .input(z.object({ title: z.string() }))
-  .mutation(async ({ ctx, input }) => {
-    // Rate limited with 'post/create:free' or 'post/create:premium'
+    // business logic
   });
 ```
 
-## Complete Configuration
+## Choose your algorithm
 
-Extend the [Setup](#setup) config with more feature-specific keys following the [Tiered Limits](#tiered-limits) pattern. Add `'feature:tier'` entries for each operation (`post/update`, `message/create`, `export`, `organization/invite`, etc.) and the `default:*` fallbacks handle everything else.
+Start simple and pick based on workload shape.
 
-## Next Steps
+### Fixed window
+
+Best when hard windows are acceptable. Tokens reset at the start of each window.
+
+```ts showLineNumbers
+const limiter = new Ratelimit({
+  db: ctx.db,
+  prefix: 'post:create',
+  limiter: Ratelimit.fixedWindow(10, '1 m'),
+});
+```
+
+### Sliding window
+
+Best when you want smoother request shaping without hard resets. Weighs the previous window proportionally so you don't get bursts at window boundaries.
+
+```ts showLineNumbers
+const limiter = new Ratelimit({
+  db: ctx.db,
+  prefix: 'search',
+  limiter: Ratelimit.slidingWindow(50, '1 m'),
+});
+```
+
+### Token bucket
+
+Best for burst-friendly throughput with long-term control. Tokens refill at a steady rate up to `maxTokens`. Use `maxReserved` to allow requests to "borrow" from future tokens when the bucket is empty.
+
+```ts showLineNumbers {4}
+const limiter = new Ratelimit({
+  db: ctx.db,
+  prefix: 'llm:tokens',
+  limiter: Ratelimit.tokenBucket(1000, '1 m', 1000, { maxReserved: 3000 }),
+});
+```
+
+### Algorithm options
+
+All three algorithm builders accept an optional `options` object as the last argument.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `shards` | `number` | `1` | Number of shards for write distribution. Higher values reduce contention at the cost of less precise counts (see [Sharding](#sharding)). |
+| `maxReserved` | `number` | `undefined` | Maximum tokens a request can "borrow" from future capacity. Only applies to `fixedWindow` and `tokenBucket`. Not supported by `slidingWindow`. |
+| `capacity` | `number` | `limit` | Maximum stored tokens. Only applies to `fixedWindow`. Useful when you want a higher burst capacity than the per-window refill. |
+| `start` | `number` | `0` | Epoch offset (ms) for window alignment. Only applies to `fixedWindow`. Aligns windows to a custom origin instead of epoch zero. |
+
+### Duration formats
+
+Every `window` or `interval` parameter accepts a `Duration` — either a raw millisecond number or a human-readable string.
+
+**String format:** `"<number> <unit>"` or `"<number><unit>"`. Both `'1 m'` and `'1m'` work.
+
+| Unit | Meaning | Example |
+| --- | --- | --- |
+| `ms` | milliseconds | `'500 ms'` |
+| `s` | seconds | `'30 s'` |
+| `m` | minutes | `'1 m'` |
+| `h` | hours | `'1 h'` |
+| `d` | days | `'1 d'` |
+
+You can also use the pre-defined constants from `better-convex/ratelimit`:
+
+```ts showLineNumbers
+import { SECOND, MINUTE, HOUR, DAY, WEEK } from 'better-convex/ratelimit';
+
+Ratelimit.fixedWindow(100, MINUTE);        // 60_000 ms
+Ratelimit.slidingWindow(50, 30 * SECOND);  // 30_000 ms
+Ratelimit.tokenBucket(10, HOUR, 100);      // 3_600_000 ms
+```
+
+Done. You now have deterministic, application-layer limits with one API surface.
+
+## Add a client-side limiter UX
+
+Server enforcement is mandatory. Client checks are for better UX — disabled buttons, countdowns, and retry hints.
+
+### Expose the hook API
+
+First, export the hook API from a Convex file. The `hookAPI()` method returns a `getRateLimit` query and a `getServerTime` mutation that the React hook consumes.
+
+```ts title="convex/functions/ratelimit.ts" showLineNumbers {1,3-10}
+import { Ratelimit } from 'better-convex/ratelimit';
+
+const limiter = new Ratelimit({
+  limiter: Ratelimit.fixedWindow(3, '30 s'),
+});
+
+export const { getRateLimit, getServerTime } = limiter.hookAPI({
+  identifier: async (_ctx, fromClient) => fromClient ?? 'anonymous',
+  sampleShards: 1,
+});
+```
+
+The `identifier` option can be a static string, or an async callback that receives `(ctx, fromClient)`. Use the callback to resolve the identifier server-side (e.g. from auth) while still accepting a client-provided fallback.
+
+`sampleShards` controls how many shards to read when estimating the remaining count. Set it to `1` for low-cost reads, or increase it for more accurate estimates on high-shard configs.
+
+### Use the React hook
+
+Then wire it up in your component with `useRateLimit`:
+
+```tsx title="src/components/send-button.tsx" showLineNumbers {1,3-7,9-10}
+import { useRateLimit } from 'better-convex/ratelimit/react';
+
+const { status, check } = useRateLimit(api.ratelimit.getRateLimit, {
+  identifier: userId,
+  count: 1,
+  getServerTimeMutation: api.ratelimit.getServerTime,
+});
+
+const blocked = status?.ok === false;
+const retryAt = status?.retryAt;
+
+return (
+  <button disabled={blocked}>
+    {blocked ? `Try again at ${new Date(retryAt!).toLocaleTimeString()}` : 'Send'}
+  </button>
+);
+```
+
+The hook returns:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `status` | `HookStatus \| undefined` | `undefined` while loading. `{ ok: true }` when allowed, `{ ok: false, retryAt: number }` when blocked. Auto-updates when `retryAt` passes. |
+| `check` | `(ts?, count?) => HookCheckValue \| undefined` | Manual projection function. Call it with a timestamp and count to get a precise snapshot for custom gauges or progress bars. |
+
+The `HookCheckValue` returned by `check()` has this shape:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `value` | `number` | Projected remaining tokens (negative means over-limit) |
+| `ts` | `number` | Timestamp of the projection (client time) |
+| `config` | `ResolvedAlgorithm` | The algorithm config for further calculations |
+| `shard` | `number` | Which shard was sampled |
+| `ok` | `boolean` | `true` when `value >= 0` |
+| `retryAt` | `number \| undefined` | Client timestamp when tokens become available |
+
+If you need precise projected values (for custom gauges), call `check(ts, count)`.
+
+## Protection and deny lists
+
+When `enableProtection` is on, the limiter tracks repeated failures per identifier, IP, user-agent, and country. Once a value reaches `denyListThreshold`, it gets blocked for 24 hours — without even checking the database.
+
+You can also provide static deny lists to block known bad actors immediately.
+
+```ts showLineNumbers {6-14}
+const limiter = new Ratelimit({
+  db: ctx.db,
+  prefix: 'api',
+  limiter: Ratelimit.fixedWindow(100, '1 m'),
+  failureMode: 'closed',
+  enableProtection: true,
+  denyListThreshold: 30,
+  denyList: {
+    identifiers: ['known-bad-user-id'],
+    ips: ['203.0.113.0'],
+    userAgents: ['BadBot/1.0'],
+    countries: ['XX'],
+  },
+});
+```
+
+To trigger deny-list matching on request metadata, pass `ip`, `userAgent`, or `country` in the `limit()` call:
+
+```ts showLineNumbers {2-5}
+const result = await limiter.limit(userId, {
+  ip: request.headers.get('x-forwarded-for') ?? undefined,
+  userAgent: request.headers.get('user-agent') ?? undefined,
+  country: request.headers.get('x-country') ?? undefined,
+});
+```
+
+<Callout icon={<InfoIcon />}>
+  **Important:** Deny-list state is in-memory and non-durable. It can survive across warm runtime requests, but is lost on cold starts/deploys. For persistent blocking, use an external deny list or database-backed blocklist.
+</Callout>
+
+## Dynamic limits
+
+Dynamic limits let you change rate limits at runtime — useful for feature flags, admin overrides, or gradual rollouts. Enable them with `dynamicLimits: true` in the constructor.
+
+```ts showLineNumbers {5}
+const limiter = new Ratelimit({
+  db: ctx.db,
+  prefix: 'api:search',
+  limiter: Ratelimit.fixedWindow(100, '1 m'),
+  dynamicLimits: true,
+});
+```
+
+Then use `setDynamicLimit` to override the configured limit at runtime:
+
+```ts showLineNumbers
+// Double the limit during a sale
+await limiter.setDynamicLimit({ limit: 200 });
+
+// Read the current override
+const { dynamicLimit } = await limiter.getDynamicLimit();
+// dynamicLimit === 200
+
+// Remove the override (reverts to configured limit)
+await limiter.setDynamicLimit({ limit: false });
+```
+
+The dynamic limit overrides the `limit` field of the algorithm. For token bucket, it overrides `refillRate` (and `maxTokens` if they were originally equal).
+
+## Limits and mitigations you should know
+
+<Callout icon={<InfoIcon />}>
+  **Important:** This is application-layer limiting. It protects business logic and expensive downstream work, but it is not a network firewall or DDoS shield.
+</Callout>
+
+Recommended production posture:
+
+- Enforce auth early and reject fast.
+- Protect anonymous flows with captcha + validated session IDs.
+- Put network-layer controls (Cloudflare or equivalent) in front when IP-based mitigation is required.
+- Alert on request spikes and fail safely (`failureMode: "closed"` by default).
+
+## API reference
+
+### Constructor options
+
+Create a `Ratelimit` instance with a config object:
+
+```ts showLineNumbers
+const limiter = new Ratelimit(config: RatelimitConfig);
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `db` | `ctx.db` | — | Convex database context. Required for `limit`, `check`, `getRemaining`, `getValue`, `resetUsedTokens`, `setDynamicLimit`, `getDynamicLimit`. Not needed for `hookAPI()` (it receives `db` from the query/mutation context). |
+| `limiter` | `ResolvedAlgorithm` | — | **Required.** Algorithm created by `Ratelimit.fixedWindow()`, `Ratelimit.slidingWindow()`, or `Ratelimit.tokenBucket()`. |
+| `prefix` | `string` | `'@better-convex/ratelimit'` | Namespaces stored state in the database. Use unique prefixes for different rate limit scopes. |
+| `dynamicLimits` | `boolean` | `false` | Enables `setDynamicLimit()` / `getDynamicLimit()`. |
+| `failureMode` | `'closed' \| 'open'` | `'closed'` | Behavior on timeout. `'closed'` rejects, `'open'` allows. |
+| `timeout` | `number` | `5000` | Milliseconds before triggering `failureMode` behavior. |
+| `enableProtection` | `boolean` | `false` | Enables deny-list tracking on repeated failures. |
+| `denyListThreshold` | `number` | `30` | Consecutive failures before an identifier is blocked (24h). Requires `enableProtection: true`. |
+| `denyList` | `ProtectionLists` | `undefined` | Static deny lists. See [Protection and deny lists](#protection-and-deny-lists). |
+| `ephemeralCache` | `Map<string, number> \| false` | `new Map()` | In-memory block cache. Shared across requests in the same Convex invocation. Pass `false` to disable. |
+
+### Algorithm builders
+
+All builders are available as static methods on `Ratelimit`.
+
+#### `Ratelimit.fixedWindow(limit, window, options?)`
+
+```ts
+fixedWindow(limit: number, window: Duration, options?: AlgorithmOptions): FixedWindowAlgorithm
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `limit` | `number` | Tokens replenished per window |
+| `window` | `Duration` | Window length (`number` in ms, or string like `'1 m'`) |
+| `options.shards` | `number` | Write distribution shards (default `1`) |
+| `options.maxReserved` | `number` | Max tokens that can be borrowed from future windows |
+| `options.capacity` | `number` | Max stored tokens (default = `limit`) |
+| `options.start` | `number` | Epoch offset for window alignment |
+
+#### `Ratelimit.slidingWindow(limit, window, options?)`
+
+```ts
+slidingWindow(limit: number, window: Duration, options?: AlgorithmOptions): SlidingWindowAlgorithm
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `limit` | `number` | Max requests in the sliding window |
+| `window` | `Duration` | Window length |
+| `options.shards` | `number` | Write distribution shards (default `1`) |
+| `options.maxReserved` | `number` | Max tokens that can be borrowed |
+
+<Callout icon={<InfoIcon />}>
+  **Note:** `reserve` is not supported with sliding window. The algorithm needs both current and previous window counts, which makes reservation impractical.
+</Callout>
+
+#### `Ratelimit.tokenBucket(refillRate, interval, maxTokens, options?)`
+
+```ts
+tokenBucket(refillRate: number, interval: Duration, maxTokens: number, options?: AlgorithmOptions): TokenBucketAlgorithm
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `refillRate` | `number` | Tokens added per interval |
+| `interval` | `Duration` | Refill interval |
+| `maxTokens` | `number` | Maximum bucket capacity |
+| `options.shards` | `number` | Write distribution shards (default `1`) |
+| `options.maxReserved` | `number` | Max tokens that can be borrowed from future refills |
+
+### Core methods
+
+#### `limit(identifier, options?)`
+
+Consume tokens and return a response. This is the primary method for enforcing rate limits.
+
+```ts
+limit(identifier: string, options?: LimitRequest): Promise<RatelimitResponse>
+```
+
+#### `check(identifier, options?)`
+
+Evaluate without consuming tokens. Use this for read-only checks (e.g. showing a warning before the user submits).
+
+```ts
+check(identifier: string, options?: CheckRequest): Promise<RatelimitResponse>
+```
+
+#### `getRemaining(identifier)`
+
+Return the remaining tokens, reset time, and limit for an identifier.
+
+```ts
+getRemaining(identifier: string): Promise<RemainingResponse>
+```
+
+#### `getValue(identifier, options?)`
+
+Return a raw snapshot for custom projections and UI calculations.
+
+```ts
+getValue(identifier: string, options?: { sampleShards?: number }): Promise<RateLimitSnapshot>
+```
+
+#### `resetUsedTokens(identifier)`
+
+Clear all stored state for an identifier. Useful for admin resets.
+
+```ts
+resetUsedTokens(identifier: string): Promise<void>
+```
+
+#### `setDynamicLimit(options)`
+
+Override the configured limit at runtime. Pass `{ limit: false }` to remove the override. Requires `dynamicLimits: true`.
+
+```ts
+setDynamicLimit(options: { limit: number | false }): Promise<void>
+```
+
+#### `getDynamicLimit()`
+
+Read the current dynamic override. Returns `{ dynamicLimit: number | null }`. Requires `dynamicLimits: true`.
+
+```ts
+getDynamicLimit(): Promise<DynamicLimitResponse>
+```
+
+#### `blockUntilReady(identifier, timeoutMs)`
+
+Wait for tokens to become available, retrying automatically. Returns as soon as `limit()` succeeds or the timeout is reached.
+
+```ts
+blockUntilReady(identifier: string, timeoutMs: number): Promise<RatelimitResponse>
+```
+
+<Callout icon={<InfoIcon />}>
+  **Important:** `blockUntilReady` uses `setTimeout` internally. Use it only in **actions** or non-Convex runtimes. Do not call it inside queries or mutations — Convex does not support timers in those contexts.
+</Callout>
+
+#### `hookAPI(options?)`
+
+Export a `getRateLimit` query and `getServerTime` mutation for the React hook.
+
+```ts
+hookAPI(options?: HookAPIOptions): {
+  getRateLimit: FunctionReference<'query'>;
+  getServerTime: FunctionReference<'mutation'>;
+}
+```
+
+### Request options
+
+#### `LimitRequest`
+
+Pass these options to `limit()` to customize behavior per-call.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `rate` | `number` | `1` | Alias for `count`. Tokens to consume. |
+| `count` | `number` | `1` | Tokens to consume. Takes precedence if both `rate` and `count` are set. |
+| `reserve` | `boolean` | `false` | Allow borrowing from future capacity (up to `maxReserved`). Not supported by `slidingWindow`. |
+| `ip` | `string` | — | IP address for deny-list matching |
+| `userAgent` | `string` | — | User-agent for deny-list matching |
+| `country` | `string` | — | Country code for deny-list matching |
+| `geo` | `unknown` | — | Reserved for future geo-based rules |
+
+#### `CheckRequest`
+
+Same as `LimitRequest` but `reserve` defaults to not consuming tokens (since `check()` is read-only).
+
+### Response types
+
+#### `RatelimitResponse`
+
+Returned by `limit()`, `check()`, and `blockUntilReady()`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `success` | `boolean` | `true` if the request was allowed |
+| `ok` | `boolean` | Alias for `success` (Convex DX parity) |
+| `limit` | `number` | Maximum tokens for this algorithm |
+| `remaining` | `number` | Tokens left after this request (floored to 0) |
+| `reset` | `number` | Epoch ms when tokens will be available |
+| `pending` | `Promise<unknown>` | Resolves when async side-effects complete |
+| `reason` | `'timeout' \| 'cacheBlock' \| 'denyList'` | Present when a reason applies. Note: `failureMode: 'open'` can return `success: true` with `reason: 'timeout'`. |
+| `deniedValue` | `string` | Present only when `reason === 'denyList'`. The value that triggered the block. |
+
+#### `RemainingResponse`
+
+Returned by `getRemaining()`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `remaining` | `number` | Tokens available |
+| `reset` | `number` | Epoch ms of next replenishment |
+| `limit` | `number` | Maximum tokens |
+
+#### `RateLimitSnapshot`
+
+Returned by `getValue()`. Used for custom projections and the React hook.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `value` | `number` | Current token count |
+| `ts` | `number` | Timestamp of last state update |
+| `shard` | `number` | Which shard was read |
+| `config` | `ResolvedAlgorithm` | Full algorithm config for `calculateRateLimit()` |
+
+### Hook API
+
+#### `HookAPIOptions`
+
+Options for `hookAPI()`.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `identifier` | `string \| (ctx, fromClient?) => string \| Promise<string>` | — | How to resolve the identifier. A string uses it directly. A callback receives the Convex context and the optional client-provided identifier. |
+| `sampleShards` | `number` | `1` | How many shards to sample when reading. Higher = more accurate, more reads. |
+
+#### `UseRateLimitOptions`
+
+Options for the `useRateLimit()` React hook.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `identifier` | `string` | — | Passed to the `getRateLimit` query |
+| `count` | `number` | `1` | Tokens to project for status calculation |
+| `sampleShards` | `number` | — | Override sampleShards from hook API |
+| `getServerTimeMutation` | `FunctionReference` | — | Enables clock-skew correction between client and server |
+
+### Time constants
+
+Pre-defined millisecond constants exported from `better-convex/ratelimit`:
+
+| Constant | Value |
+| --- | --- |
+| `SECOND` | `1_000` |
+| `MINUTE` | `60_000` |
+| `HOUR` | `3_600_000` |
+| `DAY` | `86_400_000` |
+| `WEEK` | `604_800_000` |
+
+### Internal tables
+
+The rate limiter stores state in three Convex tables. These are automatically injected by the ORM's `defineSchema` — do not define tables with these names in your schema.
+
+| Table | Purpose |
+| --- | --- |
+| `ratelimit_state` | Per-identifier, per-shard token state |
+| `ratelimit_dynamic_limit` | Dynamic limit overrides per prefix |
+| `ratelimit_protection_hit` | Protection tracking (hits, blocks) per prefix |
+
+### Advanced notes
+
+#### `calculateRateLimit`
+
+The `calculateRateLimit` function is exported for custom projections and UI calculations. It takes a state snapshot, algorithm config, current timestamp, and count, and returns the evaluated result without touching the database.
+
+```ts showLineNumbers
+import { calculateRateLimit } from 'better-convex/ratelimit';
+
+const result = calculateRateLimit(
+  { value: 8, ts: Date.now() - 30_000 },
+  Ratelimit.fixedWindow(10, '1 m'),
+  Date.now(),
+  1
+);
+// result.remaining, result.reset, result.retryAfter
+```
+
+#### Sharding
+
+When `shards > 1`, each `limit()` call picks a random shard (or two, using power-of-two-choices when `shards >= 3`) to reduce write contention. The trade-off: reads (`check`, `getRemaining`, `getValue`) only sample a subset of shards, so remaining counts are approximate. For most use cases, `shards: 1` (the default) is fine. Increase shards only when you see write contention on hot identifiers.
+
+#### Ephemeral cache
+
+The ephemeral block cache is an in-memory `Map<string, number>` that caches "blocked until" timestamps. When a `limit()` call fails, subsequent calls for the same identifier skip the database read entirely until the block expires. The cache is per-`Ratelimit` instance and resets on each Convex function invocation. Pass `ephemeralCache: false` to disable it, or pass a shared `Map` across multiple `Ratelimit` instances to share the cache.
+
+#### `ok` alias
+
+The response includes both `success` and `ok`. They are always identical. `ok` exists for Convex DX parity with patterns like `if (!result.ok) throw ...`.
+
+## Next steps
 
 <Cards>
-  <Card title="Metadata" href="/docs/server/metadata" />
+  <Card title="Metadata" href="/docs/orm/schema/column-types" />
   <Card title="Error Handling" href="/docs/server/error-handling" />
   <Card title="Middlewares" href="/docs/server/middlewares" />
 </Cards>

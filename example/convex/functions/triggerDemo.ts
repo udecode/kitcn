@@ -749,7 +749,6 @@ export const runCoverage = authMutation.mutation(async ({ ctx }) => {
           createdAt: new Date(),
           updatedAt: new Date(),
           activeOrganizationId: null,
-          test: 'trigger-probe',
         })
         .returning();
 

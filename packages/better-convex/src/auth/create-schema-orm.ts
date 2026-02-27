@@ -131,7 +131,6 @@ const getReferencedFieldName = (
 const getTypeExpression = (
   field: DBFieldAttribute,
   state: {
-    usesV: boolean;
     ormImports: Set<string>;
   }
 ): string => {
@@ -161,16 +160,16 @@ const getTypeExpression = (
       state.ormImports.add('integer');
       return 'integer()';
     case 'number[]':
-      state.ormImports.add('custom');
-      state.usesV = true;
-      return 'custom(v.array(v.number()))';
+      state.ormImports.add('arrayOf');
+      state.ormImports.add('integer');
+      return 'arrayOf(integer().notNull())';
     case 'string':
       state.ormImports.add('text');
       return 'text()';
     case 'string[]':
-      state.ormImports.add('custom');
-      state.usesV = true;
-      return 'custom(v.array(v.string()))';
+      state.ormImports.add('arrayOf');
+      state.ormImports.add('text');
+      return 'arrayOf(text().notNull())';
     default:
       throw new Error(`Unsupported Better Auth field type: ${String(type)}`);
   }
@@ -200,7 +199,6 @@ export const createSchemaOrm = async ({
   const entries = getTableEntries(tables);
   const state = {
     ormImports: new Set<string>(['convexTable', 'defineSchema']),
-    usesV: false,
   };
 
   const tableBlocks: string[] = [];
@@ -270,7 +268,6 @@ export const createSchemaOrm = async ({
 
   const importList = Array.from(state.ormImports).sort();
   const imports = `import {\n  ${importList.join(',\n  ')},\n} from "better-convex/orm";`;
-  const vImport = state.usesV ? '\nimport { v } from "convex/values";\n' : '\n';
 
   const tableObjectEntries = entries.map((entry) => {
     if (renderObjectKey(entry.modelName) === entry.varName) {
@@ -284,7 +281,8 @@ export const createSchemaOrm = async ({
 // To regenerate the schema, run:
 // \`npx @better-auth/cli generate --output ${file} -y\`
 
-${imports}${vImport}
+${imports}
+
 ${tableBlocks.join('\n\n')}
 
 export const tables = {

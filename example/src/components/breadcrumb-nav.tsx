@@ -9,6 +9,7 @@ import {
   CheckSquare,
   ChevronDown,
   FolderOpen,
+  Gauge,
   Loader2,
   LogIn,
   LogOut,
@@ -64,6 +65,12 @@ const LAB_NAV_ITEMS = [
     match: (p: string) => p.startsWith('/aggregate'),
   },
   {
+    href: '/ratelimit' as const,
+    label: 'Ratelimit',
+    icon: Gauge,
+    match: (p: string) => p.startsWith('/ratelimit'),
+  },
+  {
     href: '/triggers' as const,
     label: 'Triggers',
     icon: Activity,
@@ -82,6 +89,7 @@ type NavSection = 'app' | 'labs';
 function activeSectionFromPath(pathname: string): NavSection {
   if (
     pathname.startsWith('/aggregate') ||
+    pathname.startsWith('/ratelimit') ||
     pathname.startsWith('/triggers') ||
     pathname.startsWith('/migrations')
   ) {

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import { Agentation } from 'agentation';
 import { Suspense } from 'react';
 import { BreadcrumbNav } from '@/components/breadcrumb-nav';
 import { Providers } from '@/components/providers';
@@ -38,7 +37,6 @@ export default function RootLayout({
           </Suspense>
           {children}
           <Toaster />
-          {process.env.NODE_ENV === 'development' && <Agentation />}
         </Providers>
       </body>
     </html>

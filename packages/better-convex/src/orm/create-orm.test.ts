@@ -72,12 +72,15 @@ describe('createOrm type adapters', () => {
     expect(api).toHaveProperty('migrationCancel');
   });
 
-  test('getResetTableNames includes migration and aggregate internal tables', () => {
+  test('getResetTableNames includes migration, aggregate, and ratelimit internal tables', () => {
     const tableNames = getResetTableNames(schema);
 
     expect(tableNames).toContain('users');
     expect(tableNames).toContain('migration_state');
     expect(tableNames).toContain('migration_run');
     expect(tableNames).toContain('aggregate_state');
+    expect(tableNames).toContain('ratelimit_state');
+    expect(tableNames).toContain('ratelimit_dynamic_limit');
+    expect(tableNames).toContain('ratelimit_protection_hit');
   });
 });

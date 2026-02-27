@@ -75,6 +75,13 @@ export const api = {
   public: {
     hello: createApiLeaf<"query", typeof import("../functions/public").hello>(convexApi["public"]["hello"], { type: "query" }),
   },
+  ratelimitDemo: {
+    consumeInteractive: createApiLeaf<"mutation", typeof import("../functions/ratelimitDemo").consumeInteractive>(convexApi["ratelimitDemo"]["consumeInteractive"], { rateLimit: "ratelimit/interactive", type: "mutation" }),
+    getInteractiveStatus: createApiLeaf<"query", typeof import("../functions/ratelimitDemo").getInteractiveStatus>(convexApi["ratelimitDemo"]["getInteractiveStatus"], { type: "query" }),
+    getSnapshot: createApiLeaf<"query", typeof import("../functions/ratelimitDemo").getSnapshot>(convexApi["ratelimitDemo"]["getSnapshot"], { auth: "required", type: "query" }),
+    resetInteractive: createApiLeaf<"mutation", typeof import("../functions/ratelimitDemo").resetInteractive>(convexApi["ratelimitDemo"]["resetInteractive"], { rateLimit: "ratelimit/interactive", type: "mutation" }),
+    runCoverage: createApiLeaf<"action", typeof import("../functions/ratelimitDemo").runCoverage>(convexApi["ratelimitDemo"]["runCoverage"], { auth: "required", type: "action" }),
+  },
   seed: {
     generateSamples: createApiLeaf<"action", typeof import("../functions/seed").generateSamples>(convexApi["seed"]["generateSamples"], { auth: "required", type: "action" }),
   },

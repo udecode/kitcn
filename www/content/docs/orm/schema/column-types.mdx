@@ -5,10 +5,10 @@ description: ORM column builders (Drizzle-style) and their TypeScript types
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to define document fields using Drizzle-style column builders. You'll master string, number, boolean, and reference fields, column hooks like `$defaultFn`, and advanced types like `custom()` and `json<T>()`.
+In this guide, we'll learn how to define document fields using Drizzle-style column builders. You'll master string, number, boolean, and reference fields, column hooks like `$defaultFn`, nested shapes via `arrayOf()` / `objectOf()`, and advanced escape hatches like `custom()` / `json<T>()`.
 
 <Callout icon={<AlertTriangle />}>
-The ORM documents a **Convex subset** of Drizzle's PostgreSQL column types. Temporal fields are supported with `date()` and `timestamp()`. For Convex-native arbitrary values, use `custom()` / `json()` and validate shape with `convex/values` validators.
+The ORM documents a **Convex subset** of Drizzle's PostgreSQL column types. Temporal fields are supported with `date()` and `timestamp()`. For nested document arrays/objects, use `arrayOf()` / `objectOf()`. Use `custom()` / `json()` for advanced validator escape hatches.
 </Callout>
 
 ## Temporal Semantics
@@ -238,9 +238,35 @@ const posts = convexTable('posts', {
 });
 ```
 
-### `custom(validator)`
+### `arrayOf(element)` / `objectOf(shape)`
 
-Use `custom()` to wrap any Convex validator and get end-to-end TypeScript inference.
+Use these helpers for nested arrays and objects in ORM schemas without importing `v` directly.
+
+```ts showLineNumbers
+import {
+  arrayOf,
+  convexTable,
+  integer,
+  objectOf,
+  text,
+  textEnum,
+} from 'better-convex/orm';
+
+const events = convexTable('events', {
+  timeline: arrayOf(
+    objectOf({
+      timestamp: integer().notNull(),
+      type: textEnum(['status', 'milestone', 'note'] as const).notNull(),
+      content: text().notNull(),
+      addedBy: text().notNull(),
+    })
+  ).notNull(),
+});
+```
+
+### `custom(validator)` (advanced)
+
+Use `custom()` to wrap any Convex validator directly when you need an escape hatch.
 
 ```ts showLineNumbers
 import { convexTable, custom } from 'better-convex/orm';
@@ -279,7 +305,7 @@ These Drizzle (SQL) column type categories don't map to Convex documents and are
 - SQL database-side timezone/precision semantics for timestamp/date types
 - SQL decimals/numerics
 - SQL database enums (use `textEnum(...)`)
-- SQL arrays (beyond `vector(...)` embeddings)
+- SQL arrays (`arrayOf(...)` models document arrays, not SQL array columns)
 - Custom SQL types
 
 You now know every column builder available in the ORM. From basic primitives to typed references and custom validators, these builders give you full control over your document shape with end-to-end TypeScript inference.

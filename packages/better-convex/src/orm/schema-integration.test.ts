@@ -143,3 +143,15 @@ test('defineSchema auto-injects internal migration storage tables', () => {
   expect(schema.tables).toHaveProperty('migration_state');
   expect(schema.tables).toHaveProperty('migration_run');
 });
+
+test('defineSchema auto-injects internal ratelimit storage tables', () => {
+  const users = convexTable('ratelimit_schema_users', {
+    name: text().notNull(),
+  });
+
+  const schema = defineSchema({ users });
+
+  expect(schema.tables).toHaveProperty('ratelimit_state');
+  expect(schema.tables).toHaveProperty('ratelimit_dynamic_limit');
+  expect(schema.tables).toHaveProperty('ratelimit_protection_hit');
+});

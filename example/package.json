@@ -32,14 +32,12 @@
     "typecheck:watch": "tsc --noEmit --watch"
   },
   "dependencies": {
-    "@convex-dev/rate-limiter": "0.3.2",
     "@convex-dev/react-query": "0.1.0",
     "@convex-dev/resend": "0.2.3",
     "@hookform/resolvers": "5.2.2",
     "@react-email/components": "1.0.8",
     "@react-email/render": "2.0.4",
     "@t3-oss/env-nextjs": "0.13.10",
-    "agentation": "^2.2.1",
     "better-convex": "workspace:*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

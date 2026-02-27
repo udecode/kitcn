@@ -144,7 +144,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 | [Metadata](/docs/server/metadata) | Add procedure metadata with `.meta()`. Used by CLI for auth-aware query handling. |
 | [Error Handling](/docs/server/error-handling) | Throw `CRPCError` with codes like `UNAUTHORIZED`, `NOT_FOUND`, `BAD_REQUEST`. |
 | [Server-Side Calls](/docs/server/server-side-calls) | Call procedures from server with `createCallerFactory`. RSC data fetching. |
-| [Rate Limiting](/docs/server/advanced/rate-limiting) | Token bucket and fixed window rate limiting with `@convex-dev/rate-limiter`. |
+| [Rate Limiting](/docs/server/advanced/rate-limiting) | Token bucket and fixed/sliding window rate limiting with `better-convex/ratelimit`. |
 
 ### Database
 

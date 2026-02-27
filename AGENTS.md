@@ -213,7 +213,6 @@ Next.js application with Convex backend, Better Auth authentication, and Tailwin
 ### Data Fetching
 
 - **@tanstack/react-query**
-- **@convex-dev/react-query**
 
 ### UI Components
 
@@ -241,18 +240,14 @@ Next.js application with Convex backend, Better Auth authentication, and Tailwin
 ### Backend Framework
 
 - **Convex**
-- **convex-ents** (Entity system with relationships)
-- **convex-helpers**
+- **better-convex**
 
 ### Authentication
 
 - **better-auth**
-- **@convex-dev/better-auth** (Convex adapter)
 
 ### Backend Components
 
-- **@convex-dev/aggregate**
-- **@convex-dev/rate-limiter**
 - **@convex-dev/resend** (Email service)
 
 ### Email

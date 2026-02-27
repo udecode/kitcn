@@ -19,6 +19,7 @@ import { extractRelationsConfig } from './extractRelationsConfig';
 import { createOrmDbLifecycle, type OrmDbLifecycle } from './lifecycle';
 import { createMigrationHandlers, type MigrationSet } from './migrations';
 import { MIGRATION_STORAGE_TABLE_NAMES } from './migrations/schema';
+import { RATELIMIT_STORAGE_TABLE_NAMES } from './ratelimit/schema';
 import type { TablesRelationalConfig } from './relations';
 import { scheduledDeleteFactory } from './scheduled-delete';
 import { scheduledMutationBatchFactory } from './scheduled-mutation-batch';
@@ -126,6 +127,7 @@ type OrmClientWithApi<TSchema extends TablesRelationalConfig> =
 const RESET_INTERNAL_TABLE_NAMES = [
   ...AGGREGATE_STORAGE_TABLE_NAMES,
   ...MIGRATION_STORAGE_TABLE_NAMES,
+  ...RATELIMIT_STORAGE_TABLE_NAMES,
 ] as const;
 
 export function getResetTableNames(schema: TablesRelationalConfig): string[] {

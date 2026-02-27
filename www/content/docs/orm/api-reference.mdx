@@ -194,6 +194,27 @@ vector(1536)
 vector('embedding', 768)
 ```
 
+### `arrayOf()` / `objectOf()`
+
+```ts
+arrayOf(text().notNull())
+objectOf({
+  actor: text().notNull(),
+  metadata: objectOf({
+    source: text().notNull(),
+  }),
+})
+```
+
+### `custom()` / `json()`
+
+```ts
+custom(v.object({ type: v.string(), data: v.any() }))
+json<{ tags: string[] }>()
+```
+
+Advanced escape hatches for arbitrary Convex validator shapes.
+
 ### Column Modifiers
 
 ```ts showLineNumbers

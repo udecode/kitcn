@@ -65,7 +65,7 @@ describe('createSchemaOrm', () => {
     expect(result.code).toContain('import {');
     expect(result.code).toContain('convexTable');
     expect(result.code).toContain('defineSchema');
-    expect(result.code).toContain('import { v } from "convex/values";');
+    expect(result.code).not.toContain('import { v } from "convex/values";');
 
     expect(result.code).toContain('export const session = convexTable(');
     expect(result.code).toContain('export const user = convexTable(');
@@ -80,8 +80,8 @@ describe('createSchemaOrm', () => {
 
     // Mapping coverage.
     expect(result.code).toContain('profile: text(),');
-    expect(result.code).toContain('tags: custom(v.array(v.string())),');
-    expect(result.code).toContain('weights: custom(v.array(v.number())),');
+    expect(result.code).toContain('tags: arrayOf(text().notNull()),');
+    expect(result.code).toContain('weights: arrayOf(integer().notNull()),');
     expect(result.code).toContain(
       'status: textEnum(["active", "inactive"]).notNull(),'
     );

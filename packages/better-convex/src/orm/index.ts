@@ -100,6 +100,7 @@ export type {
   SystemFields,
 } from './builders';
 export {
+  arrayOf,
   bigint,
   boolean,
   bytes,
@@ -108,6 +109,7 @@ export {
   id,
   integer,
   json,
+  objectOf,
   text,
   textEnum,
   timestamp,

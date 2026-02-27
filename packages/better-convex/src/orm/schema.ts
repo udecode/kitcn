@@ -6,6 +6,7 @@ import type {
 import { defineSchema as defineConvexSchema } from 'convex/server';
 import { injectAggregateStorageTables } from './aggregate-index/schema';
 import { injectMigrationStorageTables } from './migrations/schema';
+import { injectRatelimitStorageTables } from './ratelimit/schema';
 import type { OrmRuntimeDefaults } from './symbols';
 import { OrmSchemaDefinition, OrmSchemaOptions } from './symbols';
 
@@ -92,13 +93,16 @@ export function defineSchema<
   );
   const schemaWithInternals = injectMigrationStorageTables(
     schemaWithAggregateInternals
+  );
+  const schemaWithAllInternals = injectRatelimitStorageTables(
+    schemaWithInternals
   ) as TSchema;
 
   Object.defineProperty(schema, OrmSchemaOptions, {
     value: { strict, defaults },
     enumerable: false,
   });
-  Object.defineProperty(schemaWithInternals, OrmSchemaOptions, {
+  Object.defineProperty(schemaWithAllInternals, OrmSchemaOptions, {
     value: { strict, defaults },
     enumerable: false,
   });
@@ -109,7 +113,7 @@ export function defineSchema<
     ...convexOptions
   } = options ?? {};
   const convexSchema = defineConvexSchema(
-    schemaWithInternals as any,
+    schemaWithAllInternals as any,
     convexOptions as DefineSchemaOptions<StrictTableNameTypes>
   );
   Object.defineProperty(convexSchema as object, OrmSchemaOptions, {
@@ -120,7 +124,7 @@ export function defineSchema<
     value: convexSchema,
     enumerable: false,
   });
-  Object.defineProperty(schemaWithInternals, OrmSchemaDefinition, {
+  Object.defineProperty(schemaWithAllInternals, OrmSchemaDefinition, {
     value: convexSchema,
     enumerable: false,
   });

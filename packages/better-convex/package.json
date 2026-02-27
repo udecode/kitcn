@@ -20,6 +20,8 @@
     "./auth/nextjs": "./dist/auth/nextjs/index.js",
     "./crpc": "./dist/crpc/index.js",
     "./orm": "./dist/orm/index.js",
+    "./ratelimit": "./dist/ratelimit/index.js",
+    "./ratelimit/react": "./dist/ratelimit/react/index.js",
     "./react": "./dist/react/index.js",
     "./rsc": "./dist/rsc/index.js",
     "./server": "./dist/server/index.js",

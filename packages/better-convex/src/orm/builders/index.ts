@@ -42,10 +42,12 @@ export {
 export { ConvexColumnBuilder } from './convex-column-builder';
 // Custom builder
 export {
+  arrayOf,
   ConvexCustomBuilder,
   type ConvexCustomBuilderInitial,
   custom,
   json,
+  objectOf,
 } from './custom';
 // Date builder
 export {
