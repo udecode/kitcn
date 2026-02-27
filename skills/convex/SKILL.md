@@ -67,11 +67,11 @@ Only remember these non-parity deltas:
 21. **`create<Module>Handler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only. Import from `./generated/<module>.runtime`.
 22. **`create<Module>Caller(ctx)`** — use in actions and HTTP routes (where handler is unavailable). Goes through validation + middleware. Root caller exposes query+mutation procedures. In `ActionCtx`, action procedures are under `caller.actions.*`; scheduling is under `caller.schedule.now|after|at` with `caller.schedule.cancel(id)`. Import from `./generated/<module>.runtime`. Each caller/handler eagerly loads every procedure in its module (no lazy loading) — split large modules to keep bundles lean.
 23. API types (`Api`, `ApiInputs`, `ApiOutputs`, `Select`, `Insert`, `TableName`) import from `@convex/api` — no manual `inferApiInputs<typeof api>`.
-23. HTTP router must export as `httpRouter` (not `appRouter`) for codegen.
-24. Server wiring imports come from `convex/functions/generated/` directory: `getAuth`, `defineAuth` from `generated/auth`; `initCRPC`, `QueryCtx`, `MutationCtx`, `OrmCtx` from `generated/server`; `create<Module>Caller`, `create<Module>Handler` from `generated/<module>.runtime`. No manual `convex/lib/orm.ts`.
-25. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
-26. Internal auth functions at `internal.generated.*` (not `internal.auth.*`).
-27. Async mutation batching is the default (codegen wires it). Customize per call: `execute({ batchSize, delayMs })`. Opt into sync: `execute({ mode: 'sync' })` or `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`. Relevant defaults: `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
+24. HTTP router must export as `httpRouter` (not `appRouter`) for codegen.
+25. Server wiring imports come from `convex/functions/generated/` directory: `getAuth`, `defineAuth` from `generated/auth`; `initCRPC`, `QueryCtx`, `MutationCtx`, `OrmCtx` from `generated/server`; `create<Module>Caller`, `create<Module>Handler` from `generated/<module>.runtime`. No manual `convex/lib/orm.ts`.
+26. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
+27. Internal auth functions at `internal.generated.*` (not `internal.auth.*`).
+28. Async mutation batching is the default (codegen wires it). Customize per call: `execute({ batchSize, delayMs })`. Opt into sync: `execute({ mode: 'sync' })` or `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`. Relevant defaults: `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
 
 ## Directory Boundary (Important)
 
@@ -350,7 +350,7 @@ export const toggleTask = authMutation
   .input(
     z.object({ projectId: z.string(), taskId: z.string(), done: z.boolean() })
   )
-  
+
   .mutation(async ({ ctx, input }) => {
     const ownedProject = await ctx.orm.query.project.findFirst({
       where: { id: input.projectId, ownerId: ctx.userId },
@@ -400,41 +400,36 @@ import { createAnalyticsCaller } from "./generated/analytics.runtime";
 import { createReportsCaller } from "./generated/reports.runtime";
 
 // Query/mutation → createHandler (zero overhead, bypasses validation)
-export const listOrganizations = authQuery
-  .query(async ({ ctx }) => {
-    const handler = createOrganizationHandler(ctx);
-    const orgs = await handler.listUserOrganizations();
-    return orgs;
-  });
+export const listOrganizations = authQuery.query(async ({ ctx }) => {
+  const handler = createOrganizationHandler(ctx);
+  const orgs = await handler.listUserOrganizations();
+  return orgs;
+});
 
 // Mutation → createHandler for sub-procedure calls
-export const seed = privateMutation
-  
-  .mutation(async ({ ctx }) => {
-    const handler = createSeedHandler(ctx);
-    await handler.cleanupSeedData();
-    await handler.seedUsers();
-    return null;
-  });
+export const seed = privateMutation.mutation(async ({ ctx }) => {
+  const handler = createSeedHandler(ctx);
+  await handler.cleanupSeedData();
+  await handler.seedUsers();
+  return null;
+});
 
 // Action → createCaller (handler unavailable)
-export const generateReport = privateAction
-  
-  .action(async ({ ctx }) => {
-    const analyticsCaller = createAnalyticsCaller(ctx);
-    const reportsCaller = createReportsCaller(ctx);
-    const stats = await analyticsCaller.actions.getDailyStats({});
-    await reportsCaller.schedule.now.create({ type: "daily", data: stats });
-    return null;
-  });
+export const generateReport = privateAction.action(async ({ ctx }) => {
+  const analyticsCaller = createAnalyticsCaller(ctx);
+  const reportsCaller = createReportsCaller(ctx);
+  const stats = await analyticsCaller.actions.getDailyStats({});
+  await reportsCaller.schedule.now.create({ type: "daily", data: stats });
+  return null;
+});
 ```
 
-| Context | Use | Why |
-|---------|-----|-----|
-| `QueryCtx` | `create<Module>Handler(ctx)` | Zero overhead, direct handler call |
-| `MutationCtx` | `create<Module>Handler(ctx)` | Zero overhead, same transaction |
-| `ActionCtx` | `create<Module>Caller(ctx)` | Root caller = query/mutation, `caller.actions.*` = action, `caller.schedule.*` = scheduled mutation/action |
-| HTTP routes | `create<Module>Caller(ctx)` | Action-like context |
+| Context       | Use                          | Why                                                                                                        |
+| ------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `QueryCtx`    | `create<Module>Handler(ctx)` | Zero overhead, direct handler call                                                                         |
+| `MutationCtx` | `create<Module>Handler(ctx)` | Zero overhead, same transaction                                                                            |
+| `ActionCtx`   | `create<Module>Caller(ctx)`  | Root caller = query/mutation, `caller.actions.*` = action, `caller.schedule.*` = scheduled mutation/action |
+| HTTP routes   | `create<Module>Caller(ctx)`  | Action-like context                                                                                        |
 
 ### 4) Query Modes (Use The Right One)
 
@@ -772,25 +767,25 @@ Before calling a feature done:
 
 ## Common Mistakes (And Fixes)
 
-| Mistake                                             | Correct pattern                                                                          |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Raw Convex handler for new feature procedures       | cRPC builders (`publicQuery`, `authMutation`, etc.)                                      |
-| Write-time side effects duplicated across mutations | Schema trigger, or one centralized mutation-side sync helper when trigger path is unsafe |
-| Missing bounds on list/search                       | Add `limit` + cursor/pagination                                                          |
-| `orderBy` written as array objects                  | Use object form: `orderBy: { updatedAt: "desc" }`                                        |
-| Using `ctx.db` for policy-sensitive reads           | Use `ctx.orm` (RLS/constraints path)                                                     |
-| Throwing generic `Error` for expected outcomes      | Throw `CRPCError` with explicit code                                                     |
-| Infinite list with TanStack native hook directly    | Use `useInfiniteQuery` from `better-convex/react`                                        |
-| Primitive root input (`z.string()`)                 | Use root `z.object(...)` input schema                                                    |
-| Returning nothing with `z.void()`                   | Omit explicit output                                                     |
-| Manual pagination wrappers for infinite endpoints   | Use `.paginated({ limit, item })`                                                        |
-| Synthetic Convex IDs in tests (`"missing-id"`)      | Use inserted IDs or semantic lookup keys                                                 |
-| Aggregates disabled but helper/config still present | Remove aggregate helper + `defineTriggers` handlers + app config together                |
-| Putting secrets in `.meta(...)`                     | Keep metadata non-sensitive (client-visible)                                             |
+| Mistake                                                         | Correct pattern                                                                                                                                                                      |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Raw Convex handler for new feature procedures                   | cRPC builders (`publicQuery`, `authMutation`, etc.)                                                                                                                                  |
+| Write-time side effects duplicated across mutations             | Schema trigger, or one centralized mutation-side sync helper when trigger path is unsafe                                                                                             |
+| Missing bounds on list/search                                   | Add `limit` + cursor/pagination                                                                                                                                                      |
+| `orderBy` written as array objects                              | Use object form: `orderBy: { updatedAt: "desc" }`                                                                                                                                    |
+| Using `ctx.db` for policy-sensitive reads                       | Use `ctx.orm` (RLS/constraints path)                                                                                                                                                 |
+| Throwing generic `Error` for expected outcomes                  | Throw `CRPCError` with explicit code                                                                                                                                                 |
+| Infinite list with TanStack native hook directly                | Use `useInfiniteQuery` from `better-convex/react`                                                                                                                                    |
+| Primitive root input (`z.string()`)                             | Use root `z.object(...)` input schema                                                                                                                                                |
+| Returning nothing with `z.void()`                               | Omit explicit output                                                                                                                                                                 |
+| Manual pagination wrappers for infinite endpoints               | Use `.paginated({ limit, item })`                                                                                                                                                    |
+| Synthetic Convex IDs in tests (`"missing-id"`)                  | Use inserted IDs or semantic lookup keys                                                                                                                                             |
+| Aggregates disabled but helper/config still present             | Remove aggregate helper + `defineTriggers` handlers + app config together                                                                                                            |
+| Putting secrets in `.meta(...)`                                 | Keep metadata non-sensitive (client-visible)                                                                                                                                         |
 | Using `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly | Use `create<Module>Handler(ctx)` in queries/mutations, `create<Module>Caller(ctx)` in actions/HTTP with `caller.actions.*` / `caller.schedule.*` (from `generated/<module>.runtime`) |
-| Using `createCaller` in query/mutation context      | Use `create<Module>Handler(ctx)` — zero overhead, bypasses redundant validation          |
-| Adding `// @ts-nocheck` to unblock compile          | NEVER do this; fix the underlying types using canonical patterns in `references/setup/`  |
-| Relaxing lint rules to pass checks                  | Keep baseline lint config; fix code-level warnings/errors instead                        |
+| Using `createCaller` in query/mutation context                  | Use `create<Module>Handler(ctx)` — zero overhead, bypasses redundant validation                                                                                                      |
+| Adding `// @ts-nocheck` to unblock compile                      | NEVER do this; fix the underlying types using canonical patterns in `references/setup/`                                                                                              |
+| Relaxing lint rules to pass checks                              | Keep baseline lint config; fix code-level warnings/errors instead                                                                                                                    |
 
 ## Reference Escalation Map (Load Only If Needed)
 
@@ -812,6 +807,7 @@ Before calling a feature done:
 - `references/features/scheduling.md`: cron + delayed job patterns
 - `references/features/testing.md`: deeper testing scenarios
 - `references/features/aggregates.md`: aggregate component patterns
+- `references/features/migrations.md`: built-in online data migrations (defineMigration, CLI, deploy, drift). Load when: task involves data backfills, optional→required field hardening, field renames/removals, type narrowing, or `better-convex migrate` CLI commands. Skip for backward-compatible changes (new optional fields, new tables, code-level defaults).
 - `references/features/auth.md`: full Better Auth core flow
 - `references/features/auth-admin.md`: admin plugin details
 - `references/features/auth-organizations.md`: org/multi-tenant plugin details

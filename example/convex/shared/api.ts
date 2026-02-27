@@ -30,6 +30,12 @@ export const api = {
       list: createApiLeaf<"query", typeof import("../functions/items/queries").list>(convexApi["items"]["queries"]["list"], { type: "query" }),
     },
   },
+  migrationDemo: {
+    cancel: createApiLeaf<"mutation", typeof import("../functions/migrationDemo").cancel>(convexApi["migrationDemo"]["cancel"], { auth: "required", type: "mutation" }),
+    getStatus: createApiLeaf<"query", typeof import("../functions/migrationDemo").getStatus>(convexApi["migrationDemo"]["getStatus"], { auth: "required", type: "query" }),
+    runDown: createApiLeaf<"mutation", typeof import("../functions/migrationDemo").runDown>(convexApi["migrationDemo"]["runDown"], { auth: "required", type: "mutation" }),
+    runUp: createApiLeaf<"mutation", typeof import("../functions/migrationDemo").runUp>(convexApi["migrationDemo"]["runUp"], { auth: "required", type: "mutation" }),
+  },
   organization: {
     acceptInvitation: createApiLeaf<"mutation", typeof import("../functions/organization").acceptInvitation>(convexApi["organization"]["acceptInvitation"], { auth: "required", type: "mutation" }),
     addMember: createApiLeaf<"mutation", typeof import("../functions/organization").addMember>(convexApi["organization"]["addMember"], { auth: "required", rateLimit: "organization/addMember", type: "mutation" }),

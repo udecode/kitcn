@@ -305,6 +305,17 @@ describe('cli/codegen', () => {
       );
       expect(fs.existsSync(serverGeneratedFile)).toBe(true);
       const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
+      const migrationsGeneratedFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'migrations.gen.ts'
+      );
+      expect(fs.existsSync(migrationsGeneratedFile)).toBe(true);
+      const migrationsGenerated = fs.readFileSync(
+        migrationsGeneratedFile,
+        'utf-8'
+      );
       const nestedRuntimeFile = path.join(
         dir,
         'convex',
@@ -398,6 +409,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
+      expect(serverGenerated).not.toContain('export type MigrationCtx =');
       expect(serverGenerated).toContain(
         'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
       );
@@ -463,6 +475,18 @@ describe('cli/codegen', () => {
         '"aggregateBackfillStatus": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfillStatus"]'
       );
       expect(serverRuntimeGenerated).toContain(
+        '"migrationRun": ["mutation", typedProcedureResolver(internal["generated"]["server"]["migrationRun"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"migrationRunChunk": ["mutation", typedProcedureResolver(internal["generated"]["server"]["migrationRunChunk"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"migrationStatus": ["mutation", typedProcedureResolver(internal["generated"]["server"]["migrationStatus"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
+        '"migrationCancel": ["mutation", typedProcedureResolver(internal["generated"]["server"]["migrationCancel"]'
+      );
+      expect(serverRuntimeGenerated).toContain(
         '"resetChunk": ["mutation", typedProcedureResolver(internal["generated"]["server"]["resetChunk"]'
       );
       expect(serverRuntimeGenerated).toContain(
@@ -477,8 +501,18 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain('aggregateBackfill');
       expect(serverGenerated).toContain('aggregateBackfillChunk');
       expect(serverGenerated).toContain('aggregateBackfillStatus');
+      expect(serverGenerated).toContain('migrationRun');
+      expect(serverGenerated).toContain('migrationRunChunk');
+      expect(serverGenerated).toContain('migrationStatus');
+      expect(serverGenerated).toContain('migrationCancel');
       expect(serverGenerated).toContain('resetChunk');
       expect(serverGenerated).toContain('reset');
+      expect(migrationsGenerated).toContain(
+        "import { relations } from '../schema';"
+      );
+      expect(migrationsGenerated).not.toContain('export type MigrationCtx =');
+      expect(migrationsGenerated).toContain('export function defineMigration(');
+      expect(migrationsGenerated).not.toContain('defineMigrationSet');
 
       const module = await import(pathToFileURL(outputFile).href);
       expect(module).toHaveProperty('api');
@@ -944,6 +978,54 @@ describe('cli/codegen', () => {
       expect(generatedServer).toContain('schema: relations,');
       expect(generatedServer).toContain('triggers,');
       expect(generatedServer).toContain('ormFunctions,');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta wires migrations manifest into generated server when present', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'migrations', 'manifest.ts'),
+        `
+        export const migrations = {
+          migrations: [],
+          ids: [],
+          byId: {},
+        };
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const serverGeneratedFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
+      const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
+      const migrationsGeneratedFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'migrations.gen.ts'
+      );
+      const migrationsGenerated = fs.readFileSync(
+        migrationsGeneratedFile,
+        'utf-8'
+      );
+
+      expect(serverGenerated).toContain(
+        "import { migrations } from '../migrations/manifest';"
+      );
+      expect(serverGenerated).toContain('migrations,');
+      expect(migrationsGenerated).toContain('export function defineMigration(');
     } finally {
       process.chdir(oldCwd);
     }
@@ -1634,6 +1716,11 @@ describe('cli/codegen', () => {
 
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'server.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'migrations.gen.ts')
+        )
       ).toBe(true);
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))

@@ -40,6 +40,10 @@ This file provides a structured index of the ORM documentation for AI assistants
 
 - `/docs/orm/rls` - rlsPolicy, rlsRole, and runtime enforcement
 
+## Data Migrations
+
+- `/docs/orm/migrations` - Built-in online data migrations with `defineMigration`, CLI commands (`create`, `up`, `down`, `status`, `cancel`), deploy integration, and drift safety
+
 ## Migration & Comparison
 
 - `/docs/orm/migrate-from-convex` - Native Convex (`ctx.db`) → ORM migration guide
@@ -190,7 +194,6 @@ isNotNull(field);
 **Unavailable in Convex:**
 
 - Raw SQL queries
-- Database migrations
 - SQL joins
 - SQL `having` and SQL window functions (`groupBy` is supported with finite constraints)
 

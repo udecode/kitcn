@@ -1,5 +1,6 @@
 import { text } from './builders/text';
-import { createOrm } from './create-orm';
+import { createOrm, getResetTableNames } from './create-orm';
+import { defineMigration, defineMigrationSet } from './migrations/definitions';
 import { defineRelations } from './relations';
 import { OrmContext } from './symbols';
 import { convexTable } from './table';
@@ -43,5 +44,40 @@ describe('createOrm type adapters', () => {
     ) as any;
 
     expect(db[OrmContext].resolvedDefaults.mutationExecutionMode).toBe('async');
+  });
+
+  test('orm.api exposes migration procedures when migrations are configured', () => {
+    const migrationSet = defineMigrationSet<typeof schema>([
+      defineMigration({
+        id: '20260227_users_name',
+        up: {
+          table: 'users',
+          migrateOne: async () => {},
+        },
+      }),
+    ]);
+    const orm = createOrm({
+      schema,
+      ormFunctions: {
+        scheduledMutationBatch: {} as any,
+        scheduledDelete: {} as any,
+      },
+      migrations: migrationSet,
+    });
+
+    const api = orm.api();
+    expect(api).toHaveProperty('migrationRun');
+    expect(api).toHaveProperty('migrationRunChunk');
+    expect(api).toHaveProperty('migrationStatus');
+    expect(api).toHaveProperty('migrationCancel');
+  });
+
+  test('getResetTableNames includes migration and aggregate internal tables', () => {
+    const tableNames = getResetTableNames(schema);
+
+    expect(tableNames).toContain('users');
+    expect(tableNames).toContain('migration_state');
+    expect(tableNames).toContain('migration_run');
+    expect(tableNames).toContain('aggregate_state');
   });
 });

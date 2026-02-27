@@ -13,6 +13,8 @@ import type {
 } from '../_generated/server';
 import { internalMutation } from '../_generated/server';
 import schema, { relations, triggers } from '../schema';
+import { migrations } from '../migrations/manifest';
+
 
 const ormFunctions = (internal as unknown as Record<string, any>)["generated"]["server"] as OrmFunctions;
 
@@ -20,6 +22,7 @@ export const orm = createOrm({
   schema: relations,
   triggers,
   ormFunctions,
+  migrations,
   internalMutation,
 });
 
@@ -44,6 +47,10 @@ export const {
   aggregateBackfill,
   aggregateBackfillChunk,
   aggregateBackfillStatus,
+  migrationRun,
+  migrationRunChunk,
+  migrationStatus,
+  migrationCancel,
   resetChunk,
   reset,
 } = orm.api();

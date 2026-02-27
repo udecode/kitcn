@@ -5,6 +5,7 @@ import type {
 } from 'convex/server';
 import { defineSchema as defineConvexSchema } from 'convex/server';
 import { injectAggregateStorageTables } from './aggregate-index/schema';
+import { injectMigrationStorageTables } from './migrations/schema';
 import type { OrmRuntimeDefaults } from './symbols';
 import { OrmSchemaDefinition, OrmSchemaOptions } from './symbols';
 
@@ -86,8 +87,11 @@ export function defineSchema<
 ): SchemaDefinition<TSchema, StrictTableNameTypes> {
   const strict = options?.strict ?? true;
   const defaults = normalizeDefaults(options?.defaults);
-  const schemaWithInternals = injectAggregateStorageTables(
+  const schemaWithAggregateInternals = injectAggregateStorageTables(
     schema as unknown as Record<string, unknown>
+  );
+  const schemaWithInternals = injectMigrationStorageTables(
+    schemaWithAggregateInternals
   ) as TSchema;
 
   Object.defineProperty(schema, OrmSchemaOptions, {

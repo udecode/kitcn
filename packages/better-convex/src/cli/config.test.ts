@@ -34,6 +34,15 @@ describe('cli/config', () => {
             timeoutMs: 900_000,
             strict: false,
           },
+          migrations: {
+            enabled: 'auto',
+            wait: true,
+            batchSize: 256,
+            pollIntervalMs: 1000,
+            timeoutMs: 900_000,
+            strict: false,
+            allowDrift: true,
+          },
         },
         codegen: {
           debug: false,
@@ -48,6 +57,15 @@ describe('cli/config', () => {
             pollIntervalMs: 1000,
             timeoutMs: 900_000,
             strict: true,
+          },
+          migrations: {
+            enabled: 'auto',
+            wait: true,
+            batchSize: 256,
+            pollIntervalMs: 1000,
+            timeoutMs: 900_000,
+            strict: true,
+            allowDrift: false,
           },
         },
       });
@@ -89,6 +107,15 @@ describe('cli/config', () => {
               wait: false,
               batchSize: 250,
             },
+            migrations: {
+              enabled: 'on',
+              wait: false,
+              batchSize: 32,
+              pollIntervalMs: 250,
+              timeoutMs: 30_000,
+              strict: true,
+              allowDrift: false,
+            },
           },
           codegen: {
             debug: true,
@@ -104,6 +131,10 @@ describe('cli/config', () => {
               pollIntervalMs: 750,
               timeoutMs: 120_000,
               strict: false,
+            },
+            migrations: {
+              enabled: 'off',
+              allowDrift: true,
             },
           },
         },
@@ -129,6 +160,15 @@ describe('cli/config', () => {
             timeoutMs: 900_000,
             strict: false,
           },
+          migrations: {
+            enabled: 'on',
+            wait: false,
+            batchSize: 32,
+            pollIntervalMs: 250,
+            timeoutMs: 30_000,
+            strict: true,
+            allowDrift: false,
+          },
         },
         codegen: {
           debug: true,
@@ -144,6 +184,15 @@ describe('cli/config', () => {
             pollIntervalMs: 750,
             timeoutMs: 120_000,
             strict: false,
+          },
+          migrations: {
+            enabled: 'off',
+            wait: true,
+            batchSize: 256,
+            pollIntervalMs: 1000,
+            timeoutMs: 900_000,
+            strict: true,
+            allowDrift: true,
           },
         },
       });
@@ -194,6 +243,31 @@ describe('cli/config', () => {
     try {
       expect(() => loadBetterConvexConfig()).toThrow(
         'Invalid deploy.aggregateBackfill.enabled in'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('throws for invalid migrations values', () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    writeFile(
+      path.join(dir, 'better-convex.json'),
+      JSON.stringify({
+        dev: {
+          migrations: {
+            allowDrift: 'yes',
+          },
+        },
+      })
+    );
+
+    process.chdir(dir);
+    try {
+      expect(() => loadBetterConvexConfig()).toThrow(
+        'Invalid dev.migrations.allowDrift in'
       );
     } finally {
       process.chdir(oldCwd);

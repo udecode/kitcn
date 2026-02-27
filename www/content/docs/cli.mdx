@@ -17,6 +17,7 @@ import { InfoIcon } from "lucide-react"
 | Auth-aware skipping | Enable query skipping based on auth state |
 | Type-safe references | Get full type safety for function references |
 | Custom metadata | Extract `.meta()` values from procedures |
+| Migrations | Create/run/cancel built-in online migrations |
 | Dev reset | Wipe all tables, re-backfill, run seed hooks |
 | Environment sync | Sync env vars to Convex deployment |
 
@@ -43,6 +44,9 @@ Options:
 | `--backfill=auto\|on\|off` | Dev aggregate backfill mode toggle (default: `auto`) |
 | `--backfill-wait` / `--no-backfill-wait` | Wait for all target indexes to become `READY` |
 | `--backfill-batch-size <n>` | Batch size for aggregate backfill kickoff |
+| `--migrations=auto\|on\|off` | Dev migration mode toggle (default: `auto`) |
+| `--migrations-wait` / `--no-migrations-wait` | Wait for migration run completion |
+| `--migrations-allow-drift` / `--no-migrations-allow-drift` | Override drift policy in dev |
 
 Wraps `convex dev` — generates runtime files on startup, watches for changes, passes all other flags through. Local backend state lives in `.convex/` at project root (isolated per worktree/clone).
 
@@ -121,8 +125,10 @@ npx better-convex deploy --prod
 
 `better-convex deploy` runs:
 1. `convex deploy ...`
-2. post-deploy `generated/server:aggregateBackfill`
-3. status polling (`generated/server:aggregateBackfillStatus`) until `READY` (default behavior)
+2. post-deploy `generated/server:migrationRun` (`direction: "up"`)
+3. status polling (`generated/server:migrationStatus`) until completion (default behavior)
+4. post-deploy `generated/server:aggregateBackfill`
+5. aggregate status polling (`generated/server:aggregateBackfillStatus`) until `READY` (default behavior)
 
 Options:
 
@@ -134,6 +140,13 @@ Options:
 | `--backfill-poll-ms <n>` | Poll interval while waiting |
 | `--backfill-timeout-ms <n>` | Max wait duration before timeout |
 | `--backfill-strict` / `--no-backfill-strict` | Fail deploy on timeout/backfill error |
+| `--migrations=auto\|on\|off` | Enable/disable post-deploy `migrate up` |
+| `--migrations-wait` / `--no-migrations-wait` | Wait for migration completion |
+| `--migrations-batch-size <n>` | Batch size for migration workers |
+| `--migrations-poll-ms <n>` | Poll interval while waiting for migration completion |
+| `--migrations-timeout-ms <n>` | Max migration wait duration before timeout |
+| `--migrations-strict` / `--no-migrations-strict` | Fail deploy on migration timeout/error |
+| `--migrations-allow-drift` / `--no-migrations-allow-drift` | Override drift blocking policy |
 
 Already-`READY` indexes are skipped (noop). See [Resume Compatibility](#resume-compatibility) for full behavior rules.
 
@@ -161,6 +174,50 @@ npx better-convex aggregate prune --prod
 
 Runs `generated/server:aggregateBackfill` in prune mode to delete storage/state for aggregate indexes no longer declared in schema.
 
+### migrate create
+
+```bash showLineNumbers
+npx better-convex migrate create backfill_user_status
+```
+
+Creates a timestamped migration file under `convex/functions/migrations/` and regenerates `convex/functions/migrations/manifest.ts`.
+
+### migrate up
+
+```bash showLineNumbers
+npx better-convex migrate up --prod
+```
+
+Runs `generated/server:migrationRun` with `direction: "up"` and waits by default.
+
+### migrate down
+
+```bash showLineNumbers
+# Roll back the latest migration
+npx better-convex migrate down --steps 1 --prod
+
+# Roll back everything after a target migration id
+npx better-convex migrate down --to 20260227_000000_backfill_user_ban_reason --prod
+```
+
+Runs `generated/server:migrationRun` with `direction: "down"` in reverse applied order.
+
+### migrate status
+
+```bash showLineNumbers
+npx better-convex migrate status --prod
+```
+
+Reads migration run/state internals from `generated/server:migrationStatus`.
+
+### migrate cancel
+
+```bash showLineNumbers
+npx better-convex migrate cancel --prod
+```
+
+Cancels the active migration run (`generated/server:migrationCancel`).
+
 ### reset
 
 Wipe all table data in one step. Useful for dev resets and seeding workflows.
@@ -169,7 +226,7 @@ Wipe all table data in one step. Useful for dev resets and seeding workflows.
 npx better-convex reset --yes
 ```
 
-The `--yes` flag is required — reset is destructive. Under the hood it calls `generated/server:reset` (which uses `ctx.orm.withoutTriggers` to clear every table).
+The `--yes` flag is required — reset is destructive. Under the hood it calls `generated/server:reset` (which uses `ctx.orm.withoutTriggers` to clear every table, including internal aggregate and migration state tables).
 
 You can run custom functions before and after the reset:
 
@@ -359,6 +416,15 @@ export const admin = authQuery
       "pollIntervalMs": 1000,
       "timeoutMs": 900000,
       "strict": false
+    },
+    "migrations": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 256,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": false,
+      "allowDrift": true
     }
   },
   "codegen": {
@@ -375,6 +441,15 @@ export const admin = authQuery
       "pollIntervalMs": 1000,
       "timeoutMs": 900000,
       "strict": true
+    },
+    "migrations": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 256,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": true,
+      "allowDrift": false
     }
   }
 }

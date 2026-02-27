@@ -259,7 +259,7 @@ These Drizzle features are SQL-specific and do not map to Convex:
 - SQL `having` and SQL window functions (`groupBy` is supported with finite constraints)
 - Raw SQL execution
 - RQB SQL-only features: `RAW` filters and SQL placeholders in `where`/`limit`/`offset` are not supported at runtime
-- Database migrations and database-side constraints/triggers
+- SQL database migrations and database-side constraints/triggers (use `better-convex migrate ...` for online data migrations)
 - Custom SQL data types
 
 Use relation filters for Convex-style existence checks:

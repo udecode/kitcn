@@ -12,6 +12,7 @@
       "!**/generated",
       "!**/convex/shared/api.ts",
       "!!**/convex.json",
+      "!**/migrations",
       "!!packages/better-convex/src/internal/upstream/server/zod4.ts"
     ]
   },

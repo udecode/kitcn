@@ -104,6 +104,17 @@ export declare const api: {
       list: FunctionReference<"query", "public", {}, Array<string>>;
     };
   };
+  migrationDemo: {
+    cancel: FunctionReference<"mutation", "public", {}, any>;
+    getStatus: FunctionReference<"query", "public", {}, any>;
+    runDown: FunctionReference<
+      "mutation",
+      "public",
+      { steps?: number; to?: string },
+      any
+    >;
+    runUp: FunctionReference<"mutation", "public", {}, any>;
+  };
   organization: {
     acceptInvitation: FunctionReference<
       "mutation",
@@ -961,6 +972,10 @@ export declare const internal: {
         any,
         any
       >;
+      migrationCancel: FunctionReference<"mutation", "internal", any, any>;
+      migrationRun: FunctionReference<"mutation", "internal", any, any>;
+      migrationRunChunk: FunctionReference<"mutation", "internal", any, any>;
+      migrationStatus: FunctionReference<"mutation", "internal", any, any>;
       reset: FunctionReference<"action", "internal", any, any>;
       resetChunk: FunctionReference<
         "mutation",

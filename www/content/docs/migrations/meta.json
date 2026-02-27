@@ -1,5 +1,5 @@
 {
   "title": "Migrations",
   "defaultOpen": false,
-  "pages": ["convex", "db", "ents", "auth", "aggregate"]
+  "pages": ["convex", "orm", "db", "ents", "auth", "aggregate"]
 }

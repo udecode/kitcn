@@ -18,6 +18,16 @@ export type AggregateBackfillConfig = {
   strict: boolean;
 };
 
+export type MigrationConfig = {
+  enabled: BackfillEnabled;
+  wait: boolean;
+  batchSize: number;
+  pollIntervalMs: number;
+  timeoutMs: number;
+  strict: boolean;
+  allowDrift: boolean;
+};
+
 export type BetterConvexConfig = {
   api: boolean;
   auth: boolean;
@@ -26,6 +36,7 @@ export type BetterConvexConfig = {
     debug: boolean;
     convexArgs: string[];
     aggregateBackfill: AggregateBackfillConfig;
+    migrations: MigrationConfig;
   };
   codegen: {
     debug: boolean;
@@ -35,6 +46,7 @@ export type BetterConvexConfig = {
   deploy: {
     convexArgs: string[];
     aggregateBackfill: AggregateBackfillConfig;
+    migrations: MigrationConfig;
   };
 };
 
@@ -55,6 +67,24 @@ function createDefaultConfig(): BetterConvexConfig {
     timeoutMs: 900_000,
     strict: true,
   };
+  const devMigrationDefaults: MigrationConfig = {
+    enabled: 'auto',
+    wait: true,
+    batchSize: 256,
+    pollIntervalMs: 1000,
+    timeoutMs: 900_000,
+    strict: false,
+    allowDrift: true,
+  };
+  const deployMigrationDefaults: MigrationConfig = {
+    enabled: 'auto',
+    wait: true,
+    batchSize: 256,
+    pollIntervalMs: 1000,
+    timeoutMs: 900_000,
+    strict: true,
+    allowDrift: false,
+  };
   return {
     api: true,
     auth: true,
@@ -63,6 +93,7 @@ function createDefaultConfig(): BetterConvexConfig {
       debug: false,
       convexArgs: [],
       aggregateBackfill: devBackfillDefaults,
+      migrations: devMigrationDefaults,
     },
     codegen: {
       debug: false,
@@ -71,6 +102,7 @@ function createDefaultConfig(): BetterConvexConfig {
     deploy: {
       convexArgs: [],
       aggregateBackfill: deployBackfillDefaults,
+      migrations: deployMigrationDefaults,
     },
   };
 }
@@ -222,6 +254,66 @@ function parseAggregateBackfillConfig(
   return parsed;
 }
 
+function parseMigrationConfig(
+  value: unknown,
+  fieldName: string,
+  configPath: string
+): Partial<MigrationConfig> {
+  if (!isRecord(value)) {
+    throw new Error(`Invalid ${fieldName} in ${configPath}: expected object.`);
+  }
+
+  const parsed: Partial<MigrationConfig> = {};
+
+  if ('enabled' in value) {
+    parsed.enabled = parseBackfillEnabled(
+      value.enabled,
+      `${fieldName}.enabled`,
+      configPath
+    );
+  }
+  if ('wait' in value) {
+    parsed.wait = parseBoolean(value.wait, `${fieldName}.wait`, configPath);
+  }
+  if ('batchSize' in value) {
+    parsed.batchSize = parsePositiveInteger(
+      value.batchSize,
+      `${fieldName}.batchSize`,
+      configPath
+    );
+  }
+  if ('pollIntervalMs' in value) {
+    parsed.pollIntervalMs = parsePositiveInteger(
+      value.pollIntervalMs,
+      `${fieldName}.pollIntervalMs`,
+      configPath
+    );
+  }
+  if ('timeoutMs' in value) {
+    parsed.timeoutMs = parsePositiveInteger(
+      value.timeoutMs,
+      `${fieldName}.timeoutMs`,
+      configPath
+    );
+  }
+  if ('strict' in value) {
+    parsed.strict = parseBoolean(
+      value.strict,
+      `${fieldName}.strict`,
+      configPath
+    );
+  }
+  if ('allowDrift' in value) {
+    parsed.allowDrift = parseBoolean(
+      value.allowDrift,
+      `${fieldName}.allowDrift`,
+      configPath
+    );
+  }
+
+  return parsed;
+}
+
 function parseCommandConfig(
   value: unknown,
   fieldName: 'dev' | 'codegen',
@@ -231,6 +323,7 @@ function parseCommandConfig(
   convexArgs?: string[];
   scope?: CodegenScope;
   aggregateBackfill?: Partial<AggregateBackfillConfig>;
+  migrations?: Partial<MigrationConfig>;
 } {
   if (!isRecord(value)) {
     throw new Error(`Invalid ${fieldName} in ${configPath}: expected object.`);
@@ -241,6 +334,7 @@ function parseCommandConfig(
     convexArgs?: string[];
     scope?: CodegenScope;
     aggregateBackfill?: Partial<AggregateBackfillConfig>;
+    migrations?: Partial<MigrationConfig>;
   } = {};
 
   if ('debug' in value) {
@@ -274,6 +368,17 @@ function parseCommandConfig(
       configPath
     );
   }
+  if (
+    fieldName === 'dev' &&
+    'migrations' in value &&
+    value.migrations !== undefined
+  ) {
+    parsed.migrations = parseMigrationConfig(
+      value.migrations,
+      `${fieldName}.migrations`,
+      configPath
+    );
+  }
 
   return parsed;
 }
@@ -284,6 +389,7 @@ function parseDeployConfig(
 ): {
   convexArgs?: string[];
   aggregateBackfill?: Partial<AggregateBackfillConfig>;
+  migrations?: Partial<MigrationConfig>;
 } {
   if (!isRecord(value)) {
     throw new Error(`Invalid deploy in ${configPath}: expected object.`);
@@ -292,6 +398,7 @@ function parseDeployConfig(
   const parsed: {
     convexArgs?: string[];
     aggregateBackfill?: Partial<AggregateBackfillConfig>;
+    migrations?: Partial<MigrationConfig>;
   } = {};
 
   if ('convexArgs' in value) {
@@ -306,6 +413,13 @@ function parseDeployConfig(
     parsed.aggregateBackfill = parseAggregateBackfillConfig(
       value.aggregateBackfill,
       'deploy.aggregateBackfill',
+      configPath
+    );
+  }
+  if ('migrations' in value && value.migrations !== undefined) {
+    parsed.migrations = parseMigrationConfig(
+      value.migrations,
+      'deploy.migrations',
       configPath
     );
   }
@@ -376,6 +490,12 @@ export function loadBetterConvexConfig(
         ...parsed.aggregateBackfill,
       };
     }
+    if (parsed.migrations !== undefined) {
+      config.dev.migrations = {
+        ...config.dev.migrations,
+        ...parsed.migrations,
+      };
+    }
   }
 
   if ('codegen' in rawConfig) {
@@ -404,6 +524,12 @@ export function loadBetterConvexConfig(
       config.deploy.aggregateBackfill = {
         ...config.deploy.aggregateBackfill,
         ...parsed.aggregateBackfill,
+      };
+    }
+    if (parsed.migrations !== undefined) {
+      config.deploy.migrations = {
+        ...config.deploy.migrations,
+        ...parsed.migrations,
       };
     }
   }

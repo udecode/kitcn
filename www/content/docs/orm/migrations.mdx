@@ -1,0 +1,371 @@
+---
+title: ORM Migrations
+description: Built-in online data migrations with Drizzle-like DX and production safety.
+links:
+  doc: https://docs.convex.dev
+---
+
+import { InfoIcon } from "lucide-react"
+
+In this guide, we'll walk through built-in data migrations for better-convex. You'll learn when to use them, how to author migration files, and how they integrate with `better-convex dev` and `better-convex deploy` for safe, auditable schema evolution.
+
+## When to Migrate
+
+Convex is not SQL — you don't need migrations for every schema change. Most changes are backward-compatible and can ship without touching existing documents.
+
+**Skip migrations when changes are backward-compatible:**
+
+- Adding optional fields (existing docs simply don't have the field)
+- Adding new tables or indexes
+- Adding code-level defaults on read (`doc.priority ?? 'medium'`)
+- Keeping old fields around (deprecated) while new code rolls out
+
+**Use migrations when existing documents must be rewritten:**
+
+- Optional → required (e.g. `todos.priority` must exist on every row)
+- Type or enum narrowing (`string` → enum, removing enum values)
+- Field rename or removal where old docs would violate schema or break code
+- Semantic rewrites or backfills you need done once and audited
+
+<Callout icon={<InfoIcon />}>
+**Rule of thumb:** If old documents still pass your schema and app logic, no migration. If old documents would fail schema validation or break behavior, run a migration.
+</Callout>
+
+## Creating a Migration
+
+We'll start by scaffolding a new migration file. The CLI generates a timestamped file and updates the manifest:
+
+```bash showLineNumbers
+npx better-convex migrate create backfill_todo_priority
+```
+
+This creates two files:
+
+- `convex/functions/migrations/<timestamp>_backfill_todo_priority.ts` — your migration logic
+- `convex/functions/migrations/manifest.ts` — auto-generated ordered list of all migrations
+
+Now let's open the generated file and implement the migration:
+
+```ts showLineNumbers title="convex/functions/migrations/20260227_080239_backfill_todo_priority.ts" {5-10}
+import { defineMigration } from 'better-convex/orm';
+
+export const migration = defineMigration({
+  id: '20260227_080239_backfill_todo_priority',
+  description: 'backfill todo priority to medium for existing rows',
+  up: {
+    table: 'todos',
+    migrateOne: async (_ctx, doc) => {
+      if (doc.priority === undefined || doc.priority === null) {
+        return { priority: 'medium' };
+      }
+    },
+  },
+});
+```
+
+Each migration has an `id` (timestamped, unique), a `table` to iterate over, and a `migrateOne` callback. Return a partial object to patch the document, or return nothing to skip it.
+
+### Adding a Down Migration
+
+If you want rollback support, add a `down` step:
+
+```ts showLineNumbers title="convex/functions/migrations/20260227_080239_backfill_todo_priority.ts" {12-20}
+import { defineMigration } from 'better-convex/orm';
+
+export const migration = defineMigration({
+  id: '20260227_080239_backfill_todo_priority',
+  description: 'backfill todo priority to medium for existing rows',
+  up: {
+    table: 'todos',
+    migrateOne: async (_ctx, doc) => {
+      if (doc.priority === undefined || doc.priority === null) {
+        return { priority: 'medium' };
+      }
+    },
+  },
+  down: {
+    table: 'todos',
+    migrateOne: async (_ctx, doc) => {
+      // Keep down handlers explicit and safe for your data model.
+      // Do not blindly unset values unless that's really what you want.
+      if (doc.priority === 'medium') {
+        return { priority: undefined };
+      }
+    },
+  },
+});
+```
+
+`down` is optional and always explicit. `better-convex dev` and `better-convex deploy` only auto-run `up` migrations. If you try to roll back a migration without a `down` handler, the CLI will error.
+
+<Callout icon={<InfoIcon />}>
+Not every migration should have a `down`. If the transform is not safely reversible, leave `down` undefined and treat rollback as a forward fix in a new migration.
+</Callout>
+
+## Running Migrations
+
+### Apply Pending Migrations
+
+```bash showLineNumbers
+# Local
+npx better-convex migrate up
+
+# Production
+npx better-convex migrate up --prod
+```
+
+This applies all pending migrations in order. Already-applied migrations are skipped.
+
+### Roll Back
+
+```bash showLineNumbers {2,5}
+# Roll back the latest migration
+npx better-convex migrate down --steps 1 --prod
+
+# Roll back everything after a specific migration
+npx better-convex migrate down --to 20260227_080239_backfill_todo_priority --prod
+```
+
+### Check Status
+
+```bash showLineNumbers
+npx better-convex migrate status --prod
+```
+
+Shows applied/pending migrations, active runs, and any drift issues.
+
+### Cancel Active Run
+
+```bash showLineNumbers
+npx better-convex migrate cancel --prod
+```
+
+Cancels a currently running migration. Useful if a migration is taking too long or you need to deploy a fix.
+
+## Deploy Integration
+
+`better-convex deploy` orchestrates the full lifecycle automatically:
+
+1. `convex deploy` — push code
+2. `migrate up` — apply pending migrations
+3. `aggregate backfill` — rebuild aggregate indexes
+
+By default, deploy is **strict** — it blocks on migration drift and waits for completion. You can configure this behavior per environment:
+
+```json title="better-convex.json" showLineNumbers {4-12}
+{
+  "deploy": {
+    "migrations": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 256,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": true,
+      "allowDrift": false
+    }
+  }
+}
+```
+
+`better-convex dev` also supports auto-migration with more relaxed defaults (`strict: false`, `allowDrift: true`). See [CLI docs](/docs/cli) for the full configuration reference.
+
+## Drift Safety
+
+Migrations track checksums based on their metadata and function source. Two drift checks are enforced automatically:
+
+| Drift Type | What Happened | Behavior |
+|-----------|--------------|----------|
+| **Checksum mismatch** | An already-applied migration file was edited | Blocks the next run |
+| **Missing from manifest** | An applied migration was deleted from the manifest | Blocks the next run |
+
+```bash
+❌ Applied migration '20260227_080239_backfill_todo_priority' checksum drift detected.
+```
+
+This is intentional — applied migrations are immutable history. If you need follow-up behavior, create a new migration with a new id.
+
+<Callout icon={<InfoIcon />}>
+`allowDrift` exists for emergency overrides only. In production, leave it `false`.
+</Callout>
+
+## End-to-End Example: Optional → Required
+
+Let's walk through the most common migration workflow — hardening an optional field to required.
+
+**Step 1:** Create the migration:
+
+```bash showLineNumbers
+npx better-convex migrate create backfill_todo_priority
+```
+
+**Step 2:** Implement the backfill (fill in missing values):
+
+```ts showLineNumbers {6-10}
+export const migration = defineMigration({
+  id: '20260227_080239_backfill_todo_priority',
+  up: {
+    table: 'todos',
+    migrateOne: async (_ctx, doc) => {
+      if (doc.priority === undefined || doc.priority === null) {
+        return { priority: 'medium' };
+      }
+    },
+  },
+});
+```
+
+**Step 3:** Run codegen and apply:
+
+```bash showLineNumbers
+npx better-convex codegen
+npx better-convex migrate up
+```
+
+**Step 4:** Harden the schema now that all rows have the field:
+
+```ts showLineNumbers {6}
+const todos = convexTable('todos', {
+  title: text().notNull(),
+  completed: boolean().notNull(),
+  userId: id('user').notNull(),
+  projectId: id('project'),
+  priority: textEnum(['low', 'medium', 'high'] as const).notNull(),
+});
+```
+
+**Step 5:** Run codegen again to confirm the schema compiles. Done — every document satisfies the new constraint.
+
+## Best Practices
+
+### Keep Migrations Small and Focused
+
+One migration per schema change. Don't bundle unrelated backfills — they can't be rolled back independently.
+
+### Always Run Codegen Before Migration Up
+
+Migration code must be deployed (or pushed via codegen) before running `migrate up`. If you race `codegen` and `migrate up`, the migration may use stale function code.
+
+Deterministic order: `dev` or `codegen` first, then `migrate up`.
+
+### Use `safe_bypass` for Performance
+
+By default, migrations run with `writeMode: 'safe_bypass'` — they bypass ORM rules and lifecycle triggers for speed and isolation. If your migration needs normal hook/rule behavior, set `writeMode: 'normal'`:
+
+```ts showLineNumbers {4}
+up: {
+  table: 'todos',
+  writeMode: 'normal',
+  migrateOne: async (_ctx, doc) => {
+    return { priority: 'medium' };
+  },
+},
+```
+
+### Don't Edit Applied Migrations
+
+Treat applied migration files like committed history. Editing them triggers checksum drift. Create a new migration instead.
+
+### Prefer Code Defaults Over Migrations
+
+Before reaching for a migration, ask: can I handle this in code?
+
+```ts showLineNumbers
+// ✅ Code default — no migration needed
+const priority = doc.priority ?? 'medium';
+
+// ❌ Migration for something code can handle
+```
+
+## API Reference
+
+### `defineMigration()`
+
+```ts showLineNumbers
+import { defineMigration } from 'better-convex/orm';
+
+defineMigration({
+  id: string,            // Unique timestamped identifier
+  description?: string,  // Human-readable description
+  up: MigrationStep,     // Forward migration
+  down?: MigrationStep,  // Rollback migration (optional)
+});
+```
+
+### `MigrationStep`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `table` | `string` | — | Table to iterate over |
+| `migrateOne` | `(ctx, doc) => patch \| void` | — | Transform callback per document |
+| `batchSize` | `number` | `128` runtime fallback | Documents per batch |
+| `writeMode` | `'safe_bypass' \| 'normal'` | `'safe_bypass'` | Bypass or run ORM rules and lifecycle triggers |
+
+`migrate up/down` from CLI passes a default batch size from config (`256` unless overridden), so CLI runs will usually use `256` unless you set another value.
+
+### `migrateOne` Context
+
+The `ctx` argument in `migrateOne` provides:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `db` | `DatabaseWriter` | Raw Convex database writer |
+| `orm` | `OrmWriter` | ORM writer for complex operations |
+| `migrationId` | `string` | Current migration id |
+| `runId` | `string` | Current run id |
+| `direction` | `'up' \| 'down'` | Current direction |
+| `dryRun` | `boolean` | Whether this is a dry run |
+| `writeMode` | `'safe_bypass' \| 'normal'` | Current write mode |
+
+### `defineMigrationSet()`
+
+Used internally by the generated manifest. Collects migrations, computes checksums, and sorts by id:
+
+```ts showLineNumbers
+import { defineMigrationSet } from 'better-convex/orm';
+
+export const migrations = defineMigrationSet([
+  migration1,
+  migration2,
+]);
+```
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `migrate create <name>` | Scaffold timestamped migration + update manifest |
+| `migrate up [--prod]` | Apply all pending migrations |
+| `migrate down --steps N [--prod]` | Roll back N migrations |
+| `migrate down --to <id> [--prod]` | Roll back to a specific migration |
+| `migrate status [--prod]` | Show applied/pending state |
+| `migrate cancel [--prod]` | Cancel active run |
+
+### Internal Tables
+
+Migrations use two internal storage tables injected by `defineSchema`:
+
+- `migration_state` — tracks applied checksums and progress per migration
+- `migration_run` — tracks run lifecycle (start, status, failures)
+
+These are reserved table names. Do not create tables with these names.
+
+### Runtime Statuses
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Migration state is queued, not yet processing |
+| `running` | Actively processing batches |
+| `completed` | All migrations applied successfully |
+| `failed` | A migration errored during execution |
+| `canceled` | Run was canceled via CLI |
+| `dry_run` | Plan computed without committing writes |
+| `noop` | No pending migrations to apply |
+| `drift_blocked` | Drift detected and blocked by policy |
+
+## Next Steps
+
+<Cards>
+  <Card title="CLI Reference" href="/docs/cli" />
+  <Card title="Triggers" href="/docs/orm/schema/triggers" />
+</Cards>

@@ -42,6 +42,7 @@ export const sessionTable = convexTable(
     impersonatedBy: text(),
     // Keep string for Better Auth compatibility (app code uses string IDs).
     activeOrganizationId: text(),
+    test: text().notNull(),
   },
   (t) => [
     index('token').on(t.token),

@@ -453,6 +453,90 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  migration_run: {
+    document: {
+      allowDrift: boolean;
+      cancelRequested: boolean;
+      completedAt?: null | number;
+      currentIndex: number;
+      direction: string;
+      dryRun: boolean;
+      lastError?: null | string;
+      migrationIds: Array<string>;
+      runId: string;
+      startedAt: number;
+      status: string;
+      updatedAt: number;
+      _id: Id<"migration_run">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "allowDrift"
+      | "cancelRequested"
+      | "completedAt"
+      | "currentIndex"
+      | "direction"
+      | "dryRun"
+      | "lastError"
+      | "migrationIds"
+      | "runId"
+      | "startedAt"
+      | "status"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_run_id: ["runId", "_creationTime"];
+      by_status: ["status", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  migration_state: {
+    document: {
+      applied: boolean;
+      checksum: string;
+      completedAt?: null | number;
+      cursor?: null | string;
+      direction?: null | string;
+      lastError?: null | string;
+      migrationId: string;
+      processed: number;
+      runId?: null | string;
+      startedAt?: null | number;
+      status: string;
+      updatedAt: number;
+      writeMode: string;
+      _id: Id<"migration_state">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "applied"
+      | "checksum"
+      | "completedAt"
+      | "cursor"
+      | "direction"
+      | "lastError"
+      | "migrationId"
+      | "processed"
+      | "runId"
+      | "startedAt"
+      | "status"
+      | "updatedAt"
+      | "writeMode";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_migration_id: ["migrationId", "_creationTime"];
+      by_status: ["status", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   organization: {
     document: {
       createdAt?: number;
@@ -544,6 +628,7 @@ export type DataModel = {
       expiresAt: number;
       impersonatedBy?: null | string;
       ipAddress?: null | string;
+      test: string;
       token: string;
       updatedAt: number;
       userAgent?: null | string;
@@ -559,6 +644,7 @@ export type DataModel = {
       | "expiresAt"
       | "impersonatedBy"
       | "ipAddress"
+      | "test"
       | "token"
       | "updatedAt"
       | "userAgent"

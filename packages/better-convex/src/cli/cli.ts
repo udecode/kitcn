@@ -12,6 +12,7 @@ import {
   type AggregateBackfillConfig,
   type BackfillEnabled,
   loadBetterConvexConfig,
+  type MigrationConfig,
 } from './config.js';
 import { syncEnv } from './env.js';
 
@@ -27,6 +28,7 @@ const realConvex = join(dirname(convexPkg), 'bin/main.js');
 const MISSING_BACKFILL_FUNCTION_RE =
   /could not find function|function .* was not found|unknown function/i;
 const GITIGNORE_CONVEX_ENTRY_RE = /(^|\r?\n)\.convex\/?\s*(\r?\n|$)/m;
+const TS_EXTENSION_RE = /\.ts$/;
 const AGGREGATE_STATE_RELATIVE_PATH = join(
   '.convex',
   'better-convex',
@@ -397,6 +399,16 @@ type BackfillCliOverrides = {
   strict?: boolean;
 };
 
+type MigrationCliOverrides = {
+  enabled?: BackfillEnabled;
+  wait?: boolean;
+  batchSize?: number;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+  strict?: boolean;
+  allowDrift?: boolean;
+};
+
 type ResetCliOptions = {
   confirmed: boolean;
   beforeHook?: string;
@@ -547,6 +559,130 @@ function extractBackfillCliOptions(args: string[]): {
   };
 }
 
+function extractMigrationCliOptions(args: string[]): {
+  remainingArgs: string[];
+  overrides: MigrationCliOverrides;
+} {
+  const remainingArgs: string[] = [];
+  const overrides: MigrationCliOverrides = {};
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--migrations') {
+      const { value, nextIndex } = readFlagValue(args, i, '--migrations');
+      if (!VALID_BACKFILL_ENABLED.has(value as BackfillEnabled)) {
+        throw new Error(
+          'Invalid --migrations value. Expected auto, on, or off.'
+        );
+      }
+      overrides.enabled = value as BackfillEnabled;
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--migrations=')) {
+      const value = arg.slice('--migrations='.length);
+      if (!VALID_BACKFILL_ENABLED.has(value as BackfillEnabled)) {
+        throw new Error(
+          'Invalid --migrations value. Expected auto, on, or off.'
+        );
+      }
+      overrides.enabled = value as BackfillEnabled;
+      continue;
+    }
+    if (arg === '--migrations-wait') {
+      overrides.wait = true;
+      continue;
+    }
+    if (arg === '--no-migrations-wait') {
+      overrides.wait = false;
+      continue;
+    }
+    if (arg === '--migrations-strict') {
+      overrides.strict = true;
+      continue;
+    }
+    if (arg === '--no-migrations-strict') {
+      overrides.strict = false;
+      continue;
+    }
+    if (arg === '--migrations-allow-drift') {
+      overrides.allowDrift = true;
+      continue;
+    }
+    if (arg === '--no-migrations-allow-drift') {
+      overrides.allowDrift = false;
+      continue;
+    }
+    if (arg === '--migrations-batch-size') {
+      const { value, nextIndex } = readFlagValue(
+        args,
+        i,
+        '--migrations-batch-size'
+      );
+      overrides.batchSize = parsePositiveIntegerArg(
+        '--migrations-batch-size',
+        value
+      );
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--migrations-batch-size=')) {
+      overrides.batchSize = parsePositiveIntegerArg(
+        '--migrations-batch-size',
+        arg.slice('--migrations-batch-size='.length)
+      );
+      continue;
+    }
+    if (arg === '--migrations-timeout-ms') {
+      const { value, nextIndex } = readFlagValue(
+        args,
+        i,
+        '--migrations-timeout-ms'
+      );
+      overrides.timeoutMs = parsePositiveIntegerArg(
+        '--migrations-timeout-ms',
+        value
+      );
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--migrations-timeout-ms=')) {
+      overrides.timeoutMs = parsePositiveIntegerArg(
+        '--migrations-timeout-ms',
+        arg.slice('--migrations-timeout-ms='.length)
+      );
+      continue;
+    }
+    if (arg === '--migrations-poll-ms') {
+      const { value, nextIndex } = readFlagValue(
+        args,
+        i,
+        '--migrations-poll-ms'
+      );
+      overrides.pollIntervalMs = parsePositiveIntegerArg(
+        '--migrations-poll-ms',
+        value
+      );
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--migrations-poll-ms=')) {
+      overrides.pollIntervalMs = parsePositiveIntegerArg(
+        '--migrations-poll-ms',
+        arg.slice('--migrations-poll-ms='.length)
+      );
+      continue;
+    }
+
+    remainingArgs.push(arg);
+  }
+
+  return {
+    remainingArgs,
+    overrides,
+  };
+}
+
 function extractResetCliOptions(args: string[]): ResetCliOptions {
   const remainingArgs: string[] = [];
   let confirmed = false;
@@ -630,6 +766,32 @@ function resolveBackfillConfig(
     timeoutMs: overrides.timeoutMs ?? resolvedBase.timeoutMs,
     pollIntervalMs: overrides.pollIntervalMs ?? resolvedBase.pollIntervalMs,
     strict: overrides.strict ?? resolvedBase.strict,
+  };
+}
+
+function resolveMigrationConfig(
+  base: MigrationConfig | undefined,
+  overrides: MigrationCliOverrides
+): MigrationConfig {
+  const fallback: MigrationConfig = {
+    enabled: 'auto',
+    wait: true,
+    batchSize: 256,
+    timeoutMs: 900_000,
+    pollIntervalMs: 1000,
+    strict: false,
+    allowDrift: true,
+  };
+  const resolvedBase = base ?? fallback;
+  return {
+    ...resolvedBase,
+    enabled: overrides.enabled ?? resolvedBase.enabled,
+    wait: overrides.wait ?? resolvedBase.wait,
+    batchSize: overrides.batchSize ?? resolvedBase.batchSize,
+    timeoutMs: overrides.timeoutMs ?? resolvedBase.timeoutMs,
+    pollIntervalMs: overrides.pollIntervalMs ?? resolvedBase.pollIntervalMs,
+    strict: overrides.strict ?? resolvedBase.strict,
+    allowDrift: overrides.allowDrift ?? resolvedBase.allowDrift,
   };
 }
 
@@ -978,6 +1140,362 @@ async function runAggregatePruneFlow(params: {
   return 0;
 }
 
+function slugifyMigrationName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function createMigrationTimestamp(now = new Date()): string {
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
+  const hour = String(now.getUTCHours()).padStart(2, '0');
+  const minute = String(now.getUTCMinutes()).padStart(2, '0');
+  const second = String(now.getUTCSeconds()).padStart(2, '0');
+  return `${year}${month}${day}_${hour}${minute}${second}`;
+}
+
+function extractMigrationDownOptions(args: string[]): {
+  remainingArgs: string[];
+  steps?: number;
+  to?: string;
+} {
+  const remainingArgs: string[] = [];
+  let steps: number | undefined;
+  let to: string | undefined;
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--steps') {
+      const { value, nextIndex } = readFlagValue(args, i, '--steps');
+      steps = parsePositiveIntegerArg('--steps', value);
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--steps=')) {
+      steps = parsePositiveIntegerArg('--steps', arg.slice('--steps='.length));
+      continue;
+    }
+    if (arg === '--to') {
+      const { value, nextIndex } = readFlagValue(args, i, '--to');
+      to = value;
+      i = nextIndex;
+      continue;
+    }
+    if (arg.startsWith('--to=')) {
+      const value = arg.slice('--to='.length);
+      if (!value) {
+        throw new Error('Missing value for --to.');
+      }
+      to = value;
+      continue;
+    }
+    remainingArgs.push(arg);
+  }
+
+  if (steps !== undefined && to !== undefined) {
+    throw new Error('Use either --steps or --to, not both.');
+  }
+
+  return {
+    remainingArgs,
+    steps,
+    to,
+  };
+}
+
+function renderMigrationManifest(ids: string[]): string {
+  const sorted = [...new Set(ids)].sort((a, b) => a.localeCompare(b));
+  const importLines = sorted.map(
+    (id, index) => `import { migration as migration_${index} } from './${id}';`
+  );
+  const entryLines = sorted.map((_, index) => `  migration_${index},`);
+
+  return `// biome-ignore-all format: generated
+// This file is auto-generated by better-convex migrate create.
+// Do not edit manually.
+
+import { defineMigrationSet } from 'better-convex/orm';
+${importLines.join('\n')}
+
+export const migrations = defineMigrationSet([
+${entryLines.join('\n')}
+]);
+`;
+}
+
+async function runMigrationCreate(params: {
+  migrationName: string;
+  functionsDir: string;
+}): Promise<void> {
+  const { migrationName, functionsDir } = params;
+  const normalizedName = slugifyMigrationName(migrationName);
+  if (!normalizedName) {
+    throw new Error(
+      'Migration name must include at least one letter or digit.'
+    );
+  }
+
+  const timestamp = createMigrationTimestamp();
+  const migrationId = `${timestamp}_${normalizedName}`;
+  const migrationsDir = join(functionsDir, 'migrations');
+  const migrationFile = join(migrationsDir, `${migrationId}.ts`);
+  const manifestFile = join(migrationsDir, 'manifest.ts');
+
+  fs.mkdirSync(migrationsDir, { recursive: true });
+  if (fs.existsSync(migrationFile)) {
+    throw new Error(
+      `Migration file already exists for '${migrationId}'. Wait one second and retry.`
+    );
+  }
+
+  const migrationSource = `import { defineMigration } from '../generated/migrations.gen';
+
+export const migration = defineMigration({
+  id: '${migrationId}',
+  description: '${migrationName.replaceAll("'", "\\'")}',
+  up: {
+    table: 'replace_with_table_name',
+    migrateOne: async () => {
+      // TODO: implement migration logic.
+    },
+  },
+  down: {
+    table: 'replace_with_table_name',
+    migrateOne: async () => {
+      // TODO: implement rollback logic.
+    },
+  },
+});
+`;
+  fs.writeFileSync(migrationFile, migrationSource);
+
+  const existingMigrationIds = fs
+    .readdirSync(migrationsDir)
+    .filter((file) => file.endsWith('.ts'))
+    .map((file) => file.replace(TS_EXTENSION_RE, ''))
+    .filter((id) => id !== 'manifest')
+    .sort((a, b) => a.localeCompare(b));
+  fs.writeFileSync(manifestFile, renderMigrationManifest(existingMigrationIds));
+
+  console.info(`ℹ️  created migration ${migrationId}`);
+  console.info(`ℹ️  file: ${migrationFile}`);
+  console.info(`ℹ️  manifest: ${manifestFile}`);
+}
+
+async function runMigrationFlow(params: {
+  execaFn: typeof execa;
+  realConvexPath: string;
+  migrationConfig: MigrationConfig;
+  deploymentArgs: string[];
+  signal?: AbortSignal;
+  context: 'deploy' | 'dev' | 'migration';
+  direction: 'up' | 'down';
+  steps?: number;
+  to?: string;
+}): Promise<number> {
+  const {
+    execaFn,
+    realConvexPath,
+    migrationConfig,
+    deploymentArgs,
+    signal,
+    context,
+    direction,
+    steps,
+    to,
+  } = params;
+  if (signal?.aborted || migrationConfig.enabled === 'off') {
+    return 0;
+  }
+
+  const kickoff = await runConvexFunction(
+    execaFn,
+    realConvexPath,
+    'generated/server:migrationRun',
+    {
+      direction,
+      batchSize: migrationConfig.batchSize,
+      allowDrift: migrationConfig.allowDrift,
+      ...(steps !== undefined ? { steps } : {}),
+      ...(to !== undefined ? { to } : {}),
+    },
+    deploymentArgs,
+    {
+      echoOutput: false,
+    }
+  );
+
+  if (kickoff.exitCode !== 0) {
+    const combinedOutput = `${kickoff.stdout}\n${kickoff.stderr}`;
+    if (
+      migrationConfig.enabled === 'auto' &&
+      isMissingBackfillFunctionOutput(combinedOutput)
+    ) {
+      if (context === 'deploy') {
+        console.info(
+          'ℹ️  migration runtime not found in this deployment; skipping (auto mode).'
+        );
+      }
+      return 0;
+    }
+    return kickoff.exitCode;
+  }
+
+  type KickoffPayload = {
+    status?: string;
+    runId?: string;
+    drift?: Array<{ message?: string }>;
+    plan?: string[];
+  };
+  const payload = parseConvexRunJson<KickoffPayload | unknown[]>(
+    kickoff.stdout
+  );
+  const kickoffStatus =
+    typeof payload === 'object' &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    typeof payload.status === 'string'
+      ? payload.status
+      : 'running';
+
+  const driftMessages =
+    typeof payload === 'object' &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    Array.isArray(payload.drift)
+      ? payload.drift
+          .map((entry) => entry?.message)
+          .filter((entry): entry is string => typeof entry === 'string')
+      : [];
+
+  if (kickoffStatus === 'drift_blocked') {
+    const message =
+      driftMessages[0] ??
+      'Migration drift detected and blocked by current policy.';
+    if (migrationConfig.strict) {
+      console.error(`❌ ${message}`);
+      return 1;
+    }
+    console.warn(`⚠️  ${message}`);
+    return 0;
+  }
+  if (kickoffStatus === 'noop') {
+    const noopMessage =
+      direction === 'down'
+        ? 'No applied migrations to roll back.'
+        : 'No pending migrations to apply.';
+    console.info(`ℹ️  ${noopMessage}`);
+    return 0;
+  }
+  if (kickoffStatus === 'dry_run') {
+    console.info('ℹ️  migration dry run completed (no writes committed).');
+    return 0;
+  }
+
+  const runId =
+    typeof payload === 'object' &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    typeof payload.runId === 'string'
+      ? payload.runId
+      : undefined;
+
+  if (!migrationConfig.wait || signal?.aborted || !runId) {
+    return 0;
+  }
+
+  const deadline = Date.now() + migrationConfig.timeoutMs;
+  let lastStatusLine = '';
+  while (!signal?.aborted) {
+    const statusResult = await runConvexFunction(
+      execaFn,
+      realConvexPath,
+      'generated/server:migrationStatus',
+      {
+        runId,
+      },
+      deploymentArgs,
+      {
+        echoOutput: false,
+      }
+    );
+    if (statusResult.exitCode !== 0) {
+      return statusResult.exitCode;
+    }
+
+    type StatusPayload = {
+      activeRun?: { status?: string } | null;
+      runs?: Array<{
+        status?: string;
+        currentIndex?: number;
+        migrationIds?: string[];
+      }>;
+    };
+    const statusPayload = parseConvexRunJson<StatusPayload | unknown[]>(
+      statusResult.stdout
+    );
+    const runStatus =
+      typeof statusPayload === 'object' &&
+      statusPayload !== null &&
+      !Array.isArray(statusPayload)
+        ? (statusPayload.activeRun?.status ??
+          statusPayload.runs?.[0]?.status ??
+          'unknown')
+        : 'unknown';
+
+    const currentIndex =
+      typeof statusPayload === 'object' &&
+      statusPayload !== null &&
+      !Array.isArray(statusPayload) &&
+      typeof statusPayload.runs?.[0]?.currentIndex === 'number'
+        ? statusPayload.runs[0].currentIndex
+        : 0;
+    const total =
+      typeof statusPayload === 'object' &&
+      statusPayload !== null &&
+      !Array.isArray(statusPayload) &&
+      Array.isArray(statusPayload.runs?.[0]?.migrationIds)
+        ? (statusPayload.runs?.[0]?.migrationIds?.length ?? 0)
+        : 0;
+    const statusLine = `${runStatus}:${currentIndex}/${total}`;
+    if (statusLine !== lastStatusLine && total > 0) {
+      lastStatusLine = statusLine;
+      console.info(`ℹ️  migration ${runStatus} ${currentIndex}/${total}`);
+    }
+
+    if (runStatus === 'completed' || runStatus === 'noop') {
+      return 0;
+    }
+    if (runStatus === 'failed' || runStatus === 'canceled') {
+      const message = `Migrations ${runStatus} for run ${runId}.`;
+      if (migrationConfig.strict) {
+        console.error(`❌ ${message}`);
+        return 1;
+      }
+      console.warn(`⚠️  ${message}`);
+      return 0;
+    }
+
+    if (Date.now() > deadline) {
+      const timeoutMessage = `Migrations timed out after ${migrationConfig.timeoutMs}ms.`;
+      if (migrationConfig.strict) {
+        console.error(`❌ ${timeoutMessage}`);
+        return 1;
+      }
+      console.warn(`⚠️  ${timeoutMessage}`);
+      return 0;
+    }
+
+    await sleep(migrationConfig.pollIntervalMs, signal);
+  }
+
+  return 0;
+}
+
 async function runDevSchemaBackfillIfNeeded(params: {
   execaFn: typeof execa;
   realConvexPath: string;
@@ -1076,8 +1594,12 @@ export async function run(
       );
     }
     const config = loadBetterConvexConfigFn(configPath);
+    const {
+      remainingArgs: devArgsWithoutMigrationFlags,
+      overrides: devMigrationOverrides,
+    } = extractMigrationCliOptions(convexArgs);
     const { remainingArgs: devCommandArgs, overrides: devBackfillOverrides } =
-      extractBackfillCliOptions(convexArgs);
+      extractBackfillCliOptions(devArgsWithoutMigrationFlags);
     const outputDir = cliOutputDir ?? config.outputDir;
     const debug = cliDebug || config.dev.debug;
     const generateApi = config.api;
@@ -1086,6 +1608,10 @@ export async function run(
     const devBackfillConfig = resolveBackfillConfig(
       config.dev.aggregateBackfill,
       devBackfillOverrides
+    );
+    const devMigrationConfig = resolveMigrationConfig(
+      config.dev.migrations,
+      devMigrationOverrides
     );
     const { functionsDir } = getConvexConfigFn(outputDir);
     const schemaPath = join(functionsDir, 'schema.ts');
@@ -1193,6 +1719,33 @@ export async function run(
         schemaBackfillInFlight = null;
       });
     };
+
+    if (devMigrationConfig.enabled !== 'off') {
+      void (async () => {
+        try {
+          const exitCode = await runMigrationFlow({
+            execaFn,
+            realConvexPath,
+            migrationConfig: devMigrationConfig,
+            deploymentArgs,
+            signal: backfillAbortController.signal,
+            context: 'dev',
+            direction: 'up',
+          });
+          if (exitCode !== 0 && !backfillAbortController.signal.aborted) {
+            console.warn(
+              '⚠️  migration up failed in dev (continuing without blocking).'
+            );
+          }
+        } catch (error) {
+          if (!backfillAbortController.signal.aborted) {
+            console.warn(
+              `⚠️  migration up errored in dev: ${(error as Error).message}`
+            );
+          }
+        }
+      })();
+    }
 
     if (devBackfillConfig.enabled !== 'off') {
       void (async () => {
@@ -1414,9 +1967,13 @@ export async function run(
   if (command === 'deploy') {
     const config = loadBetterConvexConfigFn(configPath);
     const {
+      remainingArgs: deployArgsWithoutMigrationFlags,
+      overrides: deployMigrationOverrides,
+    } = extractMigrationCliOptions(convexArgs);
+    const {
       remainingArgs: deployCommandArgs,
       overrides: deployBackfillOverrides,
-    } = extractBackfillCliOptions(convexArgs);
+    } = extractBackfillCliOptions(deployArgsWithoutMigrationFlags);
     const deployArgs = [...config.deploy.convexArgs, ...deployCommandArgs];
     const deployResult = await execaFn(
       'node',
@@ -1431,11 +1988,27 @@ export async function run(
       return deployResult.exitCode ?? 1;
     }
 
+    const migrationConfig = resolveMigrationConfig(
+      config.deploy.migrations,
+      deployMigrationOverrides
+    );
     const backfillConfig = resolveBackfillConfig(
       config.deploy.aggregateBackfill,
       deployBackfillOverrides
     );
     const deploymentArgs = extractRunDeploymentArgs(deployArgs);
+
+    const migrationExitCode = await runMigrationFlow({
+      execaFn,
+      realConvexPath,
+      migrationConfig,
+      deploymentArgs,
+      context: 'deploy',
+      direction: 'up',
+    });
+    if (migrationExitCode !== 0) {
+      return migrationExitCode;
+    }
 
     return runAggregateBackfillFlow({
       execaFn,
@@ -1445,6 +2018,117 @@ export async function run(
       deploymentArgs,
       context: 'deploy',
     });
+  }
+  if (command === 'migrate') {
+    const subcommand = restArgs[0];
+    if (
+      subcommand !== 'create' &&
+      subcommand !== 'up' &&
+      subcommand !== 'down' &&
+      subcommand !== 'status' &&
+      subcommand !== 'cancel'
+    ) {
+      throw new Error(
+        'Unknown migrate command. Use: `better-convex migrate create|up|down|status|cancel`.'
+      );
+    }
+
+    const config = loadBetterConvexConfigFn(configPath);
+
+    if (subcommand === 'create') {
+      const rawName = restArgs.slice(1).join(' ').trim();
+      if (!rawName) {
+        throw new Error(
+          'Missing migration name. Usage: `better-convex migrate create <name>`.'
+        );
+      }
+      const outputDir = cliOutputDir ?? config.outputDir;
+      const { functionsDir } = getConvexConfigFn(outputDir);
+      await runMigrationCreate({
+        migrationName: rawName,
+        functionsDir,
+      });
+      return 0;
+    }
+
+    const {
+      remainingArgs: migrationCommandArgs,
+      overrides: migrationOverrides,
+    } = extractMigrationCliOptions(restArgs.slice(1));
+    const migrationConfig = {
+      ...resolveMigrationConfig(config.deploy.migrations, migrationOverrides),
+      enabled: 'on' as const,
+    };
+    const commandArgs = [...config.deploy.convexArgs, ...migrationCommandArgs];
+    const deploymentArgs = extractRunDeploymentArgs(commandArgs);
+
+    if (subcommand === 'up') {
+      return runMigrationFlow({
+        execaFn,
+        realConvexPath,
+        migrationConfig,
+        deploymentArgs,
+        context: 'migration',
+        direction: 'up',
+      });
+    }
+
+    if (subcommand === 'down') {
+      const { remainingArgs, steps, to } =
+        extractMigrationDownOptions(commandArgs);
+      const downDeploymentArgs = extractRunDeploymentArgs(remainingArgs);
+      return runMigrationFlow({
+        execaFn,
+        realConvexPath,
+        migrationConfig,
+        deploymentArgs: downDeploymentArgs,
+        context: 'migration',
+        direction: 'down',
+        steps,
+        to,
+      });
+    }
+
+    if (subcommand === 'status') {
+      const statusResult = await runConvexFunction(
+        execaFn,
+        realConvexPath,
+        'generated/server:migrationStatus',
+        {},
+        deploymentArgs
+      );
+      return statusResult.exitCode;
+    }
+
+    let runId: string | undefined;
+    const cancelArgs: string[] = [];
+    for (let i = 0; i < commandArgs.length; i += 1) {
+      const arg = commandArgs[i];
+      if (arg === '--run-id') {
+        const { value, nextIndex } = readFlagValue(commandArgs, i, '--run-id');
+        runId = value;
+        i = nextIndex;
+        continue;
+      }
+      if (arg.startsWith('--run-id=')) {
+        const value = arg.slice('--run-id='.length);
+        if (!value) {
+          throw new Error('Missing value for --run-id.');
+        }
+        runId = value;
+        continue;
+      }
+      cancelArgs.push(arg);
+    }
+    const cancelDeploymentArgs = extractRunDeploymentArgs(cancelArgs);
+    const cancelResult = await runConvexFunction(
+      execaFn,
+      realConvexPath,
+      'generated/server:migrationCancel',
+      runId ? { runId } : {},
+      cancelDeploymentArgs
+    );
+    return cancelResult.exitCode;
   }
   if (command === 'aggregate') {
     const subcommand = restArgs[0];

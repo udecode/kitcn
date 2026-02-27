@@ -132,3 +132,14 @@ test('defineSchema auto-injects internal count storage tables', () => {
   expect(schema.tables).toHaveProperty('aggregate_extrema');
   expect(schema.tables).toHaveProperty('aggregate_state');
 });
+
+test('defineSchema auto-injects internal migration storage tables', () => {
+  const users = convexTable('migration_schema_users', {
+    name: text().notNull(),
+  });
+
+  const schema = defineSchema({ users });
+
+  expect(schema.tables).toHaveProperty('migration_state');
+  expect(schema.tables).toHaveProperty('migration_run');
+});

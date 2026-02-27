@@ -10,11 +10,9 @@
 
 ## Browser Testing
 
-- Use `agent-browser` for all browser testing instead of next-devtools `browser_eval`
 - Never close agent-browser
 - Use `--headed` unless asked for headless
 - Port 3005 for main app
-- If auth is needed, get email/password from `.env.local` L1 `AGENT_BROWSER`
 - Use `agent-browser` instead of Do NOT use next-devtools `browser_eval` (overlaps with agent-browser)
 - Use `bun convex:logs` to watch the Convex logs
 

@@ -8,6 +8,7 @@ import {
 } from 'convex/server';
 import { v } from 'convex/values';
 import { createCountBackfillHandlers } from './aggregate-index/backfill';
+import { AGGREGATE_STORAGE_TABLE_NAMES } from './aggregate-index/schema';
 import {
   type CreateDatabaseOptions,
   createDatabase,
@@ -16,6 +17,8 @@ import {
 } from './database';
 import { extractRelationsConfig } from './extractRelationsConfig';
 import { createOrmDbLifecycle, type OrmDbLifecycle } from './lifecycle';
+import { createMigrationHandlers, type MigrationSet } from './migrations';
+import { MIGRATION_STORAGE_TABLE_NAMES } from './migrations/schema';
 import type { TablesRelationalConfig } from './relations';
 import { scheduledDeleteFactory } from './scheduled-delete';
 import { scheduledMutationBatchFactory } from './scheduled-mutation-batch';
@@ -26,6 +29,7 @@ export type OrmFunctions = {
   scheduledMutationBatch: SchedulableFunctionReference;
   scheduledDelete: SchedulableFunctionReference;
   aggregateBackfillChunk?: SchedulableFunctionReference;
+  migrationRunChunk?: SchedulableFunctionReference;
   resetChunk?: SchedulableFunctionReference;
 };
 
@@ -71,6 +75,7 @@ type GenericOrmCtx<
 type CreateOrmConfigBase<TSchema extends TablesRelationalConfig> = {
   schema: TSchema;
   triggers?: OrmTriggers<TSchema, any>;
+  migrations?: MigrationSet<any>;
   internalMutation?: typeof internalMutationGeneric;
 };
 
@@ -97,6 +102,10 @@ type OrmApiResult = {
   aggregateBackfill: ReturnType<typeof internalMutationGeneric>;
   aggregateBackfillChunk: ReturnType<typeof internalMutationGeneric>;
   aggregateBackfillStatus: ReturnType<typeof internalMutationGeneric>;
+  migrationRun: ReturnType<typeof internalMutationGeneric>;
+  migrationRunChunk: ReturnType<typeof internalMutationGeneric>;
+  migrationStatus: ReturnType<typeof internalMutationGeneric>;
+  migrationCancel: ReturnType<typeof internalMutationGeneric>;
   resetChunk: ReturnType<typeof internalMutationGeneric>;
   reset: ReturnType<typeof internalActionGeneric>;
 };
@@ -113,6 +122,20 @@ type OrmClientWithApi<TSchema extends TablesRelationalConfig> =
   OrmClientBase<TSchema> & {
     api: () => OrmApiResult;
   };
+
+const RESET_INTERNAL_TABLE_NAMES = [
+  ...AGGREGATE_STORAGE_TABLE_NAMES,
+  ...MIGRATION_STORAGE_TABLE_NAMES,
+] as const;
+
+export function getResetTableNames(schema: TablesRelationalConfig): string[] {
+  return [
+    ...new Set([
+      ...Object.values(schema).map((tableConfig) => tableConfig.name),
+      ...RESET_INTERNAL_TABLE_NAMES,
+    ]),
+  ];
+}
 
 function isOrmCtx(source: OrmSource): source is OrmReaderCtx | OrmWriterCtx {
   return !!source && typeof source === 'object' && 'db' in source;
@@ -203,18 +226,34 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
     api: () => {
       let aggregateBackfillChunkRef: SchedulableFunctionReference | undefined =
         config.ormFunctions.aggregateBackfillChunk;
+      let migrationRunChunkRef: SchedulableFunctionReference | undefined =
+        config.ormFunctions.migrationRunChunk;
       let resetChunkRef: SchedulableFunctionReference | undefined =
         config.ormFunctions.resetChunk;
       const countBackfillHandlers = createCountBackfillHandlers(
         config.schema,
         () => aggregateBackfillChunkRef
       );
+      const migrationHandlers = createMigrationHandlers({
+        schema: config.schema,
+        migrations: config.migrations as MigrationSet<TSchema> | undefined,
+        getOrm: (ctx) => db(ctx as any) as OrmWriter<TSchema>,
+        getChunkRef: () => migrationRunChunkRef,
+      });
       const aggregateBackfillChunk = mutationBuilder({
         args: v.any(),
         handler: countBackfillHandlers.chunk as any,
       });
       if (!aggregateBackfillChunkRef) {
         aggregateBackfillChunkRef = aggregateBackfillChunk as any;
+      }
+      const migrationRunChunk = mutationBuilder({
+        args: v.any(),
+        handler: migrationHandlers.chunk as any,
+      });
+      if (!migrationRunChunkRef) {
+        migrationRunChunkRef =
+          migrationRunChunk as unknown as SchedulableFunctionReference;
       }
       const resetChunk = mutationBuilder({
         args: v.object({
@@ -281,17 +320,24 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
           args: v.any(),
           handler: countBackfillHandlers.status as any,
         }),
+        migrationRun: mutationBuilder({
+          args: v.any(),
+          handler: migrationHandlers.run as any,
+        }),
+        migrationRunChunk,
+        migrationStatus: mutationBuilder({
+          args: v.any(),
+          handler: migrationHandlers.status as any,
+        }),
+        migrationCancel: mutationBuilder({
+          args: v.any(),
+          handler: migrationHandlers.cancel as any,
+        }),
         resetChunk,
         reset: internalActionGeneric({
           args: v.any(),
           handler: async (ctx: any) => {
-            const tableNames = [
-              ...new Set(
-                Object.values(config.schema).map(
-                  (tableConfig) => tableConfig.name
-                )
-              ),
-            ];
+            const tableNames = getResetTableNames(config.schema);
             let deleted = 0;
 
             for (const tableName of tableNames) {

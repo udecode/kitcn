@@ -12,10 +12,12 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  Route as RouteIcon,
   Tags,
   TestTube2,
   User,
 } from 'lucide-react';
+import type { Route } from 'next';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -67,12 +69,22 @@ const LAB_NAV_ITEMS = [
     icon: Activity,
     match: (p: string) => p.startsWith('/triggers'),
   },
+  {
+    href: '/migrations' as const,
+    label: 'Migrations',
+    icon: RouteIcon,
+    match: (p: string) => p.startsWith('/migrations'),
+  },
 ];
 
 type NavSection = 'app' | 'labs';
 
 function activeSectionFromPath(pathname: string): NavSection {
-  if (pathname.startsWith('/aggregate') || pathname.startsWith('/triggers')) {
+  if (
+    pathname.startsWith('/aggregate') ||
+    pathname.startsWith('/triggers') ||
+    pathname.startsWith('/migrations')
+  ) {
     return 'labs';
   }
   return 'app';
@@ -216,7 +228,7 @@ export function BreadcrumbNav() {
                       ? 'bg-secondary text-foreground'
                       : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
                   }`}
-                  href={item.href}
+                  href={item.href as Route}
                   key={item.href}
                 >
                   <Icon className="size-4" />

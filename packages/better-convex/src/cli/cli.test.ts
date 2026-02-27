@@ -10,6 +10,8 @@ import {
   run,
 } from './cli';
 
+const TS_EXTENSION_RE = /\.ts$/;
+
 function createDefaultConfig() {
   return {
     api: true,
@@ -26,6 +28,15 @@ function createDefaultConfig() {
         timeoutMs: 900_000,
         strict: false,
       },
+      migrations: {
+        enabled: 'auto' as const,
+        wait: true,
+        batchSize: 256,
+        pollIntervalMs: 1000,
+        timeoutMs: 900_000,
+        strict: false,
+        allowDrift: true,
+      },
     },
     codegen: {
       debug: false,
@@ -40,6 +51,15 @@ function createDefaultConfig() {
         pollIntervalMs: 1000,
         timeoutMs: 900_000,
         strict: true,
+      },
+      migrations: {
+        enabled: 'auto' as const,
+        wait: true,
+        batchSize: 256,
+        pollIntervalMs: 1000,
+        timeoutMs: 900_000,
+        strict: true,
+        allowDrift: false,
       },
     },
   };
@@ -371,6 +391,24 @@ describe('cli/cli', () => {
 
     const execaStub = mock(async (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
+      if (args[1] === 'run' && args.includes('generated/server:migrationRun')) {
+        return {
+          exitCode: 0,
+          stdout: '{"status":"running","runId":"mr_1"}\n',
+          stderr: '',
+        } as any;
+      }
+      if (
+        args[1] === 'run' &&
+        args.includes('generated/server:migrationStatus')
+      ) {
+        return {
+          exitCode: 0,
+          stdout:
+            '{"status":"idle","runs":[{"status":"completed","currentIndex":1,"migrationIds":["m1"]}]}\n',
+          stderr: '',
+        } as any;
+      }
       if (
         args[1] === 'run' &&
         args.includes('generated/server:aggregateBackfillStatus')
@@ -406,8 +444,10 @@ describe('cli/cli', () => {
       cmd: 'node',
       args: ['/fake/convex/main.js', 'deploy', '--prod'],
     });
-    expect(calls[1]?.args).toContain('generated/server:aggregateBackfill');
-    expect(calls[2]?.args).toContain(
+    expect(calls[1]?.args).toContain('generated/server:migrationRun');
+    expect(calls[2]?.args).toContain('generated/server:migrationStatus');
+    expect(calls[3]?.args).toContain('generated/server:aggregateBackfill');
+    expect(calls[4]?.args).toContain(
       'generated/server:aggregateBackfillStatus'
     );
   });
@@ -423,7 +463,49 @@ describe('cli/cli', () => {
     const syncEnvStub = mock(async () => {});
     const loadConfigStub = mock(() => createDefaultConfig());
 
-    const exitCode = await run(['deploy', '--backfill=off', '--prod'], {
+    const exitCode = await run(
+      ['deploy', '--backfill=off', '--migrations=off', '--prod'],
+      {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(calls).toEqual([
+      { cmd: 'node', args: ['/fake/convex/main.js', 'deploy', '--prod'] },
+    ]);
+  });
+
+  test('run(migrate up) executes migration runtime with polling', async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (args.includes('generated/server:migrationRun')) {
+        return {
+          exitCode: 0,
+          stdout: '{"status":"running","runId":"mr_2"}\n',
+          stderr: '',
+        } as any;
+      }
+      if (args.includes('generated/server:migrationStatus')) {
+        return {
+          exitCode: 0,
+          stdout:
+            '{"status":"idle","runs":[{"status":"completed","currentIndex":1,"migrationIds":["m1"]}]}\n',
+          stderr: '',
+        } as any;
+      }
+      return { exitCode: 0 } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    const exitCode = await run(['migrate', 'up', '--prod'], {
       realConvex: '/fake/convex/main.js',
       execa: execaStub as any,
       generateMeta: generateMetaStub as any,
@@ -432,9 +514,109 @@ describe('cli/cli', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(calls).toEqual([
-      { cmd: 'node', args: ['/fake/convex/main.js', 'deploy', '--prod'] },
-    ]);
+    expect(calls[0]?.args).toContain('generated/server:migrationRun');
+    expect(calls[1]?.args).toContain('generated/server:migrationStatus');
+  });
+
+  test('run(migrate up) prints explicit noop message when nothing is pending', async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (args.includes('generated/server:migrationRun')) {
+        return {
+          exitCode: 0,
+          stdout: '{"status":"noop"}\n',
+          stderr: '',
+        } as any;
+      }
+      return { exitCode: 0 } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    const infoMessages: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoMessages.push(args.join(' '));
+    };
+
+    try {
+      const exitCode = await run(['migrate', 'up', '--prod'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(calls.length).toBe(1);
+      expect(calls[0]?.args).toContain('generated/server:migrationRun');
+      expect(
+        infoMessages.some((line) => line.includes('No pending migrations'))
+      ).toBe(true);
+    } finally {
+      console.info = originalInfo;
+    }
+  });
+
+  test('run(migrate create) scaffolds a migration file and manifest', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-migration-create-')
+    );
+    const functionsDir = path.join(tmpDir, 'convex');
+    fs.mkdirSync(functionsDir, { recursive: true });
+
+    const oldCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const getConvexConfigStub = mock(() => ({
+        functionsDir,
+        outputFile: path.join(functionsDir, 'shared', 'api.ts'),
+      }));
+
+      const exitCode = await run(['migrate', 'create', 'Add user field'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        getConvexConfig: getConvexConfigStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const migrationsDir = path.join(functionsDir, 'migrations');
+      const migrationFiles = fs
+        .readdirSync(migrationsDir)
+        .filter((file) => file.endsWith('.ts') && file !== 'manifest.ts');
+      expect(migrationFiles.length).toBe(1);
+      const migrationSource = fs.readFileSync(
+        path.join(migrationsDir, migrationFiles[0]!),
+        'utf8'
+      );
+      const manifestSource = fs.readFileSync(
+        path.join(migrationsDir, 'manifest.ts'),
+        'utf8'
+      );
+      expect(migrationSource).toContain('defineMigration');
+      expect(migrationSource).toContain(
+        "import { defineMigration } from '../generated/migrations.gen';"
+      );
+      expect(manifestSource).toContain('defineMigrationSet');
+      expect(manifestSource).toContain(
+        "import { defineMigrationSet } from 'better-convex/orm';"
+      );
+      expect(manifestSource).toContain(
+        migrationFiles[0]!.replace(TS_EXTENSION_RE, '')
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
   });
 
   test('run(deploy) rejects removed --backfill-mode flag', async () => {
@@ -487,9 +669,10 @@ describe('cli/cli', () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(calls.length).toBe(2);
+    expect(calls.length).toBe(3);
     expect(calls[0]?.args[1]).toBe('deploy');
-    expect(calls[1]?.args).toContain('generated/server:aggregateBackfill');
+    expect(calls[1]?.args).toContain('generated/server:migrationRun');
+    expect(calls[2]?.args).toContain('generated/server:aggregateBackfill');
   });
 
   test('run(dev) rejects --scope and instructs using codegen --scope', async () => {
@@ -861,6 +1044,10 @@ describe('cli/cli', () => {
           convexArgs: ['--team', 'cfg-team'],
           aggregateBackfill: {
             ...createDefaultConfig().dev.aggregateBackfill,
+            enabled: 'off' as const,
+          },
+          migrations: {
+            ...createDefaultConfig().dev.migrations,
             enabled: 'off' as const,
           },
         },

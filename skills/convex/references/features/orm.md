@@ -1062,6 +1062,7 @@ export const triggers = defineTriggers(relations, {
 ## Related References
 
 - Aggregates: `./aggregates.md`
+- Migrations: `./migrations.md`
 - Scheduling: `./scheduling.md`
 - HTTP: `./http.md`
 - React/RSC: `./react.md`

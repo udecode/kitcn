@@ -49,6 +49,11 @@ export type {
   GenericSchema,
   SchemaDefinition,
 } from 'convex/server';
+export {
+  deprecated,
+  pretend,
+  pretendRequired,
+} from '../internal/upstream/validators';
 export type {
   CountBackfillChunkArgs,
   CountBackfillKickoffArgs,
@@ -202,6 +207,33 @@ export {
   getTableConfig,
   type TableConfigResult,
 } from './introspection';
+export type {
+  MigrationAppliedState,
+  MigrationCancelArgs,
+  MigrationDefinition,
+  MigrationDirection,
+  MigrationDoc,
+  MigrationDocContext,
+  MigrationDriftIssue,
+  MigrationManifestEntry,
+  MigrationMigrateOne,
+  MigrationPlan,
+  MigrationRunArgs,
+  MigrationRunChunkArgs,
+  MigrationRunStatus,
+  MigrationSet,
+  MigrationStateMap,
+  MigrationStatusArgs,
+  MigrationStep,
+  MigrationTableName,
+  MigrationWriteMode,
+} from './migrations';
+export {
+  buildMigrationPlan,
+  defineMigration,
+  defineMigrationSet,
+  detectMigrationDrift,
+} from './migrations';
 // M5: OrderBy
 export { asc, desc } from './order-by';
 export type {

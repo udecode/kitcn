@@ -22,6 +22,7 @@
     "orm/schema",
     "orm/queries",
     "orm/mutations",
+    "orm/migrations",
     "orm/rls",
     "orm/api-reference",
     "---Integrations---",

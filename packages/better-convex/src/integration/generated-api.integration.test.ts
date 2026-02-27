@@ -52,6 +52,16 @@ describe('integration/generated-api', () => {
         'auth.ts'
       );
       const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
+      const generatedMigrationsFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'migrations.gen.ts'
+      );
+      const generatedMigrations = fs.readFileSync(
+        generatedMigrationsFile,
+        'utf-8'
+      );
 
       expect(generated).toContain('export const api = {');
       expect(generated).toContain('export type Api = typeof api;');
@@ -90,6 +100,7 @@ describe('integration/generated-api', () => {
       expect(generatedServer).toContain(
         'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
+      expect(generatedServer).not.toContain('export type MigrationCtx =');
       expect(generatedServer).toContain(
         'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
       );
@@ -99,7 +110,13 @@ describe('integration/generated-api', () => {
       expect(generatedServer).toContain('aggregateBackfill');
       expect(generatedServer).toContain('aggregateBackfillChunk');
       expect(generatedServer).toContain('aggregateBackfillStatus');
+      expect(generatedServer).toContain('migrationRun');
+      expect(generatedServer).toContain('migrationRunChunk');
+      expect(generatedServer).toContain('migrationStatus');
+      expect(generatedServer).toContain('migrationCancel');
       expect(generatedAuth).toContain('export function defineAuth<');
+      expect(generatedMigrations).toContain('export function defineMigration(');
+      expect(generatedMigrations).not.toContain('defineMigrationSet');
     } finally {
       process.chdir(oldCwd);
     }
