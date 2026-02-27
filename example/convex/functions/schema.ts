@@ -16,6 +16,7 @@ import {
   timestamp,
   uniqueIndex,
 } from 'better-convex/orm';
+import { ratelimitPlugin } from 'better-convex/plugins/ratelimit';
 import { v } from 'convex/values';
 import { getEnv } from '../lib/get-env';
 
@@ -589,6 +590,7 @@ export default defineSchema(tables, {
   defaults: {
     defaultLimit: 1000,
   },
+  plugins: [ratelimitPlugin()],
 });
 
 // =============================================================================

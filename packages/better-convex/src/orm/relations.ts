@@ -13,7 +13,12 @@ import type {
   SystemFields,
 } from './builders/system-fields';
 import type { OrmRuntimeDefaults, OrmRuntimeOptions } from './symbols';
-import { Columns, OrmSchemaDefinition, OrmSchemaOptions } from './symbols';
+import {
+  Columns,
+  OrmSchemaDefinition,
+  OrmSchemaOptions,
+  OrmSchemaPluginTables,
+} from './symbols';
 
 export { OrmSchemaDefinition } from './symbols';
 
@@ -748,6 +753,11 @@ export function defineRelations(
   const schemaDefinition = (schema as { [OrmSchemaDefinition]?: unknown })[
     OrmSchemaDefinition
   ];
+  const pluginTableNames = (
+    schema as {
+      [OrmSchemaPluginTables]?: readonly string[];
+    }
+  )[OrmSchemaPluginTables];
   const config = relations
     ? relations(createRelationsHelper(tables) as RelationsBuilder<Schema>)
     : {};
@@ -759,6 +769,12 @@ export function defineRelations(
   if (schemaDefinition) {
     Object.defineProperty(tablesConfig, OrmSchemaDefinition, {
       value: schemaDefinition,
+      enumerable: false,
+    });
+  }
+  if (pluginTableNames) {
+    Object.defineProperty(tablesConfig, OrmSchemaPluginTables, {
+      value: pluginTableNames,
       enumerable: false,
     });
   }
@@ -797,6 +813,11 @@ export function defineRelationsPart(
   const schemaDefinition = (schema as { [OrmSchemaDefinition]?: unknown })[
     OrmSchemaDefinition
   ];
+  const pluginTableNames = (
+    schema as {
+      [OrmSchemaPluginTables]?: readonly string[];
+    }
+  )[OrmSchemaPluginTables];
   const config = relations
     ? relations(createRelationsHelper(tables) as RelationsBuilder<Schema>)
     : (Object.fromEntries(
@@ -811,6 +832,12 @@ export function defineRelationsPart(
   if (schemaDefinition) {
     Object.defineProperty(tablesConfig, OrmSchemaDefinition, {
       value: schemaDefinition,
+      enumerable: false,
+    });
+  }
+  if (pluginTableNames) {
+    Object.defineProperty(tablesConfig, OrmSchemaPluginTables, {
+      value: pluginTableNames,
       enumerable: false,
     });
   }

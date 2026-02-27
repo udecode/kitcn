@@ -1,4 +1,4 @@
-import { MINUTE, Ratelimit } from 'better-convex/ratelimit';
+import { MINUTE, Ratelimit } from 'better-convex/plugins/ratelimit';
 import { CRPCError } from 'better-convex/server';
 import type { MutationCtx } from '../functions/generated/server';
 import type { SessionUser } from '../shared/auth-shared';

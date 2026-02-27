@@ -4,16 +4,20 @@ import type {
   SchemaDefinition,
 } from 'convex/server';
 import { defineSchema as defineConvexSchema } from 'convex/server';
-import { injectAggregateStorageTables } from './aggregate-index/schema';
-import { injectMigrationStorageTables } from './migrations/schema';
-import { injectRatelimitStorageTables } from './ratelimit/schema';
-import type { OrmRuntimeDefaults } from './symbols';
-import { OrmSchemaDefinition, OrmSchemaOptions } from './symbols';
+import { aggregatePlugin } from './aggregate-index/schema';
+import { migrationPlugin } from './migrations/schema';
+import type { OrmRuntimeDefaults, OrmSchemaPlugin } from './symbols';
+import {
+  OrmSchemaDefinition,
+  OrmSchemaOptions,
+  OrmSchemaPluginTables,
+} from './symbols';
 
 type BetterConvexSchemaOptions<StrictTableNameTypes extends boolean> =
   DefineSchemaOptions<StrictTableNameTypes> & {
     strict?: boolean;
     defaults?: OrmRuntimeDefaults;
+    plugins?: readonly OrmSchemaPlugin[];
   };
 
 const DEFAULTS_NUMERIC_FIELDS = [
@@ -30,6 +34,7 @@ const DEFAULTS_NUMERIC_FIELDS = [
 ] as const;
 
 const MUTATION_EXECUTION_MODES = ['sync', 'async'] as const;
+const BUILTIN_SCHEMA_PLUGINS = [aggregatePlugin(), migrationPlugin()] as const;
 
 const normalizeDefaults = (
   defaults: OrmRuntimeDefaults | undefined
@@ -72,6 +77,46 @@ const normalizeDefaults = (
   return normalized;
 };
 
+function resolveSchemaPlugins(
+  plugins: readonly OrmSchemaPlugin[] | undefined
+): readonly OrmSchemaPlugin[] {
+  const resolved = [...BUILTIN_SCHEMA_PLUGINS, ...(plugins ?? [])];
+  const seen = new Set<string>();
+
+  for (const plugin of resolved) {
+    if (seen.has(plugin.key)) {
+      throw new Error(
+        `defineSchema received duplicate plugin '${plugin.key}'. Remove duplicate plugin registrations.`
+      );
+    }
+    seen.add(plugin.key);
+  }
+
+  return resolved;
+}
+
+function applySchemaPlugins<TSchema extends Record<string, unknown>>(
+  schema: TSchema,
+  plugins: readonly OrmSchemaPlugin[]
+): { schema: TSchema; pluginTableNames: readonly string[] } {
+  let current = schema as unknown as Record<string, unknown>;
+  const pluginTableNames: string[] = [];
+
+  for (const plugin of plugins) {
+    current = plugin.inject(current);
+    for (const tableName of plugin.tableNames) {
+      if (!pluginTableNames.includes(tableName)) {
+        pluginTableNames.push(tableName);
+      }
+    }
+  }
+
+  return {
+    schema: current as TSchema,
+    pluginTableNames,
+  };
+}
+
 /**
  * Better Convex schema definition
  *
@@ -88,43 +133,53 @@ export function defineSchema<
 ): SchemaDefinition<TSchema, StrictTableNameTypes> {
   const strict = options?.strict ?? true;
   const defaults = normalizeDefaults(options?.defaults);
-  const schemaWithAggregateInternals = injectAggregateStorageTables(
-    schema as unknown as Record<string, unknown>
+  const plugins = resolveSchemaPlugins(options?.plugins);
+  const { schema: schemaWithPlugins, pluginTableNames } = applySchemaPlugins(
+    schema as unknown as Record<string, unknown>,
+    plugins
   );
-  const schemaWithInternals = injectMigrationStorageTables(
-    schemaWithAggregateInternals
-  );
-  const schemaWithAllInternals = injectRatelimitStorageTables(
-    schemaWithInternals
-  ) as TSchema;
+  const frozenPluginTableNames = Object.freeze([...pluginTableNames]);
 
   Object.defineProperty(schema, OrmSchemaOptions, {
     value: { strict, defaults },
     enumerable: false,
   });
-  Object.defineProperty(schemaWithAllInternals, OrmSchemaOptions, {
+  Object.defineProperty(schemaWithPlugins, OrmSchemaOptions, {
     value: { strict, defaults },
+    enumerable: false,
+  });
+  Object.defineProperty(schema, OrmSchemaPluginTables, {
+    value: frozenPluginTableNames,
+    enumerable: false,
+  });
+  Object.defineProperty(schemaWithPlugins, OrmSchemaPluginTables, {
+    value: frozenPluginTableNames,
     enumerable: false,
   });
 
   const {
     strict: _strict,
     defaults: _defaults,
+    plugins: _plugins,
     ...convexOptions
   } = options ?? {};
   const convexSchema = defineConvexSchema(
-    schemaWithAllInternals as any,
+    schemaWithPlugins as any,
     convexOptions as DefineSchemaOptions<StrictTableNameTypes>
   );
   Object.defineProperty(convexSchema as object, OrmSchemaOptions, {
     value: { strict, defaults },
     enumerable: false,
   });
+  Object.defineProperty(convexSchema as object, OrmSchemaPluginTables, {
+    value: frozenPluginTableNames,
+    enumerable: false,
+  });
   Object.defineProperty(schema, OrmSchemaDefinition, {
     value: convexSchema,
     enumerable: false,
   });
-  Object.defineProperty(schemaWithAllInternals, OrmSchemaDefinition, {
+  Object.defineProperty(schemaWithPlugins, OrmSchemaDefinition, {
     value: convexSchema,
     enumerable: false,
   });

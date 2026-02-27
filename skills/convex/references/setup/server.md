@@ -348,12 +348,24 @@ Use the built-in package module (no component registration):
 bun add better-convex
 ```
 
-Create `convex/lib/rate-limiter.ts` and call guard from mutation middleware using `.meta({ rateLimit: 'scope/action' })`.
-
-Use `Ratelimit` from `better-convex/ratelimit`:
+`aggregatePlugin` and `migrationPlugin` are builtin in `defineSchema`.  
+Rate limiting is opt-in: enable `ratelimitPlugin()` in `convex/functions/schema.ts`.
 
 ```ts
-import { MINUTE, Ratelimit } from "better-convex/ratelimit";
+import { defineSchema } from "better-convex/orm";
+import { ratelimitPlugin } from "better-convex/plugins/ratelimit";
+
+export default defineSchema(tables, {
+  plugins: [ratelimitPlugin()],
+});
+```
+
+Create `convex/lib/rate-limiter.ts` and call guard from mutation middleware using `.meta({ rateLimit: 'scope/action' })`.
+
+Use `Ratelimit` from `better-convex/plugins/ratelimit`:
+
+```ts
+import { MINUTE, Ratelimit } from "better-convex/plugins/ratelimit";
 import { CRPCError } from "better-convex/server";
 import type { MutationCtx } from "../functions/generated/server";
 import type { SessionUser } from "../shared/auth-shared";

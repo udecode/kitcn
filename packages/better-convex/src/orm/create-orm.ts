@@ -8,7 +8,6 @@ import {
 } from 'convex/server';
 import { v } from 'convex/values';
 import { createCountBackfillHandlers } from './aggregate-index/backfill';
-import { AGGREGATE_STORAGE_TABLE_NAMES } from './aggregate-index/schema';
 import {
   type CreateDatabaseOptions,
   createDatabase,
@@ -18,11 +17,10 @@ import {
 import { extractRelationsConfig } from './extractRelationsConfig';
 import { createOrmDbLifecycle, type OrmDbLifecycle } from './lifecycle';
 import { createMigrationHandlers, type MigrationSet } from './migrations';
-import { MIGRATION_STORAGE_TABLE_NAMES } from './migrations/schema';
-import { RATELIMIT_STORAGE_TABLE_NAMES } from './ratelimit/schema';
 import type { TablesRelationalConfig } from './relations';
 import { scheduledDeleteFactory } from './scheduled-delete';
 import { scheduledMutationBatchFactory } from './scheduled-mutation-batch';
+import { OrmSchemaPluginTables } from './symbols';
 import type { OrmTriggers } from './triggers';
 import type { VectorSearchProvider } from './types';
 
@@ -124,17 +122,17 @@ type OrmClientWithApi<TSchema extends TablesRelationalConfig> =
     api: () => OrmApiResult;
   };
 
-const RESET_INTERNAL_TABLE_NAMES = [
-  ...AGGREGATE_STORAGE_TABLE_NAMES,
-  ...MIGRATION_STORAGE_TABLE_NAMES,
-  ...RATELIMIT_STORAGE_TABLE_NAMES,
-] as const;
-
 export function getResetTableNames(schema: TablesRelationalConfig): string[] {
+  const pluginTables = (
+    schema as {
+      [OrmSchemaPluginTables]?: readonly string[];
+    }
+  )[OrmSchemaPluginTables];
+
   return [
     ...new Set([
       ...Object.values(schema).map((tableConfig) => tableConfig.name),
-      ...RESET_INTERNAL_TABLE_NAMES,
+      ...(pluginTables ?? []),
     ]),
   ];
 }

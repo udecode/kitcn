@@ -1,3 +1,4 @@
+import { ratelimitPlugin } from '../plugins/ratelimit';
 import { convexTable, defineSchema, getTableConfig, id, text } from './index';
 
 test('convexTable works with defineSchema()', () => {
@@ -144,14 +145,52 @@ test('defineSchema auto-injects internal migration storage tables', () => {
   expect(schema.tables).toHaveProperty('migration_run');
 });
 
-test('defineSchema auto-injects internal ratelimit storage tables', () => {
+test('defineSchema does not inject ratelimit storage tables by default', () => {
   const users = convexTable('ratelimit_schema_users', {
     name: text().notNull(),
   });
 
   const schema = defineSchema({ users });
 
+  expect(schema.tables).not.toHaveProperty('ratelimit_state');
+  expect(schema.tables).not.toHaveProperty('ratelimit_dynamic_limit');
+  expect(schema.tables).not.toHaveProperty('ratelimit_protection_hit');
+});
+
+test('defineSchema injects ratelimit storage tables when ratelimitPlugin is enabled', () => {
+  const users = convexTable('ratelimit_schema_plugin_users', {
+    name: text().notNull(),
+  });
+
+  const schema = defineSchema({ users }, { plugins: [ratelimitPlugin()] });
+
   expect(schema.tables).toHaveProperty('ratelimit_state');
   expect(schema.tables).toHaveProperty('ratelimit_dynamic_limit');
   expect(schema.tables).toHaveProperty('ratelimit_protection_hit');
+});
+
+test('defineSchema throws for duplicate plugin registration', () => {
+  const users = convexTable('duplicate_plugin_users', {
+    name: text().notNull(),
+  });
+
+  expect(() =>
+    defineSchema({ users }, { plugins: [ratelimitPlugin(), ratelimitPlugin()] })
+  ).toThrow(/duplicate plugin/i);
+});
+
+test('defineSchema throws when plugin-injected table name is already in use', () => {
+  const users = convexTable('plugin_collision_users', {
+    name: text().notNull(),
+  });
+  const ratelimitState = convexTable('ratelimit_state', {
+    name: text().notNull(),
+  });
+
+  expect(() =>
+    defineSchema(
+      { users, ratelimit_state: ratelimitState },
+      { plugins: [ratelimitPlugin()] }
+    )
+  ).toThrow(/cannot inject internal table 'ratelimit_state'/i);
 });

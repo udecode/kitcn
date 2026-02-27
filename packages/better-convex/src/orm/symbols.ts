@@ -30,6 +30,14 @@ export type OrmRuntimeOptions = {
   defaults?: OrmRuntimeDefaults;
 };
 
+export type OrmSchemaPlugin = {
+  key: string;
+  tableNames: readonly string[];
+  inject: <TSchema extends Record<string, unknown>>(
+    schema: TSchema
+  ) => TSchema & Record<string, unknown>;
+};
+
 export const TableName = Symbol.for('better-convex:TableName');
 export const Columns = Symbol.for('better-convex:Columns');
 export const Brand = Symbol.for('better-convex:Brand');
@@ -41,4 +49,7 @@ export const TableDeleteConfig = Symbol.for('better-convex:TableDeleteConfig');
 export const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
 export const OrmSchemaDefinition = Symbol.for(
   'better-convex:OrmSchemaDefinition'
+);
+export const OrmSchemaPluginTables = Symbol.for(
+  'better-convex:OrmSchemaPluginTables'
 );

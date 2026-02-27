@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { boolean, custom, integer, text } from '../builders';
 import { index } from '../indexes';
+import type { OrmSchemaPlugin } from '../symbols';
 import { convexTable } from '../table';
 
 export const MIGRATION_STATE_TABLE = 'migration_state';
@@ -57,6 +58,19 @@ export const MIGRATION_STORAGE_TABLE_NAMES = new Set([
   MIGRATION_STATE_TABLE,
   MIGRATION_RUN_TABLE,
 ]);
+
+const MIGRATION_PLUGIN_TABLE_NAMES = [
+  MIGRATION_STATE_TABLE,
+  MIGRATION_RUN_TABLE,
+] as const;
+
+export function migrationPlugin(): OrmSchemaPlugin {
+  return {
+    key: 'migration',
+    tableNames: MIGRATION_PLUGIN_TABLE_NAMES,
+    inject: injectMigrationStorageTables,
+  };
+}
 
 export function injectMigrationStorageTables<
   TSchema extends Record<string, unknown>,

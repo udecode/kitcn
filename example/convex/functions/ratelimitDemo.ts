@@ -5,7 +5,7 @@ import {
   Ratelimit,
   type RatelimitResponse,
   SECOND,
-} from 'better-convex/ratelimit';
+} from 'better-convex/plugins/ratelimit';
 import { z } from 'zod';
 import {
   authAction,

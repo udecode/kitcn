@@ -1,6 +1,7 @@
-import { integer, text, textEnum } from '../builders';
-import { index } from '../indexes';
-import { convexTable } from '../table';
+import { integer, text, textEnum } from '../../orm/builders';
+import { index } from '../../orm/indexes';
+import type { OrmSchemaPlugin } from '../../orm/symbols';
+import { convexTable } from '../../orm/table';
 
 export const RATELIMIT_STATE_TABLE = 'ratelimit_state';
 export const RATELIMIT_DYNAMIC_TABLE = 'ratelimit_dynamic_limit';
@@ -60,6 +61,20 @@ export const RATELIMIT_STORAGE_TABLE_NAMES = new Set([
   RATELIMIT_DYNAMIC_TABLE,
   RATELIMIT_PROTECTION_TABLE,
 ]);
+
+const RATELIMIT_PLUGIN_TABLE_NAMES = [
+  RATELIMIT_STATE_TABLE,
+  RATELIMIT_DYNAMIC_TABLE,
+  RATELIMIT_PROTECTION_TABLE,
+] as const;
+
+export function ratelimitPlugin(): OrmSchemaPlugin {
+  return {
+    key: 'ratelimit',
+    tableNames: RATELIMIT_PLUGIN_TABLE_NAMES,
+    inject: injectRatelimitStorageTables,
+  };
+}
 
 export function injectRatelimitStorageTables<
   TSchema extends Record<string, unknown>,

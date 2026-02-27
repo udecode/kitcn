@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { custom, id, integer, text } from '../builders';
 import { index } from '../indexes';
+import type { OrmSchemaPlugin } from '../symbols';
 import { convexTable } from '../table';
 
 export const AGGREGATE_BUCKET_TABLE = 'aggregate_bucket';
@@ -158,6 +159,23 @@ export const AGGREGATE_STORAGE_TABLE_NAMES = new Set([
   AGGREGATE_RANK_NODE_TABLE,
   AGGREGATE_STATE_TABLE,
 ]);
+
+const AGGREGATE_PLUGIN_TABLE_NAMES = [
+  AGGREGATE_BUCKET_TABLE,
+  AGGREGATE_MEMBER_TABLE,
+  AGGREGATE_EXTREMA_TABLE,
+  AGGREGATE_RANK_TREE_TABLE,
+  AGGREGATE_RANK_NODE_TABLE,
+  AGGREGATE_STATE_TABLE,
+] as const;
+
+export function aggregatePlugin(): OrmSchemaPlugin {
+  return {
+    key: 'aggregate',
+    tableNames: AGGREGATE_PLUGIN_TABLE_NAMES,
+    inject: injectAggregateStorageTables,
+  };
+}
 
 export function injectAggregateStorageTables<
   TSchema extends Record<string, unknown>,

@@ -7,9 +7,14 @@ export {
   tokenBucket,
 } from './core/algorithms';
 export { calculateRateLimit } from './core/calculate-rate-limit';
-export type { Duration, DurationString, DurationUnit } from './duration';
+export type {
+  Duration,
+  DurationString,
+  DurationUnit,
+} from './duration';
 export { toMs } from './duration';
 export { Ratelimit } from './ratelimit';
+export { ratelimitPlugin } from './schema';
 export {
   RATE_LIMIT_DYNAMIC_TABLE,
   RATE_LIMIT_HIT_TABLE,

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, test } from 'vitest';
 import { Ratelimit } from './ratelimit';
 import type { ConvexRateLimitDbWriter } from './types';
 
+const RATELIMIT_PLUGIN_REGEX = /ratelimitplugin\(\)/i;
+
 type TableRow = Record<string, unknown> & {
   _id: string;
   _creationTime: number;
@@ -228,5 +230,42 @@ describe('Ratelimit', () => {
       expect(check.success).toBe(true);
       expect(first.success).toBe(true);
     });
+  });
+
+  test('throws actionable guidance when ratelimit tables are missing', async () => {
+    const db: ConvexRateLimitDbWriter = {
+      query() {
+        return {
+          withIndex() {
+            return {
+              async unique() {
+                throw new Error('Table ratelimit_state does not exist');
+              },
+              async collect() {
+                throw new Error('Table ratelimit_state does not exist');
+              },
+            };
+          },
+        };
+      },
+      async insert() {
+        throw new Error('Table ratelimit_state does not exist');
+      },
+      async patch() {
+        throw new Error('Table ratelimit_state does not exist');
+      },
+      async delete() {
+        throw new Error('Table ratelimit_state does not exist');
+      },
+    };
+
+    const limiter = new Ratelimit({
+      db,
+      limiter: Ratelimit.fixedWindow(1, '10 s'),
+    });
+
+    await expect(limiter.limit('missing-table-user')).rejects.toThrow(
+      RATELIMIT_PLUGIN_REGEX
+    );
   });
 });

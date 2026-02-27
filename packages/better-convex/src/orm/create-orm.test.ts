@@ -1,7 +1,9 @@
+import { ratelimitPlugin } from '../plugins/ratelimit';
 import { text } from './builders/text';
 import { createOrm, getResetTableNames } from './create-orm';
 import { defineMigration, defineMigrationSet } from './migrations/definitions';
 import { defineRelations } from './relations';
+import { defineSchema } from './schema';
 import { OrmContext } from './symbols';
 import { convexTable } from './table';
 
@@ -15,7 +17,9 @@ describe('createOrm type adapters', () => {
   const users = convexTable('users_mode_test', {
     name: text().notNull(),
   });
-  const schema = defineRelations({ users });
+  const tables = { users };
+  defineSchema(tables);
+  const schema = defineRelations(tables);
 
   test('does not attach global date mode in orm context', () => {
     const orm = createOrm({ schema });
@@ -72,13 +76,29 @@ describe('createOrm type adapters', () => {
     expect(api).toHaveProperty('migrationCancel');
   });
 
-  test('getResetTableNames includes migration, aggregate, and ratelimit internal tables', () => {
+  test('getResetTableNames includes migration and aggregate internal tables by default', () => {
     const tableNames = getResetTableNames(schema);
 
     expect(tableNames).toContain('users');
     expect(tableNames).toContain('migration_state');
     expect(tableNames).toContain('migration_run');
     expect(tableNames).toContain('aggregate_state');
+    expect(tableNames).not.toContain('ratelimit_state');
+    expect(tableNames).not.toContain('ratelimit_dynamic_limit');
+    expect(tableNames).not.toContain('ratelimit_protection_hit');
+  });
+
+  test('getResetTableNames includes ratelimit internal tables when ratelimitPlugin is enabled', () => {
+    const pluginUsers = convexTable('users_mode_test_plugin', {
+      name: text().notNull(),
+    });
+    const pluginTables = { pluginUsers };
+    defineSchema(pluginTables, {
+      plugins: [ratelimitPlugin()],
+    });
+    const pluginSchema = defineRelations(pluginTables);
+    const tableNames = getResetTableNames(pluginSchema);
+
     expect(tableNames).toContain('ratelimit_state');
     expect(tableNames).toContain('ratelimit_dynamic_limit');
     expect(tableNames).toContain('ratelimit_protection_hit');
