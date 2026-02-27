@@ -1,5 +1,13 @@
 # better-convex
 
+## 0.7.2
+
+### Patch Changes
+
+- [`9bccd91`](https://github.com/udecode/better-convex/commit/9bccd91a5ac883fcfe6d1345d1f04ca000dcd62e) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix auth adapter date output regression.
+
+  `getAuth(ctx).api.*` date fields are normalized back to Convex-safe unix millis (`number`) on output, preventing unsupported `Date` values from leaking into raw Convex query/mutation/action returns (for example `auth.api.listOrganizations`).
+
 ## 0.7.1
 
 ### Patch Changes
