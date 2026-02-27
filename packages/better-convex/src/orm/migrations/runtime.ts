@@ -557,34 +557,36 @@ export function createMigrationHandlers<TSchema extends TablesRelationalConfig>(
         reason: 'no_active_run',
       };
     }
+    if (runRow.status !== 'running') {
+      return {
+        status: 'noop',
+        reason: 'run_not_running',
+        runId: runRow.runId,
+        runStatus: runRow.status,
+      };
+    }
 
     const now = Date.now();
     await ctx.db.patch(
       runRow._id,
       cleanUndefined({
-        status: 'canceled',
         cancelRequested: true,
         updatedAt: now,
-        completedAt: now,
       })
     );
-    for (const stateRow of await getAllStateRows(ctx.db)) {
-      if (
-        stateRow.runId === runRow.runId &&
-        (stateRow.status === 'running' || stateRow.status === 'pending')
-      ) {
-        await ctx.db.patch(
-          stateRow._id,
-          cleanUndefined({
-            status: 'canceled',
-            updatedAt: now,
-          })
-        );
-      }
+
+    const chunkRef = ctx.scheduler ? getChunkRef() : undefined;
+    // In environments without a schedulable chunk ref (tests/local inline), finalize cancel immediately.
+    if (!chunkRef) {
+      await markRunCanceled(ctx.db, runRow);
+      return {
+        status: 'canceled',
+        runId: runRow.runId,
+      };
     }
 
     return {
-      status: 'canceled',
+      status: 'cancel_requested',
       runId: runRow.runId,
     };
   };
@@ -772,6 +774,20 @@ async function markRunCanceled(
       cancelRequested: true,
     })
   );
+  for (const stateRow of await getAllStateRows(db)) {
+    if (
+      stateRow.runId === runRow.runId &&
+      (stateRow.status === 'running' || stateRow.status === 'pending')
+    ) {
+      await db.patch(
+        stateRow._id,
+        cleanUndefined({
+          status: 'canceled',
+          updatedAt: now,
+        })
+      );
+    }
+  }
 }
 
 async function markRunFailed(

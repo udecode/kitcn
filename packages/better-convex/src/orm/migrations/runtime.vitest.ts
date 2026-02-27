@@ -174,4 +174,44 @@ describe('orm/migrations runtime', () => {
       expect(Array.isArray(blocked.drift)).toBe(true);
     });
   });
+
+  test('cancel is noop for non-running run ids', async () => {
+    const migrationSet = defineMigrationSet([
+      defineMigration({
+        id: '20260227_users_cancel_noop',
+        up: {
+          table: 'users',
+          migrateOne: async () => {},
+        },
+      }),
+    ]);
+    const ormClient = createOrm({ schema: testRelations });
+    const handlers = createMigrationHandlers({
+      schema: testRelations,
+      migrations: migrationSet,
+      getOrm: (ctx) => ormClient.db(ctx as any) as any,
+      getChunkRef: () => undefined,
+    });
+    const t = convexTest(testSchema);
+
+    await t.run(async (ctx) => {
+      const run = (await handlers.run(
+        { db: ctx.db as any, scheduler: (ctx as any).scheduler },
+        { direction: 'up' }
+      )) as { runId?: string };
+      const runId = run.runId;
+      expect(typeof runId).toBe('string');
+
+      const cancel = await handlers.cancel(
+        { db: ctx.db as any, scheduler: (ctx as any).scheduler },
+        { runId }
+      );
+      expect(cancel).toMatchObject({
+        status: 'noop',
+        reason: 'run_not_running',
+        runId,
+        runStatus: 'completed',
+      });
+    });
+  });
 });
