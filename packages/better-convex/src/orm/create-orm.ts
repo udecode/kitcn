@@ -8,6 +8,7 @@ import {
 } from 'convex/server';
 import { v } from 'convex/values';
 import { createCountBackfillHandlers } from './aggregate-index/backfill';
+import { AGGREGATE_STORAGE_TABLE_NAMES } from './aggregate-index/schema';
 import {
   type CreateDatabaseOptions,
   createDatabase,

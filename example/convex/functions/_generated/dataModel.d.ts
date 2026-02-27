@@ -705,6 +705,7 @@ export type DataModel = {
       expiresAt: number;
       impersonatedBy?: null | string;
       ipAddress?: null | string;
+      test: string;
       token: string;
       updatedAt: number;
       userAgent?: null | string;
@@ -720,6 +721,7 @@ export type DataModel = {
       | "expiresAt"
       | "impersonatedBy"
       | "ipAddress"
+      | "test"
       | "token"
       | "updatedAt"
       | "userAgent"
