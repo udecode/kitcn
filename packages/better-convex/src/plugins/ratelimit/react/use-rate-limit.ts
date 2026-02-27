@@ -162,25 +162,32 @@ function evaluateSnapshot(
   now: number,
   count: number
 ): { value: number; ts: number; retryAfter?: number } {
-  if (snapshot.config.kind === 'slidingWindow') {
-    const retryAfter =
-      snapshot.value - count < 0 ? snapshot.config.window : undefined;
-    return {
-      value: snapshot.value - count,
-      ts: snapshot.ts,
-      retryAfter,
-    };
-  }
-
+  const baseState =
+    snapshot.config.kind === 'slidingWindow'
+      ? {
+          // hookAPI snapshots for sliding windows expose "remaining" at read time.
+          // Rebuild a conservative state so checks can recover as time advances.
+          value: Math.max(0, snapshot.config.limit - snapshot.value),
+          ts: snapshot.ts,
+        }
+      : {
+          value: snapshot.value,
+          ts: snapshot.ts,
+        };
   const evaluated = calculateRateLimit(
-    { value: snapshot.value, ts: snapshot.ts },
+    baseState,
     snapshot.config as ResolvedAlgorithm,
     now,
     count
   );
 
   return {
-    value: evaluated.state.value,
+    value:
+      snapshot.config.kind === 'slidingWindow'
+        ? evaluated.retryAfter !== undefined
+          ? -1
+          : evaluated.remaining
+        : evaluated.state.value,
     ts: evaluated.state.ts,
     retryAfter: evaluated.retryAfter,
   };

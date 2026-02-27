@@ -451,19 +451,29 @@ export class Ratelimit {
       return operation();
     }
 
-    const startedAt = Date.now();
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeoutResult = this.timeoutResponse(this.failureMode === 'open');
+    let timerUnavailable = false;
+    const timeoutPromise = new Promise<RatelimitResponse>((resolve) => {
+      try {
+        timeoutHandle = setTimeout(() => resolve(timeoutResult), this.timeout);
+      } catch {
+        timerUnavailable = true;
+        resolve(timeoutResult);
+      }
+    });
+
+    if (timerUnavailable) {
+      // Some environments (tests/sandboxes) may not expose timers reliably.
+      return operation();
+    }
 
     try {
-      const result = await operation();
-      if (Date.now() - startedAt > this.timeout) {
-        return this.timeoutResponse(this.failureMode === 'open');
+      return await Promise.race([operation(), timeoutPromise]);
+    } finally {
+      if (timeoutHandle !== undefined) {
+        clearTimeout(timeoutHandle);
       }
-      return result;
-    } catch (error) {
-      if (Date.now() - startedAt > this.timeout) {
-        return this.timeoutResponse(this.failureMode === 'open');
-      }
-      throw error;
     }
   }
 

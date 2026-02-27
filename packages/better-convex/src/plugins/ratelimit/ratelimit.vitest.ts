@@ -202,6 +202,46 @@ describe('Ratelimit', () => {
     expect(result.reason).toBe('timeout');
   });
 
+  test('times out stalled operations with a real deadline race', async () => {
+    const never = new Promise<never>(() => {});
+    const db: ConvexRateLimitDbWriter = {
+      query() {
+        return {
+          withIndex() {
+            return {
+              async unique() {
+                return never;
+              },
+              async collect() {
+                return never;
+              },
+            };
+          },
+        };
+      },
+      async insert() {
+        return never;
+      },
+      async patch() {
+        return never;
+      },
+      async delete() {
+        return never;
+      },
+    };
+
+    const limiter = new Ratelimit({
+      db,
+      timeout: 5,
+      failureMode: 'open',
+      limiter: Ratelimit.fixedWindow(1, '10 s'),
+    });
+
+    const result = await limiter.limit('stalled-user');
+    expect(result.success).toBe(true);
+    expect(result.reason).toBe('timeout');
+  });
+
   test('dedupes repeated reads in same invocation path', async () => {
     const { db, counters } = createMockDb();
     const limiter = new Ratelimit({
