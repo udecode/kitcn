@@ -1,5 +1,12 @@
 # better-convex
 
+## 0.8.2
+
+### Patch Changes
+
+- [`fb0064b`](https://github.com/udecode/better-convex/commit/fb0064bba994ba0ea9db7d7862a6632f53c9cede) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+  - Add `getSessionNetworkSignals(ctx, session?)` in `better-convex/auth` to expose session-derived `ip` and `userAgent` for query/mutation middleware and rate-limit guards without per-endpoint HTTP wrappers.
+
 ## 0.8.1
 
 ### Patch Changes
