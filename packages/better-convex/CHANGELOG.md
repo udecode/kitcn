@@ -1,5 +1,20 @@
 # better-convex
 
+## 0.8.3
+
+### Patch Changes
+
+- [`7f23a8e`](https://github.com/udecode/better-convex/commit/7f23a8eb512b626b952313b31ed0c2a74b1bee46) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix generated caller support for non-cRPC Convex procedure exports (like `orm.api()` internals such as `migrationStatus`).
+
+- [`02e40e8`](https://github.com/udecode/better-convex/commit/02e40e8610b6f51962326abce95c51277c3d0177) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+  - Add `polymorphic` query config support for `findMany()`, `findFirst()`, and `findFirstOrThrow()` to synthesize discriminated-union targets from `one()` relations.
+  - Support custom target aliases with `polymorphic.as` (default alias is `target`) while preserving discriminated-union narrowing by discriminator value.
+
+  ## Patches
+  - Validate polymorphic configs at runtime and throw on discriminator/case mismatches or schema parse failures.
+  - Auto-load required polymorphic case relations during synthesis and strip them from results unless explicitly requested via `with`.
+  - Reject `pipeline` + `polymorphic` combinations with explicit query-builder errors.
+
 ## 0.8.2
 
 ### Patch Changes
