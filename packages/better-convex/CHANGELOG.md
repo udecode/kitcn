@@ -1,5 +1,13 @@
 # better-convex
 
+## 0.8.1
+
+### Patch Changes
+
+- [`fc9e17c`](https://github.com/udecode/better-convex/commit/fc9e17c7cf220435451e45eeb2cc08c8d34c7d46) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Fixes
+  - Fix `better-convex/plugins/ratelimit` so `limit()` and `check()` no longer call timer APIs (`setTimeout`/`clearTimeout`) during normal execution.
+  - Remove `blockUntilReady()`
+
 ## 0.8.0
 
 ### Minor Changes
