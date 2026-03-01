@@ -30,7 +30,7 @@ test('arrayOf/objectOf infer nested select and insert model types', () => {
       timestamp: number;
       type: 'status' | 'milestone' | 'note';
       content: string;
-      note: string;
+      note: string | null;
     }>
   >();
 
@@ -39,7 +39,7 @@ test('arrayOf/objectOf infer nested select and insert model types', () => {
       timestamp: number;
       type: 'status' | 'milestone' | 'note';
       content: string;
-      note: string;
+      note: string | null;
     }>
   >();
 });
@@ -47,7 +47,7 @@ test('arrayOf/objectOf infer nested select and insert model types', () => {
 test('objectOf keeps top-level column nullability semantics', () => {
   expectTypeOf<ProductionSelect['payload']>().toEqualTypeOf<{
     actor: string;
-    source: string;
+    source: string | null;
   }>();
 
   expectTypeOf<ProductionSelect['optionalPayload']>().toEqualTypeOf<{
