@@ -1,5 +1,12 @@
 # better-convex
 
+## 0.8.4
+
+### Patch Changes
+
+- [#110](https://github.com/udecode/better-convex/pull/110) [`589e2bc`](https://github.com/udecode/better-convex/commit/589e2bc932b78c552233babe37441deae7ebdcb9) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+  - Fix nested `arrayOf(objectOf(...))` field nullability so `text()` and `text().notNull()` produce distinct schema/data-model types and avoid deploy mismatches.
+
 ## 0.8.3
 
 ### Patch Changes
