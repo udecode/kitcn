@@ -148,6 +148,33 @@ describe('custom array/object sugar', () => {
     expect(timeline.fieldType.value.type).toBe('object');
   });
 
+  test('keeps nullable builder semantics in arrayOf(objectOf(...))', () => {
+    const productions = convexTable('productions_nullable_nested_test', {
+      timeline: arrayOf(
+        objectOf({
+          requiredNote: text().notNull(),
+          optionalNote: text(),
+        })
+      ).notNull(),
+    });
+
+    const timeline = (productions.validator as any).json.value.timeline;
+    const fields = timeline.fieldType.value.value;
+
+    expect(fields.requiredNote.fieldType.type).toBe('string');
+    expect(fields.optionalNote.fieldType.type).toBe('union');
+    expect(
+      fields.optionalNote.fieldType.value.some(
+        (item: any) => item.type === 'null'
+      )
+    ).toBe(true);
+    expect(
+      fields.optionalNote.fieldType.value.some(
+        (item: any) => item.type === 'string'
+      )
+    ).toBe(true);
+  });
+
   test('arrayOf throws clear error for invalid element input', () => {
     expect(() => arrayOf(42 as any)).toThrow(
       'arrayOf(element) expected a column builder, Convex validator, or nested object shape. Got number.'

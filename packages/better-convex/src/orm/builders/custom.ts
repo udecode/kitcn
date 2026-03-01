@@ -31,7 +31,9 @@ type InferBuilderNestedValue<TBuilder extends AnyColumnBuilder> =
   }
     ? TType
     : TBuilder['_'] extends { data: infer TData }
-      ? TData
+      ? TBuilder['_'] extends { notNull: true }
+        ? TData
+        : TData | null
       : never;
 
 type InferValidatorNestedValue<TValidator extends AnyValidator> = Exclude<
@@ -74,25 +76,27 @@ function toRequiredValidator(validator: AnyValidator): AnyValidator {
     : validator;
 }
 
-function stripNullUnionMember(validator: AnyValidator): AnyValidator {
-  if (validator.kind !== 'union') {
-    return validator;
+function toRequiredBuilderValidator(validator: AnyValidator): AnyValidator {
+  const requiredValidator = toRequiredValidator(validator);
+
+  if (requiredValidator.kind !== 'union') {
+    return requiredValidator;
   }
 
-  const members = validator.members.filter((member) => member.kind !== 'null');
-  if (members.length === validator.members.length || members.length === 0) {
-    return validator;
-  }
-  if (members.length === 1) {
-    return members[0] as AnyValidator;
-  }
-  return v.union(...members);
-}
+  const nonNullMembers = requiredValidator.members.filter(
+    (member) => member.kind !== 'null'
+  );
 
-function toRequiredNonNullBuilderValidator(
-  validator: AnyValidator
-): AnyValidator {
-  return stripNullUnionMember(toRequiredValidator(validator));
+  if (nonNullMembers.length !== 1) {
+    return requiredValidator;
+  }
+
+  const [member] = nonNullMembers;
+  if (member.kind === 'object' || member.kind === 'array') {
+    return member as AnyValidator;
+  }
+
+  return requiredValidator;
 }
 
 function formatInvalidInput(path: string, value: unknown): string {
@@ -123,7 +127,7 @@ function nestedInputToValidator(
   path: string
 ): AnyValidator {
   if (isColumnBuilder(input)) {
-    return toRequiredNonNullBuilderValidator(
+    return toRequiredBuilderValidator(
       (input as any).convexValidator as AnyValidator
     );
   }
