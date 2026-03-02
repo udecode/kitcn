@@ -303,6 +303,57 @@ describe('orm schema polymorphic column builder', () => {
     });
   });
 
+  test('insert applies defaults only for active discriminator branch', async () => {
+    const defaultEvents = convexTable('poly_default_events_runtime', {
+      timestamp: integer().notNull(),
+      eventType: discriminator({
+        variants: {
+          role_change: {
+            role: text().default('member'),
+          },
+          security_alert: {
+            severity: text().default('low'),
+          },
+        },
+      }),
+    });
+
+    const defaultSchema = defineSchema({
+      poly_default_events_runtime: defaultEvents,
+    });
+    const defaultRelations = defineRelations({
+      poly_default_events_runtime: defaultEvents,
+    });
+    const defaultOrm = createOrm({ schema: defaultRelations });
+
+    const t = convexTest(defaultSchema);
+    await t.run(async (ctx) => {
+      const db = defaultOrm.db(ctx.db as any) as any;
+
+      const inserted = await db
+        .insert(defaultEvents)
+        .values({
+          timestamp: 1,
+          eventType: 'role_change',
+        })
+        .returning()
+        .execute();
+
+      expect(inserted).toHaveLength(1);
+      expect(inserted[0]?.role).toBe('member');
+      expect(inserted[0]?.severity).toBeUndefined();
+      const insertedId = inserted[0]?.id;
+      if (!insertedId) {
+        throw new Error('Expected inserted id');
+      }
+
+      const row = await db.query.poly_default_events_runtime.findFirst({
+        where: { id: insertedId },
+      });
+      expect(row?.details).toEqual({ role: 'member' });
+    });
+  });
+
   test('update validates branch requirements and cross-branch fields', async () => {
     const t = convexTest(runtimeSchema);
 

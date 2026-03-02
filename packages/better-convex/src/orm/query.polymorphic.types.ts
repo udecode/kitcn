@@ -23,6 +23,15 @@ const documents = convexTable('poly_type_documents', {
   title: text().notNull(),
 });
 
+const auditLogNotes = convexTable(
+  'poly_type_audit_log_notes',
+  {
+    auditLogId: id('poly_type_audit_logs').notNull(),
+    body: text().notNull(),
+  },
+  (t) => [index('by_audit_log').on(t.auditLogId)]
+);
+
 const auditLogs = convexTable(
   'poly_type_audit_logs',
   {
@@ -53,9 +62,16 @@ const relations = defineRelations(
   {
     poly_type_users: users,
     poly_type_documents: documents,
+    poly_type_audit_log_notes: auditLogNotes,
     poly_type_audit_logs: auditLogs,
   },
   (r) => ({
+    poly_type_audit_log_notes: {
+      auditLog: r.one.poly_type_audit_logs({
+        from: r.poly_type_audit_log_notes.auditLogId,
+        to: r.poly_type_audit_logs.id,
+      }),
+    },
     poly_type_audit_logs: {
       targetUser: r.one.poly_type_users({
         from: r.poly_type_audit_logs.targetUserId,
@@ -67,6 +83,7 @@ const relations = defineRelations(
         to: r.poly_type_documents.id,
         optional: true,
       }),
+      notes: r.many.poly_type_audit_log_notes(),
     },
   })
 );
@@ -121,6 +138,9 @@ type AuditRowWithVariants = BuildQueryResult<
 declare const rowWithVariants: AuditRowWithVariants;
 rowWithVariants.targetUser;
 rowWithVariants.document;
+// biome-ignore format: keep @ts-expect-error bound to expression
+// @ts-expect-error withVariants only auto-loads one() relations
+rowWithVariants.notes;
 
 type AuditRowWithVariantsAndWith = BuildQueryResult<
   typeof relations,
@@ -140,6 +160,25 @@ type AuditRowWithVariantsAndWith = BuildQueryResult<
 declare const rowWithVariantsAndWith: AuditRowWithVariantsAndWith;
 rowWithVariantsAndWith.targetUser?.id;
 rowWithVariantsAndWith.targetUser?.name;
+
+type AuditRowTimestampOnly = BuildQueryResult<
+  typeof relations,
+  (typeof relations)['poly_type_audit_logs'],
+  {
+    columns: {
+      timestamp: true;
+    };
+  }
+>;
+
+declare const rowTimestampOnly: AuditRowTimestampOnly;
+rowTimestampOnly.timestamp;
+// biome-ignore format: keep @ts-expect-error bound to expression
+// @ts-expect-error excluding discriminator column should exclude polymorphic union
+rowTimestampOnly.actionType;
+// biome-ignore format: keep @ts-expect-error bound to expression
+// @ts-expect-error excluding discriminator column should exclude polymorphic union
+rowTimestampOnly.details;
 
 const todos = convexTable('poly_type_todos', {
   title: text().notNull(),

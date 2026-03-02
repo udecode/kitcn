@@ -1056,10 +1056,6 @@ function resolveTableColumns(
         if (!existing) {
           if (fieldConfig) {
             fieldConfig.notNull = false;
-            fieldConfig.hasDefault = false;
-            fieldConfig.default = undefined;
-            fieldConfig.defaultFn = undefined;
-            fieldConfig.onUpdateFn = undefined;
           }
           generatedFieldMap.set(fieldName, {
             builder: fieldBuilder,

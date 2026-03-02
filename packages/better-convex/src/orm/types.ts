@@ -1628,12 +1628,47 @@ type RelationNames<TTableConfig extends TableRelationalConfig> = Extract<
   string
 >;
 
+type OneRelationNames<TTableConfig extends TableRelationalConfig> = {
+  [K in RelationNames<TTableConfig>]: TTableConfig['relations'][K] extends One<
+    any,
+    any
+  >
+    ? K
+    : never;
+}[RelationNames<TTableConfig>];
+
 type WithVariantsAutoWithConfig<
   TTableConfig extends TableRelationalConfig,
   _TSelection,
 > = {
-  [K in RelationNames<TTableConfig>]: true;
+  [K in OneRelationNames<TTableConfig>]: true;
 };
+
+type SelectedTableResult<
+  TTableConfig extends TableRelationalConfig,
+  TFullSelection extends Record<string, unknown>,
+> = InferRelationalQueryTableResult<
+  InferModelFromColumns<TableColumns<TTableConfig>>,
+  TFullSelection['columns'] extends Record<string, unknown>
+    ? TFullSelection['columns']
+    : 'Full'
+>;
+
+type TablePolymorphicResultForSelection<
+  TTableConfig extends TableRelationalConfig,
+  TFullSelection extends Record<string, unknown>,
+> = [TablePolymorphicMetadata<TTableConfig>] extends [never]
+  ? {}
+  : TablePolymorphicMetadata<TTableConfig> extends {
+        discriminator: infer TDiscriminator extends string;
+      }
+    ? TDiscriminator extends keyof SelectedTableResult<
+        TTableConfig,
+        TFullSelection
+      >
+      ? PolymorphicResultFromMetadata<TablePolymorphicMetadata<TTableConfig>>
+      : {}
+    : {};
 
 export type PaginatedResult<T> = {
   page: T[];
@@ -1655,12 +1690,7 @@ export type BuildQueryResult<
       >
     : TFullSelection extends Record<string, unknown>
       ? Simplify<
-          InferRelationalQueryTableResult<
-            InferModelFromColumns<TableColumns<TTableConfig>>,
-            TFullSelection['columns'] extends Record<string, unknown>
-              ? TFullSelection['columns']
-              : 'Full'
-          > &
+          SelectedTableResult<TTableConfig, TFullSelection> &
             (Exclude<TFullSelection['extras'], undefined> extends
               | Record<string, unknown>
               | ((...args: any[]) => Record<string, unknown>)
@@ -1691,7 +1721,7 @@ export type BuildQueryResult<
                   TTableConfig['relations']
                 >
               : {}) &
-            TablePolymorphicResult<TTableConfig> &
+            TablePolymorphicResultForSelection<TTableConfig, TFullSelection> &
             (TFullSelection extends { vectorSearch: infer TVectorSearch }
               ? [TVectorSearch] extends [undefined]
                 ? {}

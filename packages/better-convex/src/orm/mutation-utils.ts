@@ -1054,8 +1054,37 @@ export function applyDefaults<TValue extends Record<string, unknown>>(
   }
 
   const result = { ...value } as TValue;
+  const polymorphicConfigs = getTablePolymorphicConfigs(table);
+  const activeGeneratedFields = new Set<string>();
+  const generatedFields = new Set<string>();
+
+  for (const config of polymorphicConfigs) {
+    for (const fieldName of config.generatedFieldNames) {
+      generatedFields.add(fieldName);
+    }
+
+    const discriminatorValue = (result as any)[config.discriminator];
+    if (typeof discriminatorValue !== 'string') {
+      continue;
+    }
+    const activeVariant = config.variants[discriminatorValue];
+    if (!activeVariant) {
+      continue;
+    }
+    for (const fieldName of activeVariant.fieldNames) {
+      activeGeneratedFields.add(fieldName);
+    }
+  }
+
   for (const [columnName, builder] of Object.entries(columns)) {
     if ((result as any)[columnName] !== undefined) {
+      continue;
+    }
+
+    if (
+      generatedFields.has(columnName) &&
+      !activeGeneratedFields.has(columnName)
+    ) {
       continue;
     }
 

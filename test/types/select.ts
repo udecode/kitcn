@@ -2,6 +2,7 @@ import {
   convexTable,
   createOrm,
   defineRelations,
+  discriminator,
   extractRelationsConfig,
   type InferInsertModel,
   type InferSelectModel,
@@ -12,7 +13,6 @@ import {
 } from 'better-convex/orm';
 import type { GenericDatabaseReader } from 'convex/server';
 import type { GenericId, Value } from 'convex/values';
-import { z } from 'zod';
 import { UserRow } from './fixtures/types';
 import {
   bookAuthors,
@@ -646,35 +646,44 @@ const db = orm.db(mockDb);
   Expect<Equal<Author, NestedUserRow | null>>;
 }
 
-// Test 12h: polymorphic findMany narrows discriminated union target
+// Test 12h: discriminator findMany narrows synthesized details + withVariants
 {
-  const polyPosts = convexTable('poly_posts_discriminator_types', {
+  const polyUsers = convexTable('poly_users_discriminator_types', {
+    name: text().notNull(),
+  });
+
+  const polyTodos = convexTable('poly_todos_discriminator_types', {
     title: text().notNull(),
   });
 
-  const polyVideos = convexTable('poly_videos_discriminator_types', {
-    title: text().notNull(),
-    duration: integer().notNull(),
-  });
-
-  const polyComments = convexTable('poly_comments_discriminator_types', {
-    body: text().notNull(),
-    targetType: text().notNull(),
-    postId: id('poly_posts_discriminator_types'),
-    videoId: id('poly_videos_discriminator_types'),
+  const polyEvents = convexTable('poly_events_discriminator_types', {
+    actorId: id('poly_users_discriminator_types').notNull(),
+    eventType: discriminator({
+      variants: {
+        todo_completed: {
+          todoId: id('poly_todos_discriminator_types').notNull(),
+          completedAt: integer().notNull(),
+        },
+        profile_updated: {
+          displayName: text().notNull(),
+        },
+      },
+    }),
   });
 
   const polyRelations = defineRelations(
-    { polyPosts, polyVideos, polyComments },
+    { polyUsers, polyTodos, polyEvents },
     (r) => ({
-      polyComments: {
-        post: r.one.polyPosts({
-          from: r.polyComments.postId,
-          to: r.polyPosts.id,
+      polyEvents: {
+        actor: r.one.polyUsers({
+          from: r.polyEvents.actorId,
+          to: r.polyUsers.id,
+          optional: true,
         }),
-        video: r.one.polyVideos({
-          from: r.polyComments.videoId,
-          to: r.polyVideos.id,
+        todo: r.one.polyTodos({
+          from: r.polyEvents.todoId,
+          to: r.polyTodos.id,
+          optional: true,
         }),
       },
     })
@@ -683,174 +692,107 @@ const db = orm.db(mockDb);
   const polyOrm = createOrm({ schema: polyRelations });
   const polyDb = polyOrm.db(mockDb);
 
-  const polymorphicSchema = z.discriminatedUnion('targetType', [
-    z.object({
-      targetType: z.literal('post'),
-      target: z.object({
-        title: z.string(),
-      }),
-    }),
-    z.object({
-      targetType: z.literal('video'),
-      target: z.object({
-        duration: z.number(),
-      }),
-    }),
-  ]);
-
-  const result = await polyDb.query.polyComments.findMany({
-    polymorphic: {
-      discriminator: 'targetType',
-      schema: polymorphicSchema,
-      cases: {
-        post: 'post',
-        video: 'video',
-      },
-    },
+  const result = await polyDb.query.polyEvents.findMany({
+    withVariants: true,
     limit: 10,
   });
 
   type Row = (typeof result)[number];
-  type PostRow = Extract<Row, { targetType: 'post' }>;
-  type VideoRow = Extract<Row, { targetType: 'video' }>;
+  type TodoRow = Extract<Row, { eventType: 'todo_completed' }>;
+  type ProfileRow = Extract<Row, { eventType: 'profile_updated' }>;
 
-  Expect<Equal<PostRow['target']['title'], string>>;
-  Expect<Equal<VideoRow['target']['duration'], number>>;
+  Expect<
+    Equal<
+      TodoRow['details']['todoId'],
+      GenericId<'poly_todos_discriminator_types'>
+    >
+  >;
+  Expect<Equal<TodoRow['details']['completedAt'], number>>;
+  Expect<Equal<ProfileRow['details']['displayName'], string>>;
+  Expect<Equal<Row['actor'], InferSelectModel<typeof polyUsers> | null>>;
+  Expect<Equal<Row['todo'], InferSelectModel<typeof polyTodos> | null>>;
 }
 
-// Test 12i: polymorphic findFirst + custom alias narrows
+// Test 12i: discriminator findFirst + custom alias narrows
 {
-  const polyPosts = convexTable('poly_posts_discriminator_first_types', {
+  const polyDocs = convexTable('poly_docs_discriminator_first_types', {
     title: text().notNull(),
   });
 
-  const polyVideos = convexTable('poly_videos_discriminator_first_types', {
-    title: text().notNull(),
-    duration: integer().notNull(),
-  });
-
-  const polyComments = convexTable('poly_comments_discriminator_first_types', {
-    body: text().notNull(),
-    targetType: text().notNull(),
-    postId: id('poly_posts_discriminator_first_types'),
-    videoId: id('poly_videos_discriminator_first_types'),
-  });
-
-  const polyRelations = defineRelations(
-    { polyPosts, polyVideos, polyComments },
-    (r) => ({
-      polyComments: {
-        post: r.one.polyPosts({
-          from: r.polyComments.postId,
-          to: r.polyPosts.id,
-        }),
-        video: r.one.polyVideos({
-          from: r.polyComments.videoId,
-          to: r.polyVideos.id,
-        }),
+  const polyEvents = convexTable('poly_events_discriminator_first_types', {
+    actorId: text().notNull(),
+    eventType: discriminator({
+      as: 'entity',
+      variants: {
+        doc_updated: {
+          docId: id('poly_docs_discriminator_first_types').notNull(),
+          version: integer().notNull(),
+        },
+        actor_renamed: {
+          name: text().notNull(),
+        },
       },
-    })
-  );
+    }),
+  });
 
-  const polyOrm = createOrm({ schema: polyRelations });
+  const polyOrm = createOrm({
+    schema: defineRelations({ polyDocs, polyEvents }),
+  });
   const polyDb = polyOrm.db(mockDb);
 
-  const polymorphicSchema = z.discriminatedUnion('targetType', [
-    z.object({
-      targetType: z.literal('post'),
-      entity: z.object({ title: z.string() }),
-    }),
-    z.object({
-      targetType: z.literal('video'),
-      entity: z.object({ duration: z.number() }),
-    }),
-  ]);
-
-  const result = await polyDb.query.polyComments.findFirst({
-    polymorphic: {
-      discriminator: 'targetType',
-      schema: polymorphicSchema,
-      cases: {
-        post: 'post',
-        video: 'video',
-      },
-      as: 'entity',
-    },
-  });
+  const result = await polyDb.query.polyEvents.findFirst();
 
   type Row = NonNullable<typeof result>;
-  type PostRow = Extract<Row, { targetType: 'post' }>;
-  type VideoRow = Extract<Row, { targetType: 'video' }>;
+  type DocRow = Extract<Row, { eventType: 'doc_updated' }>;
+  type RenameRow = Extract<Row, { eventType: 'actor_renamed' }>;
 
-  Expect<Equal<PostRow['entity']['title'], string>>;
-  Expect<Equal<VideoRow['entity']['duration'], number>>;
+  Expect<
+    Equal<
+      DocRow['entity']['docId'],
+      GenericId<'poly_docs_discriminator_first_types'>
+    >
+  >;
+  Expect<Equal<DocRow['entity']['version'], number>>;
+  Expect<Equal<RenameRow['entity']['name'], string>>;
 }
 
-// Test 12j: polymorphic findFirstOrThrow narrows discriminated union
+// Test 12j: discriminator findFirstOrThrow narrows synthesized details
 {
-  const polyPosts = convexTable('poly_posts_discriminator_throw_types', {
-    title: text().notNull(),
+  const polyFiles = convexTable('poly_files_discriminator_throw_types', {
+    path: text().notNull(),
   });
 
-  const polyVideos = convexTable('poly_videos_discriminator_throw_types', {
-    title: text().notNull(),
-    duration: integer().notNull(),
-  });
-
-  const polyComments = convexTable('poly_comments_discriminator_throw_types', {
-    body: text().notNull(),
-    targetType: text().notNull(),
-    postId: id('poly_posts_discriminator_throw_types'),
-    videoId: id('poly_videos_discriminator_throw_types'),
-  });
-
-  const polyRelations = defineRelations(
-    { polyPosts, polyVideos, polyComments },
-    (r) => ({
-      polyComments: {
-        post: r.one.polyPosts({
-          from: r.polyComments.postId,
-          to: r.polyPosts.id,
-        }),
-        video: r.one.polyVideos({
-          from: r.polyComments.videoId,
-          to: r.polyVideos.id,
-        }),
+  const polyEvents = convexTable('poly_events_discriminator_throw_types', {
+    eventType: discriminator({
+      variants: {
+        file_created: {
+          fileId: id('poly_files_discriminator_throw_types').notNull(),
+        },
+        heartbeat: {
+          source: text().notNull(),
+        },
       },
-    })
-  );
+    }),
+  });
 
-  const polyOrm = createOrm({ schema: polyRelations });
+  const polyOrm = createOrm({
+    schema: defineRelations({ polyFiles, polyEvents }),
+  });
   const polyDb = polyOrm.db(mockDb);
 
-  const polymorphicSchema = z.discriminatedUnion('targetType', [
-    z.object({
-      targetType: z.literal('post'),
-      target: z.object({ title: z.string() }),
-    }),
-    z.object({
-      targetType: z.literal('video'),
-      target: z.object({ duration: z.number() }),
-    }),
-  ]);
-
-  const result = await polyDb.query.polyComments.findFirstOrThrow({
-    polymorphic: {
-      discriminator: 'targetType',
-      schema: polymorphicSchema,
-      cases: {
-        post: 'post',
-        video: 'video',
-      },
-    },
-  });
+  const result = await polyDb.query.polyEvents.findFirstOrThrow();
 
   type Row = typeof result;
-  type PostRow = Extract<Row, { targetType: 'post' }>;
-  type VideoRow = Extract<Row, { targetType: 'video' }>;
+  type FileRow = Extract<Row, { eventType: 'file_created' }>;
+  type HeartbeatRow = Extract<Row, { eventType: 'heartbeat' }>;
 
-  Expect<Equal<PostRow['target']['title'], string>>;
-  Expect<Equal<VideoRow['target']['duration'], number>>;
+  Expect<
+    Equal<
+      FileRow['details']['fileId'],
+      GenericId<'poly_files_discriminator_throw_types'>
+    >
+  >;
+  Expect<Equal<HeartbeatRow['details']['source'], string>>;
 }
 
 // ============================================================================
@@ -1178,126 +1120,20 @@ db.query.users.findMany({
   where: { invalidField: 'test' },
 });
 
-// Invalid polymorphic schema: must be discriminated union
+// Legacy query-level polymorphic config is removed
 db.query.users.findMany({
-  polymorphic: {
-    discriminator: 'targetType',
-    // @ts-expect-error - polymorphic.schema must be a Zod discriminated union
-    schema: z.union([
-      z.object({
-        targetType: z.literal('post'),
-        target: z.object({ title: z.string() }),
-      }),
-      z.object({
-        targetType: z.literal('video'),
-        target: z.object({ duration: z.number() }),
-      }),
-    ]),
-    cases: {
-      post: 'city',
-      video: 'homeCity',
-    },
-  },
+  // @ts-expect-error - query-level polymorphic config is removed
+  polymorphic: {},
 });
 
-// Invalid polymorphic discriminator key: must match schema discriminator
-// @ts-expect-error - polymorphic.discriminator must match schema discriminator key
-db.query.users.findMany({
-  polymorphic: {
-    discriminator: 'kind',
-    schema: z.discriminatedUnion('targetType', [
-      z.object({
-        targetType: z.literal('post'),
-        target: z.object({ name: z.string() }),
-      }),
-      z.object({
-        targetType: z.literal('video'),
-        target: z.object({ name: z.string() }),
-      }),
-    ]),
-    cases: {
-      post: 'city',
-      video: 'homeCity',
-    },
-  },
+db.query.users.findFirst({
+  // @ts-expect-error - query-level polymorphic config is removed
+  polymorphic: {},
 });
 
-// Invalid polymorphic cases: missing case key
-// @ts-expect-error - polymorphic.cases must include all discriminator literals
-db.query.users.findMany({
-  polymorphic: {
-    discriminator: 'targetType',
-    schema: z.discriminatedUnion('targetType', [
-      z.object({
-        targetType: z.literal('post'),
-        target: z.object({ name: z.string() }),
-      }),
-      z.object({
-        targetType: z.literal('video'),
-        target: z.object({ name: z.string() }),
-      }),
-    ]),
-    cases: {
-      post: 'city',
-    },
-  },
-});
-
-// Invalid polymorphic cases: extra case key
-// @ts-expect-error - polymorphic.cases cannot contain unknown discriminator literals
-db.query.users.findMany({
-  polymorphic: {
-    discriminator: 'targetType',
-    schema: z.discriminatedUnion('targetType', [
-      z.object({
-        targetType: z.literal('post'),
-        target: z.object({ name: z.string() }),
-      }),
-      z.object({
-        targetType: z.literal('video'),
-        target: z.object({ name: z.string() }),
-      }),
-    ]),
-    cases: {
-      post: 'city',
-      video: 'homeCity',
-      image: 'city',
-    },
-  },
-});
-
-// Invalid polymorphic case mapping: relation must be one()
-// @ts-expect-error - polymorphic.cases values must map to one() relations only
-db.query.users.findMany({
-  polymorphic: {
-    discriminator: 'targetType',
-    schema: z.discriminatedUnion('targetType', [
-      z.object({
-        targetType: z.literal('post'),
-        target: z.object({ title: z.string() }),
-      }),
-    ]),
-    cases: {
-      post: 'posts',
-    },
-  },
-});
-
-// Invalid polymorphic case mapping: relation must exist on source table
-// @ts-expect-error - polymorphic.cases values must map to valid relations
-db.query.users.findMany({
-  polymorphic: {
-    discriminator: 'targetType',
-    schema: z.discriminatedUnion('targetType', [
-      z.object({
-        targetType: z.literal('post'),
-        target: z.object({ title: z.string() }),
-      }),
-    ]),
-    cases: {
-      post: 'unknownRelation',
-    },
-  },
+db.query.users.findFirstOrThrow({
+  // @ts-expect-error - query-level polymorphic config is removed
+  polymorphic: {},
 });
 
 // Type mismatch in eq operator
