@@ -7,6 +7,7 @@ import {
   defineRelations,
   defineSchema,
   defineTriggers,
+  discriminator,
   eq,
   index,
   integer,
@@ -468,6 +469,47 @@ export const commentRepliesTable = convexTable(
   ]
 );
 
+export const ormPolymorphicEventTable = convexTable(
+  'ormPolymorphicEvent',
+  {
+    createdAt: timestamp().notNull().defaultNow(),
+    actorId: text()
+      .references(() => userTable.id, { onDelete: 'cascade' })
+      .notNull(),
+    eventType: discriminator({
+      as: 'details',
+      variants: {
+        todo_completed: {
+          todoId: text()
+            .references(() => todosTable.id, { onDelete: 'set null' })
+            .notNull(),
+          completed: boolean().notNull(),
+        },
+        project_visibility: {
+          projectId: text()
+            .references(() => projectsTable.id, { onDelete: 'set null' })
+            .notNull(),
+          isPublic: boolean().notNull(),
+        },
+        tag_renamed: {
+          tagId: text()
+            .references(() => tagsTable.id, { onDelete: 'set null' })
+            .notNull(),
+          previousName: text().notNull(),
+          nextName: text().notNull(),
+        },
+      },
+    }),
+  },
+  (t) => [
+    index('actorId').on(t.actorId),
+    index('eventType').on(t.eventType),
+    index('todo_event').on(t.eventType, t.todoId),
+    index('project_event').on(t.eventType, t.projectId),
+    index('tag_event').on(t.eventType, t.tagId),
+  ]
+);
+
 export const aggregateDemoRunTable = convexTable(
   'aggregateDemoRun',
   {
@@ -580,6 +622,7 @@ export const tables = {
   projectMembers: projectMembersTable,
   todoTags: todoTagsTable,
   commentReplies: commentRepliesTable,
+  ormPolymorphicEvent: ormPolymorphicEventTable,
   aggregateDemoRun: aggregateDemoRunTable,
   triggerDemoRecord: triggerDemoRecordTable,
   triggerDemoAudit: triggerDemoAuditTable,
@@ -707,6 +750,10 @@ export const relations = defineRelations(tables, (r) => ({
       from: r.user.id,
       to: r.triggerDemoRun.ownerId,
     }),
+    ormPolymorphicEvents: r.many.ormPolymorphicEvent({
+      from: r.user.id,
+      to: r.ormPolymorphicEvent.actorId,
+    }),
   },
   subscriptions: {
     organization: r.one.organization({
@@ -808,6 +855,27 @@ export const relations = defineRelations(tables, (r) => ({
     reply: r.one.todoComments({
       from: r.commentReplies.replyId,
       to: r.todoComments.id,
+    }),
+  },
+  ormPolymorphicEvent: {
+    actor: r.one.user({
+      from: r.ormPolymorphicEvent.actorId,
+      to: r.user.id,
+    }),
+    todo: r.one.todos({
+      from: r.ormPolymorphicEvent.todoId,
+      to: r.todos.id,
+      optional: true,
+    }),
+    project: r.one.projects({
+      from: r.ormPolymorphicEvent.projectId,
+      to: r.projects.id,
+      optional: true,
+    }),
+    tag: r.one.tags({
+      from: r.ormPolymorphicEvent.tagId,
+      to: r.tags.id,
+      optional: true,
     }),
   },
   triggerDemoRecord: {

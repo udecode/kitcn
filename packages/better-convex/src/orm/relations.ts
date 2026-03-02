@@ -12,12 +12,17 @@ import type {
   SystemFieldAliases,
   SystemFields,
 } from './builders/system-fields';
-import type { OrmRuntimeDefaults, OrmRuntimeOptions } from './symbols';
+import type {
+  OrmRuntimeDefaults,
+  OrmRuntimeOptions,
+  TablePolymorphicConfigRuntime,
+} from './symbols';
 import {
   Columns,
   OrmSchemaDefinition,
   OrmSchemaOptions,
   OrmSchemaPluginTables,
+  TablePolymorphic,
 } from './symbols';
 
 export { OrmSchemaDefinition } from './symbols';
@@ -466,6 +471,7 @@ export type AnyMany = Many<string>;
 export interface TableRelationalConfig {
   defaults?: OrmRuntimeDefaults;
   name: string;
+  polymorphic?: readonly TablePolymorphicConfigRuntime[];
   relations: RelationsRecord;
   strict?: boolean;
   table: SchemaEntry;
@@ -692,6 +698,9 @@ export function buildRelations<
     tablesConfig[tsName] = {
       table: table as SchemaEntry,
       name: tsName,
+      polymorphic: (table as any)[TablePolymorphic] as
+        | readonly TablePolymorphicConfigRuntime[]
+        | undefined,
       relations: (config as AnyRelationsBuilderConfig)[tsName] ?? {},
       strict,
       defaults,
@@ -717,6 +726,9 @@ export function buildRelationsParts<
     tablesConfig[tsName] = {
       table: tables[tsName] as SchemaEntry,
       name: tsName,
+      polymorphic: (tables[tsName] as any)[TablePolymorphic] as
+        | readonly TablePolymorphicConfigRuntime[]
+        | undefined,
       relations,
       strict,
       defaults,

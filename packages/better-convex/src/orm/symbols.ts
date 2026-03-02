@@ -38,6 +38,18 @@ export type OrmSchemaPlugin = {
   ) => TSchema & Record<string, unknown>;
 };
 
+export type TablePolymorphicVariantRuntime = {
+  fieldNames: readonly string[];
+  requiredFieldNames: readonly string[];
+};
+
+export type TablePolymorphicConfigRuntime = {
+  discriminator: string;
+  alias: string;
+  generatedFieldNames: readonly string[];
+  variants: Readonly<Record<string, TablePolymorphicVariantRuntime>>;
+};
+
 export const TableName = Symbol.for('better-convex:TableName');
 export const Columns = Symbol.for('better-convex:Columns');
 export const Brand = Symbol.for('better-convex:Brand');
@@ -46,6 +58,7 @@ export const OrmContext = Symbol.for('better-convex:OrmContext');
 export const RlsPolicies = Symbol.for('better-convex:RlsPolicies');
 export const EnableRLS = Symbol.for('better-convex:EnableRLS');
 export const TableDeleteConfig = Symbol.for('better-convex:TableDeleteConfig');
+export const TablePolymorphic = Symbol.for('better-convex:TablePolymorphic');
 export const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
 export const OrmSchemaDefinition = Symbol.for(
   'better-convex:OrmSchemaDefinition'

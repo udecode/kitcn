@@ -166,98 +166,72 @@ const userRelations = defineRelationsPart({ users, posts }, (r) => ({
 
 ### Polymorphic associations
 
-Two-step pattern: start non-strict, add constraints when you need DB-level guarantees.
-
-**Step 1 — Non-strict (parity-first):** One nullable FK per target + discriminator.
+Polymorphism is schema-first via a discriminator column builder.
 
 ```ts
-const comments = convexTable('comments', {
-  body: text().notNull(),
-  targetType: text().notNull(), // 'post' | 'video'
-  postId: id('posts'),
-  videoId: id('videos'),
-});
+import { boolean, convexTable, discriminator, id, index, integer, text } from 'better-convex/orm';
 
-// Filtered aliases via relation `where`
-posts: {
-  comments: r.many.comments({
-    from: r.posts.id, to: r.comments.postId,
-    where: { targetType: 'post' }, alias: 'post-comments',
-  }),
-},
-videos: {
-  comments: r.many.comments({
-    from: r.videos.id, to: r.comments.videoId,
-    where: { targetType: 'video' }, alias: 'video-comments',
-  }),
-},
-```
-
-**Step 2 — Strict (schema-enforced):** Add `.references()`, indexes, and `check(...)` constraints.
-
-```ts
-import { and, check, eq, id, index, isNotNull, isNull, or, text } from 'better-convex/orm';
-
-const comments = convexTable('comments', {
-  body: text().notNull(),
-  targetType: text().notNull(),
-  postId: id('posts').references(() => posts.id),
-  videoId: id('videos').references(() => videos.id),
-}, (t) => [
-  index('by_post').on(t.postId),
-  index('by_video').on(t.videoId),
-  check('exactly_one_target', or(
-    and(isNotNull(t.postId), isNull(t.videoId)),
-    and(isNull(t.postId), isNotNull(t.videoId)),
-  )),
-  check('target_type_matches_id', or(
-    and(eq(t.targetType, 'post'), isNotNull(t.postId), isNull(t.videoId)),
-    and(eq(t.targetType, 'video'), isNotNull(t.videoId), isNull(t.postId)),
-  )),
-]);
-
-// Relations unchanged from Step 1; add inverse one() for comment→target loading:
-comments: {
-  post: r.one.posts({ from: r.comments.postId, to: r.posts.id }),
-  video: r.one.videos({ from: r.comments.videoId, to: r.videos.id }),
-},
-```
-
-**Step 3 — Typed query synthesis (`polymorphic`):** Once `one()` relations exist, synthesize a discriminated union field in query results:
-
-```ts
-import { z } from 'zod';
-
-const targetSchema = z.discriminatedUnion('targetType', [
-  z.object({ targetType: z.literal('post'), target: z.object({ title: z.string() }) }),
-  z.object({ targetType: z.literal('video'), target: z.object({ duration: z.number() }) }),
-]);
-
-const comments = await ctx.orm.query.comments.findMany({
-  polymorphic: {
-    discriminator: 'targetType',
-    schema: targetSchema,
-    cases: { post: 'post', video: 'video' },
-    // as: 'target', // optional alias; defaults to "target"
+const auditLogs = convexTable(
+  'audit_logs',
+  {
+    timestamp: integer().notNull(),
+    actionType: discriminator({
+      as: 'details', // optional, default "details"
+      variants: {
+        role_change: {
+          targetUserId: id('users'),
+          oldRole: text().notNull(),
+          newRole: text().notNull(),
+        },
+        document_update: {
+          documentId: id('documents'),
+          version: integer().notNull(),
+          changes: text().notNull(),
+        },
+        security_alert: {
+          severity: text().notNull(),
+          errorCode: text().notNull(),
+          isResolved: boolean().notNull(),
+        },
+      },
+    }),
   },
+  (t) => [
+    index('by_action_ts').on(t.actionType, t.timestamp),
+    index('by_role_target').on(t.actionType, t.targetUserId),
+    index('by_doc').on(t.actionType, t.documentId),
+  ]
+);
+```
+
+Behavior:
+- Storage and writes are flat (`actionType`, `targetUserId`, `documentId`, ...)
+- Reads synthesize nested discriminated data at `details` (or custom `as`)
+- `withVariants: true` auto-loads all `one()` relations on discriminator tables
+- Generated variant fields are normal top-level refs for indexes/filters (`t.targetUserId`)
+
+```ts
+const rows = await ctx.orm.query.audit_logs.findMany({
   limit: 20,
+  withVariants: true,
 });
 
-for (const row of comments) {
-  switch (row.targetType) {
-    case 'post': row.target.title; break;
-    case 'video': row.target.duration; break;
+for (const row of rows) {
+  if (row.actionType === 'role_change') {
+    row.details.targetUserId;
+    row.details.oldRole;
   }
 }
 ```
 
 Rules:
-- `schema` must be `z.discriminatedUnion(...)`
-- `cases` values must be `one()` relation names on the source table
-- Discriminator/case mismatches throw at runtime
-- Auto-loaded case relations are stripped unless explicitly in `with`
-- `pipeline` and `polymorphic` cannot be combined
-- Available on `findMany`, `findFirst`, `findFirstOrThrow`
+- One `discriminator(...)` discriminator column per table (current limit)
+- Variant keys become discriminator literals
+- Variant fields are generated as nullable physical columns
+- Variant `.notNull()` means required in that branch only
+- Duplicate field names across variants require identical builder signatures
+- Alias (`as`) cannot collide with columns, relations, `with`, or `extras`
+- Query config does not include a `polymorphic` option; polymorphism is defined in schema columns.
 
 ### Relation indexing requirements
 

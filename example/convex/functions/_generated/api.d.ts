@@ -351,6 +351,12 @@ export declare const api: {
       any
     >;
   };
+  ormDemo: {
+    clearPolymorphic: FunctionReference<"mutation", "public", {}, any>;
+    getSnapshot: FunctionReference<"query", "public", {}, any>;
+    runCoverage: FunctionReference<"mutation", "public", {}, any>;
+    seedPolymorphic: FunctionReference<"mutation", "public", {}, any>;
+  };
   projects: {
     addMember: FunctionReference<
       "mutation",

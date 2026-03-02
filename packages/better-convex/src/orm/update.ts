@@ -8,6 +8,7 @@ import {
   encodeUndefinedDeep,
   enforceCheckConstraints,
   enforceForeignKeys,
+  enforcePolymorphicWrite,
   enforceUniqueIndexes,
   evaluateFilter,
   getMutationAsyncDelayMs,
@@ -667,6 +668,9 @@ export class ConvexUpdateBuilder<
       if (!decision.allowed) {
         continue;
       }
+      enforcePolymorphicWrite(this.table, updatedRow, {
+        changedFields: new Set(Object.keys(effectiveSet as any)),
+      });
       enforceCheckConstraints(this.table, updatedRow);
       await enforceForeignKeys(this.db, this.table, updatedRow, {
         changedFields: new Set(Object.keys(effectiveSet as any)),

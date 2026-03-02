@@ -238,6 +238,43 @@ const posts = convexTable('posts', {
 });
 ```
 
+### `discriminator(config)`
+
+Defines a schema-first discriminated union column. The discriminator field stores the variant key as a string, and each variant's fields are generated as nullable top-level columns. On read, variant fields are grouped into a nested object at the alias (default `"details"`).
+
+```ts showLineNumbers
+import { boolean, convexTable, discriminator, id, index, integer, text } from 'better-convex/orm';
+
+const auditLogs = convexTable(
+  'audit_logs',
+  {
+    timestamp: integer().notNull(),
+    actionType: discriminator({
+      as: 'details',
+      variants: {
+        role_change: {
+          targetUserId: id('users'),
+          oldRole: text().notNull(),
+          newRole: text().notNull(),
+        },
+        security_alert: {
+          severity: text().notNull(),
+          isResolved: boolean().notNull(),
+        },
+      },
+    }),
+  },
+  (t) => [
+    index('by_action_ts').on(t.actionType, t.timestamp),
+    index('by_role_target').on(t.actionType, t.targetUserId),
+  ]
+);
+```
+
+<Callout icon={<InfoIcon />}>
+**Note:** One `discriminator()` column per table. Variant field `.notNull()` means required in that branch only. Duplicate field names across variants must use identical builder signatures. See [Polymorphic Associations](/docs/orm/schema/relations#polymorphic-associations) for the full guide.
+</Callout>
+
 ### `arrayOf(element)` / `objectOf(shape)`
 
 Use these helpers for nested arrays and objects in ORM schemas without importing `v` directly.

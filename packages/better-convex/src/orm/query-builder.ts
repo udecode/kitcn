@@ -10,7 +10,6 @@
  */
 
 import type { GenericDatabaseReader } from 'convex/server';
-import type { z } from 'zod';
 import type { KnownKeysOnly } from '../internal/types';
 import type { EdgeMetadata } from './extractRelationsConfig';
 import { GelRankQuery, GelRelationalQuery } from './query';
@@ -46,112 +45,22 @@ import type {
   VectorSearchProvider,
 } from './types';
 
-type OneRelationNameByType<
-  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
-> = Extract<
-  {
-    [K in keyof TTableConfig['relations']]: TTableConfig['relations'][K] extends {
-      relationType: 'one';
-    }
-      ? K
-      : never;
-  }[keyof TTableConfig['relations']],
-  string
->;
-
-type PolymorphicZodSchema = z.ZodDiscriminatedUnion<any, any>;
-
-type PolymorphicDiscriminatorFromSchema<
-  TSchema extends PolymorphicZodSchema = PolymorphicZodSchema,
-> =
-  TSchema extends z.ZodDiscriminatedUnion<any, infer TDisc extends string>
-    ? TDisc
-    : string;
-
-type PolymorphicCaseLiteralFromSchema<
-  TSchema extends PolymorphicZodSchema = PolymorphicZodSchema,
-  TDiscriminator extends string = string,
-> = Extract<
-  z.output<TSchema> extends Record<TDiscriminator, infer TValue>
-    ? TValue
-    : never,
-  string
->;
-
-type IsWidenedString<T extends string> = string extends T ? true : false;
-
-type ValidatePolymorphicConfig<
-  TConfig,
-  TTableConfig extends TableRelationalConfig,
-> = TConfig extends {
-  polymorphic: infer TPolymorphic;
-}
-  ? [TPolymorphic] extends [undefined]
-    ? unknown
-    : TPolymorphic extends {
-          schema: infer TSchema;
-          discriminator: infer TDiscriminator;
-          cases: infer TCases;
-        }
-      ? TSchema extends PolymorphicZodSchema
-        ? TDiscriminator extends string
-          ? TCases extends Record<string, OneRelationNameByType<TTableConfig>>
-            ? [
-                PolymorphicCaseLiteralFromSchema<
-                  TSchema,
-                  PolymorphicDiscriminatorFromSchema<TSchema>
-                >,
-              ] extends [Extract<keyof TCases, string>]
-              ? [Extract<keyof TCases, string>] extends [
-                  PolymorphicCaseLiteralFromSchema<
-                    TSchema,
-                    PolymorphicDiscriminatorFromSchema<TSchema>
-                  >,
-                ]
-                ? IsWidenedString<TDiscriminator> extends true
-                  ? unknown
-                  : TDiscriminator extends PolymorphicDiscriminatorFromSchema<TSchema>
-                    ? unknown
-                    : {
-                        __polymorphicDiscriminatorMustMatchSchema__: never;
-                      }
-                : {
-                    __polymorphicCasesCannotContainUnknownLiterals__: never;
-                  }
-              : {
-                  __polymorphicCasesMustCoverAllDiscriminatorLiterals__: never;
-                }
-            : {
-                __polymorphicCasesMustMapToOneRelations__: never;
-              }
-          : {
-              __polymorphicDiscriminatorMustBeString__: never;
-            }
-        : {
-            __polymorphicSchemaMustBeDiscriminatedUnion__: never;
-          }
-      : {
-          __polymorphicConfigInvalid__: never;
-        }
-  : unknown;
-
 type EnforcedConfig<
   TConfig,
   TTableConfig extends TableRelationalConfig,
   THasIndex extends boolean = false,
-> = ValidatePolymorphicConfig<TConfig, TTableConfig> &
-  EnforceVectorSearchConstraints<
-    EnforceSearchConstraints<
-      EnforceCursorMaxScan<
-        EnforceNoAllowFullScanWhenIndexed<
-          EnforceWithIndexForWhere<TConfig, TTableConfig, THasIndex>,
-          THasIndex
-        >
-      >,
-      TTableConfig
+> = EnforceVectorSearchConstraints<
+  EnforceSearchConstraints<
+    EnforceCursorMaxScan<
+      EnforceNoAllowFullScanWhenIndexed<
+        EnforceWithIndexForWhere<TConfig, TTableConfig, THasIndex>,
+        THasIndex
+      >
     >,
     TTableConfig
-  >;
+  >,
+  TTableConfig
+>;
 
 type DisallowWithIndexSearchOrVector<THasIndex extends boolean> =
   THasIndex extends true
@@ -881,39 +790,6 @@ export class RelationalQueryBuilder<
       RelationCountWithConfig<TSchema, TTableConfig>
     >
   >;
-  findMany<
-    TPolymorphicSchema extends PolymorphicZodSchema,
-    TPolymorphicDiscriminator extends
-      PolymorphicDiscriminatorFromSchema<TPolymorphicSchema>,
-    TPolymorphicCases extends Record<
-      PolymorphicCaseLiteralFromSchema<
-        TPolymorphicSchema,
-        TPolymorphicDiscriminator
-      >,
-      OneRelationNameByType<TTableConfig>
-    >,
-    TConfig extends Omit<
-      NonCursorConfigNoRelationCount<TSchema, TTableConfig>,
-      'polymorphic'
-    > & {
-      polymorphic: {
-        schema: TPolymorphicSchema;
-        discriminator: TPolymorphicDiscriminator;
-        cases: TPolymorphicCases;
-        as?: string | undefined;
-      };
-    },
-  >(
-    config: KnownKeysOnlyStrict<
-      TConfig,
-      NonCursorConfigNoSearch<TSchema, TTableConfig>
-    > &
-      EnforcedConfig<TConfig, TTableConfig, THasIndex>
-  ): GelRelationalQuery<
-    TSchema,
-    TTableConfig,
-    FindManyResult<TSchema, TTableConfig, TConfig>
-  >;
   findMany<TConfig extends SearchPaginatedConfig<TSchema, TTableConfig>>(
     config: KnownKeysOnlyStrict<
       TConfig,
@@ -983,11 +859,6 @@ export class RelationalQueryBuilder<
   >;
   findMany(config?: any): GelRelationalQuery<TSchema, TTableConfig, any> {
     if (config && (config as { pipeline?: unknown }).pipeline !== undefined) {
-      if ((config as { polymorphic?: unknown }).polymorphic !== undefined) {
-        throw new Error(
-          'polymorphic cannot be combined with pipeline in findMany().'
-        );
-      }
       throw new Error(
         'findMany({ pipeline }) is removed; use db.query.<table>.select() chain instead'
       );
@@ -1026,39 +897,6 @@ export class RelationalQueryBuilder<
     TTableConfig,
     BuildQueryResult<TSchema, TTableConfig, TConfig> | null
   >;
-  findFirst<
-    TPolymorphicSchema extends PolymorphicZodSchema,
-    TPolymorphicDiscriminator extends
-      PolymorphicDiscriminatorFromSchema<TPolymorphicSchema>,
-    TPolymorphicCases extends Record<
-      PolymorphicCaseLiteralFromSchema<
-        TPolymorphicSchema,
-        TPolymorphicDiscriminator
-      >,
-      OneRelationNameByType<TTableConfig>
-    >,
-    TConfig extends Omit<
-      FindFirstConfigNoSearch<TSchema, TTableConfig>,
-      'polymorphic'
-    > & {
-      polymorphic: {
-        schema: TPolymorphicSchema;
-        discriminator: TPolymorphicDiscriminator;
-        cases: TPolymorphicCases;
-        as?: string | undefined;
-      };
-    },
-  >(
-    config: KnownKeysOnlyStrict<
-      TConfig,
-      FindFirstConfigNoSearch<TSchema, TTableConfig>
-    > &
-      EnforcedConfig<TConfig, TTableConfig, THasIndex>
-  ): GelRelationalQuery<
-    TSchema,
-    TTableConfig,
-    BuildQueryResult<TSchema, TTableConfig, TConfig> | null
-  >;
   findFirst<TConfig extends FindFirstConfigNoSearch<TSchema, TTableConfig>>(
     config?: KnownKeysOnlyStrict<
       TConfig,
@@ -1072,11 +910,6 @@ export class RelationalQueryBuilder<
   >;
   findFirst(config?: any): GelRelationalQuery<TSchema, TTableConfig, any> {
     if (config && (config as { pipeline?: unknown }).pipeline !== undefined) {
-      if ((config as { polymorphic?: unknown }).polymorphic !== undefined) {
-        throw new Error(
-          'polymorphic cannot be combined with pipeline in findFirst().'
-        );
-      }
       throw new Error(
         'findMany({ pipeline }) is removed; use db.query.<table>.select() chain instead'
       );
@@ -1113,39 +946,6 @@ export class RelationalQueryBuilder<
     BuildQueryResult<TSchema, TTableConfig, TConfig>
   >;
   findFirstOrThrow<
-    TPolymorphicSchema extends PolymorphicZodSchema,
-    TPolymorphicDiscriminator extends
-      PolymorphicDiscriminatorFromSchema<TPolymorphicSchema>,
-    TPolymorphicCases extends Record<
-      PolymorphicCaseLiteralFromSchema<
-        TPolymorphicSchema,
-        TPolymorphicDiscriminator
-      >,
-      OneRelationNameByType<TTableConfig>
-    >,
-    TConfig extends Omit<
-      FindFirstConfigNoSearch<TSchema, TTableConfig>,
-      'polymorphic'
-    > & {
-      polymorphic: {
-        schema: TPolymorphicSchema;
-        discriminator: TPolymorphicDiscriminator;
-        cases: TPolymorphicCases;
-        as?: string | undefined;
-      };
-    },
-  >(
-    config: KnownKeysOnlyStrict<
-      TConfig,
-      FindFirstConfigNoSearch<TSchema, TTableConfig>
-    > &
-      EnforcedConfig<TConfig, TTableConfig, THasIndex>
-  ): GelRelationalQuery<
-    TSchema,
-    TTableConfig,
-    BuildQueryResult<TSchema, TTableConfig, TConfig>
-  >;
-  findFirstOrThrow<
     TConfig extends FindFirstConfigNoSearch<TSchema, TTableConfig>,
   >(
     config?: KnownKeysOnlyStrict<
@@ -1162,11 +962,6 @@ export class RelationalQueryBuilder<
     config?: any
   ): GelRelationalQuery<TSchema, TTableConfig, any> {
     if (config && (config as { pipeline?: unknown }).pipeline !== undefined) {
-      if ((config as { polymorphic?: unknown }).polymorphic !== undefined) {
-        throw new Error(
-          'polymorphic cannot be combined with pipeline in findFirstOrThrow().'
-        );
-      }
       throw new Error(
         'findMany({ pipeline }) is removed; use db.query.<table>.select() chain instead'
       );

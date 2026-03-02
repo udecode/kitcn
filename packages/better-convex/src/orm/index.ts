@@ -289,7 +289,9 @@ export {
   type ConvexDeletionBuilder,
   type ConvexDeletionConfig,
   convexTable,
+  type DiscriminatorBuilderConfig,
   deletion,
+  discriminator,
   type OrmLifecycleChange,
   type OrmLifecycleOperation,
 } from './table';

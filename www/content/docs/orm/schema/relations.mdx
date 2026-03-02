@@ -44,7 +44,7 @@ r.one.users({
 - `from` / `to`: describe the relationship using columns
 - `optional`: type-level nullability (`true` by default)
 - `alias`: disambiguate multiple relations between the same tables
-- `where`: polymorphic relations / conditional relation loading
+- `where`: conditional relation loading (filter which related rows are loaded)
 
 ### `many()`
 
@@ -475,175 +475,113 @@ const relations = defineRelations({ users, posts }, (r) => ({
 
 ### Polymorphic Associations
 
-Start with a non-strict pattern when you only need relation loading parity.
-Add strict constraints only when you need database-level guarantees.
+Polymorphism is schema-first via a discriminator column builder. Instead of manually wiring nullable FKs, a discriminator, and check constraints, you declare variants directly in the table definition with `discriminator()`.
 
-#### Step 1: Non-Strict (Parity-First)
+#### Defining a Polymorphic Table
 
-Use one nullable FK per target plus a discriminator. This gives polymorphic-style relation loading and filtered aliases, without strict one-of enforcement.
-
-```ts title="convex/schema.ts" showLineNumbers
-import { convexTable, defineRelations, id, text } from 'better-convex/orm';
-
-const posts = convexTable('posts', {
-  title: text().notNull(),
-});
-
-const videos = convexTable('videos', {
-  title: text().notNull(),
-});
-
-const comments = convexTable('comments', {
-  body: text().notNull(),
-  targetType: text().notNull(), // 'post' | 'video'
-  postId: id('posts'),
-  videoId: id('videos'),
-});
-
-export const relations = defineRelations({ posts, videos, comments }, (r) => ({
-  posts: {
-    comments: r.many.comments({
-      from: r.posts.id,
-      to: r.comments.postId,
-      where: { targetType: 'post' },
-      alias: 'post-comments',
-    }),
-  },
-  videos: {
-    comments: r.many.comments({
-      from: r.videos.id,
-      to: r.comments.videoId,
-      where: { targetType: 'video' },
-      alias: 'video-comments',
-    }),
-  },
-}));
-```
-
-#### Step 2: Strict (Schema-Enforced)
-
-Add FK references, indexes, and `check(...)` constraints when a row must point to exactly one target and match the discriminator.
+We'll use `discriminator()` to define an audit log where each row has an `actionType` discriminator and variant-specific fields:
 
 ```ts title="convex/schema.ts" showLineNumbers
 import {
-  and,
-  check,
+  boolean,
   convexTable,
-  defineRelations,
-  eq,
+  discriminator,
   id,
   index,
-  isNotNull,
-  isNull,
-  or,
+  integer,
   text,
 } from 'better-convex/orm';
 
-// posts, videos unchanged from Step 1
-
-const comments = convexTable(
-  'comments',
+const auditLogs = convexTable(
+  'audit_logs',
   {
-    body: text().notNull(),
-    targetType: text().notNull(), // 'post' | 'video'
-    postId: id('posts').references(() => posts.id),
-    videoId: id('videos').references(() => videos.id),
+    timestamp: integer().notNull(),
+    actionType: discriminator({
+      as: 'details', // optional alias, defaults to "details"
+      variants: {
+        role_change: {
+          targetUserId: id('users'),
+          oldRole: text().notNull(),
+          newRole: text().notNull(),
+        },
+        document_update: {
+          documentId: id('documents'),
+          version: integer().notNull(),
+          changes: text().notNull(),
+        },
+        security_alert: {
+          severity: text().notNull(),
+          errorCode: text().notNull(),
+          isResolved: boolean().notNull(),
+        },
+      },
+    }),
   },
   (t) => [
-    index('by_post').on(t.postId),
-    index('by_video').on(t.videoId),
-    check(
-      'exactly_one_target',
-      or(
-        and(isNotNull(t.postId), isNull(t.videoId)),
-        and(isNull(t.postId), isNotNull(t.videoId))
-      )
-    ),
-    check(
-      'target_type_matches_id',
-      or(
-        and(eq(t.targetType, 'post'), isNotNull(t.postId), isNull(t.videoId)),
-        and(eq(t.targetType, 'video'), isNotNull(t.videoId), isNull(t.postId))
-      )
-    ),
+    index('by_action_ts').on(t.actionType, t.timestamp),
+    index('by_role_target').on(t.actionType, t.targetUserId),
+    index('by_doc').on(t.actionType, t.documentId),
   ]
 );
-
-export const relations = defineRelations({ posts, videos, comments }, (r) => ({
-  posts: {
-    comments: r.many.comments({
-      from: r.posts.id,
-      to: r.comments.postId,
-      where: { targetType: 'post' }, // optional filtered alias
-      alias: 'post-comments',
-    }),
-  },
-  videos: {
-    comments: r.many.comments({
-      from: r.videos.id,
-      to: r.comments.videoId,
-      where: { targetType: 'video' }, // optional filtered alias
-      alias: 'video-comments',
-    }),
-  },
-  comments: {
-    post: r.one.posts({
-      from: r.comments.postId,
-      to: r.posts.id,
-    }),
-    video: r.one.videos({
-      from: r.comments.videoId,
-      to: r.videos.id,
-    }),
-  },
-}));
 ```
 
-<Callout icon={<InfoIcon />}>
-Drizzle parity includes polymorphic-style relation filtering via relation `where`.
-True polymorphic FK integrity is app/schema-level (Step 2), not a single built-in polymorphic FK primitive.
-</Callout>
+**How it works:**
 
-#### Typed Query Synthesis (`polymorphic`)
+- **Storage is flat.** The discriminator (`actionType`) and all variant fields (`targetUserId`, `documentId`, etc.) are stored as top-level document fields. Variant-specific fields are nullable at the storage level.
+- **Reads synthesize nested data.** When you query, the ORM groups variant fields into a nested `details` object (or your custom `as` alias) as a typed discriminated union.
+- **Variant fields are available for indexes and filters.** Generated variant columns like `t.targetUserId` and `t.documentId` are normal top-level refs you can use in `index()`, `check()`, and `where`.
 
-Once `comments.post` / `comments.video` `one()` relations exist, you can synthesize a typed discriminated union field in query results:
+#### Querying Polymorphic Tables
+
+Polymorphism is resolved automatically from the schema. Use `withVariants: true` when you also want automatic variant relation loading:
 
 ```ts showLineNumbers
-import { z } from 'zod';
-
-const commentTargetSchema = z.discriminatedUnion('targetType', [
-  z.object({
-    targetType: z.literal('post'),
-    target: z.object({ title: z.string() }),
-  }),
-  z.object({
-    targetType: z.literal('video'),
-    target: z.object({ duration: z.number() }),
-  }),
-]);
-
-const comments = await db.query.comments.findMany({
-  polymorphic: {
-    discriminator: 'targetType',
-    schema: commentTargetSchema,
-    cases: {
-      post: 'post',
-      video: 'video',
-    },
-  },
+const rows = await ctx.orm.query.audit_logs.findMany({
   limit: 20,
+  withVariants: true,
 });
 
-for (const row of comments) {
-  if (row.targetType === 'post') {
-    row.target.title;
-  } else {
-    row.target.duration;
+for (const row of rows) {
+  if (row.actionType === 'role_change') {
+    row.details.targetUserId;
+    row.details.oldRole;
+  } else if (row.actionType === 'document_update') {
+    row.details.documentId;
+    row.details.version;
   }
 }
 ```
 
-`polymorphic` is available on `findMany`, `findFirst`, and `findFirstOrThrow`. It cannot be used together with `pipeline`.
+#### Writing to Polymorphic Tables
+
+Writes are flat — you set the discriminator and the fields for that variant:
+
+```ts showLineNumbers
+await ctx.orm.insert(auditLogs).values({
+  timestamp: Date.now(),
+  actionType: 'role_change',
+  targetUserId: someUserId,
+  oldRole: 'member',
+  newRole: 'admin',
+});
+```
+
+The ORM validates writes at runtime: required fields for the active variant must be present, and fields from other variants must not be set.
+
+#### Rules
+
+- One `discriminator()` discriminator column per table (current limit)
+- Variant keys become the discriminator's literal values
+- Variant fields are generated as nullable physical columns
+- `.notNull()` on a variant field means required **in that branch only**
+- Duplicate field names across variants must have identical builder signatures
+- The alias (`as`) cannot collide with column names, relation names, `with`, or `extras`
+
+<Callout icon={<InfoIcon />}>
+**Note:** Query config does not include a `polymorphic` option. Polymorphism is defined entirely in schema columns.
+</Callout>
+
+For the `discriminator()` builder API, see [Column Types -- discriminator()](/docs/orm/schema/column-types#discriminatorconfig).
 
 For index requirements per relation type, see [API Reference](#indexing-for-relation-loading) below.
 

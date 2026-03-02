@@ -194,6 +194,25 @@ vector(1536)
 vector('embedding', 768)
 ```
 
+### `discriminator()`
+
+```ts
+discriminator({
+  as: 'details',   // optional alias, defaults to "details"
+  variants: {
+    role_change: {
+      targetUserId: id('users'),
+      oldRole: text().notNull(),
+    },
+    security_alert: {
+      severity: text().notNull(),
+    },
+  },
+})
+```
+
+Schema-first discriminated union. Variant fields become nullable physical columns; reads synthesize a nested discriminated union at the alias. Writes are flat — the ORM validates variant fields at runtime. One per table. See [Polymorphic Associations](/docs/orm/schema/relations#polymorphic-associations) for the full guide and rules.
+
 ### `arrayOf()` / `objectOf()`
 
 ```ts
@@ -334,9 +353,10 @@ await db.query.users.findMany({
 - `maxScan`: `number` (only valid with cursor pagination; caps scan-fallback paths like predicate/object post-filter and index-union pagination)
 - `allowFullScan`: opt‑in for unsized non-cursor scans and relation fan-out overrides (not supported with cursor pagination; not used with `search` or `vectorSearch`)
 - `with`: relation loading
+- `withVariants`: `true` to auto-load all `one()` relations on tables with `discriminator()` columns
 - `columns`: post‑fetch projection
 - `extras`: post‑fetch computed fields
-- `polymorphic`: synthesize a discriminated-union relation field from `one()` relations
+- Polymorphic tables with `discriminator()` columns automatically synthesize a typed discriminated union on read
 
 **Sizing rules (non-paginated)**
 - Provide `limit`, or
@@ -414,47 +434,6 @@ await db.query.posts.findFirstOrThrow({
   search: { index: 'text_search', query: 'galaxy' },
 });
 ```
-
-### `findMany({ polymorphic })`
-
-```ts showLineNumbers
-import { z } from 'zod';
-
-const polymorphicSchema = z.discriminatedUnion('targetType', [
-  z.object({
-    targetType: z.literal('post'),
-    target: z.object({ title: z.string() }),
-  }),
-  z.object({
-    targetType: z.literal('video'),
-    target: z.object({ duration: z.number() }),
-  }),
-]);
-
-await db.query.comments.findMany({
-  polymorphic: {
-    discriminator: 'targetType',
-    schema: polymorphicSchema,
-    cases: {
-      post: 'post',
-      video: 'video',
-    },
-    // as: 'target', // default alias is "target"
-  },
-  limit: 20,
-});
-```
-
-**`polymorphic` rules**
-- `schema` must be `z.discriminatedUnion(...)`
-- `discriminator` must match the schema discriminator key
-- `cases` keys must match discriminator literals
-- `cases` values must be `one()` relation names on the source table
-- Runtime mismatch/parse failures throw immediately
-- Auto-loaded case relations are stripped unless explicitly requested in `with`
-- `pipeline` cannot be combined with `polymorphic`
-
-`polymorphic` is also available on `findFirst()` and `findFirstOrThrow()`.
 
 ### `findMany({ cursor, limit })`
 

@@ -65,6 +65,12 @@ export const api = {
     updateMemberRole: createApiLeaf<"mutation", typeof import("../functions/organization").updateMemberRole>(convexApi["organization"]["updateMemberRole"], { auth: "required", rateLimit: "organization/updateRole", type: "mutation" }),
     updateOrganization: createApiLeaf<"mutation", typeof import("../functions/organization").updateOrganization>(convexApi["organization"]["updateOrganization"], { auth: "required", rateLimit: "organization/update", type: "mutation" }),
   },
+  ormDemo: {
+    clearPolymorphic: createApiLeaf<"mutation", typeof import("../functions/ormDemo").clearPolymorphic>(convexApi["ormDemo"]["clearPolymorphic"], { auth: "required", type: "mutation" }),
+    getSnapshot: createApiLeaf<"query", typeof import("../functions/ormDemo").getSnapshot>(convexApi["ormDemo"]["getSnapshot"], { auth: "required", type: "query" }),
+    runCoverage: createApiLeaf<"mutation", typeof import("../functions/ormDemo").runCoverage>(convexApi["ormDemo"]["runCoverage"], { auth: "required", type: "mutation" }),
+    seedPolymorphic: createApiLeaf<"mutation", typeof import("../functions/ormDemo").seedPolymorphic>(convexApi["ormDemo"]["seedPolymorphic"], { auth: "required", type: "mutation" }),
+  },
   projects: {
     addMember: createApiLeaf<"mutation", typeof import("../functions/projects").addMember>(convexApi["projects"]["addMember"], { auth: "required", rateLimit: "project/member", type: "mutation" }),
     archive: createApiLeaf<"mutation", typeof import("../functions/projects").archive>(convexApi["projects"]["archive"], { auth: "required", rateLimit: "project/update", type: "mutation" }),
