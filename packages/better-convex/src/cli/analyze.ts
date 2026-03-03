@@ -341,8 +341,31 @@ const walkDeployEntryPoints = (
 
 const detectProjectRoots = (): ProjectRoots => {
   const projectRoot = process.cwd();
+  const convexConfigPath = path.join(projectRoot, 'convex.json');
+  const configuredFunctionsRoot = (() => {
+    if (!fs.existsSync(convexConfigPath)) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(fs.readFileSync(convexConfigPath, 'utf8')) as {
+        functions?: unknown;
+      };
+      return typeof parsed.functions === 'string' && parsed.functions.length > 0
+        ? path.join(projectRoot, parsed.functions)
+        : null;
+    } catch {
+      return null;
+    }
+  })();
   const preferredFunctionsRoot = path.join(projectRoot, 'convex', 'functions');
   const fallbackFunctionsRoot = path.join(projectRoot, 'convex');
+
+  if (configuredFunctionsRoot && fs.existsSync(configuredFunctionsRoot)) {
+    return {
+      projectRoot,
+      functionsRoot: configuredFunctionsRoot,
+    };
+  }
 
   if (fs.existsSync(preferredFunctionsRoot)) {
     return {
@@ -359,7 +382,7 @@ const detectProjectRoots = (): ProjectRoots => {
   }
 
   throw new Error(
-    `Missing Convex functions directory. Expected one of:\n- ${preferredFunctionsRoot}\n- ${fallbackFunctionsRoot}`
+    `Missing Convex functions directory. Expected one of:\n- ${configuredFunctionsRoot ?? '<convex.json functions>'}\n- ${preferredFunctionsRoot}\n- ${fallbackFunctionsRoot}`
   );
 };
 
@@ -2739,6 +2762,7 @@ export const __test = {
   cycleHotspotSort,
   cycleHotspotDetailPane,
   cycleHotspotDetailPaneBackward,
+  detectProjectRoots,
   filterEntryPointsByPattern,
   fitListViewport,
   getNativeHandlerExportNames,
