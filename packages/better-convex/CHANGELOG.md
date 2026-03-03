@@ -1,5 +1,38 @@
 # better-convex
 
+## 0.9.0
+
+### Minor Changes
+
+- [#112](https://github.com/udecode/better-convex/pull/112) [`5bd956c`](https://github.com/udecode/better-convex/commit/5bd956c7d6602d14f3a8f9062638b31879fa1160) Thanks [@zbeyens](https://github.com/zbeyens)! - ORM Discriminator (polymorphic):
+  - Drop the experimental query-level `polymorphic` config from `findMany`, `findFirst`, and `findFirstOrThrow`.
+
+  ```ts
+  // Before
+  await db.query.auditLogs.findMany({
+    polymorphic: {
+      discriminator: "actionType",
+      schema: targetSchema,
+      cases: { role_change: "roleChange", document_update: "documentUpdate" },
+    },
+    limit: 20,
+  });
+
+  // After
+  const rows = await db.query.auditLogs.findMany({ limit: 20 });
+  // Polymorphic data is synthesized from table schema at row.details
+  ```
+
+  - Add schema-first polymorphic discriminator columns via `discriminator({ variants, as? })` directly in `convexTable(...)`.
+  - Add typed nested read unions at `details` by default (or custom alias via `as`).
+  - Add `withVariants: true` as a query shortcut to auto-load one() relations on discriminator tables.
+  - Reject invalid branch writes when required variant fields are missing.
+  - Reject cross-branch write combinations that set fields outside the active discriminator variant.
+
+### Patch Changes
+
+- [#115](https://github.com/udecode/better-convex/pull/115) [`dab1447`](https://github.com/udecode/better-convex/commit/dab14473a9d2285459add2781fa5fbf9c8bd8569) Thanks [@zbeyens](https://github.com/zbeyens)! - - Improve `better-convex analyze` to respect `convex.json` `functions` paths so non-default layouts are discovered.
+
 ## 0.8.4
 
 ### Patch Changes
