@@ -43,8 +43,20 @@ export default defineConfig([
       'server/index': 'src/server/index.ts',
       'orm/index': 'src/orm/index.ts',
     },
-    // Keep CI strict: only allow this known transitive Better Auth dep to inline.
-    inlineOnly: ['kysely'],
+    // Keep CI strict: only allow these known transitive deps to inline.
+    inlineOnly: ['kysely', '@tanstack/query-core'],
+    platform: 'neutral',
+    target: 'esnext',
+    tsconfig: 'tooling/tsconfig.build.json',
+    exports: true,
+    dts: true,
+    checks: { pluginTimings: false },
+  },
+  // Solid builds (no "use client", no React compiler)
+  {
+    entry: {
+      'solid/index': 'src/solid/index.ts',
+    },
     platform: 'neutral',
     target: 'esnext',
     tsconfig: 'tooling/tsconfig.build.json',

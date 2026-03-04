@@ -26,6 +26,7 @@
     "./react": "./dist/react/index.js",
     "./rsc": "./dist/rsc/index.js",
     "./server": "./dist/server/index.js",
+    "./solid": "./dist/solid/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -63,11 +64,13 @@
   },
   "peerDependencies": {
     "@tanstack/react-query": ">=5",
+    "@tanstack/solid-query": ">=5",
     "better-auth": ">=1.4.9",
     "convex": ">=1.32",
     "hono": ">=4",
     "next": ">=14",
     "react": ">=18",
+    "solid-js": ">=1.8",
     "zod": ">=4"
   },
   "peerDependenciesMeta": {
@@ -81,6 +84,9 @@
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "solid-js": {
       "optional": true
     }
   },

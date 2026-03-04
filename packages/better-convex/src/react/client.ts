@@ -58,7 +58,7 @@ import {
   type QueryFunction,
   type QueryFunctionContext,
   type QueryKey,
-} from '@tanstack/react-query';
+} from '@tanstack/query-core';
 import { ConvexHttpClient } from 'convex/browser';
 import {
   ConvexReactClient,

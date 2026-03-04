@@ -381,7 +381,7 @@
       {
         "sourceType": "plugin",
         "pluginId": "frontend-design@claude-plugins-official",
-        "pluginVersion": "2cd88e7947b7",
+        "pluginVersion": "205b6e0b3036",
         "sourceKind": "skill",
         "sourceRelPath": "skills/frontend-design",
         "destRelPath": "frontend-design-frontend-design"

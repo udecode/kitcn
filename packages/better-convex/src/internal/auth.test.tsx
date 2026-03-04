@@ -1,9 +1,9 @@
 import { renderHook } from '@testing-library/react';
 import { makeFunctionReference } from 'convex/server';
-
+import { useAuthSkip } from '../react/auth';
 import * as authStore from '../react/auth-store';
 import * as crpcContext from '../react/context';
-import { getAuthType, useAuthSkip } from './auth';
+import { getAuthType } from './auth';
 
 describe('internal/auth', () => {
   let useSafeConvexAuthSpy: ReturnType<typeof spyOn> | undefined;

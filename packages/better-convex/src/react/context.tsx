@@ -10,12 +10,7 @@ import type { ConvexReactClient } from 'convex/react';
 import { createContext, type ReactNode, useContext, useMemo } from 'react';
 import type { HttpClientError } from '../crpc/http-types';
 import type { DataTransformerOptions } from '../crpc/transformer';
-import type {
-  CRPCClient,
-  FnMeta,
-  Meta,
-  VanillaCRPCClient,
-} from '../crpc/types';
+import type { CRPCClient, FnMeta, Meta } from '../crpc/types';
 import type { CRPCHttpRouter, HttpRouterRecord } from '../server/http-router';
 import { buildMetaIndex } from '../shared/meta-utils';
 import { useAuthStore, useFetchAccessToken } from './auth-store';
@@ -27,6 +22,7 @@ import {
 } from './http-proxy';
 import { createCRPCOptionsProxy } from './proxy';
 import { createVanillaCRPCProxy } from './vanilla-client';
+import type { ReactVanillaCRPCClient } from './vanilla-types';
 
 // ============================================================================
 // ConvexQueryClient Context
@@ -138,9 +134,8 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
   const meta = buildMetaIndex(api);
   // Create contexts
   const CRPCProxyContext = createContext<CRPCClient<TApi> | null>(null);
-  const VanillaClientContext = createContext<VanillaCRPCClient<TApi> | null>(
-    null
-  );
+  const VanillaClientContext =
+    createContext<ReactVanillaCRPCClient<TApi> | null>(null);
   const HttpProxyContext = createContext<
     HttpCRPCClientFromRouter<NonNullable<THttpRouter>> | undefined
   >(undefined);
@@ -156,10 +151,10 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
   // Vanilla client type with http namespace (vanilla methods only, no React Query)
   type VanillaClientWithHttp =
     THttpRouter extends CRPCHttpRouter<HttpRouterRecord>
-      ? VanillaCRPCClient<Omit<TApi, 'http'>> & {
+      ? ReactVanillaCRPCClient<Omit<TApi, 'http'>> & {
           http: VanillaHttpCRPCClientFromRouter<THttpRouter>;
         }
-      : VanillaCRPCClient<TApi>;
+      : ReactVanillaCRPCClient<TApi>;
 
   /** Inner provider */
   function CRPCProviderInner({

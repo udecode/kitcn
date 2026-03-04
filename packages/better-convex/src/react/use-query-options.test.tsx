@@ -5,7 +5,7 @@ import { makeFunctionReference } from 'convex/server';
 import type { CRPCClientError } from '../crpc/error';
 import { encodeWire } from '../crpc/transformer';
 import type { AuthType } from '../internal/auth';
-import * as authModule from '../internal/auth';
+import * as authModule from './auth';
 import * as authStoreModule from './auth-store';
 import * as contextModule from './context';
 import {

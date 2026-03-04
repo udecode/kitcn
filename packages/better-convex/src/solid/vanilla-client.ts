@@ -1,8 +1,8 @@
 /**
- * Vanilla CRPC Client
+ * Vanilla CRPC Client for SolidJS
  *
  * Creates a tRPC-like proxy for direct procedural calls to Convex functions.
- * Unlike the options proxy, this allows imperative usage outside React Query.
+ * Uses ConvexClient from convex/browser (no watchQuery - not available in browser client).
  *
  * @example
  * ```ts
@@ -12,16 +12,16 @@
  * ```
  */
 
-import type { ConvexReactClient, WatchQueryOptions } from 'convex/react';
+import type { ConvexClient } from 'convex/browser';
 import type { FunctionReference } from 'convex/server';
 import {
   type CombinedDataTransformer,
   type DataTransformerOptions,
   getTransformer,
 } from '../crpc/transformer';
+import type { VanillaCRPCClient } from '../crpc/types';
 import type { CallerMeta } from '../server/caller';
 import { getFuncRef, getFunctionType } from '../shared/meta-utils';
-import type { ReactVanillaCRPCClient } from './vanilla-types';
 
 // ============================================================================
 // Proxy Implementation
@@ -34,7 +34,7 @@ function createRecursiveVanillaProxy(
   api: Record<string, unknown>,
   path: string[],
   meta: CallerMeta,
-  convexClient: ConvexReactClient,
+  convexClient: ConvexClient,
   transformer: CombinedDataTransformer
 ): unknown {
   return new Proxy(() => {}, {
@@ -63,21 +63,6 @@ function createRecursiveVanillaProxy(
               funcRef as FunctionReference<'query'>,
               wireArgs as any
             )
-          );
-        };
-      }
-
-      // Terminal method: watchQuery (for queries - subscription)
-      if (prop === 'watchQuery') {
-        return (
-          args: Record<string, unknown> = {},
-          opts?: WatchQueryOptions
-        ) => {
-          const funcRef = getFuncRef(api, path);
-          return convexClient.watchQuery(
-            funcRef as FunctionReference<'query'>,
-            transformer.input.serialize(args) as any,
-            opts
           );
         };
       }
@@ -120,30 +105,16 @@ function createRecursiveVanillaProxy(
 }
 
 /**
- * Create a vanilla CRPC proxy for direct procedural calls.
+ * Create a vanilla CRPC proxy for direct procedural calls (SolidJS).
  *
- * The proxy provides a tRPC-like interface for imperative Convex function calls.
- *
- * @param api - The Convex API object (from `@convex/api`)
- * @param meta - Generated function metadata for runtime type detection
- * @param convexClient - The ConvexReactClient instance
- * @returns A typed proxy with query/mutate methods
- *
- * @example
- * ```tsx
- * const client = createVanillaCRPCProxy(api, meta, convexClient);
- *
- * // Direct calls (no React Query)
- * const user = await client.user.get.query({ id });
- * await client.user.update.mutate({ id, name: 'test' });
- * ```
+ * Uses ConvexClient from convex/browser. No watchQuery support.
  */
 export function createVanillaCRPCProxy<TApi extends Record<string, unknown>>(
   api: TApi,
   meta: CallerMeta,
-  convexClient: ConvexReactClient,
+  convexClient: ConvexClient,
   transformer?: DataTransformerOptions
-): ReactVanillaCRPCClient<TApi> {
+): VanillaCRPCClient<TApi> {
   const resolvedTransformer = getTransformer(transformer);
   return createRecursiveVanillaProxy(
     api,
@@ -151,5 +122,5 @@ export function createVanillaCRPCProxy<TApi extends Record<string, unknown>>(
     meta,
     convexClient,
     resolvedTransformer
-  ) as ReactVanillaCRPCClient<TApi>;
+  ) as VanillaCRPCClient<TApi>;
 }

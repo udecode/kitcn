@@ -6,12 +6,11 @@
 
 import type {
   DefaultError,
+  MutationObserverOptions,
   QueryFilters,
+  QueryObserverOptions,
   SkipToken,
-  UseMutationOptions,
-  UseQueryOptions,
-} from '@tanstack/react-query';
-import type { Watch, WatchQueryOptions } from 'convex/react';
+} from '@tanstack/query-core';
 import type {
   FunctionArgs,
   FunctionReference,
@@ -102,9 +101,10 @@ export type ConvexQueryMeta = {
 
 /** Options returned by `convexQuery` factory */
 export type ConvexQueryOptions<T extends FunctionReference<'query'>> = Pick<
-  UseQueryOptions<
+  QueryObserverOptions<
     FunctionReturnType<T>,
     Error,
+    FunctionReturnType<T>,
     FunctionReturnType<T>,
     ConvexQueryKey<T>
   >,
@@ -113,9 +113,10 @@ export type ConvexQueryOptions<T extends FunctionReference<'query'>> = Pick<
 
 /** Options returned by `convexAction` factory */
 export type ConvexActionOptions<T extends FunctionReference<'action'>> = Pick<
-  UseQueryOptions<
+  QueryObserverOptions<
     FunctionReturnType<T>,
     Error,
+    FunctionReturnType<T>,
     FunctionReturnType<T>,
     ConvexActionKey<T>
   >,
@@ -164,7 +165,7 @@ type EmptyObject = Record<string, never>;
 type QueryOptsParam<T extends FunctionReference<'query'>> = Simplify<
   ConvexQueryHookOptions &
     DistributiveOmit<
-      UseQueryOptions<FunctionReturnType<T>, DefaultError>,
+      QueryObserverOptions<FunctionReturnType<T>, DefaultError>,
       ReservedQueryOptions
     >
 >;
@@ -176,7 +177,7 @@ type QueryOptsReturn<T extends FunctionReference<'query'>> =
 /** Action query options parameter type (actions don't support subscriptions) */
 type ActionQueryOptsParam<T extends FunctionReference<'action'>> =
   DistributiveOmit<
-    UseQueryOptions<FunctionReturnType<T>, DefaultError>,
+    QueryObserverOptions<FunctionReturnType<T>, DefaultError>,
     ReservedQueryOptions
   >;
 
@@ -261,7 +262,7 @@ export type InfiniteQueryOptsParam<
   /** Placeholder data shown while loading (item array, not pagination result) */
   placeholderData?: ExtractPaginatedItem<FunctionReturnType<T>>[];
 } & DistributiveOmit<
-  UseQueryOptions<FunctionReturnType<T>, DefaultError>,
+  QueryObserverOptions<FunctionReturnType<T>, DefaultError>,
   ReservedInfiniteQueryOptions
 >;
 
@@ -278,9 +279,10 @@ export type ConvexInfiniteQueryMeta = ConvexQueryMeta & {
 /** Return type of infiniteQueryOptions - compatible with TanStack prefetch */
 export type ConvexInfiniteQueryOptions<T extends FunctionReference<'query'>> =
   Pick<
-    UseQueryOptions<
+    QueryObserverOptions<
       FunctionReturnType<T>,
       Error,
+      FunctionReturnType<T>,
       FunctionReturnType<T>,
       ConvexQueryKey<T>
     >,
@@ -294,7 +296,7 @@ export type ConvexInfiniteQueryOptions<T extends FunctionReference<'query'>> =
     /** Placeholder data shown while loading (item array, not pagination result) */
     placeholderData?: ExtractPaginatedItem<FunctionReturnType<T>>[];
   } & DistributiveOmit<
-      UseQueryOptions<FunctionReturnType<T>, DefaultError>,
+      QueryObserverOptions<FunctionReturnType<T>, DefaultError>,
       ReservedInfiniteQueryOptions
     >;
 
@@ -357,14 +359,14 @@ type MutationVariables<T extends FunctionReference<'mutation' | 'action'>> =
 export type DecorateMutation<T extends FunctionReference<'mutation'>> = {
   mutationOptions: (
     opts?: DistributiveOmit<
-      UseMutationOptions<
+      MutationObserverOptions<
         FunctionReturnType<T>,
         DefaultError,
         MutationVariables<T>
       >,
       ReservedMutationOptions
     >
-  ) => UseMutationOptions<
+  ) => MutationObserverOptions<
     FunctionReturnType<T>,
     DefaultError,
     MutationVariables<T>
@@ -412,14 +414,14 @@ export type DecorateAction<T extends FunctionReference<'action'>> = {
   /** Use action as a mutation */
   mutationOptions: (
     opts?: DistributiveOmit<
-      UseMutationOptions<
+      MutationObserverOptions<
         FunctionReturnType<T>,
         DefaultError,
         MutationVariables<T>
       >,
       ReservedMutationOptions
     >
-  ) => UseMutationOptions<
+  ) => MutationObserverOptions<
     FunctionReturnType<T>,
     DefaultError,
     MutationVariables<T>
@@ -439,27 +441,13 @@ export type DecorateAction<T extends FunctionReference<'action'>> = {
 // Vanilla Client Types (for direct procedural calls)
 // ============================================================================
 
-/** Vanilla query - direct .query() and .watchQuery() calls without React Query */
+/** Vanilla query - direct .query() call without React Query */
 export type VanillaQuery<T extends FunctionReference<'query'>> = {
   query: keyof FunctionArgs<T> extends never
     ? (args?: EmptyObject) => Promise<FunctionReturnType<T>>
     : EmptyObject extends FunctionArgs<T>
       ? (args?: FunctionArgs<T>) => Promise<FunctionReturnType<T>>
       : (args: FunctionArgs<T>) => Promise<FunctionReturnType<T>>;
-  watchQuery: keyof FunctionArgs<T> extends never
-    ? (
-        args?: EmptyObject,
-        opts?: WatchQueryOptions
-      ) => Watch<FunctionReturnType<T>>
-    : EmptyObject extends FunctionArgs<T>
-      ? (
-          args?: FunctionArgs<T>,
-          opts?: WatchQueryOptions
-        ) => Watch<FunctionReturnType<T>>
-      : (
-          args: FunctionArgs<T>,
-          opts?: WatchQueryOptions
-        ) => Watch<FunctionReturnType<T>>;
 };
 
 /** Vanilla mutation - direct .mutate() call without React Query */

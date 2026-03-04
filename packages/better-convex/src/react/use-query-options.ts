@@ -41,8 +41,8 @@ import type {
   InfiniteQueryInput,
   InfiniteQueryOptsParam,
 } from '../crpc/types';
-import { useAuthSkip } from '../internal/auth';
 import type { DistributiveOmit } from '../internal/types';
+import { useAuthSkip } from './auth';
 import { useAuthGuard } from './auth-store';
 import { useFnMeta, useMeta } from './context';
 

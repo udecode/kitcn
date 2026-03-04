@@ -1,4 +1,4 @@
-import { hashKey } from '@tanstack/react-query';
+import { hashKey } from '@tanstack/query-core';
 
 import {
   hashConvexAction,
