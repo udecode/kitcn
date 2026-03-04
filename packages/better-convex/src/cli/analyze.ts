@@ -513,25 +513,35 @@ const listConvexHandlerExports = async (
 const scanHandlerExportsByEntry = async (
   entryPoints: string[]
 ): Promise<Map<string, string[]>> => {
-  const jitiInstance = createJiti(process.cwd(), {
-    interopDefault: true,
-    moduleCache: false,
-  });
+  // Signal to createEnv that we are in the CLI's Node.js parse context.
+  // Use globalThis instead of process.env so Convex's auth-config env-var
+  // scanner never sees this as a required dashboard variable.
+  (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__ = true;
 
-  const results = await Promise.all(
-    entryPoints.map(async (entryPoint) => ({
-      entryPoint,
-      exportNames: await listConvexHandlerExports(entryPoint, jitiInstance),
-    }))
-  );
+  try {
+    const jitiInstance = createJiti(process.cwd(), {
+      interopDefault: true,
+      moduleCache: false,
+    });
 
-  const byEntry = new Map<string, string[]>();
-  for (const result of results) {
-    if (result.exportNames.length > 0) {
-      byEntry.set(result.entryPoint, result.exportNames);
+    const results = await Promise.all(
+      entryPoints.map(async (entryPoint) => ({
+        entryPoint,
+        exportNames: await listConvexHandlerExports(entryPoint, jitiInstance),
+      }))
+    );
+
+    const byEntry = new Map<string, string[]>();
+    for (const result of results) {
+      if (result.exportNames.length > 0) {
+        byEntry.set(result.entryPoint, result.exportNames);
+      }
     }
+    return byEntry;
+  } finally {
+    // biome-ignore lint/performance/noDelete: globalThis property, not a plain object — delete is correct here
+    delete (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__;
   }
-  return byEntry;
 };
 
 const parseArgs = (argv: string[]): AnalyzeOptions => {

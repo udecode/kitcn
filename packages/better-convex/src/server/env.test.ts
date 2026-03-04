@@ -3,14 +3,10 @@ import { createEnv } from './env';
 import { CRPCError } from './error';
 
 describe('server/env', () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-
+  // Restore BETTER_CONVEX_CODEGEN after each test so tests are fully isolated.
   afterEach(() => {
-    if (originalNodeEnv === undefined) {
-      delete process.env.NODE_ENV;
-      return;
-    }
-    process.env.NODE_ENV = originalNodeEnv;
+    // biome-ignore lint/performance/noDelete: globalThis property, not a plain object — delete is correct here
+    delete (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__;
   });
 
   test('parses runtimeEnv and applies schema defaults', () => {
@@ -114,8 +110,23 @@ describe('server/env', () => {
     expect(safeParseSpy).toHaveBeenCalledTimes(2);
   });
 
-  test('supports codegen fallback when NODE_ENV is missing', () => {
-    delete process.env.NODE_ENV;
+  test('throws at Convex runtime when a required var is missing (no sentinel, no codegenFallback)', () => {
+    // Neither BETTER_CONVEX_CODEGEN nor codegenFallback — simulates normal Convex runtime.
+    const schema = z.object({
+      BC_REQUIRED_A: z.string(),
+    });
+
+    const getEnv = createEnv({
+      schema,
+      runtimeEnv: {} as NodeJS.ProcessEnv,
+    });
+
+    expect(() => getEnv()).toThrow(CRPCError);
+  });
+
+  test('sentinel alone activates fallback without codegenFallback (CLI default path)', () => {
+    // The CLI sets BETTER_CONVEX_CODEGEN=1 but users need not set codegenFallback.
+    (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__ = true;
 
     const schema = z.object({
       ADMIN: z
@@ -140,7 +151,7 @@ describe('server/env', () => {
   });
 
   test('codegen fallback merges defaults and keeps runtimeEnv precedence', () => {
-    delete process.env.NODE_ENV;
+    (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__ = true;
 
     const schema = z.object({
       BC_REQUIRED_A: z.string(),
@@ -158,5 +169,36 @@ describe('server/env', () => {
       BC_REQUIRED_A: '',
       BC_REQUIRED_B: 'from-runtime',
     });
+  });
+
+  test('codegen fallback uses enum defaults', () => {
+    (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__ = true;
+
+    const schema = z.object({
+      DEPLOY_ENV: z.enum(['development', 'production']),
+    });
+
+    const getEnv = createEnv({
+      schema,
+      runtimeEnv: {} as NodeJS.ProcessEnv,
+    });
+
+    expect(getEnv()).toEqual({
+      DEPLOY_ENV: 'development',
+    });
+  });
+
+  test('codegenFallback: true activates fallback even without sentinel (custom setups)', () => {
+    const schema = z.object({
+      BC_REQUIRED_A: z.string(),
+    });
+
+    const getEnv = createEnv({
+      schema,
+      codegenFallback: true,
+      runtimeEnv: {} as NodeJS.ProcessEnv,
+    });
+
+    expect(getEnv()).toEqual({ BC_REQUIRED_A: '' });
   });
 });

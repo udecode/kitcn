@@ -1402,74 +1402,84 @@ export async function generateMeta(
   });
 
   if (generateApi) {
-    // Create jiti instance for importing TypeScript files
-    const jitiInstance = createJiti(process.cwd(), {
-      interopDefault: true,
-      moduleCache: false,
-    });
+    // Signal to createEnv that we are in the CLI's Node.js parse context.
+    // Use globalThis instead of process.env so Convex's auth-config env-var
+    // scanner never sees this as a required dashboard variable.
+    (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__ = true;
 
-    const files = listFilesRecursive(functionsDir).filter(
-      (file) => file.endsWith('.ts') && isValidConvexFile(file)
-    );
-    const runtimePlaceholderModules = [
-      ...new Set([
-        ...files.map((file) => file.replace(TS_EXTENSION_RE, '')),
-        ...(hasRelationsExport ? ['generated/server'] : []),
-        ...(generateAuth ? [generatedAuthModuleName] : []),
-      ]),
-    ];
-    createdRuntimePlaceholders = ensureGeneratedRuntimePlaceholders(
-      functionsDir,
-      runtimePlaceholderModules
-    );
+    try {
+      // Create jiti instance for importing TypeScript files
+      const jitiInstance = createJiti(process.cwd(), {
+        interopDefault: true,
+        moduleCache: false,
+      });
 
-    for (const file of files) {
-      const filePath = path.join(functionsDir, file);
-      // Use path (minus .ts) as namespace key: 'items/queries' for nested files
-      const moduleName = file.replace(TS_EXTENSION_RE, '');
+      const files = listFilesRecursive(functionsDir).filter(
+        (file) => file.endsWith('.ts') && isValidConvexFile(file)
+      );
+      const runtimePlaceholderModules = [
+        ...new Set([
+          ...files.map((file) => file.replace(TS_EXTENSION_RE, '')),
+          ...(hasRelationsExport ? ['generated/server'] : []),
+          ...(generateAuth ? [generatedAuthModuleName] : []),
+        ]),
+      ];
+      createdRuntimePlaceholders = ensureGeneratedRuntimePlaceholders(
+        functionsDir,
+        runtimePlaceholderModules
+      );
 
-      try {
-        const {
-          meta: moduleMeta,
-          httpRoutes,
-          procedures,
-        } = await parseModuleRuntime(filePath, jitiInstance);
+      for (const file of files) {
+        const filePath = path.join(functionsDir, file);
+        // Use path (minus .ts) as namespace key: 'items/queries' for nested files
+        const moduleName = file.replace(TS_EXTENSION_RE, '');
 
-        if (moduleMeta) {
-          meta[moduleName] = moduleMeta;
-          const fnCount = Object.keys(moduleMeta).length;
-          totalFunctions += fnCount;
-          if (debug) {
-            console.info(`  ✓ ${moduleName}: ${fnCount} functions`);
+        try {
+          const {
+            meta: moduleMeta,
+            httpRoutes,
+            procedures,
+          } = await parseModuleRuntime(filePath, jitiInstance);
+
+          if (moduleMeta) {
+            meta[moduleName] = moduleMeta;
+            const fnCount = Object.keys(moduleMeta).length;
+            totalFunctions += fnCount;
+            if (debug) {
+              console.info(`  ✓ ${moduleName}: ${fnCount} functions`);
+            }
+          }
+
+          // Merge HTTP routes
+          if (Object.keys(httpRoutes).length > 0 && debug) {
+            console.info(
+              `  ✓ ${moduleName}: ${Object.keys(httpRoutes).length} HTTP routes`
+            );
+          }
+          Object.assign(allHttpRoutes, httpRoutes);
+
+          for (const procedure of procedures) {
+            procedureEntries.push({
+              moduleName,
+              exportName: procedure.exportName,
+              internal: procedure.internal,
+              type: procedure.type,
+              kind: 'crpc',
+            });
+          }
+        } catch (error) {
+          runtimeFilesPreservedFromParseFailures.add(
+            getGeneratedRuntimeOutputFile(functionsDir, moduleName)
+          );
+          // Always log http.ts errors as they contain critical HTTP routes
+          if (debug || file === 'http.ts') {
+            console.error(`  ⚠ Failed to parse ${file}:`, error);
           }
         }
-
-        // Merge HTTP routes
-        if (Object.keys(httpRoutes).length > 0 && debug) {
-          console.info(
-            `  ✓ ${moduleName}: ${Object.keys(httpRoutes).length} HTTP routes`
-          );
-        }
-        Object.assign(allHttpRoutes, httpRoutes);
-
-        for (const procedure of procedures) {
-          procedureEntries.push({
-            moduleName,
-            exportName: procedure.exportName,
-            internal: procedure.internal,
-            type: procedure.type,
-            kind: 'crpc',
-          });
-        }
-      } catch (error) {
-        runtimeFilesPreservedFromParseFailures.add(
-          getGeneratedRuntimeOutputFile(functionsDir, moduleName)
-        );
-        // Always log http.ts errors as they contain critical HTTP routes
-        if (debug || file === 'http.ts') {
-          console.error(`  ⚠ Failed to parse ${file}:`, error);
-        }
       }
+    } finally {
+      // biome-ignore lint/performance/noDelete: globalThis property, not a plain object — delete is correct here
+      delete (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__;
     }
   }
 
