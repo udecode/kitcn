@@ -40,7 +40,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--api <dir>` | Output directory for api.ts (default: `convex/shared`) |
-| `--config <path>` | Path to better-convex config file (default: `./better-convex.json`) |
+| `--config <path>` | Path to better-convex config file (default: `./concave.json`) |
 | `--backfill=auto\|on\|off` | Dev aggregate backfill mode toggle (default: `auto`) |
 | `--backfill-wait` / `--no-backfill-wait` | Wait for all target indexes to become `READY` |
 | `--backfill-batch-size <n>` | Batch size for aggregate backfill kickoff |
@@ -74,11 +74,110 @@ Options:
 |------|-------------|
 | `--api <dir>` | Output directory (default: `convex/shared`) |
 | `--scope <all\|auth\|orm>` | Generation scope (default: `all`) |
-| `--config <path>` | Path to better-convex config file (default: `./better-convex.json`) |
+| `--config <path>` | Path to better-convex config file (default: `./concave.json`) |
 | `--debug` | Show detailed output |
 | `--silent` | Suppress all output |
 
 See [Scope Modes](#scope-modes) for the full output manifest per scope.
+
+Plugin note:
+
+- `better-convex codegen` discovers plugins from `defineSchema(..., { plugins })`.
+- Plugin discovery is used for typing/runtime context only.
+- `codegen` does not generate plugin runtime modules. Plugin runtime files are scaffold-owned.
+
+### add
+
+Scaffold plugin files and register the plugin in `schema.ts` idempotently.
+
+```bash showLineNumbers
+npx better-convex add <plugin>
+```
+
+If `<plugin>` is omitted in a TTY, the CLI prompts you to select one interactively.
+
+In interactive TTY mode, `add` also prompts for scaffold files:
+
+- File list = all templates exposed by the plugin manifest.
+- Default selection:
+  - lockfile mappings for that plugin if present
+  - otherwise templates from the resolved preset
+- You can add/remove files before scaffolding.
+- Empty selection is rejected.
+
+In non-interactive mode (`--yes` or no TTY), `add` uses the same resolved default template set directly.
+
+By default, scaffold files are created under:
+
+- `<functionsDir>/plugins/<plugin>.ts` for Convex function exports.
+- `convex/<paths.lib>/plugins/<plugin>/...` for helper modules.
+
+Write behavior for selected files:
+
+- Missing file: created.
+- Existing identical file: skipped.
+- Existing changed file:
+  - `--overwrite`: overwrite directly.
+  - Interactive TTY without `--overwrite`: prompt per file.
+  - Non-interactive without `--overwrite`: skip and report.
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | Deterministic non-interactive mode |
+| `--json` | Machine-readable command output |
+| `--dry-run` | Show planned operations without writing files |
+| `--overwrite` | Overwrite existing changed files without prompt |
+| `--no-codegen` | Skip automatic codegen after add |
+| `--preset <name>` | Plugin preset override (plugin-specific allowed values) |
+
+Example:
+
+```bash showLineNumbers
+npx better-convex add <plugin> --preset <preset>
+```
+
+Plugin helper scaffold location is configurable via `meta["better-convex"].paths.lib` in `concave.json` (no CLI path flag).  
+Plugin function modules scaffold to `<functionsDir>/plugins/<plugin>.ts`.
+
+### diff
+
+Preview scaffold drift without writing files:
+
+```bash showLineNumbers
+npx better-convex diff <plugin>
+```
+
+If `<plugin>` is omitted in a TTY, the CLI prompts you to choose from installed plugins.
+
+Template selection for `diff` is deterministic:
+
+- Default source is `plugins.lock.json` template mappings.
+- If lockfile mappings are missing, fallback is the resolved preset template set.
+- Passing `--preset` diffs against that preset template set.
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Machine-readable diff output |
+| `--preset <name>` | Plugin preset override for diff template set |
+| `--verbose-diff` | Print unified patch text for changed/missing files |
+
+### list
+
+Show installed plugin inventory from schema + lockfile:
+
+```bash showLineNumbers
+npx better-convex list --json
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Machine-readable plugin inventory output |
 
 ### env
 
@@ -286,7 +385,8 @@ The CLI extracts metadata from procedure exports automatically. See [Metadata Ex
 
 ## Configuration
 
-`better-convex` supports a project config at `./better-convex.json` (or `--config <path>`). See [Configuration Reference](#configuration-reference) for the full schema and precedence rules.
+`better-convex` supports a project config at `./concave.json` (or pass `--config <path>`).
+It reads settings from `meta["better-convex"]`.
 
 The CLI reads from `convex.json`:
 
@@ -335,9 +435,9 @@ Scope modes apply to `better-convex codegen`.
 
 | Scope | Generated outputs |
 |------|--------------------|
-| `all` (default) | `convex/shared/api.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, cRPC module runtime files |
-| `auth` | `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, `convex/functions/generated/auth.runtime.ts` (when `auth.ts` has a default export) |
-| `orm` | `convex/functions/generated/server.ts` only |
+| `all` (default) | `convex/shared/api.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, runtime files |
+| `auth` | `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, `convex/functions/generated/auth.runtime.ts` (when `auth.ts` has a default export) |
+| `orm` | `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, runtime files for ORM internals |
 
 In scoped modes, stale artifacts outside the current scope are removed automatically (for example `convex/shared/api.ts` and cRPC runtime modules in `auth`/`orm` mode).
 
@@ -399,57 +499,62 @@ export const admin = authQuery
 
 ### Configuration Reference
 
-`better-convex` supports a project config at `./better-convex.json` (or `--config <path>`):
+`better-convex` supports a project config at `./concave.json` (or `--config <path>`):
 
-```json title="better-convex.json" showLineNumbers
+```json title="concave.json" showLineNumbers
 {
-  "auth": true,
-  "api": true,
-  "outputDir": "convex/shared",
-  "dev": {
-    "debug": false,
-    "convexArgs": [],
-    "aggregateBackfill": {
-      "enabled": "auto",
-      "wait": true,
-      "batchSize": 1000,
-      "pollIntervalMs": 1000,
-      "timeoutMs": 900000,
-      "strict": false
-    },
-    "migrations": {
-      "enabled": "auto",
-      "wait": true,
-      "batchSize": 256,
-      "pollIntervalMs": 1000,
-      "timeoutMs": 900000,
-      "strict": false,
-      "allowDrift": true
-    }
-  },
-  "codegen": {
-    "debug": false,
-    "scope": "all",
-    "convexArgs": []
-  },
-  "deploy": {
-    "convexArgs": [],
-    "aggregateBackfill": {
-      "enabled": "auto",
-      "wait": true,
-      "batchSize": 1000,
-      "pollIntervalMs": 1000,
-      "timeoutMs": 900000,
-      "strict": true
-    },
-    "migrations": {
-      "enabled": "auto",
-      "wait": true,
-      "batchSize": 256,
-      "pollIntervalMs": 1000,
-      "timeoutMs": 900000,
-      "strict": true,
-      "allowDrift": false
+  "meta": {
+    "better-convex": {
+      "paths": {
+        "lib": "convex/lib",
+        "shared": "convex/shared"
+      },
+      "dev": {
+        "debug": false,
+        "convexArgs": [],
+        "aggregateBackfill": {
+          "enabled": "auto",
+          "wait": true,
+          "batchSize": 1000,
+          "pollIntervalMs": 1000,
+          "timeoutMs": 900000,
+          "strict": false
+        },
+        "migrations": {
+          "enabled": "auto",
+          "wait": true,
+          "batchSize": 256,
+          "pollIntervalMs": 1000,
+          "timeoutMs": 900000,
+          "strict": false,
+          "allowDrift": true
+        }
+      },
+      "codegen": {
+        "debug": false,
+        "scope": "all",
+        "convexArgs": []
+      },
+      "deploy": {
+        "convexArgs": [],
+        "aggregateBackfill": {
+          "enabled": "auto",
+          "wait": true,
+          "batchSize": 1000,
+          "pollIntervalMs": 1000,
+          "timeoutMs": 900000,
+          "strict": true
+        },
+        "migrations": {
+          "enabled": "auto",
+          "wait": true,
+          "batchSize": 256,
+          "pollIntervalMs": 1000,
+          "timeoutMs": 900000,
+          "strict": true,
+          "allowDrift": false
+        }
+      }
     }
   }
 }
@@ -459,6 +564,7 @@ Precedence:
 
 1. CLI flags override config values.
 2. Config `dev.convexArgs` / `codegen.convexArgs` / `deploy.convexArgs` are prepended to CLI passthrough args.
-3. If `codegen.scope` is missing, it defaults from `api` + `auth` toggles.
+3. If `codegen.scope` is missing, it defaults to `all`.
+4. Plugin lockfile path is fixed at `<functionsDir>/plugins.lock.json`.
 
-If `./better-convex.json` is missing, defaults are used silently. If `--config` points to a missing file, the CLI exits with an error.
+If no config file is found, defaults are used silently. If only `better-convex.json` exists, the CLI exits with a legacy-config error. If `--config` points to a missing file, the CLI exits with an error.

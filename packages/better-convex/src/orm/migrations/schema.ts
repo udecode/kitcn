@@ -64,11 +64,13 @@ const MIGRATION_PLUGIN_TABLE_NAMES = [
   MIGRATION_RUN_TABLE,
 ] as const;
 
-export function migrationPlugin(): OrmSchemaPlugin {
+export function migrationPlugin(): OrmSchemaPlugin<typeof migrationStorageTables> {
   return {
     key: 'migration',
-    tableNames: MIGRATION_PLUGIN_TABLE_NAMES,
-    inject: injectMigrationStorageTables,
+    schema: {
+      tableNames: MIGRATION_PLUGIN_TABLE_NAMES,
+      inject: injectMigrationStorageTables,
+    },
   };
 }
 

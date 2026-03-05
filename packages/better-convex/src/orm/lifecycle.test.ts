@@ -3,7 +3,7 @@ import { describe, expect, test } from 'vitest';
 import { createAggregate } from './aggregate';
 import { text } from './builders/text';
 import { createOrm } from './create-orm';
-import { defineRelations } from './relations';
+import { defineSchema } from './schema';
 import { convexTable } from './table';
 import { defineTriggers, TriggerCancelledError } from './triggers';
 
@@ -69,18 +69,23 @@ const createUsersSchema = (
   hooks: Record<string, unknown>
 ) => {
   const users = convexTable(tableName, columns as any);
-  const schema = defineRelations({ users });
-  const triggers = defineTriggers(schema, {
+  const triggerConfig = {
     users: hooks as any,
-  });
-  return { users, schema, triggers };
+  };
+  const schema = defineSchema(
+    { users },
+    {
+      triggers: (relations) => defineTriggers(relations, triggerConfig as any),
+    }
+  );
+  return { users, schema };
 };
 
 describe('orm lifecycle hooks', () => {
   test('orm.with(ctx) wraps raw db writes and dispatches operation hooks', async () => {
     const events: string[] = [];
 
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_test',
       { name: text().notNull() },
       {
@@ -105,7 +110,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -131,7 +136,7 @@ describe('orm lifecycle hooks', () => {
 
   test('orm.withoutTriggers bypasses trigger hooks for scoped writes', async () => {
     const events: string[] = [];
-    const { users, schema, triggers } = createUsersSchema(
+    const { users, schema } = createUsersSchema(
       'users_lifecycle_without_triggers_test',
       { name: text().notNull() },
       {
@@ -143,7 +148,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -163,7 +168,7 @@ describe('orm lifecycle hooks', () => {
   test('hook docs include public id alias when storage only exposes _id', async () => {
     const events: Array<{ hook: string; id: unknown; _id: unknown }> = [];
 
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_public_id_alias_test',
       { name: text().notNull() },
       {
@@ -204,7 +209,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -232,7 +237,7 @@ describe('orm lifecycle hooks', () => {
     let seenOrm = false;
     const events: string[] = [];
 
-    const { users, schema, triggers } = createUsersSchema(
+    const { users, schema } = createUsersSchema(
       'users_lifecycle_orm_write_test',
       { name: text().notNull() },
       {
@@ -248,7 +253,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const db = orm.db(writer as unknown as GenericDatabaseWriter<any>);
 
@@ -264,7 +269,7 @@ describe('orm lifecycle hooks', () => {
   test('ctx.orm writes inside hooks do not deadlock', async () => {
     const events: string[] = [];
 
-    const { users, schema, triggers } = createUsersSchema(
+    const { users, schema } = createUsersSchema(
       'users_lifecycle_ctx_orm_nested_write_test',
       { name: text().notNull() },
       {
@@ -285,7 +290,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { docs, writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -298,7 +303,7 @@ describe('orm lifecycle hooks', () => {
   });
 
   test('create.before can merge insert payload', async () => {
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_before_create_merge_test',
       {
         name: text().notNull(),
@@ -316,7 +321,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -336,7 +341,7 @@ describe('orm lifecycle hooks', () => {
   });
 
   test('update.before can merge patch payload', async () => {
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_before_update_merge_test',
       {
         name: text().notNull(),
@@ -354,7 +359,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -379,7 +384,7 @@ describe('orm lifecycle hooks', () => {
   });
 
   test('create.before can cancel writes by returning false', async () => {
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_before_create_cancel_test',
       { name: text().notNull() },
       {
@@ -389,7 +394,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { docs, writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -402,7 +407,7 @@ describe('orm lifecycle hooks', () => {
   });
 
   test('update.before can cancel writes by returning false', async () => {
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_before_update_cancel_test',
       { name: text().notNull() },
       {
@@ -412,7 +417,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -439,7 +444,7 @@ describe('orm lifecycle hooks', () => {
   });
 
   test('delete.before can cancel writes by returning false', async () => {
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_before_delete_cancel_test',
       { name: text().notNull() },
       {
@@ -449,7 +454,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -478,7 +483,7 @@ describe('orm lifecycle hooks', () => {
       newDoc: any;
     }> = [];
 
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_change_shape_test',
       { name: text().notNull() },
       {
@@ -488,7 +493,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -537,7 +542,7 @@ describe('orm lifecycle hooks', () => {
         },
     });
 
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_wrapped_aggregate_trigger_test',
       { name: text().notNull() },
       {
@@ -545,7 +550,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -584,7 +589,7 @@ describe('orm lifecycle hooks', () => {
       },
     };
 
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_scheduler_test',
       {
         name: text().notNull(),
@@ -605,7 +610,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer, requestId: 'req-1', scheduler } as any);
 
@@ -624,7 +629,7 @@ describe('orm lifecycle hooks', () => {
   test('raw db writes do not run hooks without orm.with(ctx)', async () => {
     const events: string[] = [];
 
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_unwrapped_test',
       {
         name: text().notNull(),
@@ -638,7 +643,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    createOrm({ schema, triggers });
+    createOrm({ schema });
     const { writer } = createWriter();
     await writer.insert('users_lifecycle_unwrapped_test', {
       name: 'Ada',
@@ -648,7 +653,7 @@ describe('orm lifecycle hooks', () => {
   });
 
   test('hook errors propagate to caller', async () => {
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_validation_test',
       {
         email: text().notNull(),
@@ -664,7 +669,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -678,7 +683,7 @@ describe('orm lifecycle hooks', () => {
   test('innerDb is available for direct writes without recursive hook dispatch', async () => {
     const events: string[] = [];
 
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_innerdb_test',
       {
         name: text().notNull(),
@@ -708,7 +713,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 
@@ -724,7 +729,7 @@ describe('orm lifecycle hooks', () => {
   test('hooks can enqueue recursive writes with stable queue order', async () => {
     const events: string[] = [];
 
-    const { schema, triggers } = createUsersSchema(
+    const { schema } = createUsersSchema(
       'users_lifecycle_recursive_test',
       {
         name: text().notNull(),
@@ -756,7 +761,7 @@ describe('orm lifecycle hooks', () => {
       }
     );
 
-    const orm = createOrm({ schema, triggers });
+    const orm = createOrm({ schema });
     const { writer } = createWriter();
     const ctx = orm.with({ db: writer } as any);
 

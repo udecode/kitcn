@@ -2,12 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { CodegenScope } from './codegen.js';
 
-const DEFAULT_CONFIG_PATH = 'better-convex.json';
+const DEFAULT_JSON_CONFIG_PATH = 'concave.json';
+const LEGACY_JSON_CONFIG_PATH = 'better-convex.json';
 
 const CODEGEN_SCOPES = new Set<CodegenScope>(['all', 'auth', 'orm']);
 const BACKFILL_ENABLED_VALUES = new Set(['auto', 'on', 'off']);
 
 export type BackfillEnabled = 'auto' | 'on' | 'off';
+export type BetterConvexPathsConfig = {
+  lib: string;
+  shared: string;
+  env?: string;
+};
 
 export type AggregateBackfillConfig = {
   enabled: BackfillEnabled;
@@ -29,9 +35,10 @@ export type MigrationConfig = {
 };
 
 export type BetterConvexConfig = {
-  api: boolean;
-  auth: boolean;
-  outputDir: string;
+  paths: BetterConvexPathsConfig;
+  hooks: {
+    postAdd: string[];
+  };
   dev: {
     debug: boolean;
     convexArgs: string[];
@@ -42,6 +49,7 @@ export type BetterConvexConfig = {
     debug: boolean;
     convexArgs: string[];
     scope?: CodegenScope;
+    trimSegments: string[];
   };
   deploy: {
     convexArgs: string[];
@@ -86,9 +94,13 @@ function createDefaultConfig(): BetterConvexConfig {
     allowDrift: false,
   };
   return {
-    api: true,
-    auth: true,
-    outputDir: 'convex/shared',
+    paths: {
+      lib: 'convex/lib',
+      shared: 'convex/shared',
+    },
+    hooks: {
+      postAdd: [],
+    },
     dev: {
       debug: false,
       convexArgs: [],
@@ -98,6 +110,7 @@ function createDefaultConfig(): BetterConvexConfig {
     codegen: {
       debug: false,
       convexArgs: [],
+      trimSegments: ['plugins'],
     },
     deploy: {
       convexArgs: [],
@@ -124,19 +137,6 @@ function parseBoolean(
   );
 }
 
-function parseString(
-  value: unknown,
-  fieldName: string,
-  configPath: string
-): string {
-  if (typeof value === 'string' && value.length > 0) {
-    return value;
-  }
-  throw new Error(
-    `Invalid ${fieldName} in ${configPath}: expected non-empty string.`
-  );
-}
-
 function parseStringArray(
   value: unknown,
   fieldName: string,
@@ -153,6 +153,26 @@ function parseStringArray(
   return [...value];
 }
 
+function parseTrimSegments(
+  value: unknown,
+  fieldName: string,
+  configPath: string
+): string[] {
+  const segments = parseStringArray(value, fieldName, configPath)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  for (const segment of segments) {
+    if (segment.includes('/') || segment.includes('\\')) {
+      throw new Error(
+        `Invalid ${fieldName} in ${configPath}: segment "${segment}" must not contain path separators.`
+      );
+    }
+  }
+
+  return [...new Set(segments)];
+}
+
 function parsePositiveInteger(
   value: unknown,
   fieldName: string,
@@ -164,6 +184,39 @@ function parsePositiveInteger(
   throw new Error(
     `Invalid ${fieldName} in ${configPath}: expected a positive integer.`
   );
+}
+
+function parseSafeRelativePath(
+  value: unknown,
+  fieldName: string,
+  configPath: string
+): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(
+      `Invalid ${fieldName} in ${configPath}: expected non-empty string.`
+    );
+  }
+  if (value.includes('\0')) {
+    throw new Error(
+      `Invalid ${fieldName} in ${configPath}: null byte is not allowed.`
+    );
+  }
+  if (path.isAbsolute(value)) {
+    throw new Error(
+      `Invalid ${fieldName} in ${configPath}: absolute paths are not allowed.`
+    );
+  }
+  const normalizedPosix = path.posix.normalize(value.replace(/\\/g, '/'));
+  if (
+    normalizedPosix === '..' ||
+    normalizedPosix.startsWith('../') ||
+    normalizedPosix.startsWith('/')
+  ) {
+    throw new Error(
+      `Invalid ${fieldName} in ${configPath}: path traversal is not allowed.`
+    );
+  }
+  return normalizedPosix;
 }
 
 function parseScope(
@@ -209,6 +262,12 @@ function parseAggregateBackfillConfig(
   if (!isRecord(value)) {
     throw new Error(`Invalid ${fieldName} in ${configPath}: expected object.`);
   }
+  assertNoUnknownKeys(
+    value,
+    ['enabled', 'wait', 'batchSize', 'pollIntervalMs', 'timeoutMs', 'strict'],
+    configPath,
+    fieldName
+  );
 
   const parsed: Partial<AggregateBackfillConfig> = {};
 
@@ -262,6 +321,20 @@ function parseMigrationConfig(
   if (!isRecord(value)) {
     throw new Error(`Invalid ${fieldName} in ${configPath}: expected object.`);
   }
+  assertNoUnknownKeys(
+    value,
+    [
+      'enabled',
+      'wait',
+      'batchSize',
+      'pollIntervalMs',
+      'timeoutMs',
+      'strict',
+      'allowDrift',
+    ],
+    configPath,
+    fieldName
+  );
 
   const parsed: Partial<MigrationConfig> = {};
 
@@ -314,6 +387,22 @@ function parseMigrationConfig(
   return parsed;
 }
 
+function assertNoUnknownKeys(
+  value: Record<string, unknown>,
+  allowedKeys: readonly string[],
+  configPath: string,
+  scope?: string
+): void {
+  const allowed = new Set(allowedKeys);
+  for (const key of Object.keys(value)) {
+    if (allowed.has(key)) {
+      continue;
+    }
+    const qualifiedKey = scope ? `${scope}.${key}` : key;
+    throw new Error(`Unknown config key "${qualifiedKey}" in ${configPath}.`);
+  }
+}
+
 function parseCommandConfig(
   value: unknown,
   fieldName: 'dev' | 'codegen',
@@ -322,17 +411,27 @@ function parseCommandConfig(
   debug?: boolean;
   convexArgs?: string[];
   scope?: CodegenScope;
+  trimSegments?: string[];
   aggregateBackfill?: Partial<AggregateBackfillConfig>;
   migrations?: Partial<MigrationConfig>;
 } {
   if (!isRecord(value)) {
     throw new Error(`Invalid ${fieldName} in ${configPath}: expected object.`);
   }
+  assertNoUnknownKeys(
+    value,
+    fieldName === 'dev'
+      ? ['debug', 'convexArgs', 'aggregateBackfill', 'migrations']
+      : ['debug', 'convexArgs', 'scope', 'trimSegments'],
+    configPath,
+    fieldName
+  );
 
   const parsed: {
     debug?: boolean;
     convexArgs?: string[];
     scope?: CodegenScope;
+    trimSegments?: string[];
     aggregateBackfill?: Partial<AggregateBackfillConfig>;
     migrations?: Partial<MigrationConfig>;
   } = {};
@@ -355,6 +454,17 @@ function parseCommandConfig(
     value.scope !== undefined
   ) {
     parsed.scope = parseScope(value.scope, `${fieldName}.scope`, configPath);
+  }
+  if (
+    fieldName === 'codegen' &&
+    'trimSegments' in value &&
+    value.trimSegments !== undefined
+  ) {
+    parsed.trimSegments = parseTrimSegments(
+      value.trimSegments,
+      `${fieldName}.trimSegments`,
+      configPath
+    );
   }
 
   if (
@@ -394,6 +504,12 @@ function parseDeployConfig(
   if (!isRecord(value)) {
     throw new Error(`Invalid deploy in ${configPath}: expected object.`);
   }
+  assertNoUnknownKeys(
+    value,
+    ['convexArgs', 'aggregateBackfill', 'migrations'],
+    configPath,
+    'deploy'
+  );
 
   const parsed: {
     convexArgs?: string[];
@@ -427,25 +543,120 @@ function parseDeployConfig(
   return parsed;
 }
 
+function parseHooksConfig(
+  value: unknown,
+  configPath: string
+): {
+  postAdd?: string[];
+} {
+  if (!isRecord(value)) {
+    throw new Error(`Invalid hooks in ${configPath}: expected object.`);
+  }
+  assertNoUnknownKeys(value, ['postAdd'], configPath, 'hooks');
+
+  const parsed: {
+    postAdd?: string[];
+  } = {};
+
+  if ('postAdd' in value && value.postAdd !== undefined) {
+    const postAdd = parseStringArray(value.postAdd, 'hooks.postAdd', configPath)
+      .map((script) => script.trim())
+      .filter((script) => script.length > 0);
+    parsed.postAdd = postAdd;
+  }
+
+  return parsed;
+}
+
+function parsePathsConfig(
+  value: unknown,
+  configPath: string
+): Partial<BetterConvexPathsConfig> {
+  if (!isRecord(value)) {
+    throw new Error(`Invalid paths in ${configPath}: expected object.`);
+  }
+  assertNoUnknownKeys(value, ['lib', 'shared', 'env'], configPath, 'paths');
+
+  const parsed: Partial<BetterConvexPathsConfig> = {};
+  if ('lib' in value && value.lib !== undefined) {
+    parsed.lib = parseSafeRelativePath(value.lib, 'paths.lib', configPath);
+  }
+  if ('shared' in value && value.shared !== undefined) {
+    parsed.shared = parseSafeRelativePath(
+      value.shared,
+      'paths.shared',
+      configPath
+    );
+  }
+  if ('env' in value && value.env !== undefined) {
+    parsed.env = parseSafeRelativePath(value.env, 'paths.env', configPath);
+  }
+  return parsed;
+}
+
+function resolveDefaultConfigPath(configPathArg?: string): {
+  resolvedPath: string | null;
+  explicit: boolean;
+  legacyPath: string | null;
+} {
+  if (typeof configPathArg === 'string') {
+    return {
+      resolvedPath: path.resolve(process.cwd(), configPathArg),
+      explicit: true,
+      legacyPath: null,
+    };
+  }
+
+  const jsonPath = path.resolve(process.cwd(), DEFAULT_JSON_CONFIG_PATH);
+  if (fs.existsSync(jsonPath)) {
+    return { resolvedPath: jsonPath, explicit: false, legacyPath: null };
+  }
+
+  const legacyPath = path.resolve(process.cwd(), LEGACY_JSON_CONFIG_PATH);
+  if (fs.existsSync(legacyPath)) {
+    return { resolvedPath: null, explicit: false, legacyPath };
+  }
+
+  return { resolvedPath: null, explicit: false, legacyPath: null };
+}
+
+function loadRawConfigFile(resolvedConfigPath: string): unknown {
+  const extension = path.extname(resolvedConfigPath).toLowerCase();
+  if (extension !== '.json') {
+    throw new Error(
+      `Only JSON config files are supported. Received: ${resolvedConfigPath}`
+    );
+  }
+  return JSON.parse(fs.readFileSync(resolvedConfigPath, 'utf-8'));
+}
+
 export function loadBetterConvexConfig(
   configPathArg?: string
 ): BetterConvexConfig {
-  const resolvedConfigPath = path.resolve(
-    process.cwd(),
-    configPathArg ?? DEFAULT_CONFIG_PATH
-  );
-  const hasExplicitConfigPath = typeof configPathArg === 'string';
+  const {
+    resolvedPath: resolvedConfigPath,
+    explicit: hasExplicitConfigPath,
+    legacyPath,
+  } = resolveDefaultConfigPath(configPathArg);
 
-  if (!fs.existsSync(resolvedConfigPath)) {
+  if (!hasExplicitConfigPath && legacyPath) {
+    throw new Error(
+      `Legacy config file ${LEGACY_JSON_CONFIG_PATH} is no longer supported. Use ${DEFAULT_JSON_CONFIG_PATH} with meta["better-convex"].`
+    );
+  }
+
+  if (!resolvedConfigPath || !fs.existsSync(resolvedConfigPath)) {
     if (hasExplicitConfigPath) {
-      throw new Error(`Config file not found: ${resolvedConfigPath}`);
+      throw new Error(
+        `Config file not found: ${resolvedConfigPath ?? String(configPathArg)}`
+      );
     }
     return createDefaultConfig();
   }
 
   let rawConfig: unknown;
   try {
-    rawConfig = JSON.parse(fs.readFileSync(resolvedConfigPath, 'utf-8'));
+    rawConfig = loadRawConfigFile(resolvedConfigPath);
   } catch (error) {
     throw new Error(
       `Failed to parse config file ${resolvedConfigPath}: ${(error as Error).message}`
@@ -458,26 +669,68 @@ export function loadBetterConvexConfig(
     );
   }
 
-  const config = createDefaultConfig();
-
-  if ('api' in rawConfig) {
-    config.api = parseBoolean(rawConfig.api, 'api', resolvedConfigPath);
-  }
-
-  if ('auth' in rawConfig) {
-    config.auth = parseBoolean(rawConfig.auth, 'auth', resolvedConfigPath);
-  }
-
-  if ('outputDir' in rawConfig) {
-    config.outputDir = parseString(
-      rawConfig.outputDir,
-      'outputDir',
-      resolvedConfigPath
+  const rawMeta = rawConfig.meta;
+  if (rawMeta !== undefined && !isRecord(rawMeta)) {
+    throw new Error(
+      `Invalid meta in ${resolvedConfigPath}: expected object when provided.`
     );
   }
 
-  if ('dev' in rawConfig) {
-    const parsed = parseCommandConfig(rawConfig.dev, 'dev', resolvedConfigPath);
+  const betterConvexConfig = isRecord(rawMeta)
+    ? rawMeta['better-convex']
+    : undefined;
+
+  if (betterConvexConfig === undefined) {
+    if (hasExplicitConfigPath) {
+      throw new Error(
+        `Missing meta["better-convex"] in ${resolvedConfigPath}.`
+      );
+    }
+    return createDefaultConfig();
+  }
+
+  if (!isRecord(betterConvexConfig)) {
+    throw new Error(
+      `Invalid meta["better-convex"] in ${resolvedConfigPath}: expected object.`
+    );
+  }
+
+  const parsedConfig = betterConvexConfig;
+  assertNoUnknownKeys(
+    parsedConfig,
+    ['paths', 'hooks', 'dev', 'codegen', 'deploy'],
+    resolvedConfigPath,
+    'meta["better-convex"]'
+  );
+
+  const config = createDefaultConfig();
+
+  if ('hooks' in parsedConfig && parsedConfig.hooks !== undefined) {
+    const parsed = parseHooksConfig(parsedConfig.hooks, resolvedConfigPath);
+    if (parsed.postAdd !== undefined) {
+      config.hooks.postAdd = parsed.postAdd;
+    }
+  }
+
+  if ('paths' in parsedConfig && parsedConfig.paths !== undefined) {
+    const parsed = parsePathsConfig(parsedConfig.paths, resolvedConfigPath);
+    if (parsed.lib !== undefined) {
+      config.paths.lib = parsed.lib;
+    }
+    if (parsed.shared !== undefined) {
+      config.paths.shared = parsed.shared;
+    }
+    if (parsed.env !== undefined) {
+      config.paths.env = parsed.env;
+    }
+  }
+
+  if ('dev' in parsedConfig) {
+    const parsed = parseCommandConfig(
+      parsedConfig.dev,
+      'dev',
+      resolvedConfigPath
+    );
     if (parsed.debug !== undefined) {
       config.dev.debug = parsed.debug;
     }
@@ -498,9 +751,9 @@ export function loadBetterConvexConfig(
     }
   }
 
-  if ('codegen' in rawConfig) {
+  if ('codegen' in parsedConfig) {
     const parsed = parseCommandConfig(
-      rawConfig.codegen,
+      parsedConfig.codegen,
       'codegen',
       resolvedConfigPath
     );
@@ -513,10 +766,13 @@ export function loadBetterConvexConfig(
     if (parsed.scope !== undefined) {
       config.codegen.scope = parsed.scope;
     }
+    if (parsed.trimSegments !== undefined) {
+      config.codegen.trimSegments = parsed.trimSegments;
+    }
   }
 
-  if ('deploy' in rawConfig) {
-    const parsed = parseDeployConfig(rawConfig.deploy, resolvedConfigPath);
+  if ('deploy' in parsedConfig) {
+    const parsed = parseDeployConfig(parsedConfig.deploy, resolvedConfigPath);
     if (parsed.convexArgs !== undefined) {
       config.deploy.convexArgs = parsed.convexArgs;
     }

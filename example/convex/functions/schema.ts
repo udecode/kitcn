@@ -1,12 +1,12 @@
+import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
+import { resendPlugin } from '@better-convex/resend/schema';
 import {
   type AnyColumn,
   aggregateIndex,
   boolean,
   convexTable,
   custom,
-  defineRelations,
   defineSchema,
-  defineTriggers,
   eq,
   index,
   integer,
@@ -16,7 +16,6 @@ import {
   timestamp,
   uniqueIndex,
 } from 'better-convex/orm';
-import { ratelimitPlugin } from 'better-convex/plugins/ratelimit';
 import { v } from 'convex/values';
 import { getEnv } from '../lib/get-env';
 
@@ -587,254 +586,479 @@ export const tables = {
   triggerDemoRun: triggerDemoRunTable,
 };
 
-export default defineSchema(tables, {
+const schema = defineSchema(tables, {
   schemaValidation: true,
   defaults: {
     defaultLimit: 1000,
   },
-  plugins: [ratelimitPlugin()],
+  plugins: [ratelimitPlugin(), resendPlugin()],
+  relations: (r) => ({
+    session: {
+      user: r.one.user({
+        from: r.session.userId,
+        to: r.user.id,
+      }),
+    },
+    account: {
+      user: r.one.user({
+        from: r.account.userId,
+        to: r.user.id,
+      }),
+    },
+    organization: {
+      members: r.many.member({
+        from: r.organization.id,
+        to: r.member.organizationId,
+      }),
+      invitations: r.many.invitation({
+        from: r.organization.id,
+        to: r.invitation.organizationId,
+      }),
+      subscriptions: r.many.subscriptions({
+        from: r.organization.id,
+        to: r.subscriptions.organizationId,
+      }),
+    },
+    member: {
+      organization: r.one.organization({
+        from: r.member.organizationId,
+        to: r.organization.id,
+      }),
+      user: r.one.user({
+        from: r.member.userId,
+        to: r.user.id,
+      }),
+    },
+    invitation: {
+      organization: r.one.organization({
+        from: r.invitation.organizationId,
+        to: r.organization.id,
+      }),
+      inviter: r.one.user({
+        from: r.invitation.inviterId,
+        to: r.user.id,
+      }),
+    },
+    user: {
+      sessions: r.many.session({
+        from: r.user.id,
+        to: r.session.userId,
+      }),
+      accounts: r.many.account({
+        from: r.user.id,
+        to: r.account.userId,
+      }),
+      members: r.many.member({
+        from: r.user.id,
+        to: r.member.userId,
+      }),
+      subscriptions: r.many.subscriptions({
+        from: r.user.id,
+        to: r.subscriptions.userId,
+      }),
+      todos: r.many.todos({
+        from: r.user.id,
+        to: r.todos.userId,
+      }),
+      ownedProjects: r.many.projects({
+        from: r.user.id,
+        to: r.projects.ownerId,
+        alias: 'ProjectOwner',
+      }),
+      memberProjects: r.many.projects({
+        from: r.user.id.through(r.projectMembers.userId),
+        to: r.projects.id.through(r.projectMembers.projectId),
+        alias: 'ProjectMembers',
+      }),
+      todoComments: r.many.todoComments({
+        from: r.user.id,
+        to: r.todoComments.userId,
+      }),
+      lastActiveOrganization: r.one.organization({
+        from: r.user.lastActiveOrganizationId,
+        to: r.organization.id,
+        optional: true,
+      }),
+      personalOrganization: r.one.organization({
+        from: r.user.personalOrganizationId,
+        to: r.organization.id,
+        optional: true,
+      }),
+      triggerDemoRecords: r.many.triggerDemoRecord({
+        from: r.user.id,
+        to: r.triggerDemoRecord.ownerId,
+      }),
+      triggerDemoAudits: r.many.triggerDemoAudit({
+        from: r.user.id,
+        to: r.triggerDemoAudit.ownerId,
+      }),
+      triggerDemoStatsRuns: r.many.triggerDemoStats({
+        from: r.user.id,
+        to: r.triggerDemoStats.ownerId,
+      }),
+      triggerDemoRuns: r.many.triggerDemoRun({
+        from: r.user.id,
+        to: r.triggerDemoRun.ownerId,
+      }),
+    },
+    subscriptions: {
+      organization: r.one.organization({
+        from: r.subscriptions.organizationId,
+        to: r.organization.id,
+      }),
+      user: r.one.user({
+        from: r.subscriptions.userId,
+        to: r.user.id,
+      }),
+    },
+    todos: {
+      user: r.one.user({
+        from: r.todos.userId,
+        to: r.user.id,
+      }),
+      project: r.one.projects({
+        from: r.todos.projectId,
+        to: r.projects.id,
+        optional: true,
+      }),
+      tags: r.many.tags({
+        from: r.todos.id.through(r.todoTags.todoId),
+        to: r.tags.id.through(r.todoTags.tagId),
+      }),
+      todoComments: r.many.todoComments({
+        from: r.todos.id,
+        to: r.todoComments.todoId,
+      }),
+    },
+    projects: {
+      owner: r.one.user({
+        from: r.projects.ownerId,
+        to: r.user.id,
+        alias: 'ProjectOwner',
+      }),
+      todos: r.many.todos({
+        from: r.projects.id,
+        to: r.todos.projectId,
+      }),
+      members: r.many.user({
+        from: r.projects.id.through(r.projectMembers.projectId),
+        to: r.user.id.through(r.projectMembers.userId),
+        alias: 'ProjectMembers',
+      }),
+    },
+    tags: {
+      todos: r.many.todos({
+        from: r.tags.id.through(r.todoTags.tagId),
+        to: r.todos.id.through(r.todoTags.todoId),
+      }),
+    },
+    todoComments: {
+      todo: r.one.todos({
+        from: r.todoComments.todoId,
+        to: r.todos.id,
+      }),
+      user: r.one.user({
+        from: r.todoComments.userId,
+        to: r.user.id,
+      }),
+      parent: r.one.todoComments({
+        from: r.todoComments.parentId,
+        to: r.todoComments.id,
+        optional: true,
+        alias: 'TodoCommentParent',
+      }),
+      replies: r.many.todoComments({
+        from: r.todoComments.id,
+        to: r.todoComments.parentId,
+        alias: 'TodoCommentParent',
+      }),
+    },
+    projectMembers: {
+      project: r.one.projects({
+        from: r.projectMembers.projectId,
+        to: r.projects.id,
+      }),
+      user: r.one.user({
+        from: r.projectMembers.userId,
+        to: r.user.id,
+      }),
+    },
+    todoTags: {
+      todo: r.one.todos({
+        from: r.todoTags.todoId,
+        to: r.todos.id,
+      }),
+      tag: r.one.tags({
+        from: r.todoTags.tagId,
+        to: r.tags.id,
+      }),
+    },
+    commentReplies: {
+      parent: r.one.todoComments({
+        from: r.commentReplies.parentId,
+        to: r.todoComments.id,
+      }),
+      reply: r.one.todoComments({
+        from: r.commentReplies.replyId,
+        to: r.todoComments.id,
+      }),
+    },
+    triggerDemoRecord: {
+      owner: r.one.user({
+        from: r.triggerDemoRecord.ownerId,
+        to: r.user.id,
+      }),
+    },
+    triggerDemoAudit: {
+      owner: r.one.user({
+        from: r.triggerDemoAudit.ownerId,
+        to: r.user.id,
+      }),
+    },
+    triggerDemoStats: {
+      owner: r.one.user({
+        from: r.triggerDemoStats.ownerId,
+        to: r.user.id,
+      }),
+    },
+    triggerDemoRun: {
+      owner: r.one.user({
+        from: r.triggerDemoRun.ownerId,
+        to: r.user.id,
+      }),
+    },
+  }),
+  triggers: {
+    user: {
+      create: {
+        before: async (data) => {
+          const role =
+            data.role !== 'admin' && getEnv().ADMIN.includes(data.email)
+              ? 'admin'
+              : data.role;
+
+          return {
+            data: {
+              ...data,
+              role,
+            },
+          };
+        },
+        after: async (user, ctx) => {
+          if (user.personalOrganizationId) {
+            return;
+          }
+
+          const userId = user.id;
+          const slug = `personal-${userId.slice(-8)}`;
+          const [organization] = await ctx.orm
+            .insert(organizationTable)
+            .values({
+              logo: user.image ?? null,
+              monthlyCredits: 0,
+              name: `${user.name}'s Organization`,
+              slug,
+              createdAt: new Date(),
+            })
+            .returning();
+          const organizationId = organization.id;
+
+          await ctx.orm.insert(memberTable).values({
+            createdAt: new Date(),
+            role: 'owner',
+            organizationId,
+            userId,
+          });
+
+          await ctx.orm
+            .update(userTable)
+            .set({
+              lastActiveOrganizationId: organizationId,
+              personalOrganizationId: organizationId,
+            })
+            .where(eq(userTable.id, userId));
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session, ctx) => {
+          if (session.activeOrganizationId) {
+            return;
+          }
+
+          const user = await ctx.orm.query.user.findFirst({
+            where: { id: session.userId },
+          });
+          if (!user) {
+            return;
+          }
+
+          const activeOrganizationId =
+            user.lastActiveOrganizationId ??
+            user.personalOrganizationId ??
+            null;
+          const sessionId = session.id;
+
+          await ctx.orm
+            .update(sessionTable)
+            .set({ activeOrganizationId })
+            .where(eq(sessionTable.id, sessionId));
+        },
+      },
+    },
+    triggerDemoRecord: {
+      create: {
+        before: async (data) => {
+          const name = data.name.trim();
+          if (!name) {
+            return false;
+          }
+
+          return {
+            data: {
+              ...data,
+              name,
+              email: data.email.toLowerCase(),
+              status: data.status ?? 'active',
+              deleteGuard: data.deleteGuard ?? false,
+              recursivePatchCount: data.recursivePatchCount ?? 0,
+            },
+          };
+        },
+        after: async (doc, ctx) => {
+          await appendTriggerDemoAudit(ctx, {
+            runId: doc.runId,
+            ownerId: doc.ownerId,
+            recordId: doc.id,
+            hook: 'create.after',
+            operation: 'insert',
+            message: 'create side effect applied',
+          });
+
+          await bumpTriggerDemoStats(ctx, {
+            runId: doc.runId,
+            ownerId: doc.ownerId,
+            delta: { create: 1 },
+          });
+
+          const rawId = (doc as { _id?: string; id?: string })._id ?? doc.id;
+
+          const innerDb = ctx.innerDb as unknown as {
+            patch: (
+              tableName: string,
+              id: string,
+              patchValue: Record<string, unknown>
+            ) => Promise<void>;
+          };
+          await innerDb.patch('triggerDemoRecord', rawId, {
+            lifecycleTag: 'innerdb-patched',
+          });
+
+          if (doc.recursivePatchCount === 0) {
+            const db = ctx.db as unknown as {
+              patch: (
+                tableName: string,
+                id: string,
+                patchValue: Record<string, unknown>
+              ) => Promise<void>;
+            };
+            await db.patch('triggerDemoRecord', rawId, {
+              recursivePatchCount: 1,
+            });
+          }
+        },
+      },
+      update: {
+        before: async (data) => {
+          const nextData = { ...data };
+
+          if (nextData.name !== undefined) {
+            const name = nextData.name.trim();
+            if (!name) {
+              return false;
+            }
+            nextData.name = name;
+          }
+
+          if (nextData.email !== undefined) {
+            nextData.email = nextData.email.toLowerCase();
+          }
+
+          return {
+            data: {
+              ...nextData,
+            },
+          };
+        },
+        after: async (doc, ctx) => {
+          await appendTriggerDemoAudit(ctx, {
+            runId: doc.runId,
+            ownerId: doc.ownerId,
+            recordId: doc.id,
+            hook: 'update.after',
+            operation: 'update',
+            message: 'update side effect applied',
+          });
+
+          await bumpTriggerDemoStats(ctx, {
+            runId: doc.runId,
+            ownerId: doc.ownerId,
+            delta: { update: 1 },
+          });
+        },
+      },
+      delete: {
+        before: async (doc) => {
+          if (doc.deleteGuard) {
+            return false;
+          }
+        },
+        after: async (doc, ctx) => {
+          await appendTriggerDemoAudit(ctx, {
+            runId: doc.runId,
+            ownerId: doc.ownerId,
+            recordId: doc.id,
+            hook: 'delete.after',
+            operation: 'delete',
+            message: 'delete side effect applied',
+          });
+
+          await bumpTriggerDemoStats(ctx, {
+            runId: doc.runId,
+            ownerId: doc.ownerId,
+            delta: { delete: 1 },
+          });
+        },
+      },
+      change: async (change, ctx) => {
+        const ownerId = change.newDoc?.ownerId ?? change.oldDoc?.ownerId;
+        const runId = change.newDoc?.runId ?? change.oldDoc?.runId;
+
+        if (!ownerId || !runId) {
+          return;
+        }
+
+        await appendTriggerDemoAudit(ctx, {
+          runId,
+          ownerId,
+          recordId: change.id ?? null,
+          hook: 'change',
+          operation: change.operation,
+          message: 'change hook observed operation',
+        });
+
+        await bumpTriggerDemoStats(ctx, {
+          runId,
+          ownerId,
+          delta: { change: 1 },
+        });
+      },
+    },
+  },
 });
 
-// =============================================================================
-// ORM Relations Config
-// =============================================================================
-
-export const relations = defineRelations(tables, (r) => ({
-  session: {
-    user: r.one.user({
-      from: r.session.userId,
-      to: r.user.id,
-    }),
-  },
-  account: {
-    user: r.one.user({
-      from: r.account.userId,
-      to: r.user.id,
-    }),
-  },
-  organization: {
-    members: r.many.member({
-      from: r.organization.id,
-      to: r.member.organizationId,
-    }),
-    invitations: r.many.invitation({
-      from: r.organization.id,
-      to: r.invitation.organizationId,
-    }),
-    subscriptions: r.many.subscriptions({
-      from: r.organization.id,
-      to: r.subscriptions.organizationId,
-    }),
-  },
-  member: {
-    organization: r.one.organization({
-      from: r.member.organizationId,
-      to: r.organization.id,
-    }),
-    user: r.one.user({
-      from: r.member.userId,
-      to: r.user.id,
-    }),
-  },
-  invitation: {
-    organization: r.one.organization({
-      from: r.invitation.organizationId,
-      to: r.organization.id,
-    }),
-    inviter: r.one.user({
-      from: r.invitation.inviterId,
-      to: r.user.id,
-    }),
-  },
-  user: {
-    sessions: r.many.session({
-      from: r.user.id,
-      to: r.session.userId,
-    }),
-    accounts: r.many.account({
-      from: r.user.id,
-      to: r.account.userId,
-    }),
-    members: r.many.member({
-      from: r.user.id,
-      to: r.member.userId,
-    }),
-    subscriptions: r.many.subscriptions({
-      from: r.user.id,
-      to: r.subscriptions.userId,
-    }),
-    todos: r.many.todos({
-      from: r.user.id,
-      to: r.todos.userId,
-    }),
-    ownedProjects: r.many.projects({
-      from: r.user.id,
-      to: r.projects.ownerId,
-      alias: 'ProjectOwner',
-    }),
-    memberProjects: r.many.projects({
-      from: r.user.id.through(r.projectMembers.userId),
-      to: r.projects.id.through(r.projectMembers.projectId),
-      alias: 'ProjectMembers',
-    }),
-    todoComments: r.many.todoComments({
-      from: r.user.id,
-      to: r.todoComments.userId,
-    }),
-    lastActiveOrganization: r.one.organization({
-      from: r.user.lastActiveOrganizationId,
-      to: r.organization.id,
-      optional: true,
-    }),
-    personalOrganization: r.one.organization({
-      from: r.user.personalOrganizationId,
-      to: r.organization.id,
-      optional: true,
-    }),
-    triggerDemoRecords: r.many.triggerDemoRecord({
-      from: r.user.id,
-      to: r.triggerDemoRecord.ownerId,
-    }),
-    triggerDemoAudits: r.many.triggerDemoAudit({
-      from: r.user.id,
-      to: r.triggerDemoAudit.ownerId,
-    }),
-    triggerDemoStatsRuns: r.many.triggerDemoStats({
-      from: r.user.id,
-      to: r.triggerDemoStats.ownerId,
-    }),
-    triggerDemoRuns: r.many.triggerDemoRun({
-      from: r.user.id,
-      to: r.triggerDemoRun.ownerId,
-    }),
-  },
-  subscriptions: {
-    organization: r.one.organization({
-      from: r.subscriptions.organizationId,
-      to: r.organization.id,
-    }),
-    user: r.one.user({
-      from: r.subscriptions.userId,
-      to: r.user.id,
-    }),
-  },
-  todos: {
-    user: r.one.user({
-      from: r.todos.userId,
-      to: r.user.id,
-    }),
-    project: r.one.projects({
-      from: r.todos.projectId,
-      to: r.projects.id,
-      optional: true,
-    }),
-    tags: r.many.tags({
-      from: r.todos.id.through(r.todoTags.todoId),
-      to: r.tags.id.through(r.todoTags.tagId),
-    }),
-    todoComments: r.many.todoComments({
-      from: r.todos.id,
-      to: r.todoComments.todoId,
-    }),
-  },
-  projects: {
-    owner: r.one.user({
-      from: r.projects.ownerId,
-      to: r.user.id,
-      alias: 'ProjectOwner',
-    }),
-    todos: r.many.todos({
-      from: r.projects.id,
-      to: r.todos.projectId,
-    }),
-    members: r.many.user({
-      from: r.projects.id.through(r.projectMembers.projectId),
-      to: r.user.id.through(r.projectMembers.userId),
-      alias: 'ProjectMembers',
-    }),
-  },
-  tags: {
-    todos: r.many.todos({
-      from: r.tags.id.through(r.todoTags.tagId),
-      to: r.todos.id.through(r.todoTags.todoId),
-    }),
-  },
-  todoComments: {
-    todo: r.one.todos({
-      from: r.todoComments.todoId,
-      to: r.todos.id,
-    }),
-    user: r.one.user({
-      from: r.todoComments.userId,
-      to: r.user.id,
-    }),
-    parent: r.one.todoComments({
-      from: r.todoComments.parentId,
-      to: r.todoComments.id,
-      optional: true,
-      alias: 'TodoCommentParent',
-    }),
-    replies: r.many.todoComments({
-      from: r.todoComments.id,
-      to: r.todoComments.parentId,
-      alias: 'TodoCommentParent',
-    }),
-  },
-  projectMembers: {
-    project: r.one.projects({
-      from: r.projectMembers.projectId,
-      to: r.projects.id,
-    }),
-    user: r.one.user({
-      from: r.projectMembers.userId,
-      to: r.user.id,
-    }),
-  },
-  todoTags: {
-    todo: r.one.todos({
-      from: r.todoTags.todoId,
-      to: r.todos.id,
-    }),
-    tag: r.one.tags({
-      from: r.todoTags.tagId,
-      to: r.tags.id,
-    }),
-  },
-  commentReplies: {
-    parent: r.one.todoComments({
-      from: r.commentReplies.parentId,
-      to: r.todoComments.id,
-    }),
-    reply: r.one.todoComments({
-      from: r.commentReplies.replyId,
-      to: r.todoComments.id,
-    }),
-  },
-  triggerDemoRecord: {
-    owner: r.one.user({
-      from: r.triggerDemoRecord.ownerId,
-      to: r.user.id,
-    }),
-  },
-  triggerDemoAudit: {
-    owner: r.one.user({
-      from: r.triggerDemoAudit.ownerId,
-      to: r.user.id,
-    }),
-  },
-  triggerDemoStats: {
-    owner: r.one.user({
-      from: r.triggerDemoStats.ownerId,
-      to: r.user.id,
-    }),
-  },
-  triggerDemoRun: {
-    owner: r.one.user({
-      from: r.triggerDemoRun.ownerId,
-      to: r.user.id,
-    }),
-  },
-}));
+export default schema;
 
 type TriggerDemoStatsDelta = {
   create?: number;
@@ -930,230 +1154,3 @@ async function bumpTriggerDemoStats(
     changeCount: input.delta.change ?? 0,
   });
 }
-
-export const triggers = defineTriggers(relations, {
-  user: {
-    create: {
-      before: async (data) => {
-        const role =
-          data.role !== 'admin' && getEnv().ADMIN.includes(data.email)
-            ? 'admin'
-            : data.role;
-
-        return {
-          data: {
-            ...data,
-            role,
-          },
-        };
-      },
-      after: async (user, ctx) => {
-        if (user.personalOrganizationId) {
-          return;
-        }
-
-        const userId = user.id;
-        const slug = `personal-${userId.slice(-8)}`;
-        const [organization] = await ctx.orm
-          .insert(organizationTable)
-          .values({
-            logo: user.image ?? null,
-            monthlyCredits: 0,
-            name: `${user.name}'s Organization`,
-            slug,
-            createdAt: new Date(),
-          })
-          .returning();
-        const organizationId = organization.id;
-
-        await ctx.orm.insert(memberTable).values({
-          createdAt: new Date(),
-          role: 'owner',
-          organizationId,
-          userId,
-        });
-
-        await ctx.orm
-          .update(userTable)
-          .set({
-            lastActiveOrganizationId: organizationId,
-            personalOrganizationId: organizationId,
-          })
-          .where(eq(userTable.id, userId));
-      },
-    },
-  },
-  session: {
-    create: {
-      after: async (session, ctx) => {
-        if (session.activeOrganizationId) {
-          return;
-        }
-
-        const user = await ctx.orm.query.user.findFirst({
-          where: { id: session.userId },
-        });
-        if (!user) {
-          return;
-        }
-
-        const activeOrganizationId =
-          user.lastActiveOrganizationId ?? user.personalOrganizationId ?? null;
-        const sessionId = session.id;
-
-        await ctx.orm
-          .update(sessionTable)
-          .set({ activeOrganizationId })
-          .where(eq(sessionTable.id, sessionId));
-      },
-    },
-  },
-  triggerDemoRecord: {
-    create: {
-      before: async (data) => {
-        const name = data.name.trim();
-        if (!name) {
-          return false;
-        }
-
-        return {
-          data: {
-            ...data,
-            name,
-            email: data.email.toLowerCase(),
-            status: data.status ?? 'active',
-            deleteGuard: data.deleteGuard ?? false,
-            recursivePatchCount: data.recursivePatchCount ?? 0,
-          },
-        };
-      },
-      after: async (doc, ctx) => {
-        await appendTriggerDemoAudit(ctx, {
-          runId: doc.runId,
-          ownerId: doc.ownerId,
-          recordId: doc.id,
-          hook: 'create.after',
-          operation: 'insert',
-          message: 'create side effect applied',
-        });
-
-        await bumpTriggerDemoStats(ctx, {
-          runId: doc.runId,
-          ownerId: doc.ownerId,
-          delta: { create: 1 },
-        });
-
-        const rawId = (doc as { _id?: string; id?: string })._id ?? doc.id;
-
-        const innerDb = ctx.innerDb as unknown as {
-          patch: (
-            tableName: string,
-            id: string,
-            patchValue: Record<string, unknown>
-          ) => Promise<void>;
-        };
-        await innerDb.patch('triggerDemoRecord', rawId, {
-          lifecycleTag: 'innerdb-patched',
-        });
-
-        if (doc.recursivePatchCount === 0) {
-          const db = ctx.db as unknown as {
-            patch: (
-              tableName: string,
-              id: string,
-              patchValue: Record<string, unknown>
-            ) => Promise<void>;
-          };
-          await db.patch('triggerDemoRecord', rawId, {
-            recursivePatchCount: 1,
-          });
-        }
-      },
-    },
-    update: {
-      before: async (data) => {
-        const nextData = { ...data };
-
-        if (nextData.name !== undefined) {
-          const name = nextData.name.trim();
-          if (!name) {
-            return false;
-          }
-          nextData.name = name;
-        }
-
-        if (nextData.email !== undefined) {
-          nextData.email = nextData.email.toLowerCase();
-        }
-
-        return {
-          data: {
-            ...nextData,
-          },
-        };
-      },
-      after: async (doc, ctx) => {
-        await appendTriggerDemoAudit(ctx, {
-          runId: doc.runId,
-          ownerId: doc.ownerId,
-          recordId: doc.id,
-          hook: 'update.after',
-          operation: 'update',
-          message: 'update side effect applied',
-        });
-
-        await bumpTriggerDemoStats(ctx, {
-          runId: doc.runId,
-          ownerId: doc.ownerId,
-          delta: { update: 1 },
-        });
-      },
-    },
-    delete: {
-      before: async (doc) => {
-        if (doc.deleteGuard) {
-          return false;
-        }
-      },
-      after: async (doc, ctx) => {
-        await appendTriggerDemoAudit(ctx, {
-          runId: doc.runId,
-          ownerId: doc.ownerId,
-          recordId: doc.id,
-          hook: 'delete.after',
-          operation: 'delete',
-          message: 'delete side effect applied',
-        });
-
-        await bumpTriggerDemoStats(ctx, {
-          runId: doc.runId,
-          ownerId: doc.ownerId,
-          delta: { delete: 1 },
-        });
-      },
-    },
-    change: async (change, ctx) => {
-      const ownerId = change.newDoc?.ownerId ?? change.oldDoc?.ownerId;
-      const runId = change.newDoc?.runId ?? change.oldDoc?.runId;
-
-      if (!ownerId || !runId) {
-        return;
-      }
-
-      await appendTriggerDemoAudit(ctx, {
-        runId,
-        ownerId,
-        recordId: change.id ?? null,
-        hook: 'change',
-        operation: change.operation,
-        message: 'change hook observed operation',
-      });
-
-      await bumpTriggerDemoStats(ctx, {
-        runId,
-        ownerId,
-        delta: { change: 1 },
-      });
-    },
-  },
-});

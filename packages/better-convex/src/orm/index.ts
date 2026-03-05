@@ -44,6 +44,23 @@
  * });
  */
 
+import type {
+  GenericDatabaseReader,
+  GenericDatabaseWriter,
+} from 'convex/server';
+import type {
+  GenericOrmCtx as GenericOrmCtxInternal,
+  GenericOrm as GenericOrmInternal,
+  OrmClientBase as OrmClientBaseInternal,
+  OrmClientWithApi as OrmClientWithApiInternal,
+  ResolveOrmSchema,
+} from './create-orm';
+import type {
+  OrmReader as OrmReaderInternal,
+  OrmWriter as OrmWriterInternal,
+} from './database';
+import type { TablesRelationalConfig } from './relations';
+
 export type {
   DefineSchemaOptions,
   GenericSchema,
@@ -129,22 +146,42 @@ export {
 } from './constraints';
 export type {
   CreateOrmOptions,
-  GenericOrm,
-  GenericOrmCtx,
   OrmApiResult,
-  OrmClientBase,
-  OrmClientWithApi,
   OrmFunctions,
   OrmReaderCtx,
   OrmWriterCtx,
+  ResolveOrmSchema,
 } from './create-orm';
 export { createOrm } from './create-orm';
-export type {
-  DatabaseWithMutations,
-  DatabaseWithQuery,
-  OrmReader,
-  OrmWriter,
-} from './database';
+export type { DatabaseWithMutations, DatabaseWithQuery } from './database';
+
+type OrmCtxBase = {
+  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>;
+};
+
+export type OrmReader<TSchema extends object> = OrmReaderInternal<
+  ResolveOrmSchema<TSchema> & TablesRelationalConfig
+>;
+export type OrmWriter<TSchema extends object> = OrmWriterInternal<
+  ResolveOrmSchema<TSchema> & TablesRelationalConfig
+>;
+export type GenericOrm<
+  Ctx extends OrmCtxBase,
+  TSchema extends object,
+> = GenericOrmInternal<Ctx, ResolveOrmSchema<TSchema> & TablesRelationalConfig>;
+export type GenericOrmCtx<
+  Ctx extends OrmCtxBase,
+  TSchema extends object,
+> = GenericOrmCtxInternal<
+  Ctx,
+  ResolveOrmSchema<TSchema> & TablesRelationalConfig
+>;
+export type OrmClientBase<TSchema extends object> = OrmClientBaseInternal<
+  ResolveOrmSchema<TSchema> & TablesRelationalConfig
+>;
+export type OrmClientWithApi<TSchema extends object> = OrmClientWithApiInternal<
+  ResolveOrmSchema<TSchema> & TablesRelationalConfig
+>;
 export { OrmNotFoundError } from './errors';
 export type { EdgeMetadata } from './extractRelationsConfig';
 // M2: Schema Extraction
@@ -247,6 +284,7 @@ export type {
 } from './query-context';
 export { getByIdWithOrmQueryFallback } from './query-context';
 export type {
+  ExtractTablesFromSchema,
   ExtractTablesWithRelations,
   ManyConfig,
   OneConfig,
@@ -275,13 +313,21 @@ export {
   type ScheduledMutationBatchArgs,
   scheduledMutationBatchFactory,
 } from './scheduled-mutation-batch';
-export { defineSchema } from './schema';
+export {
+  defineSchema,
+  getSchemaRelations,
+  getSchemaTriggers,
+  requireSchemaRelations,
+} from './schema';
 export type { OrmSchemaPlugin } from './symbols';
 // M1: Schema Foundation
 export {
   Brand,
   Columns,
+  OrmSchemaPlugins,
   OrmSchemaPluginTables,
+  OrmSchemaRelations,
+  OrmSchemaTriggers,
   TableName,
 } from './symbols';
 export type { ConvexTable, TableConfig } from './table';

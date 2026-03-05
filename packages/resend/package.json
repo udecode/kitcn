@@ -1,0 +1,26 @@
+{
+  "name": "@better-convex/resend",
+  "version": "0.1.0",
+  "description": "Better Convex Resend plugin",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./schema": "./dist/schema.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-convex": "workspace:*",
+    "svix": "^1.84.1"
+  },
+  "peerDependencies": {
+    "convex": ">=1.32"
+  }
+}

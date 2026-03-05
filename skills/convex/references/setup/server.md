@@ -8,7 +8,6 @@
 import {
   boolean,
   convexTable,
-  defineRelations,
   defineSchema,
   index,
   text,
@@ -103,24 +102,25 @@ export const project = convexTable(
 
 export const tables = { user, session, account, verification, jwks, project };
 
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  user: {
-    projects: r.many.project(),
-    sessions: r.many.session(),
-    accounts: r.many.account(),
-  },
-  project: {
-    owner: r.one.user({ from: r.project.ownerId, to: r.user.id }),
-  },
-  session: {
-    user: r.one.user({ from: r.session.userId, to: r.user.id }),
-  },
-  account: {
-    user: r.one.user({ from: r.account.userId, to: r.user.id }),
-  },
-}));
+export default defineSchema(tables, {
+  strict: false,
+  relations: (r) => ({
+    user: {
+      projects: r.many.project(),
+      sessions: r.many.session(),
+      accounts: r.many.account(),
+    },
+    project: {
+      owner: r.one.user({ from: r.project.ownerId, to: r.user.id }),
+    },
+    session: {
+      user: r.one.user({ from: r.session.userId, to: r.user.id }),
+    },
+    account: {
+      user: r.one.user({ from: r.account.userId, to: r.user.id }),
+    },
+  }),
+});
 ```
 
 ### 5.1.1 Reserved index fields (important)
@@ -133,7 +133,7 @@ Prefer `updatedAt` (or a dedicated sortable field) for custom index definitions.
 
 Do **not** create `convex/lib/orm.ts`.
 `convex/functions/generated/` directory is generated and is the canonical server contract.
-It includes `initCRPC` (from `generated/server`) and ORM helpers when `relations` exists.
+It includes `initCRPC` (from `generated/server`) and ORM helpers when schema relations metadata exists.
 If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
 
 Why this shape:
@@ -258,12 +258,12 @@ Enable only selected modules.
 When components are enabled, register them in one `defineApp()` file:
 
 ```ts
-import resend from "@convex-dev/resend/convex.config";
 import { defineApp } from "convex/server";
+import myComponent from "some-component/convex.config";
 
 const app = defineApp();
 
-app.use(resend);
+app.use(myComponent);
 
 export default app;
 ```
@@ -295,7 +295,7 @@ export const secret = convexTable.withRLS(
 ```ts
 import { convexTable, defineTriggers, text } from "better-convex/orm";
 
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   post: {
     change: async (change, ctx) => {
       if (change.operation === "delete") return;
@@ -345,7 +345,7 @@ If Aggregates are **disabled**, remove `aggregateIndex`/`rankIndex` declarations
 Use the built-in package module (no component registration):
 
 ```bash
-bun add better-convex
+bun add @better-convex/ratelimit
 ```
 
 `aggregatePlugin` and `migrationPlugin` are builtin in `defineSchema`.  
@@ -353,7 +353,7 @@ Rate limiting is opt-in: enable `ratelimitPlugin()` in `convex/functions/schema.
 
 ```ts
 import { defineSchema } from "better-convex/orm";
-import { ratelimitPlugin } from "better-convex/plugins/ratelimit";
+import { ratelimitPlugin } from "@better-convex/ratelimit/schema";
 
 export default defineSchema(tables, {
   plugins: [ratelimitPlugin()],
@@ -362,10 +362,10 @@ export default defineSchema(tables, {
 
 Create `convex/lib/rate-limiter.ts` and call guard from mutation middleware using `.meta({ rateLimit: 'scope/action' })`.
 
-Use `Ratelimit` from `better-convex/plugins/ratelimit`:
+Use `Ratelimit` from `@better-convex/ratelimit`:
 
 ```ts
-import { MINUTE, Ratelimit } from "better-convex/plugins/ratelimit";
+import { MINUTE, Ratelimit } from "@better-convex/ratelimit";
 import { CRPCError } from "better-convex/server";
 import type { MutationCtx } from "../functions/generated/server";
 import type { SessionUser } from "../shared/auth-shared";
@@ -444,30 +444,35 @@ If REST endpoints are needed, add cRPC route builders and register routers in `c
 Install packages:
 
 ```bash
-bun add @convex-dev/resend @react-email/components @react-email/render
+bun add @better-convex/resend
 ```
 
-Register component in `convex/functions/convex.config.ts`:
+Register plugin in `convex/functions/schema.ts`:
 
 ```ts
-import resend from "@convex-dev/resend/convex.config";
+import { resendPlugin } from "@better-convex/resend/schema";
 
-app.use(resend);
+export default defineSchema(tables, {
+  plugins: [resendPlugin()],
+});
 ```
 
-Create action for organization invites or transactional mail:
+Scaffold resend runtime + helpers:
 
-```ts
-"use node";
-
-import { Resend } from "@convex-dev/resend";
-import { privateAction } from "../lib/crpc";
-import { components } from "./_generated/api";
-
-const resendClient = new Resend(components.resend, { testMode: true });
+```bash
+bunx better-convex add resend
 ```
 
 Recommended files for this gate:
 
-- `convex/functions/email.tsx`
-- `convex/lib/emails/organization-invite.tsx`
+- `convex/functions/plugins/resend.ts`
+- `convex/functions/plugins/email.tsx`
+- `convex/lib/plugins/resend/plugin.ts`
+- `convex/lib/plugins/resend/webhook.ts`
+- `convex/lib/plugins/resend/crons.ts`
+
+If `plugins/email.tsx` is selected, install React Email deps:
+
+```bash
+bun add @react-email/components @react-email/render react-email react react-dom
+```

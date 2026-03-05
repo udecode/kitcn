@@ -27,7 +27,7 @@ import { defineTriggers } from "better-convex/orm";
 ## API Shape
 
 ```ts title="convex/functions/schema.ts"
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   todos: {
     create: {
       before: async (data, ctx) => {
@@ -67,11 +67,11 @@ export const userTable = convexTable("user", {
   email: text().notNull(),
 });
 
-export const relations = defineRelations({ user: userTable }, () => ({
+const relations = defineRelations({ user: userTable }, () => ({
   user: {},
 }));
 
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   user: {
     create: {
       before: async (data) => ({
@@ -108,7 +108,7 @@ Trigger definitions are schema-level only. `convexTable(..., extraConfig)` no lo
 ### Validation + Cancellation
 
 ```ts title="convex/functions/schema.ts"
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   users: {
     create: {
       before: async (data) => {
@@ -127,7 +127,7 @@ export const triggers = defineTriggers(relations, {
 ### Payload Mutation
 
 ```ts title="convex/functions/schema.ts"
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   users: {
     update: {
       before: async (data) => ({
@@ -144,7 +144,7 @@ export const triggers = defineTriggers(relations, {
 ### Change Auditing
 
 ```ts title="convex/functions/schema.ts"
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   teams: {
     change: async (change, ctx) => {
       await ctx.orm.insert(auditLog).values({

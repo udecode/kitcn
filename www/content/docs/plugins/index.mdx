@@ -1,81 +1,110 @@
 ---
 title: Plugins
-description: Cross-cutting plugins for Better Convex
+description: Schema-first plugins with scaffold-owned runtime files and plugin-aware typing.
 ---
 
-import { InfoIcon } from "lucide-react"
+Plugins are first-class in Better Convex. Register once in `defineSchema`, then scaffold runtime files with `better-convex add`.
 
-In this guide, we'll explain how Better Convex plugins work, what's available today, and where the system is headed.
+## Plugin contract
 
-## What are plugins?
+`OrmSchemaPlugin` is schema-only:
 
-Plugins are cross-cutting building blocks inspired by [better-auth's plugin architecture](https://www.better-auth.com/docs/concepts/plugins). A single plugin registration can touch multiple layers of your app at once:
-
-- **Schema** — inject internal storage tables (e.g. `ratelimit_state`, `migration_run`)
-- **Server/runtime** — add guards, hooks, or background processing
-- **Client** — optional client helpers
-
-This means you don't wire up tables, server logic, and client helpers separately. You register a plugin once, and it handles everything.
-
-## Available plugins
-
-| Plugin | What it gives you | Best for |
-| --- | --- | --- |
-| [`ratelimit`](/docs/plugins/ratelimit) | Upstash-style API with Convex-native storage, middleware-friendly guards, and optional React hook UX | Protecting expensive mutations, login flows, and public endpoints |
-
-## Experimental — more to come
-
-The plugin system is **experimental**. The core interface (`key`, `tableNames`, `inject`) is stable enough for production use today, but the API surface will grow.
-
-We're working toward a richer plugin contract inspired by better-auth's `ctx.api` pattern — where plugins can expose their own procedures, extend the ORM context, and be overridden by downstream code. Think of it like `auth.api` but for any cross-cutting concern: a plugin registers its schema, exposes typed server functions via `ctx.api`, and optionally ships client helpers.
-
-What's coming:
-
-- **`ctx.api` for plugins** — plugins will be able to expose typed procedures (queries, mutations, actions) that integrate with cRPC and the ORM context, similar to how better-auth plugins expose `auth.api.pluginName.*`
-- **Extensible and overridable** — downstream code will be able to override plugin behavior, swap implementations, or extend plugin-provided procedures
-- **More first-party plugins** — we're evaluating candidates like the official convex components
-
-For now, the plugin system gives you schema injection and table management.
-
-## API Reference
-
-Every plugin implements the `OrmSchemaPlugin` interface:
+1. `key`
+2. `schema.tableNames`
+3. `schema.inject(...)`
+4. optional `schema.relations(...)`
 
 ```ts showLineNumbers
 type OrmSchemaPlugin = {
   key: string;
-  tableNames: readonly string[];
-  inject: (schema) => schema & Record<string, unknown>;
+  schema: {
+    tableNames: readonly string[];
+    inject: <TSchema extends Record<string, unknown>>(
+      schema: TSchema
+    ) => TSchema & Record<string, unknown>;
+    relations?: (helpers: any) => Record<string, unknown>;
+  };
 };
 ```
 
-You register plugins in `defineSchema`:
+CLI presets/templates live in the first-party catalog (`packages/better-convex/src/cli/plugin-catalog.ts`), not in schema plugin objects.
 
-```ts showLineNumbers title="convex/functions/schema.ts" {1,5}
-import { ratelimitPlugin } from 'better-convex/plugins/ratelimit';
+Plugin relation composition:
+
+- Plugin `schema.relations(...)` outputs are merged with app `defineSchema(..., { relations })`.
+- Merge order is plugin order, then app relations.
+- Duplicate relation field keys (`table.field`) throw.
+
+## Discovery model
+
+`defineSchema({ plugins })` is the source of truth for plugin discovery:
+
+```ts showLineNumbers {2,6}
+import { defineSchema } from 'better-convex/orm';
+import { resendPlugin } from '@better-convex/resend/schema';
 
 export default defineSchema(tables, {
-  plugins: [ratelimitPlugin()],
+  plugins: [resendPlugin()],
 });
 ```
 
-Two plugins are built-in and always active — you don't need to register them:
+First-party plugin schema factories can also expose table overrides for advanced setups:
 
-| Plugin | Tables injected | Purpose |
-| --- | --- | --- |
-| `aggregatePlugin` | `aggregate_bucket`, `aggregate_member`, `aggregate_extrema`, `aggregate_rank_tree`, `aggregate_rank_node`, `aggregate_state` | Powers `aggregateIndex` and `rankIndex` |
-| `migrationPlugin` | `migration_state`, `migration_run` | Powers `defineMigration` and `createMigrationHandlers` |
+```ts showLineNumbers
+import { convexTable, text } from 'better-convex/orm';
+import { resendPlugin } from '@better-convex/resend/schema';
 
-Opt-in plugins like `ratelimitPlugin` must be registered explicitly.
+const customResendEmails = convexTable('resend_emails', {
+  custom: text().notNull(),
+});
 
-<Callout icon={<InfoIcon />}>
-  **Important:** Each plugin key must be unique. Registering the same plugin twice (e.g. `[ratelimitPlugin(), ratelimitPlugin()]`) throws a duplicate plugin error. If a plugin tries to inject a table name that's already in your schema, it throws a collision error.
-</Callout>
+export default defineSchema(tables, {
+  plugins: [
+    resendPlugin({
+      tables: {
+        resendEmails: customResendEmails,
+      },
+    }),
+  ],
+});
+```
+
+Codegen behavior:
+
+- Installed plugin keys are used for generated typing/runtime context.
+- Plugin runtime modules are scaffold-owned; `codegen` does not emit plugin runtime files.
+- Stale `generated/plugins/**` artifacts are removed automatically.
+
+## Ownership model (shadcn-style parity)
+
+- Generated internals are framework-owned and overwrite-safe.
+- User scaffold files are user-owned.
+- Plugin function module default: `<functionsDir>/plugins/<plugin>.ts`.
+- Plugin helper modules default: `convex/<paths.lib>/plugins/<plugin>/...`.
+- `better-convex add <plugin>` creates missing scaffold files.
+- `better-convex diff <plugin>` previews scaffold drift (read-only).
+- Plugin inventory/state is tracked in `<functionsDir>/plugins.lock.json`.
+
+## Available plugins
+
+| Plugin | What it gives you |
+| --- | --- |
+| [`ratelimit`](/docs/plugins/ratelimit) | Convex-native rate limiting with middleware + React hook support |
+| [`resend`](/docs/plugins/resend) | Durable queued email delivery, batching, webhook status ingestion, and cleanup APIs |
+
+## Built-in internal plugins
+
+These are always active and do not require explicit registration:
+
+| Plugin | Purpose |
+| --- | --- |
+| `aggregatePlugin` | Aggregate storage + runtime support |
+| `migrationPlugin` | Migration state + runtime support |
 
 ## Next steps
 
 <Cards>
+  <Card title="Resend" href="/docs/plugins/resend" />
   <Card title="Rate Limiting" href="/docs/plugins/ratelimit" />
-  <Card title="Aggregates" href="/docs/orm/queries/aggregates" />
-  <Card title="Middlewares" href="/docs/server/middlewares" />
+  <Card title="CLI" href="/docs/cli" />
 </Cards>

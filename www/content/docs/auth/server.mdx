@@ -386,7 +386,7 @@ The recommended approach is schema-level [ORM Triggers](/docs/orm/schema/trigger
     import { defineTriggers } from 'better-convex/orm';
     import { relations } from './relations';
 
-    export const triggers = defineTriggers(relations, {
+    const triggers = defineTriggers(relations, {
       user: {
         create: {
           before: async (data) => {

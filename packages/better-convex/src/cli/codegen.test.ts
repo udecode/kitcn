@@ -7,6 +7,8 @@ import { generateMeta, getConvexConfig } from './codegen';
 
 const RESERVED_HTTP_NAMESPACE_ERROR = /root "http" namespace is reserved/i;
 const RESERVED_RUNTIME_NAMESPACE_ERROR = /reserved runtime caller namespace/i;
+const HASHED_RUNTIME_CALLER_RE =
+  /export function createFooBarPlugins_[0-9a-f]{6}Caller<TCtx extends ProcedureCallerContext>\(/;
 
 function mkTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-codegen-'));
@@ -58,13 +60,18 @@ function writeScopedFixture(dir: string) {
   writeFile(
     path.join(dir, 'convex', 'schema.ts'),
     `
+    const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
     export const tables = {
       todos: { table: 'todos' },
     };
-    export const relations = {
-      todos: {},
-    };
-    export default {};
+    const schema = { tables };
+    Object.defineProperty(schema, OrmSchemaRelations, {
+      value: {
+        todos: { table: tables.todos },
+      },
+      enumerable: false,
+    });
+    export default schema;
     `.trim()
   );
   writeFile(
@@ -102,7 +109,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('getConvexConfig respects convex.json functions dir and outputDir override', () => {
+  test('getConvexConfig respects convex.json functions dir and sharedDir override', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -213,17 +220,22 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
         export const tables = {
           users: { table: 'users' },
           todos: { table: 'todos' },
         };
-
-        export const relations = {
-          users: {},
-          todos: {},
-        };
+        const schema = { tables };
+        Object.defineProperty(schema, OrmSchemaRelations, {
+          value: {
+            users: { table: tables.users },
+            todos: { table: tables.todos },
+          },
+          enumerable: false,
+        });
 
         export const shouldNotAppear = { _crpcMeta: { type: 'query' } };
+        export default schema;
         `.trim()
       );
       // Excluded by private file/dir rule.
@@ -305,6 +317,15 @@ describe('cli/codegen', () => {
       );
       expect(fs.existsSync(serverGeneratedFile)).toBe(true);
       const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
+      const ormGeneratedFile = path.join(dir, 'convex', 'generated', 'orm.ts');
+      expect(fs.existsSync(ormGeneratedFile)).toBe(false);
+      const crpcGeneratedFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'crpc.ts'
+      );
+      expect(fs.existsSync(crpcGeneratedFile)).toBe(false);
       const migrationsGeneratedFile = path.join(
         dir,
         'convex',
@@ -355,6 +376,7 @@ describe('cli/codegen', () => {
       expect(generated).toContain(
         'import type { InferInsertModel, InferSelectModel } from "better-convex/orm";'
       );
+      expect(generated).not.toContain('GeneratedQueryCtx');
       expect(generated).toContain('import type { httpRouter } from "../http";');
       expect(generated).toContain('import type { tables } from "../schema";');
       expect(generated).not.toContain(
@@ -391,12 +413,16 @@ describe('cli/codegen', () => {
       expect(generated).not.toContain('shouldBeIgnoredAuth');
 
       expect(serverGenerated).toContain(
-        "import { createOrm, type GenericOrmCtx, type OrmFunctions } from 'better-convex/orm';"
+        "import { internal } from '../_generated/api.js';"
       );
+      expect(serverGenerated).toContain('import {\n  createOrm,');
+      expect(serverGenerated).not.toContain('requireSchemaRelations');
+      expect(serverGenerated).not.toContain('getSchemaTriggers');
       expect(serverGenerated).toContain(
         "import { initCRPC as baseInitCRPC } from 'better-convex/server';"
       );
-      expect(serverGenerated).toContain('export const orm = createOrm({');
+      expect(serverGenerated).toContain("import schema from '../schema';");
+      expect(serverGenerated).not.toContain('const relations =');
       expect(serverGenerated).toContain(
         'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
       );
@@ -409,14 +435,21 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain(
         'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
+      expect(serverGenerated).not.toContain('type InstalledPluginKey =');
+      expect(serverGenerated).not.toContain('withPluginApi');
       expect(serverGenerated).not.toContain('export type MigrationCtx =');
+      expect(serverGenerated).toContain('export type OrmCtx<');
       expect(serverGenerated).toContain(
-        'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
+        'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof schema>;'
       );
+      expect(serverGenerated).not.toContain('ResolveOrmSchema');
       expect(serverGenerated).not.toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
+      expect(serverGenerated).toContain('query: (ctx) => withOrm(ctx),');
+      expect(serverGenerated).toContain('mutation: (ctx) => withOrm(ctx),');
+      expect(serverGenerated).toContain('action: (ctx) => ctx,');
       expect(serverGenerated).not.toContain('const procedureRegistry = {');
       expect(serverGenerated).not.toContain(
         'export function createCaller<TCtx extends'
@@ -424,6 +457,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).not.toContain(
         'export function createHandler<TCtx extends'
       );
+      expect(serverGenerated).toContain('export function withOrm<');
       expect(nestedRuntimeGenerated).toContain('const procedureRegistry = {');
       expect(nestedRuntimeGenerated).not.toContain('const handlerRegistry = {');
       expect(nestedRuntimeGenerated).not.toContain(
@@ -507,8 +541,13 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain('migrationCancel');
       expect(serverGenerated).toContain('resetChunk');
       expect(serverGenerated).toContain('reset');
+      expect(migrationsGenerated).toContain("import schema from '../schema';");
+      expect(migrationsGenerated).not.toContain('const relations =');
       expect(migrationsGenerated).toContain(
-        "import { relations } from '../schema';"
+        'migration: MigrationDefinition<typeof schema>'
+      );
+      expect(migrationsGenerated).toContain(
+        'return baseDefineMigration<typeof schema>(migration);'
       );
       expect(migrationsGenerated).not.toContain('export type MigrationCtx =');
       expect(migrationsGenerated).toContain('export function defineMigration(');
@@ -618,13 +657,10 @@ describe('cli/codegen', () => {
 
       const { outputFile } = getConvexConfig();
       const generated = fs.readFileSync(outputFile, 'utf-8');
-      const serverGeneratedFile = path.join(
-        dir,
-        'convex',
-        'generated',
-        'server.ts'
+      const serverGenerated = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'server.ts'),
+        'utf-8'
       );
-      const serverGenerated = fs.readFileSync(serverGeneratedFile, 'utf-8');
       const serverRuntimeFile = path.join(
         dir,
         'convex',
@@ -673,16 +709,16 @@ describe('cli/codegen', () => {
       );
       expect(serverGenerated).not.toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
-        'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
       expect(serverGenerated).not.toContain('const procedureRegistry = {');
       expect(serverGenerated).not.toContain(
         'export function createHandler<TCtx extends'
       );
       expect(serverGenerated).not.toContain('createOrm');
-      expect(serverGenerated).not.toContain('withOrm');
+      expect(serverGenerated).toContain('withOrm');
       expect(serverGenerated).not.toContain('scheduledMutationBatch');
-      expect(serverGenerated).not.toContain('export type OrmCtx<');
+      expect(serverGenerated).toContain('export type OrmCtx<');
       expect(fs.existsSync(serverRuntimeFile)).toBe(false);
       expect(todosRuntimeGenerated).toContain(
         "import type { ActionCtx, MutationCtx, QueryCtx } from './server';"
@@ -779,7 +815,320 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta keeps table helpers but omits Orm* helpers when relations export is missing', async () => {
+  test('generateMeta trims configured path segments from runtime symbol names', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          plugins: {
+            resend: {
+              list: { ref: 'plugins:resend:list' },
+            },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'plugins', 'resend.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(path.join(dir, 'convex', 'schema.ts'), 'export default {};');
+      writeFile(path.join(dir, 'convex', 'http.ts'), 'export default {};');
+
+      await generateMeta(undefined, {
+        silent: true,
+        trimSegments: ['plugins'],
+      });
+
+      const runtimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'plugins',
+        'resend.runtime.ts'
+      );
+      const runtimeGenerated = fs.readFileSync(runtimeFile, 'utf-8');
+      expect(runtimeGenerated).toContain(
+        'export function createResendCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(runtimeGenerated).toContain(
+        'export function createResendHandler<TCtx extends ProcedureHandlerContext>('
+      );
+      expect(runtimeGenerated).not.toContain(
+        'export function createPluginsResendCaller<'
+      );
+      expect(runtimeGenerated).not.toContain(
+        'export function createPluginsResendHandler<'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta always trims plugins segment even when trimSegments omits it', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          plugins: {
+            resend: {
+              list: { ref: 'plugins:resend:list' },
+            },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'plugins', 'resend.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(path.join(dir, 'convex', 'schema.ts'), 'export default {};');
+      writeFile(path.join(dir, 'convex', 'http.ts'), 'export default {};');
+
+      await generateMeta(undefined, {
+        silent: true,
+        trimSegments: ['generated'],
+      });
+
+      const runtimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'plugins',
+        'resend.runtime.ts'
+      );
+      const runtimeGenerated = fs.readFileSync(runtimeFile, 'utf-8');
+      expect(runtimeGenerated).toContain(
+        'export function createResendCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(runtimeGenerated).not.toContain(
+        'export function createPluginsResendCaller<'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta trims generated segment by default', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          plugins: {
+            generated: {
+              resend: {
+                list: { ref: 'plugins:generated:resend:list' },
+              },
+            },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'plugins', 'generated', 'resend.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(path.join(dir, 'convex', 'schema.ts'), 'export default {};');
+      writeFile(path.join(dir, 'convex', 'http.ts'), 'export default {};');
+
+      await generateMeta(undefined, {
+        silent: true,
+      });
+
+      const runtimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'plugins',
+        'generated',
+        'resend.runtime.ts'
+      );
+      const runtimeGenerated = fs.readFileSync(runtimeFile, 'utf-8');
+      expect(runtimeGenerated).toContain(
+        'export function createResendCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(runtimeGenerated).not.toContain(
+        'export function createGeneratedResendCaller<'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta appends stable hash suffix when trimmed runtime symbol names collide', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          plugins: {
+            "foo-bar": {
+              list: { ref: 'plugins:foo-bar:list' },
+            },
+            foo_bar: {
+              list: { ref: 'plugins:foo_bar:list' },
+            },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'plugins', 'foo-bar.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'plugins', 'foo_bar.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(path.join(dir, 'convex', 'schema.ts'), 'export default {};');
+      writeFile(path.join(dir, 'convex', 'http.ts'), 'export default {};');
+
+      await generateMeta(undefined, {
+        silent: true,
+        trimSegments: ['plugins'],
+      });
+
+      const firstRuntime = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'plugins', 'foo-bar.runtime.ts'),
+        'utf-8'
+      );
+      const secondRuntime = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'plugins', 'foo_bar.runtime.ts'),
+        'utf-8'
+      );
+      const combinedRuntime = `${firstRuntime}\n${secondRuntime}`;
+
+      expect(combinedRuntime).toContain(
+        'export function createFooBarPluginsCaller<TCtx extends ProcedureCallerContext>('
+      );
+      expect(combinedRuntime).toMatch(HASHED_RUNTIME_CALLER_RE);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta keeps table helpers but omits Orm* helpers when schema relations metadata is missing', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -889,19 +1238,24 @@ describe('cli/codegen', () => {
       );
       expect(serverGenerated).not.toContain('export function defineAuth<');
       expect(serverGenerated).toContain(
-        'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
+      expect(serverGenerated).toContain('query: (ctx) => ctx,');
+      expect(serverGenerated).toContain('mutation: (ctx) => ctx,');
+      expect(serverGenerated).toContain('action: (ctx) => ctx,');
       expect(serverGenerated).not.toContain('createOrm');
-      expect(serverGenerated).not.toContain('withOrm');
+      expect(serverGenerated).toContain('export function withOrm<');
       expect(serverGenerated).not.toContain('scheduledMutationBatch');
-      expect(serverGenerated).not.toContain('export type OrmCtx<');
+      expect(serverGenerated).toContain(
+        'export type OrmCtx<Ctx = QueryCtx> = Ctx;'
+      );
       expect(fs.existsSync(serverRuntimeFile)).toBe(false);
     } finally {
       process.chdir(oldCwd);
     }
   });
 
-  test('generateMeta wires schema triggers into generated server when triggers export exists', async () => {
+  test('generateMeta wires schema triggers metadata into generated orm module', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -950,16 +1304,25 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
+        const OrmSchemaTriggers = Symbol.for('better-convex:OrmSchemaTriggers');
         export const tables = {
           todos: { table: 'todos' },
         };
-        export const relations = {
-          todos: {},
-        };
-        export const triggers = {
-          todos: {},
-        };
-        export default {};
+        const schema = { tables };
+        Object.defineProperty(schema, OrmSchemaRelations, {
+          value: {
+            todos: { table: tables.todos },
+          },
+          enumerable: false,
+        });
+        Object.defineProperty(schema, OrmSchemaTriggers, {
+          value: {
+            todos: {},
+          },
+          enumerable: false,
+        });
+        export default schema;
         `.trim()
       );
 
@@ -972,11 +1335,10 @@ describe('cli/codegen', () => {
         'server.ts'
       );
       const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
-      expect(generatedServer).toContain(
-        "import schema, { relations, triggers } from '../schema';"
-      );
-      expect(generatedServer).toContain('schema: relations,');
-      expect(generatedServer).toContain('triggers,');
+      expect(generatedServer).toContain("import schema from '../schema';");
+      expect(generatedServer).not.toContain('const relations =');
+      expect(generatedServer).not.toContain('const triggers =');
+      expect(generatedServer).toContain('schema,');
       expect(generatedServer).toContain('ormFunctions,');
     } finally {
       process.chdir(oldCwd);
@@ -1031,7 +1393,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta throws when schema exports triggers without relations', async () => {
+  test('generateMeta ignores named triggers export when schema metadata is missing', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -1070,9 +1432,12 @@ describe('cli/codegen', () => {
         `.trim()
       );
 
-      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
-        "schema.ts exports 'triggers' but is missing 'relations'"
+      await generateMeta(undefined, { silent: true });
+      const generatedServer = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'server.ts'),
+        'utf-8'
       );
+      expect(generatedServer).not.toContain('createOrm');
     } finally {
       process.chdir(oldCwd);
     }
@@ -1189,13 +1554,18 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
         export const tables = {
           todos: { table: 'todos' },
         };
-        export const relations = {
-          todos: {},
-        };
-        export default {};
+        const schema = { tables };
+        Object.defineProperty(schema, OrmSchemaRelations, {
+          value: {
+            todos: { table: tables.todos },
+          },
+          enumerable: false,
+        });
+        export default schema;
         `.trim()
       );
       writeFile(
@@ -1251,10 +1621,10 @@ describe('cli/codegen', () => {
       expect(generatedRuntime).not.toContain('"beforeCreate": [');
       expect(generatedRuntime).not.toContain('"onCreate": [');
       expect(generatedRuntime).toContain(
-        'export function createGeneratedAuthCaller<TCtx extends ProcedureCallerContext>('
+        'export function createAuthCaller<TCtx extends ProcedureCallerContext>('
       );
       expect(generatedRuntime).toContain(
-        'export function createGeneratedAuthHandler<TCtx extends ProcedureHandlerContext>('
+        'export function createAuthHandler<TCtx extends ProcedureHandlerContext>('
       );
       expect(generatedAuth).not.toContain('createDisabledAuthRuntime');
       expect(generatedAuth).not.toContain('const authFunctions: AuthFunctions');
@@ -1266,7 +1636,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta emits auth runtime without ORM wiring when relations export is missing', async () => {
+  test('generateMeta emits auth runtime without ORM wiring when schema relations metadata is missing', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -1361,10 +1731,10 @@ describe('cli/codegen', () => {
       );
       const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
       expect(generatedServer).toContain(
-        'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
-      expect(generatedServer).not.toContain('createOrm');
-      expect(generatedServer).not.toContain('withOrm');
+      expect(generatedServer).not.toContain('orm.with(');
+      expect(generatedServer).not.toContain('import { createOrm');
     } finally {
       process.chdir(oldCwd);
     }
@@ -1810,7 +2180,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta with api=true auth=false keeps api outputs and removes auth outputs', async () => {
+  test('generateMeta with scope=all keeps api and auth outputs', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -1819,8 +2189,7 @@ describe('cli/codegen', () => {
       writeScopedFixture(dir);
       await generateMeta(undefined, {
         silent: true,
-        api: true,
-        auth: false,
+        scope: 'all',
       } as any);
 
       expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
@@ -1831,10 +2200,10 @@ describe('cli/codegen', () => {
       ).toBe(true);
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.ts'))
-      ).toBe(false);
+      ).toBe(true);
       expect(
         fs.existsSync(path.join(dir, 'convex', 'generated', 'auth.runtime.ts'))
-      ).toBe(false);
+      ).toBe(true);
       expect(
         fs.existsSync(
           path.join(dir, 'convex', 'generated', 'server.runtime.ts')
@@ -1848,7 +2217,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta with api=false auth=false removes api.ts and auth outputs', async () => {
+  test('generateMeta with scope=orm removes api.ts and auth outputs', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -1857,8 +2226,7 @@ describe('cli/codegen', () => {
       writeScopedFixture(dir);
       await generateMeta(undefined, {
         silent: true,
-        api: false,
-        auth: false,
+        scope: 'orm',
       } as any);
 
       expect(fs.existsSync(path.join(dir, 'convex', 'shared', 'api.ts'))).toBe(
@@ -1924,6 +2292,85 @@ describe('cli/codegen', () => {
     }
   });
 
+  test('generateMeta removes newly-created runtime placeholder when module parse fails without prior runtime file', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'broken.ts'),
+        `
+        throw new Error('parse failure');
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      const brokenRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'broken.runtime.ts'
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      expect(fs.existsSync(brokenRuntimeFile)).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta regenerates stale runtime files that still import generated/crpc', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        import { createTodosCaller } from './generated/todos.runtime';
+        void createTodosCaller;
+
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'generated', 'todos.runtime.ts'),
+        `
+        import type { ActionCtx, MutationCtx, QueryCtx } from './crpc';
+
+        export function createTodosCaller(_ctx: QueryCtx | MutationCtx | ActionCtx) {
+          return null;
+        }
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedTodosRuntime = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'todos.runtime.ts'),
+        'utf-8'
+      );
+      expect(generatedTodosRuntime).toContain(
+        "import type { ActionCtx, MutationCtx, QueryCtx } from './server';"
+      );
+      expect(generatedTodosRuntime).not.toContain("from './crpc'");
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta throws deterministic error for invalid scope', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
@@ -1939,5 +2386,266 @@ describe('cli/codegen', () => {
     } finally {
       process.chdir(oldCwd);
     }
+  });
+
+  test('generateMeta ignores plugin codegen module metadata from schema plugins', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaPlugins, {
+          value: [
+            {
+              key: 'resend',
+              schema: {
+                tableNames: [],
+                inject: (value) => value,
+              },
+              codegen: {
+                generatedModules: [
+                  {
+                    moduleName: 'generated/plugins/resend',
+                    content: "export const pluginSentinel = 'resend';\\n",
+                  },
+                ],
+              },
+            },
+          ],
+          enumerable: false,
+        });
+
+        export const tables = {};
+        export const relations = {};
+        export default schema;
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedPluginFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'plugins',
+        'resend.ts'
+      );
+      expect(fs.existsSync(generatedPluginFile)).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta removes stale generated/plugins directory artifacts', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+
+      const generatedPluginFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'plugins',
+        'resend.ts'
+      );
+      writeFile(generatedPluginFile, 'export const stale = true;\n');
+
+      await generateMeta(undefined, { silent: true });
+
+      expect(fs.existsSync(generatedPluginFile)).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'generated', 'plugins'))
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta does not reconcile plugin lockfile', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaPlugins, {
+          value: [
+            {
+              key: 'ratelimit',
+              schema: {
+                tableNames: [],
+                inject: (value) => value,
+              },
+            },
+            {
+              key: 'resend',
+              schema: {
+                tableNames: [],
+                inject: (value) => value,
+              },
+            },
+          ],
+          enumerable: false,
+        });
+
+        export const tables = {};
+        export const relations = {};
+        export default schema;
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const lockfilePath = path.join(dir, 'convex', 'plugins.lock.json');
+      expect(fs.existsSync(lockfilePath)).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta leaves existing plugin lockfile untouched', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'plugins.lock.json'),
+        JSON.stringify(
+          {
+            version: 1,
+            installedPlugins: ['resend'],
+          },
+          null,
+          2
+        )
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaPlugins, {
+          value: [
+            {
+              key: 'resend',
+              schema: {
+                tableNames: [],
+                inject: (value) => value,
+              },
+            },
+          ],
+          enumerable: false,
+        });
+
+        export const tables = {};
+        export const relations = {};
+        export default schema;
+        `.trim()
+      );
+
+      const lockfilePath = path.join(dir, 'convex', 'plugins.lock.json');
+      const before = fs.readFileSync(lockfilePath, 'utf8');
+      await generateMeta(undefined, { silent: true });
+      const after = fs.readFileSync(lockfilePath, 'utf8');
+      expect(after).toBe(before);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta emits plugin-runtime-agnostic generated/server contract', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaPlugins, {
+          value: [
+            {
+              key: 'resend',
+              schema: {
+                tableNames: [],
+                inject: (value) => value,
+              },
+            },
+            {
+              key: 'ratelimit',
+              schema: {
+                tableNames: [],
+                inject: (value) => value,
+              },
+            },
+          ],
+          enumerable: false,
+        });
+
+        export const tables = {};
+        export const relations = {};
+        export default schema;
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
+      const serverSource = fs.readFileSync(generatedServerFile, 'utf8');
+      expect(serverSource).not.toContain('InstalledPluginKey');
+      expect(serverSource).not.toContain('AnyPluginApiToken');
+      expect(serverSource).not.toContain('PluginApiCtx');
+      expect(serverSource).not.toContain('withPluginApi');
+      expect(serverSource).not.toContain('options?: PluginOptions<TToken>');
+      expect(serverSource).not.toContain('createPluginApiContext,');
+      expect(serverSource).not.toContain("from 'better-convex/plugins';");
+      const crpcSource = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'server.ts'),
+        'utf8'
+      );
+      expect(crpcSource).toContain('action: (ctx) => ctx,');
+      expect(serverSource).not.toContain('better-convex/plugins/resend');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('codegen no longer contains plugin codegen/lockfile reconciliation paths', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'packages/better-convex/src/cli/codegen.ts'),
+      'utf8'
+    );
+    expect(source).not.toContain('resolvePluginCodegenManifest(');
+    expect(source).not.toContain('resolvePluginGeneratedModules(');
+    expect(source).not.toContain('resolvePluginRuntimeProcedureEntries(');
+    expect(source).not.toContain('reconcilePluginLockfile(');
   });
 });

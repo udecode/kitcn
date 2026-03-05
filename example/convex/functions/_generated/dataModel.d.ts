@@ -698,6 +698,148 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  resendContent: {
+    document: {
+      content: ArrayBuffer;
+      filename?: null | string;
+      mimeType: string;
+      path?: null | string;
+      _id: Id<"resendContent">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "content"
+      | "filename"
+      | "mimeType"
+      | "path";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  resendDeliveryEvents: {
+    document: {
+      createdAt: string;
+      emailId: string;
+      eventType: string;
+      message?: null | string;
+      resendId: string;
+      _id: Id<"resendDeliveryEvents">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "emailId"
+      | "eventType"
+      | "message"
+      | "resendId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_emailId: ["emailId", "_creationTime"];
+      by_emailId_eventType: ["emailId", "eventType", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  resendEmails: {
+    document: {
+      attempt: number;
+      bcc?: null | Array<string>;
+      bounced?: null | boolean;
+      cc?: null | Array<string>;
+      clicked?: null | boolean;
+      complained: boolean;
+      deliveryDelayed?: null | boolean;
+      errorMessage?: null | string;
+      failed?: null | boolean;
+      finalizedAt: number;
+      from: string;
+      headers?: null | Array<{ name: string; value: string }>;
+      html?: null | string;
+      opened: boolean;
+      replyTo: Array<string>;
+      resendId?: null | string;
+      segment: number;
+      sentAt?: null | number;
+      status:
+        | "waiting"
+        | "queued"
+        | "cancelled"
+        | "sent"
+        | "delivered"
+        | "delivery_delayed"
+        | "bounced"
+        | "failed";
+      subject?: null | string;
+      template?: null | {
+        id: string;
+        variables: Record<string, string | number>;
+      };
+      text?: null | string;
+      to: Array<string>;
+      _id: Id<"resendEmails">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "attempt"
+      | "bcc"
+      | "bounced"
+      | "cc"
+      | "clicked"
+      | "complained"
+      | "deliveryDelayed"
+      | "errorMessage"
+      | "failed"
+      | "finalizedAt"
+      | "from"
+      | "headers"
+      | "html"
+      | "opened"
+      | "replyTo"
+      | "resendId"
+      | "segment"
+      | "sentAt"
+      | "status"
+      | "subject"
+      | "template"
+      | "template.id"
+      | "template.variables"
+      | `template.variables.${string}`
+      | "text"
+      | "to";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_finalizedAt: ["finalizedAt", "_creationTime"];
+      by_resendId: ["resendId", "_creationTime"];
+      by_status_segment: ["status", "segment", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  resendNextBatchRun: {
+    document: {
+      runId: string;
+      _id: Id<"resendNextBatchRun">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "runId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   session: {
     document: {
       activeOrganizationId?: null | string;

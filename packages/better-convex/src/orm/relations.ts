@@ -17,6 +17,7 @@ import {
   Columns,
   OrmSchemaDefinition,
   OrmSchemaOptions,
+  OrmSchemaPlugins,
   OrmSchemaPluginTables,
 } from './symbols';
 
@@ -31,7 +32,7 @@ import type { ConvexTable } from './table';
 export type SchemaEntry = ConvexTable<any>;
 export type Schema = Record<string, SchemaEntry>;
 
-export type ExtractTablesFromSchema<TSchema extends Record<string, unknown>> = {
+export type ExtractTablesFromSchema<TSchema extends object> = {
   [K in keyof TSchema as TSchema[K] extends SchemaEntry
     ? K extends string
       ? K
@@ -282,8 +283,19 @@ export function createRelationsHelper<TTables extends Schema>(
 export function extractTablesFromSchema<
   TSchema extends Record<string, unknown>,
 >(schema: TSchema): ExtractTablesFromSchema<TSchema> {
+  const schemaTables =
+    schema &&
+    typeof schema === 'object' &&
+    !Array.isArray(schema) &&
+    'tables' in schema &&
+    schema.tables &&
+    typeof schema.tables === 'object' &&
+    !Array.isArray(schema.tables)
+      ? (schema.tables as Record<string, unknown>)
+      : (schema as Record<string, unknown>);
+
   return Object.fromEntries(
-    Object.entries(schema).filter(([_, e]) => isConvexTable(e))
+    Object.entries(schemaTables).filter(([_, e]) => isConvexTable(e))
   ) as ExtractTablesFromSchema<TSchema>;
 }
 
@@ -484,7 +496,7 @@ export type TablesRelationalConfig<
   [OrmSchemaDefinition]?: SchemaDef;
 };
 
-type RelationsConfigWithSchema<
+export type RelationsConfigWithSchema<
   TConfig extends AnyRelationsBuilderConfig,
   TTables extends Schema,
 > = TablesRelationalConfig<
@@ -758,6 +770,11 @@ export function defineRelations(
       [OrmSchemaPluginTables]?: readonly string[];
     }
   )[OrmSchemaPluginTables];
+  const plugins = (
+    schema as {
+      [OrmSchemaPlugins]?: readonly unknown[];
+    }
+  )[OrmSchemaPlugins];
   const config = relations
     ? relations(createRelationsHelper(tables) as RelationsBuilder<Schema>)
     : {};
@@ -775,6 +792,12 @@ export function defineRelations(
   if (pluginTableNames) {
     Object.defineProperty(tablesConfig, OrmSchemaPluginTables, {
       value: pluginTableNames,
+      enumerable: false,
+    });
+  }
+  if (plugins) {
+    Object.defineProperty(tablesConfig, OrmSchemaPlugins, {
+      value: plugins,
       enumerable: false,
     });
   }
@@ -818,6 +841,11 @@ export function defineRelationsPart(
       [OrmSchemaPluginTables]?: readonly string[];
     }
   )[OrmSchemaPluginTables];
+  const plugins = (
+    schema as {
+      [OrmSchemaPlugins]?: readonly unknown[];
+    }
+  )[OrmSchemaPlugins];
   const config = relations
     ? relations(createRelationsHelper(tables) as RelationsBuilder<Schema>)
     : (Object.fromEntries(
@@ -838,6 +866,12 @@ export function defineRelationsPart(
   if (pluginTableNames) {
     Object.defineProperty(tablesConfig, OrmSchemaPluginTables, {
       value: pluginTableNames,
+      enumerable: false,
+    });
+  }
+  if (plugins) {
+    Object.defineProperty(tablesConfig, OrmSchemaPlugins, {
+      value: plugins,
       enumerable: false,
     });
   }

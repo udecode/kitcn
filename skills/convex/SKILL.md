@@ -72,6 +72,7 @@ Only remember these non-parity deltas:
 26. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
 27. Internal auth functions at `internal.generated.*` (not `internal.auth.*`).
 28. Async mutation batching is the default (codegen wires it). Customize per call: `execute({ batchSize, delayMs })`. Opt into sync: `execute({ mode: 'sync' })` or `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`. Relevant defaults: `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
+29. Do not add manual ORM mutation batching loops in app/plugin code by default. Convex runtime batching already handles mutation execution. Prefer set-based deletes/updates over per-row loops. Only add explicit chunking when batching external side effects (for example Resend API calls) or bounded cleanup sweeps.
 
 ## Directory Boundary (Important)
 
@@ -127,7 +128,6 @@ Typical feature touches:
 // convex/functions/schema.ts
 import {
   convexTable,
-  defineRelations,
   defineSchema,
   defineTriggers,
   id,
@@ -172,37 +172,38 @@ export const task = convexTable(
 );
 
 const tables = { project, task };
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  project: {
-    tasks: r.many.task(),
-  },
-  task: {
-    project: r.one.project({ from: r.task.projectId, to: r.project.id }),
-  },
-}));
-
-export const triggers = defineTriggers(relations, {
-  task: {
-    change: async (change, ctx) => {
-      const projectId = change.newDoc?.projectId ?? change.oldDoc?.projectId;
-      if (!projectId) return;
-      // Keep invariants bounded and idempotent.
-      const open = await ctx.orm.query.task.findMany({
-        where: { projectId, status: "open" },
-        limit: 500,
-        columns: { id: true },
-      });
-      await ctx.orm
-        .update(project)
-        .set({
-          updatedAt: new Date(),
-          openTaskCount: open.length,
-        })
-        .where(eq(project.id, projectId));
+export default defineSchema(tables, {
+  strict: false,
+  relations: (r) => ({
+    project: {
+      tasks: r.many.task(),
     },
-  },
+    task: {
+      project: r.one.project({ from: r.task.projectId, to: r.project.id }),
+    },
+  }),
+  triggers: (relations) =>
+    defineTriggers(relations, {
+      task: {
+        change: async (change, ctx) => {
+          const projectId = change.newDoc?.projectId ?? change.oldDoc?.projectId;
+          if (!projectId) return;
+          // Keep invariants bounded and idempotent.
+          const open = await ctx.orm.query.task.findMany({
+            where: { projectId, status: "open" },
+            limit: 500,
+            columns: { id: true },
+          });
+          await ctx.orm
+            .update(project)
+            .set({
+              updatedAt: new Date(),
+              openTaskCount: open.length,
+            })
+            .where(eq(project.id, projectId));
+        },
+      },
+    }),
 });
 ```
 
@@ -808,6 +809,7 @@ Before calling a feature done:
 - `references/features/testing.md`: deeper testing scenarios
 - `references/features/aggregates.md`: aggregate component patterns
 - `references/features/migrations.md`: built-in online data migrations (defineMigration, CLI, deploy, drift). Load when: task involves data backfills, optional→required field hardening, field renames/removals, type narrowing, or `better-convex migrate` CLI commands. Skip for backward-compatible changes (new optional fields, new tables, code-level defaults).
+- `references/features/create-plugins.md`: canonical plugin authoring patterns (split package entries, token config, scaffold/lockfile/CLI manifest rules). Load when: creating or refactoring plugins.
 - `references/features/auth.md`: full Better Auth core flow
 - `references/features/auth-admin.md`: admin plugin details
 - `references/features/auth-organizations.md`: org/multi-tenant plugin details

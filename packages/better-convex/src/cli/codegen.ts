@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createJiti } from 'jiti';
@@ -26,6 +27,7 @@ const TS_EXTENSION_RE = /\.ts$/;
 /** Pattern to detect default exports in auth contract files. */
 const DEFAULT_EXPORT_RE = /\bexport\s+default\b/;
 const RUNTIME_CALLER_RESERVED_EXPORTS = new Set(['actions', 'schedule']);
+const DEFAULT_TRIM_SEGMENTS = ['plugins', 'generated'] as const;
 
 type ApiTreeNode = {
   children: Record<string, ApiTreeNode>;
@@ -58,6 +60,9 @@ type ProcedureRegistryEntry = ProcedureMeta & {
   kind: RuntimeEntryKind;
 };
 
+const ORM_SCHEMA_RELATIONS = Symbol.for('better-convex:OrmSchemaRelations');
+const ORM_SCHEMA_TRIGGERS = Symbol.for('better-convex:OrmSchemaTriggers');
+
 export type CodegenScope = 'all' | 'auth' | 'orm';
 
 const CODEGEN_SCOPES = new Set<CodegenScope>(['all', 'auth', 'orm']);
@@ -80,44 +85,11 @@ function shouldGenerateAuth(scope: CodegenScope): boolean {
   return scope !== 'orm';
 }
 
-function getGenerationLabel(
-  generateApi: boolean,
-  generateAuth: boolean
-): string {
-  if (generateApi && generateAuth) {
-    return 'all';
-  }
-  if (!generateApi && generateAuth) {
-    return 'auth';
-  }
-  if (!generateApi && !generateAuth) {
-    return 'orm';
-  }
-  return 'api';
-}
-
-function resolveGenerationMode(options?: {
-  scope?: CodegenScope | string;
-  api?: boolean;
-  auth?: boolean;
-}): {
+function resolveGenerationMode(options?: { scope?: CodegenScope | string }): {
   generateApi: boolean;
   generateAuth: boolean;
   modeLabel: string;
 } {
-  const hasApiToggle = typeof options?.api === 'boolean';
-  const hasAuthToggle = typeof options?.auth === 'boolean';
-
-  if (hasApiToggle || hasAuthToggle) {
-    const generateApi = options?.api ?? true;
-    const generateAuth = options?.auth ?? true;
-    return {
-      generateApi,
-      generateAuth,
-      modeLabel: getGenerationLabel(generateApi, generateAuth),
-    };
-  }
-
   const scope = normalizeCodegenScope(options?.scope);
   return {
     generateApi: shouldGenerateApi(scope),
@@ -141,7 +113,7 @@ const AUTH_RUNTIME_PROCEDURES: readonly Omit<
   { exportName: 'updateOne', internal: true, type: 'mutation' },
 ];
 
-const GENERATED_SERVER_RUNTIME_PROCEDURES: readonly Omit<
+const GENERATED_ORM_RUNTIME_PROCEDURES: readonly Omit<
   ProcedureRegistryEntry,
   'moduleName' | 'kind'
 >[] = [
@@ -198,10 +170,21 @@ function toPascalCaseToken(token: string): string {
   return `${token[0]?.toUpperCase() ?? ''}${token.slice(1)}`;
 }
 
-function getModuleRuntimeExportBase(moduleName: string): string {
-  const base = moduleName
-    .split('/')
-    .filter(Boolean)
+function getRuntimeNameHash(moduleName: string): string {
+  return createHash('sha1').update(moduleName).digest('hex').slice(0, 6);
+}
+
+function normalizeTrimSegments(trimSegments?: readonly string[]): string[] {
+  const source = [...DEFAULT_TRIM_SEGMENTS, ...(trimSegments ?? [])];
+  return [...new Set(source.map((segment) => segment.trim()).filter(Boolean))];
+}
+
+function toRuntimeExportBase(
+  moduleSegments: readonly string[],
+  fallbackSegments?: readonly string[]
+): string {
+  const base = moduleSegments
+    .filter((segment) => segment.length > 0)
     .flatMap((segment) =>
       segment
         .split(/[^a-zA-Z0-9]+/g)
@@ -211,23 +194,121 @@ function getModuleRuntimeExportBase(moduleName: string): string {
     .join('');
 
   if (base.length === 0) {
+    if (fallbackSegments && fallbackSegments.length > 0) {
+      return toRuntimeExportBase(fallbackSegments);
+    }
     return 'Module';
   }
 
   return IDENTIFIER_START_RE.test(base) ? base : `M${base}`;
 }
 
+function getModuleRuntimeExportBase(
+  moduleName: string,
+  trimSegments: readonly string[]
+): {
+  primaryBase: string;
+  collisionBase: string;
+} {
+  const moduleSegments = moduleName.split('/').filter(Boolean);
+  const trimSet = new Set(trimSegments);
+  const keptSegments = moduleSegments.filter(
+    (segment) => !trimSet.has(segment)
+  );
+  const removedSegments = moduleSegments.filter((segment) =>
+    trimSet.has(segment)
+  );
+  const primaryBase = toRuntimeExportBase(keptSegments, moduleSegments);
+  const removedBase = toRuntimeExportBase(removedSegments);
+  return {
+    primaryBase,
+    collisionBase:
+      removedSegments.length > 0 ? `${primaryBase}${removedBase}` : primaryBase,
+  };
+}
+
+function resolveModuleRuntimeExportNames(
+  moduleNames: readonly string[],
+  trimSegments: readonly string[]
+): Map<
+  string,
+  {
+    callerExportName: string;
+    handlerExportName: string;
+  }
+> {
+  const resolvedNames = new Map<
+    string,
+    {
+      callerExportName: string;
+      handlerExportName: string;
+    }
+  >();
+  const byPrimaryBase = new Map<
+    string,
+    Array<{
+      moduleName: string;
+      collisionBase: string;
+    }>
+  >();
+
+  for (const moduleName of [...new Set(moduleNames)].sort((a, b) =>
+    a.localeCompare(b)
+  )) {
+    if (moduleName === 'generated/server') {
+      resolvedNames.set(moduleName, {
+        callerExportName: 'createServerCaller',
+        handlerExportName: 'createServerHandler',
+      });
+      continue;
+    }
+    const { primaryBase, collisionBase } = getModuleRuntimeExportBase(
+      moduleName,
+      trimSegments
+    );
+    const entries = byPrimaryBase.get(primaryBase);
+    if (entries) {
+      entries.push({ moduleName, collisionBase });
+      continue;
+    }
+    byPrimaryBase.set(primaryBase, [{ moduleName, collisionBase }]);
+  }
+
+  for (const [primaryBase, entries] of byPrimaryBase) {
+    if (entries.length === 1) {
+      const entry = entries[0];
+      if (!entry) {
+        continue;
+      }
+      resolvedNames.set(entry.moduleName, {
+        callerExportName: `create${primaryBase}Caller`,
+        handlerExportName: `create${primaryBase}Handler`,
+      });
+      continue;
+    }
+
+    const usedBases = new Set<string>();
+    for (const entry of entries) {
+      let exportBase = entry.collisionBase;
+      if (usedBases.has(exportBase)) {
+        exportBase = `${exportBase}_${getRuntimeNameHash(entry.moduleName)}`;
+      }
+      usedBases.add(exportBase);
+      resolvedNames.set(entry.moduleName, {
+        callerExportName: `create${exportBase}Caller`,
+        handlerExportName: `create${exportBase}Handler`,
+      });
+    }
+  }
+
+  return resolvedNames;
+}
+
 function getModuleRuntimeExportNames(moduleName: string): {
   callerExportName: string;
   handlerExportName: string;
 } {
-  if (moduleName === 'generated/server') {
-    return {
-      callerExportName: 'createServerCaller',
-      handlerExportName: 'createServerHandler',
-    };
-  }
-  const base = getModuleRuntimeExportBase(moduleName);
+  const base = toRuntimeExportBase(moduleName.split('/').filter(Boolean));
   return {
     callerExportName: `create${base}Caller`,
     handlerExportName: `create${base}Handler`,
@@ -296,6 +377,14 @@ function getGeneratedServerOutputFile(functionsDir: string): string {
   return path.join(functionsDir, GENERATED_DIR, 'server.ts');
 }
 
+function getGeneratedOrmOutputFile(functionsDir: string): string {
+  return path.join(functionsDir, GENERATED_DIR, 'orm.ts');
+}
+
+function getGeneratedCrpcOutputFile(functionsDir: string): string {
+  return path.join(functionsDir, GENERATED_DIR, 'crpc.ts');
+}
+
 function getGeneratedAuthOutputFile(functionsDir: string): string {
   return path.join(functionsDir, GENERATED_DIR, 'auth.ts');
 }
@@ -353,22 +442,17 @@ function emitGeneratedServerPlaceholderFile(): string {
 // This file is auto-generated by better-convex
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
 
-import { initCRPC as baseInitCRPC } from 'better-convex/server';
+import type {
+  ActionCtx as ServerActionCtx,
+  MutationCtx as ServerMutationCtx,
+  QueryCtx as ServerQueryCtx,
+} from '../_generated/server';
 
-export type QueryCtx = unknown;
-export type MutationCtx = unknown;
-export type ActionCtx = unknown;
+export type QueryCtx = ServerQueryCtx;
+export type MutationCtx = ServerMutationCtx;
+export type ActionCtx = ServerActionCtx;
 export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
-export type OrmCtx<Ctx = QueryCtx> = Ctx;
-
-export const orm = {} as Record<string, unknown>;
-export const scheduledMutationBatch = undefined as unknown;
-export const scheduledDelete = undefined as unknown;
-export const migrationRun = undefined as unknown;
-export const migrationRunChunk = undefined as unknown;
-export const migrationStatus = undefined as unknown;
-export const migrationCancel = undefined as unknown;
-export const initCRPC = baseInitCRPC;
+export const httpAction = undefined as unknown;
 
 export function withOrm<Ctx>(ctx: Ctx): Ctx {
   return ctx;
@@ -429,9 +513,11 @@ function ensureGeneratedSupportPlaceholders(
   }
 }
 
-function emitGeneratedRuntimePlaceholderFile(moduleName: string): string {
-  const { callerExportName, handlerExportName } =
-    getModuleRuntimeExportNames(moduleName);
+function emitGeneratedRuntimePlaceholderFile(exportNames: {
+  callerExportName: string;
+  handlerExportName: string;
+}): string {
+  const { callerExportName, handlerExportName } = exportNames;
   return `// biome-ignore-all format: generated
 // This file is auto-generated by better-convex
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
@@ -448,7 +534,14 @@ export function ${handlerExportName}(_ctx: unknown) {
 
 function ensureGeneratedRuntimePlaceholders(
   functionsDir: string,
-  moduleNames: string[]
+  moduleNames: string[],
+  runtimeExportNames: ReadonlyMap<
+    string,
+    {
+      callerExportName: string;
+      handlerExportName: string;
+    }
+  >
 ): string[] {
   const createdPlaceholderFiles: string[] = [];
   for (const moduleName of moduleNames) {
@@ -459,10 +552,13 @@ function ensureGeneratedRuntimePlaceholders(
     if (fs.existsSync(runtimeOutputFile)) {
       continue;
     }
+    const exportNames =
+      runtimeExportNames.get(moduleName) ??
+      getModuleRuntimeExportNames(moduleName);
     fs.mkdirSync(path.dirname(runtimeOutputFile), { recursive: true });
     fs.writeFileSync(
       runtimeOutputFile,
-      emitGeneratedRuntimePlaceholderFile(moduleName)
+      emitGeneratedRuntimePlaceholderFile(exportNames)
     );
     createdPlaceholderFiles.push(runtimeOutputFile);
   }
@@ -479,6 +575,75 @@ function listGeneratedRuntimeFiles(functionsDir: string): string[] {
     .map((file) => path.join(generatedDir, file));
 }
 
+async function resolveSchemaMetadataForCodegen(
+  functionsDir: string,
+  debug: boolean
+): Promise<{
+  hasRelations: boolean;
+  hasTriggers: boolean;
+}> {
+  const schemaPath = path.join(functionsDir, 'schema.ts');
+  if (!fs.existsSync(schemaPath)) {
+    return {
+      hasRelations: false,
+      hasTriggers: false,
+    };
+  }
+
+  const jitiInstance = createJiti(process.cwd(), {
+    interopDefault: true,
+    moduleCache: false,
+  });
+
+  try {
+    const schemaModule = await jitiInstance.import(schemaPath);
+    const schemaValue =
+      schemaModule && typeof schemaModule === 'object'
+        ? ((schemaModule as Record<string, unknown>).default ?? schemaModule)
+        : null;
+
+    if (!schemaValue || typeof schemaValue !== 'object') {
+      return {
+        hasRelations: false,
+        hasTriggers: false,
+      };
+    }
+
+    const hasRelations = !!(
+      schemaValue as {
+        [ORM_SCHEMA_RELATIONS]?: unknown;
+      }
+    )[ORM_SCHEMA_RELATIONS];
+    const hasTriggers = !!(
+      schemaValue as {
+        [ORM_SCHEMA_TRIGGERS]?: unknown;
+      }
+    )[ORM_SCHEMA_TRIGGERS];
+
+    return {
+      hasRelations,
+      hasTriggers,
+    };
+  } catch (error) {
+    if (debug) {
+      console.warn(
+        `⚠️  Failed to load schema plugins from ${schemaPath}: ${(error as Error).message}`
+      );
+    }
+    return {
+      hasRelations: false,
+      hasTriggers: false,
+    };
+  }
+}
+
+function cleanupGeneratedPluginArtifacts(functionsDir: string): void {
+  fs.rmSync(path.join(functionsDir, GENERATED_DIR, 'plugins'), {
+    recursive: true,
+    force: true,
+  });
+}
+
 type GeneratedAuthContract = {
   hasAuthFile: boolean;
   hasAuthDefaultExport: boolean;
@@ -487,8 +652,7 @@ type GeneratedAuthContract = {
 function emitGeneratedServerFile(
   outputFile: string,
   functionsDir: string,
-  hasRelationsExport: boolean,
-  hasTriggersExport: boolean,
+  hasRelationsMetadata: boolean,
   hasMigrationsManifest: boolean
 ): string {
   const asSingleQuotedImport = (importPath: string) =>
@@ -515,7 +679,12 @@ function emitGeneratedServerFile(
   const migrationsManifestImportLiteral = asSingleQuotedImport(
     migrationsManifestImportPath
   );
-  if (!hasRelationsExport) {
+  const migrationsImportLine = hasMigrationsManifest
+    ? `import { migrations } from ${migrationsManifestImportLiteral};\n`
+    : '';
+  const migrationsConfigLine = hasMigrationsManifest ? '  migrations,\n' : '';
+
+  if (!hasRelationsMetadata) {
     return `// biome-ignore-all format: generated
 // This file is auto-generated by better-convex
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
@@ -527,12 +696,24 @@ import type {
   MutationCtx as ServerMutationCtx,
   QueryCtx as ServerQueryCtx,
 } from ${serverTypesImportLiteral};
+import { httpAction, internalMutation } from ${serverTypesImportLiteral};
 
 export type QueryCtx = ServerQueryCtx;
 export type MutationCtx = ServerMutationCtx;
 export type ActionCtx = ServerActionCtx;
 export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
-export const initCRPC = baseInitCRPC.dataModel<DataModel>();
+export type OrmCtx<Ctx = QueryCtx> = Ctx;
+
+export function withOrm<Ctx extends ServerQueryCtx | ServerMutationCtx>(ctx: Ctx): OrmCtx<Ctx> {
+  return ctx as OrmCtx<Ctx>;
+}
+
+export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({
+  query: (ctx) => ctx,
+  mutation: (ctx) => ctx,
+  action: (ctx) => ctx,
+});
+export { httpAction, internalMutation };
 `;
   }
 
@@ -542,20 +723,15 @@ export const initCRPC = baseInitCRPC.dataModel<DataModel>();
     moduleNamespace.split('/').filter(Boolean)
   );
 
-  const schemaNamedImports = hasTriggersExport
-    ? 'relations, triggers'
-    : 'relations';
-  const triggersConfigLine = hasTriggersExport ? '  triggers,\n' : '';
-  const migrationsImportLine = hasMigrationsManifest
-    ? `import { migrations } from ${migrationsManifestImportLiteral};\n`
-    : '';
-  const migrationsConfigLine = hasMigrationsManifest ? '  migrations,\n' : '';
-
   return `// biome-ignore-all format: generated
 // This file is auto-generated by better-convex
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
 
-import { createOrm, type GenericOrmCtx, type OrmFunctions } from 'better-convex/orm';
+import {
+  createOrm,
+  type GenericOrmCtx,
+  type OrmFunctions,
+} from 'better-convex/orm';
 import { initCRPC as baseInitCRPC } from 'better-convex/server';
 import { internal } from ${runtimeApiImportLiteral};
 import type { DataModel } from ${dataModelImportLiteral};
@@ -564,19 +740,19 @@ import type {
   MutationCtx as ServerMutationCtx,
   QueryCtx as ServerQueryCtx,
 } from ${serverTypesImportLiteral};
-import { internalMutation } from ${serverTypesImportLiteral};
-import schema, { ${schemaNamedImports} } from ${schemaImportLiteral};
+import { httpAction, internalMutation } from ${serverTypesImportLiteral};
+import schema from ${schemaImportLiteral};
 ${migrationsImportLine}
 
 const ormFunctions = ${ormFunctionsAccessor} as OrmFunctions;
 
 export const orm = createOrm({
-  schema: relations,
-${triggersConfigLine}  ormFunctions,
+  schema,
+  ormFunctions,
 ${migrationsConfigLine}  internalMutation,
 });
 
-export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof relations>;
+export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof schema>;
 export type QueryCtx = OrmCtx<ServerQueryCtx>;
 export type MutationCtx = OrmCtx<ServerMutationCtx>;
 export type ActionCtx = ServerActionCtx;
@@ -589,7 +765,9 @@ export function withOrm<Ctx extends ServerQueryCtx | ServerMutationCtx>(ctx: Ctx
 export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({
   query: (ctx) => withOrm(ctx),
   mutation: (ctx) => withOrm(ctx),
+  action: (ctx) => ctx,
 });
+export { httpAction, internalMutation };
 
 export const {
   scheduledMutationBatch,
@@ -610,7 +788,7 @@ export const {
 function emitGeneratedAuthFile(
   outputFile: string,
   functionsDir: string,
-  hasRelationsExport: boolean,
+  hasRelationsMetadata: boolean,
   authContract: GeneratedAuthContract
 ): string {
   const asSingleQuotedImport = (importPath: string) =>
@@ -665,7 +843,7 @@ function emitGeneratedAuthFile(
     ? `import { internal } from ${runtimeApiImportLiteral};`
     : '';
   const withOrmImport =
-    hasRelationsExport && hasAuthDefaultExport
+    hasRelationsMetadata && hasAuthDefaultExport
       ? `import { withOrm } from ${serverImportLiteral};`
       : '';
 
@@ -716,7 +894,7 @@ const authRuntime = ${
   internal,
   moduleName: ${JSON.stringify(moduleNamespace)},
   schema,
-  auth: authDefinition,${hasRelationsExport ? '\n  context: withOrm,' : ''}
+  auth: authDefinition,${hasRelationsMetadata ? '\n  context: withOrm,' : ''}
 })`
       : `createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({
   reason: getGeneratedAuthDisabledReason(${JSON.stringify(disabledAuthReasonKind)}),
@@ -743,22 +921,12 @@ export const {
 
 function emitGeneratedMigrationsFile(
   outputFile: string,
-  functionsDir: string,
-  hasRelationsExport: boolean
+  functionsDir: string
 ): string {
   const asSingleQuotedImport = (importPath: string) =>
     `'${importPath.replaceAll("'", "\\'")}'`;
   const schemaImportPath = getSchemaImportPath(outputFile, functionsDir);
   const schemaImportLiteral = asSingleQuotedImport(schemaImportPath);
-
-  if (!hasRelationsExport) {
-    return `// biome-ignore-all format: generated
-// This file is auto-generated by better-convex
-// Do not edit manually. Run \`better-convex codegen\` to regenerate.
-
-export { defineMigration } from 'better-convex/orm';
-`;
-  }
 
   return `// biome-ignore-all format: generated
 // This file is auto-generated by better-convex
@@ -768,12 +936,12 @@ import {
   defineMigration as baseDefineMigration,
   type MigrationDefinition,
 } from 'better-convex/orm';
-import { relations } from ${schemaImportLiteral};
+import schema from ${schemaImportLiteral};
 
 export function defineMigration(
-  migration: MigrationDefinition<typeof relations>
-): MigrationDefinition<typeof relations> {
-  return baseDefineMigration<typeof relations>(migration);
+  migration: MigrationDefinition<typeof schema>
+): MigrationDefinition<typeof schema> {
+  return baseDefineMigration<typeof schema>(migration);
 }
 `;
 }
@@ -782,9 +950,17 @@ function emitGeneratedModuleRuntimeFile(
   outputFile: string,
   functionsDir: string,
   moduleName: string,
-  procedureEntries: ProcedureRegistryEntry[]
+  procedureEntries: ProcedureRegistryEntry[],
+  runtimeExportNames?: ReadonlyMap<
+    string,
+    {
+      callerExportName: string;
+      handlerExportName: string;
+    }
+  >
 ): string {
   const { callerExportName, handlerExportName } =
+    runtimeExportNames?.get(moduleName) ??
     getModuleRuntimeExportNames(moduleName);
   const runtimeApiImportPath = getRuntimeApiImportPath(
     outputFile,
@@ -1138,10 +1314,10 @@ function buildAuthRuntimeProcedureEntries(
   }));
 }
 
-function buildGeneratedServerRuntimeProcedureEntries(
+function buildGeneratedOrmRuntimeProcedureEntries(
   moduleName: string
 ): ProcedureRegistryEntry[] {
-  return GENERATED_SERVER_RUNTIME_PROCEDURES.map((entry) => ({
+  return GENERATED_ORM_RUNTIME_PROCEDURES.map((entry) => ({
     ...entry,
     moduleName,
     kind: 'dispatch',
@@ -1178,7 +1354,7 @@ function dedupeProcedureEntries(
   return deduped;
 }
 
-export function getConvexConfig(outputDir?: string): {
+export function getConvexConfig(sharedDir?: string): {
   functionsDir: string;
   outputFile: string;
 } {
@@ -1190,10 +1366,10 @@ export function getConvexConfig(outputDir?: string): {
   const functionsDir = convexConfig.functions || 'convex';
   const functionsDirPath = path.join(process.cwd(), functionsDir);
 
-  // Default: convex/shared/api.ts, or custom outputDir/api.ts
+  // Default: convex/shared/api.ts, or custom sharedDir/api.ts
   const outputFile = path.join(
     process.cwd(),
-    outputDir || 'convex/shared',
+    sharedDir || 'convex/shared',
     'api.ts'
   );
 
@@ -1323,18 +1499,19 @@ async function parseModuleRuntime(
 }
 
 export async function generateMeta(
-  outputDir?: string,
+  sharedDir?: string,
   options?: {
     debug?: boolean;
     silent?: boolean;
     scope?: CodegenScope | string;
-    api?: boolean;
-    auth?: boolean;
+    trimSegments?: string[];
   }
 ): Promise<void> {
   const startTime = Date.now();
-  const { functionsDir, outputFile } = getConvexConfig(outputDir);
+  const { functionsDir, outputFile } = getConvexConfig(sharedDir);
   const serverOutputFile = getGeneratedServerOutputFile(functionsDir);
+  const ormOutputFile = getGeneratedOrmOutputFile(functionsDir);
+  const crpcOutputFile = getGeneratedCrpcOutputFile(functionsDir);
   const authOutputFile = getGeneratedAuthOutputFile(functionsDir);
   const migrationsHelperOutputFile =
     getGeneratedMigrationsHelperOutputFile(functionsDir);
@@ -1361,6 +1538,7 @@ export async function generateMeta(
   const silent = options?.silent ?? false;
   const { generateApi, generateAuth, modeLabel } =
     resolveGenerationMode(options);
+  const normalizedTrimSegments = normalizeTrimSegments(options?.trimSegments);
 
   if (debug) {
     if (generateApi) {
@@ -1380,26 +1558,19 @@ export async function generateMeta(
   const hasAuthFile = fs.existsSync(authFilePath);
   const hasAuthDefaultExport = hasDefaultExport(authFilePath);
   const authContract = { hasAuthFile, hasAuthDefaultExport };
-  const hasRelationsExport = hasNamedExport(
-    path.join(functionsDir, 'schema.ts'),
-    'relations'
+  const schemaMetadata = await resolveSchemaMetadataForCodegen(
+    functionsDir,
+    debug
   );
-  const hasTriggersExport = hasNamedExport(
-    path.join(functionsDir, 'schema.ts'),
-    'triggers'
-  );
+  const hasRelationsMetadata = schemaMetadata.hasRelations;
   const hasMigrationsManifest = fs.existsSync(
     path.join(functionsDir, 'migrations', 'manifest.ts')
   );
-  if (hasTriggersExport && !hasRelationsExport) {
-    throw new Error(
-      "Codegen error: schema.ts exports 'triggers' but is missing 'relations'. Export `relations` and define triggers via `defineTriggers(relations, { ... })`."
-    );
-  }
 
   ensureGeneratedSupportPlaceholders(functionsDir, {
     includeAuth: generateAuth,
   });
+  cleanupGeneratedPluginArtifacts(functionsDir);
 
   if (generateApi) {
     // Create jiti instance for importing TypeScript files
@@ -1411,16 +1582,24 @@ export async function generateMeta(
     const files = listFilesRecursive(functionsDir).filter(
       (file) => file.endsWith('.ts') && isValidConvexFile(file)
     );
+    const existingRuntimeFilesBeforeParse = new Set(
+      listGeneratedRuntimeFiles(functionsDir)
+    );
     const runtimePlaceholderModules = [
       ...new Set([
         ...files.map((file) => file.replace(TS_EXTENSION_RE, '')),
-        ...(hasRelationsExport ? ['generated/server'] : []),
+        ...(hasRelationsMetadata ? ['generated/server'] : []),
         ...(generateAuth ? [generatedAuthModuleName] : []),
       ]),
     ];
+    const placeholderRuntimeExportNames = resolveModuleRuntimeExportNames(
+      runtimePlaceholderModules,
+      normalizedTrimSegments
+    );
     createdRuntimePlaceholders = ensureGeneratedRuntimePlaceholders(
       functionsDir,
-      runtimePlaceholderModules
+      runtimePlaceholderModules,
+      placeholderRuntimeExportNames
     );
 
     for (const file of files) {
@@ -1462,9 +1641,13 @@ export async function generateMeta(
           });
         }
       } catch (error) {
-        runtimeFilesPreservedFromParseFailures.add(
-          getGeneratedRuntimeOutputFile(functionsDir, moduleName)
+        const runtimeFile = getGeneratedRuntimeOutputFile(
+          functionsDir,
+          moduleName
         );
+        if (existingRuntimeFilesBeforeParse.has(runtimeFile)) {
+          runtimeFilesPreservedFromParseFailures.add(runtimeFile);
+        }
         // Always log http.ts errors as they contain critical HTTP routes
         if (debug || file === 'http.ts') {
           console.error(`  ⚠ Failed to parse ${file}:`, error);
@@ -1499,10 +1682,10 @@ export async function generateMeta(
     );
     const schemaImportPath = getSchemaImportPath(outputFile, functionsDir);
     const httpImportPath = getHttpImportPath(outputFile, functionsDir);
-    const hasTablesExport = hasNamedExport(
-      path.join(functionsDir, 'schema.ts'),
-      'tables'
-    );
+    const schemaFilePath = path.join(functionsDir, 'schema.ts');
+    const hasTablesExport = hasNamedExport(schemaFilePath, 'tables');
+    const needsInferSelectModelImport = hasTablesExport;
+    const needsInferInsertModelImport = hasTablesExport;
     const hasHttpRouterExport = hasNamedExport(
       path.join(functionsDir, 'http.ts'),
       'httpRouter'
@@ -1533,8 +1716,8 @@ export async function generateMeta(
       'import type { inferApiInputs, inferApiOutputs } from "better-convex/server";';
 
     const ormTypeImports = [
-      hasTablesExport ? 'InferInsertModel' : null,
-      hasTablesExport ? 'InferSelectModel' : null,
+      needsInferInsertModelImport ? 'InferInsertModel' : null,
+      needsInferSelectModelImport ? 'InferSelectModel' : null,
     ].filter((item): item is string => !!item);
 
     const optionalImports = [
@@ -1593,8 +1776,7 @@ ${optionalTypeExports}
   const serverOutput = emitGeneratedServerFile(
     serverOutputFile,
     functionsDir,
-    hasRelationsExport,
-    hasTriggersExport,
+    hasRelationsMetadata,
     hasMigrationsManifest
   );
 
@@ -1604,11 +1786,12 @@ ${optionalTypeExports}
   }
 
   fs.writeFileSync(serverOutputFile, serverOutput);
+  fs.rmSync(ormOutputFile, { force: true });
+  fs.rmSync(crpcOutputFile, { force: true });
 
   const migrationsOutput = emitGeneratedMigrationsFile(
     migrationsHelperOutputFile,
-    functionsDir,
-    hasRelationsExport
+    functionsDir
   );
   fs.writeFileSync(migrationsHelperOutputFile, migrationsOutput);
   fs.rmSync(legacyGeneratedMigrationsOutputFile, { force: true });
@@ -1619,7 +1802,7 @@ ${optionalTypeExports}
     const authOutput = emitGeneratedAuthFile(
       authOutputFile,
       functionsDir,
-      hasRelationsExport,
+      hasRelationsMetadata,
       authContract
     );
     fs.writeFileSync(authOutputFile, authOutput);
@@ -1630,8 +1813,8 @@ ${optionalTypeExports}
   fs.rmSync(getLegacyGeneratedOutputFile(functionsDir), { force: true });
 
   const mergedProcedureEntries = dedupeProcedureEntries([
-    ...(hasRelationsExport
-      ? buildGeneratedServerRuntimeProcedureEntries('generated/server')
+    ...(hasRelationsMetadata
+      ? buildGeneratedOrmRuntimeProcedureEntries('generated/server')
       : []),
     ...(generateApi ? procedureEntries : []),
     ...(generateAuth && hasAuthDefaultExport
@@ -1661,6 +1844,10 @@ ${optionalTypeExports}
   }
 
   const runtimeOutputFiles: string[] = [];
+  const runtimeExportNames = resolveModuleRuntimeExportNames(
+    [...runtimeProcedureEntriesByModule.keys()],
+    normalizedTrimSegments
+  );
   for (const [moduleName, moduleEntries] of [
     ...runtimeProcedureEntriesByModule,
   ].sort(([moduleA], [moduleB]) => moduleA.localeCompare(moduleB))) {
@@ -1672,7 +1859,8 @@ ${optionalTypeExports}
       runtimeOutputFile,
       functionsDir,
       moduleName,
-      moduleEntries
+      moduleEntries,
+      runtimeExportNames
     );
     fs.mkdirSync(path.dirname(runtimeOutputFile), { recursive: true });
     fs.writeFileSync(runtimeOutputFile, runtimeOutput);

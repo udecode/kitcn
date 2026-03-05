@@ -12,11 +12,47 @@ export function getWatchPatterns(functionsDir: string): string[] {
   ];
 }
 
+function parseTrimSegmentsEnv(value: string | undefined): string[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parseFromArray = (segments: string[]) => {
+    const normalized = [
+      ...new Set(
+        segments.map((segment) => segment.trim()).filter((segment) => segment)
+      ),
+    ];
+    return normalized.length > 0 ? normalized : undefined;
+  };
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((segment) => typeof segment === 'string')
+      ) {
+        return parseFromArray(parsed);
+      }
+    } catch {
+      // fall through to CSV parsing
+    }
+  }
+
+  return parseFromArray(trimmed.split(','));
+}
+
 export async function startWatcher(opts?: {
-  outputDir?: string;
+  sharedDir?: string;
   debug?: boolean;
-  api?: boolean;
-  auth?: boolean;
+  scope?: 'all' | 'auth' | 'orm';
+  trimSegments?: string[];
   debounceMs?: number;
   watch?: (
     patterns: string[],
@@ -25,24 +61,25 @@ export async function startWatcher(opts?: {
   generateMeta?: typeof generateMeta;
   getConvexConfig?: typeof getConvexConfig;
 }) {
-  const outputDir =
-    opts?.outputDir ?? (process.env.BETTER_CONVEX_API_OUTPUT_DIR || undefined);
+  const sharedDir =
+    opts?.sharedDir ?? (process.env.BETTER_CONVEX_API_OUTPUT_DIR || undefined);
   const debug = opts?.debug ?? process.env.BETTER_CONVEX_DEBUG === '1';
-  const generateApi =
-    opts?.api ??
-    (process.env.BETTER_CONVEX_GENERATE_API
-      ? process.env.BETTER_CONVEX_GENERATE_API !== '0'
-      : true);
-  const generateAuth =
-    opts?.auth ??
-    (process.env.BETTER_CONVEX_GENERATE_AUTH
-      ? process.env.BETTER_CONVEX_GENERATE_AUTH !== '0'
-      : true);
+  const scope =
+    opts?.scope ??
+    (process.env.BETTER_CONVEX_CODEGEN_SCOPE as
+      | 'all'
+      | 'auth'
+      | 'orm'
+      | undefined) ??
+    'all';
+  const trimSegments =
+    opts?.trimSegments ??
+    parseTrimSegmentsEnv(process.env.BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS);
   const debounceMs = opts?.debounceMs ?? 100;
   const resolveConfig = opts?.getConvexConfig ?? getConvexConfig;
   const runGenerateMeta = opts?.generateMeta ?? generateMeta;
 
-  const { functionsDir } = resolveConfig(outputDir);
+  const { functionsDir } = resolveConfig(sharedDir);
   const watchPatterns = getWatchPatterns(functionsDir);
 
   const watch = opts?.watch ?? (await import('chokidar')).watch;
@@ -53,12 +90,20 @@ export async function startWatcher(opts?: {
     .on('change', () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        runGenerateMeta(outputDir, {
+        const generateOptions: {
+          debug: boolean;
+          silent: boolean;
+          scope: 'all' | 'auth' | 'orm';
+          trimSegments?: string[];
+        } = {
           debug,
           silent: true,
-          api: generateApi,
-          auth: generateAuth,
-        });
+          scope,
+        };
+        if (trimSegments && trimSegments.length > 0) {
+          generateOptions.trimSegments = trimSegments;
+        }
+        runGenerateMeta(sharedDir, generateOptions);
       }, debounceMs);
     })
     .on('error', (err: unknown) => console.error('Watch error:', err));

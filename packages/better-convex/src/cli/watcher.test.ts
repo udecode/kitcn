@@ -37,16 +37,16 @@ describe('cli/watcher', () => {
       return watcher as any;
     };
 
-    const getConvexConfigStub = (outputDir?: string) => {
-      expect(outputDir).toBe('out');
+    const getConvexConfigStub = (sharedDir?: string) => {
+      expect(sharedDir).toBe('out');
       return { functionsDir: '/repo/convex', outputFile: '/repo/out/api.ts' };
     };
 
     await startWatcher({
-      outputDir: 'out',
+      sharedDir: 'out',
       debug: true,
-      api: false,
-      auth: true,
+      scope: 'orm',
+      trimSegments: ['plugins'],
       debounceMs: 10,
       watch: watchStub as any,
       generateMeta: generateMetaStub as any,
@@ -68,19 +68,28 @@ describe('cli/watcher', () => {
     await new Promise((r) => setTimeout(r, 25));
 
     expect(calls).toEqual([
-      ['out', { debug: true, silent: true, api: false, auth: true }],
+      [
+        'out',
+        {
+          debug: true,
+          silent: true,
+          scope: 'orm',
+          trimSegments: ['plugins'],
+        },
+      ],
     ]);
   });
 
-  test('startWatcher uses BETTER_CONVEX_GENERATE_* fallbacks when options are missing', async () => {
+  test('startWatcher uses BETTER_CONVEX_CODEGEN_SCOPE fallback when options are missing', async () => {
     const prevOutputDir = process.env.BETTER_CONVEX_API_OUTPUT_DIR;
     const prevDebug = process.env.BETTER_CONVEX_DEBUG;
-    const prevGenerateApi = process.env.BETTER_CONVEX_GENERATE_API;
-    const prevGenerateAuth = process.env.BETTER_CONVEX_GENERATE_AUTH;
+    const prevCodegenScope = process.env.BETTER_CONVEX_CODEGEN_SCOPE;
+    const prevTrimSegments = process.env.BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS;
     process.env.BETTER_CONVEX_API_OUTPUT_DIR = 'env-out';
     process.env.BETTER_CONVEX_DEBUG = '1';
-    process.env.BETTER_CONVEX_GENERATE_API = '0';
-    process.env.BETTER_CONVEX_GENERATE_AUTH = '1';
+    process.env.BETTER_CONVEX_CODEGEN_SCOPE = 'orm';
+    process.env.BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS =
+      'plugins,generated,plugins';
 
     const calls: any[] = [];
     const generateMetaStub = (...args: any[]) => {
@@ -110,13 +119,21 @@ describe('cli/watcher', () => {
       await new Promise((r) => setTimeout(r, 25));
 
       expect(calls).toEqual([
-        ['env-out', { debug: true, silent: true, api: false, auth: true }],
+        [
+          'env-out',
+          {
+            debug: true,
+            silent: true,
+            scope: 'orm',
+            trimSegments: ['plugins', 'generated'],
+          },
+        ],
       ]);
     } finally {
       process.env.BETTER_CONVEX_API_OUTPUT_DIR = prevOutputDir;
       process.env.BETTER_CONVEX_DEBUG = prevDebug;
-      process.env.BETTER_CONVEX_GENERATE_API = prevGenerateApi;
-      process.env.BETTER_CONVEX_GENERATE_AUTH = prevGenerateAuth;
+      process.env.BETTER_CONVEX_CODEGEN_SCOPE = prevCodegenScope;
+      process.env.BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS = prevTrimSegments;
     }
   });
 });

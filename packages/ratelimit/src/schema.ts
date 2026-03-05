@@ -1,13 +1,18 @@
-import { integer, text, textEnum } from '../../orm/builders';
-import { index } from '../../orm/indexes';
-import type { OrmSchemaPlugin } from '../../orm/symbols';
-import { convexTable } from '../../orm/table';
+import {
+  type ConvexTable,
+  convexTable,
+  index,
+  integer,
+  type OrmSchemaPlugin,
+  text,
+  textEnum,
+} from 'better-convex/orm';
 
 export const RATELIMIT_STATE_TABLE = 'ratelimit_state';
 export const RATELIMIT_DYNAMIC_TABLE = 'ratelimit_dynamic_limit';
 export const RATELIMIT_PROTECTION_TABLE = 'ratelimit_protection_hit';
 
-export const ratelimitStateTable = convexTable(
+const ratelimitStateTable: ReturnType<typeof convexTable> = convexTable(
   RATELIMIT_STATE_TABLE,
   {
     name: text().notNull(),
@@ -24,7 +29,7 @@ export const ratelimitStateTable = convexTable(
   ]
 );
 
-export const ratelimitDynamicTable = convexTable(
+const ratelimitDynamicTable: ReturnType<typeof convexTable> = convexTable(
   RATELIMIT_DYNAMIC_TABLE,
   {
     prefix: text().notNull(),
@@ -34,7 +39,7 @@ export const ratelimitDynamicTable = convexTable(
   (t) => [index('by_prefix').on(t.prefix)]
 );
 
-export const ratelimitProtectionTable = convexTable(
+const ratelimitProtectionTable: ReturnType<typeof convexTable> = convexTable(
   RATELIMIT_PROTECTION_TABLE,
   {
     prefix: text().notNull(),
@@ -56,34 +61,61 @@ export const ratelimitStorageTables = {
   [RATELIMIT_PROTECTION_TABLE]: ratelimitProtectionTable,
 } as const;
 
-export const RATELIMIT_STORAGE_TABLE_NAMES = new Set([
-  RATELIMIT_STATE_TABLE,
-  RATELIMIT_DYNAMIC_TABLE,
-  RATELIMIT_PROTECTION_TABLE,
-]);
-
 const RATELIMIT_PLUGIN_TABLE_NAMES = [
   RATELIMIT_STATE_TABLE,
   RATELIMIT_DYNAMIC_TABLE,
   RATELIMIT_PROTECTION_TABLE,
 ] as const;
 
-export function ratelimitPlugin(): OrmSchemaPlugin {
+type RatelimitStorageTables = typeof ratelimitStorageTables;
+type RatelimitTableOverrides = Partial<
+  Record<keyof RatelimitStorageTables, ConvexTable<any>>
+>;
+type ResolvedRatelimitStorageTables<
+  TOverrides extends RatelimitTableOverrides,
+> = Omit<RatelimitStorageTables, keyof TOverrides> & TOverrides;
+type RatelimitPluginOptions<TOverrides extends RatelimitTableOverrides> = {
+  tables?: TOverrides;
+};
+
+function resolveRatelimitStorageTables<
+  TOverrides extends RatelimitTableOverrides,
+>(
+  options: RatelimitPluginOptions<TOverrides> | undefined
+): ResolvedRatelimitStorageTables<TOverrides> {
+  return {
+    ...ratelimitStorageTables,
+    ...(options?.tables ?? {}),
+  } as ResolvedRatelimitStorageTables<TOverrides>;
+}
+
+export function ratelimitPlugin<
+  const TOverrides extends RatelimitTableOverrides = {},
+>(
+  options?: RatelimitPluginOptions<TOverrides>
+): OrmSchemaPlugin<ResolvedRatelimitStorageTables<TOverrides>> {
+  const storageTables = resolveRatelimitStorageTables(options);
   return {
     key: 'ratelimit',
-    tableNames: RATELIMIT_PLUGIN_TABLE_NAMES,
-    inject: injectRatelimitStorageTables,
+    schema: {
+      tableNames: RATELIMIT_PLUGIN_TABLE_NAMES,
+      inject: (schema) => injectRatelimitStorageTables(schema, storageTables),
+    },
   };
 }
 
 export function injectRatelimitStorageTables<
   TSchema extends Record<string, unknown>,
->(schema: TSchema): TSchema & typeof ratelimitStorageTables {
+  TStorageTables extends Record<string, unknown> = RatelimitStorageTables,
+>(schema: TSchema, storageTables?: TStorageTables): TSchema & TStorageTables {
+  const resolvedStorageTables =
+    (storageTables as TStorageTables | undefined) ??
+    (ratelimitStorageTables as unknown as TStorageTables);
   const merged = {
     ...schema,
-  } as TSchema & typeof ratelimitStorageTables;
+  } as TSchema & TStorageTables;
 
-  for (const [tableName, tableDef] of Object.entries(ratelimitStorageTables)) {
+  for (const [tableName, tableDef] of Object.entries(resolvedStorageTables)) {
     if (
       tableName in schema &&
       (schema as Record<string, unknown>)[tableName] !== tableDef

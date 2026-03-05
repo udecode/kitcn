@@ -15,6 +15,8 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string(),
   JWKS: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
 
   // Superadmin emails
   ADMIN: z

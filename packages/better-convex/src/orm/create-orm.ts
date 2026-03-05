@@ -17,10 +17,16 @@ import {
 import { extractRelationsConfig } from './extractRelationsConfig';
 import { createOrmDbLifecycle, type OrmDbLifecycle } from './lifecycle';
 import { createMigrationHandlers, type MigrationSet } from './migrations';
-import type { TablesRelationalConfig } from './relations';
+import type {
+  ExtractTablesFromSchema,
+  RelationsConfigWithSchema,
+  TablesRelationalConfig,
+} from './relations';
+import { defineRelations } from './relations';
 import { scheduledDeleteFactory } from './scheduled-delete';
 import { scheduledMutationBatchFactory } from './scheduled-mutation-batch';
-import { OrmSchemaPluginTables } from './symbols';
+import { getSchemaRelations, getSchemaTriggers } from './schema';
+import { OrmSchemaPluginTables, OrmSchemaRelations } from './symbols';
 import type { OrmTriggers } from './triggers';
 import type { VectorSearchProvider } from './types';
 
@@ -52,6 +58,23 @@ type OrmSource =
   | OrmReaderCtx
   | OrmWriterCtx;
 
+type OrmSchemaInput = TablesRelationalConfig | object;
+
+export type ResolveOrmSchema<TSchema extends OrmSchemaInput> =
+  TSchema extends TablesRelationalConfig
+    ? TSchema
+    : TSchema extends { [OrmSchemaRelations]?: infer TRelations }
+      ? Exclude<TRelations, undefined> extends TablesRelationalConfig
+        ? Exclude<TRelations, undefined>
+        : RelationsConfigWithSchema<
+            {},
+            ExtractTablesFromSchema<TSchema & Record<string, unknown>>
+          >
+      : RelationsConfigWithSchema<
+          {},
+          ExtractTablesFromSchema<TSchema & Record<string, unknown>>
+        >;
+
 type OrmResult<
   TSource extends OrmSource,
   TSchema extends TablesRelationalConfig,
@@ -71,19 +94,18 @@ type GenericOrmCtx<
   TSchema extends TablesRelationalConfig,
 > = Ctx & { orm: GenericOrm<Ctx, TSchema> };
 
-type CreateOrmConfigBase<TSchema extends TablesRelationalConfig> = {
+type CreateOrmConfigBase<TSchema extends OrmSchemaInput> = {
   schema: TSchema;
-  triggers?: OrmTriggers<TSchema, any>;
   migrations?: MigrationSet<any>;
   internalMutation?: typeof internalMutationGeneric;
 };
 
-type CreateOrmConfigWithFunctions<TSchema extends TablesRelationalConfig> =
+type CreateOrmConfigWithFunctions<TSchema extends OrmSchemaInput> =
   CreateOrmConfigBase<TSchema> & {
     ormFunctions: OrmFunctions;
   };
 
-type CreateOrmConfigWithoutFunctions<TSchema extends TablesRelationalConfig> =
+type CreateOrmConfigWithoutFunctions<TSchema extends OrmSchemaInput> =
   CreateOrmConfigBase<TSchema> & {
     ormFunctions?: undefined;
   };
@@ -141,6 +163,55 @@ function isOrmCtx(source: OrmSource): source is OrmReaderCtx | OrmWriterCtx {
   return !!source && typeof source === 'object' && 'db' in source;
 }
 
+function isRecordLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isTablesRelationalConfig(
+  value: unknown
+): value is TablesRelationalConfig {
+  if (!isRecordLike(value)) {
+    return false;
+  }
+
+  const candidate = Object.values(value).find(isRecordLike);
+  if (!candidate) {
+    return false;
+  }
+
+  return (
+    typeof candidate.name === 'string' &&
+    'table' in candidate &&
+    'relations' in candidate
+  );
+}
+
+function resolveOrmSchemaConfig<TSchema extends OrmSchemaInput>(
+  schemaInput: TSchema
+): {
+  schema: ResolveOrmSchema<TSchema>;
+  triggers: OrmTriggers<ResolveOrmSchema<TSchema>, any> | undefined;
+} {
+  if (isTablesRelationalConfig(schemaInput)) {
+    return {
+      schema: schemaInput as ResolveOrmSchema<TSchema>,
+      triggers: getSchemaTriggers(schemaInput) as
+        | OrmTriggers<ResolveOrmSchema<TSchema>, any>
+        | undefined,
+    };
+  }
+
+  const relations =
+    getSchemaRelations(schemaInput) ??
+    defineRelations(schemaInput as Record<string, unknown>);
+  return {
+    schema: relations as ResolveOrmSchema<TSchema>,
+    triggers: getSchemaTriggers(schemaInput) as
+      | OrmTriggers<ResolveOrmSchema<TSchema>, any>
+      | undefined,
+  };
+}
+
 function createDbFactory<TSchema extends TablesRelationalConfig>(
   schema: TSchema,
   dbLifecycle: OrmDbLifecycle,
@@ -182,26 +253,31 @@ function createDbFactory<TSchema extends TablesRelationalConfig>(
   }) as OrmFactory<TSchema>;
 }
 
-export function createOrm<TSchema extends TablesRelationalConfig>(
+export function createOrm<TSchema extends OrmSchemaInput>(
   config: CreateOrmConfigWithoutFunctions<TSchema>
-): OrmClientBase<TSchema>;
-export function createOrm<TSchema extends TablesRelationalConfig>(
+): OrmClientBase<ResolveOrmSchema<TSchema>>;
+export function createOrm<TSchema extends OrmSchemaInput>(
   config: CreateOrmConfigWithFunctions<TSchema>
-): OrmClientWithApi<TSchema>;
-export function createOrm<TSchema extends TablesRelationalConfig>(
+): OrmClientWithApi<ResolveOrmSchema<TSchema>>;
+export function createOrm<TSchema extends OrmSchemaInput>(
   config:
     | CreateOrmConfigWithFunctions<TSchema>
     | CreateOrmConfigWithoutFunctions<TSchema>
-): OrmClientBase<TSchema> | OrmClientWithApi<TSchema> {
-  const dbLifecycle = createOrmDbLifecycle(config.schema, config.triggers);
-  const edgeMetadata = extractRelationsConfig(
-    config.schema as TablesRelationalConfig
+):
+  | OrmClientBase<ResolveOrmSchema<TSchema>>
+  | OrmClientWithApi<ResolveOrmSchema<TSchema>> {
+  const { schema: resolvedSchema, triggers } = resolveOrmSchemaConfig(
+    config.schema
   );
-  const db = createDbFactory(config.schema, dbLifecycle, config.ormFunctions);
+  const dbLifecycle = createOrmDbLifecycle(resolvedSchema, triggers);
+  const edgeMetadata = extractRelationsConfig(
+    resolvedSchema as TablesRelationalConfig
+  );
+  const db = createDbFactory(resolvedSchema, dbLifecycle, config.ormFunctions);
   const withContext = <TContext extends OrmReaderCtx | OrmWriterCtx>(
     ctx: TContext,
     options?: CreateOrmOptions
-  ): GenericOrmCtx<TContext, TSchema> => {
+  ): GenericOrmCtx<TContext, ResolveOrmSchema<TSchema>> => {
     const lifecycleCtx = { ...ctx } as TContext;
     const wrappedCtx = dbLifecycle.wrapDB(lifecycleCtx);
     const orm = db(wrappedCtx, options);
@@ -209,7 +285,7 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
     return {
       ...wrappedCtx,
       orm,
-    } as GenericOrmCtx<TContext, TSchema>;
+    } as GenericOrmCtx<TContext, ResolveOrmSchema<TSchema>>;
   };
 
   if (!config.ormFunctions) {
@@ -231,13 +307,13 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
       let resetChunkRef: SchedulableFunctionReference | undefined =
         config.ormFunctions.resetChunk;
       const countBackfillHandlers = createCountBackfillHandlers(
-        config.schema,
+        resolvedSchema,
         () => aggregateBackfillChunkRef
       );
       const migrationHandlers = createMigrationHandlers({
-        schema: config.schema,
-        migrations: config.migrations as MigrationSet<TSchema> | undefined,
-        getOrm: (ctx) => db(ctx as any) as OrmWriter<TSchema>,
+        schema: resolvedSchema,
+        migrations: config.migrations as MigrationSet<any> | undefined,
+        getOrm: (ctx) => db(ctx as any) as OrmWriter<ResolveOrmSchema<TSchema>>,
         getChunkRef: () => migrationRunChunkRef,
       });
       const aggregateBackfillChunk = mutationBuilder({
@@ -298,7 +374,7 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
         scheduledMutationBatch: mutationBuilder({
           args: v.any(),
           handler: scheduledMutationBatchFactory(
-            config.schema,
+            resolvedSchema,
             edgeMetadata,
             config.ormFunctions.scheduledMutationBatch
           ) as any,
@@ -306,7 +382,7 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
         scheduledDelete: mutationBuilder({
           args: v.any(),
           handler: scheduledDeleteFactory(
-            config.schema,
+            resolvedSchema,
             edgeMetadata,
             config.ormFunctions.scheduledMutationBatch
           ) as any,
@@ -337,7 +413,7 @@ export function createOrm<TSchema extends TablesRelationalConfig>(
         reset: internalActionGeneric({
           args: v.any(),
           handler: async (ctx: any) => {
-            const tableNames = getResetTableNames(config.schema);
+            const tableNames = getResetTableNames(resolvedSchema);
             let deleted = 0;
 
             for (const tableName of tableNames) {

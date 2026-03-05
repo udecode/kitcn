@@ -67,7 +67,7 @@ export const posts = convexTable('posts', {
   userId: id('users'),
 }, (t) => [index('by_user').on(t.userId)]);
 
-export const relations = defineRelations({ users, posts }, (r) => ({
+const relations = defineRelations({ users, posts }, (r) => ({
   users: { posts: r.many.posts() },
   posts: {
     author: r.one.users({ from: r.posts.userId, to: r.users.id }),

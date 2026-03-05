@@ -95,7 +95,6 @@ We'll start by defining tables and relations in one file.
 import {
   boolean,
   convexTable,
-  defineRelations,
   defineSchema,
   id,
   index,
@@ -118,12 +117,13 @@ export const posts = convexTable(
 );
 
 const tables = { user, posts };
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  user: { posts: r.many.posts() },
-  posts: { author: r.one.user({ from: r.posts.userId, to: r.user.id }) },
-}));
+export default defineSchema(tables, {
+  strict: false,
+  relations: (r) => ({
+    user: { posts: r.many.posts() },
+    posts: { author: r.one.user({ from: r.posts.userId, to: r.user.id }) },
+  }),
+});
 ```
 
 <Callout icon={<InfoIcon />}>
@@ -175,7 +175,7 @@ Create `.env.local` with your Convex URLs:
 
 ## 3. Create ORM + cRPC Builder
 
-`convex/functions/generated.ts` is the generated canonical server contract. It includes `initCRPC` and ORM helpers when `relations` exists.
+`convex/functions/generated.ts` is the generated canonical server contract. It includes `initCRPC` and ORM helpers when schema relations metadata exists.
 For Better Auth setups, run codegen first, then define `convex/functions/auth.ts` with `defineAuth` imported from `./generated`; this file remains the canonical auth runtime contract (`authEnabled`, `getAuth`, CRUD/triggers, and `auth`).
 If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
 

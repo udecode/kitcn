@@ -1,0 +1,17 @@
+{
+  "plugins": {
+    "ratelimit": {
+      "package": "@better-convex/ratelimit"
+    },
+    "resend": {
+      "package": "@better-convex/resend",
+      "files": {
+        "resend-crons": "convex/lib/plugins/resend/crons.ts",
+        "resend-email": "convex/functions/plugins/email.tsx",
+        "resend-functions": "convex/functions/plugins/resend.ts",
+        "resend-plugin": "convex/lib/plugins/resend/plugin.ts",
+        "resend-webhook": "convex/lib/plugins/resend/webhook.ts"
+      }
+    }
+  }
+}

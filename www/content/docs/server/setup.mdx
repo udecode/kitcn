@@ -93,7 +93,6 @@ Before creating procedures, you'll need a database schema. These docs assume the
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-7,9-29,31-42}
 import {
   convexTable,
-  defineRelations,
   defineSchema,
   id,
   index,
@@ -118,12 +117,15 @@ export const session = convexTable(
 );
 
 export const tables = { user, session };
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  user: { sessions: r.many.session({ from: r.user.id, to: r.session.userId }) },
-  session: { user: r.one.user({ from: r.session.userId, to: r.user.id }) },
-}));
+export default defineSchema(tables, {
+  strict: false,
+  relations: (r) => ({
+    user: {
+      sessions: r.many.session({ from: r.user.id, to: r.session.userId }),
+    },
+    session: { user: r.one.user({ from: r.session.userId, to: r.user.id }) },
+  }),
+});
 ```
 
 <Callout icon={<InfoIcon />}>

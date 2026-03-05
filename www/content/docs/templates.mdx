@@ -137,7 +137,7 @@ import {
   text,
   timestamp,
 } from 'better-convex/orm';
-import { ratelimitPlugin } from 'better-convex/plugins/ratelimit';
+import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
 
 // Better Auth core tables (minimal template)
 export const userTable = convexTable(
@@ -219,9 +219,9 @@ export const tables = {
 
 const schema = defineSchema(tables, {
   strict: false,
-  plugins: [ratelimitPlugin()], // only required if you use better-convex/plugins/ratelimit
+  plugins: [ratelimitPlugin()], // only required if you use @better-convex/ratelimit
 });
-export const relations = defineRelations(tables);
+const relations = defineRelations(tables);
 export default schema;
 ```
 
@@ -924,7 +924,7 @@ import { defineTriggers } from 'better-convex/orm';
 import { aggregatePostCount } from './aggregates';
 import { relations } from './schema';
 
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   posts: {
     change: aggregatePostCount.trigger,
   },
@@ -938,7 +938,7 @@ See [Triggers documentation](/docs/orm/schema/triggers) for patterns.
 If you use this guard, enable the schema plugin in `convex/functions/schema.ts`:
 
 ```ts showLineNumbers
-import { ratelimitPlugin } from 'better-convex/plugins/ratelimit';
+import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
 
 export default defineSchema(tables, {
   plugins: [ratelimitPlugin()],
@@ -946,7 +946,7 @@ export default defineSchema(tables, {
 ```
 
 ```ts title="convex/lib/rate-limiter.ts" showLineNumbers
-import { MINUTE, Ratelimit } from 'better-convex/plugins/ratelimit';
+import { MINUTE, Ratelimit } from '@better-convex/ratelimit';
 import { CRPCError } from 'better-convex/server';
 import type { MutationCtx } from '../functions/generated/server';
 import type { SessionUser } from '../shared/auth-shared';

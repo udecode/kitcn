@@ -1,9 +1,9 @@
 /* biome-ignore-all lint: compile-time type assertions only */
 
 import type { OrmWriter } from 'better-convex/orm';
-import { relations } from './functions/schema';
+import schema from './functions/schema';
 
-declare const db: OrmWriter<typeof relations>;
+declare const db: OrmWriter<typeof schema>;
 
 void db.query.projects.findMany({
   with: {

@@ -2,3 +2,12 @@
 
 export { aggregatePlugin } from '../orm/aggregate-index/schema';
 export { migrationPlugin } from '../orm/migrations/schema';
+export {
+  definePluginMiddleware,
+  type PluginMiddleware,
+  type PluginMiddlewareConfigureContext,
+  type PluginMiddlewareConfigureInput,
+  type PluginMiddlewareConfigureResolver,
+  type PluginMiddlewareContextScope,
+  resolvePluginMiddlewareOptions,
+} from './middleware';

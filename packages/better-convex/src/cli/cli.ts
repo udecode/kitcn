@@ -1,8 +1,14 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  multiselect as clackMultiselect,
+  select as clackSelect,
+  confirm,
+  isCancel,
+} from '@clack/prompts';
 import { execa } from 'execa';
 import { createJiti } from 'jiti';
 import { getTableConfig } from '../orm/introspection.js';
@@ -15,6 +21,19 @@ import {
   type MigrationConfig,
 } from './config.js';
 import { syncEnv } from './env.js';
+import {
+  FUNCTIONS_DIR_IMPORT_PLACEHOLDER,
+  getPluginCatalogEntry,
+  getSupportedPluginKeys,
+  isSupportedPluginKey,
+  PLUGIN_CONFIG_IMPORT_PLACEHOLDER,
+  type PluginCatalogEntry,
+  PROJECT_CRPC_IMPORT_PLACEHOLDER,
+  PROJECT_GET_ENV_ACCESS_PLACEHOLDER,
+  PROJECT_GET_ENV_IMPORT_PLACEHOLDER,
+  PROJECT_SHARED_API_IMPORT_PLACEHOLDER,
+  type SupportedPluginKey,
+} from './plugin-catalog.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,6 +48,10 @@ const MISSING_BACKFILL_FUNCTION_RE =
   /could not find function|function .* was not found|unknown function/i;
 const GITIGNORE_CONVEX_ENTRY_RE = /(^|\r?\n)\.convex\/?\s*(\r?\n|$)/m;
 const TS_EXTENSION_RE = /\.ts$/;
+const DEFINE_SCHEMA_WITH_OPTIONS_RE =
+  /defineSchema\s*\(([\s\S]*?),\s*\{([\s\S]*?)\}\s*\)/m;
+const DEFINE_SCHEMA_CALL_RE = /defineSchema\s*\(([\s\S]*?)\)/m;
+const PLUGINS_ARRAY_RE = /plugins\s*:\s*\[([\s\S]*?)\]/m;
 const AGGREGATE_STATE_RELATIVE_PATH = join(
   '.convex',
   'better-convex',
@@ -41,17 +64,159 @@ export type ParsedArgs = {
   restArgs: string[];
   convexArgs: string[];
   debug: boolean;
-  outputDir?: string;
+  sharedDir?: string;
   scope?: 'all' | 'auth' | 'orm';
   configPath?: string;
 };
 
 const VALID_SCOPES = new Set(['all', 'auth', 'orm']);
+const ORM_SCHEMA_PLUGINS = Symbol.for('better-convex:OrmSchemaPlugins');
+const ORM_SCHEMA_RELATIONS = Symbol.for('better-convex:OrmSchemaRelations');
+type SupportedPlugin = SupportedPluginKey;
+const SUPPORTED_PLUGINS = new Set<SupportedPlugin>(getSupportedPluginKeys());
+type PluginLockfile = {
+  plugins: Record<string, { package: string; files?: Record<string, string> }>;
+};
+type CommonPluginCommandArgs = {
+  plugin?: SupportedPlugin;
+  yes: boolean;
+  json: boolean;
+  dryRun: boolean;
+  noCodegen: boolean;
+  preset?: string;
+};
+type AddCommandArgs = CommonPluginCommandArgs & {
+  overwrite: boolean;
+};
+type DiffCommandArgs = {
+  plugin?: SupportedPlugin;
+  json: boolean;
+  preset?: string;
+  verboseDiff: boolean;
+};
+type ListCommandArgs = {
+  json: boolean;
+};
+type ScaffoldFile = {
+  templateId: string;
+  filePath: string;
+  lockfilePath: string;
+  content: string;
+};
+type ScaffoldTemplate = {
+  id: string;
+  path: string;
+  content: string;
+  target: 'functions' | 'lib';
+  requires: string[];
+  dependencyHintMessage?: string;
+  dependencyHints: string[];
+};
+type ResolvedScaffoldRoots = {
+  functionsRootDir: string;
+  libRootDir: string;
+  crpcFilePath: string;
+  sharedApiFilePath: string;
+  envFilePath?: string;
+};
+type ScaffoldResult = {
+  created: string[];
+  updated: string[];
+  skipped: string[];
+};
+
+type ScaffoldDiffStatus = 'changed' | 'missing';
+
+type ScaffoldDiffResult = {
+  filePath: string;
+  status: ScaffoldDiffStatus;
+  diff?: string;
+};
+
+type PluginDescriptor = PluginCatalogEntry;
+
+type PluginDependencyInstallResult = {
+  packageName?: string;
+  packageJsonPath?: string;
+  installed: boolean;
+  skipped: boolean;
+  reason?: 'missing_package_json' | 'already_present' | 'dry_run';
+};
+
+type CliSelectOption<TValue extends string> = {
+  value: TValue;
+  label: string;
+  hint?: string;
+};
+
+type PromptAdapter = {
+  isInteractive: () => boolean;
+  confirm: (message: string) => Promise<boolean>;
+  select: <TValue extends string>(params: {
+    message: string;
+    options: readonly CliSelectOption<TValue>[];
+  }) => Promise<TValue | symbol>;
+  multiselect: <TValue extends string>(params: {
+    message: string;
+    options: readonly CliSelectOption<TValue>[];
+    initialValues?: readonly TValue[];
+    required?: boolean;
+  }) => Promise<TValue[] | symbol>;
+};
+
+const HELP_FLAGS = new Set(['--help', '-h']);
+
+const ROOT_HELP_TEXT = `Usage: better-convex <command> [options]
+
+Commands:
+  dev                          Run dev workflow with codegen/watch passthrough
+  codegen                      Generate Better Convex outputs
+  add [plugin]                 Add a plugin scaffold + schema registration
+  diff [plugin]                Preview plugin scaffold drift (read-only)
+  list                         List installed plugins
+  env                          Env helper and convex env passthrough
+  deploy                       Deploy with migrations/backfill flows
+  migrate                      Migration lifecycle commands
+  aggregate                    Aggregate backfill/rebuild/prune commands
+  analyze                      Analyze Convex runtime bundle
+  reset                        Destructive database reset (requires --yes)
+
+Run "better-convex <command> --help" for command options.`;
+
+const ADD_HELP_TEXT = `Usage: better-convex add [plugin] [options]
+
+Options:
+  --yes, -y         Deterministic non-interactive mode
+  --json            Machine-readable command output
+  --dry-run         Show planned operations without writing files
+  --overwrite       Overwrite existing changed files without prompt
+  --no-codegen      Skip automatic codegen after add
+  --preset, -p      Plugin preset override`;
+
+const DIFF_HELP_TEXT = `Usage: better-convex diff [plugin] [options]
+
+Options:
+  --json            Machine-readable command output
+  --preset, -p      Plugin preset override
+  --verbose-diff    Print unified patches for changed/missing files`;
+
+const LIST_HELP_TEXT = `Usage: better-convex list [options]
+
+Options:
+  --json            Machine-readable plugin inventory output`;
+
+const CODEGEN_HELP_TEXT = `Usage: better-convex codegen [options]
+
+Options:
+  --api <dir>       Output directory (default from config)
+  --scope <mode>    Generation scope: all | auth | orm
+  --config <path>   Config path override
+  --debug           Show detailed output`;
 
 // Parse args: better-convex [command] [--api <dir>] [--scope <all|auth|orm>] [--config <path>] [--debug] [...convex-args]
 export function parseArgs(argv: string[]): ParsedArgs {
   let debug = false;
-  let outputDir: string | undefined;
+  let sharedDir: string | undefined;
   let scope: 'all' | 'auth' | 'orm' | undefined;
   let configPath: string | undefined;
 
@@ -69,7 +234,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       if (!value) {
         throw new Error('Missing value for --api.');
       }
-      outputDir = value;
+      sharedDir = value;
       i += 1; // skip value
       continue;
     }
@@ -107,10 +272,1201 @@ export function parseArgs(argv: string[]): ParsedArgs {
     restArgs,
     convexArgs: restArgs,
     debug,
-    outputDir,
+    sharedDir,
     scope,
     configPath,
   };
+}
+
+function parsePluginPosition(args: string[]): {
+  plugin?: SupportedPlugin;
+  startIndex: number;
+} {
+  const first = args[0];
+  if (!first || first.startsWith('-')) {
+    return { startIndex: 0 };
+  }
+  if (!SUPPORTED_PLUGINS.has(first as SupportedPlugin)) {
+    throw new Error(
+      `Unsupported plugin "${first}". Supported plugins: ${[
+        ...SUPPORTED_PLUGINS,
+      ].join(', ')}.`
+    );
+  }
+  return {
+    plugin: first as SupportedPlugin,
+    startIndex: 1,
+  };
+}
+
+function hasHelpFlag(args: string[]): boolean {
+  return args.some((arg) => HELP_FLAGS.has(arg));
+}
+
+function printRootHelp(): void {
+  console.info(ROOT_HELP_TEXT);
+}
+
+function printCommandHelp(command: string): void {
+  if (command === 'add') {
+    console.info(ADD_HELP_TEXT);
+    return;
+  }
+  if (command === 'diff') {
+    console.info(DIFF_HELP_TEXT);
+    return;
+  }
+  if (command === 'list') {
+    console.info(LIST_HELP_TEXT);
+    return;
+  }
+  if (command === 'codegen') {
+    console.info(CODEGEN_HELP_TEXT);
+    return;
+  }
+  printRootHelp();
+}
+
+function createPromptAdapter(): PromptAdapter {
+  return {
+    isInteractive: () => Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    confirm: async (message: string) => {
+      const response = await confirm({ message });
+      if (isCancel(response)) {
+        return false;
+      }
+      return Boolean(response);
+    },
+    select: async <TValue extends string>(params: {
+      message: string;
+      options: readonly CliSelectOption<TValue>[];
+    }) => {
+      const options = params.options.map((option) => {
+        const next: {
+          value: TValue;
+          label: string;
+          hint?: string;
+        } = {
+          value: option.value,
+          label: option.label,
+        };
+        if (option.hint) {
+          next.hint = option.hint;
+        }
+        return next;
+      });
+      return (await clackSelect<TValue>({
+        message: params.message,
+        options: options as any,
+      })) as TValue | symbol;
+    },
+    multiselect: async <TValue extends string>(params: {
+      message: string;
+      options: readonly CliSelectOption<TValue>[];
+      initialValues?: readonly TValue[];
+      required?: boolean;
+    }) => {
+      const options = params.options.map((option) => {
+        const next: {
+          value: TValue;
+          label: string;
+          hint?: string;
+        } = {
+          value: option.value,
+          label: option.label,
+        };
+        if (option.hint) {
+          next.hint = option.hint;
+        }
+        return next;
+      });
+      return (await clackMultiselect<TValue>({
+        message: `${params.message} (space to toggle)`,
+        options: options as any,
+        initialValues: params.initialValues as TValue[] | undefined,
+        required: params.required,
+      })) as TValue[] | symbol;
+    },
+  };
+}
+
+function parseAddCommandArgs(args: string[]): AddCommandArgs {
+  const { plugin, startIndex } = parsePluginPosition(args);
+
+  let yes = false;
+  let json = false;
+  let dryRun = false;
+  let overwrite = false;
+  let noCodegen = false;
+  let preset: string | undefined;
+
+  for (let i = startIndex; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--yes' || arg === '-y') {
+      yes = true;
+      continue;
+    }
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--dry-run') {
+      dryRun = true;
+      continue;
+    }
+    if (arg === '--overwrite') {
+      overwrite = true;
+      continue;
+    }
+    if (arg === '--no-codegen') {
+      noCodegen = true;
+      continue;
+    }
+    if (arg === '--preset' || arg === '-p') {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error('Missing value for --preset.');
+      }
+      preset = value;
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--preset=')) {
+      const value = arg.slice('--preset='.length);
+      if (!value) {
+        throw new Error('Missing value for --preset.');
+      }
+      preset = value;
+      continue;
+    }
+    throw new Error(`Unknown add flag "${arg}".`);
+  }
+
+  return {
+    plugin,
+    yes,
+    json,
+    dryRun,
+    overwrite,
+    noCodegen,
+    preset,
+  };
+}
+
+function parseDiffCommandArgs(args: string[]): DiffCommandArgs {
+  const { plugin, startIndex } = parsePluginPosition(args);
+
+  let json = false;
+  let verboseDiff = false;
+  let preset: string | undefined;
+
+  for (let i = startIndex; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--verbose-diff') {
+      verboseDiff = true;
+      continue;
+    }
+    if (arg === '--preset' || arg === '-p') {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error('Missing value for --preset.');
+      }
+      preset = value;
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--preset=')) {
+      const value = arg.slice('--preset='.length);
+      if (!value) {
+        throw new Error('Missing value for --preset.');
+      }
+      preset = value;
+      continue;
+    }
+    throw new Error(`Unknown diff flag "${arg}".`);
+  }
+
+  return {
+    plugin,
+    json,
+    preset,
+    verboseDiff,
+  };
+}
+
+function parseListCommandArgs(args: string[]): ListCommandArgs {
+  let json = false;
+  for (const arg of args) {
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    throw new Error(`Unknown list flag "${arg}".`);
+  }
+  return { json };
+}
+
+function getPluginDescriptor(plugin: SupportedPlugin): PluginDescriptor {
+  return getPluginCatalogEntry(plugin);
+}
+
+function resolvePluginPackageName(
+  descriptor: PluginDescriptor
+): string | undefined {
+  return descriptor.packageName;
+}
+
+function findNearestPackageJsonPath(startDir: string): string | undefined {
+  let current = resolve(startDir);
+  while (true) {
+    const candidate = join(current, 'package.json');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return;
+    }
+    current = parent;
+  }
+}
+
+function hasDependency(
+  pkgJson: Record<string, unknown>,
+  packageName: string
+): boolean {
+  const sections = [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+  ] as const;
+  return sections.some((section) => {
+    const value = pkgJson[section];
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      packageName in (value as Record<string, unknown>)
+    );
+  });
+}
+
+async function ensurePluginDependencyInstalled(params: {
+  descriptor: PluginDescriptor;
+  dryRun: boolean;
+  execaFn: typeof execa;
+}): Promise<PluginDependencyInstallResult> {
+  const packageName = resolvePluginPackageName(params.descriptor);
+  if (!packageName) {
+    return {
+      installed: false,
+      skipped: true,
+      reason: 'missing_package_json',
+    };
+  }
+  const packageJsonPath = findNearestPackageJsonPath(process.cwd());
+  if (!packageJsonPath) {
+    return {
+      packageName,
+      installed: false,
+      skipped: true,
+      reason: 'missing_package_json',
+    };
+  }
+  const packageJson = JSON.parse(
+    fs.readFileSync(packageJsonPath, 'utf8')
+  ) as Record<string, unknown>;
+  if (hasDependency(packageJson, packageName)) {
+    return {
+      packageName,
+      packageJsonPath,
+      installed: false,
+      skipped: true,
+      reason: 'already_present',
+    };
+  }
+  if (params.dryRun) {
+    return {
+      packageName,
+      packageJsonPath,
+      installed: false,
+      skipped: true,
+      reason: 'dry_run',
+    };
+  }
+
+  await params.execaFn('bun', ['add', packageName], {
+    cwd: dirname(packageJsonPath),
+    stdio: 'inherit',
+  });
+  return {
+    packageName,
+    packageJsonPath,
+    installed: true,
+    skipped: false,
+  };
+}
+
+async function resolvePluginPreset(
+  descriptor: PluginDescriptor,
+  promptAdapter: PromptAdapter,
+  presetArg?: string
+): Promise<string> {
+  const profileKeys = descriptor.presets.map((profile) => profile.key);
+  const availablePresets = new Set(profileKeys);
+  if (
+    presetArg &&
+    availablePresets.size > 0 &&
+    !availablePresets.has(presetArg)
+  ) {
+    throw new Error(
+      `Invalid preset "${presetArg}" for plugin "${descriptor.key}". Expected one of: ${[
+        ...availablePresets,
+      ].join(', ')}.`
+    );
+  }
+
+  const fallbackPreset = descriptor.defaultPreset ?? profileKeys[0];
+  const resolvedPreset = presetArg ?? fallbackPreset;
+  if (resolvedPreset) {
+    return resolvedPreset;
+  }
+
+  if (profileKeys.length > 0 && promptAdapter.isInteractive()) {
+    const selected = await promptAdapter.select({
+      message: `Select preset for plugin "${descriptor.key}"`,
+      options: descriptor.presets.map((profile) => ({
+        value: profile.key,
+        label: profile.key,
+        hint: profile.description,
+      })),
+    });
+    if (isCancel(selected)) {
+      throw new Error('Preset selection cancelled.');
+    }
+    return selected as string;
+  }
+
+  throw new Error(
+    `Plugin "${descriptor.key}" does not define a resolvable preset. Expected one of: ${[
+      ...availablePresets,
+    ].join(', ')}.`
+  );
+}
+
+function getPluginDisplayHint(
+  descriptor: PluginDescriptor
+): string | undefined {
+  return descriptor.presets[0]?.description;
+}
+
+async function promptForPluginSelection(
+  promptAdapter: PromptAdapter,
+  plugins: readonly SupportedPlugin[],
+  message: string
+): Promise<SupportedPlugin> {
+  const options = plugins.map((plugin) => {
+    const descriptor = getPluginDescriptor(plugin);
+    return {
+      value: plugin,
+      label: plugin,
+      hint: getPluginDisplayHint(descriptor),
+    };
+  });
+  const selected = await promptAdapter.select({
+    message,
+    options,
+  });
+  if (isCancel(selected)) {
+    throw new Error('Plugin selection cancelled.');
+  }
+  return selected as SupportedPlugin;
+}
+
+function normalizeTemplateIdOrThrow(templateId: string, fieldName: string) {
+  const normalized = templateId.trim();
+  if (normalized.length === 0) {
+    throw new Error(`Invalid ${fieldName}: template id must be non-empty.`);
+  }
+  return normalized;
+}
+
+function resolvePresetScaffoldTemplates(
+  descriptor: PluginDescriptor,
+  preset: string
+): ScaffoldTemplate[] {
+  const presetDefinition = descriptor.presets.find(
+    (item) => item.key === preset
+  );
+  if (!presetDefinition) {
+    throw new Error(
+      `Invalid preset "${preset}" for plugin "${descriptor.key}". Expected one of: ${descriptor.presets
+        .map((item) => item.key)
+        .join(', ')}.`
+    );
+  }
+  const templateById = new Map(
+    collectPluginScaffoldTemplates(descriptor).map(
+      (template) => [template.id, template] as const
+    )
+  );
+  const seenTemplateIds = new Set<string>();
+  const templates: ScaffoldTemplate[] = [];
+  for (const templateIdRaw of presetDefinition.templateIds) {
+    const templateId = normalizeTemplateIdOrThrow(
+      templateIdRaw,
+      `${descriptor.key} scaffold template id`
+    );
+    if (seenTemplateIds.has(templateId)) {
+      throw new Error(
+        `Duplicate scaffold template id "${templateId}" in plugin "${descriptor.key}" preset "${preset}".`
+      );
+    }
+    const template = templateById.get(templateId);
+    if (!template) {
+      throw new Error(
+        `Preset "${preset}" in plugin "${descriptor.key}" references missing template "${templateId}".`
+      );
+    }
+    seenTemplateIds.add(templateId);
+    templates.push(template);
+  }
+  return templates.sort(
+    (a, b) =>
+      a.target.localeCompare(b.target) ||
+      a.path.localeCompare(b.path) ||
+      a.id.localeCompare(b.id)
+  );
+}
+
+export function collectPluginScaffoldTemplates(
+  descriptor: PluginDescriptor
+): ScaffoldTemplate[] {
+  const orderedTemplates: ScaffoldTemplate[] = [];
+  const seenById = new Map<string, ScaffoldTemplate>();
+  for (const template of descriptor.templates) {
+    const templateId = normalizeTemplateIdOrThrow(
+      template.id,
+      `${descriptor.key} scaffold template id`
+    );
+    const templatePath = normalizeRelativePathOrThrow(
+      template.path,
+      `${descriptor.key} scaffold template "${templateId}" path`
+    );
+    const normalizedRequires = [...new Set(template.requires ?? [])]
+      .map((requirement) =>
+        normalizeTemplateIdOrThrow(
+          requirement,
+          `${descriptor.key} scaffold template "${templateId}" dependency`
+        )
+      )
+      .sort((a, b) => a.localeCompare(b));
+    if (seenById.has(templateId)) {
+      throw new Error(
+        `Duplicate scaffold template id "${templateId}" in plugin "${descriptor.key}".`
+      );
+    }
+    const normalizedTemplate: ScaffoldTemplate = {
+      id: templateId,
+      path: templatePath,
+      content: template.content,
+      target: template.target === 'lib' ? 'lib' : 'functions',
+      requires: normalizedRequires,
+      dependencyHintMessage:
+        typeof template.dependencyHintMessage === 'string' &&
+        template.dependencyHintMessage.trim().length > 0
+          ? template.dependencyHintMessage.trim()
+          : undefined,
+      dependencyHints: [...new Set(template.dependencyHints ?? [])].filter(
+        (value): value is string =>
+          typeof value === 'string' && value.trim().length > 0
+      ),
+    };
+    seenById.set(templateId, normalizedTemplate);
+    orderedTemplates.push(normalizedTemplate);
+  }
+
+  for (const preset of descriptor.presets) {
+    for (const templateIdRaw of preset.templateIds) {
+      const templateId = normalizeTemplateIdOrThrow(
+        templateIdRaw,
+        `${descriptor.key} preset "${preset.key}" template id`
+      );
+      if (!seenById.has(templateId)) {
+        throw new Error(
+          `Preset "${preset.key}" in plugin "${descriptor.key}" references missing template "${templateId}".`
+        );
+      }
+    }
+  }
+
+  return orderedTemplates.sort(
+    (a, b) =>
+      a.target.localeCompare(b.target) ||
+      a.path.localeCompare(b.path) ||
+      a.id.localeCompare(b.id)
+  );
+}
+
+function resolveTemplateSelectionWithDependencies(
+  descriptor: PluginDescriptor,
+  allTemplates: readonly ScaffoldTemplate[],
+  templateIds: readonly string[],
+  errorContext: string
+): ScaffoldTemplate[] {
+  if (templateIds.length === 0) {
+    return [];
+  }
+
+  const templateById = new Map(
+    allTemplates.map((template) => [template.id, template] as const)
+  );
+  const selectedIds = new Set<string>();
+  const pendingIds = [...templateIds];
+  while (pendingIds.length > 0) {
+    const templateId = pendingIds.pop();
+    if (!templateId || selectedIds.has(templateId)) {
+      continue;
+    }
+    const template = templateById.get(templateId);
+    if (!template) {
+      throw new Error(
+        `No scaffold templates could be resolved for plugin "${descriptor.key}" (${errorContext}).`
+      );
+    }
+    selectedIds.add(templateId);
+    for (const requiredId of template.requires) {
+      pendingIds.push(requiredId);
+    }
+  }
+
+  const templates = allTemplates.filter((template) =>
+    selectedIds.has(template.id)
+  );
+  if (templates.length === 0) {
+    throw new Error(
+      `No scaffold templates could be resolved for plugin "${descriptor.key}" (${errorContext}).`
+    );
+  }
+  return templates;
+}
+
+function resolveTemplatesByIdOrThrow(
+  descriptor: PluginDescriptor,
+  allTemplates: readonly ScaffoldTemplate[],
+  templateIds: readonly string[],
+  errorContext: string
+): ScaffoldTemplate[] {
+  return resolveTemplateSelectionWithDependencies(
+    descriptor,
+    allTemplates,
+    templateIds,
+    errorContext
+  );
+}
+
+function filterScaffoldTemplatePathMap(
+  templatePathMap: Record<string, string>,
+  allowedTemplateIds: readonly string[]
+): Record<string, string> {
+  if (allowedTemplateIds.length === 0) {
+    return {};
+  }
+  const allowed = new Set(allowedTemplateIds.map((templateId) => templateId));
+  return Object.fromEntries(
+    Object.entries(templatePathMap).filter(([templateId]) =>
+      allowed.has(templateId)
+    )
+  );
+}
+
+function resolveAddTemplateDefaults(params: {
+  presetArg?: string;
+  lockfileTemplateIds: readonly string[];
+  presetTemplateIds: readonly string[];
+  availableTemplateIds: readonly string[];
+}): string[] {
+  const availableTemplateIdSet = new Set(
+    params.availableTemplateIds.map((id) => id.trim())
+  );
+  const normalizeTemplateIds = (templateIds: readonly string[]) =>
+    [...new Set(templateIds.map((id) => id.trim()))].filter(
+      (id) => id.length > 0 && availableTemplateIdSet.has(id)
+    );
+  const lockfileTemplateIds = normalizeTemplateIds(params.lockfileTemplateIds);
+  const presetTemplateIds = normalizeTemplateIds(params.presetTemplateIds);
+  const sourceTemplateIds =
+    typeof params.presetArg === 'string'
+      ? presetTemplateIds
+      : lockfileTemplateIds.length > 0
+        ? lockfileTemplateIds
+        : presetTemplateIds;
+  return sourceTemplateIds;
+}
+
+async function promptForScaffoldTemplateSelection(
+  promptAdapter: PromptAdapter,
+  descriptor: PluginDescriptor,
+  allTemplates: readonly ScaffoldTemplate[],
+  presetTemplateIds: readonly string[],
+  roots: ResolvedScaffoldRoots
+): Promise<string[]> {
+  const selected = await promptAdapter.multiselect({
+    message: `Select scaffold files for plugin "${descriptor.key}"`,
+    options: allTemplates.map((template) => ({
+      value: template.id,
+      label: normalizePath(
+        relative(
+          process.cwd(),
+          join(
+            template.target === 'lib'
+              ? roots.libRootDir
+              : roots.functionsRootDir,
+            template.path
+          )
+        )
+      ),
+    })),
+    initialValues: presetTemplateIds,
+    required: true,
+  });
+
+  if (isCancel(selected)) {
+    throw new Error('Scaffold file selection cancelled.');
+  }
+
+  const selectedIds = [
+    ...new Set((selected as string[]).map((id) => id.trim())),
+  ].filter((id) => id.length > 0);
+  if (selectedIds.length === 0) {
+    throw new Error(
+      `No scaffold files selected for plugin "${descriptor.key}". Select at least one scaffold file.`
+    );
+  }
+  return selectedIds;
+}
+
+function normalizePath(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
+}
+
+function normalizeRelativePathOrThrow(
+  value: string,
+  fieldName: string
+): string {
+  if (value.includes('\0')) {
+    throw new Error(`Invalid ${fieldName}: null byte is not allowed.`);
+  }
+  if (isAbsolute(value)) {
+    throw new Error(`Invalid ${fieldName}: absolute paths are not allowed.`);
+  }
+  const normalized = posix.normalize(value.replace(/\\/g, '/'));
+  if (
+    normalized.length === 0 ||
+    normalized === '.' ||
+    normalized === '..' ||
+    normalized.startsWith('../') ||
+    normalized.startsWith('/')
+  ) {
+    throw new Error(`Invalid ${fieldName}: path traversal is not allowed.`);
+  }
+  return normalized;
+}
+
+function normalizeLockfileScaffoldPath(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0) {
+    return null;
+  }
+  if (value.includes('\0') || isAbsolute(value)) {
+    return null;
+  }
+  const normalized = posix.normalize(value.replace(/\\/g, '/'));
+  if (
+    normalized.length === 0 ||
+    normalized === '.' ||
+    normalized === '..' ||
+    normalized.startsWith('../') ||
+    normalized.startsWith('/')
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function resolvePluginScaffoldRoots(
+  functionsDir: string,
+  descriptor: PluginDescriptor,
+  config: ReturnType<typeof loadBetterConvexConfig>
+): ResolvedScaffoldRoots {
+  const libDir = normalizeRelativePathOrThrow(config.paths.lib, 'paths.lib');
+  const libRoot = resolve(process.cwd(), libDir);
+  return {
+    functionsRootDir: join(functionsDir, 'plugins'),
+    libRootDir: join(libRoot, 'plugins', descriptor.key),
+    crpcFilePath: join(libRoot, 'crpc.ts'),
+    sharedApiFilePath: resolve(process.cwd(), config.paths.shared, 'api.ts'),
+    envFilePath: config.paths.env
+      ? resolve(process.cwd(), config.paths.env)
+      : undefined,
+  };
+}
+
+function resolvePluginScaffoldFiles(
+  templates: readonly ScaffoldTemplate[],
+  roots: ResolvedScaffoldRoots,
+  functionsDir: string,
+  existingTemplatePathMap?: Record<string, string>
+): ScaffoldFile[] {
+  return templates.map((template) => {
+    const rootDir =
+      template.target === 'lib' ? roots.libRootDir : roots.functionsRootDir;
+    const mappedLockfilePath = existingTemplatePathMap?.[template.id];
+    const resolvedLockfilePath =
+      normalizeLockfileScaffoldPath(mappedLockfilePath);
+    const lockfilePath =
+      resolvedLockfilePath ??
+      normalizePath(relative(process.cwd(), join(rootDir, template.path)));
+    const filePath = resolve(process.cwd(), lockfilePath);
+    const getEnvImportPath = roots.envFilePath
+      ? resolveProjectGetEnvImportPrefix(filePath, roots.envFilePath)
+      : null;
+    const content = template.content
+      .replaceAll(
+        FUNCTIONS_DIR_IMPORT_PLACEHOLDER,
+        resolveFunctionsDirImportPrefix(filePath, functionsDir)
+      )
+      .replaceAll(
+        PROJECT_CRPC_IMPORT_PLACEHOLDER,
+        resolveProjectCrpcImportPrefix(filePath, roots.crpcFilePath)
+      )
+      .replaceAll(
+        PROJECT_SHARED_API_IMPORT_PLACEHOLDER,
+        resolveProjectSharedApiImportPrefix(filePath, roots.sharedApiFilePath)
+      )
+      .replaceAll(
+        PROJECT_GET_ENV_IMPORT_PLACEHOLDER,
+        getEnvImportPath ? `import { getEnv } from "${getEnvImportPath}";` : ''
+      )
+      .replaceAll(
+        PROJECT_GET_ENV_ACCESS_PLACEHOLDER,
+        getEnvImportPath ? 'getEnv()' : 'process.env'
+      )
+      .replaceAll(
+        PLUGIN_CONFIG_IMPORT_PLACEHOLDER,
+        resolvePluginConfigImportPrefix(filePath, roots.libRootDir)
+      );
+
+    if (roots.envFilePath && content.includes('process.env')) {
+      throw new Error(
+        `Scaffold template "${template.id}" contains process.env while paths.env is configured.`
+      );
+    }
+
+    return {
+      templateId: template.id,
+      filePath,
+      lockfilePath,
+      content,
+    };
+  });
+}
+
+function resolveFunctionsDirImportPrefix(
+  filePath: string,
+  functionsDir: string
+): string {
+  const relativePath = normalizePath(relative(dirname(filePath), functionsDir));
+  if (relativePath.length === 0 || relativePath === '.') {
+    return '.';
+  }
+  if (relativePath.startsWith('.')) {
+    return relativePath;
+  }
+  return `./${relativePath}`;
+}
+
+function resolvePluginConfigImportPrefix(
+  filePath: string,
+  libPluginRootDir: string
+): string {
+  const pluginConfigFile = join(libPluginRootDir, 'plugin.ts');
+  const relativePath = normalizePath(
+    relative(dirname(filePath), pluginConfigFile)
+  ).replace(TS_EXTENSION_RE, '');
+  if (relativePath.length === 0 || relativePath === '.') {
+    return './plugin';
+  }
+  if (relativePath.startsWith('.')) {
+    return relativePath;
+  }
+  return `./${relativePath}`;
+}
+
+function resolveProjectCrpcImportPrefix(
+  filePath: string,
+  projectCrpcFilePath: string
+): string {
+  const relativePath = normalizePath(
+    relative(dirname(filePath), projectCrpcFilePath)
+  ).replace(TS_EXTENSION_RE, '');
+  if (relativePath.length === 0 || relativePath === '.') {
+    return './crpc';
+  }
+  if (relativePath.startsWith('.')) {
+    return relativePath;
+  }
+  return `./${relativePath}`;
+}
+
+function resolveProjectSharedApiImportPrefix(
+  filePath: string,
+  sharedApiFilePath: string
+): string {
+  const relativePath = normalizePath(
+    relative(dirname(filePath), sharedApiFilePath)
+  ).replace(TS_EXTENSION_RE, '');
+  if (relativePath.length === 0 || relativePath === '.') {
+    return './api';
+  }
+  if (relativePath.startsWith('.')) {
+    return relativePath;
+  }
+  return `./${relativePath}`;
+}
+
+function resolveProjectGetEnvImportPrefix(
+  filePath: string,
+  getEnvFilePath: string
+): string {
+  const relativePath = normalizePath(
+    relative(dirname(filePath), getEnvFilePath)
+  ).replace(TS_EXTENSION_RE, '');
+  if (relativePath.length === 0 || relativePath === '.') {
+    return './get-env';
+  }
+  if (relativePath.startsWith('.')) {
+    return relativePath;
+  }
+  return `./${relativePath}`;
+}
+
+function readPluginLockfile(lockfilePath: string): PluginLockfile {
+  if (!fs.existsSync(lockfilePath)) {
+    return {
+      plugins: {},
+    };
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(lockfilePath, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {
+        plugins: {},
+      };
+    }
+    const rawPlugins = (parsed as { plugins?: unknown }).plugins;
+    if (
+      !rawPlugins ||
+      typeof rawPlugins !== 'object' ||
+      Array.isArray(rawPlugins)
+    ) {
+      return {
+        plugins: {},
+      };
+    }
+    const plugins: PluginLockfile['plugins'] = {};
+    for (const [pluginKey, pluginEntry] of Object.entries(
+      rawPlugins as Record<string, unknown>
+    ).sort(([a], [b]) => a.localeCompare(b))) {
+      if (
+        !pluginEntry ||
+        typeof pluginEntry !== 'object' ||
+        Array.isArray(pluginEntry)
+      ) {
+        continue;
+      }
+      const packageName = (pluginEntry as { package?: unknown }).package;
+      if (typeof packageName !== 'string' || packageName.length === 0) {
+        continue;
+      }
+      const rawFiles = (pluginEntry as { files?: unknown }).files;
+      const normalizedFiles: Record<string, string> = {};
+      if (
+        rawFiles &&
+        typeof rawFiles === 'object' &&
+        !Array.isArray(rawFiles)
+      ) {
+        for (const [templateId, templatePath] of Object.entries(
+          rawFiles as Record<string, unknown>
+        ).sort(([a], [b]) => a.localeCompare(b))) {
+          const normalizedPath = normalizeLockfileScaffoldPath(templatePath);
+          if (normalizedPath) {
+            normalizedFiles[templateId] = normalizedPath;
+          }
+        }
+      }
+      plugins[pluginKey] =
+        Object.keys(normalizedFiles).length > 0
+          ? { package: packageName, files: normalizedFiles }
+          : { package: packageName };
+    }
+    return {
+      plugins,
+    };
+  } catch {
+    return {
+      plugins: {},
+    };
+  }
+}
+
+function writePluginLockfile(
+  lockfilePath: string,
+  lockfile: PluginLockfile
+): void {
+  const normalizedPlugins: PluginLockfile['plugins'] = {};
+  for (const plugin of Object.keys(lockfile.plugins).sort((a, b) =>
+    a.localeCompare(b)
+  )) {
+    const pluginEntry = lockfile.plugins[plugin];
+    if (
+      !pluginEntry ||
+      typeof pluginEntry.package !== 'string' ||
+      pluginEntry.package.length === 0
+    ) {
+      continue;
+    }
+    const normalizedFiles: Record<string, string> = {};
+    const rawFiles = pluginEntry?.files;
+    if (rawFiles && typeof rawFiles === 'object' && !Array.isArray(rawFiles)) {
+      for (const [templateId, templatePath] of Object.entries(rawFiles).sort(
+        ([a], [b]) => a.localeCompare(b)
+      )) {
+        const normalizedPath = normalizeLockfileScaffoldPath(templatePath);
+        if (normalizedPath) {
+          normalizedFiles[templateId] = normalizedPath;
+        }
+      }
+    }
+    normalizedPlugins[plugin] =
+      Object.keys(normalizedFiles).length > 0
+        ? { package: pluginEntry.package, files: normalizedFiles }
+        : { package: pluginEntry.package };
+  }
+  fs.mkdirSync(dirname(lockfilePath), { recursive: true });
+  fs.writeFileSync(
+    lockfilePath,
+    `${JSON.stringify(
+      {
+        plugins: normalizedPlugins,
+      },
+      null,
+      2
+    )}\n`
+  );
+}
+
+async function resolveSchemaInstalledPlugins(
+  functionsDir: string
+): Promise<SupportedPlugin[]> {
+  const schemaPath = join(functionsDir, 'schema.ts');
+  if (!fs.existsSync(schemaPath)) {
+    return [];
+  }
+
+  const jiti = createJiti(process.cwd(), {
+    interopDefault: true,
+    moduleCache: false,
+  });
+  try {
+    const schemaModule = await jiti.import(schemaPath);
+    const schemaValue =
+      schemaModule && typeof schemaModule === 'object'
+        ? ((schemaModule as Record<string, unknown>).default ?? schemaModule)
+        : null;
+    if (!schemaValue || typeof schemaValue !== 'object') {
+      return [];
+    }
+    const plugins = (schemaValue as Record<symbol, unknown>)[
+      ORM_SCHEMA_PLUGINS
+    ];
+    if (!Array.isArray(plugins)) {
+      return [];
+    }
+    return plugins
+      .map((plugin) =>
+        plugin && typeof plugin === 'object' && 'key' in plugin
+          ? String((plugin as { key: unknown }).key)
+          : ''
+      )
+      .filter((key): key is SupportedPlugin =>
+        SUPPORTED_PLUGINS.has(key as SupportedPlugin)
+      )
+      .sort((a, b) => a.localeCompare(b));
+  } catch {
+    return [];
+  }
+}
+
+function renderDiff(filePath: string, before: string, after: string): string {
+  const relPath = normalizePath(relative(process.cwd(), filePath));
+  const beforeLines = before.trimEnd().split('\n');
+  const afterLines = after.trimEnd().split('\n');
+  return [
+    `--- ${relPath}`,
+    `+++ ${relPath}`,
+    `@@ -1,${beforeLines.length} +1,${afterLines.length} @@`,
+    ...beforeLines.map((line) => `-${line}`),
+    ...afterLines.map((line) => `+${line}`),
+  ].join('\n');
+}
+
+async function applyScaffoldFiles(
+  files: readonly ScaffoldFile[],
+  options: {
+    dryRun: boolean;
+    yes: boolean;
+    overwrite: boolean;
+    promptAdapter: PromptAdapter;
+  }
+): Promise<ScaffoldResult> {
+  const result: ScaffoldResult = {
+    created: [],
+    updated: [],
+    skipped: [],
+  };
+
+  for (const file of files) {
+    const normalized = normalizePath(file.filePath);
+    const exists = fs.existsSync(file.filePath);
+    if (!exists) {
+      result.created.push(normalized);
+      if (!options.dryRun) {
+        fs.mkdirSync(dirname(file.filePath), { recursive: true });
+        fs.writeFileSync(file.filePath, file.content);
+      }
+      continue;
+    }
+
+    const existingContent = fs.readFileSync(file.filePath, 'utf8');
+    if (existingContent === file.content) {
+      result.skipped.push(normalized);
+      continue;
+    }
+
+    const canPrompt = !options.yes && options.promptAdapter.isInteractive();
+    let shouldOverwrite = options.overwrite;
+    if (!shouldOverwrite && canPrompt) {
+      const response = await options.promptAdapter.confirm(
+        `Overwrite ${normalizePath(relative(process.cwd(), file.filePath))}?`
+      );
+      shouldOverwrite = response;
+    }
+
+    if (!shouldOverwrite) {
+      result.skipped.push(normalized);
+      continue;
+    }
+
+    result.updated.push(normalized);
+    if (!options.dryRun) {
+      fs.writeFileSync(file.filePath, file.content);
+    }
+  }
+
+  return result;
+}
+
+function computeScaffoldDiffs(
+  files: readonly ScaffoldFile[],
+  options: {
+    includePatch: boolean;
+  }
+): ScaffoldDiffResult[] {
+  const diffs: ScaffoldDiffResult[] = [];
+  for (const file of files) {
+    const exists = fs.existsSync(file.filePath);
+    if (!exists) {
+      diffs.push({
+        filePath: normalizePath(file.filePath),
+        status: 'missing',
+        diff: options.includePatch
+          ? renderDiff(file.filePath, '', file.content)
+          : undefined,
+      });
+      continue;
+    }
+    const existingContent = fs.readFileSync(file.filePath, 'utf8');
+    if (existingContent !== file.content) {
+      diffs.push({
+        filePath: normalizePath(file.filePath),
+        status: 'changed',
+        diff: options.includePatch
+          ? renderDiff(file.filePath, existingContent, file.content)
+          : undefined,
+      });
+    }
+  }
+  return diffs;
+}
+
+function ensureSchemaPluginRegistered(
+  functionsDir: string,
+  descriptor: PluginDescriptor,
+  dryRun: boolean
+): { updated: boolean; skipped: boolean } {
+  const schemaPath = join(functionsDir, 'schema.ts');
+  if (!fs.existsSync(schemaPath)) {
+    return { updated: false, skipped: true };
+  }
+
+  const schemaRegistration = descriptor.schemaRegistration;
+  const pluginFactory = schemaRegistration.importName;
+  const pluginImportPath = schemaRegistration.importPath;
+
+  let source = fs.readFileSync(schemaPath, 'utf8');
+  const original = source;
+  if (source.includes(`${pluginFactory}()`)) {
+    return { updated: false, skipped: true };
+  }
+
+  const importRegex = new RegExp(
+    `import\\s+\\{[^}]*\\b${pluginFactory}\\b[^}]*\\}\\s+from\\s+['"]${pluginImportPath}['"];?`
+  );
+  if (!importRegex.test(source)) {
+    source = `import { ${pluginFactory} } from '${pluginImportPath}';\n${source}`;
+  }
+
+  if (PLUGINS_ARRAY_RE.test(source)) {
+    source = source.replace(
+      PLUGINS_ARRAY_RE,
+      (_match, inner: string) =>
+        `plugins: [${pluginFactory}(), ${inner.trim()}]`
+    );
+  } else if (DEFINE_SCHEMA_WITH_OPTIONS_RE.test(source)) {
+    source = source.replace(
+      DEFINE_SCHEMA_WITH_OPTIONS_RE,
+      (_match, schemaArg: string, optionsArg: string) =>
+        `defineSchema(${schemaArg}, { plugins: [${pluginFactory}()], ${optionsArg.trim()} })`
+    );
+  } else if (DEFINE_SCHEMA_CALL_RE.test(source)) {
+    source = source.replace(
+      DEFINE_SCHEMA_CALL_RE,
+      (_match, schemaArg: string) =>
+        `defineSchema(${schemaArg}, { plugins: [${pluginFactory}()] })`
+    );
+  }
+
+  if (source === original) {
+    return { updated: false, skipped: true };
+  }
+  if (!dryRun) {
+    fs.writeFileSync(schemaPath, source);
+  }
+  return { updated: true, skipped: false };
 }
 
 type AggregateFingerprintState = {
@@ -164,9 +1520,22 @@ function readOptionalCliFlagValue(
   return;
 }
 
-function collectSchemaTables(schemaModule: Record<string, unknown>): unknown[] {
+function resolveSchemaDefaultExport(
+  schemaModule: Record<string, unknown>
+): Record<string, unknown> | null {
+  const schemaValue =
+    schemaModule.default !== undefined ? schemaModule.default : schemaModule;
+  if (!schemaValue || typeof schemaValue !== 'object') {
+    return null;
+  }
+  return schemaValue as Record<string, unknown>;
+}
+
+function collectSchemaTables(schemaValue: Record<string, unknown>): unknown[] {
   const allTables = new Set<unknown>();
-  const relations = schemaModule.relations;
+  const relations = (schemaValue as Record<string | symbol, unknown>)[
+    ORM_SCHEMA_RELATIONS
+  ];
   if (relations && typeof relations === 'object' && !Array.isArray(relations)) {
     for (const relationConfig of Object.values(
       relations as Record<string, unknown>
@@ -178,7 +1547,7 @@ function collectSchemaTables(schemaModule: Record<string, unknown>): unknown[] {
     }
   }
 
-  const tables = schemaModule.tables;
+  const tables = schemaValue.tables;
   if (tables && typeof tables === 'object' && !Array.isArray(tables)) {
     for (const table of Object.values(tables as Record<string, unknown>)) {
       if (table) {
@@ -237,8 +1606,14 @@ async function computeAggregateIndexFingerprint(
   if (!schemaModule || typeof schemaModule !== 'object') {
     return null;
   }
+  const schemaValue = resolveSchemaDefaultExport(
+    schemaModule as Record<string, unknown>
+  );
+  if (!schemaValue) {
+    return null;
+  }
 
-  const tables = collectSchemaTables(schemaModule as Record<string, unknown>);
+  const tables = collectSchemaTables(schemaValue);
   if (tables.length === 0) {
     return null;
   }
@@ -376,18 +1751,86 @@ export type RunDeps = {
   syncEnv: typeof syncEnv;
   loadBetterConvexConfig: typeof loadBetterConvexConfig;
   ensureConvexGitignoreEntry: typeof ensureConvexGitignoreEntry;
+  promptAdapter: PromptAdapter;
   enableDevSchemaWatch: boolean;
   realConvex: string;
 };
 
-function deriveScopeFromToggles(
-  api: boolean,
-  auth: boolean
-): 'all' | 'auth' | 'orm' | null {
-  if (api && auth) return 'all';
-  if (!api && auth) return 'auth';
-  if (!api && !auth) return 'orm';
-  return null;
+function getPluginLockfilePath(functionsDir: string): string {
+  return join(functionsDir, 'plugins.lock.json');
+}
+
+function resolveCodegenTrimSegments(config: {
+  codegen: { trimSegments?: string[] };
+}): string[] {
+  const configured = config.codegen.trimSegments ?? [];
+  const normalized = [
+    ...new Set(
+      configured
+        .map((segment) => segment.trim())
+        .filter((segment) => segment.length > 0)
+    ),
+  ];
+  return normalized.length > 0 ? normalized : ['plugins'];
+}
+
+async function runConfiguredCodegen(params: {
+  config: ReturnType<typeof loadBetterConvexConfig>;
+  sharedDir: string;
+  debug: boolean;
+  generateMetaFn: typeof generateMeta;
+  execaFn: typeof execa;
+  realConvexPath: string;
+  additionalConvexArgs?: string[];
+}): Promise<number> {
+  const {
+    config,
+    sharedDir,
+    debug,
+    generateMetaFn,
+    execaFn,
+    realConvexPath,
+    additionalConvexArgs,
+  } = params;
+  const scope = config.codegen.scope;
+  const trimSegments = resolveCodegenTrimSegments(config);
+  const convexCodegenArgs = [
+    ...config.codegen.convexArgs,
+    ...(additionalConvexArgs ?? []),
+  ];
+  await generateMetaFn(sharedDir, {
+    debug,
+    scope: scope ?? 'all',
+    trimSegments,
+  });
+
+  const result = await execaFn(
+    'node',
+    [realConvexPath, 'codegen', ...convexCodegenArgs],
+    {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+    }
+  );
+  return result.exitCode ?? 0;
+}
+
+async function runAfterScaffoldScript(params: {
+  script: string;
+  execaFn: typeof execa;
+}): Promise<number> {
+  const script = params.script.trim();
+  if (script.length === 0) {
+    return 0;
+  }
+
+  const result = await params.execaFn(script, [], {
+    shell: true,
+    stdio: 'inherit',
+    cwd: process.cwd(),
+    reject: false,
+  });
+  return result.exitCode ?? 0;
 }
 
 type BackfillCliOverrides = {
@@ -1562,6 +3005,7 @@ export async function run(
     syncEnv: syncEnvFn,
     loadBetterConvexConfig: loadBetterConvexConfigFn,
     ensureConvexGitignoreEntry: ensureConvexGitignoreEntryFn,
+    promptAdapter,
     enableDevSchemaWatch,
     realConvex: realConvexPath,
   } = {
@@ -1572,20 +3016,49 @@ export async function run(
     syncEnv,
     loadBetterConvexConfig,
     ensureConvexGitignoreEntry,
+    promptAdapter: createPromptAdapter(),
     enableDevSchemaWatch: !deps,
     realConvex,
     ...deps,
   };
+
+  if (argv.length > 0) {
+    const firstArg = argv[0];
+    if (firstArg === '--help' || firstArg === '-h') {
+      printRootHelp();
+      return 0;
+    }
+    if (firstArg === 'help') {
+      printCommandHelp(argv[1] ?? '');
+      return 0;
+    }
+  }
 
   const {
     command,
     restArgs,
     convexArgs,
     debug: cliDebug,
-    outputDir: cliOutputDir,
+    sharedDir: cliSharedDir,
     scope: cliScope,
     configPath,
   } = parseArgs(argv);
+
+  if (command === '--help' || command === '-h') {
+    printRootHelp();
+    return 0;
+  }
+
+  if (
+    (command === 'add' ||
+      command === 'diff' ||
+      command === 'list' ||
+      command === 'codegen') &&
+    hasHelpFlag(restArgs)
+  ) {
+    printCommandHelp(command);
+    return 0;
+  }
 
   if (command === 'dev') {
     if (cliScope) {
@@ -1600,10 +3073,8 @@ export async function run(
     } = extractMigrationCliOptions(convexArgs);
     const { remainingArgs: devCommandArgs, overrides: devBackfillOverrides } =
       extractBackfillCliOptions(devArgsWithoutMigrationFlags);
-    const outputDir = cliOutputDir ?? config.outputDir;
+    const sharedDir = cliSharedDir ?? config.paths.shared;
     const debug = cliDebug || config.dev.debug;
-    const generateApi = config.api;
-    const generateAuth = config.auth;
     const convexDevArgs = [...config.dev.convexArgs, ...devCommandArgs];
     const devBackfillConfig = resolveBackfillConfig(
       config.dev.aggregateBackfill,
@@ -1613,9 +3084,10 @@ export async function run(
       config.dev.migrations,
       devMigrationOverrides
     );
-    const { functionsDir } = getConvexConfigFn(outputDir);
+    const { functionsDir } = getConvexConfigFn(sharedDir);
     const schemaPath = join(functionsDir, 'schema.ts');
     const deploymentArgs = extractRunDeploymentArgs(convexDevArgs);
+    const trimSegments = resolveCodegenTrimSegments(config);
 
     if (!deps) {
       try {
@@ -1628,10 +3100,10 @@ export async function run(
     }
 
     // Initial codegen
-    await generateMetaFn(outputDir, {
+    await generateMetaFn(sharedDir, {
       debug,
-      api: generateApi,
-      auth: generateAuth,
+      scope: 'all',
+      trimSegments,
     });
 
     // Spawn watcher as child process
@@ -1646,10 +3118,10 @@ export async function run(
       cwd: process.cwd(),
       env: {
         ...process.env,
-        BETTER_CONVEX_API_OUTPUT_DIR: outputDir || '',
+        BETTER_CONVEX_API_OUTPUT_DIR: sharedDir || '',
         BETTER_CONVEX_DEBUG: debug ? '1' : '',
-        BETTER_CONVEX_GENERATE_API: generateApi ? '1' : '0',
-        BETTER_CONVEX_GENERATE_AUTH: generateAuth ? '1' : '0',
+        BETTER_CONVEX_CODEGEN_SCOPE: 'all',
+        BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS: JSON.stringify(trimSegments),
       },
     });
     processes.push(watcherProcess);
@@ -1836,39 +3308,462 @@ export async function run(
     cleanup();
     return result.exitCode ?? 0;
   }
-  if (command === 'codegen') {
+  if (command === 'add') {
+    const addArgs = parseAddCommandArgs(restArgs);
     const config = loadBetterConvexConfigFn(configPath);
-    const outputDir = cliOutputDir ?? config.outputDir;
-    const debug = cliDebug || config.codegen.debug;
-    const convexCodegenArgs = [...config.codegen.convexArgs, ...convexArgs];
-    const scope = cliScope ?? config.codegen.scope;
+    const sharedDir = cliSharedDir ?? config.paths.shared;
+    const { functionsDir } = getConvexConfigFn(sharedDir);
+    const selectedPlugin =
+      addArgs.plugin ??
+      (promptAdapter.isInteractive()
+        ? await promptForPluginSelection(
+            promptAdapter,
+            [...SUPPORTED_PLUGINS].sort((a, b) => a.localeCompare(b)),
+            'Select a plugin to add'
+          )
+        : undefined);
+    if (!selectedPlugin) {
+      throw new Error(
+        'Missing plugin name. Usage: better-convex add [plugin].'
+      );
+    }
+    const pluginDescriptor = getPluginDescriptor(selectedPlugin);
+    const resolvedPreset = await resolvePluginPreset(
+      pluginDescriptor,
+      promptAdapter,
+      addArgs.preset
+    );
+    const allTemplates = collectPluginScaffoldTemplates(pluginDescriptor);
+    const presetTemplates = resolvePresetScaffoldTemplates(
+      pluginDescriptor,
+      resolvedPreset
+    );
+    const lockfilePath = getPluginLockfilePath(functionsDir);
+    const lockfile = readPluginLockfile(lockfilePath);
+    const existingTemplatePathMap = filterScaffoldTemplatePathMap(
+      lockfile.plugins[selectedPlugin]?.files ?? {},
+      allTemplates.map((template) => template.id)
+    );
+    const existingTemplateIds = Object.keys(existingTemplatePathMap);
+    const presetTemplateIds = presetTemplates.map((template) => template.id);
+    const defaultTemplateIds = resolveAddTemplateDefaults({
+      presetArg: addArgs.preset,
+      lockfileTemplateIds: existingTemplateIds,
+      presetTemplateIds,
+      availableTemplateIds: allTemplates.map((template) => template.id),
+    });
+    const scaffoldRoots = resolvePluginScaffoldRoots(
+      functionsDir,
+      pluginDescriptor,
+      config
+    );
+    const selectedTemplateIds =
+      !addArgs.yes && promptAdapter.isInteractive()
+        ? await promptForScaffoldTemplateSelection(
+            promptAdapter,
+            pluginDescriptor,
+            allTemplates,
+            defaultTemplateIds,
+            scaffoldRoots
+          )
+        : defaultTemplateIds;
+    const selectedTemplates = resolveTemplatesByIdOrThrow(
+      pluginDescriptor,
+      allTemplates,
+      selectedTemplateIds,
+      'add'
+    );
+    const dependencyHintMessages = [
+      ...new Set(
+        selectedTemplates
+          .map((template) => template.dependencyHintMessage)
+          .filter((value): value is string => typeof value === 'string')
+      ),
+    ];
+    const dependencyHints = [
+      ...new Set(
+        selectedTemplates
+          .flatMap((template) => template.dependencyHints)
+          .filter((value): value is string => typeof value === 'string')
+      ),
+    ];
+    const dependencyHintCommand =
+      dependencyHints.length > 0
+        ? `bun add ${dependencyHints.join(' ')}`
+        : undefined;
+    const nextSteps = dependencyHintCommand
+      ? [`Install scaffold dependencies: ${dependencyHintCommand}`]
+      : [];
 
-    // Run better-convex codegen first
-    if (scope) {
-      await generateMetaFn(outputDir, { debug, scope });
+    const scaffoldFiles = resolvePluginScaffoldFiles(
+      selectedTemplates,
+      scaffoldRoots,
+      functionsDir,
+      existingTemplatePathMap
+    );
+    if (!addArgs.json) {
+      const selectedFiles = scaffoldFiles
+        .map((file) => normalizePath(relative(process.cwd(), file.filePath)))
+        .sort((a, b) => a.localeCompare(b));
+      console.info(
+        `ℹ️  Selected scaffold files:\n${selectedFiles
+          .map((file) => `  - ${file}`)
+          .join('\n')}`
+      );
+    }
+    const scaffoldResult = await applyScaffoldFiles(scaffoldFiles, {
+      dryRun: addArgs.dryRun,
+      yes: addArgs.yes,
+      overwrite: addArgs.overwrite,
+      promptAdapter,
+    });
+    const schemaRegistration = ensureSchemaPluginRegistered(
+      functionsDir,
+      pluginDescriptor,
+      addArgs.dryRun
+    );
+    const dependencyInstall = await ensurePluginDependencyInstalled({
+      descriptor: pluginDescriptor,
+      dryRun: addArgs.dryRun,
+      execaFn,
+    });
+    const pluginScaffoldPaths = {
+      ...existingTemplatePathMap,
+      ...Object.fromEntries(
+        scaffoldFiles.map((file) => [file.templateId, file.lockfilePath])
+      ),
+    };
+    const nextPluginEntry =
+      Object.keys(pluginScaffoldPaths).length > 0
+        ? {
+            package: pluginDescriptor.packageName,
+            files: pluginScaffoldPaths,
+          }
+        : {
+            package: pluginDescriptor.packageName,
+          };
+    const nextLockfile: PluginLockfile = {
+      plugins: {
+        ...lockfile.plugins,
+        [selectedPlugin]: nextPluginEntry,
+      },
+    };
+    if (!addArgs.dryRun) {
+      writePluginLockfile(lockfilePath, nextLockfile);
+    }
+
+    const payload = {
+      command: 'add',
+      plugin: selectedPlugin,
+      preset: resolvedPreset,
+      presetTemplateIds,
+      selectedTemplateIds,
+      dryRun: addArgs.dryRun,
+      created: scaffoldResult.created,
+      updated: scaffoldResult.updated,
+      skipped: scaffoldResult.skipped,
+      schemaUpdated: schemaRegistration.updated,
+      dependency: {
+        packageName: dependencyInstall.packageName,
+        packageJsonPath: dependencyInstall.packageJsonPath
+          ? normalizePath(
+              relative(process.cwd(), dependencyInstall.packageJsonPath)
+            )
+          : undefined,
+        installed: dependencyInstall.installed,
+        skipped: dependencyInstall.skipped,
+        reason: dependencyInstall.reason,
+      },
+      dependencyHints,
+      nextSteps,
+      lockfilePath: normalizePath(relative(process.cwd(), lockfilePath)),
+    };
+    if (addArgs.json) {
+      console.info(JSON.stringify(payload));
     } else {
-      const derivedScope = deriveScopeFromToggles(config.api, config.auth);
-      if (derivedScope) {
-        await generateMetaFn(outputDir, { debug, scope: derivedScope });
-      } else {
-        await generateMetaFn(outputDir, {
-          debug,
-          api: config.api,
-          auth: config.auth,
-        });
+      const createdCount = scaffoldResult.created.length;
+      const updatedCount = scaffoldResult.updated.length;
+      const skippedCount = scaffoldResult.skipped.length;
+      console.info(
+        `✔ ${selectedPlugin} scaffold results: ${createdCount} created, ${updatedCount} updated, ${skippedCount} skipped.`
+      );
+      if (createdCount > 0) {
+        console.info(
+          `Created files:\n${scaffoldResult.created
+            .map((file) => `  - ${file}`)
+            .join('\n')}`
+        );
+      }
+      if (updatedCount > 0) {
+        console.info(
+          `Updated files:\n${scaffoldResult.updated
+            .map((file) => `  - ${file}`)
+            .join('\n')}`
+        );
+      }
+      if (skippedCount > 0) {
+        console.info(
+          `Skipped files:\n${scaffoldResult.skipped
+            .map((file) => `  - ${file}`)
+            .join('\n')}`
+        );
+        if (!addArgs.overwrite) {
+          console.info('ℹ️  Re-run with --overwrite to replace changed files.');
+        }
+      }
+      if (schemaRegistration.updated) {
+        console.info('✔ Updated schema.ts plugin registration.');
+      }
+      if (dependencyInstall.installed) {
+        console.info(`✔ Installed ${dependencyInstall.packageName}.`);
+      }
+      if (dependencyHints.length > 0) {
+        const hintMessage =
+          dependencyHintMessages[0] ?? 'Additional dependencies are required';
+        console.info(`ℹ️  ${hintMessage}.`);
+        console.info(
+          `Dependencies:\n${dependencyHints.map((hint) => `  - ${hint}`).join('\n')}`
+        );
+        if (dependencyHintCommand) {
+          console.info(`Install command: ${dependencyHintCommand}`);
+        }
       }
     }
 
-    // Then run real convex codegen
-    const result = await execaFn(
-      'node',
-      [realConvexPath, 'codegen', ...convexCodegenArgs],
-      {
-        stdio: 'inherit',
-        cwd: process.cwd(),
+    if (!addArgs.noCodegen && !addArgs.dryRun) {
+      const codegenExitCode = await runConfiguredCodegen({
+        config,
+        sharedDir,
+        debug: cliDebug || config.codegen.debug,
+        generateMetaFn,
+        execaFn,
+        realConvexPath,
+      });
+      if (codegenExitCode !== 0) {
+        return codegenExitCode;
       }
+    }
+
+    if (!addArgs.dryRun && config.hooks.postAdd.length > 0) {
+      for (const script of config.hooks.postAdd) {
+        const hookExitCode = await runAfterScaffoldScript({
+          script,
+          execaFn,
+        });
+        if (hookExitCode !== 0) {
+          return hookExitCode;
+        }
+      }
+    }
+    return 0;
+  }
+  if (command === 'diff') {
+    const diffArgs = parseDiffCommandArgs(restArgs);
+    const config = loadBetterConvexConfigFn(configPath);
+    const sharedDir = cliSharedDir ?? config.paths.shared;
+    const { functionsDir } = getConvexConfigFn(sharedDir);
+    const lockfilePath = getPluginLockfilePath(functionsDir);
+    const schemaPlugins = await resolveSchemaInstalledPlugins(functionsDir);
+    const existingLockfile = readPluginLockfile(lockfilePath);
+    const installedPlugins = [
+      ...new Set([
+        ...(Object.keys(existingLockfile.plugins).filter((key) =>
+          isSupportedPluginKey(key)
+        ) as SupportedPlugin[]),
+        ...schemaPlugins,
+      ]),
+    ].sort((a, b) => a.localeCompare(b)) as SupportedPlugin[];
+    if (!diffArgs.plugin && installedPlugins.length === 0) {
+      throw new Error(
+        'No installed plugins found. Usage: better-convex diff [plugin].'
+      );
+    }
+    const selectedPlugin =
+      diffArgs.plugin ??
+      (promptAdapter.isInteractive()
+        ? await promptForPluginSelection(
+            promptAdapter,
+            installedPlugins,
+            'Select a plugin to diff'
+          )
+        : undefined);
+    if (!selectedPlugin) {
+      throw new Error(
+        'Missing plugin name. Usage: better-convex diff [plugin].'
+      );
+    }
+    const pluginDescriptor = getPluginDescriptor(selectedPlugin);
+    const resolvedPreset = await resolvePluginPreset(
+      pluginDescriptor,
+      promptAdapter,
+      diffArgs.preset
     );
-    return result.exitCode ?? 0;
+    const allTemplates = collectPluginScaffoldTemplates(pluginDescriptor);
+    const existingTemplatePathMap = filterScaffoldTemplatePathMap(
+      existingLockfile.plugins[selectedPlugin]?.files ?? {},
+      allTemplates.map((template) => template.id)
+    );
+    const existingTemplateIds = Object.keys(existingTemplatePathMap);
+    const presetTemplates = resolvePresetScaffoldTemplates(
+      pluginDescriptor,
+      resolvedPreset
+    );
+    const presetTemplateIds = presetTemplates.map((template) => template.id);
+    const templateIdsUsed =
+      typeof diffArgs.preset === 'string'
+        ? presetTemplateIds
+        : existingTemplateIds.length > 0
+          ? existingTemplateIds
+          : presetTemplateIds;
+    const selectedTemplates = resolveTemplatesByIdOrThrow(
+      pluginDescriptor,
+      allTemplates,
+      templateIdsUsed,
+      diffArgs.preset
+        ? `diff preset "${diffArgs.preset}"`
+        : existingTemplateIds.length > 0
+          ? 'diff lockfile selection'
+          : `diff fallback preset "${resolvedPreset}"`
+    );
+    const scaffoldRoots = resolvePluginScaffoldRoots(
+      functionsDir,
+      pluginDescriptor,
+      config
+    );
+    const scaffoldFiles = resolvePluginScaffoldFiles(
+      selectedTemplates,
+      scaffoldRoots,
+      functionsDir,
+      existingTemplatePathMap
+    );
+    const drift = computeScaffoldDiffs(scaffoldFiles, {
+      includePatch: diffArgs.verboseDiff,
+    });
+    const driftItems = drift.map((entry) => ({
+      path: normalizePath(relative(process.cwd(), entry.filePath)),
+      status: entry.status,
+      ...(entry.diff ? { patch: entry.diff } : {}),
+    }));
+    const payload = {
+      command: 'diff',
+      plugin: selectedPlugin,
+      preset: resolvedPreset,
+      templateIdsUsed,
+      clean: driftItems.length === 0,
+      files: driftItems,
+      lockfilePath: normalizePath(relative(process.cwd(), lockfilePath)),
+    };
+
+    if (diffArgs.json) {
+      console.info(JSON.stringify(payload));
+    } else if (driftItems.length === 0) {
+      console.info(
+        `✔ No scaffold drift detected for plugin "${selectedPlugin}".`
+      );
+    } else {
+      console.info(
+        `Scaffold drift for plugin "${selectedPlugin}": ${driftItems.length} file(s).`
+      );
+      for (const entry of driftItems) {
+        console.info(`  - ${entry.status}: ${entry.path}`);
+      }
+      if (diffArgs.verboseDiff) {
+        for (const entry of driftItems) {
+          if ('patch' in entry && typeof entry.patch === 'string') {
+            console.info(entry.patch);
+          }
+        }
+      }
+    }
+    return 0;
+  }
+  if (command === 'list') {
+    const listArgs = parseListCommandArgs(restArgs);
+    const config = loadBetterConvexConfigFn(configPath);
+    const sharedDir = cliSharedDir ?? config.paths.shared;
+    const { functionsDir } = getConvexConfigFn(sharedDir);
+    const lockfilePath = getPluginLockfilePath(functionsDir);
+    const lockfile = readPluginLockfile(lockfilePath);
+    const schemaPlugins = await resolveSchemaInstalledPlugins(functionsDir);
+    const installedPlugins = [
+      ...new Set([
+        ...(Object.keys(lockfile.plugins).filter((key) =>
+          isSupportedPluginKey(key)
+        ) as SupportedPlugin[]),
+        ...schemaPlugins,
+      ]),
+    ].sort((a, b) => a.localeCompare(b));
+    const pluginMetadata = installedPlugins.map((plugin) => {
+      const descriptor = getPluginDescriptor(plugin);
+      const lockfileEntry = lockfile.plugins[plugin];
+      return {
+        key: plugin,
+        package: lockfileEntry?.package ?? descriptor.packageName,
+        files: lockfileEntry?.files ?? {},
+        defaultPreset: descriptor.defaultPreset ?? null,
+        presets: descriptor.presets.map((profile) => ({
+          key: profile.key,
+          description: profile.description,
+        })),
+      };
+    });
+    const payload = {
+      installedPlugins,
+      schemaPlugins,
+      plugins: pluginMetadata,
+      lockfilePath: normalizePath(relative(process.cwd(), lockfilePath)),
+    };
+    if (listArgs.json) {
+      console.info(JSON.stringify(payload));
+    } else if (pluginMetadata.length === 0) {
+      console.info('No plugins installed.');
+    } else {
+      const lines = pluginMetadata.map((plugin) => {
+        const presetKeys = plugin.presets
+          .map((preset) => preset.key)
+          .join(', ');
+        const presetSummary =
+          presetKeys.length > 0
+            ? `presets: ${presetKeys}${plugin.defaultPreset ? ` (default: ${plugin.defaultPreset})` : ''}`
+            : 'presets: none';
+        return `  - ${plugin.key} (${presetSummary})`;
+      });
+      console.info(`Installed plugins:\n${lines.join('\n')}`);
+    }
+    return 0;
+  }
+  if (command === 'codegen') {
+    const config = loadBetterConvexConfigFn(configPath);
+    const sharedDir = cliSharedDir ?? config.paths.shared;
+    const scope = cliScope ?? config.codegen.scope;
+    const debug = cliDebug || config.codegen.debug;
+    if (scope) {
+      const scopedConfig = {
+        ...config,
+        codegen: {
+          ...config.codegen,
+          scope,
+        },
+      };
+      return runConfiguredCodegen({
+        config: scopedConfig,
+        sharedDir,
+        debug,
+        generateMetaFn,
+        execaFn,
+        realConvexPath,
+        additionalConvexArgs: convexArgs,
+      });
+    }
+    return runConfiguredCodegen({
+      config,
+      sharedDir,
+      debug,
+      generateMetaFn,
+      execaFn,
+      realConvexPath,
+      additionalConvexArgs: convexArgs,
+    });
   }
   if (command === 'env') {
     const subcommand = convexArgs[0];
@@ -2042,8 +3937,8 @@ export async function run(
           'Missing migration name. Usage: `better-convex migrate create <name>`.'
         );
       }
-      const outputDir = cliOutputDir ?? config.outputDir;
-      const { functionsDir } = getConvexConfigFn(outputDir);
+      const sharedDir = cliSharedDir ?? config.paths.shared;
+      const { functionsDir } = getConvexConfigFn(sharedDir);
       await runMigrationCreate({
         migrationName: rawName,
         functionsDir,

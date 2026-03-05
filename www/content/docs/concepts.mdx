@@ -113,7 +113,7 @@ Automatic side effects on data changes — denormalized counts, cascade deletes,
 import { defineTriggers, eq } from 'better-convex/orm';
 import { post, relations } from './schema';
 
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   user: {
     change: async (change, ctx) => {
       if (change.operation === 'delete') {
@@ -173,7 +173,7 @@ Cross-cutting features that span schema, runtime, and client. Register once, eve
 
 ```ts showLineNumbers title="convex/functions/schema.ts" {2,5}
 import { defineSchema } from 'better-convex/orm';
-import { ratelimitPlugin } from 'better-convex/plugins/ratelimit';
+import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
 
 export default defineSchema(tables, {
   plugins: [ratelimitPlugin()],

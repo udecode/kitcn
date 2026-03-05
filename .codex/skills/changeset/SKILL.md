@@ -7,6 +7,12 @@ description: Use when writing changesets for releases
 
 Always mirror @packages/better-convex/CHANGELOG.md tone and structure.
 
+## 0) Reuse existing changeset
+
+- Before creating a new changeset, check `.changeset/` for an existing unreleased changeset.
+- If one exists, UPDATE it instead of creating a new file. Nothing in it has been released yet, so treat it as a living draft.
+- Replace outdated content — don't append "also added..." or track progress. Write the latest state as if from scratch.
+
 ## 1) Versioning (project is still v0)
 
 - Breaking change => `minor`

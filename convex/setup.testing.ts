@@ -2,7 +2,6 @@ import {
   type CreateOrmOptions,
   createOrm,
   type OrmWriter,
-  type TablesRelationalConfig,
 } from 'better-convex/orm';
 import type {
   GenericDatabaseWriter,
@@ -20,7 +19,7 @@ export function convexTest<Schema extends SchemaDefinition<any, any>>(
 
 export const withOrm = <
   Ctx extends { db: GenericDatabaseWriter<any> },
-  Schema extends TablesRelationalConfig,
+  Schema extends object,
 >(
   ctx: Ctx,
   schema: Schema,
@@ -50,13 +49,13 @@ export type TestCtx = Awaited<ReturnType<typeof runCtx>>;
 
 export async function withOrmCtx<
   Schema extends SchemaDefinition<any, any>,
-  Relations extends TablesRelationalConfig,
+  OrmSchema extends object,
   Result,
 >(
   schema: Schema,
-  relationsConfig: Relations,
+  ormSchema: OrmSchema,
   fn: (ctx: {
-    orm: OrmWriter<Relations>;
+    orm: OrmWriter<OrmSchema>;
     db: GenericDatabaseWriter<any>;
   }) => Promise<Result>,
   options?: CreateOrmOptions
@@ -64,7 +63,7 @@ export async function withOrmCtx<
   const t = convexTest(schema);
   let result: Result | undefined;
   await t.run(async (baseCtx) => {
-    const ctx = withOrm(baseCtx, relationsConfig, options);
+    const ctx = withOrm(baseCtx, ormSchema, options);
     result = await fn(ctx);
   });
   return result as Result;

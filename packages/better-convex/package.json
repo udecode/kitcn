@@ -21,8 +21,6 @@
     "./crpc": "./dist/crpc/index.js",
     "./orm": "./dist/orm/index.js",
     "./plugins": "./dist/plugins/index.js",
-    "./plugins/ratelimit": "./dist/plugins/ratelimit/index.js",
-    "./plugins/ratelimit/react": "./dist/plugins/ratelimit/react/index.js",
     "./react": "./dist/react/index.js",
     "./rsc": "./dist/rsc/index.js",
     "./server": "./dist/server/index.js",
@@ -54,6 +52,7 @@
     "jotai-x": "^2.3.3",
     "picocolors": "^1.1.1",
     "remeda": "^2.33.6",
+    "svix": "^1.84.1",
     "type-fest": "^5.4.4"
   },
   "devDependencies": {

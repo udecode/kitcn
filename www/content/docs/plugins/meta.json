@@ -1,5 +1,5 @@
 {
   "title": "Plugins",
   "defaultOpen": true,
-  "pages": ["ratelimit"]
+  "pages": ["ratelimit", "resend"]
 }

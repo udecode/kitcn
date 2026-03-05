@@ -1,12 +1,14 @@
+import { requireSchemaRelations } from 'better-convex/orm';
 import { expect, test } from 'vitest';
 import schema, {
-  relations,
   tagsTable,
   todosTable,
   todoTagsTable,
   userTable,
 } from '../../example/convex/functions/schema';
 import { withOrmCtx } from '../setup.testing';
+
+const relations = requireSchemaRelations(schema);
 
 test('example schema applies defaultLimit to unsized findMany', async () => {
   await withOrmCtx(schema, relations, async (ctx) => {

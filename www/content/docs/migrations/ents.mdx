@@ -66,7 +66,7 @@ In ORM APIs, system fields are public as `id` and `createdAt`. Internal Convex f
       (t) => [index('by_user').on(t.userId)]
     );
 
-    export const relations = defineRelations({ users, posts }, (r) => ({
+    const relations = defineRelations({ users, posts }, (r) => ({
       users: { posts: r.many.posts() },
       posts: { user: r.one.users({ from: r.posts.userId, to: r.users.id }) },
     }));

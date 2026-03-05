@@ -28,16 +28,20 @@ export default defineAuth((ctx) => ({
         invitationExpiresIn: 48 * 60 * 60, // 48 hours
         teams: { enabled: true, maximumTeams: 10 },
         sendInvitationEmail: async (data) => {
+          const inviterName = data.inviter.user.name || 'Team Admin';
+          const organizationName = data.organization.name;
+          const roleSuffix = data.role ? ` as ${data.role}` : '';
+          const acceptUrl = `${process.env.SITE_URL!}/w/${data.organization.slug}?invite=${data.id}`;
+
           await (ctx as ActionCtx).scheduler.runAfter(
-            0, internal.email.sendOrganizationInviteEmail,
+            0, internal.plugins.email.sendTemplatedEmail,
             {
-              acceptUrl: `${process.env.SITE_URL!}/w/${data.organization.slug}?invite=${data.id}`,
-              invitationId: data.id,
-              inviterEmail: data.inviter.user.email,
-              inviterName: data.inviter.user.name || 'Team Admin',
-              organizationName: data.organization.name,
-              role: data.role,
               to: data.email,
+              subject: `${inviterName} invited you to join ${organizationName}`,
+              title: `Invitation to join ${organizationName}`,
+              body: `${inviterName} (${data.inviter.user.email}) invited you to join ${organizationName}${roleSuffix}.`,
+              ctaLabel: 'Accept invitation',
+              ctaUrl: acceptUrl,
             }
           );
         },

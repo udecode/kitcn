@@ -29,7 +29,7 @@ import type {
   ResolvedAlgorithm,
 } from './types';
 
-const DEFAULT_PREFIX = '@better-convex/plugins/ratelimit';
+const DEFAULT_PREFIX = '@better-convex/ratelimit';
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_THRESHOLD = 30;
 const MIN_POWER_OF_TWO_CHOICES = 3;

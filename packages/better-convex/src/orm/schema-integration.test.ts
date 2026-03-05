@@ -1,5 +1,17 @@
-import { ratelimitPlugin } from '../plugins/ratelimit';
-import { convexTable, defineSchema, getTableConfig, id, text } from './index';
+import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
+import {
+  convexTable,
+  defineSchema,
+  defineTriggers,
+  getSchemaRelations,
+  getSchemaTriggers,
+  getTableConfig,
+  id,
+  text,
+  timestamp,
+} from './index';
+import type { OrmSchemaPlugin } from './symbols';
+import { OrmSchemaPlugins } from './symbols';
 
 test('convexTable works with defineSchema()', () => {
   const users = convexTable('users', {
@@ -169,6 +181,22 @@ test('defineSchema injects ratelimit storage tables when ratelimitPlugin is enab
   expect(schema.tables).toHaveProperty('ratelimit_protection_hit');
 });
 
+test('defineSchema stores resolved plugin descriptors for downstream codegen', () => {
+  const users = convexTable('plugin_descriptor_users', {
+    name: text().notNull(),
+  });
+
+  const schema = defineSchema({ users }, { plugins: [ratelimitPlugin()] });
+
+  const plugins = (
+    schema as { [OrmSchemaPlugins]?: readonly { key: string }[] }
+  )[OrmSchemaPlugins];
+
+  expect(plugins?.map((plugin) => plugin.key)).toEqual(
+    expect.arrayContaining(['aggregate', 'migration', 'ratelimit'])
+  );
+});
+
 test('defineSchema throws for duplicate plugin registration', () => {
   const users = convexTable('duplicate_plugin_users', {
     name: text().notNull(),
@@ -193,4 +221,193 @@ test('defineSchema throws when plugin-injected table name is already in use', ()
       { plugins: [ratelimitPlugin()] }
     )
   ).toThrow(/cannot inject internal table 'ratelimit_state'/i);
+});
+
+test('defineSchema stores relations metadata from options on default schema export', () => {
+  const users = convexTable('schema_meta_users', {
+    name: text().notNull(),
+  });
+  const posts = convexTable('schema_meta_posts', {
+    title: text().notNull(),
+    userId: id('schema_meta_users')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+  });
+
+  const schema = defineSchema(
+    { users, posts },
+    {
+      relations: (r) => ({
+        users: {
+          posts: r.many.posts(),
+        },
+        posts: {
+          user: r.one.users({ from: r.posts.userId, to: r.users.id }),
+        },
+      }),
+    }
+  );
+
+  const relations = getSchemaRelations(schema);
+  expect(relations).toBeDefined();
+  expect(relations).toHaveProperty('users');
+  expect(relations).toHaveProperty('posts');
+});
+
+test('defineSchema stores trigger metadata from options on default schema export', () => {
+  const users = convexTable('schema_meta_trigger_users', {
+    name: text().notNull(),
+    updatedAt: timestamp().notNull().defaultNow(),
+  });
+
+  const schema = defineSchema(
+    { users },
+    {
+      relations: (r) => ({
+        users: {},
+      }),
+      triggers: (relations) =>
+        defineTriggers(relations, {
+          users: {
+            change: async () => {},
+          },
+        }),
+    }
+  );
+
+  const triggers = getSchemaTriggers(schema);
+  expect(triggers).toBeDefined();
+  expect(triggers).toHaveProperty('users');
+});
+
+test('defineSchema composes plugin-provided relations when app relations are not provided', () => {
+  const users = convexTable('schema_plugin_rel_users', {
+    name: text().notNull(),
+  });
+  const posts = convexTable('schema_plugin_rel_posts', {
+    title: text().notNull(),
+    userId: id('schema_plugin_rel_users')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+  });
+
+  const relationPlugin = {
+    key: 'relation-plugin',
+    schema: {
+      tableNames: [],
+      inject: <TSchema extends Record<string, unknown>>(schema: TSchema) =>
+        schema,
+      relations: (r) => ({
+        users: {
+          posts: r.many.posts(),
+        },
+        posts: {
+          user: r.one.users({
+            from: r.posts.userId,
+            to: r.users.id,
+          }),
+        },
+      }),
+    },
+  } satisfies OrmSchemaPlugin;
+
+  const schema = defineSchema(
+    { users, posts },
+    { plugins: [relationPlugin] as const }
+  );
+  const relations = getSchemaRelations(schema);
+
+  expect(relations).toBeDefined();
+  expect(relations?.users?.relations).toHaveProperty('posts');
+});
+
+test('defineSchema composes plugin relations with app relations', () => {
+  const users = convexTable('schema_plugin_rel_merge_users', {
+    name: text().notNull(),
+  });
+  const posts = convexTable('schema_plugin_rel_merge_posts', {
+    title: text().notNull(),
+    userId: id('schema_plugin_rel_merge_users')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+  });
+
+  const relationPlugin = {
+    key: 'relation-merge-plugin',
+    schema: {
+      tableNames: [],
+      inject: <TSchema extends Record<string, unknown>>(schema: TSchema) =>
+        schema,
+      relations: (r) => ({
+        users: {
+          posts: r.many.posts(),
+        },
+      }),
+    },
+  } satisfies OrmSchemaPlugin;
+
+  const schema = defineSchema(
+    { users, posts },
+    {
+      plugins: [relationPlugin] as const,
+      relations: (r) => ({
+        posts: {
+          user: r.one.users({
+            from: r.posts.userId,
+            to: r.users.id,
+          }),
+        },
+      }),
+    }
+  );
+  const relations = getSchemaRelations(schema);
+
+  expect(relations?.users?.relations).toHaveProperty('posts');
+  expect(relations?.posts?.relations).toHaveProperty('user');
+});
+
+test('defineSchema throws when plugin relations collide with app relation fields', () => {
+  const users = convexTable('schema_plugin_rel_collision_users', {
+    name: text().notNull(),
+  });
+  const posts = convexTable('schema_plugin_rel_collision_posts', {
+    title: text().notNull(),
+    userId: id('schema_plugin_rel_collision_users')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+  });
+
+  const relationPlugin = {
+    key: 'relation-collision-plugin',
+    schema: {
+      tableNames: [],
+      inject: <TSchema extends Record<string, unknown>>(schema: TSchema) =>
+        schema,
+      relations: (r) => ({
+        users: {
+          posts: r.many.posts(),
+        },
+        posts: {
+          user: r.one.users({
+            from: r.posts.userId,
+            to: r.users.id,
+          }),
+        },
+      }),
+    },
+  } satisfies OrmSchemaPlugin;
+
+  expect(() =>
+    defineSchema(
+      { users, posts },
+      {
+        plugins: [relationPlugin] as const,
+        relations: (r) => ({
+          users: {
+            posts: r.many.posts(),
+          },
+        }),
+      }
+    )
+  ).toThrow(/relation field 'users\.posts' is defined more than once/i);
 });

@@ -121,7 +121,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
     ```ts showLineNumbers
     import { defineRelations } from 'drizzle-orm';
 
-    export const relations = defineRelations({ users, posts }, (r) => ({
+    const relations = defineRelations({ users, posts }, (r) => ({
       users: {
         posts: r.many.posts(),
       },
@@ -138,7 +138,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
     ```ts showLineNumbers {11}
     import { defineRelations } from 'better-convex/orm';
 
-    export const relations = defineRelations({ users, posts }, (r) => ({
+    const relations = defineRelations({ users, posts }, (r) => ({
       users: {
         posts: r.many.posts(),
       },

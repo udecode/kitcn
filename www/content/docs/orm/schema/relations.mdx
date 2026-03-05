@@ -82,7 +82,7 @@ const posts = convexTable('posts', {
   reviewerId: id('users'),
 });
 
-export const relations = defineRelations({ users, posts }, (r) => ({
+const relations = defineRelations({ users, posts }, (r) => ({
   users: {
     // No need for from/to here: these infer from the reverse one() relations.
     authoredPosts: r.many.posts({ alias: 'author' }),
@@ -386,7 +386,7 @@ const relations = defineRelations({ users, posts }, (r) => ({
 Make sure to export both tables and relations from your schema:
 
 ```ts showLineNumbers
-export const relations = defineRelations({ users, posts }, (r) => ({
+const relations = defineRelations({ users, posts }, (r) => ({
   users: { posts: r.many.posts() },
   posts: { author: r.one.users({ from: r.posts.userId, to: r.users.id }) },
 }));
@@ -418,7 +418,7 @@ const postRelations = defineRelationsPart({ posts, comments }, (r) => ({
   },
 }));
 
-export const relations = defineRelations({ users, posts, comments }, (r) => ({
+const relations = defineRelations({ users, posts, comments }, (r) => ({
   users: userRelations.users.relations,
   posts: {
     ...userRelations.posts.relations,
@@ -500,7 +500,7 @@ const comments = convexTable('comments', {
   videoId: id('videos'),
 });
 
-export const relations = defineRelations({ posts, videos, comments }, (r) => ({
+const relations = defineRelations({ posts, videos, comments }, (r) => ({
   posts: {
     comments: r.many.comments({
       from: r.posts.id,
@@ -569,7 +569,7 @@ const comments = convexTable(
   ]
 );
 
-export const relations = defineRelations({ posts, videos, comments }, (r) => ({
+const relations = defineRelations({ posts, videos, comments }, (r) => ({
   posts: {
     comments: r.many.comments({
       from: r.posts.id,

@@ -1,4 +1,4 @@
-import { ratelimitPlugin } from '../plugins/ratelimit';
+import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
 import { text } from './builders/text';
 import { createOrm, getResetTableNames } from './create-orm';
 import { defineMigration, defineMigrationSet } from './migrations/definitions';

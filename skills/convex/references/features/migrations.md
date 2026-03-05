@@ -95,19 +95,23 @@ export const migrations = defineMigrationSet([migration1, migration2]);
 
 `better-convex deploy` auto-runs: `convex deploy` → `migrate up` → `aggregate backfill`.
 
-Config in `better-convex.json`:
+Config in `concave.json` under `meta["better-convex"]`:
 
 ```json
 {
-  "deploy": {
-    "migrations": {
-      "enabled": "auto",
-      "wait": true,
-      "batchSize": 256,
-      "pollIntervalMs": 1000,
-      "timeoutMs": 900000,
-      "strict": true,
-      "allowDrift": false
+  "meta": {
+    "better-convex": {
+      "deploy": {
+        "migrations": {
+          "enabled": "auto",
+          "wait": true,
+          "batchSize": 256,
+          "pollIntervalMs": 1000,
+          "timeoutMs": 900000,
+          "strict": true,
+          "allowDrift": false
+        }
+      }
     }
   }
 }

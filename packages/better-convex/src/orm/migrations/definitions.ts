@@ -1,6 +1,12 @@
 import type { GenericDatabaseWriter } from 'convex/server';
 import type { OrmWriter } from '../database';
-import type { TableRelationalConfig, TablesRelationalConfig } from '../relations';
+import type {
+  ExtractTablesFromSchema,
+  RelationsConfigWithSchema,
+  TableRelationalConfig,
+  TablesRelationalConfig,
+} from '../relations';
+import { OrmSchemaRelations } from '../symbols';
 import type { InferSelectModel } from '../types';
 
 const MIGRATION_ID_RE = /^[a-zA-Z0-9_:-]+$/;
@@ -18,28 +24,49 @@ export type MigrationRunStatus =
   | 'noop';
 export type MigrationWriteMode = 'safe_bypass' | 'normal';
 
+export type MigrationSchemaInput = TablesRelationalConfig | object;
+
+export type ResolveMigrationSchema<TSchema extends MigrationSchemaInput> =
+  [TSchema] extends [TablesRelationalConfig]
+    ? TSchema
+    : TSchema extends { [OrmSchemaRelations]?: infer TRelations }
+      ? Exclude<TRelations, undefined> extends TablesRelationalConfig
+        ? Exclude<TRelations, undefined>
+        : RelationsConfigWithSchema<
+            {},
+            ExtractTablesFromSchema<TSchema & Record<string, unknown>>
+          >
+      : RelationsConfigWithSchema<
+          {},
+          ExtractTablesFromSchema<TSchema & Record<string, unknown>>
+        >;
+
 export type MigrationTableName<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 > = {
-  [K in keyof TSchema]-?: TSchema[K] extends TableRelationalConfig
-    ? TSchema[K]['name']
+  [K in keyof ResolveMigrationSchema<TSchema>]-?: ResolveMigrationSchema<
+    TSchema
+  >[K] extends TableRelationalConfig
+    ? ResolveMigrationSchema<TSchema>[K]['name']
     : never;
-}[keyof TSchema] &
+}[keyof ResolveMigrationSchema<TSchema>] &
   string;
 
 type MigrationTableConfigByName<
-  TSchema extends TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput,
   TTableName extends MigrationTableName<TSchema>,
 > = {
-  [K in keyof TSchema]-?: TSchema[K] extends TableRelationalConfig
-    ? TSchema[K]['name'] extends TTableName
-      ? TSchema[K]
+  [K in keyof ResolveMigrationSchema<TSchema>]-?: ResolveMigrationSchema<
+    TSchema
+  >[K] extends TableRelationalConfig
+    ? ResolveMigrationSchema<TSchema>[K]['name'] extends TTableName
+      ? ResolveMigrationSchema<TSchema>[K]
       : never
     : never;
-}[keyof TSchema];
+}[keyof ResolveMigrationSchema<TSchema>];
 
 export type MigrationDoc<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
   TTableName extends MigrationTableName<TSchema> = MigrationTableName<TSchema>,
 > = MigrationTableConfigByName<TSchema, TTableName> extends TableRelationalConfig
   ? Partial<
@@ -49,10 +76,10 @@ export type MigrationDoc<
   : Record<string, unknown>;
 
 export type MigrationDocContext<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 > = {
   db: GenericDatabaseWriter<any>;
-  orm: OrmWriter<TSchema>;
+  orm: OrmWriter<ResolveMigrationSchema<TSchema>>;
   migrationId: string;
   runId: string;
   direction: MigrationDirection;
@@ -61,7 +88,7 @@ export type MigrationDocContext<
 };
 
 export type MigrationMigrateOne<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
   TTableName extends MigrationTableName<TSchema> = MigrationTableName<TSchema>,
 > = (
   ctx: MigrationDocContext<TSchema>,
@@ -69,7 +96,7 @@ export type MigrationMigrateOne<
 ) => Promise<unknown> | unknown;
 
 type MigrationStepByTable<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
   TTableName extends MigrationTableName<TSchema> = MigrationTableName<TSchema>,
 > = {
   table: TTableName;
@@ -79,7 +106,7 @@ type MigrationStepByTable<
 };
 
 export type MigrationStep<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 > = {
   [TTableName in MigrationTableName<TSchema>]: MigrationStepByTable<
     TSchema,
@@ -88,7 +115,7 @@ export type MigrationStep<
 }[MigrationTableName<TSchema>];
 
 export type MigrationDefinition<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 > = {
   id: string;
   name?: string;
@@ -99,13 +126,13 @@ export type MigrationDefinition<
 };
 
 export type MigrationManifestEntry<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 > = MigrationDefinition<TSchema> & {
   checksum: string;
 };
 
 export type MigrationSet<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 > = {
   migrations: readonly MigrationManifestEntry<TSchema>[];
   ids: readonly string[];
@@ -136,14 +163,14 @@ export type MigrationDriftIssue =
     };
 
 export type MigrationPlan<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 > = {
   direction: MigrationDirection;
   migrations: readonly MigrationManifestEntry<TSchema>[];
 };
 
 export function defineMigration<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 >(migration: MigrationDefinition<TSchema>): MigrationDefinition<TSchema> {
   validateMigrationId(migration.id);
   validateMigrationStep('up', migration.up);
@@ -154,7 +181,7 @@ export function defineMigration<
 }
 
 export function defineMigrationSet<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 >(migrations: readonly MigrationDefinition<TSchema>[]): MigrationSet<TSchema> {
   const normalized = [...migrations].map((migration) => {
     const defined = defineMigration(migration);
@@ -184,7 +211,7 @@ export function defineMigrationSet<
 }
 
 export function detectMigrationDrift<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 >(params: {
   migrationSet: MigrationSet<TSchema>;
   appliedState: MigrationStateMap;
@@ -220,7 +247,7 @@ export function detectMigrationDrift<
 }
 
 export function buildMigrationPlan<
-  TSchema extends TablesRelationalConfig = TablesRelationalConfig,
+  TSchema extends MigrationSchemaInput = TablesRelationalConfig,
 >(params: {
   direction: MigrationDirection;
   migrationSet: MigrationSet<TSchema>;
@@ -296,7 +323,7 @@ function validateMigrationId(id: string): void {
   }
 }
 
-function validateMigrationStep<TSchema extends TablesRelationalConfig>(
+function validateMigrationStep<TSchema extends MigrationSchemaInput>(
   direction: string,
   step: MigrationStep<TSchema>
 ): void {
@@ -330,7 +357,7 @@ function validateMigrationStep<TSchema extends TablesRelationalConfig>(
   }
 }
 
-function computeMigrationChecksum<TSchema extends TablesRelationalConfig>(
+function computeMigrationChecksum<TSchema extends MigrationSchemaInput>(
   migration: MigrationDefinition<TSchema>
 ): string {
   const normalized = JSON.stringify({
@@ -343,7 +370,7 @@ function computeMigrationChecksum<TSchema extends TablesRelationalConfig>(
   return simpleStableHash(normalized);
 }
 
-function serializeStep<TSchema extends TablesRelationalConfig>(
+function serializeStep<TSchema extends MigrationSchemaInput>(
   step: MigrationStep<TSchema>
 ) {
   return {

@@ -49,3 +49,5 @@ const schema = defineRelations({ events });
 void createOrm({ schema });
 // @ts-expect-error types.date global mode was removed
 createOrm({ schema, types: { date: true } });
+// @ts-expect-error triggers must be declared in defineSchema metadata
+createOrm({ schema, triggers: {} });

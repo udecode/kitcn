@@ -110,7 +110,7 @@ import { index, searchIndex, vectorIndex } from 'better-convex/orm';
 ```ts
 import { defineRelations } from "better-convex/orm";
 
-export const relations = defineRelations(
+const relations = defineRelations(
   { users, posts, tags, postsTags },
   (r) => ({
     users: {
@@ -130,6 +130,12 @@ export const relations = defineRelations(
   })
 );
 ```
+
+Plugin relation composition:
+
+1. Plugins can expose `schema.relations(...)`.
+2. `defineSchema` merges plugin relations first, then app `relations`.
+3. Duplicate relation fields (`table.field`) throw.
 
 ### Many-to-many with `.through()`
 
@@ -274,6 +280,10 @@ import { defineSchema } from "better-convex/orm";
 // defineSchema takes tables map (not relations)
 export default defineSchema(tables, {
   strict: false, // false = warn instead of throw on missing indexes
+  relations: (r) => ({
+    users: { posts: r.many.posts() },
+    posts: { author: r.one.users({ from: r.posts.authorId, to: r.users.id }) },
+  }),
   defaults: {
     defaultLimit: 100, // default limit for findMany
     mutationBatchSize: 100, // page size for mutation row collection
@@ -940,7 +950,7 @@ Schema-level hooks via `defineTriggers` from `better-convex/orm`. Trigger defini
 ```ts
 import { defineTriggers } from "better-convex/orm";
 
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   comments: {
     create: {
       after: async (doc, ctx) => {
@@ -965,7 +975,7 @@ export const triggers = defineTriggers(relations, {
 ### change payload
 
 ```ts
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   comments: {
     change: async (change, ctx) => {
       change.id; // always present
@@ -982,7 +992,7 @@ export const triggers = defineTriggers(relations, {
 ```ts
 import { aggregatePostLikes } from "./aggregates";
 
-export const triggers = defineTriggers(relations, {
+const triggers = defineTriggers(relations, {
   postLikes: {
     change: aggregatePostLikes.trigger,
   },
@@ -1071,27 +1081,28 @@ export const post = convexTable(
 );
 
 const tables = { user, post };
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  user: { posts: r.many.post() },
-  post: {
-    author: r.one.user({
-      from: r.post.authorId,
-      to: r.user.id,
-      optional: false,
-    }),
-  },
-}));
-
-export const triggers = defineTriggers(relations, {
-  post: {
-    create: {
-      after: async (doc) => {
-        console.log("post created", doc._id);
-      },
+export default defineSchema(tables, {
+  strict: false,
+  relations: (r) => ({
+    user: { posts: r.many.post() },
+    post: {
+      author: r.one.user({
+        from: r.post.authorId,
+        to: r.user.id,
+        optional: false,
+      }),
     },
-  },
+  }),
+  triggers: (relations) =>
+    defineTriggers(relations, {
+      post: {
+        create: {
+          after: async (doc) => {
+            console.log("post created", doc._id);
+          },
+        },
+      },
+    }),
 });
 ```
 

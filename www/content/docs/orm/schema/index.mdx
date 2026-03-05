@@ -112,23 +112,31 @@ See [Column Types](/docs/orm/schema/column-types) for the full ORM builder refer
 
 ## Relations
 
-Use Drizzle-style `defineRelations()` to wire up relationships between tables. Relations reference `id` fields:
+Use schema-native relations in `defineSchema(..., { relations })` so codegen reads metadata from the default export:
 
 ```ts title="convex/schema.ts" showLineNumbers {5-10}
-import { defineRelations } from 'better-convex/orm';
+import { defineSchema } from 'better-convex/orm';
 
 export const posts = convexTable('posts', {
   title: text().notNull(),
   userId: id('users'),
 });
 
-export const relations = defineRelations({ users, posts }, (r) => ({
-  users: { posts: r.many.posts() },
-  posts: {
-    author: r.one.users({ from: r.posts.userId, to: r.users.id }),
-  },
-}));
+export default defineSchema({ users, posts }, {
+  relations: (r) => ({
+    users: { posts: r.many.posts() },
+    posts: {
+      author: r.one.users({ from: r.posts.userId, to: r.users.id }),
+    },
+  }),
+});
 ```
+
+Plugin relation composition follows the same model:
+
+- Plugins can expose `schema.relations(...)`.
+- `defineSchema` merges plugin relations first, then app `relations`.
+- Duplicate relation fields (`table.field`) throw.
 
 ## Schema Options
 

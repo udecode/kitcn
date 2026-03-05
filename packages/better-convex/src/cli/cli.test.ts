@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  collectPluginScaffoldTemplates,
   ensureConvexGitignoreEntry,
   getAggregateBackfillDeploymentKey,
   getDevAggregateBackfillStatePath,
@@ -9,14 +10,21 @@ import {
   parseArgs,
   run,
 } from './cli';
+import { getPluginCatalogEntry } from './plugin-catalog';
 
 const TS_EXTENSION_RE = /\.ts$/;
+const INLINE_BATCH_EMAIL_SCHEMA_OUTPUT_RE =
+  /\.output\(\s*z\.array\(\s*z\.object\(\{/m;
 
 function createDefaultConfig() {
   return {
-    api: true,
-    auth: true,
-    outputDir: 'convex/shared',
+    paths: {
+      lib: 'convex/lib',
+      shared: 'convex/shared',
+    },
+    hooks: {
+      postAdd: [],
+    },
     dev: {
       debug: false,
       convexArgs: [],
@@ -41,6 +49,7 @@ function createDefaultConfig() {
     codegen: {
       debug: false,
       convexArgs: [],
+      trimSegments: ['plugins'],
     },
     deploy: {
       convexArgs: [],
@@ -90,7 +99,7 @@ describe('cli/cli', () => {
       restArgs: [],
       convexArgs: [],
       debug: false,
-      outputDir: undefined,
+      sharedDir: undefined,
       scope: undefined,
       configPath: undefined,
     });
@@ -110,7 +119,7 @@ describe('cli/cli', () => {
       restArgs: [],
       convexArgs: [],
       debug: true,
-      outputDir: 'out/dir',
+      sharedDir: 'out/dir',
       scope: 'auth',
       configPath: './better-convex.config.json',
     });
@@ -131,7 +140,7 @@ describe('cli/cli', () => {
       restArgs: ['--foo', 'bar'],
       convexArgs: ['--foo', 'bar'],
       debug: true,
-      outputDir: 'out',
+      sharedDir: 'out',
       scope: 'orm',
       configPath: undefined,
     });
@@ -147,6 +156,65 @@ describe('cli/cli', () => {
     expect(() => parseArgs(['--config'])).toThrow(
       'Missing value for --config.'
     );
+  });
+
+  test('run(--help) prints better-convex help instead of passing through to convex', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const exitCode = await run(['--help'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(infoLines.join('\n')).toContain('Usage: better-convex');
+      expect(infoLines.join('\n')).toContain('add [plugin]');
+      expect(infoLines.join('\n')).toContain('diff [plugin]');
+      expect(infoLines.join('\n')).not.toContain('update [plugin]');
+    } finally {
+      console.info = originalInfo;
+    }
+  });
+
+  test('run(add --help) prints add help and exits without writes', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const exitCode = await run(['add', '--help'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(infoLines.join('\n')).toContain(
+        'Usage: better-convex add [plugin]'
+      );
+      expect(infoLines.join('\n')).toContain('--preset');
+      expect(infoLines.join('\n')).toContain('--overwrite');
+    } finally {
+      console.info = originalInfo;
+    }
   });
 
   test('ensureConvexGitignoreEntry adds .convex/ once', () => {
@@ -218,7 +286,10 @@ describe('cli/cli', () => {
     const syncEnvStub = mock(async () => {});
     const loadConfigStub = mock(() => ({
       ...createDefaultConfig(),
-      outputDir: 'config/out',
+      paths: {
+        ...createDefaultConfig().paths,
+        shared: 'config/out',
+      },
       codegen: {
         debug: false,
         convexArgs: ['--team', 'acme'],
@@ -252,6 +323,7 @@ describe('cli/cli', () => {
     expect(generateMetaStub).toHaveBeenCalledWith('custom/out', {
       debug: true,
       scope: 'auth',
+      trimSegments: ['plugins'],
     });
     expect(calls).toEqual([
       {
@@ -261,14 +333,38 @@ describe('cli/cli', () => {
     ]);
   });
 
-  test('run(codegen) derives scope from api/auth config when scope is missing', async () => {
+  test('run(codegen) defaults to scope=all when scope is missing', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    const exitCode = await run(['codegen'], {
+      realConvex: '/fake/convex/main.js',
+      execa: execaStub as any,
+      generateMeta: generateMetaStub as any,
+      syncEnv: syncEnvStub as any,
+      loadBetterConvexConfig: loadConfigStub as any,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(generateMetaStub).toHaveBeenCalledWith('convex/shared', {
+      debug: false,
+      scope: 'all',
+      trimSegments: ['plugins'],
+    });
+  });
+
+  test('run(codegen) uses configured scope when cli scope is missing', async () => {
     const execaStub = mock(async () => ({ exitCode: 0 }) as any);
     const generateMetaStub = mock(async () => {});
     const syncEnvStub = mock(async () => {});
     const loadConfigStub = mock(() => ({
       ...createDefaultConfig(),
-      api: false,
-      auth: false,
+      codegen: {
+        ...createDefaultConfig().codegen,
+        scope: 'orm' as const,
+      },
     }));
 
     const exitCode = await run(['codegen'], {
@@ -283,32 +379,1969 @@ describe('cli/cli', () => {
     expect(generateMetaStub).toHaveBeenCalledWith('convex/shared', {
       debug: false,
       scope: 'orm',
+      trimSegments: ['plugins'],
     });
   });
 
-  test('run(codegen) uses direct api/auth toggles for api-only mode', async () => {
+  test('run(add resend) scaffolds resend integration files without invoking convex CLI', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'resend.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'email.tsx'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'email.tsx'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'webhook.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'template.tsx')
+        )
+      ).toBe(false);
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).toContain('export const resend = ResendPlugin.configure');
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).toContain('ResendPlugin.configure({');
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).not.toContain('configure(({ ctx }) =>');
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).not.toContain('defaultResendOptions');
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).toContain('apiKey: process.env.RESEND_API_KEY');
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).toContain('webhookSecret: process.env.RESEND_WEBHOOK_SECRET');
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).not.toContain('getResend(');
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).not.toContain('generated/server');
+      const resendFunctionsSource = fs.readFileSync(
+        path.join(dir, 'convex', 'plugins', 'resend.ts'),
+        'utf8'
+      );
+      const resendEmailSource = fs.readFileSync(
+        path.join(dir, 'convex', 'plugins', 'email.tsx'),
+        'utf8'
+      );
+      const resendWebhookSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'webhook.ts'),
+        'utf8'
+      );
+      expect(resendFunctionsSource).toContain('createResendHandler');
+      expect(resendFunctionsSource).toContain('createResendCaller');
+      expect(resendFunctionsSource).not.toContain(
+        'function getMutationCaller('
+      );
+      expect(resendFunctionsSource).not.toContain('function getActionCaller(');
+      expect(resendFunctionsSource).not.toContain('createResendRuntime');
+      expect(resendFunctionsSource).not.toContain('buildResendHandlers');
+      expect(resendFunctionsSource).toContain(
+        "import { privateAction, privateMutation, privateQuery } from '../lib/crpc';"
+      );
+      expect(resendFunctionsSource).toContain(
+        "import { eq, inArray } from 'better-convex/orm';"
+      );
+      expect(resendFunctionsSource).not.toContain('initCRPC');
+      expect(resendFunctionsSource).not.toContain('initCRPC.create(');
+      expect(resendFunctionsSource).not.toContain('const c =');
+      expect(resendFunctionsSource).not.toContain('const internalMutation =');
+      expect(resendFunctionsSource).not.toContain('const internalQuery =');
+      expect(resendFunctionsSource).not.toContain('const internalAction =');
+      expect(resendFunctionsSource).toContain(
+        'export const cleanupOldEmails = privateMutation.use(resend.middleware())'
+      );
+      expect(resendFunctionsSource).toContain(
+        'async function cleanupEmailBatch('
+      );
+      expect(resendFunctionsSource).not.toContain(
+        'for (const email of batch ?? [])'
+      );
+      expect(resendFunctionsSource).toContain(
+        'where(inArray(resendStorageTables.resendDeliveryEvents.emailId, emailIds))'
+      );
+      expect(resendFunctionsSource).toContain(
+        'export const getStatus = privateQuery.use(resend.middleware())'
+      );
+      expect(resendFunctionsSource).toContain(
+        'export const callResendAPIWithBatch = privateAction.use(resend.middleware())'
+      );
+      expect(resendFunctionsSource).not.toContain('ctx.runQuery(');
+      expect(resendFunctionsSource).not.toContain('ctx.runMutation(');
+      expect(resendFunctionsSource).not.toContain('ctx.runAction(');
+      expect(resendFunctionsSource).not.toContain('deleteById(');
+      expect(resendFunctionsSource).not.toContain('insertAndGetId(');
+      expect(resendFunctionsSource).not.toContain('as any');
+      expect(resendFunctionsSource).not.toContain('ctx: any');
+      expect(resendFunctionsSource).toContain("from '@better-convex/resend';");
+      expect(resendFunctionsSource).not.toContain('type OrmCtx =');
+      expect(resendFunctionsSource).not.toContain('type OrmWriter');
+      expect(resendFunctionsSource).not.toContain('as unknown as OrmCtx');
+      expect(resendFunctionsSource).not.toContain(
+        'type ResendEmailRow = NonNullable<'
+      );
+      expect(resendFunctionsSource).not.toContain(
+        "type ResendEmailRow = Select<'resendEmails'>;"
+      );
+      expect(resendFunctionsSource).not.toContain('InferSelectModel');
+      expect(resendFunctionsSource).not.toContain('const batchEmailSchema =');
+      expect(resendFunctionsSource).toMatch(
+        INLINE_BATCH_EMAIL_SCHEMA_OUTPUT_RE
+      );
+      expect(resendFunctionsSource).not.toContain(
+        'const BASE_BATCH_DELAY_MS ='
+      );
+      expect(resendFunctionsSource).toContain(
+        'await caller.schedule.after(1000).callResendAPIWithBatch({'
+      );
+      expect(resendEmailSource).toContain('import { privateAction } from');
+      expect(resendEmailSource).toContain('../lib/crpc');
+      expect(resendEmailSource).not.toContain('initCRPC.create(');
+      expect(resendEmailSource).not.toContain('const c =');
+      expect(resendWebhookSource).toContain('import { publicRoute } from');
+      expect(resendWebhookSource).toContain('../../crpc');
+      expect(resendWebhookSource).not.toContain('initCRPC.create(');
+      expect(resendWebhookSource).not.toContain('const c =');
+      const lockfile = JSON.parse(
+        fs.readFileSync(path.join(dir, 'convex', 'plugins.lock.json'), 'utf8')
+      ) as {
+        plugins: Record<
+          string,
+          { package: string; files?: Record<string, string> }
+        >;
+      };
+      expect(lockfile.plugins.resend.package).toBe('@better-convex/resend');
+      expect(lockfile.plugins.resend.files?.['resend-plugin']).toBe(
+        'convex/lib/plugins/resend/plugin.ts'
+      );
+      expect(lockfile.plugins.resend.files?.['resend-functions']).toBe(
+        'convex/plugins/resend.ts'
+      );
+      expect(lockfile.plugins.resend.files?.['resend-email']).toBe(
+        'convex/plugins/email.tsx'
+      );
+      expect('version' in lockfile).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) runs configured hooks.postAdd scripts', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-after-scaffold-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaCalls: Array<{
+        cmd: string;
+        args: string[];
+        options: Record<string, unknown> | undefined;
+      }> = [];
+      const execaStub = mock(
+        async (
+          cmd: string,
+          args: string[] = [],
+          options?: Record<string, unknown>
+        ) => {
+          execaCalls.push({ cmd, args, options });
+          return { exitCode: 0 } as any;
+        }
+      );
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => ({
+        ...createDefaultConfig(),
+        hooks: {
+          postAdd: ['bun lint:fix'],
+        },
+      }));
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(execaCalls).toHaveLength(1);
+      expect(execaCalls[0]?.cmd).toBe('bun lint:fix');
+      expect(execaCalls[0]?.args).toEqual([]);
+      expect(execaCalls[0]?.options).toMatchObject({
+        shell: true,
+        stdio: 'inherit',
+        reject: false,
+      });
+      expect(execaCalls[0]?.options?.cwd).toContain(path.basename(dir));
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --dry-run) skips configured hooks.postAdd scripts', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-after-scaffold-dry-run-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => ({
+        ...createDefaultConfig(),
+        hooks: {
+          postAdd: ['bun lint:fix'],
+        },
+      }));
+
+      const exitCode = await run(
+        ['add', 'resend', '--no-codegen', '--dry-run'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(execaStub).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add) prompts for plugin in interactive TTY mode when plugin arg is omitted', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-interactive-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const selectPromptStub = mock(async () => 'ratelimit');
+      const multiselectPromptStub = mock(
+        async <TValue extends string>(params: {
+          initialValues?: readonly TValue[];
+        }) => params.initialValues ?? []
+      );
+
+      const exitCode = await run(['add', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: async () => true,
+          select: selectPromptStub as any,
+          multiselect: multiselectPromptStub as any,
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(selectPromptStub).toHaveBeenCalled();
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'api.ts')
+        )
+      ).toBe(true);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) prompts for scaffold files and supports selecting templates outside preset defaults', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-file-select-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const multiselectPromptStub = mock(async () => [
+        'resend-plugin',
+        'resend-functions',
+      ]);
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: async () => true,
+          select: async () => 'ignored',
+          multiselect: multiselectPromptStub as any,
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(multiselectPromptStub).toHaveBeenCalledTimes(1);
+      const calls = multiselectPromptStub.mock.calls as unknown[];
+      const firstCall = calls[0] as unknown[] | undefined;
+      expect(firstCall).toBeDefined();
+      const callArgs = firstCall![0] as {
+        initialValues: string[];
+        options: Array<{ label: string; value: string; hint?: string }>;
+      };
+      expect(callArgs.initialValues).toEqual([
+        'resend-email',
+        'resend-functions',
+        'resend-crons',
+        'resend-plugin',
+        'resend-webhook',
+      ]);
+      expect(callArgs.options.map((option) => option.label)).toEqual([
+        'convex/plugins/email.tsx',
+        'convex/plugins/resend.ts',
+        'convex/lib/plugins/resend/crons.ts',
+        'convex/lib/plugins/resend/plugin.ts',
+        'convex/lib/plugins/resend/webhook.ts',
+      ]);
+      expect(
+        callArgs.options.every((option) => option.hint === undefined)
+      ).toBe(true);
+
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'resend.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'webhook.ts')
+        )
+      ).toBe(false);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'crons.ts')
+        )
+      ).toBe(false);
+
+      const lockfile = JSON.parse(
+        fs.readFileSync(path.join(dir, 'convex', 'plugins.lock.json'), 'utf8')
+      ) as {
+        plugins: Record<
+          string,
+          { package: string; files?: Record<string, string> }
+        >;
+      };
+      expect(lockfile.plugins.resend.package).toBe('@better-convex/resend');
+      expect(lockfile.plugins.resend.files).toEqual({
+        'resend-plugin': 'convex/lib/plugins/resend/plugin.ts',
+        'resend-functions': 'convex/plugins/resend.ts',
+      });
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) throws when interactive scaffold file selection is empty', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-empty-select-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      await expect(
+        run(['add', 'resend', '--no-codegen'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+          promptAdapter: {
+            isInteractive: () => true,
+            confirm: async () => true,
+            select: async () => 'ignored',
+            multiselect: async () => [],
+          } as any,
+        })
+      ).rejects.toThrow(
+        'No scaffold files selected for plugin "resend". Select at least one scaffold file.'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --yes) bypasses scaffold multiselect and uses preset templates', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-yes-bypass-select-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const multiselectPromptStub = mock(async () => ['resend-plugin']);
+
+      const exitCode = await run(['add', 'resend', '--yes', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: async () => true,
+          select: async () => 'ignored',
+          multiselect: multiselectPromptStub as any,
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(multiselectPromptStub).not.toHaveBeenCalled();
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'webhook.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'crons.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'resend.ts'))
+      ).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) defaults first interactive selection to all resend scaffold files', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-default-all-first-run-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const multiselectPromptStub = mock(
+        async <TValue extends string>(params: {
+          initialValues?: readonly TValue[];
+        }) => params.initialValues ?? []
+      );
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: async () => true,
+          select: async () => 'ignored',
+          multiselect: multiselectPromptStub as any,
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const callArgs = (multiselectPromptStub.mock.calls[0] as unknown[])[0] as
+        | {
+            initialValues: string[];
+          }
+        | undefined;
+      expect(callArgs?.initialValues).toEqual([
+        'resend-email',
+        'resend-functions',
+        'resend-crons',
+        'resend-plugin',
+        'resend-webhook',
+      ]);
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'webhook.ts')
+        )
+      ).toBe(true);
+      expect(fs.existsSync(path.join(convexDir, 'plugins', 'resend.ts'))).toBe(
+        true
+      );
+      expect(fs.existsSync(path.join(convexDir, 'plugins', 'email.tsx'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'crons.ts')
+        )
+      ).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) defaults scaffold selection from lockfile template IDs when present', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-lockfile-default-select-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(convexDir, 'plugins.lock.json'),
+      JSON.stringify(
+        {
+          plugins: {
+            resend: {
+              package: '@better-convex/resend',
+              files: {
+                'resend-plugin': 'convex/lib/plugins/resend/plugin.ts',
+              },
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const multiselectPromptStub = mock(
+        async <TValue extends string>(params: {
+          initialValues?: readonly TValue[];
+        }) => params.initialValues ?? []
+      );
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: async () => true,
+          select: async () => 'ignored',
+          multiselect: multiselectPromptStub as any,
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const callArgs = (multiselectPromptStub.mock.calls[0] as unknown[])[0] as
+        | {
+            initialValues: string[];
+          }
+        | undefined;
+      expect(callArgs?.initialValues).toEqual(['resend-plugin']);
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'webhook.ts')
+        )
+      ).toBe(false);
+      expect(fs.existsSync(path.join(convexDir, 'plugins', 'resend.ts'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'crons.ts')
+        )
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --yes) uses lockfile template IDs when present', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-lockfile-default-yes-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(convexDir, 'plugins.lock.json'),
+      JSON.stringify(
+        {
+          plugins: {
+            resend: {
+              package: '@better-convex/resend',
+              files: {
+                'resend-plugin': 'convex/lib/plugins/resend/plugin.ts',
+              },
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['add', 'resend', '--yes', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'webhook.ts')
+        )
+      ).toBe(false);
+      expect(fs.existsSync(path.join(convexDir, 'plugins', 'resend.ts'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(
+          path.join(convexDir, 'lib', 'plugins', 'resend', 'crons.ts')
+        )
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) falls back to preset defaults when lockfile has no scaffold mapping', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-lockfile-empty-fallback-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(convexDir, 'plugins.lock.json'),
+      JSON.stringify(
+        {
+          plugins: {
+            resend: {
+              package: '@better-convex/resend',
+              files: {},
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const multiselectPromptStub = mock(
+        async <TValue extends string>(params: {
+          initialValues?: readonly TValue[];
+        }) => params.initialValues ?? []
+      );
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: async () => true,
+          select: async () => 'ignored',
+          multiselect: multiselectPromptStub as any,
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const callArgs = (multiselectPromptStub.mock.calls[0] as unknown[])[0] as
+        | {
+            initialValues: string[];
+          }
+        | undefined;
+      expect(callArgs?.initialValues).toEqual([
+        'resend-email',
+        'resend-functions',
+        'resend-crons',
+        'resend-plugin',
+        'resend-webhook',
+      ]);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) ignores stale lockfile template ids and rewrites to known ids', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-lockfile-stale-templates-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(convexDir, 'plugins.lock.json'),
+      JSON.stringify(
+        {
+          plugins: {
+            resend: {
+              package: '@better-convex/resend',
+              files: {
+                'resend-api': 'convex/lib/plugins/resend/api.ts',
+              },
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const multiselectPromptStub = mock(
+        async <TValue extends string>(params: {
+          initialValues?: readonly TValue[];
+        }) => params.initialValues ?? []
+      );
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: async () => true,
+          select: async () => 'ignored',
+          multiselect: multiselectPromptStub as any,
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const callArgs = (multiselectPromptStub.mock.calls[0] as unknown[])[0] as
+        | {
+            initialValues: string[];
+          }
+        | undefined;
+      expect(callArgs?.initialValues).toEqual([
+        'resend-email',
+        'resend-functions',
+        'resend-crons',
+        'resend-plugin',
+        'resend-webhook',
+      ]);
+      const lockfile = JSON.parse(
+        fs.readFileSync(path.join(convexDir, 'plugins.lock.json'), 'utf8')
+      ) as {
+        plugins: {
+          resend: {
+            files?: Record<string, string>;
+          };
+        };
+      };
+      expect(lockfile.plugins.resend.files?.['resend-api']).toBeUndefined();
+      expect(lockfile.plugins.resend.files?.['resend-plugin']).toBe(
+        'convex/lib/plugins/resend/plugin.ts'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add) fails with usage in non-interactive mode when plugin arg is omitted', async () => {
     const execaStub = mock(async () => ({ exitCode: 0 }) as any);
     const generateMetaStub = mock(async () => {});
     const syncEnvStub = mock(async () => {});
-    const loadConfigStub = mock(() => ({
-      ...createDefaultConfig(),
-      auth: false,
-    }));
+    const loadConfigStub = mock(() => createDefaultConfig());
 
-    const exitCode = await run(['codegen'], {
-      realConvex: '/fake/convex/main.js',
-      execa: execaStub as any,
-      generateMeta: generateMetaStub as any,
-      syncEnv: syncEnvStub as any,
-      loadBetterConvexConfig: loadConfigStub as any,
-    });
+    await expect(
+      run(['add', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => false,
+          confirm: async () => true,
+          select: async () => 'resend',
+        } as any,
+      })
+    ).rejects.toThrow(
+      'Missing plugin name. Usage: better-convex add [plugin].'
+    );
+  });
 
-    expect(exitCode).toBe(0);
-    expect(generateMetaStub).toHaveBeenCalledWith('convex/shared', {
-      debug: false,
-      api: true,
-      auth: false,
+  test('run(add resend) does not overwrite existing user-owned scaffold files', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-idempotent-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const firstRunExitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(firstRunExitCode).toBe(0);
+
+      const resendFile = path.join(
+        dir,
+        'convex',
+        'lib',
+        'plugins',
+        'resend',
+        'plugin.ts'
+      );
+      expect(fs.existsSync(resendFile)).toBe(true);
+      fs.writeFileSync(resendFile, '// user-customized resend integration\n');
+
+      const secondRunExitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(secondRunExitCode).toBe(0);
+      expect(fs.readFileSync(resendFile, 'utf8')).toBe(
+        '// user-customized resend integration\n'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --preset default) uses selected preset for scaffold files', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-preset-default-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'resend', '--preset', 'default', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'resend.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'email.tsx'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'crons.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'webhook.ts')
+        )
+      ).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'convex', 'http.ts'))).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --preset minimal) throws invalid preset error', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    await expect(
+      run(['add', 'resend', '--preset=minimal', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      })
+    ).rejects.toThrow(
+      'Invalid preset "minimal" for plugin "resend". Expected one of: default.'
+    );
+  });
+
+  test('run(add resend) supports paths.lib override for plugin helper output', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-flat-override-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => ({
+        ...createDefaultConfig(),
+        paths: {
+          ...createDefaultConfig().paths,
+          shared: 'convex/custom-shared',
+          lib: 'custom-lib',
+        },
+      }));
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'custom-lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'resend.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'email.tsx'))
+      ).toBe(true);
+      expect(
+        fs.readFileSync(
+          path.join(dir, 'custom-lib', 'plugins', 'resend', 'plugin.ts'),
+          'utf8'
+        )
+      ).toContain('export const resend = ResendPlugin.configure');
+      const resendFunctionsSource = fs.readFileSync(
+        path.join(dir, 'convex', 'plugins', 'resend.ts'),
+        'utf8'
+      );
+      const resendWebhookSource = fs.readFileSync(
+        path.join(dir, 'custom-lib', 'plugins', 'resend', 'webhook.ts'),
+        'utf8'
+      );
+      const resendEmailSource = fs.readFileSync(
+        path.join(dir, 'convex', 'plugins', 'email.tsx'),
+        'utf8'
+      );
+      expect(resendFunctionsSource).toContain(
+        "import { privateAction, privateMutation, privateQuery } from '../../custom-lib/crpc';"
+      );
+      expect(resendFunctionsSource).toContain(
+        "import { eq, inArray } from 'better-convex/orm';"
+      );
+      expect(resendFunctionsSource).not.toContain('initCRPC.create(');
+      expect(resendEmailSource).toContain('import { privateAction } from');
+      expect(resendEmailSource).toContain('../../custom-lib/crpc');
+      expect(resendEmailSource).toContain('process.env.RESEND_FROM_EMAIL');
+      expect(resendEmailSource).not.toContain('import { getEnv }');
+      expect(resendWebhookSource).toContain('import { publicRoute } from');
+      expect(resendWebhookSource).toContain('../../crpc');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) injects getEnv usage in email scaffold when paths.env is configured', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-resend-env-path-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => ({
+        ...createDefaultConfig(),
+        paths: {
+          ...createDefaultConfig().paths,
+          env: 'convex/lib/get-env',
+        },
+      }));
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const resendEmailSource = fs.readFileSync(
+        path.join(dir, 'convex', 'plugins', 'email.tsx'),
+        'utf8'
+      );
+      const resendPluginSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
+        'utf8'
+      );
+      expect(resendEmailSource).toContain(
+        'import { getEnv } from "../lib/get-env";'
+      );
+      expect(resendEmailSource).toContain('getEnv().RESEND_FROM_EMAIL');
+      expect(resendEmailSource).not.toContain('process.env.RESEND_FROM_EMAIL');
+      expect(resendPluginSource).toContain(
+        'import { getEnv } from "../../get-env";'
+      );
+      expect(resendPluginSource).toContain('apiKey: getEnv().RESEND_API_KEY');
+      expect(resendPluginSource).toContain(
+        'webhookSecret: getEnv().RESEND_WEBHOOK_SECRET'
+      );
+      expect(resendPluginSource).not.toContain('process.env');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) throws when paths.env is configured and scaffold content contains process.env', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-env-guard-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    const descriptor = getPluginCatalogEntry('resend');
+    const templates = descriptor.templates as unknown as Array<{
+      id: string;
+      content: string;
+    }>;
+    const pluginTemplate = templates.find(
+      (template) => template.id === 'resend-plugin'
+    );
+    if (!pluginTemplate) {
+      throw new Error('Expected resend-plugin scaffold template.');
+    }
+    const originalContent = pluginTemplate.content;
+    pluginTemplate.content = `${originalContent}\nconst guard = process.env.SHOULD_FAIL;\n`;
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => ({
+        ...createDefaultConfig(),
+        paths: {
+          ...createDefaultConfig().paths,
+          env: 'convex/lib/get-env',
+        },
+      }));
+
+      await expect(
+        run(['add', 'resend', '--no-codegen'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow('contains process.env');
+    } finally {
+      pluginTemplate.content = originalContent;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --events) throws because resend-specific global flags were removed', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    await expect(
+      run(['add', 'resend', '--events'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      })
+    ).rejects.toThrow('Unknown add flag "--events".');
+  });
+
+  test('run(add resend --preset nope) throws invalid preset error', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    await expect(
+      run(['add', 'resend', '--preset', 'nope'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      })
+    ).rejects.toThrow(
+      'Invalid preset "nope" for plugin "resend". Expected one of: default.'
+    );
+  });
+
+  test('run(add ratelimit --preset schema-only) skips ratelimit scaffold writes', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-ratelimit-schema-only-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'ratelimit', '--preset', 'schema-only', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'api.ts')
+        )
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add ratelimit --yes --dry-run --json) emits machine-readable plan without writes', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-ratelimit-dryrun-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'ratelimit', '--yes', '--dry-run', '--json'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'api.ts')
+        )
+      ).toBe(false);
+      expect(
+        infoLines.some((line) => line.includes('"plugin":"ratelimit"'))
+      ).toBe(true);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --yes --dry-run --json) includes dependency hints for react email scaffold', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-resend-dryrun-json-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'resend', '--yes', '--dry-run', '--json'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      const payloadLine = infoLines.find((line) =>
+        line.includes('"command":"add"')
+      );
+      const payload = JSON.parse(payloadLine ?? '{}') as {
+        selectedTemplateIds: string[];
+        dependencyHints?: string[];
+      };
+      expect(payload.selectedTemplateIds).toContain('resend-email');
+      expect(payload.dependencyHints?.join('\n')).toContain(
+        '@react-email/components'
+      );
+      expect(payload.dependencyHints?.join('\n')).toContain(
+        '@react-email/render'
+      );
+      expect(payload.dependencyHints?.join('\n')).toContain('react-email');
+      expect(payload.dependencyHints?.join('\n')).toContain('react');
+      expect(payload.dependencyHints?.join('\n')).toContain('react-dom');
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --yes --no-codegen) prints react email dependency hint', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-resend-human-hint-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['add', 'resend', '--yes', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const output = infoLines.join('\n');
+      expect(output).toContain('React Email dependencies are required');
+      expect(output).toContain('@react-email/components');
+      expect(output).toContain('@react-email/render');
+      expect(output).toContain('react-email');
+      expect(output).toContain('react');
+      expect(output).toContain('react-dom');
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend) prompts before overwriting changed scaffold files in interactive mode', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-overwrite-prompt-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const confirmPromptStub = mock(async () => true);
+
+      const firstExitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(firstExitCode).toBe(0);
+
+      const apiPath = path.join(
+        convexDir,
+        'lib',
+        'plugins',
+        'resend',
+        'plugin.ts'
+      );
+      fs.writeFileSync(apiPath, '// stale\n');
+
+      const exitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: confirmPromptStub as any,
+          select: async () => 'resend',
+          multiselect: async () => ['resend-plugin'],
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(confirmPromptStub).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(apiPath, 'utf8')).toContain(
+        'export const resend = ResendPlugin.configure'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --overwrite) overwrites changed scaffold files without prompt', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-overwrite-flag-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const confirmPromptStub = mock(async () => true);
+
+      const firstExitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(firstExitCode).toBe(0);
+
+      const apiPath = path.join(
+        convexDir,
+        'lib',
+        'plugins',
+        'resend',
+        'plugin.ts'
+      );
+      fs.writeFileSync(apiPath, '// stale\n');
+
+      const exitCode = await run(
+        ['add', 'resend', '--overwrite', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+          promptAdapter: {
+            isInteractive: () => true,
+            confirm: confirmPromptStub as any,
+            select: async () => 'resend',
+            multiselect: async () => ['resend-plugin'],
+          } as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(confirmPromptStub).not.toHaveBeenCalled();
+      expect(fs.readFileSync(apiPath, 'utf8')).toContain(
+        'export const resend = ResendPlugin.configure'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --yes) skips changed scaffold files without --overwrite', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-skip-on-conflict-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const firstExitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(firstExitCode).toBe(0);
+
+      const apiPath = path.join(
+        convexDir,
+        'lib',
+        'plugins',
+        'resend',
+        'plugin.ts'
+      );
+      fs.writeFileSync(apiPath, '// stale\n');
+
+      const exitCode = await run(['add', 'resend', '--yes', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(fs.readFileSync(apiPath, 'utf8')).toBe('// stale\n');
+      expect(infoLines.join('\n')).toContain('--overwrite');
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(diff resend --json) reports changed and missing scaffold files', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-diff-json-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const addExitCode = await run(['add', 'resend', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(addExitCode).toBe(0);
+
+      fs.writeFileSync(
+        path.join(convexDir, 'lib', 'plugins', 'resend', 'plugin.ts'),
+        '// stale\n'
+      );
+      fs.rmSync(path.join(convexDir, 'lib', 'plugins', 'resend', 'webhook.ts'));
+
+      const exitCode = await run(['diff', 'resend', '--json'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const diffJson = infoLines.find((line) =>
+        line.includes('"command":"diff"')
+      );
+      const payload = JSON.parse(diffJson ?? '{}') as {
+        clean: boolean;
+        files: Array<{ path: string; status: string }>;
+      };
+      expect(payload.clean).toBe(false);
+      expect(payload.files).toEqual(
+        expect.arrayContaining([
+          {
+            path: 'convex/lib/plugins/resend/plugin.ts',
+            status: 'changed',
+          },
+          {
+            path: 'convex/lib/plugins/resend/webhook.ts',
+            status: 'missing',
+          },
+        ])
+      );
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(diff resend) uses lockfile template path mapping', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-diff-lockfile-path-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(convexDir, 'schema.ts'),
+      `
+      import { defineSchema } from "better-convex/orm";
+      import { resendPlugin } from "@better-convex/resend/schema";
+
+      export default defineSchema({}, { plugins: [resendPlugin()] });
+      `.trim()
+    );
+    fs.writeFileSync(path.join(convexDir, 'api.ts'), '// stale\n');
+    fs.writeFileSync(
+      path.join(convexDir, 'plugins.lock.json'),
+      JSON.stringify(
+        {
+          plugins: {
+            resend: {
+              package: '@better-convex/resend',
+              files: {
+                'resend-plugin': 'convex/api.ts',
+              },
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['diff', 'resend', '--json'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const payload = JSON.parse(infoLines[0] ?? '{}') as {
+        files: Array<{ path: string; status: string }>;
+        templateIdsUsed: string[];
+      };
+      expect(payload.templateIdsUsed).toEqual(['resend-plugin']);
+      expect(payload.files).toEqual(
+        expect.arrayContaining([
+          {
+            path: 'convex/api.ts',
+            status: 'changed',
+          },
+          {
+            path: 'convex/plugins/resend.ts',
+            status: 'missing',
+          },
+        ])
+      );
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('collectPluginScaffoldTemplates throws on duplicate template ids', () => {
+    const descriptor = {
+      key: 'test',
+      packageName: '@better-convex/test',
+      schemaRegistration: {
+        importPath: '@better-convex/test/schema',
+        importName: 'testPlugin',
+      },
+      defaultPreset: 'default',
+      presets: [
+        { key: 'default', description: 'default', templateIds: ['shared'] },
+      ],
+      templates: [
+        {
+          id: 'shared',
+          path: 'a.ts',
+          target: 'functions',
+          content: 'one',
+        },
+        {
+          id: 'shared',
+          path: 'b.ts',
+          target: 'functions',
+          content: 'two',
+        },
+      ],
+    } as any;
+
+    expect(() => collectPluginScaffoldTemplates(descriptor)).toThrow(
+      'Duplicate scaffold template id "shared" in plugin "test".'
+    );
+  });
+
+  test('run(diff) prompts for plugin in interactive TTY mode when plugin arg is omitted', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-diff-interactive-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(convexDir, 'schema.ts'),
+      `
+      import { defineSchema } from "better-convex/orm";
+      import { resendPlugin } from "@better-convex/resend/schema";
+
+      export default defineSchema({}, { plugins: [resendPlugin()] });
+      `.trim()
+    );
+    fs.writeFileSync(
+      path.join(convexDir, 'plugins.lock.json'),
+      JSON.stringify(
+        {
+          plugins: {
+            resend: {
+              package: '@better-convex/resend',
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+    fs.mkdirSync(path.join(convexDir, 'lib', 'plugins', 'resend'), {
+      recursive: true,
     });
+    fs.writeFileSync(
+      path.join(convexDir, 'lib', 'plugins', 'resend', 'plugin.ts'),
+      '// stale\n'
+    );
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+      const selectPromptStub = mock(async () => 'resend');
+
+      const exitCode = await run(['diff'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+        promptAdapter: {
+          isInteractive: () => true,
+          confirm: async () => true,
+          select: selectPromptStub as any,
+          multiselect: async () => [],
+        } as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(selectPromptStub).toHaveBeenCalled();
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('cli lockfile implementation no longer keeps legacy lockfile branches', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'packages/better-convex/src/cli/cli.ts'),
+      'utf8'
+    );
+    expect(source).not.toContain('_legacyUpdatedAt');
+    expect(source).not.toContain('parsed as { installedPlugins');
+    expect(source).not.toContain('const scaffoldsValue');
+    expect(source).not.toContain('PLUGIN_LOCKFILE_VERSION');
+  });
+
+  test('run(list --json) reads schema plugins and lockfile without invoking convex cli', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-list-plugins-')
+    );
+    const oldCwd = process.cwd();
+    const convexDir = path.join(dir, 'convex');
+    fs.mkdirSync(convexDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(convexDir, 'schema.ts'),
+      `
+      const OrmSchemaPlugins = Symbol.for("better-convex:OrmSchemaPlugins");
+      const schema = {};
+      Object.defineProperty(schema, OrmSchemaPlugins, {
+        value: [
+          { key: "ratelimit", schema: { tableNames: [], inject: (value) => value } },
+          { key: "resend", schema: { tableNames: [], inject: (value) => value } },
+        ],
+        enumerable: false,
+      });
+      export default schema;
+      `.trim()
+    );
+    fs.writeFileSync(
+      path.join(convexDir, 'plugins.lock.json'),
+      JSON.stringify(
+        {
+          plugins: {
+            ratelimit: {
+              package: '@better-convex/ratelimit',
+            },
+            resend: {
+              package: '@better-convex/resend',
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['list', '--json'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const payload = JSON.parse(infoLines.at(-1) ?? '{}') as {
+        installedPlugins?: string[];
+        schemaPlugins?: string[];
+      };
+      expect(payload.installedPlugins).toEqual(['ratelimit', 'resend']);
+      expect(payload.schemaPlugins).toEqual(['ratelimit', 'resend']);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
   });
 
   test('run(env sync) delegates to syncEnv and does not call convex', async () => {
@@ -1009,7 +3042,7 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(dev) uses config toggles and merged convex args', async () => {
+  test('run(dev) uses scope-only codegen and merged convex args', async () => {
     const calls: { cmd: string; args: string[]; opts?: any }[] = [];
 
     const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
@@ -1037,8 +3070,6 @@ describe('cli/cli', () => {
       const syncEnvStub = mock(async () => {});
       const loadConfigStub = mock(() => ({
         ...createDefaultConfig(),
-        api: false,
-        auth: true,
         dev: {
           debug: false,
           convexArgs: ['--team', 'cfg-team'],
@@ -1064,8 +3095,8 @@ describe('cli/cli', () => {
       expect(exitCode).toBe(9);
       expect(generateMetaStub).toHaveBeenCalledWith('out', {
         debug: true,
-        api: false,
-        auth: true,
+        scope: 'all',
+        trimSegments: ['plugins'],
       });
 
       expect(calls.length).toBe(2);
@@ -1074,8 +3105,10 @@ describe('cli/cli', () => {
       expect((calls[0].args[0] as string).endsWith('/watcher.ts')).toBe(true);
       expect(calls[0].opts?.env?.BETTER_CONVEX_API_OUTPUT_DIR).toBe('out');
       expect(calls[0].opts?.env?.BETTER_CONVEX_DEBUG).toBe('1');
-      expect(calls[0].opts?.env?.BETTER_CONVEX_GENERATE_API).toBe('0');
-      expect(calls[0].opts?.env?.BETTER_CONVEX_GENERATE_AUTH).toBe('1');
+      expect(calls[0].opts?.env?.BETTER_CONVEX_CODEGEN_SCOPE).toBe('all');
+      expect(calls[0].opts?.env?.BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS).toBe(
+        '["plugins"]'
+      );
 
       expect(calls[1]).toEqual({
         cmd: 'node',

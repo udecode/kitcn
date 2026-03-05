@@ -13,6 +13,7 @@ import {
   type MigrationDoc,
   type MigrationDocContext,
   type MigrationManifestEntry,
+  type ResolveMigrationSchema,
   type MigrationSet,
   type MigrationStateMap,
   type MigrationWriteMode,
@@ -358,7 +359,9 @@ export function createMigrationHandlers<TSchema extends TablesRelationalConfig>(
           step.migrateOne(
             {
               ...migrationCtxBase,
-              orm: resolvedOrm,
+              orm: resolvedOrm as unknown as OrmWriter<
+                ResolveMigrationSchema<TSchema>
+              >,
             },
             doc as MigrationDoc<TSchema, typeof step.table>
           )

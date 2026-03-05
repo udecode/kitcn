@@ -1,0 +1,178 @@
+---
+title: Resend
+description: Durable queued email delivery for Better Convex with batching, retries, webhook ingestion, and cleanup.
+links:
+  doc: https://resend.com/docs
+---
+
+`@better-convex/resend` is the Resend plugin for Better Convex.
+
+## What You Get
+
+- Durable queueing and batching to Resend `/emails/batch`
+- Retries with backoff for transient failures
+- Idempotency-key handling
+- Rate pacing for batch calls
+- Webhook ingestion and status tracking
+
+## 1. Install
+
+```bash showLineNumbers
+bun add @better-convex/resend
+```
+
+## 2. Register In Schema
+
+```ts title="convex/functions/schema.ts" showLineNumbers {2,6}
+import { defineSchema } from 'better-convex/orm';
+import { resendPlugin } from '@better-convex/resend/schema';
+
+export default defineSchema(tables, {
+  plugins: [resendPlugin()],
+});
+```
+
+Optional storage-table override:
+
+```ts title="convex/functions/schema.ts" showLineNumbers
+import { convexTable, text } from 'better-convex/orm';
+import { resendPlugin } from '@better-convex/resend/schema';
+
+const customResendEmails = convexTable('resend_emails', {
+  custom: text().notNull(),
+});
+
+export default defineSchema(tables, {
+  plugins: [
+    resendPlugin({
+      tables: {
+        resendEmails: customResendEmails,
+      },
+    }),
+  ],
+});
+```
+
+## 3. Generate Framework Files
+
+```bash showLineNumbers
+npx better-convex codegen
+```
+
+## 4. Scaffold User-Owned Files
+
+```bash showLineNumbers
+npx better-convex add resend
+```
+
+Default scaffold set:
+
+- `convex/functions/plugins/resend.ts`
+- `convex/functions/plugins/email.tsx`
+- `convex/lib/plugins/resend/plugin.ts`
+- `convex/lib/plugins/resend/webhook.ts`
+- `convex/lib/plugins/resend/crons.ts`
+
+If you scaffold `email.tsx`, install React Email deps:
+
+```bash showLineNumbers
+bun add @react-email/components @react-email/render react-email react react-dom
+```
+
+## 5. Configure Middleware Once
+
+```ts title="convex/lib/plugins/resend/plugin.ts" showLineNumbers
+import { ResendPlugin } from '@better-convex/resend';
+
+export const resend = ResendPlugin.configure({
+  apiKey: process.env.RESEND_API_KEY,
+  webhookSecret: process.env.RESEND_WEBHOOK_SECRET,
+  initialBackoffMs: 30_000,
+  retryAttempts: 5,
+  testMode: true,
+});
+```
+
+`testMode` defaults to `true`; only Resend test recipients are allowed until you set `testMode: false`.
+
+## 6. Use In cRPC Procedures
+
+Use middleware for config/context and call scaffolded internal functions through generated callers.
+
+```ts title="convex/functions/sendEmail.ts" showLineNumbers
+import { createPluginsResendCaller } from './generated/plugins/resend.runtime';
+import { privateMutation } from '../lib/crpc';
+import { resend } from '../lib/plugins/resend/plugin';
+
+export const sendTestEmail = privateMutation.use(resend.middleware())
+  .mutation(async ({ ctx }) => {
+    const caller = createPluginsResendCaller(ctx);
+    await caller.sendEmail({
+      from: 'Me <test@mydomain.com>',
+      to: ['delivered@resend.dev'],
+      subject: 'Hi there',
+      html: 'This is a test email',
+    });
+  });
+```
+
+## 7. Generic React Email Action
+
+`convex/functions/plugins/email.tsx` is a generic internal cRPC action scaffold:
+
+- Input: `to, from?, subject, title, body, ctaLabel?, ctaUrl?`
+- Sender resolution: `from ?? process.env.RESEND_FROM_EMAIL`
+- Delivery: `createPluginsResendCaller(ctx).sendEmail(...)`
+
+Use it from auth organization invites:
+
+```ts title="convex/functions/auth.ts" showLineNumbers
+await actionCtx.scheduler.runAfter(
+  0,
+  internal.plugins.email.sendTemplatedEmail,
+  {
+    to: data.email,
+    subject: `${inviterName} invited you to join ${organizationName}`,
+    title: `Invitation to join ${organizationName}`,
+    body: `${inviterName} (${data.inviter.user.email}) invited you to join ${organizationName}${roleSuffix}.`,
+    ctaLabel: 'Accept invitation',
+    ctaUrl: acceptUrl,
+  }
+);
+```
+
+## 8. Wire Webhook Route
+
+```ts title="convex/functions/http.ts" showLineNumbers
+import { httpRouter } from 'convex/server';
+import { registerResendWebhook } from '../lib/plugins/resend/webhook';
+
+const http = httpRouter();
+registerResendWebhook(http);
+
+export default http;
+```
+
+## 9. Optional Event Fanout
+
+`convex/functions/plugins/resend.ts` includes scaffolded `onEmailEvent`. Customize it directly.
+
+## 10. Optional Cleanup Crons
+
+```ts title="convex/functions/crons.ts" showLineNumbers
+export { default } from '../lib/plugins/resend/crons';
+```
+
+## Runtime Surface
+
+`convex/functions/plugins/resend.ts` contains the plugin internal procedures:
+
+- `sendEmail`
+- `createManualEmail`
+- `updateManualEmail`
+- `cancelEmail`
+- `getStatus`
+- `get`
+- `handleEmailEvent`
+- `cleanupOldEmails`
+- `cleanupAbandonedEmails`

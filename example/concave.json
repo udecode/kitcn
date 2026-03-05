@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "better-convex": {
+      "paths": {
+        "lib": "convex/lib",
+        "shared": "convex/shared",
+        "env": "convex/lib/get-env"
+      },
+      "hooks": {
+        "postAdd": []
+      },
+      "dev": {
+        "debug": false,
+        "convexArgs": []
+      },
+      "codegen": {
+        "debug": false,
+        "scope": "all",
+        "convexArgs": []
+      },
+      "deploy": {
+        "convexArgs": []
+      }
+    }
+  }
+}

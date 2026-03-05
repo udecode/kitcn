@@ -169,11 +169,15 @@ const AGGREGATE_PLUGIN_TABLE_NAMES = [
   AGGREGATE_STATE_TABLE,
 ] as const;
 
-export function aggregatePlugin(): OrmSchemaPlugin {
+export function aggregatePlugin(): OrmSchemaPlugin<
+  typeof aggregateStorageTables
+> {
   return {
     key: 'aggregate',
-    tableNames: AGGREGATE_PLUGIN_TABLE_NAMES,
-    inject: injectAggregateStorageTables,
+    schema: {
+      tableNames: AGGREGATE_PLUGIN_TABLE_NAMES,
+      inject: injectAggregateStorageTables,
+    },
   };
 }
 
