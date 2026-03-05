@@ -193,7 +193,20 @@ function ConvexAuthProviderInner({
           if (!forceRefreshToken) {
             return authStore.get('token');
           }
-          return fetchFreshToken();
+
+          const cachedToken = authStore.get('token');
+          const freshToken = await fetchFreshToken();
+
+          // During hydration, keep SSR token on transient forced-refresh failure.
+          // Convex asked for a fresh token, but dropping auth to null here can
+          // briefly flip to unauthenticated before Better Auth session settles.
+          if (!freshToken && cachedToken) {
+            authStore.set('token', cachedToken);
+            authStore.set('expiresAt', decodeJwtExp(cachedToken));
+            return cachedToken;
+          }
+
+          return freshToken;
         }
 
         authStore.set('token', null);
