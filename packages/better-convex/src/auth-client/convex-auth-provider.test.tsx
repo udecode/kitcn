@@ -69,6 +69,54 @@ describe('ConvexAuthProvider', () => {
     expect(convexToken).toHaveBeenCalledTimes(0);
   });
 
+  test('fetches a fresh token when forceRefreshToken=true while session is pending', async () => {
+    const initialToken = makeJwt(3600);
+    const freshToken = makeJwt(7200);
+
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    const convexToken = mock(async () => ({ data: { token: freshToken } }));
+
+    const authClient = {
+      useSession: () => ({ data: null, isPending: true }),
+      convex: { token: convexToken },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: {
+        oneTimeToken: {
+          verify: async () => ({ data: {} }),
+        },
+      },
+    };
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ConvexAuthProvider
+        authClient={authClient as any}
+        client={client as any}
+        initialToken={initialToken}
+      >
+        {children}
+      </ConvexAuthProvider>
+    );
+
+    const { result } = renderHook(() => useFetchAccessToken(), { wrapper });
+    expect(typeof result.current).toBe('function');
+
+    let fetched: string | null = null;
+    await act(async () => {
+      fetched = await result.current!({ forceRefreshToken: true });
+    });
+
+    expect(fetched as string | null).toBe(freshToken);
+    expect(convexToken).toHaveBeenCalledTimes(1);
+    expect(convexToken).toHaveBeenCalledWith({
+      fetchOptions: { throw: false },
+    });
+  });
+
   test('passes throw=false when fetching a fresh token', async () => {
     const client = {
       setAuth: () => {},

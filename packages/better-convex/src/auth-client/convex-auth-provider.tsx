@@ -145,19 +145,60 @@ function ConvexAuthProviderInner({
     }: {
       forceRefreshToken?: boolean;
     } = {}) => {
+      const fetchFreshToken = () => {
+        if (pendingTokenRef.current) {
+          return pendingTokenRef.current;
+        }
+
+        // biome-ignore lint/suspicious/noExplicitAny: convex plugin type
+        pendingTokenRef.current = (authClient as any).convex
+          .token({ fetchOptions: { throw: false } })
+          .then((result: { data?: { token?: string | null } | null }) => {
+            const jwt = result.data?.token || null;
+
+            if (jwt) {
+              const exp = decodeJwtExp(jwt);
+              authStore.set('token', jwt);
+              authStore.set('expiresAt', exp);
+              return jwt;
+            }
+
+            authStore.set('token', null);
+            authStore.set('expiresAt', null);
+            return null;
+          })
+          .catch((error: unknown) => {
+            authStore.set('token', null);
+            authStore.set('expiresAt', null);
+            console.error('[fetchAccessToken] error', error);
+            return null;
+          })
+          .finally(() => {
+            pendingTokenRef.current = null;
+          });
+
+        return pendingTokenRef.current;
+      };
+
       const currentSession = sessionRef.current;
       const currentIsPending = isPendingRef.current;
       const hasSession = hasActiveSessionData(currentSession);
 
       // If no session:
-      // - If still pending (hydration), return cached token from SSR
+      // - If still pending (hydration), return cached SSR token for non-forced reads
+      // - If still pending + forced refresh, fetch a fresh token for Convex scheduling
       // - If not pending (confirmed no session), clear cache
       if (!hasSession) {
-        if (!currentIsPending) {
-          authStore.set('token', null);
-          authStore.set('expiresAt', null);
+        if (currentIsPending) {
+          if (!forceRefreshToken) {
+            return authStore.get('token');
+          }
+          return fetchFreshToken();
         }
-        return authStore.get('token');
+
+        authStore.set('token', null);
+        authStore.set('expiresAt', null);
+        return null;
       }
 
       // Check cached JWT from store
@@ -179,35 +220,7 @@ function ConvexAuthProviderInner({
         return pendingTokenRef.current;
       }
 
-      // Fetch fresh JWT
-      // biome-ignore lint/suspicious/noExplicitAny: convex plugin type
-      pendingTokenRef.current = (authClient as any).convex
-        .token({ fetchOptions: { throw: false } })
-        .then((result: { data?: { token?: string | null } | null }) => {
-          const jwt = result.data?.token || null;
-
-          if (jwt) {
-            const exp = decodeJwtExp(jwt);
-            authStore.set('token', jwt);
-            authStore.set('expiresAt', exp);
-            return jwt;
-          }
-
-          authStore.set('token', null);
-          authStore.set('expiresAt', null);
-          return null;
-        })
-        .catch((error: unknown) => {
-          authStore.set('token', null);
-          authStore.set('expiresAt', null);
-          console.error('[fetchAccessToken] error', error);
-          return null;
-        })
-        .finally(() => {
-          pendingTokenRef.current = null;
-        });
-
-      return pendingTokenRef.current;
+      return fetchFreshToken();
     },
     // Stable deps - authStore/authClient rarely change
     // session/isPending accessed via refs to prevent callback recreation
