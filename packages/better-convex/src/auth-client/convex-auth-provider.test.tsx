@@ -170,6 +170,73 @@ describe('ConvexAuthProvider', () => {
     });
   });
 
+  test('retries forced refresh when pending in-flight refresh resolves null', async () => {
+    const initialToken = makeJwt(3600);
+    const freshToken = makeJwt(7200);
+
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    let callCount = 0;
+    let resolveFirstCallGate!: () => void;
+    const firstCallGate = new Promise<void>((resolve) => {
+      resolveFirstCallGate = resolve;
+    });
+
+    const convexToken = mock(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        await firstCallGate;
+        return { data: {} };
+      }
+      return { data: { token: freshToken } };
+    });
+
+    const authClient = {
+      useSession: () => ({ data: null, isPending: true }),
+      convex: { token: convexToken },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: {
+        oneTimeToken: {
+          verify: async () => ({ data: {} }),
+        },
+      },
+    };
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ConvexAuthProvider
+        authClient={authClient as any}
+        client={client as any}
+        initialToken={initialToken}
+      >
+        {children}
+      </ConvexAuthProvider>
+    );
+
+    const { result } = renderHook(() => useFetchAccessToken(), { wrapper });
+    expect(typeof result.current).toBe('function');
+
+    const firstForcedPromise = result.current!({ forceRefreshToken: true });
+    await Promise.resolve();
+    const secondForcedPromise = result.current!({ forceRefreshToken: true });
+
+    resolveFirstCallGate();
+
+    let firstResult: string | null = null;
+    let secondResult: string | null = null;
+    await act(async () => {
+      firstResult = await firstForcedPromise;
+      secondResult = await secondForcedPromise;
+    });
+
+    expect(firstResult as string | null).toBe(initialToken);
+    expect(secondResult as string | null).toBe(freshToken);
+    expect(convexToken).toHaveBeenCalledTimes(2);
+  });
+
   test('passes throw=false when fetching a fresh token', async () => {
     const client = {
       setAuth: () => {},

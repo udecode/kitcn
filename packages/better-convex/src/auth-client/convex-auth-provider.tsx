@@ -180,6 +180,19 @@ function ConvexAuthProviderInner({
         return pendingTokenRef.current;
       };
 
+      const fetchFreshTokenForced = async () => {
+        // For forced refresh, if we only have an in-flight request and it
+        // resolves null, retry once immediately instead of returning null.
+        if (pendingTokenRef.current) {
+          const token = await pendingTokenRef.current;
+          if (token) {
+            return token;
+          }
+        }
+
+        return fetchFreshToken();
+      };
+
       const currentSession = sessionRef.current;
       const currentIsPending = isPendingRef.current;
       const hasSession = hasActiveSessionData(currentSession);
@@ -195,7 +208,7 @@ function ConvexAuthProviderInner({
           }
 
           const cachedToken = authStore.get('token');
-          const freshToken = await fetchFreshToken();
+          const freshToken = await fetchFreshTokenForced();
 
           // During hydration, keep SSR token on transient forced-refresh failure.
           // Convex asked for a fresh token, but dropping auth to null here can
@@ -231,6 +244,10 @@ function ConvexAuthProviderInner({
 
       if (!forceRefreshToken && pendingTokenRef.current) {
         return pendingTokenRef.current;
+      }
+
+      if (forceRefreshToken) {
+        return fetchFreshTokenForced();
       }
 
       return fetchFreshToken();
