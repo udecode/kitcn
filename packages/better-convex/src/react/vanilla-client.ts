@@ -19,9 +19,9 @@ import {
   type DataTransformerOptions,
   getTransformer,
 } from '../crpc/transformer';
-import type { VanillaCRPCClient } from '../crpc/types';
 import type { CallerMeta } from '../server/caller';
 import { getFuncRef, getFunctionType } from '../shared/meta-utils';
+import type { VanillaCRPCClient } from './crpc-types';
 
 // ============================================================================
 // Proxy Implementation

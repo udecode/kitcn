@@ -22,14 +22,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CRPCClientError, isCRPCClientError } from '../crpc/error';
 import { convexQuery } from '../crpc/query-options';
-import {
-  type ConvexInfiniteQueryOptionsWithRef,
-  type ExtractPaginatedItem,
-  FUNC_REF_SYMBOL,
-} from '../crpc/types';
+import { type ExtractPaginatedItem, FUNC_REF_SYMBOL } from '../crpc/types';
 import type { DistributiveOmit } from '../internal/types';
 import { useAuthValue, useSafeConvexAuth } from './auth-store';
 import { useMeta } from './context';
+import type { ConvexInfiniteQueryOptionsWithRef } from './crpc-types';
 
 /** Reserved options controlled by infinite query hooks */
 type ReservedInfiniteOptions =
