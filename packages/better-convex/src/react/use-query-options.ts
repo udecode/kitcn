@@ -33,18 +33,20 @@ import {
   getTransformer,
 } from '../crpc/transformer';
 import type {
-  ConvexActionOptions,
-  ConvexInfiniteQueryOptions,
   ConvexQueryHookOptions,
   ConvexQueryMeta,
-  ConvexQueryOptions,
   InfiniteQueryInput,
-  InfiniteQueryOptsParam,
 } from '../crpc/types';
 import { useAuthSkip } from '../internal/auth';
 import type { DistributiveOmit } from '../internal/types';
 import { useAuthGuard } from './auth-store';
 import { useFnMeta, useMeta } from './context';
+import type {
+  ConvexActionOptions,
+  ConvexInfiniteQueryOptions,
+  ConvexQueryOptions,
+  InfiniteQueryOptsParam,
+} from './crpc-types';
 
 // Reserved options that we control - users cannot override these
 type ReservedQueryOptions = 'queryKey' | 'queryFn' | 'staleTime';

@@ -26,6 +26,7 @@
     "./react": "./dist/react/index.js",
     "./rsc": "./dist/rsc/index.js",
     "./server": "./dist/server/index.js",
+    "./solid": "./dist/solid/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -58,19 +59,29 @@
   },
   "devDependencies": {
     "@rollup/plugin-babel": "^6.1.0",
+    "@tanstack/solid-query": "^5.90.23",
     "babel-plugin-react-compiler": "^1.0.0",
+    "solid-js": "^1.9.11",
     "tsdown": "^0.20.3"
   },
   "peerDependencies": {
     "@tanstack/react-query": ">=5",
+    "@tanstack/solid-query": ">=5",
     "better-auth": ">=1.4.9",
     "convex": ">=1.32",
     "hono": ">=4",
     "next": ">=14",
     "react": ">=18",
+    "solid-js": ">=1.8",
     "zod": ">=4"
   },
   "peerDependenciesMeta": {
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "@tanstack/solid-query": {
+      "optional": true
+    },
     "better-auth": {
       "optional": true
     },
@@ -81,6 +92,9 @@
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "solid-js": {
       "optional": true
     }
   },

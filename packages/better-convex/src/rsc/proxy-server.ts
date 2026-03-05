@@ -8,7 +8,8 @@
 import { type FunctionReference, getFunctionName } from 'convex/server';
 
 import { convexInfiniteQueryOptions, convexQuery } from '../crpc/query-options';
-import type { CRPCClient, InfiniteQueryOptsParam, Meta } from '../crpc/types';
+import type { Meta } from '../crpc/types';
+import type { CRPCClient } from '../react/crpc-types';
 import type { HttpCRPCClientFromRouter } from '../react/http-proxy';
 import type { CRPCHttpRouter, HttpRouterRecord } from '../server/http-router';
 import {
@@ -83,7 +84,7 @@ function createRecursiveProxy(
       if (prop === 'infiniteQueryOptions') {
         return (
           args: Record<string, unknown> = {},
-          opts: InfiniteQueryOptsParam = {}
+          opts: Record<string, unknown> = {}
         ) => {
           const funcRef = getFuncRef(api, path) as FunctionReference<'query'>;
           return convexInfiniteQueryOptions(funcRef, args, opts, meta);

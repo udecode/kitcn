@@ -102,7 +102,7 @@ describe('convexInfiniteQueryOptions', () => {
       meta
     );
 
-    expect(options.queryKey).toEqual([
+    expect(options.queryKey as any).toEqual([
       'convexQuery',
       'todos:list',
       { status: 'open', cursor: null, limit: 25 },

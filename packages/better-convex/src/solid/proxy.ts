@@ -1,14 +1,16 @@
 /**
- * CRPC Recursive Proxy
+ * CRPC Recursive Proxy (Solid.js)
  *
  * Creates a tRPC-like proxy that wraps Convex API functions with
- * TanStack Query options builders.
+ * TanStack Query options builders. Unlike the React version, this
+ * calls plain functions instead of hooks, receiving auth state
+ * and meta via a ProxyContext object.
  *
  * @example
  * ```ts
- * const crpc = createCRPCOptionsProxy(api);
+ * const crpc = createCRPCOptionsProxy(api, meta, ctx);
  * const opts = crpc.user.get.queryOptions({ id: '123' });
- * const { data } = useQuery(opts);
+ * const { data } = createQuery(() => opts);
  * ```
  */
 
@@ -16,7 +18,7 @@ import {
   type QueryFilters,
   type SkipToken,
   skipToken,
-} from '@tanstack/react-query';
+} from '@tanstack/solid-query';
 import type { FunctionArgs, FunctionReference } from 'convex/server';
 import { getFunctionName } from 'convex/server';
 import { convexAction, convexQuery } from '../crpc/query-options';
@@ -34,12 +36,12 @@ import {
   type InfiniteQueryOptsParam,
 } from './crpc-types';
 import {
-  useConvexActionOptions,
-  useConvexActionQueryOptions,
-  useConvexInfiniteQueryOptions,
-  useConvexMutationOptions,
-  useConvexQueryOptions,
-} from './use-query-options';
+  createConvexActionMutationOptions,
+  createConvexActionQueryOptions,
+  createConvexInfiniteQueryOptions,
+  createConvexMutationOptions,
+  createConvexQueryOptions,
+} from './query-options';
 
 // ============================================================================
 // Proxy Implementation
@@ -54,14 +56,24 @@ function getQueryKeyPrefix(
   return 'convexQuery';
 }
 
+/** Context passed through the proxy for auth state and client access */
+type ProxyContext = {
+  meta: CallerMeta;
+  authState: { isAuthenticated: boolean; isLoading: boolean };
+  convexClient: {
+    mutation: (funcRef: any, args: any) => Promise<any>;
+    action: (funcRef: any, args: any) => Promise<any>;
+  };
+  transformer?: DataTransformerOptions;
+};
+
 /**
  * Create a recursive proxy that accumulates path segments.
  */
 function createRecursiveProxy(
   api: Record<string, unknown>,
   path: string[],
-  meta: CallerMeta,
-  transformer?: DataTransformerOptions
+  ctx: ProxyContext
 ): unknown {
   return new Proxy(
     // Use a function as target so the proxy is callable
@@ -76,22 +88,31 @@ function createRecursiveProxy(
         if (prop === 'queryOptions') {
           return (args: unknown = {}, opts?: unknown) => {
             const funcRef = getFuncRef(api, path);
-            const fnType = getFunctionType(path, meta);
+            const fnType = getFunctionType(path, ctx.meta);
 
             // Actions use one-shot query (no subscription)
             if (fnType === 'action') {
-              return useConvexActionQueryOptions(
+              return createConvexActionQueryOptions(
                 funcRef as FunctionReference<'action'>,
                 args as Record<string, unknown>,
-                opts as Parameters<typeof useConvexActionQueryOptions>[2]
+                {
+                  meta: ctx.meta,
+                  authState: ctx.authState,
+                  queryOptions: opts as Parameters<
+                    typeof createConvexActionQueryOptions
+                  >[2],
+                }
               );
             }
 
-            // useConvexQueryOptions is a hook, so this must be called from a component
-            return useConvexQueryOptions(
+            return createConvexQueryOptions(
               funcRef as FunctionReference<'query'>,
               args as Record<string, unknown>,
-              opts as ConvexQueryHookOptions
+              {
+                meta: ctx.meta,
+                authState: ctx.authState,
+                hookOptions: opts as ConvexQueryHookOptions,
+              }
             );
           };
         }
@@ -100,7 +121,7 @@ function createRecursiveProxy(
         if (prop === 'staticQueryOptions') {
           return (args: unknown = {}, opts?: { skipUnauth?: boolean }) => {
             const funcRef = getFuncRef(api, path);
-            const fnType = getFunctionType(path, meta);
+            const fnType = getFunctionType(path, ctx.meta);
 
             // Convert skipToken to 'skip' for convexQuery/convexAction
             const finalArgs = args === skipToken ? 'skip' : args;
@@ -110,7 +131,7 @@ function createRecursiveProxy(
               return convexAction(
                 funcRef as FunctionReference<'action'>,
                 finalArgs as FunctionArgs<FunctionReference<'action'>>,
-                meta,
+                ctx.meta,
                 opts
               );
             }
@@ -118,7 +139,7 @@ function createRecursiveProxy(
             return convexQuery(
               funcRef as FunctionReference<'query'>,
               finalArgs as FunctionArgs<FunctionReference<'query'>>,
-              meta,
+              ctx.meta,
               opts
             );
           };
@@ -129,7 +150,7 @@ function createRecursiveProxy(
           return (args: unknown = {}) => {
             const funcRef = getFuncRef(api, path);
             const funcName = getFunctionName(funcRef);
-            const prefix = getQueryKeyPrefix(path, meta);
+            const prefix = getQueryKeyPrefix(path, ctx.meta);
             return [prefix, funcName, args];
           };
         }
@@ -139,7 +160,7 @@ function createRecursiveProxy(
           return (args?: unknown, filters?: Omit<QueryFilters, 'queryKey'>) => {
             const funcRef = getFuncRef(api, path);
             const funcName = getFunctionName(funcRef);
-            const prefix = getQueryKeyPrefix(path, meta);
+            const prefix = getQueryKeyPrefix(path, ctx.meta);
             return {
               ...filters,
               queryKey: [prefix, funcName, args],
@@ -154,9 +175,17 @@ function createRecursiveProxy(
             opts: InfiniteQueryOptsParam = {}
           ) => {
             const funcRef = getFuncRef(api, path) as FunctionReference<'query'>;
-            const options = useConvexInfiniteQueryOptions(funcRef, args, opts);
+            const options = createConvexInfiniteQueryOptions(
+              funcRef,
+              args,
+              opts,
+              {
+                meta: ctx.meta,
+                authState: ctx.authState,
+              }
+            );
 
-            // Attach funcRef via Symbol (non-enumerable, won't serialize for RSC)
+            // Attach funcRef via Symbol (non-enumerable, won't serialize)
             Object.defineProperty(options, FUNC_REF_SYMBOL, {
               value: funcRef,
               enumerable: false,
@@ -178,7 +207,7 @@ function createRecursiveProxy(
 
         // Terminal property: meta (function metadata)
         if (prop === 'meta' && path.length >= 2) {
-          return getFunctionMeta(path, meta);
+          return getFunctionMeta(path, ctx.meta);
         }
 
         // Terminal method: mutationKey
@@ -194,60 +223,61 @@ function createRecursiveProxy(
         if (prop === 'mutationOptions') {
           return (opts?: unknown) => {
             const funcRef = getFuncRef(api, path);
-            const fnType = getFunctionType(path, meta);
+            const fnType = getFunctionType(path, ctx.meta);
 
-            // Use type detection to determine if it's a mutation or action
             if (fnType === 'action') {
-              return useConvexActionOptions(
+              return createConvexActionMutationOptions(
                 funcRef as FunctionReference<'action'>,
-                opts as Parameters<typeof useConvexActionOptions>[1],
-                transformer
+                ctx.convexClient,
+                {
+                  meta: ctx.meta,
+                  authState: ctx.authState,
+                  mutationOptions: opts as Parameters<
+                    typeof createConvexActionMutationOptions
+                  >[2],
+                  transformer: ctx.transformer,
+                }
               );
             }
 
-            return useConvexMutationOptions(
+            return createConvexMutationOptions(
               funcRef as FunctionReference<'mutation'>,
-              opts as Parameters<typeof useConvexMutationOptions>[1],
-              transformer
+              ctx.convexClient,
+              {
+                meta: ctx.meta,
+                authState: ctx.authState,
+                mutationOptions: opts as Parameters<
+                  typeof createConvexMutationOptions
+                >[2],
+                transformer: ctx.transformer,
+              }
             );
           };
         }
 
         // Continue path accumulation
-        return createRecursiveProxy(api, [...path, prop], meta, transformer);
+        return createRecursiveProxy(api, [...path, prop], ctx);
       },
     }
   );
 }
 
 /**
- * Create a CRPC proxy for a Convex API object.
+ * Create a CRPC proxy for a Convex API object (Solid.js version).
  *
- * The proxy provides a tRPC-like interface for accessing Convex functions
- * with TanStack Query options builders.
+ * Unlike the React version which uses hooks internally, this proxy
+ * receives auth state and client references via a context object,
+ * since Solid components only execute once.
  *
  * @param api - The Convex API object (from `@convex/api`)
  * @param meta - Generated function metadata for runtime type detection
+ * @param ctx - Proxy context with auth state, client, and transformer
  * @returns A typed proxy with queryOptions/mutationOptions methods
- *
- * @example
- * ```tsx
- * import { api } from '@convex/api';
- *
- * // Usually you should use createCRPCContext({ api }) instead.
- * // createCRPCOptionsProxy is a low-level helper.
- * const crpc = createCRPCOptionsProxy(api, {} as any);
- *
- * function MyComponent() {
- *   const { data } = useQuery(crpc.user.get.queryOptions({ id }));
- *   const { mutate } = useMutation(crpc.user.update.mutationOptions());
- * }
- * ```
  */
 export function createCRPCOptionsProxy<TApi extends Record<string, unknown>>(
   api: TApi,
   meta: CallerMeta,
-  transformer?: DataTransformerOptions
+  ctx: Omit<ProxyContext, 'meta'>
 ): CRPCClient<TApi> {
-  return createRecursiveProxy(api, [], meta, transformer) as CRPCClient<TApi>;
+  return createRecursiveProxy(api, [], { ...ctx, meta }) as CRPCClient<TApi>;
 }

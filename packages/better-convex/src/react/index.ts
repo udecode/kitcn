@@ -5,6 +5,7 @@ export * from './auth-store';
 export { useSafeConvexAuth as useConvexAuth } from './auth-store';
 export * from './client';
 export * from './context';
+export * from './crpc-types';
 export * from './http-proxy';
 export * from './proxy';
 export * from './singleton';

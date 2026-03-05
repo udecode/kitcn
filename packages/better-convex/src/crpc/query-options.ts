@@ -8,14 +8,7 @@
 import type { FunctionArgs, FunctionReference } from 'convex/server';
 import { getFunctionName } from 'convex/server';
 
-import type {
-  ConvexActionOptions,
-  ConvexInfiniteQueryOptions,
-  ConvexQueryMeta,
-  ConvexQueryOptions,
-  InfiniteQueryOptsParam,
-  Meta,
-} from './types';
+import type { Meta } from './types';
 
 /**
  * Query options factory for Convex query function subscriptions.
@@ -26,7 +19,7 @@ export function convexQuery<T extends FunctionReference<'query'>>(
   args?: FunctionArgs<T> | 'skip',
   meta?: Meta,
   opts?: { skipUnauth?: boolean }
-): ConvexQueryOptions<T> & { meta: ConvexQueryMeta } {
+) {
   const finalArgs = args ?? {};
   const isSkip = finalArgs === 'skip';
 
@@ -44,7 +37,7 @@ export function convexQuery<T extends FunctionReference<'query'>>(
       isSkip
         ? ('skip' as unknown as FunctionArgs<T>)
         : (finalArgs as FunctionArgs<T>),
-    ],
+    ] as const,
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: false,
     refetchOnMount: false,
@@ -56,7 +49,7 @@ export function convexQuery<T extends FunctionReference<'query'>>(
       skipUnauth,
       subscribe: true, // default, can be overridden
     },
-  } as ConvexQueryOptions<T> & { meta: ConvexQueryMeta };
+  };
 }
 
 /**
@@ -81,7 +74,7 @@ export function convexAction<T extends FunctionReference<'action'>>(
   args?: FunctionArgs<T> | 'skip',
   meta?: Meta,
   opts?: { skipUnauth?: boolean }
-): ConvexActionOptions<T> & { meta: ConvexQueryMeta } {
+) {
   const finalArgs = args ?? {};
   const isSkip = finalArgs === 'skip';
 
@@ -96,7 +89,7 @@ export function convexAction<T extends FunctionReference<'action'>>(
       'convexAction',
       funcName,
       isSkip ? ({} as FunctionArgs<T>) : (finalArgs as FunctionArgs<T>),
-    ],
+    ] as const,
     staleTime: Number.POSITIVE_INFINITY,
     refetchInterval: false,
     refetchOnMount: false,
@@ -108,7 +101,7 @@ export function convexAction<T extends FunctionReference<'action'>>(
       skipUnauth,
       subscribe: false, // actions don't subscribe
     },
-  } as ConvexActionOptions<T> & { meta: ConvexQueryMeta };
+  };
 }
 
 /**
@@ -122,9 +115,14 @@ export function convexInfiniteQueryOptions<
 >(
   funcRef: T,
   args: Record<string, unknown> | 'skip',
-  opts: InfiniteQueryOptsParam<T> = {},
+  opts: {
+    limit?: number;
+    skipUnauth?: boolean;
+    enabled?: boolean;
+    [key: string]: unknown;
+  } = {},
   meta?: Meta
-): ConvexInfiniteQueryOptions<T> {
+) {
   // Extract our custom options, pass through the rest as TanStack Query options
   const { limit, skipUnauth, enabled, ...queryOptions } = opts;
 

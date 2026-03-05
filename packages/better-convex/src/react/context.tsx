@@ -10,16 +10,12 @@ import type { ConvexReactClient } from 'convex/react';
 import { createContext, type ReactNode, useContext, useMemo } from 'react';
 import type { HttpClientError } from '../crpc/http-types';
 import type { DataTransformerOptions } from '../crpc/transformer';
-import type {
-  CRPCClient,
-  FnMeta,
-  Meta,
-  VanillaCRPCClient,
-} from '../crpc/types';
+import type { FnMeta, Meta } from '../crpc/types';
 import type { CRPCHttpRouter, HttpRouterRecord } from '../server/http-router';
 import { buildMetaIndex } from '../shared/meta-utils';
 import { useAuthStore, useFetchAccessToken } from './auth-store';
 import type { ConvexQueryClient } from './client';
+import type { CRPCClient, VanillaCRPCClient } from './crpc-types';
 import {
   createHttpProxy,
   type HttpCRPCClientFromRouter,

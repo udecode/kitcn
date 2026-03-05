@@ -42,6 +42,7 @@ export default defineConfig([
       'rsc/index': 'src/rsc/index.ts',
       'server/index': 'src/server/index.ts',
       'orm/index': 'src/orm/index.ts',
+      'solid/index': 'src/solid/index.ts',
     },
     // Keep CI strict: only allow this known transitive Better Auth dep to inline.
     inlineOnly: ['kysely'],
