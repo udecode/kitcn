@@ -10,6 +10,7 @@ import {
   ChevronDown,
   FolderOpen,
   Gauge,
+  GitBranch,
   Loader2,
   LogIn,
   LogOut,
@@ -72,6 +73,12 @@ const LAB_NAV_ITEMS = [
     match: (p: string) => p.startsWith('/aggregate'),
   },
   {
+    href: '/orm' as const,
+    label: 'ORM',
+    icon: GitBranch,
+    match: (p: string) => p.startsWith('/orm'),
+  },
+  {
     href: '/ratelimit' as const,
     label: 'Ratelimit',
     icon: Gauge,
@@ -96,6 +103,7 @@ type NavSection = 'app' | 'labs';
 function activeSectionFromPath(pathname: string): NavSection {
   if (
     pathname.startsWith('/aggregate') ||
+    pathname.startsWith('/orm') ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/ratelimit') ||
     pathname.startsWith('/triggers') ||
@@ -135,7 +143,7 @@ export function BreadcrumbNav() {
   const activeSection = activeSectionFromPath(pathname);
   const scopedNavItems =
     activeSection === 'labs' ? LAB_NAV_ITEMS : APP_NAV_ITEMS;
-  const labsRootHref = '/aggregate';
+  const labsRootHref = '/orm';
 
   return (
     <header className="sticky top-0 z-50 border-border/40 border-b bg-background/80 backdrop-blur-xl">

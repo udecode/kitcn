@@ -105,7 +105,11 @@ import {
   QueryStream,
   stream,
 } from './stream';
-import { Columns, OrmSchemaDefinition } from './symbols';
+import {
+  Columns,
+  OrmSchemaDefinition,
+  type TablePolymorphicConfigRuntime,
+} from './symbols';
 import {
   CREATED_AT_MIGRATION_MESSAGE,
   INTERNAL_CREATION_TIME_FIELD,
@@ -1802,190 +1806,137 @@ export class GelRelationalQuery<
   }
 
   private _resolvePolymorphicFinalizeState(): {
-    requestedWith: Record<string, unknown> | undefined;
-    effectiveWith: Record<string, unknown> | undefined;
-    autoLoadedCaseRelations: Set<string>;
-    discriminator: string;
-    alias: string;
-    cases: Record<string, string>;
-    schema: {
-      safeParse?: (input: unknown) => { success: boolean; error?: unknown };
-      parse?: (input: unknown) => unknown;
-    };
+    configs: readonly TablePolymorphicConfigRuntime[];
   } | null {
-    const rawPolymorphic = (this.config as any).polymorphic;
-    if (rawPolymorphic === undefined) {
+    const configs = this.tableConfig.polymorphic;
+    if (!configs || configs.length === 0) {
       return null;
     }
-    if (!this._isRecord(rawPolymorphic)) {
-      throw new Error('polymorphic must be an object.');
-    }
+    return { configs };
+  }
 
-    const discriminator = rawPolymorphic.discriminator;
-    if (typeof discriminator !== 'string' || discriminator.length === 0) {
-      throw new Error('polymorphic.discriminator must be a non-empty string.');
+  private _resolveWithVariantsState(
+    requestedWith: Record<string, unknown> | undefined,
+    polymorphicState: {
+      configs: readonly TablePolymorphicConfigRuntime[];
+    } | null
+  ): {
+    effectiveWith: Record<string, unknown> | undefined;
+  } {
+    const withVariants = (this.config as { withVariants?: unknown })
+      .withVariants;
+    if (withVariants === undefined || withVariants === false) {
+      return { effectiveWith: requestedWith };
     }
-
-    const aliasRaw = rawPolymorphic.as;
-    const alias =
-      aliasRaw === undefined
-        ? 'target'
-        : typeof aliasRaw === 'string' && aliasRaw.length > 0
-          ? aliasRaw
-          : null;
-    if (!alias) {
-      throw new Error('polymorphic.as must be a non-empty string when set.');
+    if (withVariants !== true) {
+      throw new Error('withVariants currently supports only `true`.');
     }
-
-    const schema = rawPolymorphic.schema as {
-      safeParse?: (input: unknown) => { success: boolean; error?: unknown };
-      parse?: (input: unknown) => unknown;
-    };
-    if (
-      !schema ||
-      (typeof schema.safeParse !== 'function' &&
-        typeof schema.parse !== 'function')
-    ) {
+    if (!polymorphicState) {
       throw new Error(
-        'polymorphic.schema must provide safeParse() or parse().'
+        `withVariants is only available on tables with discriminator(...) columns ('${this.tableConfig.name}').`
       );
     }
 
-    const rawCases = rawPolymorphic.cases;
-    if (!this._isRecord(rawCases) || Object.keys(rawCases).length === 0) {
-      throw new Error(
-        'polymorphic.cases must be a non-empty object of discriminator-to-relation mappings.'
-      );
+    const oneRelations = Object.entries(this.tableConfig.relations).filter(
+      ([, relation]) => relation.relationType === 'one'
+    );
+    if (oneRelations.length === 0) {
+      return { effectiveWith: requestedWith };
     }
 
-    const cases: Record<string, string> = {};
-    for (const [caseKey, caseRelation] of Object.entries(rawCases)) {
-      if (typeof caseRelation !== 'string' || caseRelation.length === 0) {
-        throw new Error(
-          `polymorphic.cases.${caseKey} must be a relation name string.`
-        );
-      }
-      const relation = this.tableConfig.relations[caseRelation];
-      if (!relation) {
-        throw new Error(
-          `polymorphic.cases.${caseKey} references unknown relation '${caseRelation}' on '${this.tableConfig.name}'.`
-        );
-      }
-      if (relation.relationType !== 'one') {
-        throw new Error(
-          `polymorphic.cases.${caseKey} must map to a one() relation; received '${caseRelation}'.`
-        );
-      }
-      cases[caseKey] = caseRelation;
-    }
-
-    const requestedWith = this.config.with as
-      | Record<string, unknown>
-      | undefined;
-    const effectiveWith = requestedWith ? { ...requestedWith } : {};
-    const autoLoadedCaseRelations = new Set<string>();
-
-    for (const relationName of new Set(Object.values(cases))) {
-      if (effectiveWith[relationName] === undefined) {
-        effectiveWith[relationName] = true;
-        autoLoadedCaseRelations.add(relationName);
-      }
-    }
+    const autoWith = Object.fromEntries(
+      oneRelations.map(([relationName]) => [relationName, true])
+    );
 
     return {
-      requestedWith,
-      effectiveWith: Object.keys(effectiveWith).length
-        ? effectiveWith
-        : undefined,
-      autoLoadedCaseRelations,
-      discriminator,
-      alias,
-      cases,
-      schema,
+      effectiveWith: requestedWith
+        ? {
+            ...autoWith,
+            ...requestedWith,
+          }
+        : autoWith,
     };
   }
 
-  private _extractPolymorphicSchemaErrorMessage(error: unknown): string {
-    if (!error || typeof error !== 'object') {
-      return String(error);
-    }
-    const issueMessage = (
-      error as {
-        issues?: Array<{ message?: string }>;
+  private _assertPolymorphicAliasCollisions(
+    configs: readonly TablePolymorphicConfigRuntime[],
+    requestedWith: Record<string, unknown> | undefined,
+    resolvedExtras: unknown
+  ): void {
+    const tableColumns = this._getColumns(this.tableConfig);
+    const extras = this._isRecord(resolvedExtras) ? resolvedExtras : undefined;
+    for (const config of configs) {
+      if (config.alias in tableColumns) {
+        throw new Error(
+          `discriminator alias '${config.alias}' on '${this.tableConfig.name}' conflicts with an existing column.`
+        );
       }
-    ).issues?.[0]?.message;
-    if (issueMessage) {
-      return issueMessage;
+      if (config.alias in this.tableConfig.relations) {
+        throw new Error(
+          `discriminator alias '${config.alias}' on '${this.tableConfig.name}' conflicts with a relation.`
+        );
+      }
+      if (requestedWith && config.alias in requestedWith) {
+        throw new Error(
+          `discriminator alias '${config.alias}' on '${this.tableConfig.name}' conflicts with with.${config.alias}.`
+        );
+      }
+      if (extras && config.alias in extras) {
+        throw new Error(
+          `discriminator alias '${config.alias}' on '${this.tableConfig.name}' conflicts with extras.${config.alias}.`
+        );
+      }
     }
-    const message = (error as { message?: string }).message;
-    return message ?? String(error);
   }
 
   private _synthesizePolymorphicRows(
     rows: any[],
-    config: NonNullable<
-      ReturnType<typeof this._resolvePolymorphicFinalizeState>
-    >
+    configs: readonly TablePolymorphicConfigRuntime[]
   ): void {
     for (const row of rows) {
-      const discriminatorValue = row[config.discriminator];
-      const caseKey = String(discriminatorValue);
-      const relationName = config.cases[caseKey];
-      if (!relationName) {
-        throw new Error(
-          `polymorphic discriminator '${config.discriminator}' value '${caseKey}' has no matching case mapping.`
-        );
-      }
-
-      const targetValue = row[relationName];
-      if (targetValue === null || targetValue === undefined) {
-        throw new Error(
-          `polymorphic case '${caseKey}' resolved relation '${relationName}' but no target row was loaded.`
-        );
-      }
-
-      row[config.alias] = targetValue;
-
-      const payload = {
-        [config.discriminator]: discriminatorValue,
-        [config.alias]: targetValue,
-      };
-      if (typeof config.schema.safeParse === 'function') {
-        const result = config.schema.safeParse(payload);
-        if (!result.success) {
+      for (const config of configs) {
+        const discriminatorValue = row[config.discriminator];
+        const caseKey = String(discriminatorValue);
+        const variant = config.variants[caseKey];
+        if (!variant) {
           throw new Error(
-            `polymorphic schema parse failed: ${this._extractPolymorphicSchemaErrorMessage(result.error)}`
+            `discriminator '${config.discriminator}' value '${caseKey}' has no matching variant on '${this.tableConfig.name}'.`
           );
         }
-      } else if (typeof config.schema.parse === 'function') {
-        try {
-          config.schema.parse(payload);
-        } catch (error) {
-          throw new Error(
-            `polymorphic schema parse failed: ${this._extractPolymorphicSchemaErrorMessage(error)}`
-          );
-        }
-      }
-    }
 
-    for (const relationName of config.autoLoadedCaseRelations) {
-      if (relationName === config.alias) {
-        continue;
-      }
-      for (const row of rows) {
-        delete row[relationName];
+        const nested: Record<string, unknown> = {};
+        for (const fieldName of variant.fieldNames) {
+          nested[fieldName] = row[fieldName];
+        }
+        row[config.alias] = nested;
       }
     }
   }
 
   private async _finalizeRows(rows: any[]): Promise<any[]> {
     const polymorphicState = this._resolvePolymorphicFinalizeState();
-    const requestedWith =
-      polymorphicState?.requestedWith ??
-      (this.config.with as Record<string, unknown> | undefined);
-    const effectiveWith =
-      polymorphicState?.effectiveWith ??
-      (this.config.with as Record<string, unknown> | undefined);
+    const requestedWith = this.config.with as
+      | Record<string, unknown>
+      | undefined;
+    const withVariantsState = this._resolveWithVariantsState(
+      requestedWith,
+      polymorphicState
+    );
+    const effectiveWith = withVariantsState.effectiveWith;
+    const tableColumns = this._getColumns(this.tableConfig);
+    const extrasConfig = (this.config as any).extras;
+    const resolvedExtras =
+      typeof extrasConfig === 'function'
+        ? extrasConfig(tableColumns)
+        : extrasConfig;
+
+    if (polymorphicState) {
+      this._assertPolymorphicAliasCollisions(
+        polymorphicState.configs,
+        requestedWith,
+        resolvedExtras
+      );
+    }
 
     let rowsWithRelations = rows;
     if (effectiveWith) {
@@ -2000,15 +1951,18 @@ export class GelRelationalQuery<
     }
 
     if (polymorphicState) {
-      this._synthesizePolymorphicRows(rowsWithRelations, polymorphicState);
+      this._synthesizePolymorphicRows(
+        rowsWithRelations,
+        polymorphicState.configs
+      );
     }
 
-    if ((this.config as any).extras) {
+    if (resolvedExtras) {
       rowsWithRelations = this._applyExtras(
         rowsWithRelations,
-        (this.config as any).extras,
-        this._getColumns(this.tableConfig),
-        requestedWith,
+        resolvedExtras,
+        tableColumns,
+        effectiveWith,
         this.tableConfig.name,
         this.tableConfig
       );
@@ -2017,7 +1971,7 @@ export class GelRelationalQuery<
     return this._selectColumns(
       rowsWithRelations,
       (this.config as any).columns,
-      this._getColumns(this.tableConfig),
+      tableColumns,
       this.tableConfig
     );
   }
@@ -4865,11 +4819,6 @@ export class GelRelationalQuery<
       if (config.columns !== undefined) {
         throw new Error(
           'pipeline cannot be combined with columns in findMany().'
-        );
-      }
-      if (config.polymorphic !== undefined) {
-        throw new Error(
-          'pipeline cannot be combined with polymorphic in findMany().'
         );
       }
     }

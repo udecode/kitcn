@@ -341,8 +341,31 @@ const walkDeployEntryPoints = (
 
 const detectProjectRoots = (): ProjectRoots => {
   const projectRoot = process.cwd();
+  const convexConfigPath = path.join(projectRoot, 'convex.json');
+  const configuredFunctionsRoot = (() => {
+    if (!fs.existsSync(convexConfigPath)) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(fs.readFileSync(convexConfigPath, 'utf8')) as {
+        functions?: unknown;
+      };
+      return typeof parsed.functions === 'string' && parsed.functions.length > 0
+        ? path.join(projectRoot, parsed.functions)
+        : null;
+    } catch {
+      return null;
+    }
+  })();
   const preferredFunctionsRoot = path.join(projectRoot, 'convex', 'functions');
   const fallbackFunctionsRoot = path.join(projectRoot, 'convex');
+
+  if (configuredFunctionsRoot && fs.existsSync(configuredFunctionsRoot)) {
+    return {
+      projectRoot,
+      functionsRoot: configuredFunctionsRoot,
+    };
+  }
 
   if (fs.existsSync(preferredFunctionsRoot)) {
     return {
@@ -359,7 +382,7 @@ const detectProjectRoots = (): ProjectRoots => {
   }
 
   throw new Error(
-    `Missing Convex functions directory. Expected one of:\n- ${preferredFunctionsRoot}\n- ${fallbackFunctionsRoot}`
+    `Missing Convex functions directory. Expected one of:\n- ${configuredFunctionsRoot ?? '<convex.json functions>'}\n- ${preferredFunctionsRoot}\n- ${fallbackFunctionsRoot}`
   );
 };
 
@@ -490,25 +513,35 @@ const listConvexHandlerExports = async (
 const scanHandlerExportsByEntry = async (
   entryPoints: string[]
 ): Promise<Map<string, string[]>> => {
-  const jitiInstance = createJiti(process.cwd(), {
-    interopDefault: true,
-    moduleCache: false,
-  });
+  // Signal to createEnv that we are in the CLI's Node.js parse context.
+  // Use globalThis instead of process.env so Convex's auth-config env-var
+  // scanner never sees this as a required dashboard variable.
+  (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__ = true;
 
-  const results = await Promise.all(
-    entryPoints.map(async (entryPoint) => ({
-      entryPoint,
-      exportNames: await listConvexHandlerExports(entryPoint, jitiInstance),
-    }))
-  );
+  try {
+    const jitiInstance = createJiti(process.cwd(), {
+      interopDefault: true,
+      moduleCache: false,
+    });
 
-  const byEntry = new Map<string, string[]>();
-  for (const result of results) {
-    if (result.exportNames.length > 0) {
-      byEntry.set(result.entryPoint, result.exportNames);
+    const results = await Promise.all(
+      entryPoints.map(async (entryPoint) => ({
+        entryPoint,
+        exportNames: await listConvexHandlerExports(entryPoint, jitiInstance),
+      }))
+    );
+
+    const byEntry = new Map<string, string[]>();
+    for (const result of results) {
+      if (result.exportNames.length > 0) {
+        byEntry.set(result.entryPoint, result.exportNames);
+      }
     }
+    return byEntry;
+  } finally {
+    // biome-ignore lint/performance/noDelete: globalThis property, not a plain object — delete is correct here
+    delete (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__;
   }
-  return byEntry;
 };
 
 const parseArgs = (argv: string[]): AnalyzeOptions => {
@@ -2739,6 +2772,7 @@ export const __test = {
   cycleHotspotSort,
   cycleHotspotDetailPane,
   cycleHotspotDetailPaneBackward,
+  detectProjectRoots,
   filterEntryPointsByPattern,
   fitListViewport,
   getNativeHandlerExportNames,

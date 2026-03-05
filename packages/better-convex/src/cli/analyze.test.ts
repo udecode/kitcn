@@ -1,3 +1,5 @@
+import { describe, expect, test, vi } from 'bun:test';
+import fs from 'node:fs';
 import { __test } from './analyze';
 
 const makeState = (): Parameters<typeof __test.reduceInteractiveState>[0] => ({
@@ -124,6 +126,31 @@ export const run = authAction.action(async () => null);
     expect(() =>
       __test.filterEntryPointsByPattern(entries, roots as any, '[')
     ).toThrow('Invalid entry regex');
+  });
+
+  test('detectProjectRoots respects convex.json functions path', () => {
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('/repo');
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockImplementation((entry) => {
+      const normalizedPath = String(entry).replace(/\\/g, '/');
+      return (
+        normalizedPath === '/repo/convex.json' ||
+        normalizedPath === '/repo/custom/convex'
+      );
+    });
+    const readSpy = vi
+      .spyOn(fs, 'readFileSync')
+      .mockReturnValue('{"functions":"custom/convex"}' as any);
+
+    const roots = __test.detectProjectRoots();
+
+    expect(roots).toEqual({
+      projectRoot: '/repo',
+      functionsRoot: '/repo/custom/convex',
+    });
+
+    cwdSpy.mockRestore();
+    existsSpy.mockRestore();
+    readSpy.mockRestore();
   });
 
   test('fitListViewport keeps selected row visible', () => {

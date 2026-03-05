@@ -58,7 +58,7 @@ const user = await ctx.orm.query.users.findFirstOrThrow({
 });
 ```
 
-For polymorphic tables with multiple `one()` targets, you can synthesize typed discriminated unions at query time. See [Typed Query Synthesis](/docs/orm/schema/relations#typed-query-synthesis-polymorphic) in the Relations guide.
+For tables with a `discriminator()` discriminator column, query results automatically include a typed discriminated union at the alias field (default `details`). Use `withVariants: true` when you want all `one()` relations eagerly loaded for those variants. See [Polymorphic Associations](/docs/orm/schema/relations#polymorphic-associations) in the Relations guide.
 
 ## Filtering With `where`
 

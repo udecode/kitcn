@@ -6,14 +6,16 @@ import type {
   IndexRangeBuilder,
 } from 'convex/server';
 import type { GenericId, Value } from 'convex/values';
-import type { z } from 'zod';
 import type {
   Assume,
   KnownKeysOnly,
   ReturnTypeOrValue,
   Simplify,
 } from '../internal/types';
-import type { ColumnBuilder } from './builders/column-builder';
+import type {
+  ColumnBuilder,
+  ColumnBuilderBase,
+} from './builders/column-builder';
 import type {
   SystemFieldAliases,
   SystemFields,
@@ -210,7 +212,7 @@ export type InferSelectModel<TTable extends ConvexTable<any>> = Simplify<
 
 export type RequiredKeyOnly<
   TKey extends string,
-  TColumn extends ColumnBuilder<any, any, any>,
+  TColumn extends ColumnBuilderBase,
 > = TColumn['_']['notNull'] extends true
   ? TColumn['_']['hasDefault'] extends true
     ? never
@@ -219,12 +221,114 @@ export type RequiredKeyOnly<
 
 export type OptionalKeyOnly<
   TKey extends string,
-  TColumn extends ColumnBuilder<any, any, any>,
+  TColumn extends ColumnBuilderBase,
 > = TColumn['_']['notNull'] extends true
   ? TColumn['_']['hasDefault'] extends true
     ? TKey
     : never
   : TKey;
+
+type InferInsertModelFromColumns<
+  TColumns extends Record<string, ColumnBuilderBase>,
+  TExcludeKeys extends string = never,
+> = Simplify<
+  {
+    [K in keyof TColumns & string as K extends TExcludeKeys
+      ? never
+      : RequiredKeyOnly<K, TColumns[K]>]: GetColumnData<TColumns[K], 'query'>;
+  } & {
+    [K in keyof TColumns & string as K extends TExcludeKeys
+      ? never
+      : OptionalKeyOnly<K, TColumns[K]>]?:
+      | GetColumnData<TColumns[K], 'query'>
+      | undefined;
+  }
+>;
+
+type TablePolymorphicInsertMetadata<TTable extends ConvexTable<any>> = {
+  [K in keyof TTable['_']['columns'] &
+    string]: TTable['_']['columns'][K] extends {
+    __polymorphic: infer TMeta;
+  }
+    ? TMeta extends {
+        variants: infer TVariants extends Record<
+          string,
+          Record<string, ColumnBuilderBase>
+        >;
+      }
+      ? {
+          discriminator: K;
+          variants: TVariants;
+        }
+      : never
+    : never;
+}[keyof TTable['_']['columns'] & string];
+
+type PolymorphicVariantFieldNames<
+  TVariants extends Record<string, Record<string, ColumnBuilderBase>>,
+> = Extract<
+  TVariants[keyof TVariants & string] extends infer TVariantColumns
+    ? TVariantColumns extends Record<string, ColumnBuilderBase>
+      ? keyof TVariantColumns
+      : never
+    : never,
+  string
+>;
+
+type PolymorphicVariantInsertCase<
+  TBase extends Record<string, unknown>,
+  TDiscriminator extends string,
+  TCase extends string,
+  TVariantColumns extends Record<string, ColumnBuilderBase>,
+  TAllGeneratedFields extends string,
+> = Simplify<
+  TBase & {
+    [K in TDiscriminator]: TCase;
+  } & {
+    [K in keyof TVariantColumns & string as RequiredKeyOnly<
+      K,
+      TVariantColumns[K]
+    >]: GetColumnData<TVariantColumns[K], 'query'>;
+  } & {
+    [K in keyof TVariantColumns & string as OptionalKeyOnly<
+      K,
+      TVariantColumns[K]
+    >]?: GetColumnData<TVariantColumns[K], 'query'> | undefined;
+  } & {
+    [K in Exclude<TAllGeneratedFields, keyof TVariantColumns & string>]?: never;
+  }
+>;
+
+type PolymorphicVariantInsertUnion<
+  TBase extends Record<string, unknown>,
+  TMetadata extends {
+    discriminator: string;
+    variants: Record<string, Record<string, ColumnBuilderBase>>;
+  },
+> = {
+  [TCase in keyof TMetadata['variants'] & string]: PolymorphicVariantInsertCase<
+    TBase,
+    TMetadata['discriminator'],
+    TCase,
+    TMetadata['variants'][TCase],
+    PolymorphicVariantFieldNames<TMetadata['variants']>
+  >;
+}[keyof TMetadata['variants'] & string];
+
+type InferPolymorphicInsertModel<
+  TTable extends ConvexTable<any>,
+  TMetadata extends {
+    discriminator: string;
+    variants: Record<string, Record<string, ColumnBuilderBase>>;
+  },
+> = PolymorphicVariantInsertUnion<
+  InferInsertModelFromColumns<
+    TTable['_']['columns'],
+    | TMetadata['discriminator']
+    | PolymorphicVariantFieldNames<TMetadata['variants']>
+  >,
+  TMetadata
+>;
 
 /**
  * Extract insert type from a ConvexTable (excludes system fields).
@@ -236,17 +340,12 @@ export type OptionalKeyOnly<
  * // → { name: string }
  */
 export type InferInsertModel<TTable extends ConvexTable<any>> = Simplify<
-  {
-    [K in keyof TTable['_']['columns'] & string as RequiredKeyOnly<
-      K,
-      TTable['_']['columns'][K]
-    >]: GetColumnData<TTable['_']['columns'][K], 'query'>;
-  } & {
-    [K in keyof TTable['_']['columns'] & string as OptionalKeyOnly<
-      K,
-      TTable['_']['columns'][K]
-    >]?: GetColumnData<TTable['_']['columns'][K], 'query'> | undefined;
-  }
+  [TablePolymorphicInsertMetadata<TTable>] extends [never]
+    ? InferInsertModelFromColumns<TTable['_']['columns']>
+    : InferPolymorphicInsertModel<
+        TTable,
+        Extract<TablePolymorphicInsertMetadata<TTable>, object>
+      >
 >;
 
 /**
@@ -269,21 +368,20 @@ export type InferInsertModel<TTable extends ConvexTable<any>> = Simplify<
  * type AgeRaw = GetColumnData<typeof age, 'raw'>; // number
  */
 export type GetColumnData<
-  TColumn extends ColumnBuilder<any, any, any>,
+  TColumn extends ColumnBuilderBase,
   TInferMode extends 'query' | 'raw' = 'query',
 > = TInferMode extends 'raw'
-  ? TColumn['_'] extends { $type: infer TType }
-    ? TType
-    : TColumn['_']['data'] // Raw mode: just the base data type
+  ? ColumnDataWithOverride<TColumn>
   : TColumn['_']['notNull'] extends true
-    ? TColumn['_'] extends { $type: infer TType }
-      ? TType
-      : TColumn['_']['data'] // Query mode, notNull: no null union
-    :
-        | (TColumn['_'] extends { $type: infer TType }
-            ? TType
-            : TColumn['_']['data'])
-        | null; // Query mode, nullable: add null
+    ? ColumnDataWithOverride<TColumn> // Query mode, notNull: no null union
+    : ColumnDataWithOverride<TColumn> | null; // Query mode, nullable: add null
+
+type ColumnDataWithOverride<TColumn extends ColumnBuilderBase> =
+  TColumn['_'] extends { $type: infer TType }
+    ? unknown extends TType
+      ? TColumn['_']['data']
+      : TType
+    : TColumn['_']['data'];
 
 type AggregateIndexMap<
   TTableConfig extends TableRelationalConfig = TableRelationalConfig,
@@ -318,11 +416,7 @@ type AggregateWhereFieldValue<
   TTableConfig extends TableRelationalConfig,
   TFieldName extends string,
 > = TFieldName extends keyof TTableConfig['table']['_']['columns']
-  ? TTableConfig['table']['_']['columns'][TFieldName] extends ColumnBuilder<
-      any,
-      any,
-      any
-    >
+  ? TTableConfig['table']['_']['columns'][TFieldName] extends ColumnBuilderBase
     ? GetColumnData<TTableConfig['table']['_']['columns'][TFieldName], 'query'>
     : unknown
   : unknown;
@@ -361,53 +455,6 @@ type AggregateNoScanWhereArg<
 > = [AggregateWhereFieldName<TTableConfig>] extends [never]
   ? never
   : AggregateNoScanWhere<TTableConfig>;
-
-type OneRelationName<
-  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
-> = Extract<
-  {
-    [K in keyof TTableConfig['relations']]: TTableConfig['relations'][K] extends One<
-      any,
-      any
-    >
-      ? K
-      : never;
-  }[keyof TTableConfig['relations']],
-  string
->;
-
-type PolymorphicZodSchema = z.ZodDiscriminatedUnion<any, any>;
-
-type PolymorphicDiscriminatorFromSchema<
-  TSchema extends PolymorphicZodSchema = PolymorphicZodSchema,
-> =
-  TSchema extends z.ZodDiscriminatedUnion<any, infer TDisc extends string>
-    ? TDisc
-    : string;
-
-type PolymorphicCaseLiteralFromSchema<
-  TSchema extends PolymorphicZodSchema = PolymorphicZodSchema,
-  TDiscriminator extends string = string,
-> = Extract<
-  z.output<TSchema> extends Record<TDiscriminator, infer TValue>
-    ? TValue
-    : never,
-  string
->;
-
-export type PolymorphicQueryConfig<
-  TTableConfig extends TableRelationalConfig = TableRelationalConfig,
-  TSchema extends PolymorphicZodSchema = PolymorphicZodSchema,
-  TDiscriminator extends string = PolymorphicDiscriminatorFromSchema<TSchema>,
-> = {
-  schema: TSchema;
-  discriminator: TDiscriminator;
-  cases: Record<
-    PolymorphicCaseLiteralFromSchema<TSchema, TDiscriminator>,
-    OneRelationName<TTableConfig>
-  >;
-  as?: string | undefined;
-};
 
 // ============================================================================
 // M3 Query Builder Types
@@ -481,6 +528,10 @@ export type DBQueryConfig<
       >
     | undefined;
   /**
+   * Auto-include one() relations for discriminator-backed tables.
+   */
+  withVariants?: true | undefined;
+  /**
    * Extra computed fields (post-fetch, computed in JS at runtime)
    */
   extras?:
@@ -541,10 +592,6 @@ export type DBQueryConfig<
   pipeline?: _TIsRoot extends true
     ? FindManyPipelineConfig<TSchema, TTableConfig>
     : never;
-  /**
-   * Synthesize a discriminated-union relation field from one() cases.
-   */
-  polymorphic?: PolymorphicQueryConfig<TTableConfig> | undefined;
   /**
    * Key-based page boundaries.
    */
@@ -1524,6 +1571,105 @@ type TableColumns<TTableConfig extends TableRelationalConfig> =
       TTableConfig['table']['_']['columns']
     >;
 
+type TablePolymorphicMetadataFromColumn<
+  TColumn,
+  TDiscriminator extends string,
+> = TColumn extends { __polymorphic: infer TMeta }
+  ? TMeta extends {
+      as: infer TAlias extends string;
+      variants: infer TVariants extends Record<
+        string,
+        Record<string, ColumnBuilderBase>
+      >;
+    }
+    ? {
+        as: TAlias;
+        discriminator: TDiscriminator;
+        variants: TVariants;
+      }
+    : never
+  : never;
+
+type TablePolymorphicMetadata<TTableConfig extends TableRelationalConfig> = {
+  [K in Extract<
+    keyof TTableConfig['table']['_']['columns'],
+    string
+  >]: TablePolymorphicMetadataFromColumn<
+    TTableConfig['table']['_']['columns'][K],
+    K
+  >;
+}[Extract<keyof TTableConfig['table']['_']['columns'], string>];
+
+type PolymorphicResultFromMetadata<TMetadata> = TMetadata extends {
+  as: infer TAlias extends string;
+  discriminator: infer TDiscriminator extends string;
+  variants: infer TVariants extends Record<
+    string,
+    Record<string, ColumnBuilderBase>
+  >;
+}
+  ? {
+      [TCase in keyof TVariants & string]: {
+        [K in TDiscriminator]: TCase;
+      } & {
+        [K in TAlias]: InferModelFromColumns<TVariants[TCase]>;
+      };
+    }[keyof TVariants & string]
+  : {};
+
+type TablePolymorphicResult<TTableConfig extends TableRelationalConfig> = [
+  TablePolymorphicMetadata<TTableConfig>,
+] extends [never]
+  ? {}
+  : PolymorphicResultFromMetadata<TablePolymorphicMetadata<TTableConfig>>;
+
+type RelationNames<TTableConfig extends TableRelationalConfig> = Extract<
+  keyof TTableConfig['relations'],
+  string
+>;
+
+type OneRelationNames<TTableConfig extends TableRelationalConfig> = {
+  [K in RelationNames<TTableConfig>]: TTableConfig['relations'][K] extends One<
+    any,
+    any
+  >
+    ? K
+    : never;
+}[RelationNames<TTableConfig>];
+
+type WithVariantsAutoWithConfig<
+  TTableConfig extends TableRelationalConfig,
+  _TSelection,
+> = {
+  [K in OneRelationNames<TTableConfig>]: true;
+};
+
+type SelectedTableResult<
+  TTableConfig extends TableRelationalConfig,
+  TFullSelection extends Record<string, unknown>,
+> = InferRelationalQueryTableResult<
+  InferModelFromColumns<TableColumns<TTableConfig>>,
+  TFullSelection['columns'] extends Record<string, unknown>
+    ? TFullSelection['columns']
+    : 'Full'
+>;
+
+type TablePolymorphicResultForSelection<
+  TTableConfig extends TableRelationalConfig,
+  TFullSelection extends Record<string, unknown>,
+> = [TablePolymorphicMetadata<TTableConfig>] extends [never]
+  ? {}
+  : TablePolymorphicMetadata<TTableConfig> extends {
+        discriminator: infer TDiscriminator extends string;
+      }
+    ? TDiscriminator extends keyof SelectedTableResult<
+        TTableConfig,
+        TFullSelection
+      >
+      ? PolymorphicResultFromMetadata<TablePolymorphicMetadata<TTableConfig>>
+      : {}
+    : {};
+
 export type PaginatedResult<T> = {
   page: T[];
   continueCursor: string | null;
@@ -1538,15 +1684,13 @@ export type BuildQueryResult<
   TFullSelection,
 > =
   Equal<TFullSelection, true> extends true
-    ? InferModelFromColumns<TableColumns<TTableConfig>>
+    ? Simplify<
+        InferModelFromColumns<TableColumns<TTableConfig>> &
+          TablePolymorphicResult<TTableConfig>
+      >
     : TFullSelection extends Record<string, unknown>
       ? Simplify<
-          InferRelationalQueryTableResult<
-            InferModelFromColumns<TableColumns<TTableConfig>>,
-            TFullSelection['columns'] extends Record<string, unknown>
-              ? TFullSelection['columns']
-              : 'Full'
-          > &
+          SelectedTableResult<TTableConfig, TFullSelection> &
             (Exclude<TFullSelection['extras'], undefined> extends
               | Record<string, unknown>
               | ((...args: any[]) => Record<string, unknown>)
@@ -1570,15 +1714,14 @@ export type BuildQueryResult<
                   TTableConfig['relations']
                 >
               : {}) &
-            (TFullSelection extends {
-              polymorphic: infer TPolymorphicConfig;
-            }
-              ? TPolymorphicConfig extends {
-                  schema: infer TPolymorphicSchema extends z.ZodTypeAny;
-                }
-                ? z.output<TPolymorphicSchema>
-                : {}
+            (TFullSelection['withVariants'] extends true
+              ? BuildRelationResult<
+                  TSchema,
+                  WithVariantsAutoWithConfig<TTableConfig, TFullSelection>,
+                  TTableConfig['relations']
+                >
               : {}) &
+            TablePolymorphicResultForSelection<TTableConfig, TFullSelection> &
             (TFullSelection extends { vectorSearch: infer TVectorSearch }
               ? [TVectorSearch] extends [undefined]
                 ? {}
@@ -1644,7 +1787,7 @@ export type BuildRelationResult<
  * CRITICAL: Uses Merge instead of & to preserve NotNull phantom type brands
  */
 export type InferModelFromColumns<TColumns> =
-  TColumns extends Record<string, ColumnBuilder<any, any, any>>
+  TColumns extends Record<string, ColumnBuilderBase>
     ? Simplify<{
         [K in keyof TColumns]: GetColumnData<TColumns[K], 'query'>;
       }>
@@ -1658,7 +1801,7 @@ export type InferModelFromColumns<TColumns> =
  * CRITICAL: No extends constraint on TColumns to avoid type widening
  */
 export type PickColumns<TColumns, TSelection extends Record<string, unknown>> =
-  TColumns extends Record<string, ColumnBuilder<any, any, any>>
+  TColumns extends Record<string, ColumnBuilderBase>
     ? Simplify<{
         [K in keyof TSelection as K extends keyof TColumns
           ? TSelection[K] extends true
@@ -1817,7 +1960,7 @@ export type ReturningResult<TSelection extends Record<string, unknown>> =
     {
       [K in keyof TSelection as K extends '_count'
         ? never
-        : K]: TSelection[K] extends ColumnBuilder<any, any, any>
+        : K]: TSelection[K] extends ColumnBuilderBase
         ? GetColumnData<TSelection[K], 'query'>
         : never;
     } & (TSelection extends { _count: infer TCount }
@@ -1841,7 +1984,7 @@ export type MutationResult<
   TReturning extends MutationReturning,
 > = TReturning extends true
   ? ReturningAll<TTable>[]
-  : TReturning extends Record<string, ColumnBuilder<any, any, any>>
+  : TReturning extends Record<string, ColumnBuilderBase>
     ? ReturningResult<TReturning>[]
     : undefined;
 
@@ -1884,7 +2027,7 @@ export type MutationExecuteResult<
 export type InsertValue<TTable extends ConvexTable<any>> =
   InferInsertModel<TTable>;
 
-type UpdateSetValue<TColumn extends ColumnBuilder<any, any, any>> =
+type UpdateSetValue<TColumn extends ColumnBuilderBase> =
   | GetColumnData<TColumn, 'query'>
   | (TColumn['_']['notNull'] extends true ? never : UnsetToken)
   | undefined;

@@ -6,6 +6,7 @@ import {
   applyDefaults,
   enforceCheckConstraints,
   enforceForeignKeys,
+  enforcePolymorphicWrite,
   enforceUniqueIndexes,
   evaluateFilter,
   getColumnName,
@@ -197,6 +198,7 @@ export class ConvexInsertBuilder<
         this.table,
         applyDefaults(this.table, value as any)
       );
+      enforcePolymorphicWrite(this.table, preparedValue as any);
       const rls = ormContext?.rls;
       const tableName = getTableName(this.table);
 

@@ -566,6 +566,46 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  ormPolymorphicEvent: {
+    document: {
+      actorId: string;
+      completed?: null | boolean;
+      createdAt?: number;
+      eventType: string;
+      isPublic?: null | boolean;
+      nextName?: null | string;
+      previousName?: null | string;
+      projectId?: null | string;
+      tagId?: null | string;
+      todoId?: null | string;
+      _id: Id<"ormPolymorphicEvent">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "actorId"
+      | "completed"
+      | "createdAt"
+      | "eventType"
+      | "isPublic"
+      | "nextName"
+      | "previousName"
+      | "projectId"
+      | "tagId"
+      | "todoId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      actorId: ["actorId", "_creationTime"];
+      eventType: ["eventType", "_creationTime"];
+      project_event: ["eventType", "projectId", "_creationTime"];
+      tag_event: ["eventType", "tagId", "_creationTime"];
+      todo_event: ["eventType", "todoId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   projectMembers: {
     document: {
       createdAt?: number;

@@ -24,8 +24,15 @@ import type {
   OrmDeleteMode,
   OrmRuntimeDefaults,
   OrmTableDeleteConfig,
+  TablePolymorphicConfigRuntime,
 } from './symbols';
-import { Columns, OrmContext, TableDeleteConfig, TableName } from './symbols';
+import {
+  Columns,
+  OrmContext,
+  TableDeleteConfig,
+  TableName,
+  TablePolymorphic,
+} from './symbols';
 import type { ConvexTable } from './table';
 import {
   CREATED_AT_MIGRATION_MESSAGE,
@@ -932,6 +939,93 @@ export function getTableColumns(
   >;
 }
 
+export function getTablePolymorphicConfigs(
+  table: ConvexTable<any>
+): readonly TablePolymorphicConfigRuntime[] {
+  const fromMethod = (table as any).getPolymorphicConfigs?.();
+  if (Array.isArray(fromMethod)) {
+    return fromMethod as readonly TablePolymorphicConfigRuntime[];
+  }
+  const fromSymbol = (table as any)[TablePolymorphic];
+  return Array.isArray(fromSymbol)
+    ? (fromSymbol as readonly TablePolymorphicConfigRuntime[])
+    : [];
+}
+
+export function enforcePolymorphicWrite(
+  table: ConvexTable<any>,
+  candidate: Record<string, unknown>,
+  options?: {
+    changedFields?: Set<string>;
+  }
+): void {
+  const configs = getTablePolymorphicConfigs(table);
+  if (configs.length === 0) {
+    return;
+  }
+
+  for (const config of configs) {
+    const changedFields = options?.changedFields;
+    const discriminatorChanged =
+      !changedFields || changedFields.has(config.discriminator);
+    const generatedFieldChanged =
+      !changedFields ||
+      config.generatedFieldNames.some((fieldName) =>
+        changedFields.has(fieldName)
+      );
+    if (!discriminatorChanged && !generatedFieldChanged) {
+      continue;
+    }
+
+    const discriminatorValue = candidate[config.discriminator];
+    if (
+      typeof discriminatorValue !== 'string' ||
+      !Object.hasOwn(config.variants, discriminatorValue)
+    ) {
+      throw new Error(
+        `Invalid discriminator '${config.discriminator}' on '${getTableName(
+          table
+        )}'. Expected one of: ${Object.keys(config.variants).join(', ')}.`
+      );
+    }
+
+    const activeVariant = config.variants[discriminatorValue];
+    if (!activeVariant) {
+      throw new Error(
+        `Invalid discriminator '${config.discriminator}' value '${discriminatorValue}' on '${getTableName(
+          table
+        )}'.`
+      );
+    }
+
+    for (const requiredFieldName of activeVariant.requiredFieldNames) {
+      const value = candidate[requiredFieldName];
+      if (value === null || value === undefined) {
+        throw new Error(
+          `discriminator branch '${discriminatorValue}' requires '${requiredFieldName}' on '${getTableName(
+            table
+          )}'.`
+        );
+      }
+    }
+
+    const activeFieldSet = new Set(activeVariant.fieldNames);
+    for (const generatedFieldName of config.generatedFieldNames) {
+      if (activeFieldSet.has(generatedFieldName)) {
+        continue;
+      }
+      const value = candidate[generatedFieldName];
+      if (value !== null && value !== undefined) {
+        throw new Error(
+          `discriminator branch '${discriminatorValue}' cannot set '${generatedFieldName}' on '${getTableName(
+            table
+          )}' because it belongs to another variant.`
+        );
+      }
+    }
+  }
+}
+
 function getColumnConfig(
   table: ConvexTable<any>,
   columnName: string
@@ -960,8 +1054,37 @@ export function applyDefaults<TValue extends Record<string, unknown>>(
   }
 
   const result = { ...value } as TValue;
+  const polymorphicConfigs = getTablePolymorphicConfigs(table);
+  const activeGeneratedFields = new Set<string>();
+  const generatedFields = new Set<string>();
+
+  for (const config of polymorphicConfigs) {
+    for (const fieldName of config.generatedFieldNames) {
+      generatedFields.add(fieldName);
+    }
+
+    const discriminatorValue = (result as any)[config.discriminator];
+    if (typeof discriminatorValue !== 'string') {
+      continue;
+    }
+    const activeVariant = config.variants[discriminatorValue];
+    if (!activeVariant) {
+      continue;
+    }
+    for (const fieldName of activeVariant.fieldNames) {
+      activeGeneratedFields.add(fieldName);
+    }
+  }
+
   for (const [columnName, builder] of Object.entries(columns)) {
     if ((result as any)[columnName] !== undefined) {
+      continue;
+    }
+
+    if (
+      generatedFields.has(columnName) &&
+      !activeGeneratedFields.has(columnName)
+    ) {
       continue;
     }
 

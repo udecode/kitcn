@@ -7,10 +7,13 @@ import type {
 import type { Validator } from 'convex/values';
 import { v } from 'convex/values';
 import type {
+  $Type,
   ColumnBuilder,
   ColumnBuilderBase,
+  ColumnBuilderRuntimeConfig,
   ColumnBuilderWithTableName,
   ForeignKeyAction,
+  NotNull,
 } from './builders/column-builder';
 import { entityKind } from './builders/column-builder';
 import {
@@ -19,6 +22,7 @@ import {
   type SystemFields,
   type SystemFieldsWithAliases,
 } from './builders/system-fields';
+import { type ConvexTextBuilderInitial, text } from './builders/text';
 import type {
   ConvexCheckBuilder,
   ConvexForeignKeyBuilder,
@@ -50,6 +54,8 @@ import {
   RlsPolicies,
   TableDeleteConfig,
   TableName,
+  TablePolymorphic,
+  type TablePolymorphicConfigRuntime,
 } from './symbols';
 
 /**
@@ -57,11 +63,106 @@ import {
  */
 const RESERVED_TABLES = new Set(['_storage', '_scheduled_functions']);
 const RESERVED_COLUMN_NAMES = new Set(['id', '_id', '_creationTime']);
+const DEFAULT_POLYMORPHIC_ALIAS = 'details' as const;
+const CONVEX_TABLE_FIELD_LIMIT = 1024;
 
 /**
  * Valid table name pattern: starts with letter/underscore, contains only alphanumeric and underscore
  */
 const TABLE_NAME_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+type AnyColumnBuilder = ColumnBuilder<any, any, any>;
+type PolymorphicVariantDefinitions = Record<
+  string,
+  Record<string, ColumnBuilderBase>
+>;
+type PolymorphicDiscriminatorValue<
+  TVariants extends PolymorphicVariantDefinitions,
+> = Extract<keyof TVariants, string>;
+
+type PolymorphicTypeMetadata<
+  TVariants extends
+    PolymorphicVariantDefinitions = PolymorphicVariantDefinitions,
+  TAlias extends string = string,
+> = {
+  as: TAlias;
+  variants: TVariants;
+};
+
+type OverrideColumnMeta<
+  TColumn extends ColumnBuilderBase,
+  TOverrides extends object,
+> = TColumn extends {
+  _: infer TMeta extends object;
+}
+  ? Omit<TColumn, '_'> & {
+      _: Omit<TMeta, keyof TOverrides> & TOverrides;
+    }
+  : TColumn;
+
+type PolymorphicGeneratedColumn<TColumn extends ColumnBuilderBase> =
+  OverrideColumnMeta<
+    TColumn,
+    {
+      hasDefault: false;
+      notNull: false;
+    }
+  >;
+
+type PolymorphicDiscriminatorColumn<
+  TVariants extends
+    PolymorphicVariantDefinitions = PolymorphicVariantDefinitions,
+  TAlias extends string = typeof DEFAULT_POLYMORPHIC_ALIAS,
+> = $Type<
+  NotNull<ConvexTextBuilderInitial<''>>,
+  PolymorphicDiscriminatorValue<TVariants>
+> & {
+  __polymorphic: PolymorphicTypeMetadata<TVariants, TAlias>;
+};
+
+type ExtractPolymorphicVariants<TColumn> = TColumn extends {
+  __polymorphic: infer TMeta;
+}
+  ? TMeta extends PolymorphicTypeMetadata<
+      infer TVariants extends PolymorphicVariantDefinitions,
+      string
+    >
+    ? TVariants
+    : never
+  : never;
+
+type ExtractPolymorphicGeneratedColumns<TColumns> = SimplifyObject<
+  UnionToIntersection<
+    {
+      [K in keyof TColumns]: ExtractPolymorphicVariants<
+        TColumns[K]
+      > extends infer TVariants
+        ? [TVariants] extends [never]
+          ? {}
+          : {
+              [V in keyof TVariants & string]: {
+                [F in keyof TVariants[V] &
+                  string]: TVariants[V][F] extends ColumnBuilderBase
+                  ? PolymorphicGeneratedColumn<TVariants[V][F]>
+                  : never;
+              };
+            }[keyof TVariants & string]
+        : {};
+    }[keyof TColumns]
+  >
+>;
+
+type MergeColumnObjects<TLeft, TRight> = {
+  [K in keyof TLeft | keyof TRight]: K extends keyof TRight
+    ? TRight[K]
+    : K extends keyof TLeft
+      ? TLeft[K]
+      : never;
+};
+
+type ExpandTableColumns<TColumns> = SimplifyObject<
+  MergeColumnObjects<TColumns, ExtractPolymorphicGeneratedColumns<TColumns>>
+>;
 
 /**
  * Validate table name against Convex constraints
@@ -128,6 +229,69 @@ type ColumnsWithSystemFields<
   (TColumns extends Record<string, unknown>
     ? SystemFieldsWithAliases<TName, TColumns>
     : SystemFieldsWithAliases<TName>);
+
+export type DiscriminatorBuilderConfig<
+  TVariants extends
+    PolymorphicVariantDefinitions = PolymorphicVariantDefinitions,
+  TAlias extends string = typeof DEFAULT_POLYMORPHIC_ALIAS,
+> = {
+  as?: TAlias;
+  variants: TVariants;
+};
+
+export function discriminator<
+  const TVariants extends PolymorphicVariantDefinitions,
+  const TAlias extends string,
+>(
+  config: DiscriminatorBuilderConfig<TVariants, TAlias> & {
+    as: TAlias;
+  }
+): PolymorphicDiscriminatorColumn<TVariants, TAlias>;
+export function discriminator<
+  const TVariants extends PolymorphicVariantDefinitions,
+>(
+  config: DiscriminatorBuilderConfig<TVariants>
+): PolymorphicDiscriminatorColumn<TVariants, typeof DEFAULT_POLYMORPHIC_ALIAS>;
+export function discriminator(
+  config: DiscriminatorBuilderConfig
+): PolymorphicDiscriminatorColumn {
+  if (!config || typeof config !== 'object') {
+    throw new Error('discriminator(...) requires a config object.');
+  }
+  if (
+    !config.variants ||
+    typeof config.variants !== 'object' ||
+    Object.keys(config.variants).length === 0
+  ) {
+    throw new Error(
+      'discriminator(...).variants must contain at least one case.'
+    );
+  }
+  if (
+    config.as !== undefined &&
+    (typeof config.as !== 'string' || config.as.length === 0)
+  ) {
+    throw new Error(
+      'discriminator(...).as must be a non-empty string when set.'
+    );
+  }
+
+  const builder = text().notNull() as unknown as AnyColumnBuilder & {
+    __polymorphic?: PolymorphicTypeMetadata;
+    config: ColumnBuilderRuntimeConfig<unknown> & {
+      discriminator?: DiscriminatorBuilderConfig;
+    };
+  };
+  builder.__polymorphic = {
+    as: (config.as ?? DEFAULT_POLYMORPHIC_ALIAS) as string,
+    variants: config.variants,
+  };
+  builder.config.discriminator = {
+    as: config.as,
+    variants: config.variants,
+  };
+  return builder as unknown as PolymorphicDiscriminatorColumn;
+}
 
 export type ConvexTableExtraConfigValue =
   | ConvexIndexBuilder
@@ -726,6 +890,215 @@ function assertRankOrderFieldType(
 
 const dedupeFieldNames = (fields: string[]): string[] => [...new Set(fields)];
 
+type DiscriminatorBuilderRuntimeConfig = DiscriminatorBuilderConfig & {
+  as?: string;
+};
+
+type PolymorphicColumnRuntime = AnyColumnBuilder & {
+  config: ColumnBuilderRuntimeConfig<unknown> & {
+    discriminator?: DiscriminatorBuilderRuntimeConfig;
+  };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isColumnBuilder = (value: unknown): value is AnyColumnBuilder =>
+  isRecord(value) && typeof (value as { build?: unknown }).build === 'function';
+
+const getDiscriminatorConfig = (
+  value: unknown
+): DiscriminatorBuilderRuntimeConfig | undefined => {
+  if (!isColumnBuilder(value)) {
+    return;
+  }
+  const discriminator = (value as PolymorphicColumnRuntime).config
+    ?.discriminator;
+  if (!discriminator) {
+    return;
+  }
+  return discriminator;
+};
+
+const getPolymorphicFieldSignature = (column: AnyColumnBuilder): string => {
+  const validator = (column as any).convexValidator ?? column.build();
+  return JSON.stringify({
+    columnType: (column as any).config?.columnType,
+    validator: (validator as any)?.json,
+  });
+};
+
+function resolveTableColumns(
+  tableName: string,
+  columns: Record<string, unknown>
+): {
+  columns: Record<string, AnyColumnBuilder>;
+  polymorphicConfigs: TablePolymorphicConfigRuntime[];
+} {
+  const resolvedColumns: Record<string, AnyColumnBuilder> = {};
+  const pendingPolymorphic: Array<{
+    discriminator: string;
+    alias: string;
+    variants: PolymorphicVariantDefinitions;
+  }> = [];
+
+  for (const [columnName, rawBuilder] of Object.entries(columns)) {
+    if (!isColumnBuilder(rawBuilder)) {
+      throw new Error(
+        `Column '${columnName}' on '${tableName}' must be a column builder.`
+      );
+    }
+    resolvedColumns[columnName] = rawBuilder;
+
+    const discriminatorConfig = getDiscriminatorConfig(rawBuilder);
+    if (!discriminatorConfig) {
+      continue;
+    }
+
+    if (
+      !isRecord(discriminatorConfig.variants) ||
+      Object.keys(discriminatorConfig.variants).length === 0
+    ) {
+      throw new Error(
+        `discriminator('${tableName}.${columnName}') requires at least one variant.`
+      );
+    }
+
+    const alias =
+      discriminatorConfig.as === undefined
+        ? DEFAULT_POLYMORPHIC_ALIAS
+        : discriminatorConfig.as;
+    if (typeof alias !== 'string' || alias.length === 0) {
+      throw new Error(
+        `discriminator('${tableName}.${columnName}').as must be a non-empty string.`
+      );
+    }
+
+    pendingPolymorphic.push({
+      discriminator: columnName,
+      alias,
+      variants: discriminatorConfig.variants as PolymorphicVariantDefinitions,
+    });
+  }
+
+  if (pendingPolymorphic.length > 1) {
+    throw new Error(
+      `Only one discriminator(...) column is currently supported on '${tableName}'.`
+    );
+  }
+
+  const polymorphicConfigs: TablePolymorphicConfigRuntime[] = [];
+  for (const pending of pendingPolymorphic) {
+    if (pending.alias in resolvedColumns) {
+      throw new Error(
+        `discriminator('${tableName}.${pending.discriminator}') alias '${pending.alias}' collides with an existing column.`
+      );
+    }
+
+    const generatedFieldMap = new Map<
+      string,
+      {
+        builder: AnyColumnBuilder;
+        signature: string;
+      }
+    >();
+    const variantRuntime: Record<
+      string,
+      {
+        fieldNames: readonly string[];
+        requiredFieldNames: readonly string[];
+      }
+    > = {};
+
+    for (const [variantKey, rawVariantColumns] of Object.entries(
+      pending.variants
+    )) {
+      if (!isRecord(rawVariantColumns)) {
+        throw new Error(
+          `discriminator('${tableName}.${pending.discriminator}') variant '${variantKey}' must be an object.`
+        );
+      }
+
+      const fieldNames: string[] = [];
+      const requiredFieldNames: string[] = [];
+
+      for (const [fieldName, rawFieldBuilder] of Object.entries(
+        rawVariantColumns
+      )) {
+        if (!isColumnBuilder(rawFieldBuilder)) {
+          throw new Error(
+            `discriminator('${tableName}.${pending.discriminator}').variants.${variantKey}.${fieldName} must be a column builder.`
+          );
+        }
+        if (fieldName in resolvedColumns) {
+          throw new Error(
+            `discriminator('${tableName}.${pending.discriminator}').variants.${variantKey}.${fieldName} collides with an existing table column.`
+          );
+        }
+
+        const fieldBuilder = rawFieldBuilder as AnyColumnBuilder;
+        const fieldConfig = (fieldBuilder as any).config as
+          | ColumnBuilderRuntimeConfig<unknown>
+          | undefined;
+        const isRequiredForVariant =
+          fieldConfig?.notNull === true &&
+          fieldConfig.hasDefault !== true &&
+          typeof fieldConfig.defaultFn !== 'function';
+        const signature = getPolymorphicFieldSignature(fieldBuilder);
+        const existing = generatedFieldMap.get(fieldName);
+
+        if (existing && existing.signature !== signature) {
+          throw new Error(
+            `discriminator('${tableName}.${pending.discriminator}') field '${fieldName}' has conflicting builder signatures across variants.`
+          );
+        }
+
+        if (!existing) {
+          if (fieldConfig) {
+            fieldConfig.notNull = false;
+          }
+          generatedFieldMap.set(fieldName, {
+            builder: fieldBuilder,
+            signature,
+          });
+        }
+
+        fieldNames.push(fieldName);
+        if (isRequiredForVariant) {
+          requiredFieldNames.push(fieldName);
+        }
+      }
+
+      variantRuntime[variantKey] = {
+        fieldNames,
+        requiredFieldNames,
+      };
+    }
+
+    for (const [fieldName, { builder }] of generatedFieldMap.entries()) {
+      resolvedColumns[fieldName] = builder;
+    }
+
+    polymorphicConfigs.push({
+      discriminator: pending.discriminator,
+      alias: pending.alias,
+      generatedFieldNames: Object.freeze([...generatedFieldMap.keys()]),
+      variants: Object.freeze(variantRuntime),
+    });
+  }
+
+  if (Object.keys(resolvedColumns).length > CONVEX_TABLE_FIELD_LIMIT) {
+    throw new Error(
+      `Table '${tableName}' exceeds Convex field count limit (${CONVEX_TABLE_FIELD_LIMIT}) after discriminator expansion.`
+    );
+  }
+
+  return {
+    columns: resolvedColumns,
+    polymorphicConfigs,
+  };
+}
+
 function applyExtraConfig<T extends TableConfig>(
   table: ConvexTableImpl<T>,
   config: ConvexTableExtraConfigValue[] | ConvexTableExtraConfig | undefined
@@ -1200,13 +1573,18 @@ class ConvexTableImpl<T extends TableConfig> {
   [EnableRLS] = false;
   [RlsPolicies]: RlsPolicy[] = [];
   [TableDeleteConfig]?: OrmTableDeleteConfig;
+  [TablePolymorphic]?: readonly TablePolymorphicConfigRuntime[];
 
   /**
    * Public tableName for convenience
    */
   tableName: T['name'];
 
-  constructor(name: T['name'], columns: T['columns']) {
+  constructor(
+    name: T['name'],
+    columns: T['columns'],
+    polymorphicConfigs?: readonly TablePolymorphicConfigRuntime[]
+  ) {
     validateTableName(name);
 
     for (const columnName of Object.keys(columns as Record<string, unknown>)) {
@@ -1234,6 +1612,9 @@ class ConvexTableImpl<T extends TableConfig> {
 
     this[Columns] = namedColumns;
     this.tableName = name;
+    if (polymorphicConfigs && polymorphicConfigs.length > 0) {
+      this[TablePolymorphic] = polymorphicConfigs;
+    }
 
     // Use factory to create validator from columns
     // This extracts .convexValidator from each builder and creates v.object({...})
@@ -1290,6 +1671,12 @@ class ConvexTableImpl<T extends TableConfig> {
         }
       }
     }
+  }
+
+  getPolymorphicConfigs():
+    | readonly TablePolymorphicConfigRuntime[]
+    | undefined {
+    return this[TablePolymorphic];
   }
 
   /**
@@ -1711,6 +2098,7 @@ export interface ConvexTable<
   [RlsPolicies]: RlsPolicy[];
   [EnableRLS]: boolean;
   [TableDeleteConfig]?: OrmTableDeleteConfig;
+  [TablePolymorphic]?: readonly TablePolymorphicConfigRuntime[];
 }
 
 /**
@@ -1771,11 +2159,13 @@ type ConvexTableFnInternal = <
 >(
   name: TName,
   columns: TColumns,
-  extraConfig?: (self: ColumnsWithSystemFields<TColumns, TName>) => TExtraConfig
+  extraConfig?: (
+    self: ColumnsWithSystemFields<ExpandTableColumns<TColumns>, TName>
+  ) => TExtraConfig
 ) => ConvexTableWithColumns<
   {
     name: TName;
-    columns: ColumnsWithTableName<TColumns, TName>;
+    columns: ColumnsWithTableName<ExpandTableColumns<TColumns>, TName>;
   },
   InferDbIndexesFromExtraConfig<TExtraConfig>,
   InferSearchIndexesFromExtraConfig<TExtraConfig>,
@@ -1796,15 +2186,27 @@ const convexTableInternal: ConvexTableFnInternal = (
 ): ConvexTableWithColumns<
   {
     name: typeof name;
-    columns: ColumnsWithTableName<typeof columns, typeof name>;
+    columns: ColumnsWithTableName<
+      ExpandTableColumns<typeof columns>,
+      typeof name
+    >;
   },
   any,
   any,
   any,
   any
 > => {
+  const expanded = resolveTableColumns(
+    name,
+    columns as Record<string, unknown>
+  );
+
   // Create raw table instance
-  const rawTable = new ConvexTableImpl(name, columns as any);
+  const rawTable = new ConvexTableImpl(
+    name,
+    expanded.columns as any,
+    expanded.polymorphicConfigs
+  );
 
   // Create system fields (public id/createdAt + internal _creationTime)
   const systemFields = createSystemFields(name);

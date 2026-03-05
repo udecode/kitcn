@@ -22,11 +22,11 @@ This file provides a structured index of the ORM documentation for AI assistants
 
 **Relations:**
 
-- `/docs/orm/schema/relations` - One‑to‑one, one‑to‑many, many‑to‑many relations
+- `/docs/orm/schema/relations` - One‑to‑one, one‑to‑many, many‑to‑many relations, polymorphic associations
 
 **Querying Data:**
 
-- `/docs/orm/queries` - findMany(), findFirst(), cursor pagination (`cursor` + `limit`), filters, orderBy, polymorphic discriminated unions
+- `/docs/orm/queries` - findMany(), findFirst(), cursor pagination (`cursor` + `limit`), filters, orderBy
 - `/docs/orm/queries/operators` - All supported `where` operators (query + mutation)
 
 **Mutations:**
@@ -63,6 +63,7 @@ This file provides a structured index of the ORM documentation for AI assistants
 
 ```ts
 convexTable(name, columns)
+discriminator({ variants, as? })  // schema-first discriminated union column
 defineSchema(tables, { defaults?: { defaultLimit?, mutationBatchSize?, mutationMaxRows? } })
 defineRelations(schema, callback)
 extractRelationsConfig(schema)
@@ -188,7 +189,7 @@ isNotNull(field);
 - Column selection (post‑fetch)
 - String operators (post‑fetch)
 - Mutations (insert, update, delete, returning)
-- Polymorphic discriminated unions (`findMany({ polymorphic })` synthesizes typed union field from `one()` relations)
+- Schema-first polymorphic unions via `discriminator({ variants, as? })` in `convexTable(...)` (reads synthesize typed discriminated union at alias; no query config needed)
 - Distinct via select pipeline (`.select().distinct({ fields: ['field'] })`)
 - Ranked access via `/docs/orm/queries/aggregates` (`rankIndex` + `rank()` for leaderboards, random access, sorted pagination)
 
