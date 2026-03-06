@@ -133,8 +133,6 @@ const resolveSchemaTableName = (
       return value.modelName;
     }
   }
-
-  return;
 };
 
 const resolveOrmTable = (
@@ -158,7 +156,7 @@ const resolveOrmTable = (
   }
 
   const table = schema.tables[tableName as keyof Schema['tables']] as any;
-  if (!table || !table._id) {
+  if (!table?._id) {
     return;
   }
 
@@ -386,6 +384,20 @@ const serializeDatesForConvex = (value: unknown): unknown => {
 
 const toConvexSafe = <T>(value: T): T => serializeDatesForConvex(value) as T;
 
+const withAuthTimestamps = (data: Record<string, unknown>) => {
+  if (data.createdAt !== undefined) {
+    return data;
+  }
+
+  const now = Date.now();
+
+  return {
+    ...data,
+    createdAt: now,
+    ...(data.updatedAt === undefined ? { updatedAt: now } : {}),
+  };
+};
+
 // Extracted handler functions
 export const createHandler = async (
   ctx: any,
@@ -410,10 +422,9 @@ export const createHandler = async (
     tableTriggers?.create?.before,
     triggerCtx
   );
-  const data = serializeDatesForConvex(transformedData) as Record<
-    string,
-    unknown
-  >;
+  const data = serializeDatesForConvex(
+    withAuthTimestamps(transformedData)
+  ) as Record<string, unknown>;
 
   await checkUniqueFields(
     ctx,
@@ -1004,6 +1015,7 @@ export const createApi = <
     }),
     findMany: internalQueryGeneric({
       args: {
+        join: v.optional(v.any()),
         limit: v.optional(v.number()),
         model: modelValidator,
         offset: v.optional(v.number()),
@@ -1015,20 +1027,39 @@ export const createApi = <
           })
         ),
         where: v.optional(v.array(adapterWhereValidator)),
-        join: v.optional(v.any()),
       },
       handler: async (ctx, args) =>
         findManyHandler(ctx, args, schema, getBetterAuthSchema()),
     }),
     findOne: internalQueryGeneric({
       args: {
+        join: v.optional(v.any()),
         model: modelValidator,
         select: v.optional(v.array(v.string())),
         where: v.optional(v.array(adapterWhereValidator)),
-        join: v.optional(v.any()),
       },
       handler: async (ctx, args) =>
         findOneHandler(ctx, args, schema, getBetterAuthSchema()),
+    }),
+    getLatestJwks: internalActionGeneric({
+      args: {},
+      handler: async (ctx) => {
+        const auth = getAuth(ctx as Ctx) as {
+          api: { getLatestJwks: () => unknown };
+        };
+
+        return auth.api.getLatestJwks();
+      },
+    }),
+    rotateKeys: internalActionGeneric({
+      args: {},
+      handler: async (ctx) => {
+        const auth = getAuth(ctx as Ctx) as {
+          api: { rotateKeys: () => unknown };
+        };
+
+        return auth.api.rotateKeys();
+      },
     }),
     updateMany: mutationBuilder({
       args: {
@@ -1066,26 +1097,6 @@ export const createApi = <
           schema,
           getBetterAuthSchema()
         );
-      },
-    }),
-    getLatestJwks: internalActionGeneric({
-      args: {},
-      handler: async (ctx) => {
-        const auth = getAuth(ctx as Ctx) as {
-          api: { getLatestJwks: () => unknown };
-        };
-
-        return auth.api.getLatestJwks();
-      },
-    }),
-    rotateKeys: internalActionGeneric({
-      args: {},
-      handler: async (ctx) => {
-        const auth = getAuth(ctx as Ctx) as {
-          api: { rotateKeys: () => unknown };
-        };
-
-        return auth.api.rotateKeys();
       },
     }),
   };
