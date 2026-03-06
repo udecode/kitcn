@@ -30,7 +30,7 @@ export default defineConfig({
             'packages/**/*.vitest.ts',
             'packages/**/*.vitest.tsx',
           ],
-          exclude: ['**/node_modules/**', '**/tmp/**', '**/src/solid/**', '**/ratelimit/solid/**'],
+          exclude: ['**/node_modules/**', '**/tmp/**', '**/src/solid/**'],
         },
       },
       {
@@ -38,10 +38,7 @@ export default defineConfig({
         test: {
           name: 'solid',
           environment: 'happy-dom',
-          include: [
-            'packages/better-convex/src/solid/**/*.vitest.{ts,tsx}',
-            'packages/better-convex/src/plugins/ratelimit/solid/**/*.vitest.{ts,tsx}',
-          ],
+          include: ['packages/better-convex/src/solid/**/*.vitest.{ts,tsx}'],
           exclude: ['**/node_modules/**'],
           setupFiles: ['./tooling/test-setup-solid.ts'],
           globals: true,
