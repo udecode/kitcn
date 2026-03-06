@@ -72,15 +72,13 @@ export function ConvexProviderWithAuth(
   }>
 ) {
   const client = props.client as unknown as IConvexClient;
-  // Call the hook - in Solid this returns values at component creation time
-  // The hook itself should use Solid reactivity internally
-  const auth = props.useAuth();
   const [isConvexLoading, setIsConvexLoading] = createSignal(true);
   const [isConvexAuthenticated, setIsConvexAuthenticated] = createSignal(false);
 
-  // Track auth changes
+  // Track auth changes — call useAuth() inside the effect so that
+  // reactive reads (signals/stores) within it are tracked by Solid.
   createEffect(() => {
-    // Access reactive values
+    const auth = props.useAuth();
     const loading = auth.isLoading;
     const authenticated = auth.isAuthenticated;
 
