@@ -1,5 +1,15 @@
 # better-convex
 
+## 0.9.1
+
+### Patch Changes
+
+- [#116](https://github.com/udecode/better-convex/pull/116) [`2c98958`](https://github.com/udecode/better-convex/commit/2c98958f35953dfb4514ee038d2363e3ac92df88) Thanks [@thuillart](https://github.com/thuillart)! - Fix `createEnv` throwing "Invalid environment variables" during `better-convex dev`. The CLI now sets a `globalThis.__BETTER_CONVEX_CODEGEN__` sentinel before importing Convex files via jiti, and `createEnv` reads that sentinel (instead of `process.env`) to activate a safe fallback — using `options[0]` for `z.enum` fields instead of `""` to avoid false validation failures.
+
+- [#120](https://github.com/udecode/better-convex/pull/120) [`c50c99b`](https://github.com/udecode/better-convex/commit/c50c99b5585721e9e6dccc371c3007def1abd09c) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix SSR auth token refresh when Convex requests `forceRefreshToken` during pending Better Auth session hydration.
+
+  `ConvexAuthProvider` now fetches a fresh JWT instead of reusing the cached SSR token in that forced-refresh path, so Convex can schedule preemptive refresh instead of waiting for an auth failure.
+
 ## 0.9.0
 
 ### Minor Changes
