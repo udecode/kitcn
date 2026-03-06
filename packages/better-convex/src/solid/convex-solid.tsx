@@ -18,14 +18,6 @@ import {
 
 import { ConvexAuthBridge, useConvexAuthBridge } from './auth-store';
 
-type IConvexClient = {
-  setAuth(
-    fetchToken: AuthTokenFetcher,
-    onChange?: (isAuthenticated: boolean) => void
-  ): void;
-  clearAuth(): void;
-};
-
 // ============================================================================
 // Convex Context
 // ============================================================================
@@ -71,7 +63,6 @@ export function ConvexProviderWithAuth(
     };
   }>
 ) {
-  const client = props.client as unknown as IConvexClient;
   const [isConvexLoading, setIsConvexLoading] = createSignal(true);
   const [isConvexAuthenticated, setIsConvexAuthenticated] = createSignal(false);
 
@@ -85,20 +76,20 @@ export function ConvexProviderWithAuth(
     if (loading) return;
 
     if (!authenticated) {
-      client.clearAuth();
+      props.client.setAuth(() => Promise.resolve(null));
       setIsConvexLoading(false);
       setIsConvexAuthenticated(false);
       return;
     }
 
-    client.setAuth(auth.fetchAccessToken, (isAuth: boolean) => {
+    props.client.setAuth(auth.fetchAccessToken, (isAuth: boolean) => {
       setIsConvexLoading(false);
       setIsConvexAuthenticated(isAuth);
     });
   });
 
   onCleanup(() => {
-    client.clearAuth();
+    props.client.setAuth(() => Promise.resolve(null));
   });
 
   return (
