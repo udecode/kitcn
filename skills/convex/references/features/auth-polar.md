@@ -538,7 +538,7 @@ Polar webhooks require a public URL.
 ```json
 { "scripts": { "dev": "concurrently 'next dev' 'bun ngrok'", "ngrok": "ngrok http --url=your-domain.ngrok-free.app 3000" } }
 ```
-3. Configure webhook URL in Polar Dashboard: `https://your-domain.ngrok-free.app/api/auth/polar/webhook`
+3. Configure webhook URL in Polar Dashboard: `https://your-domain.ngrok-free.app/api/auth/polar/webhooks`
 
 ## Common Patterns
 
