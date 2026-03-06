@@ -130,6 +130,7 @@
       "peerDependencies": {
         "@tanstack/query-core": ">=5",
         "@tanstack/react-query": ">=5",
+        "@tanstack/solid-query": ">=5",
         "better-auth": ">=1.4.9",
         "convex": ">=1.32",
         "hono": ">=4",
@@ -139,6 +140,8 @@
         "zod": ">=4",
       },
       "optionalPeers": [
+        "@tanstack/react-query",
+        "@tanstack/solid-query",
         "better-auth",
         "hono",
         "next",

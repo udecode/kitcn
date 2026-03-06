@@ -66,6 +66,7 @@
   "peerDependencies": {
     "@tanstack/query-core": ">=5",
     "@tanstack/react-query": ">=5",
+    "@tanstack/solid-query": ">=5",
     "better-auth": ">=1.4.9",
     "convex": ">=1.32",
     "hono": ">=4",
@@ -79,6 +80,12 @@
       "optional": true
     },
     "hono": {
+      "optional": true
+    },
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "@tanstack/solid-query": {
       "optional": true
     },
     "next": {
