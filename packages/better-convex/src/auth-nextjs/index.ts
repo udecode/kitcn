@@ -37,6 +37,7 @@ type AuthOptions = {
 type ConvexBetterAuthOptions<TApi> = Omit<GetTokenOptions, 'jwtCache'> & {
   api: TApi;
   convexSiteUrl: string;
+  convexUrl?: string;
   /** Auth options. JWT caching is enabled by default (set `auth.jwtCache: false` to disable). */
   auth?: AuthOptions;
 };
@@ -72,7 +73,6 @@ export function convexBetterAuth<TApi extends Record<string, unknown>>(
 
   const { createContext, createCaller } = createCallerFactory({
     api: opts.api,
-    convexSiteUrl: opts.convexSiteUrl,
     auth: jwtCacheEnabled
       ? {
           getToken: (siteUrl, headers, getTokenOpts) => {
@@ -91,11 +91,13 @@ export function convexBetterAuth<TApi extends Record<string, unknown>>(
           isUnauthorized: auth.isUnauthorized ?? defaultIsUnauthorized,
         }
       : undefined,
+    convexSiteUrl: opts.convexSiteUrl,
+    convexUrl: opts.convexUrl,
   });
 
   return {
-    createContext,
     createCaller,
+    createContext,
     handler: nextJsHandler(opts.convexSiteUrl),
   };
 }
