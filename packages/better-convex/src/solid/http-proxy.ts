@@ -1,5 +1,5 @@
 /**
- * HTTP Proxy for TanStack Query
+ * HTTP Proxy for TanStack Query (SolidJS)
  *
  * Provides queryOptions/mutationOptions for HTTP endpoints,
  * colocated under `crpc.http.*` namespace.
@@ -9,10 +9,10 @@
  * const crpc = useCRPC();
  *
  * // GET endpoint → queryOptions (no subscription)
- * const { data } = useQuery(crpc.http.todos.get.queryOptions({ id }));
+ * const { data } = createQuery(() => crpc.http.todos.get.queryOptions({ id }));
  *
  * // POST endpoint → mutationOptions
- * const mutation = useMutation(crpc.http.todos.create.mutationOptions());
+ * const mutation = createMutation(() => crpc.http.todos.create.mutationOptions());
  * await mutation.mutateAsync({ title: 'New todo' });
  * ```
  */
@@ -20,9 +20,9 @@
 import type {
   DefaultError,
   QueryFilters,
-  UseMutationOptions,
-  UseQueryOptions,
-} from '@tanstack/react-query';
+  SolidMutationOptions,
+  SolidQueryOptions,
+} from '@tanstack/solid-query';
 import type { z } from 'zod';
 import { executeHttpRequest } from '../crpc/http-client';
 import { HttpClientError } from '../crpc/http-types';
@@ -177,16 +177,21 @@ export type HttpMutationKey = readonly ['httpMutation', string];
 type ReservedQueryOptions = 'queryKey' | 'queryFn';
 type ReservedMutationOptions = 'mutationFn';
 
-/** Query options for GET HTTP endpoints - compatible with both useQuery and useSuspenseQuery */
+/** Query options for GET HTTP endpoints - compatible with both createQuery and createSuspenseQuery */
 type HttpQueryOptsReturn<T extends HttpProcedure> = Omit<
-  UseQueryOptions<InferHttpOutput<T>, Error, InferHttpOutput<T>, HttpQueryKey>,
+  SolidQueryOptions<
+    InferHttpOutput<T>,
+    Error,
+    InferHttpOutput<T>,
+    HttpQueryKey
+  >,
   'queryFn'
 > & {
   queryFn: () => Promise<InferHttpOutput<T>>;
 };
 
 /** Mutation options for POST/PUT/PATCH/DELETE HTTP endpoints - typed variables */
-type HttpMutationOptsReturn<T extends HttpProcedure> = UseMutationOptions<
+type HttpMutationOptsReturn<T extends HttpProcedure> = SolidMutationOptions<
   InferHttpOutput<T>,
   DefaultError,
   InferHttpClientArgs<T>
@@ -206,8 +211,8 @@ type HttpMutationOptions<T extends HttpProcedure> = DistributiveOmit<
 
 /**
  * Decorated GET procedure with queryOptions and mutationOptions.
- * - queryOptions: For cached data fetching (useQuery/useSuspenseQuery)
- * - mutationOptions: For one-time actions like exports (useMutation)
+ * - queryOptions: For cached data fetching (createQuery/createSuspenseQuery)
+ * - mutationOptions: For one-time actions like exports (createMutation)
  */
 type DecorateHttpQuery<T extends HttpProcedure> = {
   queryOptions: keyof InferHttpInput<T> extends never
@@ -248,10 +253,10 @@ type DecorateHttpMutation<T extends HttpProcedure> = {
 };
 
 // ============================================================================
-// Vanilla HTTP Client Types (direct calls only, no React Query)
+// Vanilla HTTP Client Types (direct calls only, no TanStack Query)
 // ============================================================================
 
-/** Vanilla HTTP query - only direct call, no React Query */
+/** Vanilla HTTP query - only direct call, no TanStack Query */
 type VanillaHttpQuery<T extends HttpProcedure> = {
   query: keyof InferHttpInput<T> extends never
     ? (args?: InferHttpClientArgs<T>) => Promise<InferHttpOutput<T>>
@@ -260,7 +265,7 @@ type VanillaHttpQuery<T extends HttpProcedure> = {
       : (args: InferHttpClientArgs<T>) => Promise<InferHttpOutput<T>>;
 };
 
-/** Vanilla HTTP mutation - only direct call, no React Query */
+/** Vanilla HTTP mutation - only direct call, no TanStack Query */
 type VanillaHttpMutation<T extends HttpProcedure> = {
   mutate: keyof InferHttpInput<T> extends never
     ? (args?: InferHttpClientArgs<T>) => Promise<InferHttpOutput<T>>
@@ -294,7 +299,7 @@ export type VanillaHttpCRPCClientFromRouter<T> =
   T extends CRPCHttpRouter<infer R> ? VanillaHttpCRPCClient<R> : never;
 
 // ============================================================================
-// HTTP Client Type (recursive) - Full client with React Query options
+// HTTP Client Type (recursive) - Full client with SolidJS Query options
 // ============================================================================
 
 /**
@@ -556,7 +561,7 @@ function createRecursiveHttpProxy(
 }
 
 /**
- * Create an HTTP proxy with TanStack Query integration.
+ * Create an HTTP proxy with TanStack Query integration for SolidJS.
  *
  * Returns a proxy that provides:
  * - `queryOptions` for GET endpoints (no subscription)
@@ -565,16 +570,16 @@ function createRecursiveHttpProxy(
  * @example
  * ```ts
  * const httpProxy = createHttpProxy<AppRouter>({
- *   convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
+ *   convexSiteUrl: import.meta.env.VITE_CONVEX_SITE_URL,
  *   routes: httpRoutes,
  * });
  *
  * // GET endpoint
  * const opts = httpProxy.todos.get.queryOptions({ id: '123' });
- * const { data } = useQuery(opts);
+ * const query = createQuery(() => opts);
  *
  * // POST endpoint
- * const mutation = useMutation(httpProxy.todos.create.mutationOptions());
+ * const mutation = createMutation(() => httpProxy.todos.create.mutationOptions());
  * await mutation.mutateAsync({ title: 'New todo' });
  * ```
  */

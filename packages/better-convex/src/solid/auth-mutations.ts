@@ -1,12 +1,10 @@
-'use client';
-
 /**
  * Auth Mutations Factory
  *
  * Creates TanStack Query mutation option hooks from auth functions.
  */
 
-import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
+import type { DefaultError, SolidMutationOptions } from '@tanstack/solid-query';
 
 import type { AuthStore } from './auth-store';
 import { useAuthStore } from './auth-store';
@@ -18,10 +16,10 @@ import { AuthMutationError } from '../crpc/auth-error';
 
 type MutationOptionsHook<TData, TVariables = void> = (
   options?: Omit<
-    UseMutationOptions<TData, DefaultError, TVariables>,
+    SolidMutationOptions<TData, DefaultError, TVariables>,
     'mutationFn'
   >
-) => UseMutationOptions<TData, DefaultError, TVariables>;
+) => SolidMutationOptions<TData, DefaultError, TVariables>;
 
 /** Poll until token is null (max 5s) */
 const waitForTokenClear = async (
@@ -103,7 +101,7 @@ type AuthMutationsResult<T extends AuthClient> = {
  * @example
  * ```tsx
  * // lib/auth-client.ts
- * import { createAuthMutations } from 'better-convex/react';
+ * import { createAuthMutations } from 'better-convex/solid';
  *
  * export const authClient = createAuthClient({...});
  *
@@ -115,8 +113,8 @@ type AuthMutationsResult<T extends AuthClient> = {
  * } = createAuthMutations(authClient);
  *
  * // components/header.tsx
- * const signOutMutation = useMutation(useSignOutMutationOptions({
- *   onSuccess: () => router.push('/login'),
+ * const signOutMutation = createMutation(() => useSignOutMutationOptions({
+ *   onSuccess: () => navigate('/login'),
  * }));
  * ```
  */
