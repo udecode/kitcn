@@ -55,7 +55,10 @@ const createMemoryCtx = (docsById: Record<string, any>) => {
 
 describe('createHandler', () => {
   test('runs create.before/create.after/change triggers inline', async () => {
+    const now = 1_772_802_853_052;
+    using nowSpy = spyOn(Date, 'now').mockReturnValue(now);
     const insertCalls: any[] = [];
+    let insertedDoc: Record<string, unknown> | undefined;
     const before = mock(async (data: any) => ({
       data: {
         ...data,
@@ -68,13 +71,11 @@ describe('createHandler', () => {
     const triggerCtx = { orm: true };
     const ctx = {
       db: {
-        get: async (_id: string) => ({
-          _id: 'user-1',
-          email: 'updated@site.com',
-          name: 'alice',
-        }),
+        get: async (_id: string) =>
+          insertedDoc ? { _id: 'user-1', ...insertedDoc } : null,
         insert: async (_model: string, data: Record<string, unknown>) => {
           insertCalls.push(data);
+          insertedDoc = data;
           return 'user-1';
         },
       },
@@ -103,10 +104,13 @@ describe('createHandler', () => {
 
     expect(insertCalls).toEqual([
       {
+        createdAt: now,
         email: 'updated@site.com',
         name: 'alice',
+        updatedAt: now,
       },
     ]);
+    expect(nowSpy).toHaveBeenCalledTimes(1);
     expect(before).toHaveBeenCalledWith(
       {
         email: 'original@site.com',
@@ -117,9 +121,11 @@ describe('createHandler', () => {
     expect(after).toHaveBeenCalledWith(
       {
         _id: 'user-1',
+        createdAt: now,
         email: 'updated@site.com',
         id: 'user-1',
         name: 'alice',
+        updatedAt: now,
       },
       triggerCtx
     );
@@ -128,9 +134,11 @@ describe('createHandler', () => {
         id: 'user-1',
         newDoc: {
           _id: 'user-1',
+          createdAt: now,
           email: 'updated@site.com',
           id: 'user-1',
           name: 'alice',
+          updatedAt: now,
         },
         oldDoc: null,
         operation: 'insert',
@@ -159,6 +167,58 @@ describe('createHandler', () => {
         betterAuthSchema
       )
     ).rejects.toThrow('Failed to create users');
+  });
+
+  test('defaults createdAt and updatedAt when auth create input omits them', async () => {
+    const now = 1_772_802_853_052;
+    using nowSpy = spyOn(Date, 'now').mockReturnValue(now);
+
+    const insertCalls: Array<Record<string, unknown>> = [];
+    const ctx = {
+      db: {
+        get: async (_id: string) => ({
+          _id: 'user-1',
+          createdAt: now,
+          email: 'a@b.com',
+          name: 'alice',
+          updatedAt: now,
+        }),
+        insert: async (_model: string, data: Record<string, unknown>) => {
+          insertCalls.push(data);
+          return 'user-1';
+        },
+      },
+    };
+
+    const result = await createHandler(
+      ctx as any,
+      {
+        input: {
+          data: { email: 'a@b.com', name: 'alice' },
+          model: 'users',
+        },
+      },
+      schema,
+      betterAuthSchema
+    );
+
+    expect(nowSpy).toHaveBeenCalledTimes(1);
+    expect(insertCalls).toEqual([
+      {
+        createdAt: now,
+        email: 'a@b.com',
+        name: 'alice',
+        updatedAt: now,
+      },
+    ]);
+    expect(result).toEqual({
+      _id: 'user-1',
+      createdAt: now,
+      email: 'a@b.com',
+      id: 'user-1',
+      name: 'alice',
+      updatedAt: now,
+    });
   });
 
   test('throws when create.before returns false', async () => {

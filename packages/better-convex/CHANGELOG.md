@@ -1,5 +1,15 @@
 # better-convex
 
+## 0.9.2
+
+### Patch Changes
+
+- [#123](https://github.com/udecode/better-convex/pull/123) [`ba8ce1a`](https://github.com/udecode/better-convex/commit/ba8ce1aaf23c7a152047115763d5e4b7a3e84a64) Thanks [@thuillart](https://github.com/thuillart)! - Pass the Convex deployment URL through the SSR server caller instead of falling back to `NEXT_PUBLIC_CONVEX_URL`.
+
+  `createCallerFactory` now derives the `.convex.cloud` URL from `convexSiteUrl` by default and also accepts an explicit `convexUrl` override for frameworks that do not use Next.js env naming.
+
+- [#124](https://github.com/udecode/better-convex/pull/124) [`e19de1d`](https://github.com/udecode/better-convex/commit/e19de1d431857851012f9e5e4a1dfa276700c2cd) Thanks [@thuillart](https://github.com/thuillart)! - fix(auth): persist createdAt for auth records
+
 ## 0.9.1
 
 ### Patch Changes
