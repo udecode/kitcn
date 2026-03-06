@@ -19,6 +19,7 @@ export default defineConfig([
       '**/coverage/**',
       '**/coverage-*/**',
       '**/convex',
+      '**/solid',
     ],
   },
 ]);
