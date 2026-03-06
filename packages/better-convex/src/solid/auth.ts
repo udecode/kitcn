@@ -63,18 +63,32 @@ export function useAuthSkip(
   funcRef: FunctionReference<'query' | 'mutation' | 'action'>,
   opts?: { skipUnauth?: boolean; enabled?: boolean }
 ) {
-  const { isAuthenticated, isLoading: isAuthLoading } = useSafeConvexAuth();
+  const auth = useSafeConvexAuth();
   const meta = useMeta();
 
   const funcName = getFunctionName(funcRef);
   const authType = getAuthType(meta, funcName);
 
   const authLoadingApplies = authType === 'optional' || authType === 'required';
-  const shouldSkip =
-    opts?.enabled === false ||
-    (authLoadingApplies && isAuthLoading) ||
-    (authType === 'required' && !isAuthenticated && !isAuthLoading) ||
-    (!isAuthenticated && !isAuthLoading && !!opts?.skipUnauth);
 
-  return { authType, isAuthLoading, isAuthenticated, shouldSkip };
+  // Read auth state lazily via getters so values follow auth transitions
+  return {
+    authType,
+    get isAuthLoading() {
+      return auth.isLoading;
+    },
+    get isAuthenticated() {
+      return auth.isAuthenticated;
+    },
+    get shouldSkip() {
+      const isAuthLoading = auth.isLoading;
+      const isAuthenticated = auth.isAuthenticated;
+      return (
+        opts?.enabled === false ||
+        (authLoadingApplies && isAuthLoading) ||
+        (authType === 'required' && !isAuthenticated && !isAuthLoading) ||
+        (!isAuthenticated && !isAuthLoading && !!opts?.skipUnauth)
+      );
+    },
+  };
 }

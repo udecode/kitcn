@@ -181,21 +181,19 @@ export function useSafeConvexAuth(): ConvexAuthResult {
   const authStore = useAuthStore();
   const bridgeAuth = useConvexAuthBridge();
 
-  // Check better-convex AuthProvider first
-  if (authStore.store) {
-    return {
-      isAuthenticated: authStore.get('isAuthenticated'),
-      isLoading: authStore.get('isLoading'),
-    };
-  }
-
-  // Check ConvexAuthBridge
-  if (bridgeAuth !== null) {
-    return bridgeAuth;
-  }
-
-  // No auth configured - return defaults
-  return { isAuthenticated: false, isLoading: false };
+  // Return getters so property access reads lazily from the store
+  return {
+    get isAuthenticated() {
+      if (authStore.store) return authStore.get('isAuthenticated');
+      if (bridgeAuth !== null) return bridgeAuth.isAuthenticated;
+      return false;
+    },
+    get isLoading() {
+      if (authStore.store) return authStore.get('isLoading');
+      if (bridgeAuth !== null) return bridgeAuth.isLoading;
+      return false;
+    },
+  };
 }
 
 // ============================================================================
@@ -237,51 +235,52 @@ export const useAuth = () => {
   const authStore = useAuthStore();
   const bridgeAuth = useConvexAuthBridge();
 
-  // Check better-convex AuthProvider first
-  if (authStore.store) {
-    const token = authStore.get('token');
-    const isAuthenticated = authStore.get('isAuthenticated');
-    const isLoading = authStore.get('isLoading');
-
-    return {
-      hasSession: !!token,
-      isAuthenticated,
-      isLoading,
-    };
-  }
-
-  // Check ConvexAuthBridge
-  if (bridgeAuth !== null) {
-    return {
-      hasSession: false,
-      isAuthenticated: bridgeAuth.isAuthenticated,
-      isLoading: bridgeAuth.isLoading,
-    };
-  }
-
-  // No auth configured - return defaults
-  return { hasSession: false, isAuthenticated: false, isLoading: false };
+  // Return getters so property access reads lazily from the store
+  return {
+    get hasSession() {
+      if (authStore.store) return !!authStore.get('token');
+      return false;
+    },
+    get isAuthenticated() {
+      if (authStore.store) return authStore.get('isAuthenticated');
+      if (bridgeAuth !== null) return bridgeAuth.isAuthenticated;
+      return false;
+    },
+    get isLoading() {
+      if (authStore.store) return authStore.get('isLoading');
+      if (bridgeAuth !== null) return bridgeAuth.isLoading;
+      return false;
+    },
+  };
 };
 
 /** Check if user maybe has auth (optimistic, has token) */
 export const useMaybeAuth = () => {
-  const { hasSession } = useAuth();
-  return hasSession;
+  const auth = useAuth();
+  return () => auth.hasSession;
 };
 
 /** Check if user is authenticated (server-verified) */
 export const useIsAuth = () => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated;
+  const auth = useAuth();
+  return () => auth.isAuthenticated;
 };
 
 export const useAuthGuard = () => {
-  const { isAuthenticated } = useSafeConvexAuth();
-  const onMutationUnauthorized = useAuthValue('onMutationUnauthorized');
+  const authStore = useAuthStore();
+  const bridgeAuth = useConvexAuthBridge();
 
   return (callback?: () => Promise<void> | void) => {
+    // Read auth state lazily at callback time so guard follows auth transitions
+    let isAuthenticated = false;
+    if (authStore.store) {
+      isAuthenticated = authStore.get('isAuthenticated');
+    } else if (bridgeAuth !== null) {
+      isAuthenticated = bridgeAuth.isAuthenticated;
+    }
+
     if (!isAuthenticated) {
-      onMutationUnauthorized();
+      authStore.get('onMutationUnauthorized')();
 
       return true;
     }
@@ -297,24 +296,28 @@ export const useAuthGuard = () => {
 /** Render children only when maybe has auth (optimistic) */
 export function MaybeAuthenticated(props: { children: JSX.Element }) {
   const isAuth = useMaybeAuth();
-  return <Show when={isAuth}>{props.children}</Show>;
+  return <Show when={isAuth()}>{props.children}</Show>;
 }
 
 /** Render children only when authenticated (server-verified) */
 export function Authenticated(props: { children: JSX.Element }) {
   const isAuth = useIsAuth();
-  return <Show when={isAuth}>{props.children}</Show>;
+  return <Show when={isAuth()}>{props.children}</Show>;
 }
 
 /** Render children only when maybe not auth (optimistic) */
 export function MaybeUnauthenticated(props: { children: JSX.Element }) {
   const isAuth = useMaybeAuth();
-  return <Show when={!isAuth}>{props.children}</Show>;
+  return <Show when={!isAuth()}>{props.children}</Show>;
 }
 
 /** Render children only when not authenticated (server-verified) */
 export function Unauthenticated(props: { children: JSX.Element }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const auth = useAuth();
   // Wait for loading, then show if not authenticated
-  return <Show when={!isAuthenticated || isLoading}>{props.children}</Show>;
+  return (
+    <Show when={!auth.isAuthenticated && !auth.isLoading}>
+      {props.children}
+    </Show>
+  );
 }
