@@ -16,7 +16,6 @@ import {
   decodeJwtExp,
   FetchAccessTokenContext,
   useAuthStore,
-  useAuthValue,
 } from './auth-store';
 import { ConvexProviderWithAuth, useConvexAuth } from './convex-solid';
 import type { SolidAuthClient } from './types';
@@ -226,18 +225,21 @@ function ConvexAuthProviderInner(
  * 6. Queries would throw UNAUTHORIZED before token is validated
  */
 function AuthStateSync(props: ParentProps) {
-  const { isLoading: convexIsLoading, isAuthenticated } = useConvexAuth();
+  // Don't destructure — access via getters inside createEffect to preserve reactivity
+  const convexAuth = useConvexAuth();
   const authStore = useAuthStore();
-  const token = useAuthValue('token');
 
   createEffect(() => {
+    // Read token inside effect so changes are tracked
+    const token = authStore.get('token');
+
     // DEFENSIVE: If we have a token but Convex says not authenticated,
     // stay in loading state to avoid UNAUTHORIZED errors during hydration
-    const hasTokenButNotAuth = !!token && !isAuthenticated;
-    const isLoading = convexIsLoading || hasTokenButNotAuth;
+    const hasTokenButNotAuth = !!token && !convexAuth.isAuthenticated;
+    const isLoading = convexAuth.isLoading || hasTokenButNotAuth;
 
     authStore.set('isLoading', isLoading);
-    authStore.set('isAuthenticated', isAuthenticated);
+    authStore.set('isAuthenticated', convexAuth.isAuthenticated);
   });
 
   return props.children;

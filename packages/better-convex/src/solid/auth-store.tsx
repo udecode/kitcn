@@ -212,13 +212,18 @@ export function ConvexAuthBridge(
     isAuthenticated: boolean;
   }>
 ) {
+  // Use getters so context consumers can track prop changes reactively
+  const value = {
+    get isLoading() {
+      return props.isLoading;
+    },
+    get isAuthenticated() {
+      return props.isAuthenticated;
+    },
+  };
+
   return (
-    <ConvexAuthBridgeContext.Provider
-      value={{
-        isLoading: props.isLoading,
-        isAuthenticated: props.isAuthenticated,
-      }}
-    >
+    <ConvexAuthBridgeContext.Provider value={value}>
       {props.children}
     </ConvexAuthBridgeContext.Provider>
   );
