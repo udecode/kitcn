@@ -6,7 +6,9 @@
       "name": "better-convex",
       "dependencies": {
         "@convex-dev/better-auth": "0.10.11",
+        "@tanstack/query-core": "5.90.20",
         "@tanstack/react-query": "5.90.21",
+        "@tanstack/solid-query": "5.90.23",
         "convex": "1.32.0",
         "hono": "4.12.2",
         "next": "16.1.6",
@@ -102,14 +104,13 @@
     },
     "packages/better-convex": {
       "name": "better-convex",
-      "version": "0.9.1",
+      "version": "0.9.2",
       "bin": {
         "better-convex": "./dist/cli.mjs",
       },
       "dependencies": {
         "@clack/prompts": "^0.11.0",
         "@convex-dev/better-auth": "^0.10.11",
-        "@tanstack/solid-query": "^5.90.23",
         "chokidar": "^5.0.0",
         "common-tags": "^1.8.2",
         "dotenv": "^17.3.1",
@@ -129,6 +130,7 @@
         "tsdown": "^0.20.3",
       },
       "peerDependencies": {
+        "@tanstack/query-core": ">=5",
         "@tanstack/react-query": ">=5",
         "@tanstack/solid-query": ">=5",
         "better-auth": ">=1.4.9",
