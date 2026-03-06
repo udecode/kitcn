@@ -706,6 +706,81 @@ describe('auth/create-api createApi()', () => {
       });
     });
 
+    test('create keeps ORM-created createdAt values when the table defaults them', async () => {
+      const api = createApi(schema, getAuth as any);
+      const ormCreatedAt = new Date('2026-03-06T18:42:31.000Z');
+      const ormUpdatedAt = new Date('2026-03-06T18:42:31.500Z');
+      const store = new Map<string, any>();
+      const ormInsert = mock((_table: any) => ({
+        values: (_data: Record<string, unknown>) => ({
+          returning: async () => {
+            const id = `user-${store.size + 1}`;
+            const doc = {
+              _creationTime: ormCreatedAt.getTime() + 17,
+              _id: id,
+              createdAt: ormCreatedAt,
+              email: 'd@site.com',
+              name: 'dave',
+              updatedAt: ormUpdatedAt,
+            };
+            store.set(id, doc);
+            return [doc];
+          },
+        }),
+      }));
+
+      const ctx = {
+        db: {
+          delete: mock(async () => {
+            throw new Error('db.delete should not be called when orm exists');
+          }),
+          get: async (id: string) => store.get(id) ?? null,
+          insert: mock(async () => {
+            throw new Error('db.insert should not be called when orm exists');
+          }),
+          patch: mock(async () => {
+            throw new Error('db.patch should not be called when orm exists');
+          }),
+        },
+        orm: {
+          delete: mock(() => ({
+            where: async () => undefined,
+          })),
+          insert: ormInsert,
+          update: mock(() => ({
+            set: () => ({
+              where: async () => [],
+            }),
+          })),
+        },
+        runMutation: mock(async () => undefined),
+      };
+
+      const created = await (api.create as any)._handler(ctx, {
+        input: {
+          data: {
+            email: 'd@site.com',
+            name: 'dave',
+          },
+          model: 'user',
+        },
+      });
+
+      expect(ormInsert).toHaveBeenCalledTimes(1);
+      expect(created).toMatchObject({
+        createdAt: ormCreatedAt.getTime(),
+        email: 'd@site.com',
+        name: 'dave',
+        updatedAt: ormUpdatedAt.getTime(),
+      });
+      expect(Array.from(store.values())[0]).toMatchObject({
+        createdAt: ormCreatedAt,
+        email: 'd@site.com',
+        name: 'dave',
+        updatedAt: ormUpdatedAt,
+      });
+    });
+
     test('create normalizes ORM docs for create.after hooks and serializes Date values', async () => {
       const after = mock(async () => undefined);
       const change = mock(async () => undefined);
