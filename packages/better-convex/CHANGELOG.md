@@ -1,5 +1,24 @@
 # better-convex
 
+## 0.10.0
+
+### Minor Changes
+
+- [#121](https://github.com/udecode/better-convex/pull/121) [`7aa4f16`](https://github.com/udecode/better-convex/commit/7aa4f1643b2538627d3c6e51a6e5ab34bec0b500) Thanks [@carere](https://github.com/carere)! - ## Features
+  - Add SolidJS flavor with full feature parity to React integration
+  - Add `ConvexProvider`, `ConvexProviderWithAuth`, `useConvex`, and `useConvexAuth` for SolidJS
+  - Add `createConvexQueryClient` and `useConvexQuery` bridging Convex subscriptions to TanStack Solid Query
+  - Add cRPC layer for SolidJS with typed query/mutation/action proxies
+  - Add `useConvexInfiniteQuery` for paginated queries in SolidJS
+  - Add `createConvexHTTPProxy` for SSR-compatible HTTP client in SolidJS
+  - Add auth mutation helpers (`useSignIn`, `useSignUp`, `useSignOut`) for SolidJS
+  - Add `useRateLimit` hook for SolidJS using `client.onUpdate()` subscriptions
+  - Add `./solid` and `./plugins/ratelimit/solid` package exports
+
+### Patch Changes
+
+- [#126](https://github.com/udecode/better-convex/pull/126) [`0c88268`](https://github.com/udecode/better-convex/commit/0c88268d8efe4160a734ff119aba859d8b4b3fb3) Thanks [@thuillart](https://github.com/thuillart)! - Preserve real `createdAt` columns during ORM writes so auth records keep schema-defaulted timestamps when created through the generated auth runtime.
+
 ## 0.9.2
 
 ### Patch Changes
