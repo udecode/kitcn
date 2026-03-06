@@ -89,7 +89,7 @@ export function useConvexQueryOptions<T extends FunctionReference<'query'>>(
   // Convert enabled to boolean (TanStack Query allows function)
   const enabled =
     typeof options?.enabled === 'function' ? undefined : options?.enabled;
-  const { authType, shouldSkip } = useAuthSkip(funcRef, {
+  const authSkip = useAuthSkip(funcRef, {
     enabled: isSkipped ? false : enabled,
     skipUnauth: options?.skipUnauth,
   });
@@ -106,10 +106,10 @@ export function useConvexQueryOptions<T extends FunctionReference<'query'>>(
   return {
     ...baseOptions,
     ...queryOptions, // Spread user options
-    enabled: isSkipped ? false : !shouldSkip,
+    enabled: isSkipped ? false : !authSkip.shouldSkip,
     meta: {
       ...baseOptions.meta,
-      authType,
+      authType: authSkip.authType,
       subscribe: subscribe !== false,
     },
   };
@@ -154,13 +154,13 @@ export function useConvexInfiniteQueryOptions<
   const enabledOpt =
     typeof opts.enabled === 'function' ? undefined : opts.enabled;
 
-  const { authType, shouldSkip } = useAuthSkip(funcRef, {
+  const authSkip = useAuthSkip(funcRef, {
     enabled: isSkipped ? false : enabledOpt,
     skipUnauth: opts.skipUnauth,
   });
 
   // Determine final enabled state
-  const enabled = isSkipped || shouldSkip ? false : enabledOpt;
+  const enabled = isSkipped || authSkip.shouldSkip ? false : enabledOpt;
 
   const baseOptions = convexInfiniteQueryOptions(
     funcRef,
@@ -173,7 +173,7 @@ export function useConvexInfiniteQueryOptions<
     ...baseOptions,
     meta: {
       ...baseOptions.meta,
-      authType,
+      authType: authSkip.authType,
     },
   } as ConvexInfiniteQueryOptions<T>;
 }
@@ -212,7 +212,7 @@ export function useConvexActionQueryOptions<
   // Convert enabled to boolean (TanStack Query allows function)
   const enabled =
     typeof options?.enabled === 'function' ? undefined : options?.enabled;
-  const { shouldSkip } = useAuthSkip(action, {
+  const authSkip = useAuthSkip(action, {
     enabled: isSkipped ? false : enabled,
     skipUnauth: options?.skipUnauth,
   });
@@ -229,7 +229,7 @@ export function useConvexActionQueryOptions<
   return {
     ...baseOptions,
     ...queryOptions,
-    enabled: isSkipped ? false : !shouldSkip,
+    enabled: isSkipped ? false : !authSkip.shouldSkip,
   };
 }
 

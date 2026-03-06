@@ -297,7 +297,7 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
   // Extract our custom options, the rest are TanStack Query options for page queries
   const { limit, enabled, placeholderData, ...queryOptions } = options;
 
-  const { isLoading: isAuthLoading } = useSafeConvexAuth();
+  const safeAuth = useSafeConvexAuth();
   const meta = useMeta();
   const queryClient = useQueryClient();
 
@@ -318,7 +318,7 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
 
   // Don't skip if we have prefetched data - use it for instant hydration
   const skip = createMemo(
-    () => !prefetchedFirstPage() && (isAuthLoading || enabled === false)
+    () => !prefetchedFirstPage() && (safeAuth.isLoading || enabled === false)
   );
 
   // Helper to get/set pagination state from queryClient with gcTime: Infinity
@@ -747,7 +747,7 @@ export function useInfiniteQuery<
   // Extract function reference from Symbol (attached by proxy)
   const query = infiniteOptions[FUNC_REF_SYMBOL];
   const onQueryUnauthorized = useAuthValue('onQueryUnauthorized');
-  const { isLoading: isAuthLoading, isAuthenticated } = useSafeConvexAuth();
+  const safeAuth = useSafeConvexAuth();
 
   // Extract metadata and query options from infiniteOptions
   const {
@@ -768,13 +768,13 @@ export function useInfiniteQuery<
 
   // Auth required but user not authenticated (after auth loads)
   const isUnauthorized =
-    authType === 'required' && !isAuthLoading && !isAuthenticated;
+    authType === 'required' && !safeAuth.isLoading && !safeAuth.isAuthenticated;
 
   // Determine if we should skip the query
   const shouldSkip =
     factoryEnabled === false ||
-    (authType === 'required' && isAuthLoading) ||
-    (authType === 'required' && !isAuthenticated);
+    (authType === 'required' && safeAuth.isLoading) ||
+    (authType === 'required' && !safeAuth.isAuthenticated);
 
   // Create error when unauthorized (unless skipUnauth)
   const authError = createMemo(() => {
@@ -828,7 +828,7 @@ export function useInfiniteQuery<
       const ae = authError();
       const isClientError = isCRPCClientError(result.error);
       return (
-        (authLoadingApplies && isAuthLoading) ||
+        (authLoadingApplies && safeAuth.isLoading) ||
         (!isClientError && !ae && !isSkippedUnauth && result.isLoading)
       );
     },
