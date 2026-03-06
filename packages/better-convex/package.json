@@ -23,6 +23,7 @@
     "./plugins": "./dist/plugins/index.js",
     "./plugins/ratelimit": "./dist/plugins/ratelimit/index.js",
     "./plugins/ratelimit/react": "./dist/plugins/ratelimit/react/index.js",
+    "./plugins/ratelimit/solid": "./dist/plugins/ratelimit/solid/index.js",
     "./react": "./dist/react/index.js",
     "./rsc": "./dist/rsc/index.js",
     "./server": "./dist/server/index.js",

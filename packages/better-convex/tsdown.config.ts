@@ -33,6 +33,7 @@ export default defineConfig([
   {
     entry: {
       'solid/index': 'src/solid/index.ts',
+      'plugins/ratelimit/solid/index': 'src/plugins/ratelimit/solid/index.ts',
     },
     platform: 'neutral',
     target: 'esnext',
