@@ -484,14 +484,6 @@
       },
       {
         "sourceType": "plugin",
-        "pluginId": "learn@dotai",
-        "pluginVersion": "3.0.0",
-        "sourceKind": "skill",
-        "sourceRelPath": "skills/learn",
-        "destRelPath": "learn"
-      },
-      {
-        "sourceType": "plugin",
         "pluginId": "compound-engineering@every-marketplace",
         "pluginVersion": "2.35.2",
         "sourceKind": "agent",
@@ -529,6 +521,22 @@
         "sourceKind": "agent",
         "sourceRelPath": "agents/review/performance-oracle.md",
         "destRelPath": "performance-oracle"
+      },
+      {
+        "sourceType": "plugin",
+        "pluginId": "planning-with-files@planning-with-files",
+        "pluginVersion": "2.21.0",
+        "sourceKind": "command",
+        "sourceRelPath": "commands/plan.md",
+        "destRelPath": "planning-with-files-plan"
+      },
+      {
+        "sourceType": "plugin",
+        "pluginId": "planning-with-files@planning-with-files",
+        "pluginVersion": "2.21.0",
+        "sourceKind": "skill",
+        "sourceRelPath": "skills/planning-with-files",
+        "destRelPath": "planning-with-files-planning-with-files"
       },
       {
         "sourceType": "plugin",
@@ -641,6 +649,22 @@
         "sourceKind": "agent",
         "sourceRelPath": "agents/workflow/spec-flow-analyzer.md",
         "destRelPath": "spec-flow-analyzer"
+      },
+      {
+        "sourceType": "plugin",
+        "pluginId": "planning-with-files@planning-with-files",
+        "pluginVersion": "2.21.0",
+        "sourceKind": "command",
+        "sourceRelPath": "commands/start.md",
+        "destRelPath": "start"
+      },
+      {
+        "sourceType": "plugin",
+        "pluginId": "planning-with-files@planning-with-files",
+        "pluginVersion": "2.21.0",
+        "sourceKind": "command",
+        "sourceRelPath": "commands/status.md",
+        "destRelPath": "status"
       },
       {
         "sourceType": "plugin",

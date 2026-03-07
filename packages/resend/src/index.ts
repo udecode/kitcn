@@ -1,16 +1,9 @@
 /** biome-ignore-all lint/performance/noBarrelFile: package entry */
 
-import {
-  definePluginMiddleware,
-  type PluginMiddleware,
-} from 'better-convex/plugins';
-import {
-  type ResendOptions,
-  type ResendResolvedOptions,
-  resolveResendOptions,
-} from './runtime-helpers';
+import { definePlugin } from 'better-convex/plugins';
+import type { ResendApi, ResendOptions } from './runtime-helpers';
 
-export type { ResendOptions, ResendResolvedOptions } from './runtime-helpers';
+export type { ResendApi, ResendOptions } from './runtime-helpers';
 export {
   canUpgradeStatus,
   getRetryDelayMs,
@@ -19,7 +12,6 @@ export {
   normalizeHeaders,
   normalizeRecipientList,
   parseEmailEvent,
-  resolveResendOptions,
   shouldRetry,
   verifyResendWebhookEvent,
 } from './runtime-helpers';
@@ -32,18 +24,13 @@ export type {
   Template,
 } from './shared';
 
-export const ResendPlugin: PluginMiddleware<
-  { options: ResendResolvedOptions },
-  ResendOptions,
+export const ResendPlugin = definePlugin<'resend', ResendOptions, ResendApi>(
   'resend',
-  unknown
-> = definePluginMiddleware<
-  'resend',
-  { options: ResendResolvedOptions },
-  ResendOptions
->({
-  key: 'resend',
-  provide: ({ options }) => ({
-    options: resolveResendOptions(options),
-  }),
-});
+  ({ options }) => ({
+    apiKey: options?.apiKey ?? '',
+    webhookSecret: options?.webhookSecret ?? '',
+    initialBackoffMs: options?.initialBackoffMs ?? 30_000,
+    retryAttempts: options?.retryAttempts ?? 5,
+    testMode: options?.testMode ?? true,
+  })
+);

@@ -7,221 +7,159 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll set up `@better-convex/ratelimit` with an Upstash-parity API, Convex-first storage, and a UI-friendly hook.
+In this guide, we'll set up `better-convex/ratelimit` with an Upstash-parity API, Convex-first storage, and a UI-friendly hook.
 
-We'll keep it practical: a reusable server guard, middleware wiring, algorithm choices, and client-side button disabling with live countdowns.
+We'll keep it practical: a local ratelimit plugin, middleware wiring, algorithm choices, and client-side button disabling with live countdowns.
 
 ## Approach
 
 We'll build this in four steps so you can ship quickly and keep things maintainable:
 
-1. Enable the schema plugin so internal storage tables exist.
-2. Add one reusable server guard for all protected mutations.
-3. Wire the guard into middleware so handlers stay focused.
-4. Add optional client-side UX with `useRateLimit()` for disabled states and retry timers.
+1. Scaffold the local schema extension so internal storage tables exist.
+2. Add one local ratelimit plugin that owns buckets and policy.
+3. Wire that plugin into middleware so handlers stay focused.
+4. Add optional client-side UX with `useRatelimit()` for disabled states and retry timers.
 
 We'll end with a full API reference so you can tune behavior without guesswork.
 
 ## Why this package
 
-`@better-convex/ratelimit` is designed as a hard cutover from component-driven APIs.
+`better-convex/ratelimit` is designed as a hard cutover from component-driven APIs.
 
 | What you get | Why it matters |
 | --- | --- |
 | Upstash-style API | Easier migration if your team already knows Upstash (`limit`, `check`, `getRemaining`, `resetUsedTokens`) |
 | Convex-first tables | No component registration and no component migration path to manage |
 | Read dedupe helpers | Common repeated reads may reuse cached results and reduce duplicate DB fetches |
-| React hook support | `hookAPI()` + `useRateLimit()` gives accurate client countdown and button states |
+| React hook support | `hookAPI()` + `useRatelimit()` gives accurate client countdown and button states |
 | Fail-closed default | Safer behavior under pressure (`failureMode: "closed"`) |
 
 ## Install
 
 ```bash
-bun add @better-convex/ratelimit
+bun add better-convex
 ```
 
-That's it. You do not install or register `@convex-dev/rate-limiter`.
+## Scaffold the starter (required)
 
-## Enable schema plugin (required)
+Rate limiting is opt-in, so scaffold the full starter once:
 
-`aggregatePlugin` and `migrationPlugin` are builtin in `defineSchema`.  
-Rate limiting is opt-in, so add `ratelimitPlugin()` where you define schema:
+```bash
+npx better-convex add ratelimit
+```
+
+That creates:
+
+- `convex/lib/plugins/ratelimit/schema.ts`
+- `convex/lib/plugins/ratelimit/plugin.ts`
+
+and registers `ratelimitExtension()` in `convex/functions/schema.ts`.
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,6}
 import { defineSchema } from 'better-convex/orm';
-import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
+import { ratelimitExtension } from '../lib/plugins/ratelimit/schema';
 
 export const tables = {
   // your tables...
 };
 
-export default defineSchema(tables, {
-  plugins: [ratelimitPlugin()],
-});
+export default defineSchema(tables).extend(ratelimitExtension());
 ```
 
-## Create a reusable guard
+## Create a local ratelimit plugin
 
-We'll start with a shared guard function so all mutations enforce rate limits consistently.
+Scaffold a local plugin and keep one default bucket for every mutation. Add named buckets only when a procedure genuinely needs stricter behavior.
 
-```ts title="convex/lib/rate-limiter.ts" showLineNumbers {1-2,18-28,43-59}
-import { MINUTE, Ratelimit } from '@better-convex/ratelimit';
-import { CRPCError } from 'better-convex/server';
-import type { MutationCtx } from '../functions/generated/server';
-import type { SessionUser } from '../shared/auth-shared';
+```ts title="convex/lib/plugins/ratelimit/plugin.ts" showLineNumbers {1-5,8-13,39-54}
+import { getSessionNetworkSignals } from 'better-convex/auth';
+import { MINUTE, Ratelimit, RatelimitPlugin } from 'better-convex/ratelimit';
+import type { MutationCtx } from '../../../functions/generated/server';
+import type { Select } from '../../../shared/api';
 
 const fixed = (rate: number) => Ratelimit.fixedWindow(rate, MINUTE);
 
-const rateLimitConfig = {
-  'default:free': fixed(60),
-  'default:premium': fixed(200),
-  'default:public': fixed(30),
-  'todo/create:free': fixed(20),
-  'todo/create:premium': fixed(60),
+export const ratelimitBuckets = {
+  default: {
+    public: fixed(30),
+    free: fixed(60),
+    premium: fixed(200),
+  },
 } as const;
 
-function getUserTier(
-  user: { isAdmin?: boolean; plan?: SessionUser['plan'] } | null
-): 'free' | 'premium' | 'public' {
+type RatelimitTier = keyof (typeof ratelimitBuckets)['default'];
+export type RatelimitBucket = keyof typeof ratelimitBuckets;
+
+type RatelimitUser = {
+  id: string;
+  isAdmin?: boolean;
+  plan?: 'premium' | 'team' | null;
+  session?: Select<'session'> | null;
+};
+
+type RatelimitCtx = MutationCtx & {
+  user?: RatelimitUser | null;
+};
+
+type RatelimitMeta = {
+  ratelimit?: RatelimitBucket;
+};
+
+export function getUserTier(user: RatelimitUser | null): RatelimitTier {
   if (!user) return 'public';
   if (user.isAdmin || user.plan) return 'premium';
   return 'free';
 }
 
-export async function rateLimitGuard(
-  ctx: MutationCtx & {
-    rateLimitKey: string;
-    user: Pick<SessionUser, 'id' | 'plan'> | null;
-  }
-) {
-  const tier = getUserTier(ctx.user);
-  const limitKey = `${ctx.rateLimitKey}:${tier}` as keyof typeof rateLimitConfig;
-  const resolved = limitKey in rateLimitConfig ? limitKey : (`default:${tier}` as const);
-
-  const limiter = new Ratelimit({
-    db: ctx.db,
-    prefix: `example:${resolved}`,
-    limiter: rateLimitConfig[resolved],
-    failureMode: 'closed',
-    enableProtection: true,
-    denyListThreshold: 30,
-  });
-
-  const status = await limiter.limit(ctx.user?.id ?? 'anonymous');
-  if (!status.success) {
-    throw new CRPCError({
-      code: 'TOO_MANY_REQUESTS',
-      message: 'Rate limit exceeded. Please try again later.',
-    });
-  }
-}
+export const ratelimit = RatelimitPlugin.configure({
+  buckets: ratelimitBuckets,
+  getBucket: ({ meta }: { meta: RatelimitMeta }) => meta.ratelimit ?? 'default',
+  getUser: ({ ctx }: { ctx: RatelimitCtx }) => ctx.user ?? null,
+  getIdentifier: ({ user }: { user: RatelimitUser | null }) =>
+    user?.id ?? 'anonymous',
+  getTier: getUserTier,
+  getSignals: ({ ctx, user }: { ctx: RatelimitCtx; user: RatelimitUser | null }) =>
+    getSessionNetworkSignals(ctx, user?.session ?? null),
+  prefix: ({ bucket, tier }) => `ratelimit:${bucket}:${tier}`,
+  failureMode: 'closed',
+  enableProtection: true,
+  denyListThreshold: 30,
+});
 ```
 
-Now you have one place to tune plan limits, prefixes, and protection defaults.
-
-## No-wrapper IP signals with Better Auth
-
-If you already use Better Auth sessions, you can enrich rate-limit checks with session-derived network signals in normal query/mutation middleware, without wrapping every endpoint in `httpAction`.
-
-```ts title="convex/lib/rate-limiter.ts" showLineNumbers {1,4,23-24,26}
-import { getSessionNetworkSignals } from 'better-convex/auth';
-import { Ratelimit } from '@better-convex/ratelimit';
-import type { MutationCtx } from '../functions/generated/server';
-
-export async function rateLimitGuard(
-  ctx: MutationCtx & {
-    rateLimitKey: string;
-    user: { id: string; session?: { ipAddress?: string; userAgent?: string } } | null;
-  }
-) {
-  const limiter = new Ratelimit({
-    db: ctx.db,
-    prefix: `example:${ctx.rateLimitKey}`,
-    limiter: Ratelimit.fixedWindow(60, '1 m'),
-  });
-
-  const identifier = ctx.user?.id ?? 'anonymous';
-  const signals = await getSessionNetworkSignals(ctx, ctx.user?.session ?? null);
-  const status = await limiter.limit(identifier, signals);
-
-  if (!status.success) throw new Error('Too many requests');
-}
-```
-
-`getSessionNetworkSignals()` returns:
-- `{}` when no session is available
-- `{ ip }`, `{ userAgent }`, or both when present on the session
-- trimmed values, with blank strings normalized away
-
-### Optional anonymous-session strategy
-
-If your app has public flows and you still want session-based IP/user-agent keys, use Better Auth anonymous sessions and captcha-gate anonymous session creation.
-
-```ts title="convex/functions/auth.ts" showLineNumbers {1,6}
-import { anonymous } from 'better-auth/plugins';
-
-plugins: [
-  // ...other plugins
-  anonymous(),
-];
-```
-
-```ts title="src/lib/convex/auth-client.ts" showLineNumbers {1,6}
-import { anonymousClient } from 'better-auth/client/plugins';
-
-plugins: [
-  // ...other plugins
-  anonymousClient(),
-];
-```
-
-<Callout icon={<InfoIcon />}>
-  **Important:** session IP/user-agent is captured by auth/session lifecycle, not guaranteed to be fresh per request. Treat it as trusted-ish app-layer identity, not strict network truth. For cert/audit-grade per-request source IP controls, use HTTP/proxy logging and enforcement.
-</Callout>
-
-### Queries vs mutations
-
-- Use `check()` in queries (read-only, no token consumption).
-- Use `limit()` in mutations/actions (consumes capacity).
-
-```ts showLineNumbers
-// query
-const preview = await limiter.check(identifier, signals);
-
-// mutation/action
-const enforced = await limiter.limit(identifier, signals);
-```
+`getSessionNetworkSignals()` returns `{}` when no session exists and fills `ip` / `userAgent` when Better Auth session data is available.
 
 ## Wire it into middleware
 
-Next, apply the guard from cRPC middleware so your handlers stay focused on business logic.
+Apply the plugin once in your mutation builders. The default bucket covers normal writes. `meta.ratelimit` is an optional named-bucket override.
 
-```ts title="convex/lib/crpc.ts" showLineNumbers {1,5-13}
-const rateLimitMiddleware = c.middleware<
-  MutationCtx & { user?: Pick<SessionUser, 'id' | 'plan' | 'session'> | null }
->(async ({ ctx, meta, next }) => {
-  await rateLimitGuard({
-    ...ctx,
-    rateLimitKey: meta.rateLimit ?? 'default',
-    user: ctx.user ?? null,
-  });
-  return next({ ctx });
-});
+```ts title="convex/lib/crpc.ts" showLineNumbers {1,4-5,8-10}
+import { ratelimit, type RatelimitBucket } from './plugins/ratelimit/plugin';
 
-export const authMutation = c.mutation
-  .meta({ auth: 'required' })
-  .use(authMiddleware)
-  .use(rateLimitMiddleware);
+const c = initCRPC
+  .meta<{ ratelimit?: RatelimitBucket }>()
+  .create();
+
+export const publicMutation = c.mutation.use(ratelimit.middleware());
 ```
 
-Then set per-procedure keys with metadata:
+Normal writes use the default bucket:
 
 ```ts showLineNumbers
 export const createTodo = authMutation
-  .meta({ rateLimit: 'todo/create' })
   .input(z.object({ title: z.string().min(1) }))
   .mutation(async ({ ctx, input }) => {
     // business logic
+  });
+```
+
+Add a named bucket only for exceptions:
+
+```ts showLineNumbers
+export const stressTest = publicMutation
+  .meta({ ratelimit: 'interactive' })
+  .input(z.object({ id: z.string() }))
+  .mutation(async ({ ctx, input }) => {
+    // stricter bucket
   });
 ```
 
@@ -290,10 +228,10 @@ Every `window` or `interval` parameter accepts a `Duration` — either a raw mil
 | `h` | hours | `'1 h'` |
 | `d` | days | `'1 d'` |
 
-You can also use the pre-defined constants from `@better-convex/ratelimit`:
+You can also use the pre-defined constants from `better-convex/ratelimit`:
 
 ```ts showLineNumbers
-import { SECOND, MINUTE, HOUR, DAY, WEEK } from '@better-convex/ratelimit';
+import { SECOND, MINUTE, HOUR, DAY, WEEK } from 'better-convex/ratelimit';
 
 Ratelimit.fixedWindow(100, MINUTE);        // 60_000 ms
 Ratelimit.slidingWindow(50, 30 * SECOND);  // 30_000 ms
@@ -308,16 +246,16 @@ Server enforcement is mandatory. Client checks are for better UX — disabled bu
 
 ### Expose the hook API
 
-First, export the hook API from a Convex file. The `hookAPI()` method returns a `getRateLimit` query and a `getServerTime` mutation that the React hook consumes.
+First, export the hook API from a Convex file. The `hookAPI()` method returns a `getRatelimit` query and a `getServerTime` mutation that the React hook consumes.
 
 ```ts title="convex/functions/ratelimit.ts" showLineNumbers {1,3-10}
-import { Ratelimit } from '@better-convex/ratelimit';
+import { Ratelimit } from 'better-convex/ratelimit';
 
 const limiter = new Ratelimit({
   limiter: Ratelimit.fixedWindow(3, '30 s'),
 });
 
-export const { getRateLimit, getServerTime } = limiter.hookAPI({
+export const { getRatelimit, getServerTime } = limiter.hookAPI({
   identifier: async (_ctx, fromClient) => fromClient ?? 'anonymous',
   sampleShards: 1,
 });
@@ -329,15 +267,15 @@ The `identifier` option can be a static string, or an async callback that receiv
 
 ### Use the React hook
 
-Then wire it up in your component with `useRateLimit`:
+Then wire it up in your component with `useRatelimit`:
 
 ```tsx title="src/components/send-button.tsx" showLineNumbers {1,3-10,12-13}
-import { useRateLimit } from '@better-convex/ratelimit/react';
+import { useRatelimit } from 'better-convex/ratelimit/react';
 
-const rateLimitRef = 'ratelimitDemo:getInteractiveRateLimit' as const;
+const ratelimitRef = 'ratelimitDemo:getInteractiveRatelimit' as const;
 const serverTimeRef = 'ratelimitDemo:getInteractiveServerTime' as const;
 
-const { status, check } = useRateLimit(rateLimitRef, {
+const { status, check } = useRatelimit(ratelimitRef, {
   identifier: sessionId,
   count: 1,
   getServerTimeMutation: serverTimeRef,
@@ -347,7 +285,7 @@ const blocked = status?.ok === false;
 const retryAt = status?.retryAt;
 ```
 
-`useRateLimit` accepts either:
+`useRatelimit` accepts either:
 - a Convex function path string (`'module:functionName'`) — this is what the `/ratelimit` demo uses.
 - a generated `FunctionReference` from `api`.
 
@@ -464,7 +402,7 @@ const limiter = new Ratelimit(config: RatelimitConfig);
 | --- | --- | --- | --- |
 | `db` | `ctx.db` | — | Convex database context. Required for `limit`, `check`, `getRemaining`, `getValue`, `resetUsedTokens`, `setDynamicLimit`, `getDynamicLimit`. Not needed for `hookAPI()` (it receives `db` from the query/mutation context). |
 | `limiter` | `ResolvedAlgorithm` | — | **Required.** Algorithm created by `Ratelimit.fixedWindow()`, `Ratelimit.slidingWindow()`, or `Ratelimit.tokenBucket()`. |
-| `prefix` | `string` | `'@@better-convex/ratelimit'` | Namespaces stored state in the database. Use unique prefixes for different rate limit scopes. |
+| `prefix` | `string` | `'better-convex/ratelimit'` | Namespaces stored state in the database. Use unique prefixes for different rate limit scopes. |
 | `dynamicLimits` | `boolean` | `false` | Enables `setDynamicLimit()` / `getDynamicLimit()`. |
 | `failureMode` | `'closed' \| 'open'` | `'closed'` | Behavior on timeout. `'closed'` rejects, `'open'` allows. |
 | `timeout` | `number` | `5000` | Milliseconds before triggering `failureMode` behavior. |
@@ -554,7 +492,7 @@ getRemaining(identifier: string): Promise<RemainingResponse>
 Return a raw snapshot for custom projections and UI calculations.
 
 ```ts
-getValue(identifier: string, options?: { sampleShards?: number }): Promise<RateLimitSnapshot>
+getValue(identifier: string, options?: { sampleShards?: number }): Promise<RatelimitSnapshot>
 ```
 
 #### `resetUsedTokens(identifier)`
@@ -583,11 +521,11 @@ getDynamicLimit(): Promise<DynamicLimitResponse>
 
 #### `hookAPI(options?)`
 
-Export a `getRateLimit` query and `getServerTime` mutation for the React hook.
+Export a `getRatelimit` query and `getServerTime` mutation for the React hook.
 
 ```ts
 hookAPI(options?: HookAPIOptions): {
-  getRateLimit: FunctionReference<'query'>;
+  getRatelimit: FunctionReference<'query'>;
   getServerTime: FunctionReference<'mutation'>;
 }
 ```
@@ -639,7 +577,7 @@ Returned by `getRemaining()`.
 | `reset` | `number` | Epoch ms of next replenishment |
 | `limit` | `number` | Maximum tokens |
 
-#### `RateLimitSnapshot`
+#### `RatelimitSnapshot`
 
 Returned by `getValue()`. Used for custom projections and the React hook.
 
@@ -648,7 +586,7 @@ Returned by `getValue()`. Used for custom projections and the React hook.
 | `value` | `number` | Current token count |
 | `ts` | `number` | Timestamp of last state update |
 | `shard` | `number` | Which shard was read |
-| `config` | `ResolvedAlgorithm` | Full algorithm config for `calculateRateLimit()` |
+| `config` | `ResolvedAlgorithm` | Full algorithm config for `calculateRatelimit()` |
 
 ### Hook API
 
@@ -661,27 +599,27 @@ Options for `hookAPI()`.
 | `identifier` | `string \| (ctx, fromClient?) => string \| Promise<string>` | — | How to resolve the identifier. A string uses it directly. A callback receives the Convex context and the optional client-provided identifier. |
 | `sampleShards` | `number` | `1` | How many shards to sample when reading. Higher = more accurate, more reads. |
 
-#### `UseRateLimitOptions`
+#### `UseRatelimitOptions`
 
-Options for the `useRateLimit()` React hook.
+Options for the `useRatelimit()` React hook.
 
 ```ts
-useRateLimit(
-  getRateLimitValueQuery: FunctionReference<'query'> | string,
-  options?: UseRateLimitOptions
+useRatelimit(
+  getRatelimitValueQuery: FunctionReference<'query'> | string,
+  options?: UseRatelimitOptions
 )
 ```
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `identifier` | `string` | — | Passed to the `getRateLimit` query |
+| `identifier` | `string` | — | Passed to the `getRatelimit` query |
 | `count` | `number` | `1` | Tokens to project for status calculation |
 | `sampleShards` | `number` | — | Override sampleShards from hook API |
 | `getServerTimeMutation` | `FunctionReference \| string` | — | Enables clock-skew correction between client and server |
 
 ### Time constants
 
-Pre-defined millisecond constants exported from `@better-convex/ratelimit`:
+Pre-defined millisecond constants exported from `better-convex/ratelimit`:
 
 | Constant | Value |
 | --- | --- |
@@ -693,24 +631,24 @@ Pre-defined millisecond constants exported from `@better-convex/ratelimit`:
 
 ### Internal tables
 
-The rate limiter stores state in three Convex tables. These are added only when you enable `ratelimitPlugin()` in `defineSchema` — do not define tables with these names yourself.
+The rate limiter stores state in three local schema keys. These come from your local `convex/lib/plugins/ratelimit/schema.ts` extension, so do not define these keys twice. The underlying Convex storage table names stay underscored.
 
-| Table | Purpose |
+| Schema key | Purpose |
 | --- | --- |
-| `ratelimit_state` | Per-identifier, per-shard token state |
-| `ratelimit_dynamic_limit` | Dynamic limit overrides per prefix |
-| `ratelimit_protection_hit` | Protection tracking (hits, blocks) per prefix |
+| `ratelimitState` | Per-identifier, per-shard token state |
+| `ratelimitDynamicLimit` | Dynamic limit overrides per prefix |
+| `ratelimitProtectionHit` | Protection tracking (hits, blocks) per prefix |
 
 ### Advanced notes
 
-#### `calculateRateLimit`
+#### `calculateRatelimit`
 
-The `calculateRateLimit` function is exported for custom projections and UI calculations. It takes a state snapshot, algorithm config, current timestamp, and count, and returns the evaluated result without touching the database.
+The `calculateRatelimit` function is exported for custom projections and UI calculations. It takes a state snapshot, algorithm config, current timestamp, and count, and returns the evaluated result without touching the database.
 
 ```ts showLineNumbers
-import { calculateRateLimit } from '@better-convex/ratelimit';
+import { calculateRatelimit } from 'better-convex/ratelimit';
 
-const result = calculateRateLimit(
+const result = calculateRatelimit(
   { value: 8, ts: Date.now() - 30_000 },
   Ratelimit.fixedWindow(10, '1 m'),
   Date.now(),

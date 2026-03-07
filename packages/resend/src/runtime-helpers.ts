@@ -12,10 +12,6 @@ const PERMANENT_ERROR_CODES = new Set([
 const RESEND_TEST_EMAIL_REGEX =
   /^(delivered|bounced|complained)(\+[a-zA-Z0-9_-]*)?@resend\.dev$/;
 
-const DEFAULT_INITIAL_BACKOFF_MS = 30_000;
-const DEFAULT_RETRY_ATTEMPTS = 5;
-const DEFAULT_TEST_MODE = true;
-
 const EMAIL_STATUS_RANK: Record<Status, number> = {
   waiting: 0,
   queued: 1,
@@ -33,22 +29,9 @@ export type ResendOptions = Partial<RuntimeConfig> & {
   webhookSecret?: string;
 };
 
-export type ResendResolvedOptions = RuntimeConfig & {
+export type ResendApi = RuntimeConfig & {
   webhookSecret: string;
 };
-
-export function resolveResendOptions(
-  options?: ResendOptions
-): ResendResolvedOptions {
-  return {
-    apiKey: options?.apiKey ?? process.env.RESEND_API_KEY ?? '',
-    webhookSecret:
-      options?.webhookSecret ?? process.env.RESEND_WEBHOOK_SECRET ?? '',
-    initialBackoffMs: options?.initialBackoffMs ?? DEFAULT_INITIAL_BACKOFF_MS,
-    retryAttempts: options?.retryAttempts ?? DEFAULT_RETRY_ATTEMPTS,
-    testMode: options?.testMode ?? DEFAULT_TEST_MODE,
-  };
-}
 
 export function getSegment(now: number): number {
   return Math.floor(now / SEGMENT_MS);

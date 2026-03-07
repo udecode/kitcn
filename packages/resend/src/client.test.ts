@@ -1,10 +1,33 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
-import { resolvePluginMiddlewareOptions } from '../../better-convex/src/plugins';
+import { resolvePluginOptions } from '../../better-convex/src/plugins';
+import { initCRPC } from '../../better-convex/src/server';
 import * as resendPackage from './index';
 import { ResendPlugin } from './index';
 
-describe('resend middleware api', () => {
+const originalResendApiKey = process.env.RESEND_API_KEY;
+const originalResendWebhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+
+describe('resend plugin api', () => {
+  beforeEach(() => {
+    process.env.RESEND_API_KEY = 're_env';
+    process.env.RESEND_WEBHOOK_SECRET = 'whsec_env';
+  });
+
+  afterEach(() => {
+    if (originalResendApiKey === undefined) {
+      delete process.env.RESEND_API_KEY;
+    } else {
+      process.env.RESEND_API_KEY = originalResendApiKey;
+    }
+
+    if (originalResendWebhookSecret === undefined) {
+      delete process.env.RESEND_WEBHOOK_SECRET;
+    } else {
+      process.env.RESEND_WEBHOOK_SECRET = originalResendWebhookSecret;
+    }
+  });
+
   test('package root no longer exports createResendRuntime', () => {
     expect('createResendRuntime' in resendPackage).toBe(false);
   });
@@ -17,6 +40,7 @@ describe('resend middleware api', () => {
     expect('Resend' in resendPackage).toBe(false);
     expect('createResend' in resendPackage).toBe(false);
     expect('createResendApi' in resendPackage).toBe(false);
+    expect('resolveResendOptions' in resendPackage).toBe(false);
   });
 
   test('package root no longer exports validator values', () => {
@@ -52,12 +76,27 @@ describe('resend middleware api', () => {
       initialBackoffMs: 42_000,
     });
 
-    expect(resolvePluginMiddlewareOptions(plugin, { ctx: {} })).toEqual({
+    expect(resolvePluginOptions(plugin, { ctx: {} })).toEqual({
       apiKey: 're_configured',
       webhookSecret: 'whsec_configured',
       initialBackoffMs: 42_000,
       retryAttempts: 7,
       testMode: false,
+    });
+  });
+
+  test('runtime api does not read resend secrets from process.env', async () => {
+    const c = initCRPC.create();
+    const proc = c.query
+      .use(ResendPlugin.middleware())
+      .query(async ({ ctx }) => ctx.api.resend);
+
+    await expect((proc as any)._handler({}, {})).resolves.toEqual({
+      apiKey: '',
+      webhookSecret: '',
+      initialBackoffMs: 30_000,
+      retryAttempts: 5,
+      testMode: true,
     });
   });
 });

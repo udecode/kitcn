@@ -119,13 +119,14 @@ export const session = convexTable(
 export const tables = { user, session };
 export default defineSchema(tables, {
   strict: false,
-  relations: (r) => ({
-    user: {
-      sessions: r.many.session({ from: r.user.id, to: r.session.userId }),
-    },
-    session: { user: r.one.user({ from: r.session.userId, to: r.user.id }) },
-  }),
-});
+}).relations((r) => ({
+  user: {
+    sessions: r.many.session({ from: r.user.id, to: r.session.userId }),
+  },
+  session: {
+    user: r.one.user({ from: r.session.userId, to: r.user.id }),
+  },
+}));
 ```
 
 <Callout icon={<InfoIcon />}>
@@ -219,7 +220,7 @@ const c = initCRPC
   .meta<{
     auth?: 'optional' | 'required';
     role?: 'admin';
-    rateLimit?: string;
+    ratelimit?: string;
   }>()
   .create();
 ```

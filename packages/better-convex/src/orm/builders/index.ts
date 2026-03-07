@@ -48,6 +48,7 @@ export {
   custom,
   json,
   objectOf,
+  unionOf,
 } from './custom';
 // Date builder
 export {

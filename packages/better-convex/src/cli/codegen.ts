@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createJiti } from 'jiti';
+import { getSchemaRelations, getSchemaTriggers } from '../orm/schema';
 import { isValidConvexFile } from '../shared/meta-utils';
 
 /**
@@ -59,9 +60,6 @@ type ProcedureRegistryEntry = ProcedureMeta & {
   moduleName: string;
   kind: RuntimeEntryKind;
 };
-
-const ORM_SCHEMA_RELATIONS = Symbol.for('better-convex:OrmSchemaRelations');
-const ORM_SCHEMA_TRIGGERS = Symbol.for('better-convex:OrmSchemaTriggers');
 
 export type CodegenScope = 'all' | 'auth' | 'orm';
 
@@ -609,16 +607,8 @@ async function resolveSchemaMetadataForCodegen(
       };
     }
 
-    const hasRelations = !!(
-      schemaValue as {
-        [ORM_SCHEMA_RELATIONS]?: unknown;
-      }
-    )[ORM_SCHEMA_RELATIONS];
-    const hasTriggers = !!(
-      schemaValue as {
-        [ORM_SCHEMA_TRIGGERS]?: unknown;
-      }
-    )[ORM_SCHEMA_TRIGGERS];
+    const hasRelations = Boolean(getSchemaRelations(schemaValue));
+    const hasTriggers = Boolean(getSchemaTriggers(schemaValue));
 
     return {
       hasRelations,
@@ -627,7 +617,7 @@ async function resolveSchemaMetadataForCodegen(
   } catch (error) {
     if (debug) {
       console.warn(
-        `⚠️  Failed to load schema plugins from ${schemaPath}: ${(error as Error).message}`
+        `⚠️  Failed to load schema extensions from ${schemaPath}: ${(error as Error).message}`
       );
     }
     return {
@@ -1453,7 +1443,7 @@ async function parseModuleRuntime(
         fnMeta.auth = meta.auth;
       }
 
-      // Copy any additional meta properties (role, rateLimit, dev, etc.)
+      // Copy any additional meta properties (role, ratelimit, dev, etc.)
       for (const [key, val] of Object.entries(meta)) {
         if (key !== 'type' && key !== 'internal' && val !== undefined) {
           fnMeta[key] = val;

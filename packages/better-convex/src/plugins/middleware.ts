@@ -1,52 +1,93 @@
 import { createMiddlewareFactory } from '../server/builder';
 import type { MiddlewareBuilder } from '../server/types';
 
-const PLUGIN_MIDDLEWARE_CONFIG_RESOLVERS = Symbol.for(
-  'better-convex:PluginMiddlewareConfigResolvers'
+const PLUGIN_CONFIG_RESOLVERS = Symbol.for(
+  'better-convex:PluginConfigResolvers'
 );
 
-export type PluginMiddlewareConfigureContext<TCtx = unknown> = {
+export type PluginConfigureContext<TCtx = unknown> = {
   ctx: TCtx;
 };
 
-export type PluginMiddlewareConfigureResolver<TOptions, TCtx = unknown> = (
-  args: PluginMiddlewareConfigureContext<TCtx>
+export type PluginConfigureResolver<TOptions, TCtx = unknown> = (
+  args: PluginConfigureContext<TCtx>
 ) => TOptions | undefined;
 
-export type PluginMiddlewareConfigureInput<TOptions, TCtx = unknown> =
+export type PluginConfigureInput<TOptions, TCtx = unknown> =
   | TOptions
-  | PluginMiddlewareConfigureResolver<TOptions, TCtx>;
+  | PluginConfigureResolver<TOptions, TCtx>;
 
-export type PluginMiddlewareContextScope<TKey extends string, TContext> = {
-  plugins: Record<string, unknown> & Record<TKey, TContext>;
+export type PluginApiScope<TKey extends string, TApi extends object> = {
+  api: Record<string, unknown> & Record<TKey, TApi>;
 };
 
-type PluginMiddlewareDefinition<TApi, TOptions, TKey extends string, TCtx> = {
+type PluginMiddlewareHelpers<TKey extends string, TApi extends object> = {
+  middleware: () => MiddlewareBuilder<
+    any,
+    object,
+    PluginApiScope<TKey, TApi>,
+    unknown
+  >;
+};
+
+type PluginMiddlewareFactory = (
+  ...args: never[]
+) => MiddlewareBuilder<any, object, any, unknown>;
+
+export type PluginNamedMiddlewareFactories = Record<
+  string,
+  PluginMiddlewareFactory
+>;
+
+type PluginExtensionFactories = PluginNamedMiddlewareFactories & {
+  middleware?: PluginMiddlewareFactory;
+};
+
+type PluginExtensionBuilder<TKey extends string, TApi extends object> = (
+  helpers: PluginMiddlewareHelpers<TKey, TApi>
+) => PluginExtensionFactories;
+
+type PluginDefinition<
+  TKey extends string,
+  TOptions,
+  TApi extends object,
+  TCtx,
+> = {
   key: TKey;
   provide: (args: { ctx: TCtx; options?: TOptions }) => TApi;
 };
 
-export type PluginMiddleware<
-  TApi,
-  TOptions = undefined,
+export type Plugin<
   TKey extends string = string,
+  TOptions = undefined,
+  TApi extends object = {},
   TCtx = unknown,
+  TMiddlewares extends PluginNamedMiddlewareFactories = {},
 > = {
   readonly key: TKey;
   readonly configure: <TNextCtx = TCtx>(
-    input: PluginMiddlewareConfigureInput<TOptions, TNextCtx>
-  ) => PluginMiddleware<TApi, TOptions, TKey, TNextCtx>;
+    input: PluginConfigureInput<TOptions, TNextCtx>
+  ) => Plugin<TKey, TOptions, TApi, TNextCtx, TMiddlewares>;
   readonly middleware: () => MiddlewareBuilder<
     any,
     object,
-    PluginMiddlewareContextScope<TKey, TApi>,
+    PluginApiScope<TKey, TApi>,
     unknown
   >;
-  readonly [PLUGIN_MIDDLEWARE_CONFIG_RESOLVERS]?: readonly PluginMiddlewareConfigureResolver<
+  readonly extend: <TNextExtensions extends PluginExtensionFactories>(
+    build: (helpers: PluginMiddlewareHelpers<TKey, TApi>) => TNextExtensions
+  ) => Plugin<
+    TKey,
+    TOptions,
+    TApi,
+    TCtx,
+    TMiddlewares & Omit<TNextExtensions, 'middleware'>
+  >;
+  readonly [PLUGIN_CONFIG_RESOLVERS]?: readonly PluginConfigureResolver<
     TOptions,
     TCtx
   >[];
-};
+} & TMiddlewares;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -72,28 +113,26 @@ function mergeOptions<TOptions>(
 }
 
 function toConfigureResolver<TOptions, TCtx>(
-  input: PluginMiddlewareConfigureInput<TOptions, TCtx>
-): PluginMiddlewareConfigureResolver<TOptions, TCtx> {
+  input: PluginConfigureInput<TOptions, TCtx>
+): PluginConfigureResolver<TOptions, TCtx> {
   if (typeof input === 'function') {
-    return input as PluginMiddlewareConfigureResolver<TOptions, TCtx>;
+    return input as PluginConfigureResolver<TOptions, TCtx>;
   }
   return () => input;
 }
 
-export function resolvePluginMiddlewareOptions<
-  TMiddleware extends PluginMiddleware<any, any, any, any>,
+export function resolvePluginOptions<
+  TPlugin extends Plugin<any, any, any, any>,
   TCtx = unknown,
 >(
-  middleware: TMiddleware,
-  args: PluginMiddlewareConfigureContext<TCtx>
-): TMiddleware extends PluginMiddleware<any, infer TOptions, any, any>
+  plugin: TPlugin,
+  args: PluginConfigureContext<TCtx>
+): TPlugin extends Plugin<any, infer TOptions, any, any>
   ? TOptions | undefined
   : never {
-  const resolvers = middleware[
-    PLUGIN_MIDDLEWARE_CONFIG_RESOLVERS as keyof typeof middleware
-  ] as
-    | readonly PluginMiddlewareConfigureResolver<
-        TMiddleware extends PluginMiddleware<any, infer TOptions, any, any>
+  const resolvers = plugin[PLUGIN_CONFIG_RESOLVERS as keyof typeof plugin] as
+    | readonly PluginConfigureResolver<
+        TPlugin extends Plugin<any, infer TOptions, any, any>
           ? TOptions
           : never,
         TCtx
@@ -105,9 +144,7 @@ export function resolvePluginMiddlewareOptions<
   }
 
   let resolvedOptions:
-    | (TMiddleware extends PluginMiddleware<any, infer TOptions, any, any>
-        ? TOptions
-        : never)
+    | (TPlugin extends Plugin<any, infer TOptions, any, any> ? TOptions : never)
     | undefined;
 
   for (const resolver of resolvers) {
@@ -117,82 +154,145 @@ export function resolvePluginMiddlewareOptions<
   return resolvedOptions as never;
 }
 
-function createConfiguredPluginMiddleware<
-  TApi,
-  TOptions = undefined,
+function createConfiguredPlugin<
   TKey extends string = string,
+  TOptions = undefined,
+  TApi extends object = {},
   TCtx = unknown,
+  TMiddlewares extends PluginNamedMiddlewareFactories = {},
 >(
-  definition: PluginMiddlewareDefinition<TApi, TOptions, TKey, TCtx>,
-  resolvers: readonly PluginMiddlewareConfigureResolver<TOptions, TCtx>[]
-): PluginMiddleware<TApi, TOptions, TKey, TCtx> {
-  const middleware = {
-    key: definition.key,
-    configure: <TNextCtx = TCtx>(
-      input: PluginMiddlewareConfigureInput<TOptions, TNextCtx>
-    ) =>
-      createConfiguredPluginMiddleware<TApi, TOptions, TKey, TNextCtx>(
-        definition as unknown as PluginMiddlewareDefinition<
-          TApi,
-          TOptions,
-          TKey,
-          TNextCtx
-        >,
-        [
-          ...(resolvers as unknown as readonly PluginMiddlewareConfigureResolver<
-            TOptions,
-            TNextCtx
-          >[]),
-          toConfigureResolver(input),
-        ]
-      ),
-    middleware: () => {
-      const createMiddleware = createMiddlewareFactory<unknown, object>();
-      return createMiddleware<
-        unknown,
-        PluginMiddlewareContextScope<TKey, TApi>
-      >(async ({ ctx, next }) => {
-        const options = resolvePluginMiddlewareOptions(
-          middleware as PluginMiddleware<TApi, TOptions, TKey, TCtx>,
+  definition: PluginDefinition<TKey, TOptions, TApi, TCtx>,
+  resolvers: readonly PluginConfigureResolver<TOptions, TCtx>[],
+  extensionBuilders: readonly PluginExtensionBuilder<TKey, TApi>[] = []
+): Plugin<TKey, TOptions, TApi, TCtx, TMiddlewares> {
+  let plugin!: Plugin<TKey, TOptions, TApi, TCtx, TMiddlewares>;
+  const createBaseMiddleware = () => {
+    const createMiddleware = createMiddlewareFactory<unknown, object>();
+    return createMiddleware<unknown, PluginApiScope<TKey, TApi>>(
+      async ({ ctx, next }) => {
+        const options = resolvePluginOptions(
+          plugin as Plugin<TKey, TOptions, TApi, TCtx>,
           { ctx: ctx as TCtx }
         );
         const providedApi = definition.provide({
           ctx: ctx as TCtx,
           options: options as TOptions | undefined,
         });
-        const existingPlugins = isPlainObject(
-          (ctx as { plugins?: unknown }).plugins
-        )
-          ? ((ctx as { plugins?: Record<string, unknown> }).plugins ?? {})
+        const existingApi = isPlainObject((ctx as { api?: unknown }).api)
+          ? ((ctx as { api?: Record<string, unknown> }).api ?? {})
           : {};
-        const nextPlugins = {
-          ...existingPlugins,
+        const nextApi = {
+          ...existingApi,
           [definition.key]: providedApi,
         } as Record<string, unknown> & Record<TKey, TApi>;
         return next({
           ctx: {
             ...(ctx as Record<string, unknown>),
-            plugins: nextPlugins,
+            api: nextApi,
           },
         });
-      });
-    },
-    [PLUGIN_MIDDLEWARE_CONFIG_RESOLVERS]: resolvers,
-  } as PluginMiddleware<TApi, TOptions, TKey, TCtx>;
+      }
+    );
+  };
+  const middlewareHelpers: PluginMiddlewareHelpers<TKey, TApi> = {
+    middleware: createBaseMiddleware,
+  };
+  let middlewareOverride: PluginMiddlewareFactory | undefined;
+  const basePlugin = {
+    key: definition.key,
+    configure: <TNextCtx = TCtx>(
+      input: PluginConfigureInput<TOptions, TNextCtx>
+    ) =>
+      createConfiguredPlugin<TKey, TOptions, TApi, TNextCtx, TMiddlewares>(
+        definition as unknown as PluginDefinition<
+          TKey,
+          TOptions,
+          TApi,
+          TNextCtx
+        >,
+        [
+          ...(resolvers as unknown as readonly PluginConfigureResolver<
+            TOptions,
+            TNextCtx
+          >[]),
+          toConfigureResolver(input),
+        ],
+        extensionBuilders as readonly PluginExtensionBuilder<TKey, TApi>[]
+      ),
+    middleware: () =>
+      (middlewareOverride
+        ? middlewareOverride()
+        : createBaseMiddleware()) as MiddlewareBuilder<
+        any,
+        object,
+        PluginApiScope<TKey, TApi>,
+        unknown
+      >,
+    extend: <TNextExtensions extends PluginExtensionFactories>(
+      build: (helpers: PluginMiddlewareHelpers<TKey, TApi>) => TNextExtensions
+    ) =>
+      createConfiguredPlugin<
+        TKey,
+        TOptions,
+        TApi,
+        TCtx,
+        TMiddlewares & Omit<TNextExtensions, 'middleware'>
+      >(definition, resolvers, [
+        ...extensionBuilders,
+        build as PluginExtensionBuilder<TKey, TApi>,
+      ]),
+    [PLUGIN_CONFIG_RESOLVERS]: resolvers,
+  };
 
-  return Object.freeze(middleware);
+  const middlewarePresets: PluginNamedMiddlewareFactories = {};
+  for (const build of extensionBuilders) {
+    const builtExtensions = build(middlewareHelpers);
+
+    for (const [name, preset] of Object.entries(builtExtensions)) {
+      if (typeof preset !== 'function') {
+        throw new Error(
+          `Duplicate plugin middleware "${name}" on plugin "${definition.key}".`
+        );
+      }
+      if (name === 'middleware') {
+        if (middlewareOverride) {
+          throw new Error(
+            `Duplicate plugin middleware override on plugin "${definition.key}".`
+          );
+        }
+        middlewareOverride = preset;
+        continue;
+      }
+      if (name in middlewarePresets || name in basePlugin) {
+        throw new Error(
+          `Duplicate plugin middleware "${name}" on plugin "${definition.key}".`
+        );
+      }
+      middlewarePresets[name] = preset;
+    }
+  }
+
+  plugin = {
+    ...basePlugin,
+    ...middlewarePresets,
+  } as Plugin<TKey, TOptions, TApi, TCtx, TMiddlewares>;
+
+  return Object.freeze(plugin);
 }
 
-export function definePluginMiddleware<
+export function definePlugin<
   TKey extends string,
-  TApi,
   TOptions = undefined,
->(definition: {
-  key: TKey;
-  provide: (args: { ctx: unknown; options?: TOptions }) => TApi;
-}): PluginMiddleware<TApi, TOptions, TKey, unknown> {
-  return createConfiguredPluginMiddleware(
-    definition as PluginMiddlewareDefinition<TApi, TOptions, TKey, unknown>,
+  TApi extends object = {},
+>(
+  key: TKey,
+  provide: (args: { ctx: unknown; options?: TOptions }) => TApi
+): Plugin<TKey, TOptions, TApi, unknown, {}> {
+  return createConfiguredPlugin(
+    {
+      key,
+      provide,
+    } satisfies PluginDefinition<TKey, TOptions, TApi, unknown>,
     []
   );
 }

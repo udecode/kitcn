@@ -213,7 +213,7 @@ discriminator({
 
 Schema-first discriminated union. Variant fields become nullable physical columns; reads synthesize a nested discriminated union at the alias. Writes are flat — the ORM validates variant fields at runtime. One per table. See [Polymorphic Associations](/docs/orm/schema/relations#polymorphic-associations) for the full guide and rules.
 
-### `arrayOf()` / `objectOf()`
+### `arrayOf()` / `objectOf()` / `unionOf()`
 
 ```ts
 arrayOf(text().notNull())
@@ -223,6 +223,7 @@ objectOf({
     source: text().notNull(),
   }),
 })
+objectOf(unionOf(text().notNull(), integer().notNull()).notNull())
 ```
 
 ### `custom()` / `json()`

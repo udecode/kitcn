@@ -1,5 +1,5 @@
 import { expectTypeOf, test } from 'vitest';
-import { arrayOf, integer, objectOf, text, textEnum } from '../index';
+import { arrayOf, integer, objectOf, text, textEnum, unionOf } from '../index';
 import { convexTable } from '../table';
 import type { InferInsertModel, InferSelectModel } from '../types';
 
@@ -19,6 +19,10 @@ const productions = convexTable('productions_nested_types_test', {
   optionalPayload: objectOf({
     actor: text().notNull(),
   }),
+  value: unionOf(text().notNull(), integer().notNull()).notNull(),
+  variables: objectOf(
+    unionOf(text().notNull(), integer().notNull()).notNull()
+  ).notNull(),
 });
 
 type ProductionSelect = InferSelectModel<typeof productions>;
@@ -53,4 +57,20 @@ test('objectOf keeps top-level column nullability semantics', () => {
   expectTypeOf<ProductionSelect['optionalPayload']>().toEqualTypeOf<{
     actor: string;
   } | null>();
+});
+
+test('unionOf infers heterogeneous scalar value types', () => {
+  expectTypeOf<ProductionSelect['value']>().toEqualTypeOf<string | number>();
+
+  expectTypeOf<ProductionInsert['value']>().toEqualTypeOf<string | number>();
+});
+
+test('objectOf(unionOf(...)) infers homogeneous record value types', () => {
+  expectTypeOf<ProductionSelect['variables']>().toEqualTypeOf<
+    Record<string, string | number>
+  >();
+
+  expectTypeOf<ProductionInsert['variables']>().toEqualTypeOf<
+    Record<string, string | number>
+  >();
 });

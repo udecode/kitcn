@@ -1,10 +1,10 @@
-export type RateLimitCoverageStatus =
+export type RatelimitCoverageStatus =
   | 'supported'
   | 'partial'
   | 'blocked'
   | 'missing';
 
-export type RateLimitCoverageId =
+export type RatelimitCoverageId =
   | 'fixed-window-limit'
   | 'sliding-window-limit'
   | 'check-non-consuming'
@@ -16,16 +16,16 @@ export type RateLimitCoverageId =
   | 'timeout-open-mode'
   | 'get-value-snapshot';
 
-export type RateLimitCoverageDefinition = {
-  id: RateLimitCoverageId;
+export type RatelimitCoverageDefinition = {
+  id: RatelimitCoverageId;
   feature: string;
-  status: RateLimitCoverageStatus;
+  status: RatelimitCoverageStatus;
   reason: string;
   example: string;
   errorCode?: string;
 };
 
-export type RateLimitCoverageProbeResult = {
+export type RatelimitCoverageProbeResult = {
   ok: boolean;
   elapsedMs: number;
   error: string | null;
@@ -33,7 +33,7 @@ export type RateLimitCoverageProbeResult = {
   value?: unknown;
 };
 
-export const RATELIMIT_COVERAGE_DEFINITIONS: readonly RateLimitCoverageDefinition[] =
+export const RATELIMIT_COVERAGE_DEFINITIONS: readonly RatelimitCoverageDefinition[] =
   [
     {
       id: 'fixed-window-limit',
@@ -110,7 +110,7 @@ export const RATELIMIT_COVERAGE_DEFINITIONS: readonly RateLimitCoverageDefinitio
     },
   ] as const;
 
-export const RATELIMIT_LIVE_PROBE_IDS = new Set<RateLimitCoverageId>([
+export const RATELIMIT_LIVE_PROBE_IDS = new Set<RatelimitCoverageId>([
   'fixed-window-limit',
   'sliding-window-limit',
   'check-non-consuming',
@@ -120,8 +120,8 @@ export const RATELIMIT_LIVE_PROBE_IDS = new Set<RateLimitCoverageId>([
 ]);
 
 export function createStaticProbeResult(
-  definition: RateLimitCoverageDefinition
-): RateLimitCoverageProbeResult {
+  definition: RatelimitCoverageDefinition
+): RatelimitCoverageProbeResult {
   if (definition.status === 'blocked') {
     return {
       ok: false,

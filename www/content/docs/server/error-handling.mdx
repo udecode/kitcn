@@ -157,7 +157,7 @@ export const getById = authQuery
 Throw `TOO_MANY_REQUESTS` when rate limits are exceeded:
 
 ```ts showLineNumbers {2-5}
-if (isRateLimited) {
+if (isRatelimited) {
   throw new CRPCError({
     code: 'TOO_MANY_REQUESTS',
     message: 'Rate limit exceeded. Try again later.',

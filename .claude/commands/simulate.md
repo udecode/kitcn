@@ -5,7 +5,7 @@ I want you to simulate onboarding for a brand-new better-convex app and ship a f
 
 Important framing:
 - Simulate a real new user who does not know better-convex internals.
-- Use `skills/convex/SKILL.md` for all better-convex-specific setup/implementation details.
+- Use `packages/better-convex/skills/convex/SKILL.md` for all better-convex-specific setup/implementation details.
 - Keep this runbook outcome-focused; avoid hardcoding low-level framework internals here.
 
 ## Global Rules

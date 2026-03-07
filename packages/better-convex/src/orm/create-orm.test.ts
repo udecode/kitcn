@@ -1,11 +1,25 @@
-import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
 import { text } from './builders/text';
 import { createOrm, getResetTableNames } from './create-orm';
+import { defineSchemaExtension } from './extensions';
 import { defineMigration, defineMigrationSet } from './migrations/definitions';
 import { defineRelations } from './relations';
 import { defineSchema } from './schema';
 import { OrmContext } from './symbols';
 import { convexTable } from './table';
+
+function ratelimitExtension() {
+  return defineSchemaExtension('ratelimit', {
+    ratelimitState: convexTable('ratelimit_state', {
+      name: text().notNull(),
+    }),
+    ratelimitDynamicLimit: convexTable('ratelimit_dynamic_limit', {
+      prefix: text().notNull(),
+    }),
+    ratelimitProtectionHit: convexTable('ratelimit_protection_hit', {
+      value: text().notNull(),
+    }),
+  });
+}
 
 const createReader = () =>
   ({
@@ -18,8 +32,7 @@ describe('createOrm type adapters', () => {
     name: text().notNull(),
   });
   const tables = { users };
-  defineSchema(tables);
-  const schema = defineRelations(tables);
+  const schema = defineRelations(defineSchema(tables));
 
   test('does not attach global date mode in orm context', () => {
     const orm = createOrm({ schema });
@@ -83,24 +96,23 @@ describe('createOrm type adapters', () => {
     expect(tableNames).toContain('migration_state');
     expect(tableNames).toContain('migration_run');
     expect(tableNames).toContain('aggregate_state');
-    expect(tableNames).not.toContain('ratelimit_state');
-    expect(tableNames).not.toContain('ratelimit_dynamic_limit');
-    expect(tableNames).not.toContain('ratelimit_protection_hit');
+    expect(tableNames).not.toContain('ratelimitState');
+    expect(tableNames).not.toContain('ratelimitDynamicLimit');
+    expect(tableNames).not.toContain('ratelimitProtectionHit');
   });
 
-  test('getResetTableNames includes ratelimit internal tables when ratelimitPlugin is enabled', () => {
+  test('getResetTableNames includes ratelimit internal tables when ratelimitExtension is enabled', () => {
     const pluginUsers = convexTable('users_mode_test_plugin', {
       name: text().notNull(),
     });
     const pluginTables = { pluginUsers };
-    defineSchema(pluginTables, {
-      plugins: [ratelimitPlugin()],
-    });
-    const pluginSchema = defineRelations(pluginTables);
+    const pluginSchema = defineRelations(
+      defineSchema(pluginTables).extend(ratelimitExtension())
+    );
     const tableNames = getResetTableNames(pluginSchema);
 
-    expect(tableNames).toContain('ratelimit_state');
-    expect(tableNames).toContain('ratelimit_dynamic_limit');
-    expect(tableNames).toContain('ratelimit_protection_hit');
+    expect(tableNames).toContain('ratelimitState');
+    expect(tableNames).toContain('ratelimitDynamicLimit');
+    expect(tableNames).toContain('ratelimitProtectionHit');
   });
 });

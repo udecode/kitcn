@@ -85,14 +85,14 @@ describe('integration/generated-api', () => {
       expect(generated).toContain('export type Insert<T extends TableName>');
       expect(generated).not.toContain('WithHttpRouter');
       expect(generatedServer).toContain(
-        'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
+        'export type QueryCtx = ServerQueryCtx;'
       );
-      expect(generatedServer).toContain('export const orm = createOrm({');
+      expect(generatedServer).not.toContain('createOrm');
       expect(generatedServer).toContain(
         "import { initCRPC as baseInitCRPC } from 'better-convex/server';"
       );
       expect(generatedServer).toContain(
-        'export type MutationCtx = OrmCtx<ServerMutationCtx>;'
+        'export type MutationCtx = ServerMutationCtx;'
       );
       expect(generatedServer).toContain(
         'export type ActionCtx = ServerActionCtx;'
@@ -102,18 +102,14 @@ describe('integration/generated-api', () => {
       );
       expect(generatedServer).not.toContain('export type MigrationCtx =');
       expect(generatedServer).toContain(
-        'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx>'
+        'export type OrmCtx<Ctx = QueryCtx> = Ctx;'
       );
       expect(generatedServer).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
-      expect(generatedServer).toContain('aggregateBackfill');
-      expect(generatedServer).toContain('aggregateBackfillChunk');
-      expect(generatedServer).toContain('aggregateBackfillStatus');
-      expect(generatedServer).toContain('migrationRun');
-      expect(generatedServer).toContain('migrationRunChunk');
-      expect(generatedServer).toContain('migrationStatus');
-      expect(generatedServer).toContain('migrationCancel');
+      expect(generatedServer).toContain('query: (ctx) => ctx,');
+      expect(generatedServer).toContain('mutation: (ctx) => ctx,');
+      expect(generatedServer).toContain('action: (ctx) => ctx,');
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedMigrations).toContain('export function defineMigration(');
       expect(generatedMigrations).not.toContain('defineMigrationSet');
@@ -183,7 +179,7 @@ describe('integration/generated-api', () => {
           _crpcMeta: {
             type: "mutation",
             auth: "required",
-            rateLimit: "todo/create",
+            ratelimit: "todo/create",
           },
         };
         `.trim()
@@ -245,11 +241,13 @@ describe('integration/generated-api', () => {
         'export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;'
       );
       expect(generatedServer).toContain(
-        'export const initCRPC = baseInitCRPC.dataModel<DataModel>();'
+        'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
       expect(generatedServer).not.toContain('createOrm');
-      expect(generatedServer).not.toContain('withOrm');
-      expect(generatedServer).not.toContain('export type OrmCtx<');
+      expect(generatedServer).toContain('export function withOrm<');
+      expect(generatedServer).toContain(
+        'export type OrmCtx<Ctx = QueryCtx> = Ctx;'
+      );
       expect(generatedAuth).toContain('export function defineAuth<');
       const generated = await import(pathToFileURL(outputFile).href);
       const api = generated.api as any;
@@ -270,7 +268,7 @@ describe('integration/generated-api', () => {
       );
 
       expect(api.todos.create.type).toBe('mutation');
-      expect(api.todos.create.rateLimit).toBe('todo/create');
+      expect(api.todos.create.ratelimit).toBe('todo/create');
       expect(getFunctionName(api.todos.create)).toBe('todos:create');
       expect(getFunctionName(api.todos.create.functionRef)).toBe(
         'todos:create'
@@ -406,7 +404,7 @@ describe('integration/generated-api', () => {
       );
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).toContain('auth: authDefinition,');
-      expect(generatedAuth).toContain('context: withOrm,');
+      expect(generatedAuth).not.toContain('context: withOrm,');
       expect(generatedAuth).toContain('authEnabled,');
       expect(generatedAuth).not.toContain('createDisabledAuthRuntime');
       expect(generatedAuth).not.toContain('const authFunctions: AuthFunctions');

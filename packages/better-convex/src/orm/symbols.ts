@@ -30,20 +30,6 @@ export type OrmRuntimeOptions = {
   defaults?: OrmRuntimeDefaults;
 };
 
-export type OrmSchemaPlugin<
-  TInjectedSchema extends Record<string, unknown> = {},
-> = {
-  key: string;
-  schema: {
-    tableNames: readonly string[];
-    inject: <TSchema extends Record<string, unknown>>(
-      schema: TSchema
-    ) => TSchema & TInjectedSchema;
-    relations?: (helpers: any) => Record<string, unknown>;
-  };
-  runtime?: Record<string, unknown>;
-};
-
 export type TablePolymorphicVariantRuntime = {
   fieldNames: readonly string[];
   requiredFieldNames: readonly string[];
@@ -69,10 +55,18 @@ export const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
 export const OrmSchemaDefinition = Symbol.for(
   'better-convex:OrmSchemaDefinition'
 );
-export const OrmSchemaPluginTables = Symbol.for(
-  'better-convex:OrmSchemaPluginTables'
+export const OrmSchemaExtensionTables = Symbol.for(
+  'better-convex:OrmSchemaExtensionTables'
 );
-export const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+export const OrmSchemaExtensions = Symbol.for(
+  'better-convex:OrmSchemaExtensions'
+);
+export const OrmSchemaExtensionRelations = Symbol.for(
+  'better-convex:OrmSchemaExtensionRelations'
+);
+export const OrmSchemaExtensionTriggers = Symbol.for(
+  'better-convex:OrmSchemaExtensionTriggers'
+);
 export const OrmSchemaRelations = Symbol.for(
   'better-convex:OrmSchemaRelations'
 );

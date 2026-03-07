@@ -51,7 +51,6 @@
       "name": "example",
       "version": "0.1.0",
       "dependencies": {
-        "@better-convex/ratelimit": "workspace:*",
         "@better-convex/resend": "workspace:*",
         "@convex-dev/react-query": "0.1.0",
         "@hookform/resolvers": "5.2.2",
@@ -103,6 +102,7 @@
       "version": "0.9.0",
       "bin": {
         "better-convex": "./dist/cli.mjs",
+        "intent": "./bin/intent.js",
       },
       "dependencies": {
         "@clack/prompts": "^0.11.0",
@@ -122,6 +122,7 @@
       },
       "devDependencies": {
         "@rollup/plugin-babel": "^6.1.0",
+        "@tanstack/intent": "0.0.13",
         "babel-plugin-react-compiler": "^1.0.0",
         "tsdown": "^0.20.3",
       },
@@ -138,20 +139,6 @@
         "better-auth",
         "hono",
         "next",
-        "react",
-      ],
-    },
-    "packages/ratelimit": {
-      "name": "@better-convex/ratelimit",
-      "version": "0.1.0",
-      "dependencies": {
-        "better-convex": "workspace:*",
-      },
-      "peerDependencies": {
-        "convex": ">=1.32",
-        "react": ">=18",
-      },
-      "optionalPeers": [
         "react",
       ],
     },
@@ -235,8 +222,6 @@
     "@better-auth/telemetry": ["@better-auth/telemetry@1.4.9", "", { "dependencies": { "@better-auth/utils": "0.3.0", "@better-fetch/fetch": "1.1.21" }, "peerDependencies": { "@better-auth/core": "1.4.9" } }, "sha512-Tthy1/Gmx+pYlbvRQPBTKfVei8+pJwvH1NZp+5SbhwA6K2EXIaoonx/K6N/AXYs2aKUpyR4/gzqDesDjL7zd6A=="],
 
     "@better-auth/utils": ["@better-auth/utils@0.3.0", "", {}, "sha512-W+Adw6ZA6mgvnSnhOki270rwJ42t4XzSK6YWGF//BbVXL6SwCLWfyzBc1lN2m/4RM28KubdBKQ4X5VMoLRNPQw=="],
-
-    "@better-convex/ratelimit": ["@better-convex/ratelimit@workspace:packages/ratelimit"],
 
     "@better-convex/resend": ["@better-convex/resend@workspace:packages/resend"],
 
@@ -857,6 +842,8 @@
     "@tailwindcss/oxide-win32-x64-msvc": ["@tailwindcss/oxide-win32-x64-msvc@4.2.1", "", { "os": "win32", "cpu": "x64" }, "sha512-rbO34G5sMWWyrN/idLeVxAZgAKWrn5LiR3/I90Q9MkA67s6T1oB0xtTe+0heoBvHSpbU9Mk7i6uwJnpo4u21XQ=="],
 
     "@tailwindcss/postcss": ["@tailwindcss/postcss@4.2.1", "", { "dependencies": { "@alloc/quick-lru": "^5.2.0", "@tailwindcss/node": "4.2.1", "@tailwindcss/oxide": "4.2.1", "postcss": "^8.5.6", "tailwindcss": "4.2.1" } }, "sha512-OEwGIBnXnj7zJeonOh6ZG9woofIjGrd2BORfvE5p9USYKDCZoQmfqLcfNiRWoJlRWLdNPn2IgVZuWAOM4iTYMw=="],
+
+    "@tanstack/intent": ["@tanstack/intent@0.0.13", "", { "dependencies": { "yaml": "^2.7.0" }, "bin": { "intent": "dist/cli.mjs", "intent-library": "dist/intent-library.mjs" } }, "sha512-J/geETt+AGQBMJpSVC7urEN/E1eAmgNHb6y/Z01LJfnmWXza17cMDReBOvT7LueYUeNV93PUBznMVPn5siJa3Q=="],
 
     "@tanstack/query-core": ["@tanstack/query-core@5.90.20", "", {}, "sha512-OMD2HLpNouXEfZJWcKeVKUgQ5n+n3A2JFmBaScpNDUqSrQSjiveC7dKMe53uJUg1nDG16ttFPz2xfilz6i2uVg=="],
 
@@ -2031,6 +2018,8 @@
     "www": ["www@workspace:www"],
 
     "yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
+
+    "yaml": ["yaml@2.8.2", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A=="],
 
     "yauzl": ["yauzl@3.2.0", "", { "dependencies": { "buffer-crc32": "~0.2.3", "pend": "~1.2.0" } }, "sha512-Ow9nuGZE+qp1u4JIPvg+uCiUr7xGQWdff7JQSk5VGYTAZMDe2q8lxJ10ygv10qmSj031Ty/6FNJpLO4o1Sgc+w=="],
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useRateLimit } from '@better-convex/ratelimit/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRatelimit } from 'better-convex/ratelimit/react';
 import { useMaybeAuth } from 'better-convex/react';
 import {
   AlertTriangle,
@@ -71,8 +71,8 @@ type InteractiveStatus = {
   reason: string | null;
 };
 
-const interactiveRateLimitRef =
-  'ratelimitDemo:getInteractiveRateLimit' as const;
+const interactiveRatelimitRef =
+  'ratelimitDemo:getInteractiveRatelimit' as const;
 
 const interactiveServerTimeRef =
   'ratelimitDemo:getInteractiveServerTime' as const;
@@ -157,7 +157,7 @@ export default function RatelimitPage() {
     useState<InteractiveStatus | null>(null);
 
   const { status: interactiveRateStatus, check: checkInteractiveRate } =
-    useRateLimit(interactiveRateLimitRef, {
+    useRatelimit(interactiveRatelimitRef, {
       identifier: sessionId,
       count: 1,
       getServerTimeMutation: interactiveServerTimeRef,

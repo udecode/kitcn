@@ -8,11 +8,16 @@ import {
   parseEmailEvent,
   shouldRetry,
 } from '@better-convex/resend';
-import { resendStorageTables } from '@better-convex/resend/schema';
 import { eq, inArray } from 'better-convex/orm';
 import { z } from 'zod';
 import { privateAction, privateMutation, privateQuery } from '../../lib/crpc';
 import { resend } from '../../lib/plugins/resend/plugin';
+import {
+  resendContentTable,
+  resendDeliveryEventsTable,
+  resendEmailsTable,
+  resendNextBatchRunTable,
+} from '../../lib/plugins/resend/schema';
 import {
   createResendCaller,
   createResendHandler,
@@ -50,15 +55,14 @@ const cleanupInputSchema = z.object({
 });
 
 async function scheduleBatchRun(ctx: MutationCtx) {
-  const query = ctx.orm.query;
-  const existing = await query.resendNextBatchRun.findMany({ limit: 1 });
-  if (existing?.[0]) {
+  const existing = await ctx.orm.query.resendNextBatchRun.findFirst();
+  if (existing) {
     return;
   }
 
   const caller = createResendCaller(ctx);
-  const runId = await caller.schedule.after(0).makeBatch({});
-  await ctx.orm.insert(resendStorageTables.resendNextBatchRun).values({
+  const runId = await caller.schedule.now.makeBatch({});
+  await ctx.orm.insert(resendNextBatchRunTable).values({
     runId: String(runId),
   });
 }
@@ -84,16 +88,16 @@ async function cleanupEmailBatch(
   ];
 
   await ctx.orm
-    .delete(resendStorageTables.resendDeliveryEvents)
-    .where(inArray(resendStorageTables.resendDeliveryEvents.emailId, emailIds));
+    .delete(resendDeliveryEventsTable)
+    .where(inArray(resendDeliveryEventsTable.emailId, emailIds));
   await ctx.orm
-    .delete(resendStorageTables.resendEmails)
-    .where(inArray(resendStorageTables.resendEmails.id, emailIds));
+    .delete(resendEmailsTable)
+    .where(inArray(resendEmailsTable.id, emailIds));
 
   if (contentIds.length > 0) {
     await ctx.orm
-      .delete(resendStorageTables.resendContent)
-      .where(inArray(resendStorageTables.resendContent.id, contentIds));
+      .delete(resendContentTable)
+      .where(inArray(resendContentTable.id, contentIds));
   }
 }
 
@@ -119,7 +123,7 @@ export const cleanupOldEmails = privateMutation
 
     if ((batch?.length ?? 0) === BATCH_SIZE) {
       const caller = createResendCaller(ctx);
-      await caller.schedule.after(0).cleanupOldEmails({ olderThan });
+      await caller.schedule.now.cleanupOldEmails({ olderThan });
     }
 
     return null;
@@ -149,7 +153,7 @@ export const cleanupAbandonedEmails = privateMutation
 
     if ((batch?.length ?? 0) === BATCH_SIZE) {
       const caller = createResendCaller(ctx);
-      await caller.schedule.after(0).cleanupAbandonedEmails({ olderThan });
+      await caller.schedule.now.cleanupAbandonedEmails({ olderThan });
     }
 
     return null;
@@ -173,10 +177,7 @@ export const sendEmail = privateMutation
   )
   .mutation(async ({ ctx, input }) => {
     const args = input;
-    const options = ctx.plugins.resend.options;
-    if (!options.apiKey) {
-      throw new Error('RESEND_API_KEY is missing.');
-    }
+    const options = ctx.api.resend;
 
     if (options.testMode) {
       for (const address of [
@@ -207,7 +208,7 @@ export const sendEmail = privateMutation
     let htmlContentId: string | undefined;
     if (args.html !== undefined) {
       const [htmlContent] = await ctx.orm
-        .insert(resendStorageTables.resendContent)
+        .insert(resendContentTable)
         .values({
           content: new TextEncoder().encode(args.html).buffer,
           mimeType: 'text/html',
@@ -219,7 +220,7 @@ export const sendEmail = privateMutation
     let textContentId: string | undefined;
     if (args.text !== undefined) {
       const [textContent] = await ctx.orm
-        .insert(resendStorageTables.resendContent)
+        .insert(resendContentTable)
         .values({
           content: new TextEncoder().encode(args.text).buffer,
           mimeType: 'text/plain',
@@ -229,7 +230,7 @@ export const sendEmail = privateMutation
     }
 
     const [email] = await ctx.orm
-      .insert(resendStorageTables.resendEmails)
+      .insert(resendEmailsTable)
       .values({
         from: args.from,
         to: args.to,
@@ -277,7 +278,7 @@ export const createManualEmail = privateMutation
   .mutation(async ({ ctx, input }) => {
     const args = input;
     const [email] = await ctx.orm
-      .insert(resendStorageTables.resendEmails)
+      .insert(resendEmailsTable)
       .values({
         from: args.from,
         to: normalizeRecipientList(args.to),
@@ -317,14 +318,14 @@ export const updateManualEmail = privateMutation
         : undefined;
 
     await ctx.orm
-      .update(resendStorageTables.resendEmails)
+      .update(resendEmailsTable)
       .set({
         status: args.status,
         resendId: args.resendId,
         errorMessage: args.errorMessage,
         ...(finalizedAt ? { finalizedAt } : {}),
       })
-      .where(eq(resendStorageTables.resendEmails.id, args.emailId));
+      .where(eq(resendEmailsTable.id, args.emailId));
 
     return null;
   });
@@ -350,12 +351,12 @@ export const cancelEmail = privateMutation
     }
 
     await ctx.orm
-      .update(resendStorageTables.resendEmails)
+      .update(resendEmailsTable)
       .set({
         status: 'cancelled',
         finalizedAt: Date.now(),
       })
-      .where(eq(resendStorageTables.resendEmails.id, input.emailId));
+      .where(eq(resendEmailsTable.id, input.emailId));
 
     return null;
   });
@@ -439,18 +440,10 @@ export const makeBatch = privateMutation
   .input(z.object({}))
   .mutation(async ({ ctx }) => {
     const caller = createResendCaller(ctx);
-    const query = ctx.orm.query;
-    const scheduledRows = await query.resendNextBatchRun.findMany({
-      limit: 10,
-    });
-    for (const row of scheduledRows ?? []) {
-      await ctx.orm
-        .delete(resendStorageTables.resendNextBatchRun)
-        .where(eq(resendStorageTables.resendNextBatchRun.id, row.id));
-    }
+    await ctx.orm.delete(resendNextBatchRunTable).allowFullScan();
 
     const segment = getSegment(Date.now());
-    const emails = await query.resendEmails.findMany({
+    const emails = await ctx.orm.query.resendEmails.findMany({
       where: {
         status: 'waiting',
         segment: { lte: segment },
@@ -462,17 +455,16 @@ export const makeBatch = privateMutation
       return null;
     }
 
-    for (const email of emails) {
-      await ctx.orm
-        .update(resendStorageTables.resendEmails)
-        .set({
-          status: 'queued',
-        })
-        .where(eq(resendStorageTables.resendEmails.id, email.id));
-    }
+    const emailIds = emails.map((email) => email.id);
+    await ctx.orm
+      .update(resendEmailsTable)
+      .set({
+        status: 'queued',
+      })
+      .where(inArray(resendEmailsTable.id, emailIds));
 
     await caller.schedule.after(1000).callResendAPIWithBatch({
-      emailIds: emails.map((email) => email.id),
+      emailIds,
       attempt: 0,
     });
 
@@ -492,19 +484,27 @@ export const getAllContentByIds = privateQuery
   )
   .output(z.record(z.string(), z.string()))
   .query(async ({ ctx, input }) => {
-    const query = ctx.orm.query;
-    const entries: [string, string][] = [];
+    if (input.contentIds.length === 0) {
+      return {};
+    }
 
-    for (const contentId of input.contentIds) {
-      const content = await query.resendContent.findFirst({
-        where: { id: contentId },
-      });
-      if (!content || !(content.content instanceof ArrayBuffer)) {
+    const rows = await ctx.orm.query.resendContent.findMany({
+      where: { id: { in: input.contentIds } },
+      limit: input.contentIds.length,
+      columns: {
+        id: true,
+        content: true,
+      },
+    });
+
+    const entries: Array<readonly [string, string]> = [];
+    for (const row of rows) {
+      if (!(row.content instanceof ArrayBuffer)) {
         continue;
       }
       entries.push([
-        contentId,
-        new TextDecoder().decode(new Uint8Array(content.content)),
+        row.id,
+        new TextDecoder().decode(new Uint8Array(row.content)),
       ]);
     }
 
@@ -537,13 +537,19 @@ export const getEmailsByIds = privateQuery
     )
   )
   .query(async ({ ctx, input }) => {
-    const query = ctx.orm.query;
-    const rows = await Promise.all(
-      input.emailIds.map((emailId) =>
-        query.resendEmails.findFirst({ where: { id: emailId } })
-      )
-    );
-    return rows.filter((row): row is NonNullable<typeof row> => !!row);
+    if (input.emailIds.length === 0) {
+      return [];
+    }
+
+    const rows = await ctx.orm.query.resendEmails.findMany({
+      where: { id: { in: input.emailIds } },
+      limit: input.emailIds.length,
+    });
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+
+    return input.emailIds
+      .map((emailId) => rowById.get(emailId))
+      .filter((row): row is NonNullable<typeof row> => !!row);
   });
 
 export const markEmailsFailed = privateMutation
@@ -556,25 +562,33 @@ export const markEmailsFailed = privateMutation
     })
   )
   .mutation(async ({ ctx, input }) => {
-    const query = ctx.orm.query;
+    const existingEmails = await ctx.orm.query.resendEmails.findMany({
+      where: { id: { in: input.emailIds } },
+      limit: input.emailIds.length,
+      columns: {
+        id: true,
+        attempt: true,
+      },
+    });
+    const attemptsById = new Map(
+      existingEmails.map((email) => [email.id, email.attempt ?? 0])
+    );
+
     for (const emailId of input.emailIds) {
-      const email = await query.resendEmails.findFirst({
-        where: { id: emailId },
-      });
-      if (!email) {
+      if (!attemptsById.has(emailId)) {
         continue;
       }
 
       await ctx.orm
-        .update(resendStorageTables.resendEmails)
+        .update(resendEmailsTable)
         .set({
           status: 'failed',
           failed: true,
           errorMessage: input.errorMessage,
           finalizedAt: Date.now(),
-          attempt: Math.max(email.attempt ?? 0, input.attempt + 1),
+          attempt: Math.max(attemptsById.get(emailId) ?? 0, input.attempt + 1),
         })
-        .where(eq(resendStorageTables.resendEmails.id, emailId));
+        .where(eq(resendEmailsTable.id, emailId));
     }
 
     return null;
@@ -598,7 +612,7 @@ export const onEmailComplete = privateMutation
       }
       if (!resendId) {
         await ctx.orm
-          .update(resendStorageTables.resendEmails)
+          .update(resendEmailsTable)
           .set({
             status: 'failed',
             failed: true,
@@ -606,19 +620,19 @@ export const onEmailComplete = privateMutation
             finalizedAt: Date.now(),
             attempt: input.attempt + 1,
           })
-          .where(eq(resendStorageTables.resendEmails.id, emailId));
+          .where(eq(resendEmailsTable.id, emailId));
         continue;
       }
 
       await ctx.orm
-        .update(resendStorageTables.resendEmails)
+        .update(resendEmailsTable)
         .set({
           status: 'sent',
           resendId,
           sentAt: Date.now(),
           attempt: input.attempt + 1,
         })
-        .where(eq(resendStorageTables.resendEmails.id, emailId));
+        .where(eq(resendEmailsTable.id, emailId));
     }
 
     return null;
@@ -634,7 +648,7 @@ export const callResendAPIWithBatch = privateAction
   )
   .action(async ({ ctx, input }) => {
     const args = input;
-    const options = ctx.plugins.resend.options;
+    const options = ctx.api.resend;
     const caller = createResendCaller(ctx);
     const emails = await caller.getEmailsByIds({
       emailIds: args.emailIds,
@@ -835,12 +849,12 @@ export const handleEmailEvent = privateMutation
 
     if (Object.keys(patch).length > 0) {
       await ctx.orm
-        .update(resendStorageTables.resendEmails)
+        .update(resendEmailsTable)
         .set(patch)
-        .where(eq(resendStorageTables.resendEmails.id, email.id));
+        .where(eq(resendEmailsTable.id, email.id));
     }
 
-    await ctx.orm.insert(resendStorageTables.resendDeliveryEvents).values({
+    await ctx.orm.insert(resendDeliveryEventsTable).values({
       emailId: email.id,
       resendId,
       eventType: event.type,

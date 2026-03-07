@@ -1,4 +1,5 @@
 import type { FunctionReference, FunctionReturnType } from 'convex/server';
+import type { GenericId } from 'convex/values';
 import {
   type DataTransformerOptions,
   decodeWire,
@@ -10,6 +11,7 @@ import type { CRPCFunctionTypeHint } from './builder';
 type ProcedureType = 'query' | 'mutation' | 'action';
 type CallerContextType = 'query' | 'mutation';
 type CallerExecutionMode = 'caller' | 'handler';
+type ScheduledFunctionId = GenericId<'_scheduled_functions'>;
 
 type ProcedureHandler = (ctx: unknown, input: unknown) => unknown;
 type ProcedureRawHandler = (opts: { ctx: unknown; input: unknown }) => unknown;
@@ -83,16 +85,22 @@ type ProcedureOutput<TProcedure> = [
   ? InferredHandlerOutput<TProcedure>
   : ProcedureTypeHintOutput<TProcedure>;
 
-type ProcedureCallable<TProcedure> =
+type ProcedureCallableWithOutput<TProcedure, TOutput> =
   keyof ProcedureInput<TProcedure> extends never
-    ? (input?: EmptyObject) => Promise<ProcedureOutput<TProcedure>>
+    ? (input?: EmptyObject) => Promise<TOutput>
     : EmptyObject extends ProcedureInput<TProcedure>
-      ? (
-          input?: ProcedureInput<TProcedure>
-        ) => Promise<ProcedureOutput<TProcedure>>
-      : (
-          input: ProcedureInput<TProcedure>
-        ) => Promise<ProcedureOutput<TProcedure>>;
+      ? (input?: ProcedureInput<TProcedure>) => Promise<TOutput>
+      : (input: ProcedureInput<TProcedure>) => Promise<TOutput>;
+
+type ProcedureCallable<TProcedure> = ProcedureCallableWithOutput<
+  TProcedure,
+  ProcedureOutput<TProcedure>
+>;
+
+type ProcedureSchedulableCallable<TProcedure> = ProcedureCallableWithOutput<
+  TProcedure,
+  ScheduledFunctionId
+>;
 
 type SchedulableProcedureType = Exclude<ProcedureType, 'query'>;
 
@@ -192,6 +200,21 @@ type RegistryEntryToPathShape<
     : {}
   : {};
 
+type RegistryEntryToSchedulablePathShape<
+  TPath extends string,
+  TEntry,
+  TAllowed extends ProcedureType,
+> = TEntry extends readonly [infer TType extends ProcedureType, infer TResolver]
+  ? TType extends TAllowed
+    ? BuildPathShape<
+        SplitPath<TPath>,
+        ProcedureSchedulableCallable<
+          ResolverOutput<Extract<TResolver, (...args: any[]) => unknown>>
+        >
+      >
+    : {}
+  : {};
+
 export type GeneratedProcedureRegistryEntry<
   TType extends ProcedureType = ProcedureType,
   TResolver extends (...args: any[]) => unknown = (...args: any[]) => unknown,
@@ -230,9 +253,16 @@ export type ProcedureActionCallerFromRegistry<
 
 export type ProcedureSchedulableCallerFromRegistry<
   TRegistry extends GeneratedProcedureRegistry,
-> = ProcedureCallerFromRegistryByAllowedTypes<
-  TRegistry,
-  SchedulableProcedureType
+> = SimplifyDeep<
+  UnionToIntersection<
+    {
+      [K in keyof TRegistry & string]: RegistryEntryToSchedulablePathShape<
+        K,
+        TRegistry[K],
+        SchedulableProcedureType
+      >;
+    }[keyof TRegistry & string]
+  >
 >;
 
 export type ProcedureScheduleCallerFromRegistry<
@@ -243,7 +273,7 @@ export type ProcedureScheduleCallerFromRegistry<
     timestamp: number | Date
   ) => ProcedureSchedulableCallerFromRegistry<TRegistry>;
   now: ProcedureSchedulableCallerFromRegistry<TRegistry>;
-  cancel: (id: string) => Promise<void>;
+  cancel: (id: ScheduledFunctionId) => Promise<void>;
 };
 
 type ProcedureMutationCallerWithSchedule<
@@ -912,7 +942,7 @@ function createScheduleNamespace(
         timestamp,
       }),
     now: nowProxy,
-    cancel: async (id: string) => {
+    cancel: async (id: ScheduledFunctionId) => {
       const scheduler = (ctx as ActionDispatchContext).scheduler;
       if (!scheduler || typeof scheduler !== 'object') {
         throw new Error(

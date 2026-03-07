@@ -318,7 +318,6 @@ export const get = optionalAuthQuery
 
 // Create project with owner assignment
 export const create = authMutation
-  .meta({ rateLimit: 'project/create' })
   .input(
     z.object({
       name: z.string().min(1).max(100),
@@ -346,7 +345,6 @@ export const create = authMutation
 
 // Update project
 export const update = authMutation
-  .meta({ rateLimit: 'project/update' })
   .input(
     z.object({
       projectId: z.string(),
@@ -380,7 +378,6 @@ export const update = authMutation
   });
 
 export const archive = authMutation
-  .meta({ rateLimit: 'project/update' })
   .input(z.object({ projectId: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -402,7 +399,6 @@ export const archive = authMutation
   });
 
 export const restore = authMutation
-  .meta({ rateLimit: 'project/update' })
   .input(z.object({ projectId: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -424,7 +420,6 @@ export const restore = authMutation
   });
 
 export const addMember = authMutation
-  .meta({ rateLimit: 'project/member' })
   .input(
     z.object({
       projectId: z.string(),
@@ -472,7 +467,6 @@ export const addMember = authMutation
   });
 
 export const removeMember = authMutation
-  .meta({ rateLimit: 'project/member' })
   .input(
     z.object({
       projectId: z.string(),
@@ -502,7 +496,6 @@ export const removeMember = authMutation
   });
 
 export const leave = authMutation
-  .meta({ rateLimit: 'project/member' })
   .input(z.object({ projectId: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -516,7 +509,6 @@ export const leave = authMutation
   });
 
 export const transfer = authMutation
-  .meta({ rateLimit: 'project/update' })
   .input(
     z.object({
       projectId: z.string(),

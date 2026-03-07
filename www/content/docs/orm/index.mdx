@@ -57,7 +57,15 @@ With cRPC, Date wire serialization is built in, so `Date` values round-trip with
 Let's define a simple schema with `users` and `posts` tables, then wire up relations between them:
 
 ```ts title="convex/schema.ts" showLineNumbers {3-7,10-14}
-import { convexTable, defineSchema, text, boolean, integer, id, index } from 'better-convex/orm';
+import {
+  boolean,
+  convexTable,
+  defineSchema,
+  id,
+  index,
+  integer,
+  text,
+} from 'better-convex/orm';
 
 export const users = convexTable('users', {
   name: text().notNull(),
@@ -73,14 +81,15 @@ export const posts = convexTable('posts', {
   userId: id('users'),
 }, (t) => [index('by_published').on(t.published)]);
 
-export default defineSchema({ users, posts }, {
-  relations: (r) => ({
-    users: { posts: r.many.posts() },
-    posts: {
-      author: r.one.users({ from: r.posts.userId, to: r.users.id }),
-    },
-  }),
-});
+const tables = { users, posts };
+export default defineSchema(tables).relations((r) => ({
+  users: {
+    posts: r.many.posts(),
+  },
+  posts: {
+    author: r.one.users({ from: r.posts.userId, to: r.users.id }),
+  },
+}));
 ```
 
 Here's how to query published posts with their authors using `ctx.orm` in cRPC:

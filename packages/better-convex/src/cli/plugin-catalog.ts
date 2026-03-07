@@ -1,8 +1,13 @@
-import { RESEND_FUNCTIONS_TEMPLATE } from './templates/resend-functions-template.js';
+import { RATELIMIT_PLUGIN_TEMPLATE } from './plugins/ratelimit/ratelimit-plugin.template.js';
+import { RATELIMIT_SCHEMA_TEMPLATE } from './plugins/ratelimit/ratelimit-schema.template.js';
+import { RESEND_FUNCTIONS_TEMPLATE } from './plugins/resend/resend.template.js';
+import { RESEND_SCHEMA_TEMPLATE } from './plugins/resend/resend-schema.template.js';
 export const FUNCTIONS_DIR_IMPORT_PLACEHOLDER =
   '__BETTER_CONVEX_FUNCTIONS_DIR__';
 export const PLUGIN_CONFIG_IMPORT_PLACEHOLDER =
   '__BETTER_CONVEX_PLUGIN_CONFIG_IMPORT__';
+export const PLUGIN_SCHEMA_IMPORT_PLACEHOLDER =
+  '__BETTER_CONVEX_PLUGIN_SCHEMA_IMPORT__';
 export const PROJECT_CRPC_IMPORT_PLACEHOLDER =
   '__BETTER_CONVEX_PROJECT_CRPC_IMPORT__';
 export const PROJECT_SHARED_API_IMPORT_PLACEHOLDER =
@@ -31,12 +36,22 @@ export type PluginPreset = {
   templateIds: readonly string[];
 };
 
+export type PluginEnvField = {
+  key: string;
+  schema: string;
+  reminder?: {
+    message?: string;
+  };
+};
+
 export type PluginCatalogEntry = {
   key: SupportedPluginKey;
   packageName: string;
+  envFields?: readonly PluginEnvField[];
   schemaRegistration: {
-    importPath: string;
     importName: string;
+    path: string;
+    target: 'functions' | 'lib';
   };
   defaultPreset: string;
   presets: readonly PluginPreset[];
@@ -56,10 +71,14 @@ export const resend = ResendPlugin.configure({
   webhookSecret: ${PROJECT_GET_ENV_ACCESS_PLACEHOLDER}.RESEND_WEBHOOK_SECRET,
   initialBackoffMs: 30_000,
   retryAttempts: 5,
-  // testMode defaults to true. Set to false in production once your domain is ready.
+  // Set to false in production once your domain is ready.
   testMode: true,
 });
 `;
+}
+
+function emitResendSchemaTemplate() {
+  return RESEND_SCHEMA_TEMPLATE;
 }
 
 function emitResendWebhookTemplate() {
@@ -75,7 +94,7 @@ const webhookHandler = publicRoute
   .mutation(async ({ ctx, c }) => {
     const event = await verifyResendWebhookEvent(
       c.req.raw,
-      ctx.plugins.resend.options.webhookSecret,
+      ctx.api.resend.webhookSecret,
     );
     const caller = createResendCaller(ctx);
     await caller.handleEmailEvent({ event });
@@ -235,25 +254,27 @@ export const sendTemplatedEmail = privateAction
 `;
 }
 
-function emitRatelimitApiTemplate() {
-  return `import { MINUTE, Ratelimit } from "@better-convex/ratelimit";
-
-export function createRatelimit(db: any, prefix: string) {
-  return new Ratelimit({
-    db,
-    prefix,
-    limiter: Ratelimit.fixedWindow(60, MINUTE),
-  });
+function emitRatelimitPluginTemplate() {
+  return RATELIMIT_PLUGIN_TEMPLATE;
 }
-`;
+
+function emitRatelimitSchemaTemplate() {
+  return RATELIMIT_SCHEMA_TEMPLATE;
 }
 
 const RESEND_TEMPLATES: readonly PluginScaffoldTemplate[] = [
+  {
+    id: 'resend-schema',
+    path: 'schema.ts',
+    target: 'lib',
+    content: emitResendSchemaTemplate(),
+  },
   {
     id: 'resend-functions',
     path: 'resend.ts',
     target: 'functions',
     content: emitResendFunctionsTemplate(),
+    requires: ['resend-schema'],
   },
   {
     id: 'resend-email',
@@ -295,10 +316,17 @@ const RESEND_TEMPLATES: readonly PluginScaffoldTemplate[] = [
 
 const RATELIMIT_TEMPLATES: readonly PluginScaffoldTemplate[] = [
   {
-    id: 'ratelimit-api',
-    path: 'api.ts',
+    id: 'ratelimit-schema',
+    path: 'schema.ts',
     target: 'lib',
-    content: emitRatelimitApiTemplate(),
+    content: emitRatelimitSchemaTemplate(),
+  },
+  {
+    id: 'ratelimit-plugin',
+    path: 'plugin.ts',
+    target: 'lib',
+    content: emitRatelimitPluginTemplate(),
+    requires: ['ratelimit-schema'],
   },
 ];
 
@@ -306,9 +334,27 @@ const PLUGIN_CATALOG: Record<SupportedPluginKey, PluginCatalogEntry> = {
   resend: {
     key: 'resend',
     packageName: '@better-convex/resend',
+    envFields: [
+      {
+        key: 'RESEND_API_KEY',
+        schema: 'z.string().optional()',
+        reminder: {
+          message: 'Set before sending email through Resend.',
+        },
+      },
+      {
+        key: 'RESEND_WEBHOOK_SECRET',
+        schema: 'z.string().optional()',
+      },
+      {
+        key: 'RESEND_FROM_EMAIL',
+        schema: 'z.string().optional()',
+      },
+    ],
     schemaRegistration: {
-      importPath: '@better-convex/resend/schema',
-      importName: 'resendPlugin',
+      importName: 'resendExtension',
+      path: 'schema.ts',
+      target: 'lib',
     },
     defaultPreset: 'default',
     presets: [
@@ -322,23 +368,24 @@ const PLUGIN_CATALOG: Record<SupportedPluginKey, PluginCatalogEntry> = {
   },
   ratelimit: {
     key: 'ratelimit',
-    packageName: '@better-convex/ratelimit',
+    packageName: 'better-convex',
     schemaRegistration: {
-      importPath: '@better-convex/ratelimit/schema',
-      importName: 'ratelimitPlugin',
+      importName: 'ratelimitExtension',
+      path: 'schema.ts',
+      target: 'lib',
     },
     defaultPreset: 'server-first',
     presets: [
       {
         key: 'server-first',
         description:
-          'Scaffold a reusable server-side ratelimit helper and auto-register schema plugin.',
-        templateIds: ['ratelimit-api'],
+          'Scaffold a reusable ratelimit plugin and auto-register schema extension.',
+        templateIds: ['ratelimit-schema', 'ratelimit-plugin'],
       },
       {
         key: 'schema-only',
-        description: 'Only register ratelimit plugin in schema.',
-        templateIds: [],
+        description: 'Only register ratelimit extension in schema.',
+        templateIds: ['ratelimit-schema'],
       },
     ],
     templates: RATELIMIT_TEMPLATES,

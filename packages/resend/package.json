@@ -6,7 +6,6 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.js",
-    "./schema": "./dist/schema.js",
     "./package.json": "./package.json"
   },
   "files": [

@@ -119,11 +119,14 @@ export const posts = convexTable(
 const tables = { user, posts };
 export default defineSchema(tables, {
   strict: false,
-  relations: (r) => ({
-    user: { posts: r.many.posts() },
-    posts: { author: r.one.user({ from: r.posts.userId, to: r.user.id }) },
-  }),
-});
+}).relations((r) => ({
+  user: {
+    posts: r.many.posts(),
+  },
+  posts: {
+    author: r.one.user({ from: r.posts.userId, to: r.user.id }),
+  },
+}));
 ```
 
 <Callout icon={<InfoIcon />}>

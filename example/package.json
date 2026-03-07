@@ -32,7 +32,6 @@
     "typecheck:watch": "tsc --noEmit --watch"
   },
   "dependencies": {
-    "@better-convex/ratelimit": "workspace:*",
     "@better-convex/resend": "workspace:*",
     "@convex-dev/react-query": "0.1.0",
     "@hookform/resolvers": "5.2.2",

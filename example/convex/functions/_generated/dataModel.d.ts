@@ -75,7 +75,7 @@ export type DataModel = {
       count: number;
       indexName: string;
       keyHash: string;
-      keyParts: Array<any>;
+      keyParts: Array<null | any>;
       nonNullCountValues: Record<string, number>;
       sumValues: Record<string, number>;
       tableKey: string;
@@ -163,10 +163,10 @@ export type DataModel = {
   aggregate_member: {
     document: {
       docId: string;
-      extremaValues: Record<string, any>;
+      extremaValues: Record<string, null | any>;
       indexName: string;
       keyHash: string;
-      keyParts: Array<any>;
+      keyParts: Array<null | any>;
       kind: string;
       nonNullCountValues: Record<string, number>;
       rankKey?: null | any;
@@ -215,7 +215,7 @@ export type DataModel = {
   aggregate_rank_node: {
     document: {
       aggregate?: null | { count: number; sum: number };
-      items: Array<{ k: any; s: number; v: any }>;
+      items: Array<{ k: null | any; s: number; v: null | any }>;
       subtrees: Array<string>;
       _id: Id<"aggregate_rank_node">;
       _creationTime: number;
@@ -661,12 +661,12 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
-  ratelimit_dynamic_limit: {
+  ratelimitDynamicLimit: {
     document: {
       limit: number;
       prefix: string;
       updatedAt: number;
-      _id: Id<"ratelimit_dynamic_limit">;
+      _id: Id<"ratelimitDynamicLimit">;
       _creationTime: number;
     };
     fieldPaths: "_creationTime" | "_id" | "limit" | "prefix" | "updatedAt";
@@ -678,7 +678,7 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
-  ratelimit_protection_hit: {
+  ratelimitProtectionHit: {
     document: {
       blockedUntil?: null | number;
       hits: number;
@@ -686,7 +686,7 @@ export type DataModel = {
       prefix: string;
       updatedAt: number;
       value: string;
-      _id: Id<"ratelimit_protection_hit">;
+      _id: Id<"ratelimitProtectionHit">;
       _creationTime: number;
     };
     fieldPaths:
@@ -707,7 +707,7 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
-  ratelimit_state: {
+  ratelimitState: {
     document: {
       auxTs?: null | number;
       auxValue?: null | number;
@@ -716,7 +716,7 @@ export type DataModel = {
       shard: number;
       ts: number;
       value: number;
-      _id: Id<"ratelimit_state">;
+      _id: Id<"ratelimitState">;
       _creationTime: number;
     };
     fieldPaths:

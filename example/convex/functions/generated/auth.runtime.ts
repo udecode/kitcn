@@ -60,13 +60,13 @@ const createHandlerFromRegistry = createGenericHandlerFactory<
 >(procedureRegistry);
 
 
-export function createGeneratedAuthCaller<TCtx extends ProcedureCallerContext>(
+export function createAuthCaller<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
   return createCallerFromRegistry(ctx) as GeneratedProcedureCaller<TCtx>;
 }
 
-export function createGeneratedAuthHandler<TCtx extends ProcedureHandlerContext>(
+export function createAuthHandler<TCtx extends ProcedureHandlerContext>(
   ctx: TCtx
 ): GeneratedProcedureHandler<TCtx> {
   return createHandlerFromRegistry(ctx) as GeneratedProcedureHandler<TCtx>;

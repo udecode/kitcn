@@ -1,11 +1,11 @@
 import {
-  type ConvexRateLimitDbReader,
-  type ConvexRateLimitDbWriter,
+  type ConvexRatelimitDbReader,
+  type ConvexRatelimitDbWriter,
   MINUTE,
   Ratelimit,
   type RatelimitResponse,
   SECOND,
-} from '@better-convex/ratelimit';
+} from 'better-convex/ratelimit';
 import { z } from 'zod';
 import {
   authAction,
@@ -19,22 +19,22 @@ import {
   createStaticProbeResult,
   RATELIMIT_COVERAGE_DEFINITIONS,
   RATELIMIT_LIVE_PROBE_IDS,
-  type RateLimitCoverageDefinition,
-  type RateLimitCoverageId,
-  type RateLimitCoverageProbeResult,
-  type RateLimitCoverageStatus,
+  type RatelimitCoverageDefinition,
+  type RatelimitCoverageId,
+  type RatelimitCoverageProbeResult,
+  type RatelimitCoverageStatus,
 } from './ratelimitDemo.coverage';
 
-type ProbeResult = RateLimitCoverageProbeResult;
+type ProbeResult = RatelimitCoverageProbeResult;
 
-type RateLimitCoverageEntry = RateLimitCoverageDefinition & {
+type RatelimitCoverageEntry = RatelimitCoverageDefinition & {
   probe: ProbeResult;
 };
 
-type RateLimitCoverageSnapshot = {
+type RatelimitCoverageSnapshot = {
   generatedAt: string;
-  entries: RateLimitCoverageEntry[];
-  summary: Record<RateLimitCoverageStatus, number>;
+  entries: RatelimitCoverageEntry[];
+  summary: Record<RatelimitCoverageStatus, number>;
   validated: number;
   total: number;
 };
@@ -48,7 +48,7 @@ type InteractiveStatus = {
   reason: RatelimitResponse['reason'] | null;
 };
 
-type RateLimitClientSignals = {
+type RatelimitClientSignals = {
   ip?: string;
   userAgent?: string;
 };
@@ -59,23 +59,23 @@ const INTERACTIVE_PREFIX = 'demo:ratelimit:interactive:v1';
 const TIMEOUT_PROBE_DELAY_MS = 2;
 const COVERAGE_IDS = RATELIMIT_COVERAGE_DEFINITIONS.map(
   (entry) => entry.id
-) as [RateLimitCoverageId, ...RateLimitCoverageId[]];
+) as [RatelimitCoverageId, ...RatelimitCoverageId[]];
 
-type ConvexRateLimitDb = ConvexRateLimitDbReader | ConvexRateLimitDbWriter;
+type ConvexRatelimitDb = ConvexRatelimitDbReader | ConvexRatelimitDbWriter;
 
-function getRateLimitReader({
+function getRatelimitReader({
   db,
 }: {
-  db: ConvexRateLimitDbReader | ConvexRateLimitDbWriter;
-}): ConvexRateLimitDbReader {
+  db: ConvexRatelimitDbReader | ConvexRatelimitDbWriter;
+}): ConvexRatelimitDbReader {
   return db;
 }
 
-function getRateLimitWriter({
+function getRatelimitWriter({
   db,
 }: {
-  db: ConvexRateLimitDbWriter;
-}): ConvexRateLimitDbWriter {
+  db: ConvexRatelimitDbWriter;
+}): ConvexRatelimitDbWriter {
   return db;
 }
 
@@ -106,7 +106,7 @@ function busyDelay(ms: number): void {
   }
 }
 
-function isWriterDb(db: ConvexRateLimitDb): db is ConvexRateLimitDbWriter {
+function isWriterDb(db: ConvexRatelimitDb): db is ConvexRatelimitDbWriter {
   return (
     'insert' in db &&
     typeof db.insert === 'function' &&
@@ -118,10 +118,10 @@ function isWriterDb(db: ConvexRateLimitDb): db is ConvexRateLimitDbWriter {
 }
 
 function createSlowDb(
-  db: ConvexRateLimitDb,
+  db: ConvexRatelimitDb,
   delayMs = TIMEOUT_PROBE_DELAY_MS
-): ConvexRateLimitDb {
-  const wrappedReader: ConvexRateLimitDbReader = {
+): ConvexRatelimitDb {
+  const wrappedReader: ConvexRatelimitDbReader = {
     query(tableName) {
       busyDelay(delayMs);
       return db.query(tableName);
@@ -175,7 +175,7 @@ function toSerializableProbeValue(value: unknown): unknown {
 }
 
 function createInteractiveLimiter(
-  db: ConvexRateLimitDbReader | ConvexRateLimitDbWriter
+  db: ConvexRatelimitDbReader | ConvexRatelimitDbWriter
 ) {
   return new Ratelimit({
     db,
@@ -190,7 +190,7 @@ const interactiveHookLimiter = new Ratelimit({
 });
 
 export const {
-  getRateLimit: getInteractiveRateLimit,
+  getRatelimit: getInteractiveRatelimit,
   getServerTime: getInteractiveServerTime,
 } = interactiveHookLimiter.hookAPI({
   identifier: (_ctx, fromClient) => fromClient ?? 'ratelimit-demo-anonymous',
@@ -231,8 +231,8 @@ async function runProbe(probe: () => Promise<unknown>): Promise<ProbeResult> {
 }
 
 function buildSummary(
-  entries: RateLimitCoverageEntry[]
-): Record<RateLimitCoverageStatus, number> {
+  entries: RatelimitCoverageEntry[]
+): Record<RatelimitCoverageStatus, number> {
   return entries.reduce(
     (acc, entry) => {
       acc[entry.status] = (acc[entry.status] ?? 0) + 1;
@@ -243,11 +243,11 @@ function buildSummary(
       partial: 0,
       blocked: 0,
       missing: 0,
-    } as Record<RateLimitCoverageStatus, number>
+    } as Record<RatelimitCoverageStatus, number>
   );
 }
 
-function matchesExpected(entry: RateLimitCoverageEntry): boolean {
+function matchesExpected(entry: RatelimitCoverageEntry): boolean {
   if (entry.status === 'blocked') {
     return !entry.probe.ok;
   }
@@ -255,10 +255,10 @@ function matchesExpected(entry: RateLimitCoverageEntry): boolean {
 }
 
 function buildCoverageProbes(
-  db: ConvexRateLimitDbWriter,
+  db: ConvexRatelimitDbWriter,
   userId: string,
-  signals: RateLimitClientSignals
-): Record<RateLimitCoverageId, () => Promise<unknown>> {
+  signals: RatelimitClientSignals
+): Record<RatelimitCoverageId, () => Promise<unknown>> {
   return {
     'fixed-window-limit': async () => {
       const limiter = new Ratelimit({
@@ -462,7 +462,7 @@ export const getSnapshot = authQuery.query(async () => {
     ),
     validated: 0,
     total: RATELIMIT_COVERAGE_DEFINITIONS.length,
-  } satisfies RateLimitCoverageSnapshot;
+  } satisfies RatelimitCoverageSnapshot;
 });
 
 export const getInteractiveStatus = publicQuery
@@ -472,31 +472,31 @@ export const getInteractiveStatus = publicQuery
     })
   )
   .query(async ({ ctx, input }) => {
-    const limiter = createInteractiveLimiter(getRateLimitReader(ctx));
+    const limiter = createInteractiveLimiter(getRatelimitReader(ctx));
     return toInteractiveStatus(await limiter.check(input.sessionId));
   });
 
 export const consumeInteractive = publicMutation
-  .meta({ rateLimit: 'ratelimit/interactive' })
+  .meta({ ratelimit: 'interactive' })
   .input(
     z.object({
       sessionId: z.string().min(6).max(128),
     })
   )
   .mutation(async ({ ctx, input }) => {
-    const limiter = createInteractiveLimiter(getRateLimitWriter(ctx));
+    const limiter = createInteractiveLimiter(getRatelimitWriter(ctx));
     return toInteractiveStatus(await limiter.limit(input.sessionId));
   });
 
 export const resetInteractive = publicMutation
-  .meta({ rateLimit: 'ratelimit/interactive' })
+  .meta({ ratelimit: 'interactive' })
   .input(
     z.object({
       sessionId: z.string().min(6).max(128),
     })
   )
   .mutation(async ({ ctx, input }) => {
-    const limiter = createInteractiveLimiter(getRateLimitWriter(ctx));
+    const limiter = createInteractiveLimiter(getRatelimitWriter(ctx));
     await limiter.resetUsedTokens(input.sessionId);
     return toInteractiveStatus(await limiter.check(input.sessionId));
   });
@@ -515,7 +515,7 @@ export const runCoverageProbe = privateMutation
       where: { userId: input.userId },
     });
 
-    const probes = buildCoverageProbes(getRateLimitWriter(ctx), input.userId, {
+    const probes = buildCoverageProbes(getRatelimitWriter(ctx), input.userId, {
       ip: normalizeSignal(input.ip) ?? normalizeSignal(session?.ipAddress),
       userAgent:
         normalizeSignal(input.userAgent) ?? normalizeSignal(session?.userAgent),
@@ -567,5 +567,5 @@ export const runCoverage = authAction.action(async ({ ctx }) => {
     summary: buildSummary(entries),
     validated,
     total,
-  } satisfies RateLimitCoverageSnapshot;
+  } satisfies RatelimitCoverageSnapshot;
 });

@@ -26,7 +26,7 @@ import { defineRelations } from './relations';
 import { scheduledDeleteFactory } from './scheduled-delete';
 import { scheduledMutationBatchFactory } from './scheduled-mutation-batch';
 import { getSchemaRelations, getSchemaTriggers } from './schema';
-import { OrmSchemaPluginTables, OrmSchemaRelations } from './symbols';
+import { OrmSchemaExtensionTables, OrmSchemaRelations } from './symbols';
 import type { OrmTriggers } from './triggers';
 import type { VectorSearchProvider } from './types';
 
@@ -147,9 +147,9 @@ type OrmClientWithApi<TSchema extends TablesRelationalConfig> =
 export function getResetTableNames(schema: TablesRelationalConfig): string[] {
   const pluginTables = (
     schema as {
-      [OrmSchemaPluginTables]?: readonly string[];
+      [OrmSchemaExtensionTables]?: readonly string[];
     }
-  )[OrmSchemaPluginTables];
+  )[OrmSchemaExtensionTables];
 
   return [
     ...new Set([

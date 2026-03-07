@@ -41,18 +41,18 @@ export type BetterConvexConfig = {
   };
   dev: {
     debug: boolean;
-    convexArgs: string[];
+    args: string[];
     aggregateBackfill: AggregateBackfillConfig;
     migrations: MigrationConfig;
   };
   codegen: {
     debug: boolean;
-    convexArgs: string[];
+    args: string[];
     scope?: CodegenScope;
     trimSegments: string[];
   };
   deploy: {
-    convexArgs: string[];
+    args: string[];
     aggregateBackfill: AggregateBackfillConfig;
     migrations: MigrationConfig;
   };
@@ -103,17 +103,17 @@ function createDefaultConfig(): BetterConvexConfig {
     },
     dev: {
       debug: false,
-      convexArgs: [],
+      args: [],
       aggregateBackfill: devBackfillDefaults,
       migrations: devMigrationDefaults,
     },
     codegen: {
       debug: false,
-      convexArgs: [],
+      args: [],
       trimSegments: ['plugins'],
     },
     deploy: {
-      convexArgs: [],
+      args: [],
       aggregateBackfill: deployBackfillDefaults,
       migrations: deployMigrationDefaults,
     },
@@ -409,7 +409,7 @@ function parseCommandConfig(
   configPath: string
 ): {
   debug?: boolean;
-  convexArgs?: string[];
+  args?: string[];
   scope?: CodegenScope;
   trimSegments?: string[];
   aggregateBackfill?: Partial<AggregateBackfillConfig>;
@@ -421,15 +421,15 @@ function parseCommandConfig(
   assertNoUnknownKeys(
     value,
     fieldName === 'dev'
-      ? ['debug', 'convexArgs', 'aggregateBackfill', 'migrations']
-      : ['debug', 'convexArgs', 'scope', 'trimSegments'],
+      ? ['debug', 'args', 'aggregateBackfill', 'migrations']
+      : ['debug', 'args', 'scope', 'trimSegments'],
     configPath,
     fieldName
   );
 
   const parsed: {
     debug?: boolean;
-    convexArgs?: string[];
+    args?: string[];
     scope?: CodegenScope;
     trimSegments?: string[];
     aggregateBackfill?: Partial<AggregateBackfillConfig>;
@@ -440,12 +440,8 @@ function parseCommandConfig(
     parsed.debug = parseBoolean(value.debug, `${fieldName}.debug`, configPath);
   }
 
-  if ('convexArgs' in value) {
-    parsed.convexArgs = parseStringArray(
-      value.convexArgs,
-      `${fieldName}.convexArgs`,
-      configPath
-    );
+  if ('args' in value) {
+    parsed.args = parseStringArray(value.args, `${fieldName}.args`, configPath);
   }
 
   if (
@@ -497,7 +493,7 @@ function parseDeployConfig(
   value: unknown,
   configPath: string
 ): {
-  convexArgs?: string[];
+  args?: string[];
   aggregateBackfill?: Partial<AggregateBackfillConfig>;
   migrations?: Partial<MigrationConfig>;
 } {
@@ -506,23 +502,19 @@ function parseDeployConfig(
   }
   assertNoUnknownKeys(
     value,
-    ['convexArgs', 'aggregateBackfill', 'migrations'],
+    ['args', 'aggregateBackfill', 'migrations'],
     configPath,
     'deploy'
   );
 
   const parsed: {
-    convexArgs?: string[];
+    args?: string[];
     aggregateBackfill?: Partial<AggregateBackfillConfig>;
     migrations?: Partial<MigrationConfig>;
   } = {};
 
-  if ('convexArgs' in value) {
-    parsed.convexArgs = parseStringArray(
-      value.convexArgs,
-      'deploy.convexArgs',
-      configPath
-    );
+  if ('args' in value) {
+    parsed.args = parseStringArray(value.args, 'deploy.args', configPath);
   }
 
   if ('aggregateBackfill' in value && value.aggregateBackfill !== undefined) {
@@ -734,8 +726,8 @@ export function loadBetterConvexConfig(
     if (parsed.debug !== undefined) {
       config.dev.debug = parsed.debug;
     }
-    if (parsed.convexArgs !== undefined) {
-      config.dev.convexArgs = parsed.convexArgs;
+    if (parsed.args !== undefined) {
+      config.dev.args = parsed.args;
     }
     if (parsed.aggregateBackfill !== undefined) {
       config.dev.aggregateBackfill = {
@@ -760,8 +752,8 @@ export function loadBetterConvexConfig(
     if (parsed.debug !== undefined) {
       config.codegen.debug = parsed.debug;
     }
-    if (parsed.convexArgs !== undefined) {
-      config.codegen.convexArgs = parsed.convexArgs;
+    if (parsed.args !== undefined) {
+      config.codegen.args = parsed.args;
     }
     if (parsed.scope !== undefined) {
       config.codegen.scope = parsed.scope;
@@ -773,8 +765,8 @@ export function loadBetterConvexConfig(
 
   if ('deploy' in parsedConfig) {
     const parsed = parseDeployConfig(parsedConfig.deploy, resolvedConfigPath);
-    if (parsed.convexArgs !== undefined) {
-      config.deploy.convexArgs = parsed.convexArgs;
+    if (parsed.args !== undefined) {
+      config.deploy.args = parsed.args;
     }
     if (parsed.aggregateBackfill !== undefined) {
       config.deploy.aggregateBackfill = {

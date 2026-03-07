@@ -7,6 +7,7 @@ import {
   type GenericQueryCtx,
   makeFunctionReference,
 } from 'convex/server';
+import type { GenericId } from 'convex/values';
 import { z } from 'zod';
 import type { CRPCClient } from '../crpc/types';
 import type { GenericOrmCtx } from '../orm';
@@ -304,7 +305,7 @@ const generatedLikeApi = {
     create: createApiLeaf<'mutation', typeof todosCreateRef>(todosCreateRef, {
       type: 'mutation',
       auth: 'required',
-      rateLimit: 'todo/create',
+      ratelimit: 'todo/create',
     }),
     get: createApiLeaf<'query', typeof todosGetRef>(todosGetRef, {
       type: 'query',
@@ -626,6 +627,23 @@ generatedActionCaller.schedule.now.organization.update({
   name: 'Renamed',
 });
 generatedActionCaller.schedule.now.jobs.reindex({ force: true });
+
+type GeneratedScheduleOutput = Awaited<
+  ReturnType<typeof generatedActionCaller.schedule.now.organization.update>
+>;
+type _generatedScheduleOutput = Expect<
+  Equal<GeneratedScheduleOutput, GenericId<'_scheduled_functions'>>
+>;
+type _generatedScheduleOutputNotAny = Expect<
+  Equal<false, IsAny<GeneratedScheduleOutput>>
+>;
+
+generatedActionCaller.schedule.cancel(
+  'scheduled_1' as GenericId<'_scheduled_functions'>
+);
+// @ts-expect-error schedule cancel requires scheduled function id
+generatedActionCaller.schedule.cancel('scheduled_1');
+
 // @ts-expect-error schedule caller excludes query procedures
 generatedActionCaller.schedule.now.organization.get({ slug: 'acme' });
 // @ts-expect-error action caller excludes action procedures on root

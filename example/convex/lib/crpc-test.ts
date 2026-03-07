@@ -10,8 +10,8 @@
 /* biome-ignore-all lint: type test file with intentional expressions */
 import { z } from 'zod';
 import {
-  createGeneratedAuthCaller,
-  createGeneratedAuthHandler,
+  createAuthCaller,
+  createAuthHandler,
 } from '../functions/generated/auth.runtime';
 import {
   createProjectsCaller,
@@ -638,7 +638,7 @@ export const void_return = publicMutation
 
 // 14.1 query with .meta() - meta can be set on procedures
 export const meta_query = publicQuery
-  .meta({ rateLimit: 'api/heavy' })
+  .meta({ ratelimit: 'default' })
   .query(async ({ ctx }) => {
     ctx.orm;
     return null;
@@ -646,7 +646,7 @@ export const meta_query = publicQuery
 
 // 14.2 mutation with .meta()
 export const meta_mutation = publicMutation
-  .meta({ rateLimit: 'api/create' })
+  .meta({ ratelimit: 'interactive' })
   .mutation(async ({ ctx }) => {
     ctx.orm;
     return null;
@@ -654,7 +654,7 @@ export const meta_mutation = publicMutation
 
 // 14.3 action with .meta()
 export const meta_action = publicAction
-  .meta({ rateLimit: 'api/external' })
+  .meta({ ratelimit: 'default' })
   .action(async ({ ctx }) => {
     ctx.runQuery;
     return null;
@@ -662,7 +662,7 @@ export const meta_action = publicAction
 
 // 14.4 .meta() with input and output
 export const meta_io = publicQuery
-  .meta({ rateLimit: 'api/read' })
+  .meta({ ratelimit: 'default' })
   .input(z.object({ id: z.string() }))
   .output(z.string().nullable())
   .query(async ({ ctx, input }) => {
@@ -674,7 +674,7 @@ export const meta_io = publicQuery
 
 // 14.5 .meta() with role - admin check via meta
 export const meta_middleware = authQuery
-  .meta({ role: 'admin', rateLimit: 'api/admin' })
+  .meta({ role: 'admin', ratelimit: 'default' })
   .query(async ({ ctx }) => {
     ctx.orm;
     return null;
@@ -682,13 +682,13 @@ export const meta_middleware = authQuery
 
 // 14.6 .meta() chaining - shallow merge
 export const meta_chained = publicQuery
-  .meta({ rateLimit: 'api/base' })
+  .meta({ ratelimit: 'default' })
   .meta({ dev: true })
   .query(async () => null);
 
 // 14.7 .meta() with paginated
 export const meta_paginated = publicQuery
-  .meta({ rateLimit: 'api/list' })
+  .meta({ ratelimit: 'interactive' })
   .paginated({ limit: 10, item: PaginatedUserSchema })
   .query(async ({ ctx, input }) => {
     return ctx.orm.query.user.findMany({
@@ -699,7 +699,7 @@ export const meta_paginated = publicQuery
 
 // 14.8 .meta() with internal
 export const meta_internal = publicQuery
-  .meta({ rateLimit: 'internal/batch' })
+  .meta({ ratelimit: 'default' })
   .internal()
   .query(async ({ ctx }) => {
     ctx.orm;
@@ -971,20 +971,20 @@ export const http_ctx_properties = publicRoute
 
 // 18.6 httpAction - .meta() method
 export const http_meta = publicRoute
-  .meta({ rateLimit: 'api/http' })
+  .meta({ ratelimit: 'interactive' })
   .get('/api/meta-test')
   .query(async () => ({ meta: true }));
 
 // 18.7 httpAction - .meta() with chaining
 export const http_meta_chained = publicRoute
-  .meta({ rateLimit: 'api/base' })
+  .meta({ ratelimit: 'default' })
   .meta({ dev: true })
   .get('/api/meta-chained')
   .query(async () => ({ chained: true }));
 
 // 18.8 httpAction - .meta() with input/output
 export const http_meta_io = publicRoute
-  .meta({ rateLimit: 'api/crud' })
+  .meta({ ratelimit: 'default' })
   .post('/api/meta-io')
   .input(z.object({ data: z.string() }))
   .output(z.object({ result: z.string() }))
@@ -1328,9 +1328,9 @@ const projectsMutationCaller = createProjectsCaller({} as MutationCtx);
 const projectsActionCaller = createProjectsCaller({} as ActionCtx);
 const projectsQueryHandler = createProjectsHandler({} as QueryCtx);
 const projectsMutationHandler = createProjectsHandler({} as MutationCtx);
-const generatedActionCaller = createGeneratedAuthCaller({} as ActionCtx);
-const generatedQueryHandler = createGeneratedAuthHandler({} as QueryCtx);
-const generatedMutationHandler = createGeneratedAuthHandler({} as MutationCtx);
+const generatedActionCaller = createAuthCaller({} as ActionCtx);
+const generatedQueryHandler = createAuthHandler({} as QueryCtx);
+const generatedMutationHandler = createAuthHandler({} as MutationCtx);
 
 projectsQueryCaller.list;
 // @ts-expect-error query caller excludes mutations

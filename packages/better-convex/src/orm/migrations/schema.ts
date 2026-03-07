@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { boolean, custom, integer, text } from '../builders';
+import { defineSchemaExtension, type SchemaExtension } from '../extensions';
 import { index } from '../indexes';
-import type { OrmSchemaPlugin } from '../symbols';
 import { convexTable } from '../table';
 
 export const MIGRATION_STATE_TABLE = 'migration_state';
@@ -59,19 +59,10 @@ export const MIGRATION_STORAGE_TABLE_NAMES = new Set([
   MIGRATION_RUN_TABLE,
 ]);
 
-const MIGRATION_PLUGIN_TABLE_NAMES = [
-  MIGRATION_STATE_TABLE,
-  MIGRATION_RUN_TABLE,
-] as const;
-
-export function migrationPlugin(): OrmSchemaPlugin<typeof migrationStorageTables> {
-  return {
-    key: 'migration',
-    schema: {
-      tableNames: MIGRATION_PLUGIN_TABLE_NAMES,
-      inject: injectMigrationStorageTables,
-    },
-  };
+export function migrationExtension(): SchemaExtension<
+  typeof migrationStorageTables
+> {
+  return defineSchemaExtension('migration', migrationStorageTables);
 }
 
 export function injectMigrationStorageTables<

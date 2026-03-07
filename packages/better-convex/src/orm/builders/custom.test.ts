@@ -11,6 +11,7 @@ import {
   objectOf,
   text,
   textEnum,
+  unionOf,
 } from '../index';
 
 const timelineEntryShape = {
@@ -128,6 +129,42 @@ describe('custom array/object sugar', () => {
     const sugarPayload = (sugarEvents.validator as any).json.value.payload;
 
     expect(sugarPayload).toEqual(customPayload);
+  });
+
+  test('unionOf(...) matches custom(v.union(...)) for heterogeneous scalar values', () => {
+    const customValues = convexTable('values_custom_union_test', {
+      value: custom(v.union(v.string(), v.number())).notNull(),
+    });
+
+    const sugarValues = convexTable('values_union_of_test', {
+      value: unionOf(text().notNull(), integer().notNull()).notNull(),
+    });
+
+    const customValue = (customValues.validator as any).json.value.value;
+    const sugarValue = (sugarValues.validator as any).json.value.value;
+
+    expect(sugarValue).toEqual(customValue);
+  });
+
+  test('objectOf(unionOf(...)) matches custom(v.record(...)) for record payloads', () => {
+    const customTemplates = convexTable('templates_custom_variables_test', {
+      variables: custom(
+        v.record(v.string(), v.union(v.string(), v.number()))
+      ).notNull(),
+    });
+
+    const sugarTemplates = convexTable('templates_object_of_variables_test', {
+      variables: objectOf(
+        unionOf(text().notNull(), integer().notNull()).notNull()
+      ).notNull(),
+    });
+
+    const customVariables = (customTemplates.validator as any).json.value
+      .variables;
+    const sugarVariables = (sugarTemplates.validator as any).json.value
+      .variables;
+
+    expect(sugarVariables).toEqual(customVariables);
   });
 
   test('supports nested builder shape without direct v.* usage', () => {

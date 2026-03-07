@@ -47,7 +47,7 @@ const DEFAULT_CONFIG: BetterConvexConfig = {
   },
   dev: {
     debug: false,
-    convexArgs: [],
+    args: [],
     aggregateBackfill: {
       enabled: 'auto',
       wait: true,
@@ -68,11 +68,11 @@ const DEFAULT_CONFIG: BetterConvexConfig = {
   },
   codegen: {
     debug: false,
-    convexArgs: [],
+    args: [],
     trimSegments: ['plugins'],
   },
   deploy: {
-    convexArgs: [],
+    args: [],
     aggregateBackfill: {
       enabled: 'auto',
       wait: true,
@@ -254,7 +254,7 @@ describe('cli/config', () => {
       },
       dev: {
         debug: true,
-        convexArgs: ['--team', 'dev-team'],
+        args: ['--team', 'dev-team'],
         aggregateBackfill: {
           enabled: 'on',
           wait: false,
@@ -272,12 +272,12 @@ describe('cli/config', () => {
       },
       codegen: {
         debug: true,
-        convexArgs: ['--prod'],
+        args: ['--prod'],
         scope: 'auth',
         trimSegments: ['plugins', 'internal'],
       },
       deploy: {
-        convexArgs: ['--prod'],
+        args: ['--prod'],
         aggregateBackfill: {
           enabled: 'auto',
           wait: true,
@@ -305,7 +305,7 @@ describe('cli/config', () => {
         },
         dev: {
           debug: true,
-          convexArgs: ['--team', 'dev-team'],
+          args: ['--team', 'dev-team'],
           aggregateBackfill: {
             enabled: 'on',
             wait: false,
@@ -326,12 +326,12 @@ describe('cli/config', () => {
         },
         codegen: {
           debug: true,
-          convexArgs: ['--prod'],
+          args: ['--prod'],
           scope: 'auth',
           trimSegments: ['plugins', 'internal'],
         },
         deploy: {
-          convexArgs: ['--prod'],
+          args: ['--prod'],
           aggregateBackfill: {
             enabled: 'auto',
             wait: true,

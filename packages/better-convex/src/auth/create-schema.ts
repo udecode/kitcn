@@ -6,7 +6,7 @@ export const indexFields = {
   account: ['accountId', ['accountId', 'providerId'], ['providerId', 'userId']],
   oauthConsent: [['clientId', 'userId']],
   passkey: ['credentialID'],
-  rateLimit: ['key'],
+  ratelimit: ['key'],
   session: ['expiresAt', ['expiresAt', 'userId']],
   user: [['email', 'name'], 'name', 'userId'],
   verification: ['expiresAt', 'identifier'],

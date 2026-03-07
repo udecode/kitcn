@@ -12,11 +12,13 @@ import {
 import { execa } from 'execa';
 import { createJiti } from 'jiti';
 import { getTableConfig } from '../orm/introspection.js';
+import { getSchemaRelations } from '../orm/schema.js';
 import { runAnalyze } from './analyze.js';
 import { generateMeta, getConvexConfig } from './codegen.js';
 import {
   type AggregateBackfillConfig,
   type BackfillEnabled,
+  type BetterConvexConfig,
   loadBetterConvexConfig,
   type MigrationConfig,
 } from './config.js';
@@ -27,7 +29,9 @@ import {
   getSupportedPluginKeys,
   isSupportedPluginKey,
   PLUGIN_CONFIG_IMPORT_PLACEHOLDER,
+  PLUGIN_SCHEMA_IMPORT_PLACEHOLDER,
   type PluginCatalogEntry,
+  type PluginEnvField,
   PROJECT_CRPC_IMPORT_PLACEHOLDER,
   PROJECT_GET_ENV_ACCESS_PLACEHOLDER,
   PROJECT_GET_ENV_IMPORT_PLACEHOLDER,
@@ -48,10 +52,10 @@ const MISSING_BACKFILL_FUNCTION_RE =
   /could not find function|function .* was not found|unknown function/i;
 const GITIGNORE_CONVEX_ENTRY_RE = /(^|\r?\n)\.convex\/?\s*(\r?\n|$)/m;
 const TS_EXTENSION_RE = /\.ts$/;
-const DEFINE_SCHEMA_WITH_OPTIONS_RE =
-  /defineSchema\s*\(([\s\S]*?),\s*\{([\s\S]*?)\}\s*\)/m;
 const DEFINE_SCHEMA_CALL_RE = /defineSchema\s*\(([\s\S]*?)\)/m;
-const PLUGINS_ARRAY_RE = /plugins\s*:\s*\[([\s\S]*?)\]/m;
+const CHAIN_EXTEND_RE = /\.extend\s*\(([\s\S]*?)\)/m;
+const CHAIN_RELATIONS_RE = /\.relations\s*\(/m;
+const CHAIN_TRIGGERS_RE = /\.triggers\s*\(/m;
 const AGGREGATE_STATE_RELATIVE_PATH = join(
   '.convex',
   'better-convex',
@@ -70,8 +74,7 @@ export type ParsedArgs = {
 };
 
 const VALID_SCOPES = new Set(['all', 'auth', 'orm']);
-const ORM_SCHEMA_PLUGINS = Symbol.for('better-convex:OrmSchemaPlugins');
-const ORM_SCHEMA_RELATIONS = Symbol.for('better-convex:OrmSchemaRelations');
+const ORM_SCHEMA_EXTENSIONS = Symbol.for('better-convex:OrmSchemaExtensions');
 type SupportedPlugin = SupportedPluginKey;
 const SUPPORTED_PLUGINS = new Set<SupportedPlugin>(getSupportedPluginKeys());
 type PluginLockfile = {
@@ -125,6 +128,12 @@ type ScaffoldResult = {
   skipped: string[];
 };
 
+type PluginEnvReminder = {
+  key: string;
+  path: string;
+  message?: string;
+};
+
 type ScaffoldDiffStatus = 'changed' | 'missing';
 
 type ScaffoldDiffResult = {
@@ -148,6 +157,9 @@ type CliSelectOption<TValue extends string> = {
   label: string;
   hint?: string;
 };
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 type PromptAdapter = {
   isInteractive: () => boolean;
@@ -997,6 +1009,189 @@ function normalizeLockfileScaffoldPath(value: unknown): string | null {
   return normalized;
 }
 
+const DEFAULT_ENV_HELPER_BASENAME = 'get-env.ts';
+const BASE_ENV_FIELDS: readonly PluginEnvField[] = [
+  {
+    key: 'DEPLOY_ENV',
+    schema: "z.string().default('production')",
+  },
+  {
+    key: 'SITE_URL',
+    schema: "z.string().default('http://localhost:3000')",
+  },
+];
+const ENV_SCHEMA_RE = /(const\s+\w+\s*=\s*z\.object\(\{\n)([\s\S]*?)(\n\}\);)/m;
+
+function resolveDefaultEnvHelperPath(config: BetterConvexConfig): string {
+  return normalizePath(
+    posix.join(
+      normalizeRelativePathOrThrow(config.paths.lib, 'paths.lib'),
+      DEFAULT_ENV_HELPER_BASENAME
+    )
+  );
+}
+
+function resolveConfigWritePath(configPathArg?: string): string {
+  return resolve(process.cwd(), configPathArg ?? 'concave.json');
+}
+
+function resolveEnvHelperFilePath(envPath: string): string {
+  const normalized = normalizeRelativePathOrThrow(envPath, 'paths.env');
+  const resolved = resolve(process.cwd(), normalized);
+  if (fs.existsSync(resolved) || resolved.endsWith('.ts')) {
+    return resolved;
+  }
+  return `${resolved}.ts`;
+}
+
+function renderEnvHelperContent(
+  envFields: readonly PluginEnvField[],
+  existingContent?: string
+): string {
+  const fields = [...BASE_ENV_FIELDS];
+  for (const field of envFields) {
+    if (!fields.some((existing) => existing.key === field.key)) {
+      fields.push(field);
+    }
+  }
+
+  if (!existingContent) {
+    const fieldLines = fields
+      .map((field) => `  ${field.key}: ${field.schema},`)
+      .join('\n');
+    return `import { createEnv } from 'better-convex/server';\nimport { z } from 'zod';\n\nconst envSchema = z.object({\n${fieldLines}\n});\n\nexport const getEnv = createEnv({\n  schema: envSchema,\n});\n`;
+  }
+
+  const match = existingContent.match(ENV_SCHEMA_RE);
+  if (!match) {
+    throw new Error(
+      'Expected env helper to define `const envSchema = z.object({ ... });`.'
+    );
+  }
+
+  const existingBody = match[2];
+  const missingFieldLines = fields
+    .filter((field) => {
+      const fieldPattern = new RegExp(`(^|\\n)\\s*${field.key}\\s*:`, 'm');
+      return !fieldPattern.test(existingBody);
+    })
+    .map((field) => `  ${field.key}: ${field.schema},`);
+
+  if (missingFieldLines.length === 0) {
+    return existingContent;
+  }
+
+  const nextBody = `${existingBody}${existingBody.endsWith('\n') ? '' : '\n'}${missingFieldLines.join('\n')}`;
+  return existingContent.replace(
+    ENV_SCHEMA_RE,
+    `${match[1]}${nextBody}${match[3]}`
+  );
+}
+
+function renderConfigWithEnvPath(
+  configPath: string,
+  config: BetterConvexConfig,
+  envPath: string
+): string {
+  const existingRaw = fs.existsSync(configPath)
+    ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    : {};
+  if (!isPlainObject(existingRaw)) {
+    throw new Error(`Invalid config file ${configPath}: expected object.`);
+  }
+
+  const nextRoot = { ...existingRaw } as Record<string, unknown>;
+  const nextMeta = isPlainObject(nextRoot.meta) ? { ...nextRoot.meta } : {};
+  const nextBetterConvex = isPlainObject(nextMeta['better-convex'])
+    ? { ...(nextMeta['better-convex'] as Record<string, unknown>) }
+    : {};
+  const nextPaths = isPlainObject(nextBetterConvex.paths)
+    ? { ...(nextBetterConvex.paths as Record<string, unknown>) }
+    : {};
+
+  nextPaths.lib = config.paths.lib;
+  nextPaths.shared = config.paths.shared;
+  nextPaths.env = envPath;
+
+  nextBetterConvex.paths = nextPaths;
+  nextMeta['better-convex'] = nextBetterConvex;
+  nextRoot.meta = nextMeta;
+
+  return `${JSON.stringify(nextRoot, null, 2)}\n`;
+}
+
+function buildEnvBootstrapFiles(
+  config: BetterConvexConfig,
+  configPathArg: string | undefined,
+  envFields: readonly PluginEnvField[]
+): {
+  config: BetterConvexConfig;
+  files: ScaffoldFile[];
+} {
+  const envPath = config.paths.env ?? resolveDefaultEnvHelperPath(config);
+  const nextConfig = config.paths.env
+    ? config
+    : {
+        ...config,
+        paths: {
+          ...config.paths,
+          env: envPath,
+        },
+      };
+
+  const envFilePath = resolveEnvHelperFilePath(envPath);
+  const envFileContent = renderEnvHelperContent(
+    envFields,
+    fs.existsSync(envFilePath)
+      ? fs.readFileSync(envFilePath, 'utf8')
+      : undefined
+  );
+
+  const files: ScaffoldFile[] = [
+    {
+      templateId: '__better-convex-env__',
+      filePath: envFilePath,
+      lockfilePath: normalizePath(relative(process.cwd(), envFilePath)),
+      content: envFileContent,
+    },
+  ];
+
+  if (!config.paths.env) {
+    const configFilePath = resolveConfigWritePath(configPathArg);
+    files.unshift({
+      templateId: '__better-convex-config__',
+      filePath: configFilePath,
+      lockfilePath: normalizePath(relative(process.cwd(), configFilePath)),
+      content: renderConfigWithEnvPath(configFilePath, nextConfig, envPath),
+    });
+  }
+
+  return {
+    config: nextConfig,
+    files,
+  };
+}
+
+function resolvePluginEnvReminders(
+  functionsDir: string,
+  envFields: readonly PluginEnvField[]
+): PluginEnvReminder[] {
+  const envPath = normalizePath(
+    relative(process.cwd(), join(functionsDir, '.env'))
+  );
+  return envFields.flatMap((field) =>
+    field.reminder
+      ? [
+          {
+            key: field.key,
+            path: envPath,
+            message: field.reminder.message,
+          } satisfies PluginEnvReminder,
+        ]
+      : []
+  );
+}
+
 function resolvePluginScaffoldRoots(
   functionsDir: string,
   descriptor: PluginDescriptor,
@@ -1010,7 +1205,7 @@ function resolvePluginScaffoldRoots(
     crpcFilePath: join(libRoot, 'crpc.ts'),
     sharedApiFilePath: resolve(process.cwd(), config.paths.shared, 'api.ts'),
     envFilePath: config.paths.env
-      ? resolve(process.cwd(), config.paths.env)
+      ? resolveEnvHelperFilePath(config.paths.env)
       : undefined,
   };
 }
@@ -1058,6 +1253,10 @@ function resolvePluginScaffoldFiles(
       .replaceAll(
         PLUGIN_CONFIG_IMPORT_PLACEHOLDER,
         resolvePluginConfigImportPrefix(filePath, roots.libRootDir)
+      )
+      .replaceAll(
+        PLUGIN_SCHEMA_IMPORT_PLACEHOLDER,
+        resolvePluginSchemaImportPrefix(filePath, roots.libRootDir)
       );
 
     if (roots.envFilePath && content.includes('process.env')) {
@@ -1093,60 +1292,52 @@ function resolvePluginConfigImportPrefix(
   filePath: string,
   libPluginRootDir: string
 ): string {
-  const pluginConfigFile = join(libPluginRootDir, 'plugin.ts');
-  const relativePath = normalizePath(
-    relative(dirname(filePath), pluginConfigFile)
-  ).replace(TS_EXTENSION_RE, '');
-  if (relativePath.length === 0 || relativePath === '.') {
-    return './plugin';
-  }
-  if (relativePath.startsWith('.')) {
-    return relativePath;
-  }
-  return `./${relativePath}`;
+  return resolveRelativeImportPath(
+    filePath,
+    join(libPluginRootDir, 'plugin.ts')
+  );
+}
+
+function resolvePluginSchemaImportPrefix(
+  filePath: string,
+  libPluginRootDir: string
+): string {
+  return resolveRelativeImportPath(
+    filePath,
+    join(libPluginRootDir, 'schema.ts')
+  );
 }
 
 function resolveProjectCrpcImportPrefix(
   filePath: string,
   projectCrpcFilePath: string
 ): string {
-  const relativePath = normalizePath(
-    relative(dirname(filePath), projectCrpcFilePath)
-  ).replace(TS_EXTENSION_RE, '');
-  if (relativePath.length === 0 || relativePath === '.') {
-    return './crpc';
-  }
-  if (relativePath.startsWith('.')) {
-    return relativePath;
-  }
-  return `./${relativePath}`;
+  return resolveRelativeImportPath(filePath, projectCrpcFilePath);
 }
 
 function resolveProjectSharedApiImportPrefix(
   filePath: string,
   sharedApiFilePath: string
 ): string {
-  const relativePath = normalizePath(
-    relative(dirname(filePath), sharedApiFilePath)
-  ).replace(TS_EXTENSION_RE, '');
-  if (relativePath.length === 0 || relativePath === '.') {
-    return './api';
-  }
-  if (relativePath.startsWith('.')) {
-    return relativePath;
-  }
-  return `./${relativePath}`;
+  return resolveRelativeImportPath(filePath, sharedApiFilePath);
 }
 
 function resolveProjectGetEnvImportPrefix(
   filePath: string,
   getEnvFilePath: string
 ): string {
+  return resolveRelativeImportPath(filePath, getEnvFilePath);
+}
+
+function resolveRelativeImportPath(
+  filePath: string,
+  targetFilePath: string
+): string {
   const relativePath = normalizePath(
-    relative(dirname(filePath), getEnvFilePath)
+    relative(dirname(filePath), targetFilePath)
   ).replace(TS_EXTENSION_RE, '');
   if (relativePath.length === 0 || relativePath === '.') {
-    return './get-env';
+    return '.';
   }
   if (relativePath.startsWith('.')) {
     return relativePath;
@@ -1291,7 +1482,7 @@ async function resolveSchemaInstalledPlugins(
       return [];
     }
     const plugins = (schemaValue as Record<symbol, unknown>)[
-      ORM_SCHEMA_PLUGINS
+      ORM_SCHEMA_EXTENSIONS
     ];
     if (!Array.isArray(plugins)) {
       return [];
@@ -1413,10 +1604,11 @@ function computeScaffoldDiffs(
   return diffs;
 }
 
-function ensureSchemaPluginRegistered(
+function ensureSchemaExtensionRegistered(
   functionsDir: string,
   descriptor: PluginDescriptor,
-  dryRun: boolean
+  dryRun: boolean,
+  roots: ResolvedScaffoldRoots
 ): { updated: boolean; skipped: boolean } {
   const schemaPath = join(functionsDir, 'schema.ts');
   if (!fs.existsSync(schemaPath)) {
@@ -1425,7 +1617,14 @@ function ensureSchemaPluginRegistered(
 
   const schemaRegistration = descriptor.schemaRegistration;
   const pluginFactory = schemaRegistration.importName;
-  const pluginImportPath = schemaRegistration.importPath;
+  const registrationRoot =
+    schemaRegistration.target === 'lib'
+      ? roots.libRootDir
+      : roots.functionsRootDir;
+  const pluginImportPath = resolveRelativeImportPath(
+    schemaPath,
+    join(registrationRoot, schemaRegistration.path)
+  );
 
   let source = fs.readFileSync(schemaPath, 'utf8');
   const original = source;
@@ -1440,23 +1639,25 @@ function ensureSchemaPluginRegistered(
     source = `import { ${pluginFactory} } from '${pluginImportPath}';\n${source}`;
   }
 
-  if (PLUGINS_ARRAY_RE.test(source)) {
+  if (CHAIN_EXTEND_RE.test(source)) {
     source = source.replace(
-      PLUGINS_ARRAY_RE,
-      (_match, inner: string) =>
-        `plugins: [${pluginFactory}(), ${inner.trim()}]`
+      CHAIN_EXTEND_RE,
+      (_match, inner: string) => `.extend(${pluginFactory}(), ${inner.trim()})`
     );
-  } else if (DEFINE_SCHEMA_WITH_OPTIONS_RE.test(source)) {
+  } else if (CHAIN_RELATIONS_RE.test(source)) {
     source = source.replace(
-      DEFINE_SCHEMA_WITH_OPTIONS_RE,
-      (_match, schemaArg: string, optionsArg: string) =>
-        `defineSchema(${schemaArg}, { plugins: [${pluginFactory}()], ${optionsArg.trim()} })`
+      CHAIN_RELATIONS_RE,
+      `.extend(${pluginFactory}()).relations(`
+    );
+  } else if (CHAIN_TRIGGERS_RE.test(source)) {
+    source = source.replace(
+      CHAIN_TRIGGERS_RE,
+      `.extend(${pluginFactory}()).triggers(`
     );
   } else if (DEFINE_SCHEMA_CALL_RE.test(source)) {
     source = source.replace(
       DEFINE_SCHEMA_CALL_RE,
-      (_match, schemaArg: string) =>
-        `defineSchema(${schemaArg}, { plugins: [${pluginFactory}()] })`
+      (match: string) => `${match}.extend(${pluginFactory}())`
     );
   }
 
@@ -1533,9 +1734,7 @@ function resolveSchemaDefaultExport(
 
 function collectSchemaTables(schemaValue: Record<string, unknown>): unknown[] {
   const allTables = new Set<unknown>();
-  const relations = (schemaValue as Record<string | symbol, unknown>)[
-    ORM_SCHEMA_RELATIONS
-  ];
+  const relations = getSchemaRelations(schemaValue);
   if (relations && typeof relations === 'object' && !Array.isArray(relations)) {
     for (const relationConfig of Object.values(
       relations as Record<string, unknown>
@@ -1795,7 +1994,7 @@ async function runConfiguredCodegen(params: {
   const scope = config.codegen.scope;
   const trimSegments = resolveCodegenTrimSegments(config);
   const convexCodegenArgs = [
-    ...config.codegen.convexArgs,
+    ...config.codegen.args,
     ...(additionalConvexArgs ?? []),
   ];
   await generateMetaFn(sharedDir, {
@@ -3075,7 +3274,7 @@ export async function run(
       extractBackfillCliOptions(devArgsWithoutMigrationFlags);
     const sharedDir = cliSharedDir ?? config.paths.shared;
     const debug = cliDebug || config.dev.debug;
-    const convexDevArgs = [...config.dev.convexArgs, ...devCommandArgs];
+    const convexDevArgs = [...config.dev.args, ...devCommandArgs];
     const devBackfillConfig = resolveBackfillConfig(
       config.dev.aggregateBackfill,
       devBackfillOverrides
@@ -3352,10 +3551,16 @@ export async function run(
       presetTemplateIds,
       availableTemplateIds: allTemplates.map((template) => template.id),
     });
+    const envBootstrap = buildEnvBootstrapFiles(
+      config,
+      configPath,
+      pluginDescriptor.envFields ?? []
+    );
+    const effectiveConfig = envBootstrap.config;
     const scaffoldRoots = resolvePluginScaffoldRoots(
       functionsDir,
       pluginDescriptor,
-      config
+      effectiveConfig
     );
     const selectedTemplateIds =
       !addArgs.yes && promptAdapter.isInteractive()
@@ -3391,6 +3596,10 @@ export async function run(
       dependencyHints.length > 0
         ? `bun add ${dependencyHints.join(' ')}`
         : undefined;
+    const envReminders = resolvePluginEnvReminders(
+      functionsDir,
+      pluginDescriptor.envFields ?? []
+    );
     const nextSteps = dependencyHintCommand
       ? [`Install scaffold dependencies: ${dependencyHintCommand}`]
       : [];
@@ -3402,7 +3611,7 @@ export async function run(
       existingTemplatePathMap
     );
     if (!addArgs.json) {
-      const selectedFiles = scaffoldFiles
+      const selectedFiles = [...envBootstrap.files, ...scaffoldFiles]
         .map((file) => normalizePath(relative(process.cwd(), file.filePath)))
         .sort((a, b) => a.localeCompare(b));
       console.info(
@@ -3411,16 +3620,46 @@ export async function run(
           .join('\n')}`
       );
     }
-    const scaffoldResult = await applyScaffoldFiles(scaffoldFiles, {
+    const envBootstrapResult = await applyScaffoldFiles(envBootstrap.files, {
       dryRun: addArgs.dryRun,
       yes: addArgs.yes,
       overwrite: addArgs.overwrite,
       promptAdapter,
     });
-    const schemaRegistration = ensureSchemaPluginRegistered(
+    const requiredEnvBootstrapConflicts = addArgs.dryRun
+      ? []
+      : envBootstrap.files
+          .map((file) => ({
+            filePath: normalizePath(file.filePath),
+            hasMismatch:
+              fs.existsSync(file.filePath) &&
+              fs.readFileSync(file.filePath, 'utf8') !== file.content,
+          }))
+          .filter((file) => file.hasMismatch)
+          .map((file) => file.filePath);
+    if (requiredEnvBootstrapConflicts.length > 0) {
+      throw new Error(
+        `Cannot scaffold "${selectedPlugin}" without updating required env bootstrap files:\n${requiredEnvBootstrapConflicts
+          .map((file) => `  - ${file}`)
+          .join('\n')}`
+      );
+    }
+    const pluginScaffoldResult = await applyScaffoldFiles(scaffoldFiles, {
+      dryRun: addArgs.dryRun,
+      yes: addArgs.yes,
+      overwrite: addArgs.overwrite,
+      promptAdapter,
+    });
+    const scaffoldResult: ScaffoldResult = {
+      created: [...envBootstrapResult.created, ...pluginScaffoldResult.created],
+      updated: [...envBootstrapResult.updated, ...pluginScaffoldResult.updated],
+      skipped: [...envBootstrapResult.skipped, ...pluginScaffoldResult.skipped],
+    };
+    const schemaRegistration = ensureSchemaExtensionRegistered(
       functionsDir,
       pluginDescriptor,
-      addArgs.dryRun
+      addArgs.dryRun,
+      scaffoldRoots
     );
     const dependencyInstall = await ensurePluginDependencyInstalled({
       descriptor: pluginDescriptor,
@@ -3475,6 +3714,7 @@ export async function run(
         reason: dependencyInstall.reason,
       },
       dependencyHints,
+      envReminders,
       nextSteps,
       lockfilePath: normalizePath(relative(process.cwd(), lockfilePath)),
     };
@@ -3512,7 +3752,7 @@ export async function run(
         }
       }
       if (schemaRegistration.updated) {
-        console.info('✔ Updated schema.ts plugin registration.');
+        console.info('✔ Updated schema.ts extension registration.');
       }
       if (dependencyInstall.installed) {
         console.info(`✔ Installed ${dependencyInstall.packageName}.`);
@@ -3528,13 +3768,32 @@ export async function run(
           console.info(`Install command: ${dependencyHintCommand}`);
         }
       }
+      if (envReminders.length > 0) {
+        const remindersByPath = new Map<string, PluginEnvReminder[]>();
+        for (const reminder of envReminders) {
+          const existing = remindersByPath.get(reminder.path) ?? [];
+          existing.push(reminder);
+          remindersByPath.set(reminder.path, existing);
+        }
+        for (const [envPath, reminders] of remindersByPath.entries()) {
+          console.info(`ℹ️  Set plugin env values in ${envPath}.`);
+          console.info(
+            `Environment values:\n${reminders
+              .map(
+                (reminder) =>
+                  `  - ${reminder.key}${reminder.message ? `: ${reminder.message}` : ''}`
+              )
+              .join('\n')}`
+          );
+        }
+      }
     }
 
     if (!addArgs.noCodegen && !addArgs.dryRun) {
       const codegenExitCode = await runConfiguredCodegen({
-        config,
+        config: effectiveConfig,
         sharedDir,
-        debug: cliDebug || config.codegen.debug,
+        debug: cliDebug || effectiveConfig.codegen.debug,
         generateMetaFn,
         execaFn,
         realConvexPath,
@@ -3544,8 +3803,8 @@ export async function run(
       }
     }
 
-    if (!addArgs.dryRun && config.hooks.postAdd.length > 0) {
-      for (const script of config.hooks.postAdd) {
+    if (!addArgs.dryRun && effectiveConfig.hooks.postAdd.length > 0) {
+      for (const script of effectiveConfig.hooks.postAdd) {
         const hookExitCode = await runAfterScaffoldScript({
           script,
           execaFn,
@@ -3805,7 +4064,7 @@ export async function run(
     }
 
     const config = loadBetterConvexConfigFn(configPath);
-    const resetArgs = [...config.deploy.convexArgs, ...resetCommandArgs];
+    const resetArgs = [...config.deploy.args, ...resetCommandArgs];
     const deploymentArgs = extractRunDeploymentArgs(resetArgs);
 
     const runOptionalHook = async (functionName: string | undefined) => {
@@ -3869,7 +4128,7 @@ export async function run(
       remainingArgs: deployCommandArgs,
       overrides: deployBackfillOverrides,
     } = extractBackfillCliOptions(deployArgsWithoutMigrationFlags);
-    const deployArgs = [...config.deploy.convexArgs, ...deployCommandArgs];
+    const deployArgs = [...config.deploy.args, ...deployCommandArgs];
     const deployResult = await execaFn(
       'node',
       [realConvexPath, 'deploy', ...deployArgs],
@@ -3954,7 +4213,7 @@ export async function run(
       ...resolveMigrationConfig(config.deploy.migrations, migrationOverrides),
       enabled: 'on' as const,
     };
-    const commandArgs = [...config.deploy.convexArgs, ...migrationCommandArgs];
+    const commandArgs = [...config.deploy.args, ...migrationCommandArgs];
     const deploymentArgs = extractRunDeploymentArgs(commandArgs);
 
     if (subcommand === 'up') {
@@ -4042,10 +4301,7 @@ export async function run(
       remainingArgs: aggregateCommandArgs,
       overrides: aggregateBackfillOverrides,
     } = extractBackfillCliOptions(restArgs.slice(1));
-    const aggregateArgs = [
-      ...config.deploy.convexArgs,
-      ...aggregateCommandArgs,
-    ];
+    const aggregateArgs = [...config.deploy.args, ...aggregateCommandArgs];
     const backfillConfig = {
       ...resolveBackfillConfig(
         config.deploy.aggregateBackfill,

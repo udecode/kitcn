@@ -39,7 +39,7 @@ export const api = {
     create: {
       type: 'mutation',
       auth: 'required',
-      rateLimit: 'user/create',
+      ratelimit: 'user/create',
       functionRef: /* Convex FunctionReference */,
     },
   },
@@ -70,7 +70,7 @@ const c = initCRPC
   .meta<{
     auth?: 'optional' | 'required';
     role?: 'admin';
-    rateLimit?: string;
+    ratelimit?: string;
   }>()
   .create();
 ```
@@ -89,7 +89,7 @@ export const adminOnly = authQuery
   });
 
 export const createSession = authMutation
-  .meta({ rateLimit: 'session/create' })
+  .meta({ ratelimit: 'session/create' })
   .input(z.object({ token: z.string() }))
   .mutation(async ({ ctx, input }) => {
     const [row] = await ctx.orm
@@ -112,16 +112,15 @@ const roleMiddleware = c.middleware(({ ctx, meta, next }) => {
   return next({ ctx });
 });
 
-const rateLimitMiddleware = c.middleware(async ({ ctx, meta, next }) => {
-  await rateLimitGuard({
-    key: meta.rateLimit ?? 'default',
-    userId: ctx.userId,
-  });
-  return next({ ctx });
+const ratelimit = RatelimitPlugin.configure({
+  buckets: ratelimitBuckets,
+  getBucket: ({ meta }: { meta: { ratelimit?: string } }) =>
+    meta.ratelimit ?? 'default',
+  // ...
 });
 ```
 
-The middleware reads `meta.role` and `meta.rateLimit` to decide what checks to apply.
+The role middleware reads `meta.role`, and the ratelimit plugin reads `meta.ratelimit` through `getBucket(...)`.
 
 ## Default Meta
 
@@ -133,7 +132,7 @@ const c = initCRPC
   .meta<{
     auth?: 'optional' | 'required';
     role?: 'admin';
-    rateLimit?: string;
+    ratelimit?: string;
   }>()
   .create({
     defaultMeta: { auth: 'optional' },
@@ -158,9 +157,9 @@ export const adminQuery = authQuery
   .meta({ role: 'admin' });
 // Meta: { auth: 'required', role: 'admin' }
 
-export const rateLimitedAdmin = adminQuery
-  .meta({ rateLimit: 'admin/heavy' });
-// Meta: { auth: 'required', role: 'admin', rateLimit: 'admin/heavy' }
+export const ratelimitedAdmin = adminQuery
+  .meta({ ratelimit: 'admin/heavy' });
+// Meta: { auth: 'required', role: 'admin', ratelimit: 'admin/heavy' }
 ```
 
 This makes it easy to build procedure variants with progressively more configuration.
@@ -229,22 +228,12 @@ Apply different rate limits based on metadata:
 ```ts title="convex/lib/crpc.ts" showLineNumbers {2,5-12,15-16}
 const c = initCRPC
   .dataModel<DataModel>()
-  .meta<{ rateLimit?: string }>()
+  .meta<{ ratelimit?: string }>()
   .create();
 
-const rateLimitMiddleware = c.middleware(async ({ ctx, meta, next }) => {
-  if (meta.rateLimit) {
-    await rateLimitGuard({
-      key: meta.rateLimit,
-      userId: ctx.userId,
-    });
-  }
-  return next({ ctx });
-});
-
 export const createSession = authMutation
-  .meta({ rateLimit: 'session/create' })
-  .use(rateLimitMiddleware)
+  .meta({ ratelimit: 'session/create' })
+  .use(ratelimit.middleware())
   .mutation(async ({ ctx, input }) => { ... });
 ```
 

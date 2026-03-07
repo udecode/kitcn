@@ -1,7 +1,6 @@
-import { v } from 'convex/values';
-import { custom, id, integer, text } from '../builders';
+import { arrayOf, id, integer, json, objectOf, text } from '../builders';
+import { defineSchemaExtension, type SchemaExtension } from '../extensions';
 import { index } from '../indexes';
-import type { OrmSchemaPlugin } from '../symbols';
 import { convexTable } from '../table';
 
 export const AGGREGATE_BUCKET_TABLE = 'aggregate_bucket';
@@ -17,10 +16,10 @@ export const countBucketTable = convexTable(
     tableKey: text().notNull(),
     indexName: text().notNull(),
     keyHash: text().notNull(),
-    keyParts: custom(v.array(v.any())).notNull(),
+    keyParts: arrayOf(json()).notNull(),
     count: integer().notNull(),
-    sumValues: custom(v.record(v.string(), v.number())).notNull(),
-    nonNullCountValues: custom(v.record(v.string(), v.number())).notNull(),
+    sumValues: objectOf(integer().notNull()).notNull(),
+    nonNullCountValues: objectOf(integer().notNull()).notNull(),
     updatedAt: integer().notNull(),
   },
   (t) => [
@@ -37,12 +36,12 @@ export const countMemberTable = convexTable(
     indexName: text().notNull(),
     docId: text().notNull(),
     keyHash: text().notNull(),
-    keyParts: custom(v.array(v.any())).notNull(),
-    sumValues: custom(v.record(v.string(), v.number())).notNull(),
-    nonNullCountValues: custom(v.record(v.string(), v.number())).notNull(),
-    extremaValues: custom(v.record(v.string(), v.any())).notNull(),
-    rankNamespace: custom(v.any()),
-    rankKey: custom(v.any()),
+    keyParts: arrayOf(json()).notNull(),
+    sumValues: objectOf(integer().notNull()).notNull(),
+    nonNullCountValues: objectOf(integer().notNull()).notNull(),
+    extremaValues: objectOf(json()).notNull(),
+    rankNamespace: json(),
+    rankKey: json(),
     rankSumValue: integer(),
     updatedAt: integer().notNull(),
   },
@@ -65,7 +64,7 @@ export const countExtremaTable = convexTable(
     keyHash: text().notNull(),
     fieldName: text().notNull(),
     valueHash: text().notNull(),
-    value: custom(v.any()).notNull(),
+    value: json().notNull(),
     sortKey: text().notNull(),
     count: integer().notNull(),
     updatedAt: integer().notNull(),
@@ -111,23 +110,12 @@ export const countStateTable = convexTable(
   ]
 );
 
-const aggregateCounterValidator = v.object({
-  count: v.number(),
-  sum: v.number(),
-});
-
-const aggregateItemValidator = v.object({
-  k: v.any(),
-  v: v.any(),
-  s: v.number(),
-});
-
 export const rankTreeTable = convexTable(
   AGGREGATE_RANK_TREE_TABLE,
   {
     aggregateName: text().notNull(),
     maxNodeSize: integer().notNull(),
-    namespace: custom(v.any()),
+    namespace: json(),
     root: id(AGGREGATE_RANK_NODE_TABLE).notNull(),
   },
   (tree) => [
@@ -137,9 +125,18 @@ export const rankTreeTable = convexTable(
 );
 
 export const rankNodeTable = convexTable(AGGREGATE_RANK_NODE_TABLE, {
-  aggregate: custom(aggregateCounterValidator),
-  items: custom(v.array(aggregateItemValidator)).notNull(),
-  subtrees: custom(v.array(v.string())).notNull(),
+  aggregate: objectOf({
+    count: integer().notNull(),
+    sum: integer().notNull(),
+  }),
+  items: arrayOf(
+    objectOf({
+      k: json(),
+      v: json(),
+      s: integer().notNull(),
+    })
+  ).notNull(),
+  subtrees: arrayOf(text().notNull()).notNull(),
 });
 
 export const aggregateStorageTables = {
@@ -160,25 +157,10 @@ export const AGGREGATE_STORAGE_TABLE_NAMES = new Set([
   AGGREGATE_STATE_TABLE,
 ]);
 
-const AGGREGATE_PLUGIN_TABLE_NAMES = [
-  AGGREGATE_BUCKET_TABLE,
-  AGGREGATE_MEMBER_TABLE,
-  AGGREGATE_EXTREMA_TABLE,
-  AGGREGATE_RANK_TREE_TABLE,
-  AGGREGATE_RANK_NODE_TABLE,
-  AGGREGATE_STATE_TABLE,
-] as const;
-
-export function aggregatePlugin(): OrmSchemaPlugin<
+export function aggregateExtension(): SchemaExtension<
   typeof aggregateStorageTables
 > {
-  return {
-    key: 'aggregate',
-    schema: {
-      tableNames: AGGREGATE_PLUGIN_TABLE_NAMES,
-      inject: injectAggregateStorageTables,
-    },
-  };
+  return defineSchemaExtension('aggregate', aggregateStorageTables);
 }
 
 export function injectAggregateStorageTables<

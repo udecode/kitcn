@@ -182,7 +182,7 @@ describe('cli/codegen', () => {
             type: 'query',
             auth: 'optional',
             role: 'admin',
-            rateLimit: 10,
+            ratelimit: 10,
             dev: true,
             nested: { a: 1 },
           },
@@ -565,7 +565,7 @@ describe('cli/codegen', () => {
       expect(api.items.queries.list.type).toBe('query');
       expect(api.items.queries.list.auth).toBe('optional');
       expect(api.items.queries.list.role).toBe('admin');
-      expect(api.items.queries.list.rateLimit).toBe(10);
+      expect(api.items.queries.list.ratelimit).toBe(10);
       expect(api.items.queries.list.dev).toBe(true);
       expect(api.items.queries.list.functionRef).toBe(api.items.queries.list);
       expect(api.items.queries).not.toHaveProperty('internalOnly');
@@ -2388,7 +2388,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta ignores plugin codegen module metadata from schema plugins', async () => {
+  test('generateMeta ignores plugin codegen module metadata from schema extensions', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -2398,10 +2398,10 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
-        const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+        const OrmSchemaExtensions = Symbol.for('better-convex:OrmSchemaExtensions');
 
         const schema = {};
-        Object.defineProperty(schema, OrmSchemaPlugins, {
+        Object.defineProperty(schema, OrmSchemaExtensions, {
           value: [
             {
               key: 'resend',
@@ -2481,10 +2481,10 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
-        const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+        const OrmSchemaExtensions = Symbol.for('better-convex:OrmSchemaExtensions');
 
         const schema = {};
-        Object.defineProperty(schema, OrmSchemaPlugins, {
+        Object.defineProperty(schema, OrmSchemaExtensions, {
           value: [
             {
               key: 'ratelimit',
@@ -2540,10 +2540,10 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
-        const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+        const OrmSchemaExtensions = Symbol.for('better-convex:OrmSchemaExtensions');
 
         const schema = {};
-        Object.defineProperty(schema, OrmSchemaPlugins, {
+        Object.defineProperty(schema, OrmSchemaExtensions, {
           value: [
             {
               key: 'resend',
@@ -2582,10 +2582,10 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
-        const OrmSchemaPlugins = Symbol.for('better-convex:OrmSchemaPlugins');
+        const OrmSchemaExtensions = Symbol.for('better-convex:OrmSchemaExtensions');
 
         const schema = {};
-        Object.defineProperty(schema, OrmSchemaPlugins, {
+        Object.defineProperty(schema, OrmSchemaExtensions, {
           value: [
             {
               key: 'resend',

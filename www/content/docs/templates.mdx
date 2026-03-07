@@ -137,7 +137,7 @@ import {
   text,
   timestamp,
 } from 'better-convex/orm';
-import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
+import { ratelimitExtension } from '../lib/plugins/ratelimit/schema';
 
 // Better Auth core tables (minimal template)
 export const userTable = convexTable(
@@ -219,8 +219,7 @@ export const tables = {
 
 const schema = defineSchema(tables, {
   strict: false,
-  plugins: [ratelimitPlugin()], // only required if you use @better-convex/ratelimit
-});
+}).extend(ratelimitExtension()); // only required if you scaffold ratelimit
 const relations = defineRelations(tables);
 export default schema;
 ```
@@ -244,7 +243,7 @@ import { createUserCaller } from '../functions/generated/user.runtime';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
-import { rateLimitGuard } from './rate-limiter';
+import { ratelimit, type RatelimitBucket } from './plugins/ratelimit/plugin';
 
 /** Context with optional auth - user/userId may be null */
 export type MaybeAuthCtx<Ctx extends MutationCtx | QueryCtx = QueryCtx> =
@@ -272,7 +271,7 @@ const c = initCRPC
   .meta<{
     auth?: 'optional' | 'required';
     role?: 'admin';
-    rateLimit?: string;
+    ratelimit?: RatelimitBucket;
     dev?: boolean;
   }>()
   .create();
@@ -284,17 +283,6 @@ const devMiddleware = c.middleware<object>(({ meta, next, ctx }) => {
       message: 'This function is only available in development',
     });
   }
-  return next({ ctx });
-});
-
-const rateLimitMiddleware = c.middleware<
-  MutationCtx & { user?: Pick<SessionUser, 'id' | 'plan'> | null }
->(async ({ ctx, meta, next }) => {
-  await rateLimitGuard({
-    ...ctx,
-    rateLimitKey: meta.rateLimit ?? 'default',
-    user: ctx.user ?? null,
-  });
   return next({ ctx });
 });
 
@@ -359,7 +347,7 @@ export const authQuery = c.query
   })
   .use(roleMiddleware);
 
-export const publicMutation = c.mutation.use(devMiddleware).use(rateLimitMiddleware);
+export const publicMutation = c.mutation.use(devMiddleware).use(ratelimit.middleware());
 export const privateMutation = c.mutation.internal();
 
 export const optionalAuthMutation = c.mutation
@@ -383,7 +371,7 @@ export const optionalAuthMutation = c.mutation
       },
     });
   })
-  .use(rateLimitMiddleware);
+  .use(ratelimit.middleware());
 
 export const authMutation = c.mutation
   .meta({ auth: 'required' })
@@ -405,7 +393,7 @@ export const authMutation = c.mutation
     });
   })
   .use(roleMiddleware)
-  .use(rateLimitMiddleware);
+  .use(ratelimit.middleware());
 
 export const publicAction = c.action.use(devMiddleware);
 export const privateAction = c.action.use(devMiddleware).internal();
@@ -933,83 +921,70 @@ const triggers = defineTriggers(relations, {
 
 See [Triggers documentation](/docs/orm/schema/triggers) for patterns.
 
-### rate-limiter.ts
+### plugins/ratelimit/plugin.ts
 
-If you use this guard, enable the schema plugin in `convex/functions/schema.ts`:
+If you use ratelimiting, register the local ratelimit schema extension in `convex/functions/schema.ts`:
 
 ```ts showLineNumbers
-import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
+import { ratelimitExtension } from '../lib/plugins/ratelimit/schema';
 
-export default defineSchema(tables, {
-  plugins: [ratelimitPlugin()],
-});
+export default defineSchema(tables).extend(ratelimitExtension());
 ```
 
-```ts title="convex/lib/rate-limiter.ts" showLineNumbers
-import { MINUTE, Ratelimit } from '@better-convex/ratelimit';
-import { CRPCError } from 'better-convex/server';
-import type { MutationCtx } from '../functions/generated/server';
-import type { SessionUser } from '../shared/auth-shared';
+```ts title="convex/lib/plugins/ratelimit/plugin.ts" showLineNumbers
+import { getSessionNetworkSignals } from 'better-convex/auth';
+import { MINUTE, Ratelimit, RatelimitPlugin } from 'better-convex/ratelimit';
+import type { MutationCtx } from '../../../functions/generated/server';
+import type { Select } from '../../../shared/api';
 
 const fixed = (rate: number) => Ratelimit.fixedWindow(rate, MINUTE);
 
-const rateLimitConfig = {
-  'default:free': fixed(60),
-  'default:premium': fixed(200),
-  'default:public': fixed(30),
-  'todo/create:free': fixed(20),
-  'todo/create:premium': fixed(60),
+export const ratelimitBuckets = {
+  default: {
+    public: fixed(30),
+    free: fixed(60),
+    premium: fixed(200),
+  },
 } as const;
 
-export function getRateLimitKey(
-  baseKey: string,
-  tier: 'free' | 'premium' | 'public'
-): string {
-  const specificKey = `${baseKey}:${tier}`;
+type RatelimitTier = keyof (typeof ratelimitBuckets)['default'];
+export type RatelimitBucket = keyof typeof ratelimitBuckets;
 
-  if (specificKey in rateLimitConfig) {
-    return specificKey;
-  }
+type RatelimitUser = {
+  id: string;
+  isAdmin?: boolean;
+  plan?: 'premium' | 'team' | null;
+  session?: Select<'session'> | null;
+};
 
-  return `default:${tier}`;
-}
+type RatelimitCtx = MutationCtx & {
+  user?: RatelimitUser | null;
+};
 
-export function getUserTier(
-  user: { isAdmin?: boolean; plan?: SessionUser['plan'] } | null
-): 'free' | 'premium' | 'public' {
+type RatelimitMeta = {
+  ratelimit?: RatelimitBucket;
+};
+
+export function getUserTier(user: RatelimitUser | null): RatelimitTier {
   if (!user) return 'public';
-  if (user.isAdmin) return 'premium';
-  if (user.plan) return 'premium';
+  if (user.isAdmin || user.plan) return 'premium';
   return 'free';
 }
 
-export async function rateLimitGuard(
-  ctx: MutationCtx & {
-    rateLimitKey: string;
-    user: Pick<SessionUser, 'id' | 'plan'> | null;
-  }
-) {
-  const tier = getUserTier(ctx.user);
-  const limitKey = getRateLimitKey(ctx.rateLimitKey, tier);
-  const identifier = ctx.user?.id ?? 'anonymous';
-
-  const limiter = new Ratelimit({
-    db: ctx.db,
-    prefix: `app:${limitKey}`,
-    limiter: rateLimitConfig[limitKey],
-    failureMode: 'closed',
-    enableProtection: true,
-    denyListThreshold: 30,
-  });
-  const status = await limiter.limit(identifier);
-
-  if (!status.success) {
-    throw new CRPCError({
-      code: 'TOO_MANY_REQUESTS',
-      message: 'Rate limit exceeded. Please try again later.',
-    });
-  }
-}
+export const ratelimit = RatelimitPlugin.configure({
+  buckets: ratelimitBuckets,
+  getBucket: ({ meta }: { meta: RatelimitMeta }) => meta.ratelimit ?? 'default',
+  getUser: ({ ctx }: { ctx: RatelimitCtx }) => ctx.user ?? null,
+  getIdentifier: ({ user }: { user: RatelimitUser | null }) =>
+    user?.id ?? 'anonymous',
+  getTier: getUserTier,
+  getSignals: ({ ctx, user }: { ctx: RatelimitCtx; user: RatelimitUser | null }) =>
+    getSessionNetworkSignals(ctx, user?.session ?? null),
+  prefix: ({ bucket, tier }) => `ratelimit:${bucket}:${tier}`,
+  failureMode: 'closed',
+  enableProtection: true,
+  denyListThreshold: 30,
+});
 ```
 
 See [Rate Limiting documentation](/docs/plugins/ratelimit) for setup.

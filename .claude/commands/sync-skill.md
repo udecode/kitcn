@@ -1,10 +1,10 @@
 ---
-description: Sync doc changes from www/content/docs/ into skills/convex/
+description: Sync doc changes from www/content/docs/ into packages/better-convex/skills/convex/
 ---
 
 ## Task
 
-Sync recent doc changes into `skills/convex/` so the skill stays current.
+Sync recent doc changes into `packages/better-convex/skills/convex/` so the skill stays current.
 
 **Input**: $ARGUMENTS (doc file path, PR diff, or "all" to scan for drift)
 

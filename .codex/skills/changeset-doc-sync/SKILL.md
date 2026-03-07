@@ -1,6 +1,6 @@
 ---
 name: changeset-doc-sync
-description: Use when syncing docs in www and skills/convex to active changeset(s) with per-file checkmarks.
+description: Use when syncing docs in www and packages/better-convex/skills/convex to active changeset(s) with per-file checkmarks.
 ---
 
 # Changeset Doc Sync
@@ -34,7 +34,7 @@ Use this workflow when release docs must match current changeset content.
    - Include every file in:
      - `www/**/*.md`
      - `www/**/*.mdx`
-     - `skills/convex/**/*.md`
+     - `packages/better-convex/skills/convex/**/*.md`
    - Keep `/example` crosswalk checklist in `task_plan.md` in sync during the run.
 
 5. Read every listed doc and sync:
@@ -69,10 +69,10 @@ Use this workflow when release docs must match current changeset content.
 - [ ] `www/content/docs/a.mdx` — pending
 - [ ] `www/content/docs/b.mdx` — pending
 
-### Phase: Doc Sync Checklist (skills/convex)
+### Phase: Doc Sync Checklist (packages/better-convex/skills/convex)
 
-- [ ] `skills/convex/SKILL.md` — pending
-- [ ] `skills/convex/references/setup/index.md` — pending
+- [ ] `packages/better-convex/skills/convex/SKILL.md` — pending
+- [ ] `packages/better-convex/skills/convex/references/setup/index.md` — pending
 
 ### Phase: /example-to-doc Crosswalk (required)
 
@@ -97,15 +97,15 @@ Use this workflow when release docs must match current changeset content.
 
 - [ ] `www/path/to/doc.mdx` — pending
 
-## skills/convex docs
+## packages/better-convex/skills/convex docs
 
-- [ ] `skills/convex/SKILL.md` — pending
-- [ ] `skills/convex/references/setup/index.md` — pending
+- [ ] `packages/better-convex/skills/convex/SKILL.md` — pending
+- [ ] `packages/better-convex/skills/convex/references/setup/index.md` — pending
 
 ## Synced
 
 - [x] `www/path/to/doc.mdx` — updated for `@convex/api` migration
-- [x] `skills/convex/references/setup/index.md` — no change needed
+- [x] `packages/better-convex/skills/convex/references/setup/index.md` — no change needed
 ```
 
 ## Suggested commands
@@ -116,5 +116,5 @@ git diff --stat -- example
 git diff -- example
 find .changeset -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | sort
 find www -type f \( -name '*.md' -o -name '*.mdx' \) | sort
-{ echo 'skills/convex/SKILL.md'; find skills/convex/references -type f -name '*.md' | sort; }
+{ echo 'packages/better-convex/skills/convex/SKILL.md'; find packages/better-convex/skills/convex/references -type f -name '*.md' | sort; }
 ```

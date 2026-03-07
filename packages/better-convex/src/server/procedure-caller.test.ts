@@ -1,3 +1,4 @@
+import type { GenericId } from 'convex/values';
 import { z } from 'zod';
 import { initCRPC } from './builder';
 import {
@@ -507,8 +508,10 @@ describe('server/procedure-caller', () => {
 
     const mutationRef = { path: 'posts.create' } as any;
     const actionRef = { path: 'jobs.reindex' } as any;
-    const runAfter = mock(async () => 'sched_after');
-    const runAt = mock(async () => 'sched_at');
+    const scheduledAfterId = 'sched_after' as GenericId<'_scheduled_functions'>;
+    const scheduledAtId = 'sched_at' as GenericId<'_scheduled_functions'>;
+    const runAfter = mock(async () => scheduledAfterId);
+    const runAt = mock(async () => scheduledAtId);
     const cancel = mock(async () => {});
 
     const registry = {
@@ -540,14 +543,14 @@ describe('server/procedure-caller', () => {
 
     await expect(
       caller.schedule.now.posts.create({ name: 'alpha' })
-    ).resolves.toBe('sched_after');
+    ).resolves.toBe(scheduledAfterId);
     await expect(
       caller.schedule.after(50).jobs.reindex({ force: true })
-    ).resolves.toBe('sched_after');
+    ).resolves.toBe(scheduledAfterId);
     const date = new Date('2026-01-01T00:00:00.000Z');
     await expect(
       caller.schedule.at(date).jobs.reindex({ force: true })
-    ).resolves.toBe('sched_at');
+    ).resolves.toBe(scheduledAtId);
     await caller.schedule.cancel('scheduled_id' as any);
 
     expect(runAfter).toHaveBeenCalledTimes(2);
@@ -569,7 +572,8 @@ describe('server/procedure-caller', () => {
 
   test('generated caller scheduling dispatches non-cRPC exports with function reference metadata', async () => {
     const mutationRef = { path: 'generated.server.aggregateBackfill' } as any;
-    const runAfter = mock(async () => 'sched_after');
+    const scheduledAfterId = 'sched_after' as GenericId<'_scheduled_functions'>;
+    const runAfter = mock(async () => scheduledAfterId);
 
     const registry = {
       'generated.server.aggregateBackfill': [
@@ -596,7 +600,7 @@ describe('server/procedure-caller', () => {
       caller.schedule.now.generated.server.aggregateBackfill({
         mode: 'resume',
       } as any)
-    ).resolves.toBe('sched_after');
+    ).resolves.toBe(scheduledAfterId);
 
     expect(runAfter).toHaveBeenCalledTimes(1);
     expect(runAfter).toHaveBeenCalledWith(0, mutationRef, {

@@ -158,7 +158,7 @@ export const authMutation = c.mutation
   .use(devMiddleware)
   .use(authMiddleware)
   .use(roleMiddleware)
-  .use(rateLimitMiddleware);
+  .use(ratelimit.middleware());
 ```
 
 ### Role Guard Helper

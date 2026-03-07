@@ -1,8 +1,7 @@
-import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
 import {
   convexTable,
   defineSchema,
-  defineTriggers,
+  defineSchemaExtension,
   getSchemaRelations,
   getSchemaTriggers,
   getTableConfig,
@@ -10,8 +9,21 @@ import {
   text,
   timestamp,
 } from './index';
-import type { OrmSchemaPlugin } from './symbols';
-import { OrmSchemaPlugins } from './symbols';
+import { OrmSchemaExtensions } from './symbols';
+
+function ratelimitExtension() {
+  return defineSchemaExtension('ratelimit', {
+    ratelimitState: convexTable('ratelimit_state', {
+      name: text().notNull(),
+    }),
+    ratelimitDynamicLimit: convexTable('ratelimit_dynamic_limit', {
+      prefix: text().notNull(),
+    }),
+    ratelimitProtectionHit: convexTable('ratelimit_protection_hit', {
+      value: text().notNull(),
+    }),
+  });
+}
 
 test('convexTable works with defineSchema()', () => {
   const users = convexTable('users', {
@@ -164,50 +176,52 @@ test('defineSchema does not inject ratelimit storage tables by default', () => {
 
   const schema = defineSchema({ users });
 
-  expect(schema.tables).not.toHaveProperty('ratelimit_state');
-  expect(schema.tables).not.toHaveProperty('ratelimit_dynamic_limit');
-  expect(schema.tables).not.toHaveProperty('ratelimit_protection_hit');
+  expect(schema.tables).not.toHaveProperty('ratelimitState');
+  expect(schema.tables).not.toHaveProperty('ratelimitDynamicLimit');
+  expect(schema.tables).not.toHaveProperty('ratelimitProtectionHit');
 });
 
-test('defineSchema injects ratelimit storage tables when ratelimitPlugin is enabled', () => {
+test('defineSchema injects ratelimit storage tables when ratelimitExtension is enabled', () => {
   const users = convexTable('ratelimit_schema_plugin_users', {
     name: text().notNull(),
   });
 
-  const schema = defineSchema({ users }, { plugins: [ratelimitPlugin()] });
+  const schema = defineSchema({ users }).extend(ratelimitExtension());
 
-  expect(schema.tables).toHaveProperty('ratelimit_state');
-  expect(schema.tables).toHaveProperty('ratelimit_dynamic_limit');
-  expect(schema.tables).toHaveProperty('ratelimit_protection_hit');
+  expect(schema.tables).toHaveProperty('ratelimitState');
+  expect(schema.tables).toHaveProperty('ratelimitDynamicLimit');
+  expect(schema.tables).toHaveProperty('ratelimitProtectionHit');
 });
 
-test('defineSchema stores resolved plugin descriptors for downstream codegen', () => {
+test('defineSchema stores resolved extension descriptors for downstream codegen', () => {
   const users = convexTable('plugin_descriptor_users', {
     name: text().notNull(),
   });
 
-  const schema = defineSchema({ users }, { plugins: [ratelimitPlugin()] });
+  const schema = defineSchema({ users }).extend(ratelimitExtension());
 
-  const plugins = (
-    schema as { [OrmSchemaPlugins]?: readonly { key: string }[] }
-  )[OrmSchemaPlugins];
+  const extensions = (
+    schema as { [OrmSchemaExtensions]?: readonly { key: string }[] }
+  )[OrmSchemaExtensions];
 
-  expect(plugins?.map((plugin) => plugin.key)).toEqual(
+  expect(extensions?.map((extension) => extension.key)).toEqual(
     expect.arrayContaining(['aggregate', 'migration', 'ratelimit'])
   );
 });
 
-test('defineSchema throws for duplicate plugin registration', () => {
+test('defineSchema throws for duplicate extension registration', () => {
   const users = convexTable('duplicate_plugin_users', {
     name: text().notNull(),
   });
 
   expect(() =>
-    defineSchema({ users }, { plugins: [ratelimitPlugin(), ratelimitPlugin()] })
-  ).toThrow(/duplicate plugin/i);
+    defineSchema({
+      users,
+    }).extend(ratelimitExtension(), ratelimitExtension())
+  ).toThrow(/duplicate extension/i);
 });
 
-test('defineSchema throws when plugin-injected table name is already in use', () => {
+test('defineSchema throws when extension-injected table name is already in use', () => {
   const users = convexTable('plugin_collision_users', {
     name: text().notNull(),
   });
@@ -216,14 +230,11 @@ test('defineSchema throws when plugin-injected table name is already in use', ()
   });
 
   expect(() =>
-    defineSchema(
-      { users, ratelimit_state: ratelimitState },
-      { plugins: [ratelimitPlugin()] }
-    )
-  ).toThrow(/cannot inject internal table 'ratelimit_state'/i);
+    defineSchema({ users, ratelimitState }).extend(ratelimitExtension())
+  ).toThrow(/cannot inject internal table 'ratelimitState'/i);
 });
 
-test('defineSchema stores relations metadata from options on default schema export', () => {
+test('defineSchema stores relations metadata from chained relations on default schema export', () => {
   const users = convexTable('schema_meta_users', {
     name: text().notNull(),
   });
@@ -233,20 +244,16 @@ test('defineSchema stores relations metadata from options on default schema expo
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
   });
+  const tables = { users, posts } as const;
 
-  const schema = defineSchema(
-    { users, posts },
-    {
-      relations: (r) => ({
-        users: {
-          posts: r.many.posts(),
-        },
-        posts: {
-          user: r.one.users({ from: r.posts.userId, to: r.users.id }),
-        },
-      }),
-    }
-  );
+  const schema = defineSchema(tables).relations((r) => ({
+    users: {
+      posts: r.many.posts(),
+    },
+    posts: {
+      user: r.one.users({ from: r.posts.userId, to: r.users.id }),
+    },
+  }));
 
   const relations = getSchemaRelations(schema);
   expect(relations).toBeDefined();
@@ -254,160 +261,162 @@ test('defineSchema stores relations metadata from options on default schema expo
   expect(relations).toHaveProperty('posts');
 });
 
-test('defineSchema stores trigger metadata from options on default schema export', () => {
+test('defineSchema stores trigger metadata from chained triggers on default schema export', () => {
   const users = convexTable('schema_meta_trigger_users', {
     name: text().notNull(),
     updatedAt: timestamp().notNull().defaultNow(),
   });
+  const tables = { users } as const;
 
-  const schema = defineSchema(
-    { users },
-    {
-      relations: (r) => ({
-        users: {},
-      }),
-      triggers: (relations) =>
-        defineTriggers(relations, {
-          users: {
-            change: async () => {},
-          },
-        }),
-    }
-  );
+  const schema = defineSchema(tables)
+    .relations(() => ({
+      users: {},
+    }))
+    .triggers({
+      users: {
+        change: async () => {},
+      },
+    });
 
   const triggers = getSchemaTriggers(schema);
   expect(triggers).toBeDefined();
   expect(triggers).toHaveProperty('users');
 });
 
-test('defineSchema composes plugin-provided relations when app relations are not provided', () => {
-  const users = convexTable('schema_plugin_rel_users', {
+test('defineSchema composes extension-provided relations when app relations are not provided', () => {
+  const users = convexTable('schema_plugin_ext_users', {
     name: text().notNull(),
   });
-  const posts = convexTable('schema_plugin_rel_posts', {
+  const posts = convexTable('schema_plugin_ext_posts', {
     title: text().notNull(),
-    userId: id('schema_plugin_rel_users')
+    userId: id('schema_plugin_ext_users')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
   });
 
-  const relationPlugin = {
-    key: 'relation-plugin',
-    schema: {
-      tableNames: [],
-      inject: <TSchema extends Record<string, unknown>>(schema: TSchema) =>
-        schema,
-      relations: (r) => ({
-        users: {
-          posts: r.many.posts(),
-        },
-        posts: {
-          user: r.one.users({
-            from: r.posts.userId,
-            to: r.users.id,
-          }),
-        },
+  const relationExtension = defineSchemaExtension('relation-plugin', {
+    users,
+    posts,
+  }).relations((r) => ({
+    users: {
+      posts: r.many.posts(),
+    },
+    posts: {
+      user: r.one.users({
+        from: r.posts.userId,
+        to: r.users.id,
       }),
     },
-  } satisfies OrmSchemaPlugin;
+  }));
 
-  const schema = defineSchema(
-    { users, posts },
-    { plugins: [relationPlugin] as const }
-  );
+  const schema = defineSchema({}).extend(relationExtension);
   const relations = getSchemaRelations(schema);
 
   expect(relations).toBeDefined();
   expect(relations?.users?.relations).toHaveProperty('posts');
 });
 
-test('defineSchema composes plugin relations with app relations', () => {
-  const users = convexTable('schema_plugin_rel_merge_users', {
+test('defineSchema composes extension relations with app relations', () => {
+  const users = convexTable('schema_plugin_ext_merge_users', {
     name: text().notNull(),
   });
-  const posts = convexTable('schema_plugin_rel_merge_posts', {
+  const posts = convexTable('schema_plugin_ext_merge_posts', {
     title: text().notNull(),
-    userId: id('schema_plugin_rel_merge_users')
+    userId: id('schema_plugin_ext_merge_users')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
   });
 
-  const relationPlugin = {
-    key: 'relation-merge-plugin',
-    schema: {
-      tableNames: [],
-      inject: <TSchema extends Record<string, unknown>>(schema: TSchema) =>
-        schema,
-      relations: (r) => ({
-        users: {
-          posts: r.many.posts(),
-        },
-      }),
+  const relationExtension = defineSchemaExtension('relation-merge-plugin', {
+    users,
+    posts,
+  }).relations((r) => ({
+    users: {
+      posts: r.many.posts(),
     },
-  } satisfies OrmSchemaPlugin;
+  }));
+  const extensions = [relationExtension] as const;
 
-  const schema = defineSchema(
-    { users, posts },
-    {
-      plugins: [relationPlugin] as const,
-      relations: (r) => ({
-        posts: {
-          user: r.one.users({
-            from: r.posts.userId,
-            to: r.users.id,
-          }),
-        },
-      }),
-    }
-  );
+  const schema = defineSchema({})
+    .extend(...extensions)
+    .relations((r) => ({
+      posts: {
+        user: r.one.users({
+          from: r.posts.userId,
+          to: r.users.id,
+        }),
+      },
+    }));
   const relations = getSchemaRelations(schema);
 
   expect(relations?.users?.relations).toHaveProperty('posts');
   expect(relations?.posts?.relations).toHaveProperty('user');
 });
 
-test('defineSchema throws when plugin relations collide with app relation fields', () => {
-  const users = convexTable('schema_plugin_rel_collision_users', {
+test('defineSchema throws when extension relations collide with app relation fields', () => {
+  const users = convexTable('schema_plugin_ext_collision_users', {
     name: text().notNull(),
   });
-  const posts = convexTable('schema_plugin_rel_collision_posts', {
+  const posts = convexTable('schema_plugin_ext_collision_posts', {
     title: text().notNull(),
-    userId: id('schema_plugin_rel_collision_users')
+    userId: id('schema_plugin_ext_collision_users')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
   });
 
-  const relationPlugin = {
-    key: 'relation-collision-plugin',
-    schema: {
-      tableNames: [],
-      inject: <TSchema extends Record<string, unknown>>(schema: TSchema) =>
-        schema,
-      relations: (r) => ({
+  const relationExtension = defineSchemaExtension('relation-collision-plugin', {
+    users,
+    posts,
+  }).relations((r) => ({
+    users: {
+      posts: r.many.posts(),
+    },
+    posts: {
+      user: r.one.users({
+        from: r.posts.userId,
+        to: r.users.id,
+      }),
+    },
+  }));
+  const extensions = [relationExtension] as const;
+
+  expect(() =>
+    defineSchema({})
+      .extend(...extensions)
+      .relations((r) => ({
         users: {
           posts: r.many.posts(),
         },
-        posts: {
-          user: r.one.users({
-            from: r.posts.userId,
-            to: r.users.id,
-          }),
-        },
-      }),
-    },
-  } satisfies OrmSchemaPlugin;
-
-  expect(() =>
-    defineSchema(
-      { users, posts },
-      {
-        plugins: [relationPlugin] as const,
-        relations: (r) => ({
-          users: {
-            posts: r.many.posts(),
-          },
-        }),
-      }
-    )
+      }))
   ).toThrow(/relation field 'users\.posts' is defined more than once/i);
+});
+
+test('defineSchema composes extension triggers with app triggers', () => {
+  const users = convexTable('schema_extension_trigger_users', {
+    name: text().notNull(),
+  });
+
+  const triggerExtension = defineSchemaExtension('trigger-extension', { users })
+    .relations((r) => ({
+      users: {},
+    }))
+    .triggers({
+      users: {
+        change: async () => {},
+      },
+    });
+
+  const schema = defineSchema({})
+    .extend(triggerExtension)
+    .triggers({
+      users: {
+        create: {
+          after: async () => {},
+        },
+      },
+    });
+
+  const triggers = getSchemaTriggers(schema);
+  expect(triggers?.users?.change).toBeFunction();
+  expect(triggers?.users?.create?.after).toBeFunction();
 });

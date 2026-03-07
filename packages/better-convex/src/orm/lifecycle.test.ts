@@ -72,12 +72,7 @@ const createUsersSchema = (
   const triggerConfig = {
     users: hooks as any,
   };
-  const schema = defineSchema(
-    { users },
-    {
-      triggers: (relations) => defineTriggers(relations, triggerConfig as any),
-    }
-  );
+  const schema = defineSchema({ users }).triggers(triggerConfig as any);
   return { users, schema };
 };
 

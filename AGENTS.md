@@ -10,13 +10,15 @@
 - Parity: Don't reinvent the wheel. Before designing APIs or architecture, study how proven OSS projects solve the same problem — Drizzle (schema/ORM), tRPC (procedures/middleware), shadcn (CLI/codegen), better-auth (plugin system/auth). Adopt their patterns when applicable. Do `ls` in `..` directory to find the respective repositories, then inspect their source code when needed.
 - DX: Optimize for the absolute best developer experience. CLI must be first-class for agents — deterministic, machine-readable output (--json), non-interactive defaults (--yes), composable commands. Every API surface should be intuitive for both humans and AI agents.
 - Docs (www/): NEVER write changelog-style language ("has been removed", "new feature", "previously", "now supports"). Docs are user-facing reference for the LATEST state only. Write as if no prior version exists. No migration notes, no "what changed" — just document what IS. Follow docs/solutions/style.md for writing tone/structure.
-- Docs sync: When updating www/ docs, also update the corresponding content in skills/convex/SKILL.md or skills/convex/references/ to stay synced. Follow skills/convex/references/setup/doc-guidelines.md for compression/placement rules.
-- Plugins: ALWAYS read skills/convex/references/features/create-plugins.md before creating or modifying plugins. Keep it synced when any plugin API changes in the package.
+- Docs sync: When updating www/ docs, also update the corresponding content in packages/better-convex/skills/convex/SKILL.md or packages/better-convex/skills/convex/references/ to stay synced. Follow packages/better-convex/skills/convex/references/setup/doc-guidelines.md for compression/placement rules.
+- Plugins: ALWAYS read packages/better-convex/skills/convex/references/features/create-plugins.md before creating or modifying plugins. Keep it synced when any plugin API changes in the package.
+- Intent maintainer loop: use `bunx intent scaffold` when you need new skills or a major skill reshuffle; for normal work, update docs and `packages/better-convex/skills/convex/**` in the same diff; run `bunx intent validate skills` and `bunx intent stale`; keep `@tanstack/intent`, `bin/intent.js`, `bin.intent`, and package `files` wired; verify with `npm pack --json --dry-run ./packages/better-convex`; after release, treat `intent feedback` as product input — tighten the skill if wording is wrong, fix the API if the same workaround keeps repeating.
 - Always use @.claude/skills/changeset/changeset.mdc when updating packages to write a changeset before completing
 - After any package modification, run `bun --cwd packages/better-convex build`, then touch `example/convex/functions/schema.ts` to trigger a re-build
 - Use tdd skill for package updates that add or change live behavior.
 - Do not write TDD cases for dead code/legacy removal assertions (for example: "should not contain old API X anymore"). Remove the dead path directly and keep tests focused on current behavior.
 - Never edit scaffolded example output first. Change package templates/source, then regenerate scaffold files via CLI.
+- Never update example plugin files directly. Update the package plugin template first, then regenerate with `better-convex add ... --overwrite`.
 - Prefer inline Zod schemas when used once; extract constants only when reused.
 
 ## General
@@ -27,22 +29,32 @@
 - When using git worktree, copy `example/.env.local` and `example/convex/.env` to the worktree directory.
 - Dirty workspace: Never pause to ask about unrelated local changes. Continue work and ignore unrelated diffs.
 - If you get `failed to load config from /Users/zbeyens/GitHub/better-convex/vitest.config.mts`, rimraf `**/node_modules` and install again.
+- Use `bun convex:logs` to watch the Convex logs
 
-## Browser Testing
+## Skill Overrides
+
+When using the following skills, override the default behavior.
+
+`planning-with-files`:
+
+- Do not create `task_plan.md`, `findings.md`, or `progress.md` at repo root. Merge that content into one file under `docs/plans/`. Example: `docs/plans/2026-02-07-fix-schema.md`
+
+`agent-browser`:
 
 - Never close agent-browser
 - Use `--headed` only you failed to test and need manual input from human.
 - Port 3005 for main app
 - Use `agent-browser` instead of Do NOT use next-devtools `browser_eval` (overlaps with agent-browser)
-- Use `bun convex:logs` to watch the Convex logs
+- If `agent-browser` gets blocked or loops on the same step, stop and ask the user to unblock. After the unblock works:
+  - [Add browser learning]
 
-## Compound Engineering Overrides
+`workflows:*`:
 
 - **Git:** Never git add, commit, push, or create PR unless the user explicitly asks.
+- **PR:** Before creating or updating a PR, run `bun check`. If it fails, stop and fix it or report the blocker. Do not open a PR with failing `bun check` unless the user explicitly says to.
 - **plan:** Include test-browser in acceptance criteria for browser features
 - **deepen-plan:** Context7 only when not covered by skills
 - **work:** UI tasks require test-browser BEFORE marking complete. Never guess.
-- **review:** Skip kieran-rails, dhh-rails, rails-turbo. Trust user input (internal). Keep simple.
 
 ## Prompt Hook
 
@@ -77,6 +89,7 @@
 
 - [ ] Typecheck (IF updated .ts files): Bash `bun typecheck`
 - [ ] Lint: Bash `bun lint:fix`
+- [ ] PR gate (IF creating/updating a PR): Bash `bun check`
 - [ ] Learn (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: Skill(learn) NOW to extract the knowledge (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
 
 ### Post Compact Recovery
@@ -94,375 +107,22 @@
 
 
 
-<!-- Source: .claude/skills/1-app-design-document/1-app-design-document.mdc -->
-
-# App Design System
-
-Use `frontend-design` skill for new UI features.
-
-## Aesthetic
-
-Refined minimal (Linear/Notion style). Step-up from shadcn defaults without over-using cards.
-
-## Constraints
-
-- **DO NOT edit** `src/components/ui/*` (shadcn components)
-- Use shadcn tokens (bg-secondary, text-muted-foreground, etc.)
-- Borderless separation: `bg-secondary/40` instead of `border`
-- Button variants: `secondary` over `outline`, `ghost` for cancel
-
-## Patterns
-
-### Page Container
-```tsx
-<div className="mx-auto max-w-5xl px-6 py-8 @3xl:px-8 @3xl:py-12">
-```
-
-### Page Header
-```tsx
-<header className="mb-10">
-  <div className="flex items-start justify-between gap-4">
-    <div className="space-y-1">
-      <h1 className="font-semibold text-2xl tracking-tight">Title</h1>
-      <p className="text-muted-foreground text-sm">Description</p>
-    </div>
-    <Button variant="secondary" size="sm">Action</Button>
-  </div>
-</header>
-```
-
-### Section (replaces Card)
-```tsx
-<section className="mb-8">
-  <h2 className="mb-3 font-medium text-muted-foreground text-sm uppercase tracking-wide">
-    Section Title
-  </h2>
-  <div className="rounded-lg bg-secondary/30">
-    {/* content */}
-  </div>
-</section>
-```
-
-### List Item (borderless)
-```tsx
-<div className="rounded-md px-4 py-3 transition-colors hover:bg-secondary/50">
-```
-
-### Grid Card
-```tsx
-<div className="group rounded-lg bg-secondary/40 p-4 transition-colors hover:bg-secondary/60">
-  <h3 className="font-medium group-hover:underline">Title</h3>
-  <p className="text-muted-foreground text-sm line-clamp-2">Description</p>
-</div>
-```
-
-### Selectable Item
-```tsx
-<div className={cn(
-  "rounded-md px-3 py-2.5 transition-colors cursor-pointer hover:bg-secondary/50",
-  selected && "bg-secondary ring-2 ring-primary"
-)}>
-```
-
-### Tabs (transparent)
-```tsx
-<TabsList className="h-auto gap-1 bg-transparent p-0">
-  <TabsTrigger className="rounded-md px-3 py-1.5 text-sm data-[state=active]:bg-secondary" value="tab">
-    Tab
-  </TabsTrigger>
-</TabsList>
-```
-
-### Dialog Buttons
-```tsx
-<DialogFooter>
-  <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-  <Button variant="secondary" onClick={onSubmit}>Save</Button>
-</DialogFooter>
-```
-
-
-
-<!-- Source: .claude/skills/2-tech-stack/2-tech-stack.mdc -->
-
-# Tech Stack Documentation
-
-## Overview
-
-Next.js application with Convex backend, Better Auth authentication, and Tailwind CSS v4 styling. Built with TypeScript and React.
-
-## Programming Language & Runtime
-
-- **TypeScript**
-- **Node.js**: v22
-- **Package Manager**: Bun v1.3.9
-
-## Frontend
-
-### UI Framework
-
-- **React** (with React Compiler enabled)
-- **Next.js** (App Router, Turbopack, Typed Routes)
-
-### Styling
-
-- **Tailwind CSS**: v4 (CSS-first configuration)
-- **PostCSS**: @tailwindcss/postcss
-- **tw-animate-css**
-- **Fonts**: Geist Sans, Geist Mono (Google Fonts)
-
-### Component Libraries
-
-- **Radix UI**: Complete UI primitives library
-- **shadcn/ui components**: Built on Radix UI
-- **class-variance-authority**
-- **clsx**
-- **tailwind-merge**
-
-### State Management
-
-- **jotai-x**
-- **React Hook Form**
-- **@hookform/resolvers**
-
-### Data Fetching
-
-- **@tanstack/react-query**
-
-### UI Components
-
-- **cmdk** (Command palette)
-- **date-fns** (Date utilities)
-- **embla-carousel-react**
-- **input-otp**
-- **lucide-react** (Icons)
-- **react-day-picker**
-- **react-resizable-panels**
-- **recharts** (Charts)
-- **sonner** (Toast notifications)
-- **vaul** (Drawer component)
-
-### Utilities
-
-- **next-themes** (Theme management)
-- **nuqs** (URL state management)
-- **ts-essentials**
-- **use-debounce**
-- **superjson**
-
-## Backend
-
-### Backend Framework
-
-- **Convex**
-- **better-convex**
-
-### Authentication
-
-- **better-auth**
-
-### Backend Components
-
-- **@convex-dev/resend** (Email service)
-
-### Email
-
-- **@react-email/components**
-- **@react-email/render**
-
-### Validation
-
-- **zod**
-
-## Database & Storage
-
-- **Convex Database**: Built-in reactive database
-- **Schema**: Defined using convex-ents with users table
-
-## Development Tools & Workflow
-
-### Build Tools
-
-- **Next.js Turbopack**: Development server
-- **TypeScript**: Compiler with custom tsconfig
-- **React Compiler**: Babel plugin for automatic optimizations
-
-### Code Quality
-
-- **Ultracite**: Zero-config Biome preset (formatting & linting)
-- **Biome**: Rust-based linter and formatter (replaces Prettier)
-- **ESLint**: JavaScript linting with React Hooks plugin
-- **TypeScript ESLint**: TypeScript-specific linting
-- **Lefthook**: Git hooks management
-
-### Environment Configuration
-
-- **@t3-oss/env-nextjs**
-
-## Path Aliases
-
-- `@/*` → `./src/*`
-- `@convex/*` → `./convex/*`
-
-## Convex Configuration
-
-- Better Auth integration
-- Rate limiting
-- User aggregation
-- Custom authentication with email verification
-- Session management (30-day expiry, 15-day update age)
-
-
-
-<!-- Source: .claude/skills/3-project-status/3-project-status.mdc -->
-
-## Project Status: Pre-MVP
-
-**Current Stage**: Pre-MVP (highest velocity to ship)
-
-### DO Care About (Production-Ready Foundation)
-
-- **Security**: Authentication, authorization, session management
-- **Data Validation**: Zod schemas for all inputs
-- **Error Handling**: User-friendly error messages and proper error states
-- **Type Safety**: Full TypeScript coverage and type-safe APIs
-- **Data Integrity**: Proper database constraints and relationships
-- **Code Patterns**: Follow existing patterns in the codebase
-- **Core Features**: Complete implementation including error states
-- **API Security**: Rate limiting, protected procedures, userId filters
-
-### DO NOT Care About (Skip for Velocity)
-
-- **Breaking Changes**: Not deployed yet, refactor freely
-- **Unit Testing**: Unless specifically requested
-- **Performance Optimization**: Unless blocking functionality
-- **Backward Compatibility**: No existing users
-- **Migration Scripts**: No production data yet
-- **Extensive Documentation**: Unless requested
-- **Edge Cases**: That don't block core functionality
-- **Premature Abstractions**: Build what's needed now
-
-
-
 <!-- Source: .claude/skills/4-ultracite/4-ultracite.mdc -->
 
-# Ultracite Code Standards
+## Code Standards
 
-This project uses **Ultracite**, a zero-config Biome preset that enforces strict code quality standards through automated formatting and linting.
+When writing code in a project with Ultracite, follow these standards. For the full rules reference, see [references/code-standards.md](references/code-standards.md).
 
-## Quick Reference
+Key rules at a glance:
 
-- **Format code**: `npx ultracite fix`
-- **Check for issues**: `npx ultracite check`
-- **Diagnose setup**: `npx ultracite doctor`
+**Formatting:** 2-space indent, semicolons, double quotes, 80-char width, ES5 trailing commas, LF line endings.
 
-Biome (the underlying engine) provides extremely fast Rust-based linting and formatting. Most issues are automatically fixable.
+**Style:** Arrow functions preferred. `const` by default, never `var`. `for...of` over `.forEach()`. Template literals over concatenation. No enums (use objects with `as const`). No nested ternaries. Kebab-case filenames.
 
----
+**Correctness:** No unused imports/variables. No `any` (use `unknown`). Always `await` promises in async functions. No `console.log`/`debugger`/`alert` in production.
 
-## Core Principles
+**React:** Function components only. Hooks at top level. Exhaustive deps. `key` on iterables (no array index). No nested component definitions. Semantic HTML + ARIA.
 
-Write code that is **accessible, performant, type-safe, and maintainable**. Focus on clarity and explicit intent over brevity.
+**Performance:** No accumulating spread in loops. No barrel files. No namespace imports. Top-level regex.
 
-### Type Safety & Explicitness
-
-- Use explicit types for function parameters and return values when they enhance clarity
-- Prefer `unknown` over `any` when the type is genuinely unknown
-- Use const assertions (`as const`) for immutable values and literal types
-- Leverage TypeScript's type narrowing instead of type assertions
-- Use meaningful variable names instead of magic numbers - extract constants with descriptive names
-
-### Modern JavaScript/TypeScript
-
-- Use arrow functions for callbacks and short functions
-- Prefer `for...of` loops over indexed `for` loops
-- Use optional chaining (`?.`) and nullish coalescing (`??`) for safer property access
-- Prefer template literals over string concatenation
-- Use destructuring for object and array assignments
-- Use `const` by default, `let` only when reassignment is needed, never `var`
-
-### Async & Promises
-
-- Always `await` promises in async functions - don't forget to use the return value
-- Use `async/await` syntax instead of promise chains for better readability
-- Handle errors appropriately in async code with try-catch blocks
-- Don't use async functions as Promise executors
-
-### React & JSX
-
-- Use function components over class components
-- Call hooks at the top level only, never conditionally
-- Specify all dependencies in hook dependency arrays correctly
-- Use the `key` prop for elements in iterables (prefer unique IDs over array indices)
-- Nest children between opening and closing tags instead of passing as props
-- Don't define components inside other components
-- Use semantic HTML and ARIA attributes for accessibility:
-  - Provide meaningful alt text for images
-  - Use proper heading hierarchy
-  - Add labels for form inputs
-  - Include keyboard event handlers alongside mouse events
-  - Use semantic elements (`<button>`, `<nav>`, etc.) instead of divs with roles
-
-### Error Handling & Debugging
-
-- Remove `console.log`, `debugger`, and `alert` statements from production code
-- Throw `Error` objects with descriptive messages, not strings or other values
-- Use `try-catch` blocks meaningfully - don't catch errors just to rethrow them
-- Prefer early returns over nested conditionals for error cases
-
-### Code Organization
-
-- Keep functions focused and under reasonable cognitive complexity limits
-- Extract complex conditions into well-named boolean variables
-- Use early returns to reduce nesting
-- Prefer simple conditionals over nested ternary operators
-- Group related code together and separate concerns
-
-### Security
-
-- Add `rel="noopener"` when using `target="_blank"` on links
-- Avoid `dangerouslySetInnerHTML` unless absolutely necessary
-- Don't use `eval()` or assign directly to `document.cookie`
-- Validate and sanitize user input
-
-### Performance
-
-- Avoid spread syntax in accumulators within loops
-- Use top-level regex literals instead of creating them in loops
-- Prefer specific imports over namespace imports
-- Avoid barrel files (index files that re-export everything)
-
-### Framework-Specific Guidance
-
-**Next.js:**
-
-- Use `next/head` or App Router metadata API for head elements
-- Use Server Components for async data fetching instead of async Client Components
-
-**React 19+:**
-
-- Use ref as a prop instead of `React.forwardRef`
-
----
-
-## Testing
-
-- Write assertions inside `it()` or `test()` blocks
-- Avoid done callbacks in async tests - use async/await instead
-- Don't use `.only` or `.skip` in committed code
-- Keep test suites reasonably flat - avoid excessive `describe` nesting
-
-## When Biome Can't Help
-
-Biome's linter will catch most issues automatically. Focus your attention on:
-
-1. **Business logic correctness** - Biome can't validate your algorithms
-2. **Meaningful naming** - Use descriptive names for functions, variables, and types
-3. **Architecture decisions** - Component structure, data flow, and API design
-4. **Edge cases** - Handle boundary conditions and error states
-5. **User experience** - Accessibility, performance, and usability considerations
-6. **Documentation** - Add comments for complex logic, but prefer self-documenting code
-
----
-
-Most formatting and common issues are automatically fixed by Biome. Run `npx ultracite fix` before committing to ensure compliance.
+**Security:** `rel="noopener"` on `target="_blank"`. No `dangerouslySetInnerHTML`. No `eval()`.

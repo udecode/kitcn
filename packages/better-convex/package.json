@@ -7,8 +7,15 @@
     "react-query",
     "tanstack-query",
     "codegen",
-    "cli"
+    "cli",
+    "agent-skills",
+    "intent"
   ],
+  "homepage": "https://better-convex.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/udecode/better-convex.git"
+  },
   "sideEffects": false,
   "type": "module",
   "exports": {
@@ -21,16 +28,22 @@
     "./crpc": "./dist/crpc/index.js",
     "./orm": "./dist/orm/index.js",
     "./plugins": "./dist/plugins/index.js",
+    "./ratelimit": "./dist/ratelimit/index.js",
+    "./ratelimit/react": "./dist/ratelimit/react/index.js",
     "./react": "./dist/react/index.js",
     "./rsc": "./dist/rsc/index.js",
     "./server": "./dist/server/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
-    "better-convex": "./dist/cli.mjs"
+    "better-convex": "./dist/cli.mjs",
+    "intent": "./bin/intent.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    "bin",
+    "!skills/_artifacts"
   ],
   "scripts": {
     "build": "NODE_OPTIONS=\"--require ../../tooling/node-styletext-patch.cjs\" tsdown",
@@ -57,6 +70,7 @@
   },
   "devDependencies": {
     "@rollup/plugin-babel": "^6.1.0",
+    "@tanstack/intent": "0.0.13",
     "babel-plugin-react-compiler": "^1.0.0",
     "tsdown": "^0.20.3"
   },
@@ -85,5 +99,10 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "intent": {
+    "version": 1,
+    "repo": "udecode/better-convex",
+    "docs": "https://better-convex.com/docs"
   }
 }

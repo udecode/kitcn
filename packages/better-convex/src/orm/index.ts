@@ -130,6 +130,7 @@ export {
   text,
   textEnum,
   timestamp,
+  unionOf,
   vector,
 } from './builders';
 export {
@@ -183,6 +184,7 @@ export type OrmClientWithApi<TSchema extends object> = OrmClientWithApiInternal<
   ResolveOrmSchema<TSchema> & TablesRelationalConfig
 >;
 export { OrmNotFoundError } from './errors';
+export type { SchemaExtension } from './extensions';
 export type { EdgeMetadata } from './extractRelationsConfig';
 // M2: Schema Extraction
 export { extractRelationsConfig } from './extractRelationsConfig';
@@ -295,7 +297,10 @@ export type {
   TablesRelationalConfig,
 } from './relations';
 // M2: Relations Layer (v1)
-export { defineRelations, defineRelationsPart } from './relations';
+export {
+  defineRelations,
+  defineRelationsPart,
+} from './relations';
 // RLS (Row-Level Security)
 export type {
   RlsPolicyConfig,
@@ -315,22 +320,22 @@ export {
 } from './scheduled-mutation-batch';
 export {
   defineSchema,
+  defineSchemaExtension,
   getSchemaRelations,
   getSchemaTriggers,
   requireSchemaRelations,
 } from './schema';
-export type { OrmSchemaPlugin } from './symbols';
 // M1: Schema Foundation
 export {
   Brand,
   Columns,
-  OrmSchemaPlugins,
-  OrmSchemaPluginTables,
+  OrmSchemaExtensions,
+  OrmSchemaExtensionTables,
   OrmSchemaRelations,
   OrmSchemaTriggers,
   TableName,
 } from './symbols';
-export type { ConvexTable, TableConfig } from './table';
+export type { ConvexTable, ConvexTableWithColumns, TableConfig } from './table';
 export {
   type ConvexDeletionBuilder,
   type ConvexDeletionConfig,

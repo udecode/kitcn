@@ -49,7 +49,7 @@ type ReservedMutationOptions = 'mutationFn';
 export type FnMeta = {
   auth?: 'required' | 'optional';
   role?: string;
-  rateLimit?: string;
+  ratelimit?: string;
   type?: 'query' | 'mutation' | 'action';
   limit?: number;
   [key: string]: unknown;
@@ -338,7 +338,7 @@ export type DecorateInfiniteQuery<T extends FunctionReference<'query'>> = {
   infiniteQueryKey: (
     args?: DeepPartial<InfiniteQueryInput<FunctionArgs<T>>>
   ) => ConvexQueryKey<T>;
-  /** Function metadata from server (auth, limit, rateLimit, role, type) */
+  /** Function metadata from server (auth, limit, ratelimit, role, type) */
   meta: PaginatedFnMeta;
 };
 

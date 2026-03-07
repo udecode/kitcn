@@ -4,22 +4,22 @@
       "paths": {
         "lib": "convex/lib",
         "shared": "convex/shared",
-        "env": "convex/lib/get-env"
+        "env": "convex/lib/get-env.ts"
       },
       "hooks": {
         "postAdd": []
       },
       "dev": {
         "debug": false,
-        "convexArgs": []
+        "args": []
       },
       "codegen": {
         "debug": false,
         "scope": "all",
-        "convexArgs": []
+        "args": []
       },
       "deploy": {
-        "convexArgs": []
+        "args": []
       }
     }
   }

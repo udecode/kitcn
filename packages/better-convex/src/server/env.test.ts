@@ -201,4 +201,133 @@ describe('server/env', () => {
 
     expect(getEnv()).toEqual({ BC_REQUIRED_A: '' });
   });
+
+  test('default runtimeEnv snapshots process.env and avoids probing missing optional keys', () => {
+    const accessed = new Set<string>();
+    const originalEnv = process.env;
+    const proxiedEnv = new Proxy(
+      {
+        ...originalEnv,
+        BC_REQUIRED_A: 'secret',
+      } as NodeJS.ProcessEnv,
+      {
+        get(target, property, receiver) {
+          if (typeof property === 'string') {
+            accessed.add(property);
+          }
+          return Reflect.get(target, property, receiver);
+        },
+        ownKeys(target) {
+          return Reflect.ownKeys(target);
+        },
+        getOwnPropertyDescriptor(target, property) {
+          return Reflect.getOwnPropertyDescriptor(target, property);
+        },
+      }
+    ) as NodeJS.ProcessEnv;
+
+    process.env = proxiedEnv;
+    try {
+      const schema = z.object({
+        BC_REQUIRED_A: z.string(),
+        RESEND_WEBHOOK_SECRET: z.string().optional(),
+      });
+
+      const getEnv = createEnv({
+        cache: false,
+        schema,
+      });
+
+      expect(getEnv()).toEqual({
+        BC_REQUIRED_A: 'secret',
+        RESEND_WEBHOOK_SECRET: undefined,
+      });
+      expect(accessed.has('RESEND_WEBHOOK_SECRET')).toBe(false);
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  test('default runtimeEnv still reads optional keys when they are present', () => {
+    const originalEnv = process.env;
+    const proxiedEnv = new Proxy(
+      {
+        ...originalEnv,
+        BC_REQUIRED_A: 'secret',
+        RESEND_WEBHOOK_SECRET: 'webhook-secret',
+      } as NodeJS.ProcessEnv,
+      {
+        get(target, property, receiver) {
+          return Reflect.get(target, property, receiver);
+        },
+        ownKeys(target) {
+          return Reflect.ownKeys(target);
+        },
+        getOwnPropertyDescriptor(target, property) {
+          return Reflect.getOwnPropertyDescriptor(target, property);
+        },
+      }
+    ) as NodeJS.ProcessEnv;
+
+    process.env = proxiedEnv;
+    try {
+      const schema = z.object({
+        BC_REQUIRED_A: z.string(),
+        RESEND_WEBHOOK_SECRET: z.string().optional(),
+      });
+
+      const getEnv = createEnv({
+        cache: false,
+        schema,
+      });
+
+      expect(getEnv()).toEqual({
+        BC_REQUIRED_A: 'secret',
+        RESEND_WEBHOOK_SECRET: 'webhook-secret',
+      });
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  test('default runtimeEnv reads defaulted optional keys via get fallback when has checks fail', () => {
+    const originalEnv = process.env;
+    const proxiedEnv = new Proxy(
+      {
+        BC_REQUIRED_A: 'secret',
+        DEPLOY_ENV: 'development',
+      } as NodeJS.ProcessEnv,
+      {
+        get(target, property, receiver) {
+          return Reflect.get(target, property, receiver);
+        },
+        has() {
+          return false;
+        },
+        getOwnPropertyDescriptor(target, property) {
+          return Reflect.getOwnPropertyDescriptor(target, property);
+        },
+      }
+    ) as NodeJS.ProcessEnv;
+
+    process.env = proxiedEnv;
+    try {
+      const schema = z.object({
+        BC_REQUIRED_A: z.string(),
+        DEPLOY_ENV: z.string().default('production'),
+      });
+
+      const getEnv = createEnv({
+        cache: false,
+        schema,
+      });
+
+      expect(getEnv()).toEqual({
+        BC_REQUIRED_A: 'secret',
+        DEPLOY_ENV: 'development',
+      });
+    } finally {
+      process.env = originalEnv;
+    }
+  });
 });

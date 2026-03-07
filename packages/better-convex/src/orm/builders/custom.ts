@@ -54,6 +54,14 @@ type InferObjectShape<TShape extends NestedShapeInput> = {
   [K in keyof TShape]: InferNestedValue<TShape[K]>;
 };
 
+type InferObjectValue<TInput extends NestedInput> = TInput extends
+  | AnyColumnBuilder
+  | AnyValidator
+  ? Record<string, InferNestedValue<TInput>>
+  : TInput extends NestedShapeInput
+    ? InferObjectShape<TInput>
+    : never;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -209,17 +217,42 @@ export function arrayOf<TElement extends NestedInput>(element: TElement) {
 }
 
 /**
- * Creates an object column from a nested shape of validators/builders.
+ * Creates a union column from validators/builders without dropping to `v.union(...)`.
+ */
+export function unionOf<
+  const TMembers extends readonly [NestedInput, NestedInput, ...NestedInput[]],
+>(...members: TMembers) {
+  const validators = members.map((member, index) =>
+    nestedInputToValidator(member, `unionOf(members[${index}])`)
+  );
+  return custom(
+    v.union(...(validators as [AnyValidator, AnyValidator, ...AnyValidator[]]))
+  ).$type<InferNestedValue<TMembers[number]>>();
+}
+
+/**
+ * Creates an object column from either:
+ * - a nested shape of validators/builders, or
+ * - a validator/builder describing homogeneous record values
  *
  * Fields in nested objects are always compiled as required validators.
  */
-export function objectOf<TShape extends NestedShapeInput>(shape: TShape) {
-  if (!isRecord(shape)) {
-    throw new Error(formatInvalidInput('objectOf(shape)', shape));
+export function objectOf<TInput extends NestedInput>(input: TInput) {
+  if (isColumnBuilder(input) || isValidator(input)) {
+    return custom(
+      v.record(v.string(), nestedInputToValidator(input, 'objectOf(value)'))
+    ).$type<InferObjectValue<TInput>>();
   }
 
-  const validator = objectShapeToValidator(shape, 'objectOf(shape)');
-  return custom(validator).$type<InferObjectShape<TShape>>();
+  if (!isRecord(input)) {
+    throw new Error(formatInvalidInput('objectOf(shape)', input));
+  }
+
+  const validator = objectShapeToValidator(
+    input as NestedShapeInput,
+    'objectOf(shape)'
+  );
+  return custom(validator).$type<InferObjectValue<TInput>>();
 }
 
 /**

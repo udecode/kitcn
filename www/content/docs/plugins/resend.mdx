@@ -21,45 +21,7 @@ links:
 bun add @better-convex/resend
 ```
 
-## 2. Register In Schema
-
-```ts title="convex/functions/schema.ts" showLineNumbers {2,6}
-import { defineSchema } from 'better-convex/orm';
-import { resendPlugin } from '@better-convex/resend/schema';
-
-export default defineSchema(tables, {
-  plugins: [resendPlugin()],
-});
-```
-
-Optional storage-table override:
-
-```ts title="convex/functions/schema.ts" showLineNumbers
-import { convexTable, text } from 'better-convex/orm';
-import { resendPlugin } from '@better-convex/resend/schema';
-
-const customResendEmails = convexTable('resend_emails', {
-  custom: text().notNull(),
-});
-
-export default defineSchema(tables, {
-  plugins: [
-    resendPlugin({
-      tables: {
-        resendEmails: customResendEmails,
-      },
-    }),
-  ],
-});
-```
-
-## 3. Generate Framework Files
-
-```bash showLineNumbers
-npx better-convex codegen
-```
-
-## 4. Scaffold User-Owned Files
+## 2. Scaffold User-Owned Files
 
 ```bash showLineNumbers
 npx better-convex add resend
@@ -67,11 +29,37 @@ npx better-convex add resend
 
 Default scaffold set:
 
+- `convex/lib/plugins/resend/schema.ts`
 - `convex/functions/plugins/resend.ts`
 - `convex/functions/plugins/email.tsx`
 - `convex/lib/plugins/resend/plugin.ts`
 - `convex/lib/plugins/resend/webhook.ts`
 - `convex/lib/plugins/resend/crons.ts`
+
+## 3. Register In Schema
+
+```ts title="convex/functions/schema.ts" showLineNumbers {2,6}
+import { defineSchema } from 'better-convex/orm';
+import { resendExtension } from '../lib/plugins/resend/schema';
+
+export default defineSchema(tables).extend(resendExtension());
+```
+
+`better-convex add resend` writes this for you. Customize resend tables and relations by editing `convex/lib/plugins/resend/schema.ts` directly.
+
+If `paths.env` is missing, `better-convex add resend` also creates `convex/lib/get-env.ts`, writes `paths.env` into `concave.json`, and adds:
+
+- `RESEND_API_KEY: z.string().optional()`
+- `RESEND_WEBHOOK_SECRET: z.string().optional()`
+- `RESEND_FROM_EMAIL: z.string().optional()`
+
+The add command also reminds you to set `RESEND_API_KEY` in `convex/.env` before sending real email.
+
+## 4. Generate Framework Files
+
+```bash showLineNumbers
+npx better-convex codegen
+```
 
 If you scaffold `email.tsx`, install React Email deps:
 
@@ -83,10 +71,11 @@ bun add @react-email/components @react-email/render react-email react react-dom
 
 ```ts title="convex/lib/plugins/resend/plugin.ts" showLineNumbers
 import { ResendPlugin } from '@better-convex/resend';
+import { getEnv } from '../../get-env';
 
 export const resend = ResendPlugin.configure({
-  apiKey: process.env.RESEND_API_KEY,
-  webhookSecret: process.env.RESEND_WEBHOOK_SECRET,
+  apiKey: getEnv().RESEND_API_KEY,
+  webhookSecret: getEnv().RESEND_WEBHOOK_SECRET,
   initialBackoffMs: 30_000,
   retryAttempts: 5,
   testMode: true,
@@ -121,7 +110,7 @@ export const sendTestEmail = privateMutation.use(resend.middleware())
 `convex/functions/plugins/email.tsx` is a generic internal cRPC action scaffold:
 
 - Input: `to, from?, subject, title, body, ctaLabel?, ctaUrl?`
-- Sender resolution: `from ?? process.env.RESEND_FROM_EMAIL`
+- Sender resolution: `from ?? getEnv().RESEND_FROM_EMAIL`
 - Delivery: `createPluginsResendCaller(ctx).sendEmail(...)`
 
 Use it from auth organization invites:

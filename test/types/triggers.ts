@@ -4,12 +4,12 @@ import {
   convexTable,
   createOrm,
   defineRelations,
+  defineSchema,
   defineTriggers,
   type InferSelectModel,
   type OrmBeforeResult,
   type OrmTriggerChange,
   type OrmTriggerContext,
-  type OrmWriter,
   text,
 } from 'better-convex/orm';
 import { type Equal, Expect } from './utils';
@@ -51,7 +51,8 @@ const triggers = defineTriggers(relations, {
   users: {
     create: {
       before: (data, ctx) => {
-        Expect<Equal<typeof ctx.orm, OrmWriter<typeof relations>>>;
+        const _ctx: UsersAggregateCtx = ctx;
+        void _ctx;
         data.name;
         const result: OrmBeforeResult<typeof data> = {
           data: { email: 'ada@example.com' },
@@ -83,7 +84,8 @@ const triggers = defineTriggers(relations, {
       },
     },
     change: async (change, ctx) => {
-      Expect<Equal<typeof ctx.orm, OrmWriter<typeof relations>>>;
+      const _ctx: UsersAggregateCtx = ctx;
+      void _ctx;
       Expect<Equal<IsUnknown<typeof change.id>, false>>;
 
       await usersAggregate.trigger(change, ctx);
@@ -124,7 +126,14 @@ const aggregateCompatibleTriggers = defineTriggers(relations, {
   },
 });
 
-const orm = createOrm({ schema: relations, triggers });
+// @ts-expect-error triggers must be declared in defineSchema metadata
+createOrm({ schema: relations, triggers });
+const schemaWithTriggers = defineSchema({ users, posts }).triggers({
+  users: {
+    change: usersAggregate.trigger,
+  },
+});
+const orm = createOrm({ schema: schemaWithTriggers });
 void orm;
 void aggregateCompatibleTriggers;
 

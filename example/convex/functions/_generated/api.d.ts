@@ -468,7 +468,7 @@ export declare const api: {
       { sessionId: string },
       any
     >;
-    getInteractiveRateLimit: FunctionReference<
+    getInteractiveRatelimit: FunctionReference<
       "query",
       "public",
       { identifier?: string; sampleShards?: number },

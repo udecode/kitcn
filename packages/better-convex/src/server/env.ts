@@ -11,12 +11,7 @@ export type CreateEnvOptions<TSchema extends z.ZodObject<z.ZodRawShape>> = {
 export function createEnv<TSchema extends z.ZodObject<z.ZodRawShape>>(
   options: CreateEnvOptions<TSchema>
 ): () => z.infer<TSchema> {
-  const {
-    schema,
-    runtimeEnv = process.env,
-    cache = true,
-    codegenFallback = false,
-  } = options;
+  const { schema, runtimeEnv, cache = true, codegenFallback = false } = options;
   let cached: z.infer<TSchema> | undefined;
 
   return () => {
@@ -34,6 +29,28 @@ export function createEnv<TSchema extends z.ZodObject<z.ZodRawShape>>(
     const isCodegenParse =
       (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__ ===
         true || codegenFallback;
+    const runtimeEnvSource = runtimeEnv ?? process.env;
+    const runtimeEnvSnapshot: NodeJS.ProcessEnv = {};
+    for (const [key, zodType] of Object.entries(schema.shape)) {
+      const undefinedParse = (zodType as z.ZodType).safeParse(undefined);
+      const acceptsUndefined = undefinedParse.success;
+      if (acceptsUndefined) {
+        // Avoid direct reads for missing optional keys so auth-config env
+        // tracking does not treat absent optional vars as required.
+        if (Object.hasOwn(runtimeEnvSource, key) || key in runtimeEnvSource) {
+          runtimeEnvSnapshot[key] = runtimeEnvSource[key];
+        } else if (
+          !isCodegenParse &&
+          // Keys with schema defaults/transforms may still have runtime values
+          // behind env proxies where `in`/`hasOwn` return false.
+          undefinedParse.data !== undefined
+        ) {
+          runtimeEnvSnapshot[key] = runtimeEnvSource[key];
+        }
+        continue;
+      }
+      runtimeEnvSnapshot[key] = runtimeEnvSource[key];
+    }
     const envForParse = isCodegenParse
       ? {
           ...Object.fromEntries(
@@ -55,9 +72,13 @@ export function createEnv<TSchema extends z.ZodObject<z.ZodRawShape>>(
               ];
             })
           ),
-          ...runtimeEnv,
+          ...Object.fromEntries(
+            Object.entries(runtimeEnvSnapshot).filter(
+              ([, value]) => value !== undefined
+            )
+          ),
         }
-      : runtimeEnv;
+      : runtimeEnvSnapshot;
 
     const parsed = schema.safeParse(envForParse);
 

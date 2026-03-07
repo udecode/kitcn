@@ -1,7 +1,11 @@
 {
   "plugins": {
     "ratelimit": {
-      "package": "@better-convex/ratelimit"
+      "package": "better-convex",
+      "files": {
+        "ratelimit-plugin": "convex/lib/plugins/ratelimit/plugin.ts",
+        "ratelimit-schema": "convex/lib/plugins/ratelimit/schema.ts"
+      }
     },
     "resend": {
       "package": "@better-convex/resend",
@@ -10,6 +14,7 @@
         "resend-email": "convex/functions/plugins/email.tsx",
         "resend-functions": "convex/functions/plugins/resend.ts",
         "resend-plugin": "convex/lib/plugins/resend/plugin.ts",
+        "resend-schema": "convex/lib/plugins/resend/schema.ts",
         "resend-webhook": "convex/lib/plugins/resend/webhook.ts"
       }
     }

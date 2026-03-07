@@ -270,10 +270,11 @@ Search for a file exporting `Expect` and `Equal`. If none exists, create one:
 
 ```typescript
 export function Expect<T extends true>() {}
-export type Equal<X, Y> =
-  (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2
-    ? true
-    : false;
+export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <
+  T
+>() => T extends Y ? 1 : 2
+  ? true
+  : false;
 export type Not<T extends boolean> = T extends true ? false : true;
 export type IsAny<T> = 0 extends 1 & T ? true : false;
 export type IsNever<T> = [T] extends [never] ? true : false;

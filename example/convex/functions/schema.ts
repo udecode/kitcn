@@ -1,5 +1,3 @@
-import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
-import { resendPlugin } from '@better-convex/resend/schema';
 import {
   type AnyColumn,
   aggregateIndex,
@@ -20,6 +18,8 @@ import {
 } from 'better-convex/orm';
 import { v } from 'convex/values';
 import { getEnv } from '../lib/get-env';
+import { ratelimitExtension } from '../lib/plugins/ratelimit/schema';
+import { resendExtension } from '../lib/plugins/resend/schema';
 
 // =============================================================================
 // Tables
@@ -635,8 +635,9 @@ const schema = defineSchema(tables, {
   defaults: {
     defaultLimit: 1000,
   },
-  plugins: [ratelimitPlugin(), resendPlugin()],
-  relations: (r) => ({
+})
+  .extend(ratelimitExtension(), resendExtension())
+  .relations((r) => ({
     session: {
       user: r.one.user({
         from: r.session.userId,
@@ -896,8 +897,8 @@ const schema = defineSchema(tables, {
         to: r.user.id,
       }),
     },
-  }),
-  triggers: {
+  }))
+  .triggers({
     user: {
       create: {
         before: async (data) => {
@@ -1124,8 +1125,7 @@ const schema = defineSchema(tables, {
         });
       },
     },
-  },
-});
+  });
 
 export default schema;
 

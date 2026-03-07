@@ -173,11 +173,9 @@ Cross-cutting features that span schema, runtime, and client. Register once, eve
 
 ```ts showLineNumbers title="convex/functions/schema.ts" {2,5}
 import { defineSchema } from 'better-convex/orm';
-import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
+import { ratelimitExtension } from '../lib/plugins/ratelimit/schema';
 
-export default defineSchema(tables, {
-  plugins: [ratelimitPlugin()],
-});
+export default defineSchema(tables).extend(ratelimitExtension());
 ```
 
 See [Plugins](/docs/plugins) and [Rate Limiting](/docs/plugins/ratelimit).
@@ -194,7 +192,9 @@ convex/
 ├── lib/                 # Shared helpers (not deployed)
 │   ├── crpc.ts          # cRPC builder and middleware
 │   ├── orm.ts           # ORM context attachment
-│   └── rate-limiter.ts  # Rate limiting logic
+│   └── plugins/
+│       └── ratelimit/
+│           └── plugin.ts # Rate limiting policy + middleware
 └── shared/              # Client-importable code
     ├── types.ts         # Shared TypeScript types
     └── api.ts          # Generated procedure metadata

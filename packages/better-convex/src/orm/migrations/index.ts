@@ -30,7 +30,7 @@ export type {
 export { createMigrationHandlers } from './runtime';
 export {
   injectMigrationStorageTables,
-  migrationPlugin,
+  migrationExtension,
   MIGRATION_RUN_TABLE,
   MIGRATION_STATE_TABLE,
   MIGRATION_STORAGE_TABLE_NAMES,

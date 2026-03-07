@@ -5,13 +5,15 @@
 - Parity: Don't reinvent the wheel. Before designing APIs or architecture, study how proven OSS projects solve the same problem — Drizzle (schema/ORM), tRPC (procedures/middleware), shadcn (CLI/codegen), better-auth (plugin system/auth). Adopt their patterns when applicable. Do `ls` in `..` directory to find the respective repositories, then inspect their source code when needed.
 - DX: Optimize for the absolute best developer experience. CLI must be first-class for agents — deterministic, machine-readable output (--json), non-interactive defaults (--yes), composable commands. Every API surface should be intuitive for both humans and AI agents.
 - Docs (www/): NEVER write changelog-style language ("has been removed", "new feature", "previously", "now supports"). Docs are user-facing reference for the LATEST state only. Write as if no prior version exists. No migration notes, no "what changed" — just document what IS. Follow docs/solutions/style.md for writing tone/structure.
-- Docs sync: When updating www/ docs, also update the corresponding content in skills/convex/SKILL.md or skills/convex/references/ to stay synced. Follow skills/convex/references/setup/doc-guidelines.md for compression/placement rules.
-- Plugins: ALWAYS read skills/convex/references/features/create-plugins.md before creating or modifying plugins. Keep it synced when any plugin API changes in the package.
+- Docs sync: When updating www/ docs, also update the corresponding content in packages/better-convex/skills/convex/SKILL.md or packages/better-convex/skills/convex/references/ to stay synced. Follow packages/better-convex/skills/convex/references/setup/doc-guidelines.md for compression/placement rules.
+- Plugins: ALWAYS read packages/better-convex/skills/convex/references/features/create-plugins.md before creating or modifying plugins. Keep it synced when any plugin API changes in the package.
+- Intent maintainer loop: use `bunx intent scaffold` when you need new skills or a major skill reshuffle; for normal work, update docs and `packages/better-convex/skills/convex/**` in the same diff; run `bunx intent validate skills` and `bunx intent stale`; keep `@tanstack/intent`, `bin/intent.js`, `bin.intent`, and package `files` wired; verify with `npm pack --json --dry-run ./packages/better-convex`; after release, treat `intent feedback` as product input — tighten the skill if wording is wrong, fix the API if the same workaround keeps repeating.
 - Always use @.claude/skills/changeset/changeset.mdc when updating packages to write a changeset before completing
 - After any package modification, run `bun --cwd packages/better-convex build`, then touch `example/convex/functions/schema.ts` to trigger a re-build
 - Use tdd skill for package updates that add or change live behavior.
 - Do not write TDD cases for dead code/legacy removal assertions (for example: "should not contain old API X anymore"). Remove the dead path directly and keep tests focused on current behavior.
 - Never edit scaffolded example output first. Change package templates/source, then regenerate scaffold files via CLI.
+- Never update example plugin files directly. Update the package plugin template first, then regenerate with `better-convex add ... --overwrite`.
 - Prefer inline Zod schemas when used once; extract constants only when reused.
 
 ## General
@@ -22,22 +24,32 @@
 - When using git worktree, copy `example/.env.local` and `example/convex/.env` to the worktree directory.
 - Dirty workspace: Never pause to ask about unrelated local changes. Continue work and ignore unrelated diffs.
 - If you get `failed to load config from /Users/zbeyens/GitHub/better-convex/vitest.config.mts`, rimraf `**/node_modules` and install again.
+- Use `bun convex:logs` to watch the Convex logs
 
-## Browser Testing
+## Skill Overrides
+
+When using the following skills, override the default behavior.
+
+`planning-with-files`:
+
+- Do not create `task_plan.md`, `findings.md`, or `progress.md` at repo root. Merge that content into one file under `docs/plans/`. Example: `docs/plans/2026-02-07-fix-schema.md`
+
+`agent-browser`:
 
 - Never close agent-browser
 - Use `--headed` only you failed to test and need manual input from human.
 - Port 3005 for main app
 - Use `agent-browser` instead of Do NOT use next-devtools `browser_eval` (overlaps with agent-browser)
-- Use `bun convex:logs` to watch the Convex logs
+- If `agent-browser` gets blocked or loops on the same step, stop and ask the user to unblock. After the unblock works:
+  - [Add browser learning]
 
-## Compound Engineering Overrides
+`workflows:*`:
 
 - **Git:** Never git add, commit, push, or create PR unless the user explicitly asks.
+- **PR:** Before creating or updating a PR, run `bun check`. If it fails, stop and fix it or report the blocker. Do not open a PR with failing `bun check` unless the user explicitly says to.
 - **plan:** Include test-browser in acceptance criteria for browser features
 - **deepen-plan:** Context7 only when not covered by skills
 - **work:** UI tasks require test-browser BEFORE marking complete. Never guess.
-- **review:** Skip kieran-rails, dhh-rails, rails-turbo. Trust user input (internal). Keep simple.
 
 ## Prompt Hook
 
@@ -72,6 +84,7 @@
 
 - [ ] Typecheck (IF updated .ts files): Bash `bun typecheck`
 - [ ] Lint: Bash `bun lint:fix`
+- [ ] PR gate (IF creating/updating a PR): Bash `bun check`
 - [ ] Learn (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: Skill(learn) NOW to extract the knowledge (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
 
 ### Post Compact Recovery

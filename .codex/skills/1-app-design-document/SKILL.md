@@ -1,0 +1,104 @@
+---
+name: 1-app-design-document
+description: 'Skill: 1-app-design-document'
+---
+
+# App Design System
+
+Use `frontend-design` skill for new UI features.
+
+## Aesthetic
+
+Refined minimal (Linear/Notion style). Step-up from shadcn defaults without over-using cards.
+
+## Constraints
+
+- **DO NOT edit** `src/components/ui/*` (shadcn components)
+- Use shadcn tokens (bg-secondary, text-muted-foreground, etc.)
+- Borderless separation: `bg-secondary/40` instead of `border`
+- Button variants: `secondary` over `outline`, `ghost` for cancel
+
+## Patterns
+
+### Page Container
+
+```tsx
+<div className="mx-auto max-w-5xl px-6 py-8 @3xl:px-8 @3xl:py-12">
+```
+
+### Page Header
+
+```tsx
+<header className="mb-10">
+  <div className="flex items-start justify-between gap-4">
+    <div className="space-y-1">
+      <h1 className="font-semibold text-2xl tracking-tight">Title</h1>
+      <p className="text-muted-foreground text-sm">Description</p>
+    </div>
+    <Button variant="secondary" size="sm">
+      Action
+    </Button>
+  </div>
+</header>
+```
+
+### Section (replaces Card)
+
+```tsx
+<section className="mb-8">
+  <h2 className="mb-3 font-medium text-muted-foreground text-sm uppercase tracking-wide">
+    Section Title
+  </h2>
+  <div className="rounded-lg bg-secondary/30">{/* content */}</div>
+</section>
+```
+
+### List Item (borderless)
+
+```tsx
+<div className="rounded-md px-4 py-3 transition-colors hover:bg-secondary/50">
+```
+
+### Grid Card
+
+```tsx
+<div className="group rounded-lg bg-secondary/40 p-4 transition-colors hover:bg-secondary/60">
+  <h3 className="font-medium group-hover:underline">Title</h3>
+  <p className="text-muted-foreground text-sm line-clamp-2">Description</p>
+</div>
+```
+
+### Selectable Item
+
+```tsx
+<div className={cn(
+  "rounded-md px-3 py-2.5 transition-colors cursor-pointer hover:bg-secondary/50",
+  selected && "bg-secondary ring-2 ring-primary"
+)}>
+```
+
+### Tabs (transparent)
+
+```tsx
+<TabsList className="h-auto gap-1 bg-transparent p-0">
+  <TabsTrigger
+    className="rounded-md px-3 py-1.5 text-sm data-[state=active]:bg-secondary"
+    value="tab"
+  >
+    Tab
+  </TabsTrigger>
+</TabsList>
+```
+
+### Dialog Buttons
+
+```tsx
+<DialogFooter>
+  <Button variant="ghost" onClick={onCancel}>
+    Cancel
+  </Button>
+  <Button variant="secondary" onClick={onSubmit}>
+    Save
+  </Button>
+</DialogFooter>
+```

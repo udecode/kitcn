@@ -1,89 +1,60 @@
 ---
 title: Plugins
-description: Schema-first plugins with scaffold-owned runtime files and plugin-aware typing.
+description: Runtime plugins with scaffold-owned schema extensions and user-owned runtime files.
 ---
 
-Plugins are first-class in Better Convex. Register once in `defineSchema`, then scaffold runtime files with `better-convex add`.
+Plugins are first-class in Better Convex. Install the runtime package, scaffold local files with `better-convex add`, then keep customizing those local files.
 
-## Plugin contract
+## Runtime vs schema
 
-`OrmSchemaPlugin` is schema-only:
+First-party plugins are split on purpose:
 
-1. `key`
-2. `schema.tableNames`
-3. `schema.inject(...)`
-4. optional `schema.relations(...)`
+- Runtime package: middleware, helpers, and types
+- Local schema extension: `convex/lib/plugins/<plugin>/schema.ts`
+- Local runtime files: `convex/functions/plugins/<plugin>.ts` and `convex/lib/plugins/<plugin>/...`
+
+Schema is app-owned and uses `defineSchemaExtension(...)`:
 
 ```ts showLineNumbers
-type OrmSchemaPlugin = {
-  key: string;
-  schema: {
-    tableNames: readonly string[];
-    inject: <TSchema extends Record<string, unknown>>(
-      schema: TSchema
-    ) => TSchema & Record<string, unknown>;
-    relations?: (helpers: any) => Record<string, unknown>;
-  };
-};
+import { defineSchemaExtension } from 'better-convex/orm';
+
+export function myExtension() {
+  return defineSchemaExtension('my-plugin', {}).relations(() => ({}));
+}
 ```
-
-CLI presets/templates live in the first-party catalog (`packages/better-convex/src/cli/plugin-catalog.ts`), not in schema plugin objects.
-
-Plugin relation composition:
-
-- Plugin `schema.relations(...)` outputs are merged with app `defineSchema(..., { relations })`.
-- Merge order is plugin order, then app relations.
-- Duplicate relation field keys (`table.field`) throw.
 
 ## Discovery model
 
-`defineSchema({ plugins })` is the source of truth for plugin discovery:
+`defineSchema(...).extend(...)` is the source of truth for installed schema capabilities:
 
-```ts showLineNumbers {2,6}
+```ts showLineNumbers {2,5}
 import { defineSchema } from 'better-convex/orm';
-import { resendPlugin } from '@better-convex/resend/schema';
+import { resendExtension } from '../lib/plugins/resend/schema';
 
-export default defineSchema(tables, {
-  plugins: [resendPlugin()],
-});
+export default defineSchema(tables).extend(resendExtension());
 ```
 
-First-party plugin schema factories can also expose table overrides for advanced setups:
+Extension composition rules:
 
-```ts showLineNumbers
-import { convexTable, text } from 'better-convex/orm';
-import { resendPlugin } from '@better-convex/resend/schema';
+- Extension `relations(...)` merge before app `relations`.
+- Extension `triggers` merge before app `triggers`.
+- Duplicate relation fields and trigger hooks throw.
 
-const customResendEmails = convexTable('resend_emails', {
-  custom: text().notNull(),
-});
+## Ownership model (shadcn-style)
 
-export default defineSchema(tables, {
-  plugins: [
-    resendPlugin({
-      tables: {
-        resendEmails: customResendEmails,
-      },
-    }),
-  ],
-});
-```
+- Packages own stable runtime helpers.
+- The CLI owns scaffold templates.
+- Your app owns scaffolded schema and runtime files.
+- `better-convex add <plugin>` creates or refreshes local plugin files.
+- If `paths.env` is missing, `better-convex add <plugin>` also bootstraps `convex/lib/get-env.ts` and writes `paths.env` into `concave.json`.
+- `better-convex diff <plugin>` previews scaffold drift.
+- Installed plugin state is tracked in `<functionsDir>/plugins.lock.json`.
 
 Codegen behavior:
 
-- Installed plugin keys are used for generated typing/runtime context.
-- Plugin runtime modules are scaffold-owned; `codegen` does not emit plugin runtime files.
+- Installed extension keys drive generated plugin typing.
+- Plugin runtime modules stay scaffold-owned.
 - Stale `generated/plugins/**` artifacts are removed automatically.
-
-## Ownership model (shadcn-style parity)
-
-- Generated internals are framework-owned and overwrite-safe.
-- User scaffold files are user-owned.
-- Plugin function module default: `<functionsDir>/plugins/<plugin>.ts`.
-- Plugin helper modules default: `convex/<paths.lib>/plugins/<plugin>/...`.
-- `better-convex add <plugin>` creates missing scaffold files.
-- `better-convex diff <plugin>` previews scaffold drift (read-only).
-- Plugin inventory/state is tracked in `<functionsDir>/plugins.lock.json`.
 
 ## Available plugins
 
@@ -92,14 +63,14 @@ Codegen behavior:
 | [`ratelimit`](/docs/plugins/ratelimit) | Convex-native rate limiting with middleware + React hook support |
 | [`resend`](/docs/plugins/resend) | Durable queued email delivery, batching, webhook status ingestion, and cleanup APIs |
 
-## Built-in internal plugins
+## Built-in internal extensions
 
 These are always active and do not require explicit registration:
 
-| Plugin | Purpose |
+| Extension | Purpose |
 | --- | --- |
-| `aggregatePlugin` | Aggregate storage + runtime support |
-| `migrationPlugin` | Migration state + runtime support |
+| `aggregate` | Aggregate storage + runtime support |
+| `migration` | Migration state + runtime support |
 
 ## Next steps
 

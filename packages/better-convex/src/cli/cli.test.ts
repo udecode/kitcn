@@ -27,7 +27,7 @@ function createDefaultConfig() {
     },
     dev: {
       debug: false,
-      convexArgs: [],
+      args: [],
       aggregateBackfill: {
         enabled: 'auto' as const,
         wait: true,
@@ -48,11 +48,11 @@ function createDefaultConfig() {
     },
     codegen: {
       debug: false,
-      convexArgs: [],
+      args: [],
       trimSegments: ['plugins'],
     },
     deploy: {
-      convexArgs: [],
+      args: [],
       aggregateBackfill: {
         enabled: 'auto' as const,
         wait: true,
@@ -292,7 +292,7 @@ describe('cli/cli', () => {
       },
       codegen: {
         debug: false,
-        convexArgs: ['--team', 'acme'],
+        args: ['--team', 'acme'],
         scope: 'orm' as const,
       },
     }));
@@ -389,6 +389,14 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'schema.ts'),
+      `
+      import { defineSchema } from "better-convex/orm";
+
+      export default defineSchema({});
+      `.trim()
+    );
 
     process.chdir(dir);
     try {
@@ -410,6 +418,11 @@ describe('cli/cli', () => {
       expect(
         fs.existsSync(
           path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'schema.ts')
         )
       ).toBe(true);
       expect(
@@ -460,13 +473,45 @@ describe('cli/cli', () => {
           path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
           'utf8'
         )
-      ).toContain('apiKey: process.env.RESEND_API_KEY');
+      ).toContain('apiKey: getEnv().RESEND_API_KEY');
       expect(
         fs.readFileSync(
           path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
           'utf8'
         )
-      ).toContain('webhookSecret: process.env.RESEND_WEBHOOK_SECRET');
+      ).toContain('webhookSecret: getEnv().RESEND_WEBHOOK_SECRET');
+      expect(fs.existsSync(path.join(dir, 'convex', 'lib', 'get-env.ts'))).toBe(
+        true
+      );
+      const envSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'get-env.ts'),
+        'utf8'
+      );
+      expect(envSource).toContain(
+        "DEPLOY_ENV: z.string().default('production')"
+      );
+      expect(envSource).toContain(
+        "SITE_URL: z.string().default('http://localhost:3000')"
+      );
+      expect(envSource).toContain('RESEND_API_KEY: z.string().optional()');
+      expect(envSource).toContain(
+        'RESEND_WEBHOOK_SECRET: z.string().optional()'
+      );
+      expect(envSource).toContain('RESEND_FROM_EMAIL: z.string().optional()');
+      const createdConfig = JSON.parse(
+        fs.readFileSync(path.join(dir, 'concave.json'), 'utf8')
+      ) as {
+        meta?: {
+          'better-convex'?: {
+            paths?: {
+              env?: string;
+            };
+          };
+        };
+      };
+      expect(createdConfig.meta?.['better-convex']?.paths?.env).toBe(
+        'convex/lib/get-env.ts'
+      );
       expect(
         fs.readFileSync(
           path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
@@ -481,6 +526,14 @@ describe('cli/cli', () => {
       ).not.toContain('generated/server');
       const resendFunctionsSource = fs.readFileSync(
         path.join(dir, 'convex', 'plugins', 'resend.ts'),
+        'utf8'
+      );
+      const resendSchemaSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'schema.ts'),
+        'utf8'
+      );
+      const appSchemaSource = fs.readFileSync(
+        path.join(dir, 'convex', 'schema.ts'),
         'utf8'
       );
       const resendEmailSource = fs.readFileSync(
@@ -521,7 +574,13 @@ describe('cli/cli', () => {
         'for (const email of batch ?? [])'
       );
       expect(resendFunctionsSource).toContain(
-        'where(inArray(resendStorageTables.resendDeliveryEvents.emailId, emailIds))'
+        'where(inArray(resendDeliveryEventsTable.emailId, emailIds))'
+      );
+      expect(resendFunctionsSource).toContain(
+        'where: { id: { in: input.contentIds } }'
+      );
+      expect(resendFunctionsSource).toContain(
+        'where: { id: { in: input.emailIds } }'
       );
       expect(resendFunctionsSource).toContain(
         'export const getStatus = privateQuery.use(resend.middleware())'
@@ -529,6 +588,7 @@ describe('cli/cli', () => {
       expect(resendFunctionsSource).toContain(
         'export const callResendAPIWithBatch = privateAction.use(resend.middleware())'
       );
+      expect(resendFunctionsSource).not.toContain('RESEND_API_KEY is missing.');
       expect(resendFunctionsSource).not.toContain('ctx.runQuery(');
       expect(resendFunctionsSource).not.toContain('ctx.runMutation(');
       expect(resendFunctionsSource).not.toContain('ctx.runAction(');
@@ -537,6 +597,17 @@ describe('cli/cli', () => {
       expect(resendFunctionsSource).not.toContain('as any');
       expect(resendFunctionsSource).not.toContain('ctx: any');
       expect(resendFunctionsSource).toContain("from '@better-convex/resend';");
+      expect(resendFunctionsSource).toContain(
+        "from '../lib/plugins/resend/schema';"
+      );
+      expect(resendFunctionsSource).toContain('resendContentTable');
+      expect(resendFunctionsSource).toContain('resendDeliveryEventsTable');
+      expect(resendFunctionsSource).toContain('resendEmailsTable');
+      expect(resendFunctionsSource).toContain('resendNextBatchRunTable');
+      expect(resendFunctionsSource).not.toContain(
+        "from '@better-convex/resend/schema';"
+      );
+      expect(resendFunctionsSource).not.toContain('resendStorageTables');
       expect(resendFunctionsSource).not.toContain('type OrmCtx =');
       expect(resendFunctionsSource).not.toContain('type OrmWriter');
       expect(resendFunctionsSource).not.toContain('as unknown as OrmCtx');
@@ -565,6 +636,27 @@ describe('cli/cli', () => {
       expect(resendWebhookSource).toContain('../../crpc');
       expect(resendWebhookSource).not.toContain('initCRPC.create(');
       expect(resendWebhookSource).not.toContain('const c =');
+      expect(resendSchemaSource).toContain('export function resendExtension()');
+      expect(resendSchemaSource).toContain('defineSchemaExtension("resend", {');
+      expect(resendSchemaSource).toContain('}).relations((r) => ({');
+      expect(resendSchemaSource).toContain('deliveryEvents: r.many');
+      expect(resendSchemaSource).not.toContain('tables: {');
+      expect(resendSchemaSource).toContain('resendContent: resendContentTable');
+      expect(resendSchemaSource).toContain(
+        'unionOf(text().notNull(), integer().notNull()).notNull()'
+      );
+      expect(resendSchemaSource).not.toContain(
+        'export const resendStorageTables'
+      );
+      expect(resendSchemaSource).not.toContain('const RESEND_CONTENT_TABLE =');
+      expect(resendSchemaSource).not.toContain('type SchemaRelationsMap');
+      expect(resendSchemaSource).not.toContain('defineSchemaRelations');
+      expect(resendSchemaSource).not.toContain("from 'convex/values'");
+      expect(resendSchemaSource).not.toContain('v.record(');
+      expect(appSchemaSource).toContain(
+        "import { resendExtension } from './lib/plugins/resend/schema';"
+      );
+      expect(appSchemaSource).toContain('.extend(resendExtension())');
       const lockfile = JSON.parse(
         fs.readFileSync(path.join(dir, 'convex', 'plugins.lock.json'), 'utf8')
       ) as {
@@ -574,6 +666,9 @@ describe('cli/cli', () => {
         >;
       };
       expect(lockfile.plugins.resend.package).toBe('@better-convex/resend');
+      expect(lockfile.plugins.resend.files?.['resend-schema']).toBe(
+        'convex/lib/plugins/resend/schema.ts'
+      );
       expect(lockfile.plugins.resend.files?.['resend-plugin']).toBe(
         'convex/lib/plugins/resend/plugin.ts'
       );
@@ -720,9 +815,25 @@ describe('cli/cli', () => {
       expect(selectPromptStub).toHaveBeenCalled();
       expect(
         fs.existsSync(
-          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'api.ts')
+          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'plugin.ts')
         )
       ).toBe(true);
+      const ratelimitPluginSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'plugin.ts'),
+        'utf8'
+      );
+      expect(ratelimitPluginSource).toContain(
+        'import { MINUTE, Ratelimit, RatelimitPlugin } from "better-convex/ratelimit";'
+      );
+      expect(ratelimitPluginSource).toContain(
+        'export const ratelimitBuckets = {'
+      );
+      expect(ratelimitPluginSource).toContain(
+        'export const ratelimit = RatelimitPlugin.configure({'
+      );
+      expect(ratelimitPluginSource).toContain('default: {');
+      expect(ratelimitPluginSource).not.toContain('project/create:free');
+      expect(ratelimitPluginSource).not.toContain('tag/create:free');
       expect(execaStub).not.toHaveBeenCalled();
       expect(generateMetaStub).not.toHaveBeenCalled();
     } finally {
@@ -776,6 +887,7 @@ describe('cli/cli', () => {
         'resend-functions',
         'resend-crons',
         'resend-plugin',
+        'resend-schema',
         'resend-webhook',
       ]);
       expect(callArgs.options.map((option) => option.label)).toEqual([
@@ -783,6 +895,7 @@ describe('cli/cli', () => {
         'convex/plugins/resend.ts',
         'convex/lib/plugins/resend/crons.ts',
         'convex/lib/plugins/resend/plugin.ts',
+        'convex/lib/plugins/resend/schema.ts',
         'convex/lib/plugins/resend/webhook.ts',
       ]);
       expect(
@@ -819,6 +932,7 @@ describe('cli/cli', () => {
       expect(lockfile.plugins.resend.package).toBe('@better-convex/resend');
       expect(lockfile.plugins.resend.files).toEqual({
         'resend-plugin': 'convex/lib/plugins/resend/plugin.ts',
+        'resend-schema': 'convex/lib/plugins/resend/schema.ts',
         'resend-functions': 'convex/plugins/resend.ts',
       });
     } finally {
@@ -961,6 +1075,7 @@ describe('cli/cli', () => {
         'resend-functions',
         'resend-crons',
         'resend-plugin',
+        'resend-schema',
         'resend-webhook',
       ]);
       expect(
@@ -1194,6 +1309,7 @@ describe('cli/cli', () => {
         'resend-functions',
         'resend-crons',
         'resend-plugin',
+        'resend-schema',
         'resend-webhook',
       ]);
     } finally {
@@ -1263,6 +1379,7 @@ describe('cli/cli', () => {
         'resend-functions',
         'resend-crons',
         'resend-plugin',
+        'resend-schema',
         'resend-webhook',
       ]);
       const lockfile = JSON.parse(
@@ -1477,6 +1594,9 @@ describe('cli/cli', () => {
           'utf8'
         )
       ).toContain('export const resend = ResendPlugin.configure');
+      expect(fs.existsSync(path.join(dir, 'custom-lib', 'get-env.ts'))).toBe(
+        true
+      );
       const resendFunctionsSource = fs.readFileSync(
         path.join(dir, 'convex', 'plugins', 'resend.ts'),
         'utf8'
@@ -1498,8 +1618,9 @@ describe('cli/cli', () => {
       expect(resendFunctionsSource).not.toContain('initCRPC.create(');
       expect(resendEmailSource).toContain('import { privateAction } from');
       expect(resendEmailSource).toContain('../../custom-lib/crpc');
-      expect(resendEmailSource).toContain('process.env.RESEND_FROM_EMAIL');
-      expect(resendEmailSource).not.toContain('import { getEnv }');
+      expect(resendEmailSource).toContain('import { getEnv } from');
+      expect(resendEmailSource).toContain('../../custom-lib/get-env');
+      expect(resendEmailSource).toContain('getEnv().RESEND_FROM_EMAIL');
       expect(resendWebhookSource).toContain('import { publicRoute } from');
       expect(resendWebhookSource).toContain('../../crpc');
     } finally {
@@ -1523,7 +1644,7 @@ describe('cli/cli', () => {
         ...createDefaultConfig(),
         paths: {
           ...createDefaultConfig().paths,
-          env: 'convex/lib/get-env',
+          env: 'convex/lib/get-env.ts',
         },
       }));
 
@@ -1540,7 +1661,7 @@ describe('cli/cli', () => {
         path.join(dir, 'convex', 'plugins', 'email.tsx'),
         'utf8'
       );
-      const resendPluginSource = fs.readFileSync(
+      const resendExtensionSource = fs.readFileSync(
         path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
         'utf8'
       );
@@ -1549,14 +1670,16 @@ describe('cli/cli', () => {
       );
       expect(resendEmailSource).toContain('getEnv().RESEND_FROM_EMAIL');
       expect(resendEmailSource).not.toContain('process.env.RESEND_FROM_EMAIL');
-      expect(resendPluginSource).toContain(
+      expect(resendExtensionSource).toContain(
         'import { getEnv } from "../../get-env";'
       );
-      expect(resendPluginSource).toContain('apiKey: getEnv().RESEND_API_KEY');
-      expect(resendPluginSource).toContain(
+      expect(resendExtensionSource).toContain(
+        'apiKey: getEnv().RESEND_API_KEY'
+      );
+      expect(resendExtensionSource).toContain(
         'webhookSecret: getEnv().RESEND_WEBHOOK_SECRET'
       );
-      expect(resendPluginSource).not.toContain('process.env');
+      expect(resendExtensionSource).not.toContain('process.env');
     } finally {
       process.chdir(oldCwd);
     }
@@ -1592,7 +1715,7 @@ describe('cli/cli', () => {
         ...createDefaultConfig(),
         paths: {
           ...createDefaultConfig().paths,
-          env: 'convex/lib/get-env',
+          env: 'convex/lib/get-env.ts',
         },
       }));
 
@@ -1653,6 +1776,14 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'schema.ts'),
+      `
+      import { defineSchema } from "better-convex/orm";
+
+      export default defineSchema({});
+      `.trim()
+    );
 
     process.chdir(dir);
     try {
@@ -1675,9 +1806,109 @@ describe('cli/cli', () => {
       expect(exitCode).toBe(0);
       expect(
         fs.existsSync(
-          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'api.ts')
+          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'schema.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'plugin.ts')
         )
       ).toBe(false);
+      expect(
+        fs.readFileSync(path.join(dir, 'convex', 'schema.ts'), 'utf8')
+      ).toContain(
+        "import { ratelimitExtension } from './lib/plugins/ratelimit/schema';"
+      );
+      expect(
+        fs.readFileSync(path.join(dir, 'convex', 'schema.ts'), 'utf8')
+      ).toContain('.extend(ratelimitExtension())');
+      const ratelimitSchemaSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'schema.ts'),
+        'utf8'
+      );
+      expect(ratelimitSchemaSource).not.toContain('tables: {');
+      expect(ratelimitSchemaSource).toContain(
+        'ratelimitState: ratelimitStateTable'
+      );
+      expect(ratelimitSchemaSource).toContain('"ratelimit_state"');
+      expect(ratelimitSchemaSource).not.toContain(
+        'export const ratelimitStorageTables'
+      );
+      expect(ratelimitSchemaSource).not.toContain(
+        'export const RATELIMIT_STATE_TABLE'
+      );
+      expect(ratelimitSchemaSource).not.toContain(
+        'export const RATELIMIT_DYNAMIC_TABLE'
+      );
+      expect(ratelimitSchemaSource).not.toContain(
+        'export const RATELIMIT_PROTECTION_TABLE'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add ratelimit --preset schema-only) bootstraps getEnv when paths.env is missing', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-ratelimit-env-bootstrap-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'schema.ts'),
+      `
+      import { defineSchema } from "better-convex/orm";
+
+      export default defineSchema({});
+      `.trim()
+    );
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'ratelimit', '--preset', 'schema-only', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(fs.existsSync(path.join(dir, 'convex', 'lib', 'get-env.ts'))).toBe(
+        true
+      );
+      const envSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'get-env.ts'),
+        'utf8'
+      );
+      expect(envSource).toContain(
+        "DEPLOY_ENV: z.string().default('production')"
+      );
+      expect(envSource).toContain(
+        "SITE_URL: z.string().default('http://localhost:3000')"
+      );
+      const createdConfig = JSON.parse(
+        fs.readFileSync(path.join(dir, 'concave.json'), 'utf8')
+      ) as {
+        meta?: {
+          'better-convex'?: {
+            paths?: {
+              env?: string;
+            };
+          };
+        };
+      };
+      expect(createdConfig.meta?.['better-convex']?.paths?.env).toBe(
+        'convex/lib/get-env.ts'
+      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -1717,7 +1948,7 @@ describe('cli/cli', () => {
       expect(exitCode).toBe(0);
       expect(
         fs.existsSync(
-          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'api.ts')
+          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'plugin.ts')
         )
       ).toBe(false);
       expect(
@@ -1768,6 +1999,11 @@ describe('cli/cli', () => {
       const payload = JSON.parse(payloadLine ?? '{}') as {
         selectedTemplateIds: string[];
         dependencyHints?: string[];
+        envReminders?: Array<{
+          key: string;
+          path: string;
+          message?: string;
+        }>;
       };
       expect(payload.selectedTemplateIds).toContain('resend-email');
       expect(payload.dependencyHints?.join('\n')).toContain(
@@ -1779,6 +2015,13 @@ describe('cli/cli', () => {
       expect(payload.dependencyHints?.join('\n')).toContain('react-email');
       expect(payload.dependencyHints?.join('\n')).toContain('react');
       expect(payload.dependencyHints?.join('\n')).toContain('react-dom');
+      expect(payload.envReminders).toEqual([
+        {
+          key: 'RESEND_API_KEY',
+          path: 'convex/.env',
+          message: 'Set before sending email through Resend.',
+        },
+      ]);
       expect(execaStub).not.toHaveBeenCalled();
       expect(generateMetaStub).not.toHaveBeenCalled();
     } finally {
@@ -1822,6 +2065,10 @@ describe('cli/cli', () => {
       expect(output).toContain('react-email');
       expect(output).toContain('react');
       expect(output).toContain('react-dom');
+      expect(output).toContain('Set plugin env values in convex/.env');
+      expect(output).toContain(
+        'RESEND_API_KEY: Set before sending email through Resend.'
+      );
       expect(execaStub).not.toHaveBeenCalled();
       expect(generateMetaStub).not.toHaveBeenCalled();
     } finally {
@@ -2086,9 +2333,20 @@ describe('cli/cli', () => {
       path.join(convexDir, 'schema.ts'),
       `
       import { defineSchema } from "better-convex/orm";
-      import { resendPlugin } from "@better-convex/resend/schema";
+      import { resendExtension } from "./lib/plugins/resend/schema";
 
-      export default defineSchema({}, { plugins: [resendPlugin()] });
+      export default defineSchema({}).extend(resendExtension());
+      `.trim()
+    );
+    fs.mkdirSync(path.join(convexDir, 'lib', 'plugins', 'resend'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(convexDir, 'lib', 'plugins', 'resend', 'schema.ts'),
+      `
+      import { defineSchemaExtension } from "better-convex/orm";
+
+      export const resendExtension = defineSchemaExtension("resend", {});
       `.trim()
     );
     fs.writeFileSync(path.join(convexDir, 'api.ts'), '// stale\n');
@@ -2159,8 +2417,9 @@ describe('cli/cli', () => {
       key: 'test',
       packageName: '@better-convex/test',
       schemaRegistration: {
-        importPath: '@better-convex/test/schema',
-        importName: 'testPlugin',
+        importName: 'testExtension',
+        path: 'schema.ts',
+        target: 'lib',
       },
       defaultPreset: 'default',
       presets: [
@@ -2199,9 +2458,20 @@ describe('cli/cli', () => {
       path.join(convexDir, 'schema.ts'),
       `
       import { defineSchema } from "better-convex/orm";
-      import { resendPlugin } from "@better-convex/resend/schema";
+      import { resendExtension } from "./lib/plugins/resend/schema";
 
-      export default defineSchema({}, { plugins: [resendPlugin()] });
+      export default defineSchema({}).extend(resendExtension());
+      `.trim()
+    );
+    fs.mkdirSync(path.join(convexDir, 'lib', 'plugins', 'resend'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(convexDir, 'lib', 'plugins', 'resend', 'schema.ts'),
+      `
+      import { defineSchemaExtension } from "better-convex/orm";
+
+      export const resendExtension = defineSchemaExtension("resend", {});
       `.trim()
     );
     fs.writeFileSync(
@@ -2268,7 +2538,7 @@ describe('cli/cli', () => {
     expect(source).not.toContain('PLUGIN_LOCKFILE_VERSION');
   });
 
-  test('run(list --json) reads schema plugins and lockfile without invoking convex cli', async () => {
+  test('run(list --json) reads schema extensions and lockfile without invoking convex cli', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-list-plugins-')
     );
@@ -2278,9 +2548,9 @@ describe('cli/cli', () => {
     fs.writeFileSync(
       path.join(convexDir, 'schema.ts'),
       `
-      const OrmSchemaPlugins = Symbol.for("better-convex:OrmSchemaPlugins");
+      const OrmSchemaExtensions = Symbol.for("better-convex:OrmSchemaExtensions");
       const schema = {};
-      Object.defineProperty(schema, OrmSchemaPlugins, {
+      Object.defineProperty(schema, OrmSchemaExtensions, {
         value: [
           { key: "ratelimit", schema: { tableNames: [], inject: (value) => value } },
           { key: "resend", schema: { tableNames: [], inject: (value) => value } },
@@ -2296,7 +2566,7 @@ describe('cli/cli', () => {
         {
           plugins: {
             ratelimit: {
-              package: '@better-convex/ratelimit',
+              package: 'better-convex',
             },
             resend: {
               package: '@better-convex/resend',
@@ -3072,7 +3342,7 @@ describe('cli/cli', () => {
         ...createDefaultConfig(),
         dev: {
           debug: false,
-          convexArgs: ['--team', 'cfg-team'],
+          args: ['--team', 'cfg-team'],
           aggregateBackfill: {
             ...createDefaultConfig().dev.aggregateBackfill,
             enabled: 'off' as const,

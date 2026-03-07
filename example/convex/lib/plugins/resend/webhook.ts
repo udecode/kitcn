@@ -10,7 +10,7 @@ const webhookHandler = publicRoute
   .mutation(async ({ ctx, c }) => {
     const event = await verifyResendWebhookEvent(
       c.req.raw,
-      ctx.plugins.resend.options.webhookSecret
+      ctx.api.resend.webhookSecret
     );
     const caller = createResendCaller(ctx);
     await caller.handleEmailEvent({ event });

@@ -1,10 +1,13 @@
 import {
+  convexTable,
   createOrm,
   defineRelations,
+  defineSchema,
+  defineSchemaExtension,
+  type ExtractTablesFromSchema,
   type GenericOrm,
   type GenericOrmCtx,
-  type OrmReader,
-  type OrmWriter,
+  text,
 } from 'better-convex/orm';
 import type {
   GenericDatabaseReader,
@@ -14,23 +17,49 @@ import type {
 import { users } from './tables-rel';
 import { type Equal, Expect, IsAny } from './utils';
 
+type HasKey<T, K extends PropertyKey> = K extends keyof T ? true : false;
+
 const schemaConfig = defineRelations({ users });
 const mockDb = {} as GenericDatabaseWriter<any>;
+const mockReader = {} as GenericDatabaseReader<any>;
 
 const orm = createOrm({ schema: schemaConfig });
 const db = orm.db(mockDb);
+const dbReader = orm.db(mockReader);
+
+const ratelimitExtension = defineSchemaExtension('ratelimit', {
+  ratelimitState: convexTable('ratelimit_state', {
+    name: text().notNull(),
+  }),
+  ratelimitDynamicLimit: convexTable('ratelimit_dynamic_limit', {
+    prefix: text().notNull(),
+  }),
+  ratelimitProtectionHit: convexTable('ratelimit_protection_hit', {
+    value: text().notNull(),
+  }),
+});
+
+const extensionUsers = convexTable('users_extension_types', {
+  name: text().notNull(),
+});
+const extensionSchema = defineSchema({ extensionUsers }).extend(
+  ratelimitExtension
+);
+type ExtensionTables = ExtractTablesFromSchema<typeof extensionSchema>;
+Expect<Equal<HasKey<ExtensionTables, 'extensionUsers'>, true>>();
+Expect<Equal<HasKey<ExtensionTables, 'ratelimitState'>, true>>();
+Expect<Equal<HasKey<ExtensionTables, 'ratelimitDynamicLimit'>, true>>();
+Expect<Equal<HasKey<ExtensionTables, 'ratelimitProtectionHit'>, true>>();
 
 {
-  const _writer: OrmWriter<typeof schemaConfig> = db;
+  const _writer = db;
   _writer.skipRules.query.users.findMany;
   // @ts-expect-error - skipRules does not itself have skipRules
   _writer.skipRules.skipRules;
 }
 
 {
-  const mockReader = {} as GenericDatabaseReader<any>;
-  const dbReader = orm.db(mockReader);
-  const _reader: OrmReader<typeof schemaConfig> = dbReader;
+  const _reader = dbReader;
   _reader.skipRules.query.users.findMany;
   // @ts-expect-error - skipRules does not itself have skipRules
   _reader.skipRules.skipRules;
@@ -50,22 +79,31 @@ type ReaderOrWriterWithOrmCtx = GenericOrmCtx<
   typeof schemaConfig
 >;
 
-Expect<Equal<ReaderOrm, OrmReader<typeof schemaConfig>>>;
-Expect<Equal<WriterOrm, OrmWriter<typeof schemaConfig>>>;
-Expect<
-  Equal<
-    ReaderOrWriterOrm,
-    OrmReader<typeof schemaConfig> | OrmWriter<typeof schemaConfig>
-  >
->;
-Expect<Equal<ReaderWithOrmCtx['orm'], OrmReader<typeof schemaConfig>>>;
-Expect<Equal<WriterWithOrmCtx['orm'], OrmWriter<typeof schemaConfig>>>;
-Expect<
-  Equal<
-    ReaderOrWriterWithOrmCtx['orm'],
-    OrmReader<typeof schemaConfig> | OrmWriter<typeof schemaConfig>
-  >
->;
+{
+  const _readerOrm = {} as ReaderOrm;
+  _readerOrm.query.users.findMany;
+  _readerOrm.skipRules.query.users.findMany;
+  // @ts-expect-error - insert is not available on reader orm
+  _readerOrm.insert;
+}
+
+{
+  const _writerOrm = {} as WriterOrm;
+  _writerOrm.insert(users).values({ name: 'Ada', email: 'ada@example.com' });
+  _writerOrm.skipRules
+    .insert(users)
+    .values({ name: 'Ada', email: 'ada@example.com' });
+}
+
+{
+  const _readerOrWriterOrm = {} as ReaderOrWriterOrm;
+  _readerOrWriterOrm.query.users.findMany;
+  // @ts-expect-error - insert is not safe on reader|writer union
+  _readerOrWriterOrm.insert;
+}
+Expect<Equal<ReaderWithOrmCtx['orm'], ReaderOrm>>;
+Expect<Equal<WriterWithOrmCtx['orm'], WriterOrm>>;
+Expect<Equal<ReaderOrWriterWithOrmCtx['orm'], ReaderOrWriterOrm>>;
 
 // ORM db intentionally does NOT expose raw Convex db methods. It only exposes:
 // - `query.*` builders
