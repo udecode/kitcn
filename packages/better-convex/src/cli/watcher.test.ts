@@ -3,17 +3,19 @@ import path from 'node:path';
 import { getWatchPatterns, startWatcher } from './watcher';
 
 describe('cli/watcher', () => {
-  test('getWatchPatterns includes function sources and routers/**/*.ts', () => {
+  test('getWatchPatterns includes function, generated, and router sources', () => {
     const functionsDir = '/repo/convex';
     expect(getWatchPatterns(functionsDir)).toEqual([
       path.join(functionsDir, '**', '*.ts'),
+      path.join(functionsDir, '_generated', '**', '*.ts'),
+      path.join(functionsDir, '_generated', '**', '*.js'),
       path.join('/repo', 'routers', '**', '*.ts'),
     ]);
   });
 
-  test('startWatcher debounces change events and calls generateMeta', async () => {
+  test('startWatcher debounces add/change/unlink events and calls generateMeta', async () => {
     const calls: any[] = [];
-    const generateMetaStub = (...args: any[]) => {
+    const generateMetaStub = async (...args: any[]) => {
       calls.push(args);
     };
 
@@ -60,15 +62,69 @@ describe('cli/watcher', () => {
     expect(watchedPatterns as unknown).toEqual(
       getWatchPatterns('/repo/convex')
     );
+    expect(typeof handlers.add).toBe('function');
     expect(typeof handlers.change).toBe('function');
+    expect(typeof handlers.unlink).toBe('function');
 
-    // Two rapid changes => one codegen call after debounce.
+    // Rapid file graph updates => one codegen call after debounce.
+    handlers.add();
     handlers.change();
-    handlers.change();
+    handlers.unlink();
     await new Promise((r) => setTimeout(r, 25));
 
     expect(calls).toEqual([
       ['out', { debug: true, silent: true, api: false, auth: true }],
+    ]);
+  });
+
+  test('startWatcher queues a rerun when changes land during codegen', async () => {
+    const calls: any[] = [];
+    const pendingRuns: Array<() => void> = [];
+    const generateMetaStub = (...args: any[]) => {
+      calls.push(args);
+      return new Promise<void>((resolve) => {
+        pendingRuns.push(resolve);
+      });
+    };
+
+    const handlers: Record<string, (...args: any[]) => void> = {};
+    const watcher = {
+      on(event: string, cb: (...args: any[]) => void) {
+        handlers[event] = cb;
+        return watcher;
+      },
+    };
+
+    await startWatcher({
+      outputDir: 'out',
+      debounceMs: 10,
+      watch: (() => watcher) as any,
+      generateMeta: generateMetaStub as any,
+      getConvexConfig: (() => ({
+        functionsDir: '/repo/convex',
+        outputFile: '/repo/out/api.ts',
+      })) as any,
+    });
+
+    handlers.add();
+    await new Promise((r) => setTimeout(r, 25));
+    expect(calls).toHaveLength(1);
+
+    handlers.change();
+    await new Promise((r) => setTimeout(r, 25));
+    expect(calls).toHaveLength(1);
+
+    const finishCurrentRun = pendingRuns.shift();
+    if (!finishCurrentRun) {
+      throw new Error('Expected generateMeta to start');
+    }
+    finishCurrentRun();
+    await new Promise((r) => setTimeout(r, 25));
+
+    expect(calls).toHaveLength(2);
+    expect(calls).toEqual([
+      ['out', { debug: false, silent: true, api: true, auth: true }],
+      ['out', { debug: false, silent: true, api: true, auth: true }],
     ]);
   });
 
@@ -83,7 +139,7 @@ describe('cli/watcher', () => {
     process.env.BETTER_CONVEX_GENERATE_AUTH = '1';
 
     const calls: any[] = [];
-    const generateMetaStub = (...args: any[]) => {
+    const generateMetaStub = async (...args: any[]) => {
       calls.push(args);
     };
     const handlers: Record<string, (...args: any[]) => void> = {};
@@ -106,7 +162,7 @@ describe('cli/watcher', () => {
         }),
       });
 
-      handlers.change();
+      handlers.add();
       await new Promise((r) => setTimeout(r, 25));
 
       expect(calls).toEqual([
