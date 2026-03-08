@@ -1,5 +1,11 @@
 # better-convex
 
+## 0.10.2
+
+### Patch Changes
+
+- [#129](https://github.com/udecode/better-convex/pull/129) [`9262e6f`](https://github.com/udecode/better-convex/commit/9262e6fe823bf8ededc84c1ee2ba9087efa96aa9) Thanks [@thuillart](https://github.com/thuillart)! - Fix trigger-generated callers in `schema.ts` so they stay schema-safe during Convex pushes, and preserve mutation scheduling APIs when triggers are parameterized with `MutationCtx`.
+
 ## 0.10.1
 
 ### Patch Changes
