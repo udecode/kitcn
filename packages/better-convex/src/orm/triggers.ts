@@ -51,7 +51,7 @@ type TriggerUpdateData<
 
 export type OrmTriggerContext<
   TSchema extends TablesRelationalConfig,
-  TExtraCtx extends Record<string, unknown> = {},
+  TExtraCtx extends object = {},
 > = Omit<TExtraCtx, 'db' | 'innerDb' | 'orm'> & {
   db: GenericDatabaseWriter<any>;
   innerDb: GenericDatabaseWriter<any>;
@@ -77,20 +77,17 @@ export type OrmBeforeResult<TData extends AnyRecord> =
       data: Partial<TData>;
     };
 
-type OrmBeforeHook<
-  TData extends AnyRecord,
-  TCtx extends Record<string, unknown>,
-> = (data: TData, ctx: TCtx) => MaybePromise<OrmBeforeResult<TData>>;
+type OrmBeforeHook<TData extends AnyRecord, TCtx extends object> = (
+  data: TData,
+  ctx: TCtx
+) => MaybePromise<OrmBeforeResult<TData>>;
 
-type OrmAfterHook<
-  TDoc extends AnyRecord,
-  TCtx extends Record<string, unknown>,
-> = (doc: TDoc, ctx: TCtx) => MaybePromise<void>;
+type OrmAfterHook<TDoc extends AnyRecord, TCtx extends object> = (
+  doc: TDoc,
+  ctx: TCtx
+) => MaybePromise<void>;
 
-type OrmChangeHook<
-  TDoc extends AnyRecord,
-  TCtx extends Record<string, unknown>,
-> =
+type OrmChangeHook<TDoc extends AnyRecord, TCtx extends object> =
   | ((change: OrmTriggerChange<TDoc>, ctx: TCtx) => MaybePromise<void>)
   | {
       (): unknown;
@@ -101,7 +98,7 @@ export type OrmTableTriggers<
   TDoc extends AnyRecord,
   TInsert extends AnyRecord,
   TUpdate extends AnyRecord,
-  TCtx extends Record<string, unknown>,
+  TCtx extends object,
 > = {
   create?: {
     before?: OrmBeforeHook<TInsert, TCtx>;
@@ -120,7 +117,7 @@ export type OrmTableTriggers<
 
 export type OrmTriggers<
   TSchema extends TablesRelationalConfig,
-  TExtraCtx extends Record<string, unknown> = {},
+  TExtraCtx extends object = {},
 > = {
   [TTableName in TriggerTableName<TSchema>]?: OrmTableTriggers<
     TriggerDoc<TSchema, TTableName>,
@@ -249,14 +246,14 @@ export function defineTriggers<TSchema extends TablesRelationalConfig>(
 ): OrmTriggers<TSchema>;
 export function defineTriggers<
   TSchema extends TablesRelationalConfig,
-  TExtraCtx extends Record<string, unknown>,
+  TExtraCtx extends object,
 >(
   schema: TSchema,
   triggers: OrmTriggers<TSchema, TExtraCtx>
 ): OrmTriggers<TSchema, TExtraCtx>;
 export function defineTriggers(
   schema: TablesRelationalConfig,
-  triggers: OrmTriggers<TablesRelationalConfig, Record<string, unknown>>
+  triggers: OrmTriggers<TablesRelationalConfig, object>
 ) {
   void schema;
   return triggers;
@@ -264,7 +261,7 @@ export function defineTriggers(
 
 export function normalizeOrmTriggers<
   TSchema extends TablesRelationalConfig,
-  TExtraCtx extends Record<string, unknown> = Record<string, unknown>,
+  TExtraCtx extends object = object,
 >(
   triggers: OrmTriggers<TSchema, TExtraCtx> | undefined
 ): Map<string, NormalizedOrmTableTriggers<Record<string, unknown>>> {

@@ -61,6 +61,8 @@ import {
   defineTriggers,
   text,
 } from "better-convex/orm";
+import type { MutationCtx } from "./generated/server";
+import { createUserCaller } from "./generated/user.runtime";
 
 export const userTable = convexTable("user", {
   name: text().notNull(),
@@ -71,7 +73,7 @@ export const relations = defineRelations({ user: userTable }, () => ({
   user: {},
 }));
 
-export const triggers = defineTriggers(relations, {
+export const triggers = defineTriggers<typeof relations, MutationCtx>(relations, {
   user: {
     create: {
       before: async (data) => ({
@@ -80,7 +82,7 @@ export const triggers = defineTriggers(relations, {
       after: async (doc, ctx) => {
         const caller = createUserCaller(ctx);
         await caller.schedule.now.sendWelcomeEmail({
-          userId: doc._id,
+          userId: doc.id,
         });
       },
     },
@@ -167,6 +169,7 @@ For runtime behavior, see [API Reference](#api-reference) below.
 2. Keep expensive work in `caller.schedule.after()` or `caller.schedule.now`.
 3. Index every query path used inside hooks.
 4. Prefer `create/update/delete` for specific rules; use `change` for cross-operation logic.
+5. If you only need scheduling and not a typed caller, `ctx.scheduler` also works directly.
 
 ## API Reference
 

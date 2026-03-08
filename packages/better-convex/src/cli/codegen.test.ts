@@ -433,16 +433,64 @@ describe('cli/codegen', () => {
         'export type ProcedureHandlerContext = QueryCtx | MutationCtx;'
       );
       expect(nestedRuntimeGenerated).toContain(
-        'type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;'
+        'type ProcedureCallerContext = QueryCtx | MutationCallerContext | ActionCtx;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        "import type { OrmTriggerContext } from 'better-convex/orm';"
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type MutationCallerContext = MutationCtx | OrmTriggerContext<any, MutationCtx>;'
       );
       expect(nestedRuntimeGenerated).toContain(
         'type ProcedureHandlerContext = QueryCtx | MutationCtx;'
       );
-      expect(nestedRuntimeGenerated).not.toContain(
-        'export type GeneratedProcedureCaller<'
+      expect(nestedRuntimeGenerated).toContain(
+        "type RuntimeServerModule = typeof import('better-convex/server');"
       );
       expect(nestedRuntimeGenerated).toContain(
-        'const createHandlerFromRegistry = createGenericHandlerFactory<'
+        'function createProcedureRegistry() {'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type ProcedureRegistryBundle = ReturnType<typeof createProcedureRegistry>;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'let cachedProcedureRegistry: ProcedureRegistryBundle | undefined;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'function createCallerFromRegistryFactory() {'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type CallerFactory = ReturnType<typeof createCallerFromRegistryFactory>;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'function getCreateCallerFromRegistry(): CallerFactory {'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        "const { typedProcedureResolver } =\n    (require('better-convex/server') as RuntimeServerModule);"
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'if (cachedProcedureRegistry) {\n    return cachedProcedureRegistry;\n  }'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'const { api, internal } =\n    (require("../../_generated/api.js") as typeof import(\'../../_generated/api.js\'));'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        "import { api, internal } from '../_generated/api.js';"
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'import {\n  createGenericCallerFactory,'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'const createCallerFromRegistry = createGenericCallerFactory<'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        "RuntimeServerModule['createGenericCallerFactory']<"
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'let cachedProcedureRegistry: ReturnType<typeof buildProcedureRegistry> | undefined;'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'export type GeneratedProcedureCaller<'
       );
       expect(nestedRuntimeGenerated).toContain(
         'export function createItemsQueriesCaller<TCtx extends ProcedureCallerContext>('
@@ -688,7 +736,19 @@ describe('cli/codegen', () => {
         "import type { ActionCtx, MutationCtx, QueryCtx } from './server';"
       );
       expect(todosRuntimeGenerated).toContain(
+        "import type { OrmTriggerContext } from 'better-convex/orm';"
+      );
+      expect(todosRuntimeGenerated).toContain(
+        "type RuntimeServerModule = typeof import('better-convex/server');"
+      );
+      expect(todosRuntimeGenerated).toContain(
+        'function getCreateCallerFromRegistry(): CallerFactory {'
+      );
+      expect(todosRuntimeGenerated).toContain(
         '"list": ["query", typedProcedureResolver(api["todos"]["list"], () => (require("../todos") as Record<string, unknown>)["list"])],'
+      );
+      expect(todosRuntimeGenerated).not.toContain(
+        "import { api, internal } from './_generated/api.js';"
       );
       expect(todosRuntimeGenerated).toContain(
         'export function createTodosCaller<TCtx extends ProcedureCallerContext>('
