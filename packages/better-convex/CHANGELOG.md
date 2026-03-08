@@ -1,5 +1,12 @@
 # better-convex
 
+## 0.10.1
+
+### Patch Changes
+
+- [#128](https://github.com/udecode/better-convex/pull/128) [`24e1e60`](https://github.com/udecode/better-convex/commit/24e1e60877b1a0c46631abc6d4118058d42acd4e) Thanks [@thuillart](https://github.com/thuillart)! - ## Patches
+  - Fix `better-convex dev` codegen watch mode so added, changed, and removed procedure files regenerate runtime artifacts more reliably during local development.
+
 ## 0.10.0
 
 ### Minor Changes
