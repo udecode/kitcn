@@ -3,12 +3,25 @@ import { fileURLToPath } from 'node:url';
 import { generateMeta, getConvexConfig } from './codegen.js';
 
 export function getWatchPatterns(functionsDir: string): string[] {
-  // Watch function source files + HTTP route sources.
+  // Watch function source files + Convex generated inputs.
   // Note: routers/ is sibling to functions/, not inside it.
   const convexDir = path.dirname(functionsDir);
   return [
     path.join(functionsDir, '**', '*.ts'),
+    path.join(functionsDir, '_generated', '**', '*.js'),
     path.join(convexDir, 'routers', '**', '*.ts'),
+  ];
+}
+
+export function getIgnoredWatchPatterns(
+  functionsDir: string,
+  outputFile: string
+): string[] {
+  return [
+    path.join(functionsDir, 'generated', '**', '*.ts'),
+    path.join(functionsDir, '**', '*.runtime.ts'),
+    path.join(functionsDir, 'generated.ts'),
+    outputFile,
   ];
 }
 
@@ -20,7 +33,7 @@ export async function startWatcher(opts?: {
   debounceMs?: number;
   watch?: (
     patterns: string[],
-    options: { ignoreInitial: boolean }
+    options: { ignoreInitial: boolean; ignored: string[] }
   ) => { on: (event: string, cb: (...args: any[]) => void) => any };
   generateMeta?: typeof generateMeta;
   getConvexConfig?: typeof getConvexConfig;
@@ -42,25 +55,59 @@ export async function startWatcher(opts?: {
   const resolveConfig = opts?.getConvexConfig ?? getConvexConfig;
   const runGenerateMeta = opts?.generateMeta ?? generateMeta;
 
-  const { functionsDir } = resolveConfig(outputDir);
+  const { functionsDir, outputFile } = resolveConfig(outputDir);
   const watchPatterns = getWatchPatterns(functionsDir);
+  const ignoredWatchPatterns = getIgnoredWatchPatterns(
+    functionsDir,
+    outputFile
+  );
 
   const watch = opts?.watch ?? (await import('chokidar')).watch;
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let generateMetaInFlight = false;
+  let generateMetaQueued = false;
 
-  watch(watchPatterns, { ignoreInitial: true })
-    .on('change', () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        runGenerateMeta(outputDir, {
-          debug,
-          silent: true,
-          api: generateApi,
-          auth: generateAuth,
-        });
-      }, debounceMs);
-    })
+  const runGenerateMetaSafely = async () => {
+    if (generateMetaInFlight) {
+      generateMetaQueued = true;
+      return;
+    }
+
+    generateMetaInFlight = true;
+    try {
+      await runGenerateMeta(outputDir, {
+        debug,
+        silent: true,
+        api: generateApi,
+        auth: generateAuth,
+      });
+    } catch (error) {
+      console.error('Watch codegen error:', error);
+    } finally {
+      generateMetaInFlight = false;
+      if (generateMetaQueued) {
+        generateMetaQueued = false;
+        scheduleGenerateMeta();
+      }
+    }
+  };
+
+  const scheduleGenerateMeta = () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      void runGenerateMetaSafely();
+    }, debounceMs);
+  };
+
+  watch(watchPatterns, {
+    ignoreInitial: true,
+    ignored: ignoredWatchPatterns,
+  })
+    .on('add', scheduleGenerateMeta)
+    .on('change', scheduleGenerateMeta)
+    .on('unlink', scheduleGenerateMeta)
     .on('error', (err: unknown) => console.error('Watch error:', err));
 }
 
