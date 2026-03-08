@@ -1043,6 +1043,98 @@ describe('cli/codegen', () => {
     }
   });
 
+  test('generateMeta prefers dedicated triggers file when triggers export exists there', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export const tables = {
+          todos: { table: 'todos' },
+        };
+        export const relations = {
+          todos: {},
+        };
+        export default {};
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'triggers.ts'),
+        `
+        export const triggers = {
+          todos: {},
+        };
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      expect(generatedServer).toContain(
+        "import schema, { relations } from '../schema';"
+      );
+      expect(generatedServer).toContain(
+        "import { triggers } from '../triggers';"
+      );
+      expect(generatedServer).not.toContain(
+        "import schema, { relations, triggers } from '../schema';"
+      );
+      expect(generatedServer).toContain('triggers,');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta wires migrations manifest into generated server when present', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
@@ -1131,7 +1223,7 @@ describe('cli/codegen', () => {
       );
 
       await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
-        "schema.ts exports 'triggers' but is missing 'relations'"
+        "triggers require a 'relations' export from schema.ts"
       );
     } finally {
       process.chdir(oldCwd);

@@ -266,6 +266,15 @@ function getSchemaImportPath(outputFile: string, functionsDir: string): string {
   return ensureRelativeImportPath(normalizeImportPath(relativePath));
 }
 
+function getTriggersImportPath(
+  outputFile: string,
+  functionsDir: string
+): string {
+  const triggersFile = path.join(functionsDir, 'triggers');
+  const relativePath = path.relative(path.dirname(outputFile), triggersFile);
+  return ensureRelativeImportPath(normalizeImportPath(relativePath));
+}
+
 function getServerTypesImportPath(
   outputFile: string,
   functionsDir: string
@@ -489,6 +498,7 @@ function emitGeneratedServerFile(
   functionsDir: string,
   hasRelationsExport: boolean,
   hasTriggersExport: boolean,
+  triggersImportSource: 'schema' | 'triggers',
   hasMigrationsManifest: boolean
 ): string {
   const asSingleQuotedImport = (importPath: string) =>
@@ -503,6 +513,7 @@ function emitGeneratedServerFile(
     functionsDir
   );
   const schemaImportPath = getSchemaImportPath(outputFile, functionsDir);
+  const triggersImportPath = getTriggersImportPath(outputFile, functionsDir);
   const migrationsManifestImportPath = getModuleImportPath(
     outputFile,
     functionsDir,
@@ -512,6 +523,7 @@ function emitGeneratedServerFile(
   const dataModelImportLiteral = asSingleQuotedImport(dataModelImportPath);
   const runtimeApiImportLiteral = asSingleQuotedImport(runtimeApiImportPath);
   const schemaImportLiteral = asSingleQuotedImport(schemaImportPath);
+  const triggersImportLiteral = asSingleQuotedImport(triggersImportPath);
   const migrationsManifestImportLiteral = asSingleQuotedImport(
     migrationsManifestImportPath
   );
@@ -542,10 +554,15 @@ export const initCRPC = baseInitCRPC.dataModel<DataModel>();
     moduleNamespace.split('/').filter(Boolean)
   );
 
-  const schemaNamedImports = hasTriggersExport
-    ? 'relations, triggers'
-    : 'relations';
+  const schemaNamedImports =
+    hasTriggersExport && triggersImportSource === 'schema'
+      ? 'relations, triggers'
+      : 'relations';
   const triggersConfigLine = hasTriggersExport ? '  triggers,\n' : '';
+  const triggersImportLine =
+    hasTriggersExport && triggersImportSource === 'triggers'
+      ? `import { triggers } from ${triggersImportLiteral};\n`
+      : '';
   const migrationsImportLine = hasMigrationsManifest
     ? `import { migrations } from ${migrationsManifestImportLiteral};\n`
     : '';
@@ -566,6 +583,7 @@ import type {
 } from ${serverTypesImportLiteral};
 import { internalMutation } from ${serverTypesImportLiteral};
 import schema, { ${schemaNamedImports} } from ${schemaImportLiteral};
+${triggersImportLine}
 ${migrationsImportLine}
 
 const ormFunctions = ${ormFunctionsAccessor} as OrmFunctions;
@@ -1452,16 +1470,25 @@ export async function generateMeta(
     path.join(functionsDir, 'schema.ts'),
     'relations'
   );
-  const hasTriggersExport = hasNamedExport(
+  const hasSchemaTriggersExport = hasNamedExport(
     path.join(functionsDir, 'schema.ts'),
     'triggers'
   );
+  const hasDedicatedTriggersExport = hasNamedExport(
+    path.join(functionsDir, 'triggers.ts'),
+    'triggers'
+  );
+  const hasTriggersExport =
+    hasSchemaTriggersExport || hasDedicatedTriggersExport;
+  const triggersImportSource = hasDedicatedTriggersExport
+    ? 'triggers'
+    : 'schema';
   const hasMigrationsManifest = fs.existsSync(
     path.join(functionsDir, 'migrations', 'manifest.ts')
   );
   if (hasTriggersExport && !hasRelationsExport) {
     throw new Error(
-      "Codegen error: schema.ts exports 'triggers' but is missing 'relations'. Export `relations` and define triggers via `defineTriggers(relations, { ... })`."
+      "Codegen error: triggers require a 'relations' export from schema.ts. Export `relations` from schema.ts and define triggers via `defineTriggers(relations, { ... })` in schema.ts or triggers.ts."
     );
   }
 
@@ -1673,6 +1700,7 @@ ${optionalTypeExports}
     functionsDir,
     hasRelationsExport,
     hasTriggersExport,
+    triggersImportSource,
     hasMigrationsManifest
   );
 
