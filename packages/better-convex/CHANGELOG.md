@@ -1,5 +1,11 @@
 # better-convex
 
+## 0.10.3
+
+### Patch Changes
+
+- [#132](https://github.com/udecode/better-convex/pull/132) [`7182e18`](https://github.com/udecode/better-convex/commit/7182e18a00ee038d64d14c0078a456678fa9e79f) Thanks [@thuillart](https://github.com/thuillart)! - Support loading ORM triggers from `triggers.ts` during codegen, with fallback to `schema.ts` for backward compatibility. This keeps `schema.ts` schema-safe when triggers need generated runtime helpers like `createXCaller(...)`.
+
 ## 0.10.2
 
 ### Patch Changes

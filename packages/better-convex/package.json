@@ -1,6 +1,6 @@
 {
   "name": "better-convex",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "description": "Better Convex - React Query integration and CLI tools for Convex",
   "keywords": [
     "convex",
