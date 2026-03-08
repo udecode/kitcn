@@ -1,15 +1,28 @@
 import path from 'node:path';
 
-import { getWatchPatterns, startWatcher } from './watcher';
+import {
+  getIgnoredWatchPatterns,
+  getWatchPatterns,
+  startWatcher,
+} from './watcher';
 
 describe('cli/watcher', () => {
-  test('getWatchPatterns includes function, generated, and router sources', () => {
+  test('getWatchPatterns includes function, convex-generated-js, and router sources', () => {
     const functionsDir = '/repo/convex';
     expect(getWatchPatterns(functionsDir)).toEqual([
       path.join(functionsDir, '**', '*.ts'),
-      path.join(functionsDir, '_generated', '**', '*.ts'),
       path.join(functionsDir, '_generated', '**', '*.js'),
       path.join('/repo', 'routers', '**', '*.ts'),
+    ]);
+  });
+
+  test('getIgnoredWatchPatterns excludes better-convex outputs', () => {
+    const functionsDir = '/repo/convex';
+    expect(getIgnoredWatchPatterns(functionsDir, '/repo/out/api.ts')).toEqual([
+      path.join(functionsDir, 'generated', '**', '*.ts'),
+      path.join(functionsDir, '**', '*.runtime.ts'),
+      path.join(functionsDir, 'generated.ts'),
+      '/repo/out/api.ts',
     ]);
   });
 
@@ -20,7 +33,8 @@ describe('cli/watcher', () => {
     };
 
     let watchedPatterns: string[] | null = null;
-    let watchedOptions: { ignoreInitial: boolean } | null = null;
+    let watchedOptions: { ignoreInitial: boolean; ignored: string[] } | null =
+      null;
     const handlers: Record<string, (...args: any[]) => void> = {};
 
     const watcher = {
@@ -32,7 +46,7 @@ describe('cli/watcher', () => {
 
     const watchStub = (
       patterns: string[],
-      options: { ignoreInitial: boolean }
+      options: { ignoreInitial: boolean; ignored: string[] }
     ) => {
       watchedPatterns = patterns;
       watchedOptions = options;
@@ -58,7 +72,10 @@ describe('cli/watcher', () => {
     if (!watchedOptions) throw new Error('Expected watcher to be configured');
     if (!watchedPatterns) throw new Error('Expected watcher to be configured');
 
-    expect(watchedOptions as unknown).toEqual({ ignoreInitial: true });
+    expect(watchedOptions as unknown).toEqual({
+      ignoreInitial: true,
+      ignored: getIgnoredWatchPatterns('/repo/convex', '/repo/out/api.ts'),
+    });
     expect(watchedPatterns as unknown).toEqual(
       getWatchPatterns('/repo/convex')
     );
