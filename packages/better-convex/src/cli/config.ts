@@ -7,8 +7,10 @@ const LEGACY_JSON_CONFIG_PATH = 'better-convex.json';
 
 const CODEGEN_SCOPES = new Set<CodegenScope>(['all', 'auth', 'orm']);
 const BACKFILL_ENABLED_VALUES = new Set(['auto', 'on', 'off']);
+const BACKEND_VALUES = new Set<BetterConvexBackend>(['convex', 'concave']);
 
 export type BackfillEnabled = 'auto' | 'on' | 'off';
+export type BetterConvexBackend = 'convex' | 'concave';
 export type BetterConvexPathsConfig = {
   lib: string;
   shared: string;
@@ -35,6 +37,7 @@ export type MigrationConfig = {
 };
 
 export type BetterConvexConfig = {
+  backend: BetterConvexBackend;
   paths: BetterConvexPathsConfig;
   hooks: {
     postAdd: string[];
@@ -94,6 +97,7 @@ function createDefaultConfig(): BetterConvexConfig {
     allowDrift: false,
   };
   return {
+    backend: 'convex',
     paths: {
       lib: 'convex/lib',
       shared: 'convex/shared',
@@ -229,6 +233,22 @@ function parseScope(
   }
   throw new Error(
     `Invalid ${fieldName} in ${configPath}: expected one of all, auth, orm.`
+  );
+}
+
+function parseBackend(
+  value: unknown,
+  fieldName: string,
+  configPath: string
+): BetterConvexBackend {
+  if (
+    typeof value === 'string' &&
+    BACKEND_VALUES.has(value as BetterConvexBackend)
+  ) {
+    return value as BetterConvexBackend;
+  }
+  throw new Error(
+    `Invalid ${fieldName} in ${configPath}: expected one of convex, concave.`
   );
 }
 
@@ -690,12 +710,20 @@ export function loadBetterConvexConfig(
   const parsedConfig = betterConvexConfig;
   assertNoUnknownKeys(
     parsedConfig,
-    ['paths', 'hooks', 'dev', 'codegen', 'deploy'],
+    ['backend', 'paths', 'hooks', 'dev', 'codegen', 'deploy'],
     resolvedConfigPath,
     'meta["better-convex"]'
   );
 
   const config = createDefaultConfig();
+
+  if ('backend' in parsedConfig && parsedConfig.backend !== undefined) {
+    config.backend = parseBackend(
+      parsedConfig.backend,
+      'meta["better-convex"].backend',
+      resolvedConfigPath
+    );
+  }
 
   if ('hooks' in parsedConfig && parsedConfig.hooks !== undefined) {
     const parsed = parseHooksConfig(parsedConfig.hooks, resolvedConfigPath);

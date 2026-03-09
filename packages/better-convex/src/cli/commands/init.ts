@@ -52,9 +52,11 @@ export const handleInitCommand = async (
     loadBetterConvexConfig: loadBetterConvexConfigFn,
     promptAdapter,
     realConvex: realConvexPath,
+    realConcave: realConcavePath,
   } = resolveRunDeps(deps);
   const result = await runInitCommandFlow({
     initArgs,
+    backendArg: parsed.backend,
     configPath: parsed.configPath,
     execaFn,
     generateMetaFn,
@@ -62,6 +64,7 @@ export const handleInitCommand = async (
     ensureConvexGitignoreEntryFn,
     promptAdapter,
     realConvexPath,
+    realConcavePath,
   });
 
   const cwdRelative =
@@ -71,6 +74,7 @@ export const handleInitCommand = async (
     console.info(
       JSON.stringify({
         command: 'init',
+        backend: result.backend,
         cwd: cwdRelative,
         created: result.created,
         updated: result.updated,

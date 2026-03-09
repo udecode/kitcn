@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated `api` utility with precise types.
+ * Generated `api` utility.
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
@@ -8,11 +8,13 @@
  * @module
  */
 
-import type * as orm from "../orm.js";
+import type * as generated_server from "../generated/server.js";
+import type * as messages from "../messages.js";
 
 import type {
-  FunctionReference,
+  ApiFromModules,
   FilterApi,
+  FunctionReference,
   AnyComponents,
 } from "convex/server";
 
@@ -24,12 +26,10 @@ import type {
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-declare const fullApi: {
-  orm: {
-    scheduledDelete: FunctionReference<"mutation", "internal", any, any>;
-    scheduledMutationBatch: FunctionReference<"mutation", "internal", any, any>;
-  };
-};
+declare const fullApi: ApiFromModules<{
+  generated_server: typeof generated_server;
+  messages: typeof messages;
+}>;
 
 export declare const api: FilterApi<
   typeof fullApi,

@@ -53,6 +53,9 @@ export default {
 
 - Use `better-convex init` as the baseline bootstrap, `better-convex init -t next` for the shadcn-backed Next.js path, and let `better-convex add <plugin>` bootstrap missing Better Convex baseline files before applying plugin scaffolds. Init also runs the first Better Convex runtime generation pass, retries real codegen with anonymous local bootstrap or explicit `--team/--project` bootstrap when needed, and only falls back to a stubbed runtime for plain non-template init when real codegen stays unavailable. Template verification validates a fresh generated app with install, lint, typecheck, and build before it compares the normalized fixture snapshot.
 
+- Select the backend explicitly with `meta["better-convex"].backend` in `concave.json` or `--backend <convex|concave>`. Better Convex now routes `init`, `dev`, `codegen`, `deploy`, `migrate`, `aggregate`, `reset`, and unknown passthrough commands through the selected backend CLI. `tooling/template-next.ts` uses `--backend concave` for repo sync/check, and raw `better-convex env ...` passthrough stays Convex-only because Concave has no upstream env command.
+- Use `concave codegen --static` for the Concave template-init lane. Repo template sync/check keeps the public scaffold contract but avoids Concave runtime-analysis flakiness in that path.
+
 ```bash
 # Before
 bunx create-next-app@latest my-app

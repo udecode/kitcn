@@ -27,6 +27,7 @@ const SHADCN_LAYOUT_PROVIDERS_RE =
 
 function createDefaultConfig() {
   return {
+    backend: 'convex' as const,
     paths: {
       lib: 'convex/lib',
       shared: 'convex/shared',
@@ -158,6 +159,7 @@ describe('cli/cli', () => {
       command: 'dev',
       restArgs: [],
       convexArgs: [],
+      backend: undefined,
       debug: false,
       sharedDir: undefined,
       scope: undefined,
@@ -178,6 +180,7 @@ describe('cli/cli', () => {
       command: 'dev',
       restArgs: [],
       convexArgs: [],
+      backend: undefined,
       debug: true,
       sharedDir: 'out/dir',
       scope: 'auth',
@@ -187,6 +190,8 @@ describe('cli/cli', () => {
     expect(
       parseArgs([
         '--debug',
+        '--backend',
+        'concave',
         '--api',
         'out',
         'codegen',
@@ -199,11 +204,18 @@ describe('cli/cli', () => {
       command: 'codegen',
       restArgs: ['--foo', 'bar'],
       convexArgs: ['--foo', 'bar'],
+      backend: 'concave',
       debug: true,
       sharedDir: 'out',
       scope: 'orm',
       configPath: undefined,
     });
+  });
+
+  test('parseArgs throws for invalid --backend value', () => {
+    expect(() => parseArgs(['--backend', 'nope'])).toThrow(
+      'Invalid --backend value "nope". Expected one of: convex, concave.'
+    );
   });
 
   test('parseArgs throws for invalid --scope value', () => {
@@ -246,6 +258,39 @@ describe('cli/cli', () => {
       expect(infoLines.join('\n')).not.toContain('diff [plugin]');
       expect(infoLines.join('\n')).not.toContain('list');
       expect(infoLines.join('\n')).not.toContain('update [plugin]');
+    } finally {
+      console.info = originalInfo;
+    }
+  });
+
+  test('run(--backend concave --help) prints concave-aware root help', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      backend: 'convex' as const,
+    }));
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const exitCode = await run(['--backend', 'concave', '--help'], {
+        realConvex: '/fake/convex/main.js',
+        realConcave: '/fake/concave/main.mjs',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      const output = infoLines.join('\n');
+      expect(output).toContain('function-spec');
+      expect(output).toContain('components');
+      expect(output).toContain('data');
+      expect(output).toContain('--backend <convex|concave>');
     } finally {
       console.info = originalInfo;
     }
@@ -3556,7 +3601,71 @@ describe('cli/cli', () => {
     expect(calls).toEqual([
       { cmd: 'node', args: ['/fake/convex/main.js', 'env', 'get', 'FOO'] },
     ]);
-    expect(loadConfigStub).not.toHaveBeenCalled();
+    expect(loadConfigStub).toHaveBeenCalledTimes(1);
+  });
+
+  test('run(env get) fails clearly when backend is concave', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      backend: 'concave' as const,
+    }));
+
+    await expect(
+      run(['--backend', 'concave', 'env', 'get', 'FOO'], {
+        realConvex: '/fake/convex/main.js',
+        realConcave: '/fake/concave/main.mjs',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      })
+    ).rejects.toThrow(
+      'Raw `better-convex env` passthrough is only available on the Convex backend.'
+    );
+
+    expect(execaStub).not.toHaveBeenCalled();
+  });
+
+  test('run(data) passes through to concave when backend is concave', async () => {
+    const concaveCliPath = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-concave-cli-')),
+      'main.mjs'
+    );
+    fs.writeFileSync(concaveCliPath, 'export {};\n');
+    const calls: { cmd: string; args: string[] }[] = [];
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      return { exitCode: 9 } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      backend: 'concave' as const,
+    }));
+
+    const exitCode = await run(
+      ['--backend', 'concave', 'data', '--url', 'http://localhost:3210'],
+      {
+        realConvex: '/fake/convex/main.js',
+        realConcave: concaveCliPath,
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      }
+    );
+
+    expect(exitCode).toBe(9);
+    expect(calls).toEqual([
+      {
+        cmd: 'bun',
+        args: [concaveCliPath, 'data', '--url', 'http://localhost:3210'],
+      },
+    ]);
   });
 
   test('run(analyze) delegates to internal analyzer and does not invoke convex CLI', async () => {
@@ -3673,6 +3782,81 @@ describe('cli/cli', () => {
     expect(calls).toEqual([
       { cmd: 'node', args: ['/fake/convex/main.js', 'deploy', '--prod'] },
     ]);
+  });
+
+  test('run(deploy) uses concave deploy + concave run when backend is concave', async () => {
+    const concaveCliPath = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-concave-cli-')),
+      'main.mjs'
+    );
+    fs.writeFileSync(concaveCliPath, 'export {};\n');
+    const calls: { cmd: string; args: string[] }[] = [];
+
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (args[1] === 'run' && args.includes('generated/server:migrationRun')) {
+        return {
+          exitCode: 0,
+          stdout: '{"status":"running","runId":"mr_concave"}\n',
+          stderr: '',
+        } as any;
+      }
+      if (
+        args[1] === 'run' &&
+        args.includes('generated/server:migrationStatus')
+      ) {
+        return {
+          exitCode: 0,
+          stdout:
+            '{"status":"idle","runs":[{"status":"completed","currentIndex":1,"migrationIds":["m1"]}]}\n',
+          stderr: '',
+        } as any;
+      }
+      if (
+        args[1] === 'run' &&
+        args.includes('generated/server:aggregateBackfillStatus')
+      ) {
+        return { exitCode: 0, stdout: '[]\n', stderr: '' } as any;
+      }
+      if (
+        args[1] === 'run' &&
+        args.includes('generated/server:aggregateBackfill')
+      ) {
+        return { exitCode: 0, stdout: '{"status":"ok"}\n', stderr: '' } as any;
+      }
+      return { exitCode: 0 } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      backend: 'concave' as const,
+    }));
+
+    const exitCode = await run(
+      ['--backend', 'concave', 'deploy', '--target', 'cf'],
+      {
+        realConvex: '/fake/convex/main.js',
+        realConcave: concaveCliPath,
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(calls[0]).toEqual({
+      cmd: 'bun',
+      args: [concaveCliPath, 'deploy', '--target', 'cf'],
+    });
+    expect(calls[1]?.cmd).toBe('bun');
+    expect(calls[1]?.args).toContain('generated/server:migrationRun');
+    expect(calls[2]?.args).toContain('generated/server:migrationStatus');
+    expect(calls[3]?.args).toContain('generated/server:aggregateBackfill');
+    expect(calls[4]?.args).toContain(
+      'generated/server:aggregateBackfillStatus'
+    );
   });
 
   test('run(migrate up) executes migration runtime with polling', async () => {

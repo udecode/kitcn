@@ -87,6 +87,9 @@ Use the CLI first:
 # Existing app
 bunx better-convex init
 
+# Existing app on Concave
+bunx better-convex --backend concave init --yes
+
 # New Next.js app with deterministic shadcn bootstrap + curated minimal scaffold
 bunx better-convex init -t next --yes
 
@@ -125,6 +128,7 @@ Template-mode init preserves the shadcn-owned shell (`app/layout.tsx`, `app/page
 
 Init also runs the first Better Convex codegen pass so `convex/lib/crpc.ts` can import `../functions/generated/server` immediately.
 Template-mode init infers `src/` vs root app layouts and writes the Next client scaffold into the matching tree. Conflicting `src` + root layouts should fail instead of guessing.
+Backend resolves from `--backend`, then `meta["better-convex"].backend`, then `convex`.
 
 ### 3.2 Manual app creation and baseline packages
 

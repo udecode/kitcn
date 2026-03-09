@@ -1,0 +1,11 @@
+{
+  "type": "module",
+  "exports": {
+    "./server": "./server.js",
+    "./server.js": "./server.js",
+    "./api": "./api.js",
+    "./api.js": "./api.js",
+    "./dataModel": "./dataModel.d.ts",
+    "./dataModel.d.ts": "./dataModel.d.ts"
+  }
+}

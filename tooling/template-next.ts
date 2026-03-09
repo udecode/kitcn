@@ -167,17 +167,24 @@ export const normalizeTemplate = (directory: string) => {
 export const run = async (
   cmd: string[],
   cwd: string,
-  allowNonZeroExit = false
+  options: {
+    allowNonZeroExit?: boolean;
+    env?: Record<string, string | undefined>;
+  } = {}
 ): Promise<number> => {
   const child = Bun.spawn({
     cmd,
     cwd,
+    env: {
+      ...process.env,
+      ...options.env,
+    },
     stdio: ['ignore', 'inherit', 'inherit'],
   });
 
   const actualExitCode = await child.exited;
 
-  if (allowNonZeroExit) {
+  if (options.allowNonZeroExit) {
     return actualExitCode;
   }
 
@@ -209,6 +216,8 @@ export const generateTemplate = async (
     [
       bunBinary,
       localCliPath,
+      '--backend',
+      'concave',
       'init',
       '-t',
       'next',
@@ -318,7 +327,9 @@ export const checkTemplate = async (
         generatedAppDir,
       ],
       projectRoot,
-      true
+      {
+        allowNonZeroExit: true,
+      }
     );
 
     if (diffExitCode === 0) {

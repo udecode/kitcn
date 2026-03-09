@@ -13,7 +13,16 @@ import { handleInitCommand, INIT_HELP_TEXT } from './commands/init.js';
 import { handleMigrateCommand, MIGRATE_HELP_TEXT } from './commands/migrate.js';
 import { handleResetCommand } from './commands/reset.js';
 import { handleViewCommand, VIEW_HELP_TEXT } from './commands/view.js';
-import { cleanup, isEntryPoint, parseArgs, type RunDeps } from './core.js';
+import type { BetterConvexBackend } from './config.js';
+import {
+  cleanup,
+  getRootHelpText,
+  isEntryPoint,
+  parseArgs,
+  type RunDeps,
+  resolveConfiguredBackend,
+  resolveRunDeps,
+} from './core.js';
 import { handleCliError } from './utils/handle-error.js';
 import { logger } from './utils/logger.js';
 
@@ -31,26 +40,6 @@ export {
   isEntryPoint,
   parseArgs,
 } from './core.js';
-
-export const ROOT_HELP_TEXT = `Usage: better-convex <command> [options]
-
-Commands:
-  init                         Bootstrap a Better Convex app in-place
-  create                       Alias for init
-  dev                          Run dev workflow with codegen/watch passthrough
-  codegen                      Generate Better Convex outputs
-  add [plugin]                 Add a plugin scaffold + schema registration
-  view [plugin]                Inspect a plugin install plan without writing
-  info                         Inspect project + installed plugin state
-  docs <topic...>              Show docs links for CLI and plugins
-  env                          Env helper and convex env passthrough
-  deploy                       Deploy with migrations/backfill flows
-  migrate                      Migration lifecycle commands
-  aggregate                    Aggregate backfill/rebuild/prune commands
-  analyze                      Analyze Convex runtime bundle
-  reset                        Destructive database reset (requires --yes)
-
-Run "better-convex <command> --help" for command options.`;
 
 const COMMAND_HELP: Record<string, string> = {
   init: INIT_HELP_TEXT,
@@ -79,46 +68,61 @@ const COMMAND_HANDLERS = {
   analyze: handleAnalyzeCommand,
 } as const;
 
-const printRootHelp = () => {
-  logger.write(ROOT_HELP_TEXT);
+const printRootHelp = (backend: BetterConvexBackend = 'convex') => {
+  logger.write(getRootHelpText(backend));
 };
 
 const printVersion = () => {
   logger.write(packageJson.version ?? '0.0.0');
 };
 
-const printCommandHelp = (command: string) => {
+const printCommandHelp = (
+  command: string,
+  backend: BetterConvexBackend = 'convex'
+) => {
   const help = COMMAND_HELP[command];
   if (help) {
     logger.write(help);
     return;
   }
-  printRootHelp();
+  printRootHelp(backend);
 };
 
 export async function run(argv: string[], deps: Partial<RunDeps> = {}) {
   if (argv.length === 0) {
     return handleDevCommand(argv, deps);
   }
-  if (HELP_FLAGS.has(argv[0]!)) {
-    printRootHelp();
-    return 0;
-  }
   if (VERSION_FLAGS.has(argv[0]!)) {
     printVersion();
     return 0;
   }
-  if (argv[0] === 'help') {
-    printCommandHelp(argv[1] ?? '');
-    return 0;
-  }
 
   const parsed = parseArgs(argv);
+  let resolvedBackend: BetterConvexBackend | undefined;
+  const getBackend = () => {
+    resolvedBackend ??= resolveConfiguredBackend({
+      backendArg: parsed.backend,
+      config: resolveRunDeps(deps).loadBetterConvexConfig(parsed.configPath),
+    });
+    return resolvedBackend;
+  };
+  if (
+    HELP_FLAGS.has(argv[0]!) ||
+    parsed.command === '--help' ||
+    parsed.command === '-h'
+  ) {
+    printRootHelp(getBackend());
+    return 0;
+  }
+  if (argv[0] === 'help') {
+    printCommandHelp(argv[1] ?? '', getBackend());
+    return 0;
+  }
   if (
     parsed.command in COMMAND_HELP &&
     HELP_FLAGS.has(parsed.restArgs[0] ?? '')
   ) {
-    printCommandHelp(parsed.command);
+    printCommandHelp(parsed.command, getBackend());
     return 0;
   }
 

@@ -1,12 +1,14 @@
 import {
+  createBackendAdapter,
+  extractBackendRunTargetArgs,
   extractMigrationCliOptions,
   extractMigrationDownOptions,
-  extractRunDeploymentArgs,
   parseArgs,
   type RunDeps,
+  resolveConfiguredBackend,
   resolveMigrationConfig,
   resolveRunDeps,
-  runConvexFunction,
+  runBackendFunction,
   runMigrationCreate,
   runMigrationFlow,
 } from '../core.js';
@@ -96,8 +98,18 @@ export const handleMigrateCommand = async (
     getConvexConfig: getConvexConfigFn,
     loadBetterConvexConfig: loadBetterConvexConfigFn,
     realConvex: realConvexPath,
+    realConcave: realConcavePath,
   } = resolveRunDeps(deps);
   const config = loadBetterConvexConfigFn(parsed.configPath);
+  const backend = resolveConfiguredBackend({
+    backendArg: parsed.backend,
+    config,
+  });
+  const backendAdapter = createBackendAdapter({
+    backend,
+    realConvexPath,
+    realConcavePath,
+  });
 
   if (migrateArgs.subcommand === 'create') {
     const rawName = migrateArgs.restArgs.join(' ').trim();
@@ -122,14 +134,14 @@ export const handleMigrateCommand = async (
     enabled: 'on' as const,
   };
   const commandArgs = [...config.deploy.args, ...migrationCommandArgs];
-  const deploymentArgs = extractRunDeploymentArgs(commandArgs);
+  const targetArgs = extractBackendRunTargetArgs(backend, commandArgs);
 
   if (migrateArgs.subcommand === 'up') {
     return runMigrationFlow({
       execaFn,
-      realConvexPath,
+      backendAdapter,
       migrationConfig,
-      deploymentArgs,
+      targetArgs,
       context: 'migration',
       direction: 'up',
     });
@@ -138,12 +150,12 @@ export const handleMigrateCommand = async (
   if (migrateArgs.subcommand === 'down') {
     const { remainingArgs, steps, to } =
       extractMigrationDownOptions(commandArgs);
-    const downDeploymentArgs = extractRunDeploymentArgs(remainingArgs);
+    const downTargetArgs = extractBackendRunTargetArgs(backend, remainingArgs);
     return runMigrationFlow({
       execaFn,
-      realConvexPath,
+      backendAdapter,
       migrationConfig,
-      deploymentArgs: downDeploymentArgs,
+      targetArgs: downTargetArgs,
       context: 'migration',
       direction: 'down',
       steps,
@@ -152,12 +164,12 @@ export const handleMigrateCommand = async (
   }
 
   if (migrateArgs.subcommand === 'status') {
-    const statusResult = await runConvexFunction(
+    const statusResult = await runBackendFunction(
       execaFn,
-      realConvexPath,
+      backendAdapter,
       'generated/server:migrationStatus',
       {},
-      deploymentArgs
+      targetArgs
     );
     return statusResult.exitCode;
   }
@@ -185,13 +197,13 @@ export const handleMigrateCommand = async (
     }
     cancelArgs.push(arg);
   }
-  const cancelDeploymentArgs = extractRunDeploymentArgs(cancelArgs);
-  const cancelResult = await runConvexFunction(
+  const cancelTargetArgs = extractBackendRunTargetArgs(backend, cancelArgs);
+  const cancelResult = await runBackendFunction(
     execaFn,
-    realConvexPath,
+    backendAdapter,
     'generated/server:migrationCancel',
     runId ? { runId } : {},
-    cancelDeploymentArgs
+    cancelTargetArgs
   );
   return cancelResult.exitCode;
 };

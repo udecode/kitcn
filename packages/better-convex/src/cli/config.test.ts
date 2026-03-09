@@ -38,6 +38,7 @@ function writeConcaveConfig(dir: string, config: Record<string, unknown>) {
 }
 
 const DEFAULT_CONFIG: BetterConvexConfig = {
+  backend: 'convex',
   paths: {
     lib: 'convex/lib',
     shared: 'convex/shared',
@@ -249,6 +250,7 @@ describe('cli/config', () => {
     const oldCwd = process.cwd();
 
     writeBetterConvexConfig(dir, {
+      backend: 'concave',
       paths: {
         shared: 'convex/custom-shared',
       },
@@ -296,6 +298,7 @@ describe('cli/config', () => {
     process.chdir(dir);
     try {
       expect(loadBetterConvexConfig()).toEqual({
+        backend: 'concave',
         paths: {
           lib: 'convex/lib',
           shared: 'convex/custom-shared',
@@ -356,6 +359,22 @@ describe('cli/config', () => {
     }
   });
 
+  test('loads backend override from config', () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    writeBetterConvexConfig(dir, {
+      backend: 'concave',
+    });
+
+    process.chdir(dir);
+    try {
+      expect(loadBetterConvexConfig().backend).toBe('concave');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('throws for invalid config values', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
@@ -390,6 +409,24 @@ describe('cli/config', () => {
     try {
       expect(() => loadBetterConvexConfig()).toThrow(
         'Invalid codegen.trimSegments in'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('throws for invalid backend values', () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    writeBetterConvexConfig(dir, {
+      backend: 'nope',
+    });
+
+    process.chdir(dir);
+    try {
+      expect(() => loadBetterConvexConfig()).toThrow(
+        'Invalid meta["better-convex"].backend in'
       );
     } finally {
       process.chdir(oldCwd);

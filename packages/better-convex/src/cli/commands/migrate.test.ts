@@ -88,4 +88,73 @@ describe('cli/commands/migrate', () => {
       process.chdir(originalCwd);
     }
   });
+
+  test('handleMigrateCommand(up) uses concave run when backend is concave', async () => {
+    const concaveCliPath = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-concave-cli-')),
+      'main.mjs'
+    );
+    fs.writeFileSync(concaveCliPath, 'export {};\n');
+    const calls: { cmd: string; args: string[] }[] = [];
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (args.includes('generated/server:migrationRun')) {
+        return {
+          exitCode: 0,
+          stdout: '{"status":"running","runId":"mr_concave"}\n',
+          stderr: '',
+        } as any;
+      }
+      if (args.includes('generated/server:migrationStatus')) {
+        return {
+          exitCode: 0,
+          stdout:
+            '{"status":"idle","runs":[{"status":"completed","currentIndex":1,"migrationIds":["m1"]}]}\n',
+          stderr: '',
+        } as any;
+      }
+      return { exitCode: 0 } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      backend: 'concave' as const,
+    }));
+
+    const exitCode = await handleMigrateCommand(
+      [
+        '--backend',
+        'concave',
+        'migrate',
+        'up',
+        '--url',
+        'http://localhost:3210',
+      ],
+      {
+        realConvex: '/fake/convex/main.js',
+        realConcave: concaveCliPath,
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(calls[0]).toEqual({
+      cmd: 'bun',
+      args: [
+        concaveCliPath,
+        'run',
+        '--url',
+        'http://localhost:3210',
+        'generated/server:migrationRun',
+        '{"direction":"up","batchSize":256,"allowDrift":false}',
+      ],
+    });
+    expect(calls[1]?.cmd).toBe('bun');
+    expect(calls[1]?.args).toContain('generated/server:migrationStatus');
+    expect(calls[1]?.args).toContain('--url');
+  });
 });

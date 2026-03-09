@@ -38,6 +38,7 @@ describe('cli/commands/info', () => {
         },
       ],
       project: {
+        backend: 'concave',
         functionsDir: 'convex',
         schemaPath: 'convex/schema.ts',
         schemaExists: true,
@@ -61,6 +62,7 @@ describe('cli/commands/info', () => {
     expect(output).toContain('better-convex info');
     expect(output).toContain('Project');
     expect(output).toContain('Plugins');
+    expect(output).toContain('backend');
     expect(output).toContain('resend');
   });
 
@@ -99,7 +101,6 @@ describe('cli/commands/info', () => {
     const execaStub = mock(async () => ({ exitCode: 0 }) as any);
     const generateMetaStub = mock(async () => {});
     const syncEnvStub = mock(async () => {});
-    const loadConfigStub = mock(() => createDefaultConfig());
     const infoLines: string[] = [];
     const originalInfo = console.info;
     const originalCwd = process.cwd();
@@ -113,11 +114,15 @@ describe('cli/commands/info', () => {
         execa: execaStub as any,
         generateMeta: generateMetaStub as any,
         syncEnv: syncEnvStub as any,
-        loadBetterConvexConfig: loadConfigStub as any,
+        loadBetterConvexConfig: (() => ({
+          ...createDefaultConfig(),
+          backend: 'concave' as const,
+        })) as any,
       });
       expect(exitCode).toBe(0);
       const payload = JSON.parse(infoLines.at(-1) ?? '{}');
       expect(payload.project.functionsDir).toBe('convex');
+      expect(payload.project.backend).toBe('concave');
     } finally {
       process.chdir(originalCwd);
       console.info = originalInfo;

@@ -22,12 +22,19 @@ import { InfoIcon } from "lucide-react"
 | Migrations | Create/run/cancel built-in online migrations |
 | Dev reset | Wipe all tables, re-backfill, run seed hooks |
 | Environment sync | Sync env vars to Convex deployment |
+| Backend selection | Drive Convex or Concave with one CLI |
 
 ## Installation
 
 ```bash showLineNumbers
 bun add better-convex
 ```
+
+Backend resolves in this order:
+
+1. `--backend <convex|concave>`
+2. `meta["better-convex"].backend` in `concave.json`
+3. default `convex`
 
 ## Commands
 
@@ -42,6 +49,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--api <dir>` | Output directory for api.ts (default: `convex/shared`) |
+| `--backend <convex\|concave>` | Backend CLI to drive |
 | `--config <path>` | Path to better-convex config file (default: `./concave.json`) |
 | `--backfill=auto\|on\|off` | Dev aggregate backfill mode toggle (default: `auto`) |
 | `--backfill-wait` / `--no-backfill-wait` | Wait for all target indexes to become `READY` |
@@ -50,7 +58,12 @@ Options:
 | `--migrations-wait` / `--no-migrations-wait` | Wait for migration run completion |
 | `--migrations-allow-drift` / `--no-migrations-allow-drift` | Override drift policy in dev |
 
-Wraps `convex dev` — generates runtime files on startup, watches for changes, passes all other flags through. Local backend state lives in `.convex/` at project root (isolated per worktree/clone).
+Wraps the selected backend `dev` command, generates runtime files on startup, watches for changes, and passes all other flags through.
+
+Local backend state depends on the selected backend:
+
+- Convex: `.convex/` at project root
+- Concave Bun/Node: `.concave/local/`
 
 `better-convex dev` always runs full cRPC generation by default. Use `better-convex codegen --scope ...` for one-off scoped generation.
 
@@ -64,7 +77,7 @@ npx better-convex dev --once
 
 ### codegen
 
-Generate `api.ts` once (requires an active Convex backend connection):
+Generate `api.ts` once against the selected backend connection:
 
 ```bash showLineNumbers
 npx better-convex codegen
@@ -75,6 +88,7 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `--api <dir>` | Output directory (default: `convex/shared`) |
+| `--backend <convex\|concave>` | Backend CLI to drive |
 | `--scope <all\|auth\|orm>` | Generation scope (default: `all`) |
 | `--config <path>` | Path to better-convex config file (default: `./concave.json`) |
 | `--debug` | Show detailed output |
@@ -94,6 +108,7 @@ Bootstrap Better Convex into the current app, or opt into shadcn-backed app crea
 
 ```bash showLineNumbers
 npx better-convex init
+npx better-convex --backend concave init --yes
 npx better-convex init -t next --yes
 npx better-convex init -t next --yes --cwd apps --name web
 ```
@@ -124,12 +139,14 @@ Behavior:
 - `--cwd` picks the target directory. When you also pass `--name`, the final app path is `<cwd>/<name>`.
 - `--json` includes `codegen` (`generated` or `stubbed`) and `convexBootstrap` (`existing`, `created`, or `missing`) for automation.
 - `better-convex create` is an alias for `init`.
+- backend resolves from `--backend`, then `meta["better-convex"].backend`, then `convex`
 
 Options:
 
 | Flag | Description |
 |------|-------------|
 | `-t, --template <template>` | Project template to create before overlaying Better Convex. Only `next` is supported. |
+| `--backend <convex\|concave>` | Backend CLI to drive |
 | `--cwd <cwd>` | Target directory |
 | `--name <name>` | Name for a new target directory |
 | `--team <slug>` | Convex team slug for non-interactive project-backed bootstrap |
@@ -251,8 +268,9 @@ npx better-convex info
 
 `info` reports:
 
+- resolved backend
 - detected config paths
-- installed `better-convex` and `convex` versions
+- installed `better-convex` and backend package versions
 - schema and lockfile presence
 - installed plugins
 - schema/lockfile mismatches
@@ -317,7 +335,7 @@ Options:
 
 Reads `convex/.env`, syncs to Convex (skips if up to date). With `--auth`: generates `BETTER_AUTH_SECRET` and `JWKS` if missing. Requires `better-convex dev` running.
 
-Other env subcommands pass through to Convex CLI:
+Other env subcommands pass through to Convex CLI only:
 
 ```bash showLineNumbers
 npx better-convex env list
@@ -326,6 +344,8 @@ npx better-convex env set <name> <value>
 npx better-convex env remove <name>
 ```
 
+On backend `concave`, raw `better-convex env ...` passthrough fails clearly because Concave has no upstream env command.
+
 ### deploy
 
 ```bash showLineNumbers
@@ -333,7 +353,7 @@ npx better-convex deploy --prod
 ```
 
 `better-convex deploy` runs:
-1. `convex deploy ...`
+1. selected backend `deploy ...`
 2. post-deploy `generated/server:migrationRun` (`direction: "up"`)
 3. status polling (`generated/server:migrationStatus`) until completion (default behavior)
 4. post-deploy `generated/server:aggregateBackfill`

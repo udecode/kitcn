@@ -84,6 +84,14 @@ Why not direct `better-convex codegen`?
   scaffold -> dependency install -> codegen -> bootstrap retry -> codegen retry
 - the fixture script should consume that contract, not reimplement half of it
 
+Repo automation adds one deliberate detail:
+
+- `tooling/template-next.ts` runs local
+  `better-convex init -t next --backend concave`
+- that uses the same public backend selector users can use elsewhere
+- template sync intentionally chooses Concave because it is more agent/CI-friendly here
+- default CLI behavior is still backend `convex` unless config or `--backend` says otherwise
+
 ### Human Repro
 
 To regenerate the checked-in fixture:
@@ -130,16 +138,18 @@ When checking parity or drift:
 2. run the local CLI:
 
    ```bash
-   bun packages/better-convex/src/cli/cli.ts init -t next --yes --cwd <tmp> --name next
+   bun packages/better-convex/src/cli/cli.ts --backend concave init -t next --yes --cwd <tmp> --name next
    ```
 
 3. let `init` run the actual scaffold flow:
    - run `shadcn init -t next`
    - apply Better Convex overlay files and patches
    - install Better Convex baseline deps
-   - run `better-convex codegen`
+   - run Better Convex codegen via the init-owned backend adapter
 4. if codegen needs Convex bootstrap, `init` bootstraps Convex and reruns real
    codegen
+   - for template sync, the selected backend is Concave
+   - outside that flow, backend still resolves normally from config/CLI
 5. validate the fresh generated app:
    - build the local `better-convex` package
    - pack local `better-convex` to a tarball

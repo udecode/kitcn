@@ -15,7 +15,7 @@ import type {
   SystemTableNames,
 } from "convex/server";
 import type { GenericId } from "convex/values";
-import schema from "../schema.js";
+
 
 /**
  * The names of all of your Convex tables.
@@ -57,4 +57,4 @@ export type Id<TableName extends TableNames | SystemTableNames> =
  * This type is used to parameterize methods like `queryGeneric` and
  * `mutationGeneric` to make them type-safe.
  */
-export type DataModel = DataModelFromSchemaDefinition<typeof schema>;
+export type DataModel = any;

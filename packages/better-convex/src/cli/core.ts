@@ -26,6 +26,7 @@ import { generateMeta, getConvexConfig } from './codegen.js';
 import {
   type AggregateBackfillConfig,
   type BackfillEnabled,
+  type BetterConvexBackend,
   type BetterConvexConfig,
   loadBetterConvexConfig,
   type MigrationConfig,
@@ -118,7 +119,7 @@ export const initCRPC = baseInitCRPC;
 `;
 const INIT_CONVEX_BOOTSTRAP_REQUIRED_RE =
   /No CONVEX_DEPLOYMENT set|Cannot prompt for input in non-interactive terminals|Local backend isn't running/i;
-const INIT_LOCAL_BOOTSTRAP_READY_RE = /Convex functions ready!/i;
+const INIT_LOCAL_BOOTSTRAP_READY_RE = /(Convex|Concave) functions ready!/i;
 const INIT_NEXT_TSCONFIG_ALIAS_RE = /"@\/\*"\s*:\s*\[\s*"([^"]+)"\s*\]/m;
 const INIT_NEXT_IMPORT_QUOTE_RE = /from\s+(['"])/;
 const INIT_NEXT_IMPORT_SEMICOLON_RE = /^\s*import .*;\s*$/m;
@@ -130,6 +131,7 @@ export type ParsedArgs = {
   command: string;
   restArgs: string[];
   convexArgs: string[];
+  backend?: BetterConvexBackend;
   debug: boolean;
   sharedDir?: string;
   scope?: 'all' | 'auth' | 'orm';
@@ -137,6 +139,7 @@ export type ParsedArgs = {
 };
 
 const VALID_SCOPES = new Set(['all', 'auth', 'orm']);
+const VALID_BACKENDS = new Set<BetterConvexBackend>(['convex', 'concave']);
 const ORM_SCHEMA_EXTENSIONS = Symbol.for('better-convex:OrmSchemaExtensions');
 type SupportedPlugin = SupportedPluginKey;
 const SUPPORTED_PLUGINS = new Set<SupportedPlugin>(getSupportedPluginKeys());
@@ -182,6 +185,7 @@ export type InitCommandArgs = {
 export type InitCodegenStatus = 'generated' | 'stubbed';
 export type InitConvexBootstrapStatus = 'existing' | 'created' | 'missing';
 export type InitRunResult = {
+  backend: BetterConvexBackend;
   cwd: string;
   created: string[];
   updated: string[];
@@ -357,25 +361,17 @@ type PromptAdapter = {
 
 const HELP_FLAGS = new Set(['--help', '-h']);
 
-const ROOT_HELP_TEXT = `Usage: better-convex <command> [options]
-
-Commands:
-  init                         Bootstrap a Better Convex app in-place
-  create                       Alias for init
-  dev                          Run dev workflow with codegen/watch passthrough
-  codegen                      Generate Better Convex outputs
-  add [plugin]                 Add a plugin scaffold + schema registration
-  view [plugin]                Inspect a plugin install plan without writing
-  info                         Inspect project + installed plugin state
-  docs <topic...>              Show docs links for CLI and plugins
-  env                          Env helper and convex env passthrough
-  deploy                       Deploy with migrations/backfill flows
-  migrate                      Migration lifecycle commands
-  aggregate                    Aggregate backfill/rebuild/prune commands
-  analyze                      Analyze Convex runtime bundle
-  reset                        Destructive database reset (requires --yes)
-
-Run "better-convex <command> --help" for command options.`;
+const CONCAVE_PASSTHROUGH_COMMANDS = [
+  'run',
+  'data',
+  'function-spec',
+  'components',
+  'build',
+  'dev',
+  'deploy',
+  'codegen',
+  'init',
+] as const;
 
 const ADD_HELP_TEXT = `Usage: better-convex add [plugin] [options]
 
@@ -480,6 +476,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let sharedDir: string | undefined;
   let scope: 'all' | 'auth' | 'orm' | undefined;
   let configPath: string | undefined;
+  let backend: BetterConvexBackend | undefined;
 
   const filtered: string[] = [];
   for (let i = 0; i < argv.length; i++) {
@@ -522,6 +519,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
+    if (a === '--backend') {
+      const value = argv[i + 1];
+      if (!value || !VALID_BACKENDS.has(value as BetterConvexBackend)) {
+        throw new Error(
+          `Invalid --backend value "${value ?? ''}". Expected one of: convex, concave.`
+        );
+      }
+      backend = value as BetterConvexBackend;
+      i += 1; // skip value
+      continue;
+    }
+
     filtered.push(a);
   }
 
@@ -532,6 +541,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     command,
     restArgs,
     convexArgs: restArgs,
+    backend,
     debug,
     sharedDir,
     scope,
@@ -564,11 +574,56 @@ function hasHelpFlag(args: string[]): boolean {
   return args.some((arg) => HELP_FLAGS.has(arg));
 }
 
-function printRootHelp(): void {
-  logger.write(ROOT_HELP_TEXT);
+export function getRootHelpText(
+  backend: BetterConvexBackend = 'convex'
+): string {
+  const backendPassThrough =
+    backend === 'concave'
+      ? [
+          '',
+          'Concave passthrough:',
+          `  ${CONCAVE_PASSTHROUGH_COMMANDS.join(', ')}`,
+          '  Raw `env` passthrough is Convex-only. Use `better-convex env sync` here.',
+        ].join('\n')
+      : [
+          '',
+          'Convex passthrough:',
+          '  Unknown commands are forwarded to the Convex CLI.',
+        ].join('\n');
+
+  return `Usage: better-convex <command> [options]
+
+Global options:
+  --backend <convex|concave>   Backend CLI to drive
+
+Commands:
+  init                         Bootstrap a Better Convex app in-place
+  create                       Alias for init
+  dev                          Run dev workflow with codegen/watch passthrough
+  codegen                      Generate Better Convex outputs
+  add [plugin]                 Add a plugin scaffold + schema registration
+  view [plugin]                Inspect a plugin install plan without writing
+  info                         Inspect project + installed plugin state
+  docs <topic...>              Show docs links for CLI and plugins
+  env                          Env helper and backend env passthrough
+  deploy                       Deploy with migrations/backfill flows
+  migrate                      Migration lifecycle commands
+  aggregate                    Aggregate backfill/rebuild/prune commands
+  analyze                      Analyze runtime bundle
+  reset                        Destructive database reset (requires --yes)
+${backendPassThrough}
+
+Run "better-convex <command> --help" for command options.`;
 }
 
-function printCommandHelp(command: string): void {
+function printRootHelp(backend: BetterConvexBackend = 'convex'): void {
+  logger.write(getRootHelpText(backend));
+}
+
+function printCommandHelp(
+  command: string,
+  backend: BetterConvexBackend = 'convex'
+): void {
   if (command === 'init' || command === 'create') {
     logger.write(INIT_HELP_TEXT);
     return;
@@ -593,7 +648,7 @@ function printCommandHelp(command: string): void {
     logger.write(CODEGEN_HELP_TEXT);
     return;
   }
-  printRootHelp();
+  printRootHelp(backend);
 }
 
 function createPromptAdapter(): PromptAdapter {
@@ -671,6 +726,7 @@ export function resolveRunDeps(deps: Partial<RunDeps> = {}): RunDeps {
     promptAdapter: createPromptAdapter(),
     enableDevSchemaWatch: true,
     realConvex,
+    realConcave: undefined,
     ...deps,
   };
 }
@@ -2502,6 +2558,7 @@ export async function withWorkingDirectory<T>(
 
 export async function runInitCommandFlow(params: {
   initArgs: InitCommandArgs;
+  backendArg?: BetterConvexBackend;
   configPath?: string;
   execaFn: typeof execa;
   generateMetaFn: typeof generateMeta;
@@ -2509,6 +2566,7 @@ export async function runInitCommandFlow(params: {
   ensureConvexGitignoreEntryFn: typeof ensureConvexGitignoreEntry;
   promptAdapter: PromptAdapter;
   realConvexPath: string;
+  realConcavePath?: string;
 }): Promise<InitRunResult> {
   const template = resolveSupportedInitTemplate(params.initArgs.template);
   const projectDir = template
@@ -2528,6 +2586,10 @@ export async function runInitCommandFlow(params: {
 
   return withWorkingDirectory(projectDir, async () => {
     const config = params.loadBetterConvexConfigFn(params.configPath);
+    const backend = resolveConfiguredBackend({
+      backendArg: params.backendArg,
+      config,
+    });
     const initPlan = buildInitializationPlan({
       config,
       configPathArg: params.configPath,
@@ -2553,11 +2615,13 @@ export async function runInitCommandFlow(params: {
 
     const codegenResult = await runInitializationCodegen({
       config: initPlan.config,
+      backend,
       sharedDir: initPlan.config.paths.shared,
       debug: initPlan.config.codegen.debug,
       generateMetaFn: params.generateMetaFn,
       execaFn: params.execaFn,
       realConvexPath: params.realConvexPath,
+      realConcavePath: params.realConcavePath,
       functionsDir: initPlan.functionsDir,
       template,
       team: params.initArgs.team,
@@ -2566,6 +2630,7 @@ export async function runInitCommandFlow(params: {
     });
 
     return {
+      backend,
       cwd: projectDir,
       created: applyResult.created,
       updated: applyResult.updated,
@@ -3400,6 +3465,7 @@ export function formatInfoOutput(payload: {
   schemaPlugins: SupportedPlugin[];
   installedPlugins: InstalledPluginState[];
   project: {
+    backend: BetterConvexBackend;
     functionsDir: string;
     schemaPath: string;
     schemaExists: boolean;
@@ -3424,6 +3490,7 @@ export function formatInfoOutput(payload: {
     `${highlighter.bold('┌')} ${highlighter.bold('better-convex info')}`,
     highlighter.dim('│'),
     `${highlighter.dim('├')} ${highlighter.bold('Project')}`,
+    `${highlighter.dim('│')} ${highlighter.dim('backend')} ${payload.project.backend}`,
     `${highlighter.dim('│')} ${highlighter.dim('functions')} ${payload.project.functionsDir}`,
     `${highlighter.dim('│')} ${highlighter.dim('schema')} ${
       payload.project.schemaExists
@@ -3940,6 +4007,7 @@ export type RunDeps = {
   promptAdapter: PromptAdapter;
   enableDevSchemaWatch: boolean;
   realConvex: string;
+  realConcave?: string;
 };
 
 export function getPluginLockfilePath(functionsDir: string): string {
@@ -3960,6 +4028,84 @@ function resolveCodegenTrimSegments(config: {
   return normalized.length > 0 ? normalized : ['plugins'];
 }
 
+type BackendAdapter = {
+  publicName: BetterConvexBackend;
+  internalName: 'convex' | 'concave-bun';
+  command: string;
+  argsPrefix: string[];
+};
+
+export function resolveConfiguredBackend(params: {
+  backendArg?: BetterConvexBackend;
+  config?: Pick<BetterConvexConfig, 'backend'>;
+}): BetterConvexBackend {
+  return params.backendArg ?? params.config?.backend ?? 'convex';
+}
+
+function resolveInstalledConcaveCliPath() {
+  try {
+    const concavePkgPath = require.resolve('@concavejs/cli/package.json');
+    const concavePkg = JSON.parse(fs.readFileSync(concavePkgPath, 'utf8')) as {
+      bin?: string | Record<string, string>;
+    };
+    const binRelative =
+      typeof concavePkg.bin === 'string'
+        ? concavePkg.bin
+        : concavePkg.bin?.concave;
+    if (!binRelative) {
+      throw new Error('Missing concave binary entry.');
+    }
+    return join(dirname(concavePkgPath), binRelative);
+  } catch (error) {
+    throw new Error(
+      `backend=concave requires @concavejs/cli to be installed. ${(error as Error).message}`
+    );
+  }
+}
+
+function resolveConcaveCliPath(realConcavePath?: string) {
+  if (realConcavePath) {
+    if (!fs.existsSync(realConcavePath)) {
+      throw new Error(
+        `backend=concave could not find Concave CLI at ${realConcavePath}.`
+      );
+    }
+    return realConcavePath;
+  }
+  return resolveInstalledConcaveCliPath();
+}
+
+export function createBackendAdapter(params: {
+  backend: BetterConvexBackend;
+  realConvexPath: string;
+  realConcavePath?: string;
+}): BackendAdapter {
+  if (params.backend === 'concave') {
+    return {
+      publicName: 'concave',
+      internalName: 'concave-bun',
+      command: 'bun',
+      argsPrefix: [resolveConcaveCliPath(params.realConcavePath)],
+    };
+  }
+  return {
+    publicName: 'convex',
+    internalName: 'convex',
+    command: 'node',
+    argsPrefix: [params.realConvexPath],
+  };
+}
+
+function resolveTemplateInitCodegenArgs(
+  runtimeAdapter: BackendAdapter,
+  template?: string
+) {
+  if (template && runtimeAdapter.publicName === 'concave') {
+    return ['--static'];
+  }
+  return undefined;
+}
+
 export async function runConfiguredCodegen(params: {
   config: ReturnType<typeof loadBetterConvexConfig>;
   sharedDir: string;
@@ -3967,7 +4113,9 @@ export async function runConfiguredCodegen(params: {
   generateMetaFn: typeof generateMeta;
   execaFn: typeof execa;
   realConvexPath: string;
+  realConcavePath?: string;
   additionalConvexArgs?: string[];
+  backend?: BetterConvexBackend;
 }): Promise<number> {
   const result = await runConfiguredCodegenDetailed({
     ...params,
@@ -3983,9 +4131,12 @@ export async function runConfiguredCodegenDetailed(params: {
   generateMetaFn: typeof generateMeta;
   execaFn: typeof execa;
   realConvexPath: string;
+  realConcavePath?: string;
   additionalConvexArgs?: string[];
+  backend?: BetterConvexBackend;
   env?: Record<string, string | undefined>;
   stdio?: 'inherit' | 'pipe';
+  backendAdapter?: BackendAdapter;
 }): Promise<CodegenRunResult> {
   const {
     config,
@@ -3996,6 +4147,8 @@ export async function runConfiguredCodegenDetailed(params: {
     realConvexPath,
     additionalConvexArgs,
     env,
+    backend,
+    backendAdapter,
     stdio = 'pipe',
   } = params;
   const scope = config.codegen.scope;
@@ -4004,6 +4157,13 @@ export async function runConfiguredCodegenDetailed(params: {
     ...config.codegen.args,
     ...(additionalConvexArgs ?? []),
   ];
+  const resolvedRuntimeAdapter =
+    backendAdapter ??
+    createBackendAdapter({
+      backend: backend ?? config.backend,
+      realConvexPath,
+      realConcavePath: params.realConcavePath,
+    });
   await generateMetaFn(sharedDir, {
     debug,
     scope: scope ?? 'all',
@@ -4011,8 +4171,8 @@ export async function runConfiguredCodegenDetailed(params: {
   });
 
   const result = await execaFn(
-    'node',
-    [realConvexPath, 'codegen', ...convexCodegenArgs],
+    resolvedRuntimeAdapter.command,
+    [...resolvedRuntimeAdapter.argsPrefix, 'codegen', ...convexCodegenArgs],
     {
       stdio,
       cwd: process.cwd(),
@@ -4053,13 +4213,13 @@ function formatInitCodegenFailure(output: string) {
 
 async function runConvexBootstrapForInit(params: {
   execaFn: typeof execa;
-  realConvexPath: string;
+  runtimeAdapter: BackendAdapter;
   args: string[];
   env?: Record<string, string | undefined>;
 }): Promise<CodegenRunResult> {
   const result = await params.execaFn(
-    'node',
-    [params.realConvexPath, ...params.args],
+    params.runtimeAdapter.command,
+    [...params.runtimeAdapter.argsPrefix, ...params.args],
     {
       cwd: process.cwd(),
       env: params.env,
@@ -4099,13 +4259,13 @@ async function stopPersistentBootstrapProcess(
 
 async function runLocalConvexBootstrapForInit(params: {
   execaFn: typeof execa;
-  realConvexPath: string;
+  runtimeAdapter: BackendAdapter;
   args: string[];
   env?: Record<string, string | undefined>;
 }): Promise<InitBootstrapResult> {
   const bootstrapProcess = params.execaFn(
-    'node',
-    [params.realConvexPath, ...params.args],
+    params.runtimeAdapter.command,
+    [...params.runtimeAdapter.argsPrefix, ...params.args],
     {
       cwd: process.cwd(),
       env: params.env,
@@ -4203,11 +4363,13 @@ async function runLocalConvexBootstrapForInit(params: {
 
 async function runInitializationCodegen(params: {
   config: ReturnType<typeof loadBetterConvexConfig>;
+  backend: BetterConvexBackend;
   sharedDir: string;
   debug: boolean;
   generateMetaFn: typeof generateMeta;
   execaFn: typeof execa;
   realConvexPath: string;
+  realConcavePath?: string;
   functionsDir: string;
   template?: string;
   team?: string;
@@ -4217,6 +4379,15 @@ async function runInitializationCodegen(params: {
   codegen: InitCodegenStatus;
   convexBootstrap: InitConvexBootstrapStatus;
 }> {
+  const runtimeAdapter = createBackendAdapter({
+    backend: params.backend,
+    realConvexPath: params.realConvexPath,
+    realConcavePath: params.realConcavePath,
+  });
+  const additionalCodegenArgs = resolveTemplateInitCodegenArgs(
+    runtimeAdapter,
+    params.template
+  );
   const initial = await runConfiguredCodegenDetailed({
     config: params.config,
     sharedDir: params.sharedDir,
@@ -4224,6 +4395,10 @@ async function runInitializationCodegen(params: {
     generateMetaFn: params.generateMetaFn,
     execaFn: params.execaFn,
     realConvexPath: params.realConvexPath,
+    realConcavePath: params.realConcavePath,
+    additionalConvexArgs: additionalCodegenArgs,
+    backend: params.backend,
+    backendAdapter: runtimeAdapter,
   });
   if (initial.exitCode === 0) {
     return {
@@ -4237,13 +4412,13 @@ async function runInitializationCodegen(params: {
     throw new Error(formatInitCodegenFailure(initialOutput));
   }
 
-  if (params.team && params.project) {
+  if (runtimeAdapter.publicName === 'convex' && params.team && params.project) {
     const devDeployment = params.devDeployment ?? INIT_DEFAULT_DEV_DEPLOYMENT;
     const bootstrap =
       devDeployment === 'local'
         ? await runLocalConvexBootstrapForInit({
             execaFn: params.execaFn,
-            realConvexPath: params.realConvexPath,
+            runtimeAdapter,
             args: [
               'dev',
               '--configure',
@@ -4263,7 +4438,7 @@ async function runInitializationCodegen(params: {
           })
         : await runConvexBootstrapForInit({
             execaFn: params.execaFn,
-            realConvexPath: params.realConvexPath,
+            runtimeAdapter,
             args: [
               'dev',
               '--once',
@@ -4295,6 +4470,10 @@ async function runInitializationCodegen(params: {
         generateMetaFn: params.generateMetaFn,
         execaFn: params.execaFn,
         realConvexPath: params.realConvexPath,
+        realConcavePath: params.realConcavePath,
+        additionalConvexArgs: additionalCodegenArgs,
+        backend: params.backend,
+        backendAdapter: runtimeAdapter,
       });
       if (retry.exitCode === 0) {
         return {
@@ -4312,19 +4491,25 @@ async function runInitializationCodegen(params: {
 
   const anonymousBootstrap = await runLocalConvexBootstrapForInit({
     execaFn: params.execaFn,
-    realConvexPath: params.realConvexPath,
-    env: {
-      CONVEX_AGENT_MODE: 'anonymous',
-    },
-    args: [
-      'dev',
-      '--local',
-      '--local-force-upgrade',
-      '--typecheck',
-      'disable',
-      '--tail-logs',
-      'disable',
-    ],
+    runtimeAdapter,
+    env:
+      runtimeAdapter.publicName === 'convex'
+        ? {
+            CONVEX_AGENT_MODE: 'anonymous',
+          }
+        : undefined,
+    args:
+      runtimeAdapter.publicName === 'convex'
+        ? [
+            'dev',
+            '--local',
+            '--local-force-upgrade',
+            '--typecheck',
+            'disable',
+            '--tail-logs',
+            'disable',
+          ]
+        : ['dev', '--bun'],
   });
   if (anonymousBootstrap.exitCode !== 0) {
     await anonymousBootstrap.stop();
@@ -4350,6 +4535,10 @@ async function runInitializationCodegen(params: {
       generateMetaFn: params.generateMetaFn,
       execaFn: params.execaFn,
       realConvexPath: params.realConvexPath,
+      realConcavePath: params.realConcavePath,
+      additionalConvexArgs: additionalCodegenArgs,
+      backend: params.backend,
+      backendAdapter: runtimeAdapter,
     });
     if (retry.exitCode === 0) {
       return {
@@ -4799,7 +4988,7 @@ export function resolveMigrationConfig(
   };
 }
 
-export function extractRunDeploymentArgs(args: string[]): string[] {
+export function extractConvexRunTargetArgs(args: string[]): string[] {
   const deploymentArgs: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -4833,11 +5022,44 @@ export function extractRunDeploymentArgs(args: string[]): string[] {
   return deploymentArgs;
 }
 
+export function extractConcaveRunTargetArgs(args: string[]): string[] {
+  const targetArgs: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--url' || arg === '--port' || arg === '--component') {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error(`Missing value for ${arg}.`);
+      }
+      targetArgs.push(arg, value);
+      i += 1;
+      continue;
+    }
+    if (
+      arg.startsWith('--url=') ||
+      arg.startsWith('--port=') ||
+      arg.startsWith('--component=')
+    ) {
+      targetArgs.push(arg);
+    }
+  }
+  return targetArgs;
+}
+
+export function extractBackendRunTargetArgs(
+  backend: BetterConvexBackend,
+  args: string[]
+): string[] {
+  return backend === 'concave'
+    ? extractConcaveRunTargetArgs(args)
+    : extractConvexRunTargetArgs(args);
+}
+
 function isMissingBackfillFunctionOutput(output: string): boolean {
   return MISSING_BACKFILL_FUNCTION_RE.test(output);
 }
 
-function parseConvexRunJson<T>(stdout: string): T {
+function parseBackendRunJson<T>(stdout: string): T {
   const trimmed = stdout.trim();
   if (trimmed.length === 0) {
     return [] as T;
@@ -4857,7 +5079,7 @@ function parseConvexRunJson<T>(stdout: string): T {
     }
   }
   throw new Error(
-    `Failed to parse convex run output as JSON.\nOutput:\n${stdout.trim()}`
+    `Failed to parse backend run output as JSON.\nOutput:\n${stdout.trim()}`
   );
 }
 
@@ -4879,22 +5101,22 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-export async function runConvexFunction(
+export async function runBackendFunction(
   execaFn: typeof execa,
-  realConvexPath: string,
+  backendAdapter: BackendAdapter,
   functionName: string,
   args: Record<string, unknown>,
-  deploymentArgs: string[],
+  targetArgs: string[],
   options?: {
     echoOutput?: boolean;
   }
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const result = await execaFn(
-    'node',
+    backendAdapter.command,
     [
-      realConvexPath,
+      ...backendAdapter.argsPrefix,
       'run',
-      ...deploymentArgs,
+      ...targetArgs,
       functionName,
       JSON.stringify(args),
     ],
@@ -4925,19 +5147,19 @@ export async function runConvexFunction(
 
 export async function runAggregateBackfillFlow(params: {
   execaFn: typeof execa;
-  realConvexPath: string;
+  backendAdapter: BackendAdapter;
   backfillConfig: AggregateBackfillConfig;
   mode: 'resume' | 'rebuild';
-  deploymentArgs: string[];
+  targetArgs: string[];
   signal?: AbortSignal;
   context: 'deploy' | 'dev' | 'aggregate';
 }): Promise<number> {
   const {
     execaFn,
-    realConvexPath,
+    backendAdapter,
     backfillConfig,
     mode,
-    deploymentArgs,
+    targetArgs,
     signal,
     context,
   } = params;
@@ -4949,15 +5171,15 @@ export async function runAggregateBackfillFlow(params: {
     return 0;
   }
 
-  const kickoff = await runConvexFunction(
+  const kickoff = await runBackendFunction(
     execaFn,
-    realConvexPath,
+    backendAdapter,
     'generated/server:aggregateBackfill',
     {
       mode,
       batchSize: backfillConfig.batchSize,
     },
-    deploymentArgs,
+    targetArgs,
     {
       echoOutput: false,
     }
@@ -4987,7 +5209,7 @@ export async function runAggregateBackfillFlow(params: {
     pruned?: number;
     mode?: string;
   };
-  const kickoffPayload = parseConvexRunJson<KickoffResult | unknown[]>(
+  const kickoffPayload = parseBackendRunJson<KickoffResult | unknown[]>(
     kickoff.stdout
   );
   const needsRebuild =
@@ -5041,12 +5263,12 @@ export async function runAggregateBackfillFlow(params: {
   const deadline = Date.now() + backfillConfig.timeoutMs;
   let lastProgress = '';
   while (!signal?.aborted) {
-    const statusResult = await runConvexFunction(
+    const statusResult = await runBackendFunction(
       execaFn,
-      realConvexPath,
+      backendAdapter,
       'generated/server:aggregateBackfillStatus',
       {},
-      deploymentArgs,
+      targetArgs,
       {
         echoOutput: false,
       }
@@ -5061,7 +5283,7 @@ export async function runAggregateBackfillFlow(params: {
       indexName: string;
       lastError?: string | null;
     };
-    const statuses = parseConvexRunJson<BackfillStatusEntry[]>(
+    const statuses = parseBackendRunJson<BackfillStatusEntry[]>(
       statusResult.stdout
     );
     const failed = statuses.find((entry) => Boolean(entry.lastError));
@@ -5102,18 +5324,18 @@ export async function runAggregateBackfillFlow(params: {
 
 export async function runAggregatePruneFlow(params: {
   execaFn: typeof execa;
-  realConvexPath: string;
-  deploymentArgs: string[];
+  backendAdapter: BackendAdapter;
+  targetArgs: string[];
 }): Promise<number> {
-  const { execaFn, realConvexPath, deploymentArgs } = params;
-  const result = await runConvexFunction(
+  const { execaFn, backendAdapter, targetArgs } = params;
+  const result = await runBackendFunction(
     execaFn,
-    realConvexPath,
+    backendAdapter,
     'generated/server:aggregateBackfill',
     {
       mode: 'prune',
     },
-    deploymentArgs,
+    targetArgs,
     {
       echoOutput: false,
     }
@@ -5126,7 +5348,7 @@ export async function runAggregatePruneFlow(params: {
   type PruneResult = {
     pruned?: number;
   };
-  const payload = parseConvexRunJson<PruneResult | unknown[]>(result.stdout);
+  const payload = parseBackendRunJson<PruneResult | unknown[]>(result.stdout);
   const pruned =
     typeof payload === 'object' &&
     payload !== null &&
@@ -5292,9 +5514,9 @@ export const migration = defineMigration({
 
 export async function runMigrationFlow(params: {
   execaFn: typeof execa;
-  realConvexPath: string;
+  backendAdapter: BackendAdapter;
   migrationConfig: MigrationConfig;
-  deploymentArgs: string[];
+  targetArgs: string[];
   signal?: AbortSignal;
   context: 'deploy' | 'dev' | 'migration';
   direction: 'up' | 'down';
@@ -5303,9 +5525,9 @@ export async function runMigrationFlow(params: {
 }): Promise<number> {
   const {
     execaFn,
-    realConvexPath,
+    backendAdapter,
     migrationConfig,
-    deploymentArgs,
+    targetArgs,
     signal,
     context,
     direction,
@@ -5316,9 +5538,9 @@ export async function runMigrationFlow(params: {
     return 0;
   }
 
-  const kickoff = await runConvexFunction(
+  const kickoff = await runBackendFunction(
     execaFn,
-    realConvexPath,
+    backendAdapter,
     'generated/server:migrationRun',
     {
       direction,
@@ -5327,7 +5549,7 @@ export async function runMigrationFlow(params: {
       ...(steps !== undefined ? { steps } : {}),
       ...(to !== undefined ? { to } : {}),
     },
-    deploymentArgs,
+    targetArgs,
     {
       echoOutput: false,
     }
@@ -5355,7 +5577,7 @@ export async function runMigrationFlow(params: {
     drift?: Array<{ message?: string }>;
     plan?: string[];
   };
-  const payload = parseConvexRunJson<KickoffPayload | unknown[]>(
+  const payload = parseBackendRunJson<KickoffPayload | unknown[]>(
     kickoff.stdout
   );
   const kickoffStatus =
@@ -5415,14 +5637,14 @@ export async function runMigrationFlow(params: {
   const deadline = Date.now() + migrationConfig.timeoutMs;
   let lastStatusLine = '';
   while (!signal?.aborted) {
-    const statusResult = await runConvexFunction(
+    const statusResult = await runBackendFunction(
       execaFn,
-      realConvexPath,
+      backendAdapter,
       'generated/server:migrationStatus',
       {
         runId,
       },
-      deploymentArgs,
+      targetArgs,
       {
         echoOutput: false,
       }
@@ -5439,7 +5661,7 @@ export async function runMigrationFlow(params: {
         migrationIds?: string[];
       }>;
     };
-    const statusPayload = parseConvexRunJson<StatusPayload | unknown[]>(
+    const statusPayload = parseBackendRunJson<StatusPayload | unknown[]>(
       statusResult.stdout
     );
     const runStatus =
@@ -5502,18 +5724,18 @@ export async function runMigrationFlow(params: {
 
 async function runDevSchemaBackfillIfNeeded(params: {
   execaFn: typeof execa;
-  realConvexPath: string;
+  backendAdapter: BackendAdapter;
   backfillConfig: AggregateBackfillConfig;
   functionsDir: string;
-  deploymentArgs: string[];
+  targetArgs: string[];
   signal: AbortSignal;
 }): Promise<number> {
   const {
     execaFn,
-    realConvexPath,
+    backendAdapter,
     backfillConfig,
     functionsDir,
-    deploymentArgs,
+    targetArgs,
     signal,
   } = params;
   const fingerprint = await computeAggregateIndexFingerprint(functionsDir);
@@ -5521,7 +5743,7 @@ async function runDevSchemaBackfillIfNeeded(params: {
     return 0;
   }
 
-  const deploymentKey = getAggregateBackfillDeploymentKey(deploymentArgs);
+  const deploymentKey = getAggregateBackfillDeploymentKey(targetArgs);
   const statePath = getDevAggregateBackfillStatePath();
   const state = readAggregateFingerprintState(statePath);
   const existing = state.entries[deploymentKey];
@@ -5532,13 +5754,13 @@ async function runDevSchemaBackfillIfNeeded(params: {
   logger.info(`aggregateBackfill resume (${deploymentKey} schema change)`);
   const exitCode = await runAggregateBackfillFlow({
     execaFn,
-    realConvexPath,
+    backendAdapter,
     backfillConfig: {
       ...backfillConfig,
       enabled: 'on',
     },
     mode: 'resume',
-    deploymentArgs,
+    targetArgs,
     signal,
     context: 'dev',
   });
@@ -5569,6 +5791,7 @@ export async function run(
     promptAdapter,
     enableDevSchemaWatch,
     realConvex: realConvexPath,
+    realConcave: realConcavePath,
   } = {
     execa,
     runAnalyze,
@@ -5580,33 +5803,58 @@ export async function run(
     promptAdapter: createPromptAdapter(),
     enableDevSchemaWatch: !deps,
     realConvex,
+    realConcave: undefined,
     ...deps,
   };
-
-  if (argv.length > 0) {
-    const firstArg = argv[0];
-    if (firstArg === '--help' || firstArg === '-h') {
-      printRootHelp();
-      return 0;
-    }
-    if (firstArg === 'help') {
-      printCommandHelp(argv[1] ?? '');
-      return 0;
-    }
-  }
 
   const {
     command,
     restArgs,
     convexArgs,
+    backend: backendArg,
     debug: cliDebug,
     sharedDir: cliSharedDir,
     scope: cliScope,
     configPath,
   } = parseArgs(argv);
 
+  let resolvedConfig: ReturnType<typeof loadBetterConvexConfigFn> | undefined;
+  let resolvedBackend: BetterConvexBackend | undefined;
+  let resolvedBackendAdapter: BackendAdapter | undefined;
+  const getConfig = () => {
+    resolvedConfig ??= loadBetterConvexConfigFn(configPath);
+    return resolvedConfig;
+  };
+  const getBackend = () => {
+    resolvedBackend ??= resolveConfiguredBackend({
+      backendArg,
+      config: getConfig(),
+    });
+    return resolvedBackend;
+  };
+  const getBackendAdapter = () => {
+    resolvedBackendAdapter ??= createBackendAdapter({
+      backend: getBackend(),
+      realConvexPath,
+      realConcavePath,
+    });
+    return resolvedBackendAdapter;
+  };
+
+  if (argv.length > 0) {
+    const firstArg = argv[0];
+    if (firstArg === '--help' || firstArg === '-h') {
+      printRootHelp(getBackend());
+      return 0;
+    }
+    if (firstArg === 'help') {
+      printCommandHelp(argv[1] ?? '', getBackend());
+      return 0;
+    }
+  }
+
   if (command === '--help' || command === '-h') {
-    printRootHelp();
+    printRootHelp(getBackend());
     return 0;
   }
 
@@ -5620,7 +5868,7 @@ export async function run(
       command === 'codegen') &&
     hasHelpFlag(restArgs)
   ) {
-    printCommandHelp(command);
+    printCommandHelp(command, getBackend());
     return 0;
   }
 
@@ -5628,6 +5876,7 @@ export async function run(
     const initArgs = parseInitCommandArgs(restArgs);
     const result = await runInitCommandFlow({
       initArgs,
+      backendArg,
       configPath,
       execaFn,
       generateMetaFn,
@@ -5635,12 +5884,14 @@ export async function run(
       ensureConvexGitignoreEntryFn,
       promptAdapter,
       realConvexPath,
+      realConcavePath,
     });
 
     if (initArgs.json) {
       console.info(
         JSON.stringify({
           command: 'init',
+          backend: result.backend,
           cwd: normalizePath(relative(process.cwd(), result.cwd) || '.'),
           created: result.created,
           updated: result.updated,
@@ -5666,7 +5917,9 @@ export async function run(
         '`--scope` is not supported for `better-convex dev`. Use `better-convex codegen --scope <all|auth|orm>` for scoped generation.'
       );
     }
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
+    const backend = getBackend();
+    const backendAdapter = getBackendAdapter();
     const {
       remainingArgs: devArgsWithoutMigrationFlags,
       overrides: devMigrationOverrides,
@@ -5686,7 +5939,7 @@ export async function run(
     );
     const { functionsDir } = getConvexConfigFn(sharedDir);
     const schemaPath = join(functionsDir, 'schema.ts');
-    const deploymentArgs = extractRunDeploymentArgs(convexDevArgs);
+    const targetArgs = extractBackendRunTargetArgs(backend, convexDevArgs);
     const trimSegments = resolveCodegenTrimSegments(config);
 
     if (!deps) {
@@ -5728,8 +5981,8 @@ export async function run(
 
     // Spawn real convex dev
     const convexProcess = execaFn(
-      'node',
-      [realConvexPath, 'dev', ...convexDevArgs],
+      backendAdapter.command,
+      [...backendAdapter.argsPrefix, 'dev', ...convexDevArgs],
       {
         stdio: 'inherit',
         cwd: process.cwd(),
@@ -5751,10 +6004,10 @@ export async function run(
       try {
         const exitCode = await runDevSchemaBackfillIfNeeded({
           execaFn,
-          realConvexPath,
+          backendAdapter,
           backfillConfig: devBackfillConfig,
           functionsDir,
-          deploymentArgs,
+          targetArgs,
           signal: backfillAbortController.signal,
         });
         if (exitCode !== 0 && !backfillAbortController.signal.aborted) {
@@ -5797,9 +6050,9 @@ export async function run(
         try {
           const exitCode = await runMigrationFlow({
             execaFn,
-            realConvexPath,
+            backendAdapter,
             migrationConfig: devMigrationConfig,
-            deploymentArgs,
+            targetArgs,
             signal: backfillAbortController.signal,
             context: 'dev',
             direction: 'up',
@@ -5824,10 +6077,10 @@ export async function run(
         try {
           const exitCode = await runAggregateBackfillFlow({
             execaFn,
-            realConvexPath,
+            backendAdapter,
             backfillConfig: devBackfillConfig,
             mode: 'resume',
-            deploymentArgs,
+            targetArgs,
             signal: backfillAbortController.signal,
             context: 'dev',
           });
@@ -5913,7 +6166,7 @@ export async function run(
     const dryRunSpinner = createSpinner('Resolving plugin install plan...', {
       silent: addArgs.json || !addArgs.dryRun,
     });
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
     const sharedDir = cliSharedDir ?? config.paths.shared;
     const { functionsDir } = getConvexConfigFn(sharedDir);
     const selectedPlugin =
@@ -6137,6 +6390,11 @@ export async function run(
         generateMetaFn,
         execaFn,
         realConvexPath,
+        realConcavePath,
+        backend: resolveConfiguredBackend({
+          backendArg,
+          config: effectiveConfig,
+        }),
       });
       if (codegenExitCode !== 0) {
         return codegenExitCode;
@@ -6161,7 +6419,7 @@ export async function run(
     const viewSpinner = createSpinner('Resolving plugin view...', {
       silent: viewArgs.json,
     });
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
     const sharedDir = cliSharedDir ?? config.paths.shared;
     const { functionsDir } = getConvexConfigFn(sharedDir);
     assertSchemaFileExists(functionsDir);
@@ -6255,7 +6513,8 @@ export async function run(
       silent: infoArgs.json,
     });
     infoSpinner.start();
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
+    const backend = getBackend();
     const sharedDir = cliSharedDir ?? config.paths.shared;
     const { functionsDir } = getConvexConfigFn(sharedDir);
     const schemaPath = getSchemaFilePath(functionsDir);
@@ -6343,6 +6602,7 @@ export async function run(
       schemaPlugins,
       installedPlugins: pluginStates,
       project: {
+        backend,
         functionsDir: normalizePath(relative(process.cwd(), functionsDir)),
         schemaPath: normalizePath(relative(process.cwd(), schemaPath)),
         schemaExists,
@@ -6400,7 +6660,7 @@ export async function run(
     return 0;
   }
   if (command === 'codegen') {
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
     const sharedDir = cliSharedDir ?? config.paths.shared;
     const scope = cliScope ?? config.codegen.scope;
     const debug = cliDebug || config.codegen.debug;
@@ -6419,7 +6679,9 @@ export async function run(
         generateMetaFn,
         execaFn,
         realConvexPath,
+        realConcavePath,
         additionalConvexArgs: convexArgs,
+        backend: getBackend(),
       });
     }
     return runConfiguredCodegen({
@@ -6429,7 +6691,9 @@ export async function run(
       generateMetaFn,
       execaFn,
       realConvexPath,
+      realConcavePath,
       additionalConvexArgs: convexArgs,
+      backend: getBackend(),
     });
   }
   if (command === 'env') {
@@ -6443,10 +6707,15 @@ export async function run(
       await syncEnvFn({ auth, force, prod });
       return 0;
     }
-    // Pass through to convex env (list, get, set, remove)
+    if (getBackend() === 'concave') {
+      throw new Error(
+        'Raw `better-convex env` passthrough is only available on the Convex backend.'
+      );
+    }
+    const backendAdapter = getBackendAdapter();
     const result = await execaFn(
-      'node',
-      [realConvexPath, 'env', ...convexArgs],
+      backendAdapter.command,
+      [...backendAdapter.argsPrefix, 'env', ...convexArgs],
       {
         stdio: 'inherit',
         cwd: process.cwd(),
@@ -6471,20 +6740,22 @@ export async function run(
       );
     }
 
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
+    const backend = getBackend();
+    const backendAdapter = getBackendAdapter();
     const resetArgs = [...config.deploy.args, ...resetCommandArgs];
-    const deploymentArgs = extractRunDeploymentArgs(resetArgs);
+    const targetArgs = extractBackendRunTargetArgs(backend, resetArgs);
 
     const runOptionalHook = async (functionName: string | undefined) => {
       if (!functionName) {
         return 0;
       }
-      const result = await runConvexFunction(
+      const result = await runBackendFunction(
         execaFn,
-        realConvexPath,
+        backendAdapter,
         functionName,
         {},
-        deploymentArgs
+        targetArgs
       );
       return result.exitCode;
     };
@@ -6494,12 +6765,12 @@ export async function run(
       return beforeExitCode;
     }
 
-    const resetResult = await runConvexFunction(
+    const resetResult = await runBackendFunction(
       execaFn,
-      realConvexPath,
+      backendAdapter,
       'generated/server:reset',
       {},
-      deploymentArgs
+      targetArgs
     );
     if (resetResult.exitCode !== 0) {
       return resetResult.exitCode;
@@ -6507,7 +6778,7 @@ export async function run(
 
     const backfillExitCode = await runAggregateBackfillFlow({
       execaFn,
-      realConvexPath,
+      backendAdapter,
       backfillConfig: {
         enabled: 'on',
         wait: true,
@@ -6517,7 +6788,7 @@ export async function run(
         strict: false,
       },
       mode: 'resume',
-      deploymentArgs,
+      targetArgs,
       context: 'aggregate',
     });
     if (backfillExitCode !== 0) {
@@ -6527,7 +6798,9 @@ export async function run(
     return runOptionalHook(afterHook);
   }
   if (command === 'deploy') {
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
+    const backend = getBackend();
+    const backendAdapter = getBackendAdapter();
     const {
       remainingArgs: deployArgsWithoutMigrationFlags,
       overrides: deployMigrationOverrides,
@@ -6538,8 +6811,8 @@ export async function run(
     } = extractBackfillCliOptions(deployArgsWithoutMigrationFlags);
     const deployArgs = [...config.deploy.args, ...deployCommandArgs];
     const deployResult = await execaFn(
-      'node',
-      [realConvexPath, 'deploy', ...deployArgs],
+      backendAdapter.command,
+      [...backendAdapter.argsPrefix, 'deploy', ...deployArgs],
       {
         stdio: 'inherit',
         cwd: process.cwd(),
@@ -6558,13 +6831,13 @@ export async function run(
       config.deploy.aggregateBackfill,
       deployBackfillOverrides
     );
-    const deploymentArgs = extractRunDeploymentArgs(deployArgs);
+    const targetArgs = extractBackendRunTargetArgs(backend, deployArgs);
 
     const migrationExitCode = await runMigrationFlow({
       execaFn,
-      realConvexPath,
+      backendAdapter,
       migrationConfig,
-      deploymentArgs,
+      targetArgs,
       context: 'deploy',
       direction: 'up',
     });
@@ -6574,10 +6847,10 @@ export async function run(
 
     return runAggregateBackfillFlow({
       execaFn,
-      realConvexPath,
+      backendAdapter,
       backfillConfig,
       mode: 'resume',
-      deploymentArgs,
+      targetArgs,
       context: 'deploy',
     });
   }
@@ -6595,7 +6868,9 @@ export async function run(
       );
     }
 
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
+    const backend = getBackend();
+    const backendAdapter = getBackendAdapter();
 
     if (subcommand === 'create') {
       const rawName = restArgs.slice(1).join(' ').trim();
@@ -6622,14 +6897,14 @@ export async function run(
       enabled: 'on' as const,
     };
     const commandArgs = [...config.deploy.args, ...migrationCommandArgs];
-    const deploymentArgs = extractRunDeploymentArgs(commandArgs);
+    const targetArgs = extractBackendRunTargetArgs(backend, commandArgs);
 
     if (subcommand === 'up') {
       return runMigrationFlow({
         execaFn,
-        realConvexPath,
+        backendAdapter,
         migrationConfig,
-        deploymentArgs,
+        targetArgs,
         context: 'migration',
         direction: 'up',
       });
@@ -6638,12 +6913,15 @@ export async function run(
     if (subcommand === 'down') {
       const { remainingArgs, steps, to } =
         extractMigrationDownOptions(commandArgs);
-      const downDeploymentArgs = extractRunDeploymentArgs(remainingArgs);
+      const downTargetArgs = extractBackendRunTargetArgs(
+        backend,
+        remainingArgs
+      );
       return runMigrationFlow({
         execaFn,
-        realConvexPath,
+        backendAdapter,
         migrationConfig,
-        deploymentArgs: downDeploymentArgs,
+        targetArgs: downTargetArgs,
         context: 'migration',
         direction: 'down',
         steps,
@@ -6652,12 +6930,12 @@ export async function run(
     }
 
     if (subcommand === 'status') {
-      const statusResult = await runConvexFunction(
+      const statusResult = await runBackendFunction(
         execaFn,
-        realConvexPath,
+        backendAdapter,
         'generated/server:migrationStatus',
         {},
-        deploymentArgs
+        targetArgs
       );
       return statusResult.exitCode;
     }
@@ -6682,13 +6960,13 @@ export async function run(
       }
       cancelArgs.push(arg);
     }
-    const cancelDeploymentArgs = extractRunDeploymentArgs(cancelArgs);
-    const cancelResult = await runConvexFunction(
+    const cancelTargetArgs = extractBackendRunTargetArgs(backend, cancelArgs);
+    const cancelResult = await runBackendFunction(
       execaFn,
-      realConvexPath,
+      backendAdapter,
       'generated/server:migrationCancel',
       runId ? { runId } : {},
-      cancelDeploymentArgs
+      cancelTargetArgs
     );
     return cancelResult.exitCode;
   }
@@ -6704,7 +6982,9 @@ export async function run(
       );
     }
 
-    const config = loadBetterConvexConfigFn(configPath);
+    const config = getConfig();
+    const backend = getBackend();
+    const backendAdapter = getBackendAdapter();
     const {
       remainingArgs: aggregateCommandArgs,
       overrides: aggregateBackfillOverrides,
@@ -6717,28 +6997,28 @@ export async function run(
       ),
       enabled: 'on' as const,
     };
-    const deploymentArgs = extractRunDeploymentArgs(aggregateArgs);
+    const targetArgs = extractBackendRunTargetArgs(backend, aggregateArgs);
     if (subcommand === 'prune') {
       return runAggregatePruneFlow({
         execaFn,
-        realConvexPath,
-        deploymentArgs,
+        backendAdapter,
+        targetArgs,
       });
     }
 
     return runAggregateBackfillFlow({
       execaFn,
-      realConvexPath,
+      backendAdapter,
       backfillConfig,
       mode: subcommand === 'rebuild' ? 'rebuild' : 'resume',
-      deploymentArgs,
+      targetArgs,
       context: 'aggregate',
     });
   }
-  // Pass through to real convex CLI
+  const backendAdapter = getBackendAdapter();
   const result = await execaFn(
-    'node',
-    [realConvexPath, command, ...convexArgs],
+    backendAdapter.command,
+    [...backendAdapter.argsPrefix, command, ...convexArgs],
     {
       stdio: 'inherit',
       cwd: process.cwd(),

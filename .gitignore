@@ -93,4 +93,5 @@ yarn-error.log*
 
 *.local*
 .convex/
+.concave/
 .worktrees

@@ -4,7 +4,7 @@
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
- * To regenerate, run `npx convex dev`.
+ * To regenerate, run `npx concave codegen`.
  * @module
  */
 
@@ -16,6 +16,8 @@ import {
   internalActionGeneric,
   internalMutationGeneric,
   internalQueryGeneric,
+  defineSchema,
+  defineTable,
 } from "convex/server";
 
 /**
@@ -80,14 +82,15 @@ export const action = actionGeneric;
 export const internalAction = internalActionGeneric;
 
 /**
- * Define an HTTP action.
+ * Define a Convex HTTP action.
  *
- * The wrapped function will be used to respond to HTTP requests received
- * by a Convex deployment if the requests matches the path and method where
- * this action is routed. Be sure to route your httpAction in `convex/http.js`.
- *
- * @param func - The function. It receives an {@link ActionCtx} as its first argument
- * and a Fetch API `Request` object as its second.
- * @returns The wrapped function. Import this function from `convex/http.js` and route it to hook it up.
+ * @param func - The function. It receives an {@link ActionCtx} as its first argument, and a `Request` object
+ * as its second.
+ * @returns The wrapped endpoint function. Route a URL path to this function in `convex/http.js`.
  */
 export const httpAction = httpActionGeneric;
+
+/**
+ * Define a table in this Convex app's schema.
+ */
+export { defineTable, defineSchema };

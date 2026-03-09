@@ -14,6 +14,7 @@ import {
   type RunDeps,
   readPluginLockfile,
   resolveAddTemplateDefaults,
+  resolveConfiguredBackend,
   resolvePluginPreset,
   resolvePluginScaffoldRoots,
   resolvePresetScaffoldTemplates,
@@ -179,6 +180,7 @@ export const handleAddCommand = async (
     loadBetterConvexConfig: loadBetterConvexConfigFn,
     promptAdapter,
     realConvex: realConvexPath,
+    realConcave: realConcavePath,
   } = resolveRunDeps(deps);
   const dryRunSpinner = createSpinner('Resolving plugin install plan...', {
     silent: addArgs.json || !addArgs.dryRun,
@@ -397,6 +399,11 @@ export const handleAddCommand = async (
       generateMetaFn,
       execaFn,
       realConvexPath,
+      realConcavePath,
+      backend: resolveConfiguredBackend({
+        backendArg: parsed.backend,
+        config: effectiveConfig,
+      }),
     });
     if (codegenExitCode !== 0) {
       return codegenExitCode;

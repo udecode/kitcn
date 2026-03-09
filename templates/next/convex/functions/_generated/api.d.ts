@@ -4,31 +4,41 @@
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
- * To regenerate, run `npx convex dev`.
+ * To regenerate, run `npx concave codegen`.
  * @module
  */
 
-import type { FunctionReference } from "convex/server";
-import type { GenericId as Id } from "convex/values";
+import type * as generated_auth from "../generated/auth.js";
+import type * as generated_server from "../generated/server.js";
+
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+  AnyComponents,
+} from "convex/server";
 
 /**
- * A utility for referencing Convex functions in your app's public API.
+ * A utility for referencing Convex functions in your app's API.
  *
  * Usage:
  * ```js
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-export declare const api: {};
+declare const fullApi: ApiFromModules<{
+  generated_auth: typeof generated_auth;
+  generated_server: typeof generated_server;
+}>;
 
-/**
- * A utility for referencing Convex functions in your app's internal API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
- */
-export declare const internal: {};
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
 
-export declare const components: {};
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
+
+export declare const components: AnyComponents;

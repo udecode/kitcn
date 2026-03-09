@@ -22,6 +22,7 @@
 - Never update example plugin files directly. Update the package plugin template first, then regenerate with `better-convex add ... --overwrite`.
 - When changing `better-convex init` scaffold output, treat `templates/next/**` as generated fixture output from `bun run template:next:sync` — including `templates/next/package.json`. Do not patch fixture files by hand.
 - After any `init -t next` template or scaffold change, you must rerun `bun run template:next:sync` and `bun run check:templates`. No exceptions.
+- If `bun run template:next:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers first: `pkill -f 'convex/bin/main.js codegen' || true; pkill -f 'convex/bin/main.js dev' || true; pkill -f '@esbuild/.*/bin/esbuild --service' || true`, then rerun sync once. If `ps` still shows an esbuild worker stuck in `U` state after `kill -9`, stop bullshitting and reboot — that machine state is wedged.
 - After every template/scaffold change, regenerate the affected example with `better-convex add <plugin> --overwrite`, then verify with `better-convex add <plugin> --diff`. If diff still shows drift, the template is wrong: fix the template and regenerate again until diff is clean.
 - Prefer inline Zod schemas when used once; extract constants only when reused.
 

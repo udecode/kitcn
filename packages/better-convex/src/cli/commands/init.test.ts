@@ -645,6 +645,192 @@ describe('cli/commands/init', () => {
     }
   });
 
+  test('handleInitCommand uses concave for init codegen/bootstrap when backend is concave', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-init-command-concave-')
+    );
+    const fakeConcaveCliPath = path.join(tmpDir, 'concave-cli.mjs');
+    fs.writeFileSync(fakeConcaveCliPath, 'export {};\n');
+    const execaStub = mock(async (_cmd: string, args: string[]) => {
+      if (args[0] === fakeConcaveCliPath && args[1] === 'codegen') {
+        const attempt = execaStub.mock.calls.filter(
+          (call) =>
+            (call as unknown as [string, string[]])[0] === 'bun' &&
+            (call as unknown as [string, string[]])[1]?.[0] ===
+              fakeConcaveCliPath &&
+            (call as unknown as [string, string[]])[1]?.[1] === 'codegen'
+        ).length;
+        if (attempt === 1) {
+          return {
+            exitCode: 1,
+            stdout: '',
+            stderr: "✖ Local backend isn't running.",
+          } as any;
+        }
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+      if (args[0] === fakeConcaveCliPath && args[1] === 'dev') {
+        return {
+          exitCode: 0,
+          stdout: 'Concave functions ready!',
+          stderr: '',
+        } as any;
+      }
+      return { exitCode: 0, stdout: '', stderr: '' } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(
+        ['--backend', 'concave', 'init', '--yes'],
+        {
+          realConvex: '/fake/convex/main.js',
+          realConcave: fakeConcaveCliPath,
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+      expect(exitCode).toBe(0);
+      const codegenCalls = execaStub.mock.calls.filter(
+        (call) =>
+          (call as unknown as [string, string[]])[0] === 'bun' &&
+          (call as unknown as [string, string[]])[1]?.[0] ===
+            fakeConcaveCliPath &&
+          (call as unknown as [string, string[]])[1]?.[1] === 'codegen'
+      );
+      expect(codegenCalls).toHaveLength(2);
+      expect(
+        execaStub.mock.calls.some((call) => {
+          const [command, args] = call as unknown as [string, string[]];
+          return (
+            command === 'bun' &&
+            args[0] === fakeConcaveCliPath &&
+            JSON.stringify(args.slice(1)) === JSON.stringify(['dev', '--bun'])
+          );
+        })
+      ).toBe(true);
+      expect(
+        execaStub.mock.calls.some((call) => {
+          const [command, args] = call as unknown as [string, string[]];
+          return command === 'node' && args[0] === '/fake/convex/main.js';
+        })
+      ).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand uses concave static codegen for template init when backend is concave', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-init-command-concave-template-')
+    );
+    writeShadcnNextApp(tmpDir);
+    const fakeConcaveCliPath = path.join(tmpDir, 'concave-cli.mjs');
+    fs.writeFileSync(fakeConcaveCliPath, 'export {};\n');
+    const execaStub = mock(async (_cmd: string, args: string[]) => {
+      if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+      if (args[0] === fakeConcaveCliPath && args[1] === 'codegen') {
+        const attempt = execaStub.mock.calls.filter(
+          (call) =>
+            (call as unknown as [string, string[]])[0] === 'bun' &&
+            (call as unknown as [string, string[]])[1]?.[0] ===
+              fakeConcaveCliPath &&
+            (call as unknown as [string, string[]])[1]?.[1] === 'codegen'
+        ).length;
+        if (attempt === 1) {
+          return {
+            exitCode: 1,
+            stdout: '',
+            stderr: "✖ Local backend isn't running.",
+          } as any;
+        }
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+      if (args[0] === fakeConcaveCliPath && args[1] === 'dev') {
+        return {
+          exitCode: 0,
+          stdout: 'Concave functions ready!',
+          stderr: '',
+        } as any;
+      }
+      return { exitCode: 0, stdout: '', stderr: '' } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(
+        ['--backend', 'concave', 'init', '-t', 'next', '--yes'],
+        {
+          realConvex: '/fake/convex/main.js',
+          realConcave: fakeConcaveCliPath,
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+      expect(exitCode).toBe(0);
+      const codegenCalls = execaStub.mock.calls.filter(
+        (call) =>
+          (call as unknown as [string, string[]])[0] === 'bun' &&
+          (call as unknown as [string, string[]])[1]?.[0] ===
+            fakeConcaveCliPath &&
+          (call as unknown as [string, string[]])[1]?.[1] === 'codegen'
+      ) as [string, string[]][];
+      expect(codegenCalls).toHaveLength(2);
+      expect(codegenCalls[0]?.[1]).toEqual([
+        fakeConcaveCliPath,
+        'codegen',
+        '--static',
+      ]);
+      expect(codegenCalls[1]?.[1]).toEqual([
+        fakeConcaveCliPath,
+        'codegen',
+        '--static',
+      ]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand fails clearly when backend concave cannot resolve the CLI', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-init-command-concave-missing-')
+    );
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      await expect(
+        handleInitCommand(['--backend', 'concave', 'init', '--yes'], {
+          realConvex: '/fake/convex/main.js',
+          realConcave: '/definitely/missing/concave.mjs',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow('backend=concave could not find Concave CLI');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test('handleInitCommand bootstraps anonymous convex when configured local backend is not running', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-init-command-anonymous-local-')
@@ -829,6 +1015,7 @@ describe('cli/commands/init', () => {
         string,
         unknown
       >;
+      expect(payload.backend).toBe('convex');
       expect(payload.codegen).toBe('stubbed');
       expect(payload.convexBootstrap).toBe('missing');
       const stubPath = path.join(

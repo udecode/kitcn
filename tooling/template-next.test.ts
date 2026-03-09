@@ -2,9 +2,67 @@ import { describe, expect, mock, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkTemplate, validateGeneratedTemplateApp } from './template-next';
+import {
+  checkTemplate,
+  generateTemplate,
+  validateGeneratedTemplateApp,
+} from './template-next';
 
 describe('tooling/template-next', () => {
+  test('generateTemplate runs init -t next through the public concave backend flag', async () => {
+    const calls: Array<{
+      cmd: string[];
+      cwd: string;
+      allowNonZeroExit: boolean;
+      env?: Record<string, string | undefined>;
+    }> = [];
+    const runCommand = mock(
+      async (
+        cmd: string[],
+        cwd: string,
+        options?: {
+          allowNonZeroExit?: boolean;
+          env?: Record<string, string | undefined>;
+        }
+      ) => {
+        calls.push({
+          cmd,
+          cwd,
+          allowNonZeroExit: options?.allowNonZeroExit ?? false,
+          env: options?.env,
+        });
+        return 0;
+      }
+    );
+
+    const { tempRoot, generatedAppDir } = await generateTemplate({
+      projectRoot: '/repo',
+      localCliPath: '/repo/packages/better-convex/src/cli/cli.ts',
+      generatedAppName: 'next',
+      runCommand: runCommand as any,
+    });
+
+    const bunBinary = Bun.which('bun') ?? process.execPath;
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.cmd).toEqual([
+      bunBinary,
+      '/repo/packages/better-convex/src/cli/cli.ts',
+      '--backend',
+      'concave',
+      'init',
+      '-t',
+      'next',
+      '--yes',
+      '--cwd',
+      tempRoot,
+      '--name',
+      'next',
+    ]);
+    expect(calls[0]?.env).toBeUndefined();
+    expect(generatedAppDir).toBe(path.join(tempRoot, 'next'));
+  });
+
   test('validateGeneratedTemplateApp runs install, lint, typecheck, and build in order', async () => {
     const tempDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'template-next-validate-')
@@ -28,8 +86,16 @@ describe('tooling/template-next', () => {
       allowNonZeroExit: boolean;
     }> = [];
     const runCommand = mock(
-      async (cmd: string[], cwd: string, allowNonZeroExit = false) => {
-        calls.push({ cmd, cwd, allowNonZeroExit });
+      async (
+        cmd: string[],
+        cwd: string,
+        options?: { allowNonZeroExit?: boolean }
+      ) => {
+        calls.push({
+          cmd,
+          cwd,
+          allowNonZeroExit: options?.allowNonZeroExit ?? false,
+        });
         return 0;
       }
     );
@@ -99,8 +165,12 @@ describe('tooling/template-next', () => {
       callOrder.push('normalize');
     });
     const runCommand = mock(
-      async (_cmd: string[], _cwd: string, allowNonZeroExit = false) => {
-        if (allowNonZeroExit) {
+      async (
+        _cmd: string[],
+        _cwd: string,
+        options?: { allowNonZeroExit?: boolean }
+      ) => {
+        if (options?.allowNonZeroExit) {
           callOrder.push('diff');
         }
         return 0;

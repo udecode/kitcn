@@ -13,6 +13,7 @@ import {
   type RunDeps,
   readPackageVersions,
   readPluginLockfile,
+  resolveConfiguredBackend,
   resolvePresetScaffoldTemplates,
   resolveRunDeps,
   resolveSchemaInstalledPlugins,
@@ -71,6 +72,10 @@ export const handleInfoCommand = async (
   });
   infoSpinner.start();
   const config = loadBetterConvexConfigFn(parsed.configPath);
+  const backend = resolveConfiguredBackend({
+    backendArg: parsed.backend,
+    config,
+  });
   const sharedDir = parsed.sharedDir ?? config.paths.shared;
   const { functionsDir } = getConvexConfigFn(sharedDir);
   const schemaPath = getSchemaFilePath(functionsDir);
@@ -157,6 +162,7 @@ export const handleInfoCommand = async (
     schemaPlugins,
     installedPlugins: pluginStates,
     project: {
+      backend,
       functionsDir: normalizeRelativePath(functionsDir),
       schemaPath: normalizeRelativePath(schemaPath),
       schemaExists,

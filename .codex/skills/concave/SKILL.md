@@ -1,0 +1,295 @@
+---
+name: concave
+description: Use and maintain this skill when working on Better Convex's Concave backend, Concave-specific behavior, template sync, or the Concave smoke lane.
+---
+
+# Concave
+
+## Scope
+
+Use this skill for Concave-specific behavior and Concave-vs-Convex differences in this repo.
+
+Keep the boundary hard:
+
+- public Better Convex CLI supports `backend: "concave"` and `--backend concave`
+- public Better Convex CLI still defaults to Convex
+- `/example` stays on Convex
+- the big `convex-test` suites stay on Convex tooling
+- Concave is both a real Better Convex backend and the repo's preferred agent/CI runtime lane
+
+Do not restate generic Convex docs here. The `convex` skill already owns that.
+
+## Upstream Concave Facts That Actually Matter
+
+These are the Concave-only facts worth keeping in your head.
+
+### Runtime model
+
+- Concave is Convex-compatible, self-hosted, and multi-runtime.
+- Supported runtimes marked production upstream:
+  - Cloudflare Workers
+  - Bun
+  - Node.js
+- Bun is the default local runtime.
+- Node.js requires 22.5+ and `--experimental-sqlite`.
+- Cloudflare is the recommended production target.
+
+### Deployment shape
+
+- Cloudflare uses Workers + Durable Objects.
+- DO SQLite is the default document store on Cloudflare.
+- D1 is optional when you need different scaling characteristics.
+- R2 is only needed for `ctx.storage`.
+- Self-hosted Bun/Node and desktop embeddings are single-instance by default because SQLite needs exclusive file access.
+- `concave build` can compile a standalone Bun-based binary; useful, but still single-instance with SQLite.
+
+### Local dev shape
+
+- `concave dev` auto-picks runtime; `--bun`, `--node`, and `--cf` force it.
+- Bun/Node local data lives in `./.concave/local`.
+- Bun dev binds `0.0.0.0` by default. That is LAN-visible. `127.0.0.1` is the safer local-only bind.
+- Local dashboard lives at `/_dashboard`.
+- DevTools are web-only and designed around Vite/manual client init, not React Native.
+
+### Configuration / API differences
+
+- `concave.config.ts` is real Concave surface area.
+- Bun/Node use `createConcave(...)`.
+- Cloudflare uses explicit `defineConcaveRuntime(...)` wiring.
+- Adapter choice is part of the product, not hidden infra:
+  - docstore
+  - blobstore
+  - module loading
+  - Cloudflare bindings
+
+### Compatibility gaps
+
+- Vector search is only basic/brute-force in built-in adapters.
+- Crons are planned, not done.
+- Components are not supported.
+- Convex Auth is not supported.
+- Streaming exports are not supported.
+
+### Testing stance upstream
+
+- `convex-test` is still valid for isolated function/unit tests.
+- Real E2E against Concave is done with `createConcave(...)` plus `ConvexHttpClient`.
+- Cross-runtime E2E is a real supported testing strategy upstream.
+
+## Current Repo Usage
+
+We use Concave in two concrete ways.
+
+### Public backend selector
+
+Better Convex now resolves backend in this order:
+
+1. `--backend <convex|concave>`
+2. `meta["better-convex"].backend` in `concave.json`
+3. default `convex`
+
+Public meaning:
+
+- `convex` => drive Convex CLI
+- `concave` => drive Concave CLI
+
+Internal meaning:
+
+- public `concave` currently maps to the Bun adapter (`concave-bun`)
+
+Files:
+
+- `packages/better-convex/src/cli/config.ts`
+- `packages/better-convex/src/cli/core.ts`
+- `packages/better-convex/src/cli/cli.ts`
+
+Command shape:
+
+- Better Convex orchestration commands (`init`, `dev`, `codegen`, `deploy`, `migrate`, `aggregate`, `reset`) run on the selected backend
+- unknown commands pass through to the selected backend CLI
+- `better-convex env sync` stays a Better Convex helper
+- raw `better-convex env ...` passthrough is Convex-only because Concave has no matching upstream env command
+
+### Concave smoke lane
+
+Use:
+
+```bash
+bun run test:concave
+```
+
+Files:
+
+- `test/concave/run-smoke.ts`
+- `test/concave/fixture/**`
+
+Runtime shape:
+
+- `createConcave(...)`
+- `SqliteDocStore(':memory:')`
+- `ConvexHttpClient`
+
+Goal:
+
+- generated Better Convex runtime contract loads
+- one mutation/query roundtrip works end-to-end
+
+Keep it small. This is a smoke lane, not a migration plan.
+
+## Repo-Specific Concave Differences
+
+### Template sync/check uses the public backend selector
+
+`tooling/template-next.ts` runs local `better-convex init -t next --backend concave`.
+
+That means:
+
+- `templates/next/convex/functions/_generated/*` comes from the init flow running Better Convex codegen against Concave-backed bootstrap
+- template-mode Concave codegen intentionally uses `concave codegen --static`
+- `tooling/template-next.ts` itself must not shell out to raw `better-convex codegen`
+
+### `_generated/*` drift is expected
+
+Concave-generated `_generated/*` output is not guaranteed to match Convex-generated output byte-for-byte.
+
+Read the diff before calling it a bug.
+
+### `staticDataModel` mismatch is real
+
+Current repo finding:
+
+- `templates/next/convex.json` sets `codegen.staticDataModel: true`
+- Concave-generated `templates/next/convex/functions/_generated/dataModel.d.ts` is still dynamic
+
+So today, in this repo path, Concave is not honoring that flag.
+
+### Use plain `bun`, not `bun test`, for the smoke lane
+
+Root `bun test` preloads Happy DOM here.
+That poisoned `ConvexHttpClient` behavior for the Concave smoke lane.
+
+Keep the smoke entry as:
+
+```bash
+bun ./test/concave/run-smoke.ts
+```
+
+### Keep the adapter tiny
+
+Do not invent a second fake runtime layer on top of `backend`.
+
+The right model is:
+
+- one public selector: `backend`
+- one internal mapping: `concave` -> current Bun adapter
+- native backend flags stay native
+
+## Read Before Editing
+
+Start with repo wiring:
+
+- `packages/better-convex/src/cli/core.ts`
+- `packages/better-convex/src/cli/commands/init.ts`
+- `packages/better-convex/src/cli/commands/init.test.ts`
+- `tooling/template-next.ts`
+- `tooling/template-next.test.ts`
+- `test/concave/run-smoke.ts`
+- `test/concave/fixture/**`
+- `.github/workflows/ci.yml`
+
+Then read Concave docs starting from:
+
+- `https://docs.concave.dev/llms.txt`
+
+## Do Not
+
+- do not add a second selector like `--runtime concave`
+- do not switch `/example` to Concave
+- do not migrate the big `convex-test` suites just because Concave exists
+- do not document generic Convex APIs here
+- do not assume Concave codegen output equals Convex codegen output
+
+## Verification
+
+When touching Concave repo-runtime wiring, run:
+
+```bash
+bun test packages/better-convex/src/cli/commands/init.test.ts ./tooling/template-next.test.ts
+bun test packages/better-convex/src/cli/cli.test.ts
+bun run test:concave
+bun run check:templates
+```
+
+If package code changed too, also run:
+
+```bash
+bun --cwd packages/better-convex build
+touch example/convex/functions/schema.ts
+bun lint:fix
+bun typecheck
+```
+
+## Skill Sync
+
+When Concave docs or repo usage changes, update this skill with this exact loop.
+
+### 1. Re-read current repo wiring
+
+```bash
+rg -n "backend|concave-bun|test:concave|createConcave|@concavejs|Concave|--backend" \
+  package.json \
+  packages/better-convex/src/cli/core.ts \
+  packages/better-convex/src/cli/config.ts \
+  packages/better-convex/src/cli/cli.ts \
+  packages/better-convex/src/cli/commands/init.ts \
+  packages/better-convex/src/cli/commands/init.test.ts \
+  tooling/template-next.ts \
+  tooling/template-next.test.ts \
+  test/concave \
+  .github/workflows/ci.yml \
+  -g '!**/_generated/**'
+```
+
+### 2. Re-fetch the upstream Concave doc index
+
+```bash
+mkdir -p /tmp/concave-docs-fetch
+curl -fsSL -A 'Mozilla/5.0' https://docs.concave.dev/llms.txt \
+  | tee /tmp/concave-docs-fetch/llms.txt
+```
+
+### 3. Re-fetch every linked page from `llms.txt`
+
+```bash
+awk '
+  match($0, /(https:\\/\\/docs\\.concave\\.dev[^) ]+)/, m) { print m[1] }
+' /tmp/concave-docs-fetch/llms.txt \
+  | nl -ba \
+  | while read -r n url; do
+      curl -fsSL -A 'Mozilla/5.0' "$url" >"/tmp/concave-docs-fetch/${n}.md"
+    done
+```
+
+### 4. Rewrite this file with Concave-only facts
+
+Rules:
+
+- keep only Concave-specific behavior or Concave-vs-Convex differences
+- keep repo-specific usage and mismatches
+- do not restate generic Convex docs
+
+### 5. Regenerate agent docs
+
+```bash
+bunx skiller@latest apply
+```
+
+### 6. Validate the skill wiring
+
+```bash
+bun run intent:validate
+bun run intent:stale
+```
+
+If `.claude/AGENTS.md` changes, that is expected. It is generated from `.claude/**`.
+
