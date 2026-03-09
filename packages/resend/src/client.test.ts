@@ -41,6 +41,7 @@ describe('resend plugin api', () => {
     expect('createResend' in resendPackage).toBe(false);
     expect('createResendApi' in resendPackage).toBe(false);
     expect('resolveResendOptions' in resendPackage).toBe(false);
+    expect('verifyResendWebhookEvent' in resendPackage).toBe(false);
   });
 
   test('package root no longer exports validator values', () => {
@@ -91,12 +92,12 @@ describe('resend plugin api', () => {
       .use(ResendPlugin.middleware())
       .query(async ({ ctx }) => ctx.api.resend);
 
-    await expect((proc as any)._handler({}, {})).resolves.toEqual({
-      apiKey: '',
-      webhookSecret: '',
-      initialBackoffMs: 30_000,
-      retryAttempts: 5,
-      testMode: true,
-    });
+    const api = await (proc as any)._handler({}, {});
+    expect(api.apiKey).toBe('');
+    expect(api.webhookSecret).toBe('');
+    expect(api.initialBackoffMs).toBe(30_000);
+    expect(api.retryAttempts).toBe(5);
+    expect(api.testMode).toBe(true);
+    expect(typeof api.verifyWebhookEvent).toBe('function');
   });
 });

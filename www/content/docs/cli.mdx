@@ -14,6 +14,8 @@ import { InfoIcon } from "lucide-react"
 | API generation | Auto-generate `api.ts` with typed function refs |
 | Scoped generation | Generate only `all`, `auth`, or `orm` artifacts |
 | Runtime analysis | Inspect Convex isolate bundle size before deploy |
+| Plugin install plans | Preview scaffold, schema, lockfile, dependency, and hook effects before writing |
+| Project inspection | Audit installed plugins, drift, and docs links |
 | Auth-aware skipping | Enable query skipping based on auth state |
 | Type-safe references | Get full type safety for function references |
 | Custom metadata | Extract `.meta()` values from procedures |
@@ -82,9 +84,60 @@ See [Scope Modes](#scope-modes) for the full output manifest per scope.
 
 Plugin note:
 
-- `better-convex codegen` discovers plugins from `defineSchema(..., { plugins })`.
+- `better-convex codegen` discovers plugins from schema extensions and local plugin scaffold registration.
 - Plugin discovery is used for typing/runtime context only.
 - `codegen` does not generate plugin runtime modules. Plugin runtime files are scaffold-owned.
+
+### init
+
+Bootstrap Better Convex into the current app, or opt into shadcn-backed app creation.
+
+```bash showLineNumbers
+npx better-convex init
+npx better-convex init -t next --yes
+npx better-convex init -t next --yes --cwd apps --name web
+```
+
+Behavior:
+
+- `better-convex init` writes the Better Convex baseline only:
+  - `convex/functions/schema.ts`
+  - `convex/functions/http.ts`
+  - `convex/lib/crpc.ts`
+  - `convex/lib/get-env.ts`
+  - `concave.json`
+  - a first generated runtime pass for `convex/functions/generated/server.ts`
+- `better-convex init -t next` creates a shadcn Next.js app in the resolved target directory, then adds the Better Convex integration layer and patches the existing shell minimally:
+  - `package.json`
+  - `tsconfig.json`
+  - `.env.local`
+  - `components/providers.tsx`
+  - `lib/convex/*`
+  - the Better Convex baseline files above
+- template-mode init preserves shadcn-owned files such as `app/layout.tsx`, `app/page.tsx`, `app/globals.css`, `components/theme-provider.tsx`, `lib/utils.ts`, `components.json`, `eslint.config.mjs`, `next.config.mjs`, and `postcss.config.mjs`, and only patches:
+  - `app/layout.tsx` to mount `Providers`
+  - `tsconfig.json` to add `@convex/*`
+  - `components.json` when `tailwind.css` needs to follow the resolved app root
+- template-mode init detects `src/` vs root app layouts and writes the client scaffold into the matching tree. Mixed `src` + root layouts fail fast instead of guessing.
+- init tries real Better Convex codegen immediately. If the app is not linked to a Convex deployment yet, init first tries anonymous local bootstrap. For explicit project-backed bootstrap in non-interactive environments, pass `--team`, `--project`, and optionally `--dev-deployment`. Plain non-template init can fall back to a stubbed `convex/functions/generated/server.ts` only when real codegen still cannot complete; `init -t next` fails instead.
+- `--yes` makes the Next.js path deterministic for CI by using the pinned shadcn bootstrap and its default answers.
+- `--cwd` picks the target directory. When you also pass `--name`, the final app path is `<cwd>/<name>`.
+- `--json` includes `codegen` (`generated` or `stubbed`) and `convexBootstrap` (`existing`, `created`, or `missing`) for automation.
+- `better-convex create` is an alias for `init`.
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `-t, --template <template>` | Project template to create before overlaying Better Convex. Only `next` is supported. |
+| `--cwd <cwd>` | Target directory |
+| `--name <name>` | Name for a new target directory |
+| `--team <slug>` | Convex team slug for non-interactive project-backed bootstrap |
+| `--project <slug>` | Convex project slug for non-interactive project-backed bootstrap |
+| `--dev-deployment <cloud\|local>` | Convex dev deployment kind for init bootstrap (default: `local`) |
+| `--yes` | Deterministic non-interactive mode |
+| `--defaults` | Use default shadcn answers without enabling the rest of `--yes` |
+| `--json` | Machine-readable command output |
 
 ### add
 
@@ -127,57 +180,114 @@ Options:
 |------|-------------|
 | `--yes` | Deterministic non-interactive mode |
 | `--json` | Machine-readable command output |
-| `--dry-run` | Show planned operations without writing files |
+| `--dry-run` | Show the full install plan without writing files |
+| `--diff [path]` | Show unified diffs for planned file changes (implies `--dry-run`) |
+| `--view [path]` | Show planned file contents (implies `--dry-run`) |
 | `--overwrite` | Overwrite existing changed files without prompt |
 | `--no-codegen` | Skip automatic codegen after add |
 | `--preset <name>` | Plugin preset override (plugin-specific allowed values) |
 
-Example:
+If the Better Convex baseline is missing, `add` bootstraps it first. The preview surface covers the full repo delta:
+
+- scaffold files
+- env helper bootstrap
+- `concave.json`
+- `convex.json` when `functionsDir` is `convex/functions`
+- `<functionsDir>/schema.ts`
+- `<functionsDir>/http.ts`
+- `<paths.lib>/crpc.ts`
+- `<functionsDir>/plugins.lock.json`
+- dependency install status
+- codegen and `hooks.postAdd`
+- env reminders
+
+Preview output uses semantic comparisons for `.ts`, `.tsx`, `.js`, `.jsx`, and `.json`, so formatter-only changes are treated as unchanged.
+
+`--diff [path]` and `--view [path]` accept workspace-relative output paths. Matching is exact path first, then substring, then suffix.
+
+Examples:
 
 ```bash showLineNumbers
 npx better-convex add <plugin> --preset <preset>
+npx better-convex add resend --diff convex/plugins/resend.ts
+npx better-convex add resend --view convex/schema.ts
 ```
 
 Plugin helper scaffold location is configurable via `meta["better-convex"].paths.lib` in `concave.json` (no CLI path flag).  
 Plugin function modules scaffold to `<functionsDir>/plugins/<plugin>.ts`.
 
-### diff
+### view
 
-Preview scaffold drift without writing files:
+Inspect a plugin install plan without writing files:
 
 ```bash showLineNumbers
-npx better-convex diff <plugin>
+npx better-convex view <plugin>
 ```
 
-If `<plugin>` is omitted in a TTY, the CLI prompts you to choose from installed plugins.
+If `<plugin>` is omitted in a TTY, the CLI prompts you to choose a plugin.
 
-Template selection for `diff` is deterministic:
+Template selection is deterministic:
 
 - Default source is `plugins.lock.json` template mappings.
 - If lockfile mappings are missing, fallback is the resolved preset template set.
-- Passing `--preset` diffs against that preset template set.
+- Passing `--preset` forces that preset template set.
+
+`view` prints the resolved preset, selection source, docs link, planned files, and planned operations. `--json` returns the same plan payload shape as `add --dry-run --json`.
 
 Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Machine-readable diff output |
-| `--preset <name>` | Plugin preset override for diff template set |
-| `--verbose-diff` | Print unified patch text for changed/missing files |
+| `--json` | Machine-readable install plan output |
+| `--preset <name>` | Plugin preset override |
 
-### list
+### info
 
-Show installed plugin inventory from schema + lockfile:
+Inspect project and installed plugin state:
 
 ```bash showLineNumbers
-npx better-convex list --json
+npx better-convex info
 ```
+
+`info` reports:
+
+- detected config paths
+- installed `better-convex` and `convex` versions
+- schema and lockfile presence
+- installed plugins
+- schema/lockfile mismatches
+- missing package dependencies
+- scaffold drift per plugin
 
 Options:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Machine-readable plugin inventory output |
+| `--json` | Machine-readable inspection output |
+
+### docs
+
+Show local and public docs links for CLI topics and plugins:
+
+```bash showLineNumbers
+npx better-convex docs resend cli
+```
+
+Supported topics include:
+
+- `cli`
+- `plugins`
+- `auth`
+- `orm`
+- `migrations`
+- `resend`
+- `ratelimit`
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Machine-readable docs link output |
 
 ### env
 

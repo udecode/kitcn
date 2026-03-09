@@ -10,6 +10,7 @@
 
 import type * as functions from "../functions.js";
 import type * as orm from "../orm.js";
+import type * as shared_api from "../shared/api.js";
 import type * as types from "../types.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   orm: typeof orm;
+  "shared/api": typeof shared_api;
   types: typeof types;
 }>;
 

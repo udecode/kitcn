@@ -15,6 +15,7 @@ export default defineConfig([
       '**/next-env.d.ts',
       '**/out/**',
       '**/build/**',
+      'templates/**',
       '**/tmp/**',
       '**/coverage/**',
       '**/coverage-*/**',

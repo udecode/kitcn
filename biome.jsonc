@@ -8,6 +8,7 @@
   "files": {
     "includes": [
       "!!tmp",
+      "!templates",
       "!**/_generated",
       "!**/generated",
       "!**/convex/shared/api.ts",

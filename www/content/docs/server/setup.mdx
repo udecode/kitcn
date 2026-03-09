@@ -255,7 +255,7 @@ With generated `initCRPC`, ORM context is already wired. Chain `.use()` for addi
 | `authMutation` | Auth + rate limiting | Auth + rate limit |
 | `adminQuery` | Auth + admin role | Auth + role check |
 
-See [Templates](/docs/templates) for complete implementations with rate limiting, error handling, and more.
+For production bootstrap, start with [CLI](/docs/cli). Use [Templates](/docs/templates) only when you want a full-file snippet reference.
 
 ## File Organization
 
@@ -303,9 +303,10 @@ Key differences:
 - `{ ctx, input }` destructured params
 - Reusable procedure variants with built-in middleware
 
-## Full Template
+## Snippet Reference
 
 <Cards>
+  <Card title="CLI" href="/docs/cli" />
   <Card title="Templates" href="/docs/templates#crpcts" />
 </Cards>
 

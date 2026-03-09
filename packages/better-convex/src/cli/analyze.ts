@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { type BuildResult, build, type Plugin } from 'esbuild';
 import { createJiti } from 'jiti';
+import { isColorEnabled } from './utils/highlighter.js';
 
 const MB = 1024 * 1024;
 
@@ -37,8 +38,7 @@ const EXPORTED_NATIVE_HANDLER_CAPTURE_REGEX =
 const EXPORTED_ORM_API_DESTRUCTURE_CAPTURE_REGEX =
   /export\s+const\s*\{([^}]+)\}\s*=\s*orm\.api\s*\(\s*\)\s*;?/g;
 
-const supportsColor =
-  process.stdout.isTTY && !process.env.NO_COLOR && process.env.TERM !== 'dumb';
+const supportsColor = isColorEnabled();
 const isInteractiveTerminal = process.stdin.isTTY && process.stdout.isTTY;
 
 let colorEnabled = supportsColor;

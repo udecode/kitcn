@@ -31,6 +31,7 @@ export type ResendOptions = Partial<RuntimeConfig> & {
 
 export type ResendApi = RuntimeConfig & {
   webhookSecret: string;
+  verifyWebhookEvent(req: Request): Promise<EmailEvent>;
 };
 
 export function getSegment(now: number): number {

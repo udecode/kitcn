@@ -1,0 +1,149 @@
+name: Check Skills
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check for stale skills
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        name: Install bun
+        with:
+          bun-version-file: package.json
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/cache@v4
+        name: Setup bun cache
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install deps
+        run: bun install --frozen-lockfile && bun gen
+
+      - name: Check staleness
+        id: stale
+        run: |
+          OUTPUT=$(node tooling/intent-stale.mjs --json 2>&1) || true
+          echo "$OUTPUT"
+
+          # Check if any skills need review
+          NEEDS_REVIEW=$(echo "$OUTPUT" | node -e "
+            const input = require('fs').readFileSync('/dev/stdin','utf8');
+            try {
+              const reports = JSON.parse(input);
+              const stale = reports.flatMap(r =>
+                r.skills.filter(s => s.needsReview).map(s => ({ library: r.library, skill: s.name, reasons: s.reasons }))
+              );
+              if (stale.length > 0) {
+                console.log(JSON.stringify(stale));
+              }
+            } catch {}
+          ")
+
+          if [ -z "$NEEDS_REVIEW" ]; then
+            echo "has_stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_stale=true" >> "$GITHUB_OUTPUT"
+            # Escape for multiline GH output
+            EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+            echo "stale_json<<$EOF" >> "$GITHUB_OUTPUT"
+            echo "$NEEDS_REVIEW" >> "$GITHUB_OUTPUT"
+            echo "$EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build summary
+        if: steps.stale.outputs.has_stale == 'true'
+        id: summary
+        run: |
+          node -e "
+            const stale = JSON.parse(process.env.STALE_JSON);
+            const lines = stale.map(s =>
+              '- **' + s.skill + '** (' + s.library + '): ' + s.reasons.join(', ')
+            );
+            const summary = lines.join('\n');
+
+            const prompt = [
+              'Review and update the following stale intent skills for better-convex:',
+              '',
+              ...stale.map(s => '- ' + s.skill + ': ' + s.reasons.join(', ')),
+              '',
+              'For each stale skill:',
+              '1. Read the current SKILL.md file',
+              '2. Check what changed in the library since the skill was last updated',
+              '3. Update the skill content to reflect current APIs and behavior',
+              '4. Run \`bun run intent:validate\` and \`bun run intent:stale\` to verify the updated skill',
+            ].join('\n');
+
+            // Write outputs
+            const fs = require('fs');
+            const env = fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8');
+            const eof = require('crypto').randomBytes(15).toString('base64');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,
+              'summary<<' + eof + '\n' + summary + '\n' + eof + '\n' +
+              'prompt<<' + eof + '\n' + prompt + '\n' + eof + '\n'
+            );
+          "
+        env:
+          STALE_JSON: ${{ steps.stale.outputs.stale_json }}
+
+      - name: Open review PR
+        if: steps.stale.outputs.has_stale == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.event.release.tag_name || 'manual' }}"
+          BRANCH="skills/review-${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit --allow-empty -m "chore: review stale skills for ${VERSION}"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "Review stale skills (${VERSION})" \
+            --body "$(cat <<'PREOF'
+          ## Stale Skills Detected
+
+          The following skills may need updates after the latest release:
+
+          ${{ steps.summary.outputs.summary }}
+
+          ---
+
+          ### Update Prompt
+
+          Paste this into your coding agent (Codex or Claude Code):
+
+          ~~~
+          ${{ steps.summary.outputs.prompt }}
+          ~~~
+
+          PREOF
+          )" \
+            --head "$BRANCH" \
+            --base main

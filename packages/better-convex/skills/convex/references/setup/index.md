@@ -30,7 +30,7 @@ Ask these questions before editing files.
 
 | Feature         | Options                                                              | Default            |
 | --------------- | -------------------------------------------------------------------- | ------------------ |
-| Approach        | Top-down (copy from Templates), Bottom-up (follow docs step-by-step) | Top-down           |
+| Bootstrap       | CLI (`better-convex init` / `add`), Docs by section                  | CLI                |
 | React Framework | Next.js App Router, TanStack Start, Other                            | Next.js App Router |
 | Database        | ORM (`ctx.orm`)                                                      | ORM                |
 
@@ -52,7 +52,7 @@ Ask these questions before editing files.
 
 Use this exact structure:
 
-1. Approach: Top-down templates or bottom-up docs?
+1. Bootstrap: CLI (`better-convex init` / `add`) or docs by section?
 2. Framework: Next.js App Router, TanStack Start, or other?
 3. Database: ORM (`ctx.orm`) or other?
 4. Auth: Better Auth, custom auth, or no auth?
@@ -79,7 +79,54 @@ Map answers to setup execution in this order:
 
 ## 3. Base Bootstrap
 
-### 3.1 Create app and install baseline packages
+### 3.1 Preferred bootstrap path
+
+Use the CLI first:
+
+```bash
+# Existing app
+bunx better-convex init
+
+# New Next.js app with deterministic shadcn bootstrap + curated minimal scaffold
+bunx better-convex init -t next --yes
+
+# Nested app target
+bunx better-convex init -t next --yes --cwd apps --name web
+```
+
+Then add only the features you want:
+
+```bash
+bunx better-convex add ratelimit
+bunx better-convex add resend
+```
+
+`better-convex init -t next --yes` owns the Better Convex integration layer for:
+
+- `package.json`
+- `tsconfig.json`
+- `.env.local`
+- `components/providers.tsx`
+- `lib/convex/*`
+- `convex/functions/schema.ts`
+- `convex/functions/http.ts`
+- `convex/functions/generated/server.ts`
+- `convex/lib/crpc.ts`
+- `convex/lib/get-env.ts`
+- `convex/shared/api.ts`
+- `concave.json`
+
+Template-mode init preserves the shadcn-owned shell (`app/layout.tsx`, `app/page.tsx`, `app/globals.css`, `components/theme-provider.tsx`, `lib/utils.ts`, `components.json`, `eslint.config.mjs`, `next.config.mjs`, `postcss.config.mjs`) and only patches:
+
+- `app/layout.tsx` to mount `Providers`
+- `tsconfig.json` to add `@convex/*`
+- `components.json` when `tailwind.css` needs to follow the resolved app root
+- `package.json` to add `better-convex codegen` as `codegen` (or `convex:codegen` when `codegen` is already taken)
+
+Init also runs the first Better Convex codegen pass so `convex/lib/crpc.ts` can import `../functions/generated/server` immediately.
+Template-mode init infers `src/` vs root app layouts and writes the Next client scaffold into the matching tree. Conflicting `src` + root layouts should fail instead of guessing.
+
+### 3.2 Manual app creation and baseline packages
 
 ```bash
 bunx create-next-app@latest my-app --typescript --tailwind --eslint --app --src-dir
@@ -87,7 +134,7 @@ cd my-app
 bun add convex better-convex zod @tanstack/react-query
 ```
 
-### 3.2 Create baseline folders
+### 3.3 Create baseline folders
 
 ```bash
 mkdir -p convex/functions convex/lib convex/shared src/lib/convex
@@ -108,7 +155,7 @@ convex/lib/             # backend helpers (not deployed as API)
 convex/shared/          # shared types/meta imported by client
 ```
 
-### 3.3 Configure Convex functions path and static codegen
+### 3.4 Configure Convex functions path and static codegen
 
 **Create:** `convex.json`
 
@@ -122,7 +169,7 @@ convex/shared/          # shared types/meta imported by client
 }
 ```
 
-### 3.4 Configure TypeScript aliases and strict function typing
+### 3.5 Configure TypeScript aliases and strict function typing
 
 **Edit:** `tsconfig.json`
 
@@ -147,7 +194,7 @@ Type-clean baseline notes:
 3. If third-party declaration noise blocks setup, temporarily set `"skipLibCheck": true` and remove it once dependency versions are stabilized.
 4. In backend Convex files, import `./_generated/*` relatively; `@convex/*` is for shared generated surface (`convex/shared/*`).
 
-### 3.5 Enforce import boundaries (recommended)
+### 3.6 Enforce import boundaries (recommended)
 
 **Edit:** `biome.jsonc`
 
@@ -292,9 +339,26 @@ Then prefer `getEnv()` in Convex code instead of scattered `process.env`.
 
 ## 11. Dev Scripts and CLI Workflow
 
+### 11.0 Plugin scaffold inspection
+
+Use the plugin CLI as a plan engine, not a blind writer:
+
+1. `bunx better-convex add <plugin> --dry-run` → compact full-plan summary.
+2. `bunx better-convex add <plugin> --diff [path]` → unified diffs for planned file changes.
+3. `bunx better-convex add <plugin> --view [path]` → rendered planned file contents.
+4. `bunx better-convex view <plugin>` → inspect resolved preset, selection source, docs link, files, operations.
+5. `bunx better-convex info --json` → project paths, versions, installed plugins, schema/lockfile mismatch, missing deps, scaffold drift.
+6. `bunx better-convex docs <topic...>` → local/public docs links for `cli`, `plugins`, `auth`, `orm`, `migrations`, `resend`, `ratelimit`.
+
+Rules:
+
+1. `better-convex add <plugin>` bootstraps baseline files first when they are missing.
+2. `--diff [path]` / `--view [path]` match workspace-relative output path by exact match first, substring fallback.
+3. Preview scope includes scaffold files, env bootstrap, `concave.json`, schema registration, lockfile write, dependency install status, codegen/hooks, env reminders.
+
 ### 11.1 Dev bootstrap functions (example parity mode)
 
-If you want the same operational model as the canonical template shape, use these canonical templates.
+If you want the same operational model as the scaffolded baseline, use these canonical snippets.
 
 **Create:** `convex/functions/init.ts`
 
@@ -594,7 +658,7 @@ This runbook + references map to the canonical template shape as follows:
 | Symptom                                                                               | Likely Cause                                                                                    | Fix                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@convex/api` not found                                                               | `better-convex dev` not run                                                                     | Run `bunx better-convex dev` and regenerate API metadata                                                                                                                                     |
-| `Cannot prompt for input in non-interactive terminals` during bootstrap               | Convex setup needs explicit project/team flags                                                  | Run `bunx convex dev --once --configure new --team <team_slug> --project <project_slug> --dev-deployment local`, then start `bunx better-convex dev`                                        |
+| `Cannot prompt for input in non-interactive terminals` during bootstrap               | Convex setup needs explicit bootstrap input                                                     | Re-run `bunx better-convex init --team <team_slug> --project <project_slug> --dev-deployment local`, or let init/dev fall back to anonymous local bootstrap when project-backed setup is not needed |
 | Can't find new local backend files under `~/.convex`                                  | Convex now stores new local deployment state per project                                        | Check `.convex/local/default/` in the current project root; treat `~/.convex/**` as legacy storage                                                                                          |
 | `better-convex env sync --auth` says anonymous deployment or fails to set vars        | No active deployment connection                                                                 | Start `bunx better-convex dev` (or `bunx convex dev`) first, then rerun sync                                                                                                                |
 | `Failed to analyze auth.js` with `Unexpected token` / `map is not a function` on JWKS | Static `JWKS` value is malformed JSON                                                           | Unset/fix `JWKS`; use `getAuthConfigProvider()` fallback or resync with `bunx better-convex env sync --auth`                                                                                |

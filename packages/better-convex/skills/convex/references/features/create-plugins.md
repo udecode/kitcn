@@ -108,10 +108,14 @@ Trigger composition rules:
 4. `better-convex codegen` must not generate plugin runtime modules.
 5. Scaffold templates need stable template IDs.
 6. `add` can merge/upsert scaffold mappings; never clobber custom files unless overwrite is explicit.
-7. `diff` is read-only drift detection.
-8. Runtime packages should stay focused on stable logic; function wiring and schema stay local.
-9. If `paths.env` is missing, `better-convex add <plugin>` bootstraps `${paths.lib}/get-env.ts` and writes `paths.env` into `concave.json`.
-10. `envFields` can attach reminder metadata; `better-convex add <plugin>` prints those reminders against `<functionsDir>/.env` and includes them in JSON output.
+7. `add --dry-run`, `add --diff [path]`, and `add --view [path]` preview one shared install plan: scaffold files, env bootstrap, `concave.json`, schema registration, lockfile write, dependency install status, codegen/hooks, env reminders.
+8. Preview comparisons for `.ts`, `.tsx`, `.js`, `.jsx`, and `.json` should be semantic enough to ignore formatter-only churn.
+9. `view` is read-only plan inspection. Default template source is lockfile mappings, fallback is the resolved preset, `--preset` forces preset selection.
+10. `info` audits installed plugins from schema + lockfile and reports scaffold drift / missing dependencies.
+11. Runtime packages should stay focused on stable logic; function wiring and schema stay local.
+12. If `paths.env` is missing, `better-convex add <plugin>` bootstraps `${paths.lib}/get-env.ts` and writes `paths.env` into `concave.json`.
+13. `envFields` can attach reminder metadata; `better-convex add <plugin>` prints those reminders against `<functionsDir>/.env` and includes them in JSON output.
+14. Scaffolded Convex files should read env through `getEnv()` only. Do not generate `process.env` access in plugin scaffolds.
 
 ## Lockfile Rules
 
@@ -130,10 +134,11 @@ No `version` or timestamp fields in lockfile.
 
 Each plugin should provide:
 
-1. label/description for prompts and list output
-2. preset definitions
-3. scaffold template resolver
-4. local schema registration metadata (`importName`, file path, target root)
+1. `label` / `description` for prompts plus `view` / `info` output
+2. `docs` links and `keywords` for `better-convex docs`
+3. preset definitions
+4. scaffold template resolver
+5. local schema registration metadata (`importName`, file path, target root)
 
 CLI stays plugin-agnostic; plugin-specific flags should not be added globally.
 
@@ -143,6 +148,6 @@ CLI stays plugin-agnostic; plugin-specific flags should not be added globally.
 2. codegen: no plugin runtime artifacts are generated
 3. stale cleanup: `generated/plugins/**` artifacts are removed
 4. add flow: idempotent scaffold writes + lockfile mapping
-5. diff flow: changed/missing scaffold drift
+5. preview flow: plan captures changed/missing scaffold files plus schema/lockfile/config/env updates
 6. runtime parity tests for plugin API methods exposed via middleware
 7. schema registration: local `convex/lib/plugins/<plugin>/schema.ts` is scaffolded and imported once in root schema

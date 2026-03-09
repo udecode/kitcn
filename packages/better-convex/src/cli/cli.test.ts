@@ -10,11 +10,20 @@ import {
   parseArgs,
   run,
 } from './cli';
+import { INIT_SHADCN_PACKAGE_SPEC } from './commands/init';
 import { getPluginCatalogEntry } from './plugin-catalog';
+import { RESEND_SCHEMA_TEMPLATE } from './plugins/resend/resend-schema.template';
+import { writeShadcnNextApp } from './test-utils';
 
 const TS_EXTENSION_RE = /\.ts$/;
 const INLINE_BATCH_EMAIL_SCHEMA_OUTPUT_RE =
   /\.output\(\s*z\.array\(\s*z\.object\(\{/m;
+const LEGACY_TRAILING_COMMA_RE = /,\n(\s*[)\]}])/g;
+const LEGACY_RELATIONS_INDENT_RE = /\.relations\(\(r\) => \(\{\n\s{6}/;
+const LEGACY_RELATIONS_CLOSE_RE = /\n\s{6}\}\)\);\n\}/;
+const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`);
+const SHADCN_LAYOUT_PROVIDERS_RE =
+  /ThemeProvider>\s*<Providers>\{children\}<\/Providers>\s*<\/ThemeProvider>/s;
 
 function createDefaultConfig() {
   return {
@@ -72,6 +81,57 @@ function createDefaultConfig() {
       },
     },
   };
+}
+
+function writePackageJson(
+  dir: string,
+  pkg: Record<string, unknown> = { name: 'test-app', private: true }
+) {
+  fs.writeFileSync(
+    path.join(dir, 'package.json'),
+    `${JSON.stringify(pkg, null, 2)}\n`
+  );
+}
+
+function writeMinimalSchema(dir: string, source?: string) {
+  const schemaSource =
+    source ??
+    `
+    import { defineSchema } from "better-convex/orm";
+
+    export default defineSchema({});
+    `.trim();
+  fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'convex', 'schema.ts'), `${schemaSource}\n`);
+}
+
+function formatAsLegacySingleQuoteTs(source: string) {
+  return source
+    .replaceAll('"', "'")
+    .replace(LEGACY_TRAILING_COMMA_RE, '\n$1')
+    .replace(LEGACY_RELATIONS_INDENT_RE, '.relations((r) => ({\n    ')
+    .replace(LEGACY_RELATIONS_CLOSE_RE, '\n  }));\n}');
+}
+
+function expectDependencyInstallCall(calls: unknown[], packageName: string) {
+  const normalized = calls as [string, string[], Record<string, unknown>][];
+  if (normalized.length !== 1) {
+    throw new Error(
+      `Expected 1 dependency install call, received ${normalized.length}.`
+    );
+  }
+  if (normalized[0]?.[0] !== 'bun') {
+    throw new Error(
+      `Expected dependency install command "bun", received "${normalized[0]?.[0] ?? 'undefined'}".`
+    );
+  }
+  if (
+    JSON.stringify(normalized[0]?.[1]) !== JSON.stringify(['add', packageName])
+  ) {
+    throw new Error(
+      `Expected dependency install args ${JSON.stringify(['add', packageName])}, received ${JSON.stringify(normalized[0]?.[1] ?? [])}.`
+    );
+  }
 }
 
 describe('cli/cli', () => {
@@ -180,7 +240,11 @@ describe('cli/cli', () => {
       expect(execaStub).not.toHaveBeenCalled();
       expect(infoLines.join('\n')).toContain('Usage: better-convex');
       expect(infoLines.join('\n')).toContain('add [plugin]');
-      expect(infoLines.join('\n')).toContain('diff [plugin]');
+      expect(infoLines.join('\n')).toContain('view [plugin]');
+      expect(infoLines.join('\n')).toContain('info');
+      expect(infoLines.join('\n')).toContain('docs <topic...>');
+      expect(infoLines.join('\n')).not.toContain('diff [plugin]');
+      expect(infoLines.join('\n')).not.toContain('list');
       expect(infoLines.join('\n')).not.toContain('update [plugin]');
     } finally {
       console.info = originalInfo;
@@ -210,10 +274,751 @@ describe('cli/cli', () => {
       expect(infoLines.join('\n')).toContain(
         'Usage: better-convex add [plugin]'
       );
+      expect(infoLines.join('\n')).toContain('--diff [path]');
+      expect(infoLines.join('\n')).toContain('--view [path]');
       expect(infoLines.join('\n')).toContain('--preset');
       expect(infoLines.join('\n')).toContain('--overwrite');
     } finally {
       console.info = originalInfo;
+    }
+  });
+
+  test('run(init --help) prints init help and exits without writes', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const exitCode = await run(['init', '--help'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(infoLines.join('\n')).toContain('Usage: better-convex init');
+      expect(infoLines.join('\n')).toContain('--template');
+      expect(infoLines.join('\n')).toContain('--cwd');
+      expect(infoLines.join('\n')).toContain('--name');
+    } finally {
+      console.info = originalInfo;
+    }
+  });
+
+  test('run(create --help) prints init help', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const exitCode = await run(['create', '--help'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(infoLines.join('\n')).toContain('Usage: better-convex init');
+    } finally {
+      console.info = originalInfo;
+    }
+  });
+
+  test('run(init -t next --yes) shells out to shadcn for fresh dirs, then applies better-convex overlay', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-init-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (
+          args.includes('init') &&
+          args.includes('--template') &&
+          args.includes('next')
+        ) {
+          const cwdFlagIndex = args.indexOf('--cwd');
+          const nameFlagIndex = args.indexOf('--name');
+          const baseDir = cwdFlagIndex >= 0 ? args[cwdFlagIndex + 1]! : dir;
+          const projectName =
+            nameFlagIndex >= 0 ? args[nameFlagIndex + 1]! : path.basename(dir);
+          const projectDir = path.join(baseDir, projectName);
+          writeShadcnNextApp(projectDir);
+        }
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['init', '-t', 'next', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const firstCall = execaStub.mock.calls.find((call) =>
+        call[1]?.includes(INIT_SHADCN_PACKAGE_SPEC)
+      ) as unknown as [string, string[], Record<string, unknown>] | undefined;
+      expect(firstCall?.[0]).toBe('bunx');
+      expect(firstCall?.[1].slice(0, 8)).toEqual([
+        INIT_SHADCN_PACKAGE_SPEC,
+        'init',
+        '--template',
+        'next',
+        '--cwd',
+        path.dirname(fs.realpathSync(dir)),
+        '--name',
+        path.basename(dir),
+      ]);
+      expect(firstCall?.[1][7]).toContain('better-convex-cli-init-');
+      expect(firstCall?.[1]).toContain('--defaults');
+      expect(firstCall?.[1]).toContain('--yes');
+      expect(fs.existsSync(path.join(dir, 'package.json'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'convex.json'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'tsconfig.json'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'eslint.config.mjs'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'next.config.mjs'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'postcss.config.mjs'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'components.json'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'app', 'layout.tsx'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'app', 'page.tsx'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'app', 'globals.css'))).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'components', 'theme-provider.tsx'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'lib', 'utils.ts'))).toBe(true);
+      const tsconfig = JSON.parse(
+        fs.readFileSync(path.join(dir, 'tsconfig.json'), 'utf8')
+      );
+      expect(tsconfig.compilerOptions.paths['@/*']).toEqual(['./*']);
+      expect(tsconfig.compilerOptions.paths['@convex/*']).toEqual([
+        './convex/shared/*',
+      ]);
+      expect(
+        fs
+          .readFileSync(path.join(dir, 'eslint.config.mjs'), 'utf8')
+          .includes('eslint-config-next/core-web-vitals')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(path.join(dir, 'next.config.mjs'), 'utf8')
+          .includes('const nextConfig = {}')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(path.join(dir, 'postcss.config.mjs'), 'utf8')
+          .includes('"@tailwindcss/postcss"')
+      ).toBe(true);
+      expect(
+        SHADCN_LAYOUT_PROVIDERS_RE.test(
+          fs.readFileSync(path.join(dir, 'app', 'layout.tsx'), 'utf8')
+        )
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(path.join(dir, 'app', 'page.tsx'), 'utf8')
+          .includes('shadcn page')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(path.join(dir, 'app', 'globals.css'), 'utf8')
+          .includes('--shadcn-shell')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(
+            path.join(dir, 'components', 'theme-provider.tsx'),
+            'utf8'
+          )
+          .includes('NextThemesProvider')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(path.join(dir, 'lib', 'utils.ts'), 'utf8')
+          .includes('filter(Boolean)')
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'schema.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'http.ts'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'convex', 'lib', 'crpc.ts'))).toBe(
+        true
+      );
+      expect(fs.existsSync(path.join(dir, 'convex', 'lib', 'get-env.ts'))).toBe(
+        true
+      );
+      expect(fs.existsSync(path.join(dir, 'concave.json'))).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(init --yes) skips shadcn in fresh dirs and applies better-convex overlay only', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-init-overlay-only-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(
+        (
+          execaStub.mock.calls as unknown as [string, string[], ...unknown[]][]
+        ).some(([, args]) => args.includes(INIT_SHADCN_PACKAGE_SPEC))
+      ).toBe(false);
+      expect(fs.existsSync(path.join(dir, 'package.json'))).toBe(false);
+      expect(fs.existsSync(path.join(dir, 'convex.json'))).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'schema.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'http.ts'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'convex', 'lib', 'crpc.ts'))).toBe(
+        true
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(init -t next --yes --cwd apps --name web) overlays the generated app dir', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-init-named-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (
+          args.includes('init') &&
+          args.includes('--template') &&
+          args.includes('next')
+        ) {
+          const cwdFlagIndex = args.indexOf('--cwd');
+          const nameFlagIndex = args.indexOf('--name');
+          const baseDir = cwdFlagIndex >= 0 ? args[cwdFlagIndex + 1]! : dir;
+          const projectName =
+            nameFlagIndex >= 0 ? args[nameFlagIndex + 1]! : 'web';
+          const projectDir = path.join(baseDir, projectName);
+          writeShadcnNextApp(projectDir);
+        }
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['init', '-t', 'next', '--yes', '--cwd', 'apps', '--name', 'web'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(fs.existsSync(path.join(dir, 'apps', 'web', 'package.json'))).toBe(
+        true
+      );
+      expect(fs.existsSync(path.join(dir, 'apps', 'web', 'convex.json'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(
+          path.join(dir, 'apps', 'web', 'convex', 'functions', 'schema.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'apps', 'web', 'convex', 'lib', 'crpc.ts'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'convex.json'))).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(create -t next --yes) behaves like init and shells out to shadcn for fresh dirs', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-create-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (
+          args.includes('init') &&
+          args.includes('--template') &&
+          args.includes('next')
+        ) {
+          const cwdFlagIndex = args.indexOf('--cwd');
+          const nameFlagIndex = args.indexOf('--name');
+          const baseDir = cwdFlagIndex >= 0 ? args[cwdFlagIndex + 1]! : dir;
+          const projectName =
+            nameFlagIndex >= 0 ? args[nameFlagIndex + 1]! : path.basename(dir);
+          const projectDir = path.join(baseDir, projectName);
+          writeShadcnNextApp(projectDir);
+        }
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['create', '-t', 'next', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const firstCall = execaStub.mock.calls.find((call) =>
+        call[1]?.includes(INIT_SHADCN_PACKAGE_SPEC)
+      ) as unknown as [string, string[], Record<string, unknown>] | undefined;
+      expect(firstCall?.[0]).toBe('bunx');
+      expect(firstCall?.[1].slice(0, 4)).toEqual([
+        INIT_SHADCN_PACKAGE_SPEC,
+        'init',
+        '--template',
+        'next',
+      ]);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'schema.ts'))
+      ).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(init -t vite --yes) fails fast for unsupported templates', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-init-unsupported-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      await expect(
+        run(['init', '-t', 'vite', '--yes'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow(
+        'Unsupported init template "vite". Only "next" is currently supported.'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --yes --dry-run --json) emits shared install plan with files and operations', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-plan-json-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'resend', '--yes', '--dry-run', '--json'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      const payload = JSON.parse(infoLines.at(-1) ?? '{}') as {
+        plugin?: string;
+        preset?: string;
+        selectionSource?: string;
+        files?: Array<{ path: string; kind: string; action: string }>;
+        operations?: Array<{ kind: string; status: string; path?: string }>;
+      };
+      expect(payload.plugin).toBe('resend');
+      expect(payload.selectionSource).toBe('preset');
+      expect(payload.files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: 'convex/schema.ts',
+            kind: 'schema',
+          }),
+          expect.objectContaining({
+            path: 'convex/plugins.lock.json',
+            kind: 'lockfile',
+          }),
+          expect.objectContaining({
+            path: 'concave.json',
+            kind: 'config',
+          }),
+          expect.objectContaining({
+            path: 'convex/lib/get-env.ts',
+            kind: 'env',
+          }),
+          expect.objectContaining({
+            path: 'convex/plugins/resend.ts',
+            kind: 'scaffold',
+          }),
+        ])
+      );
+      expect(payload.operations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'dependency_install',
+          }),
+          expect.objectContaining({
+            kind: 'codegen',
+          }),
+        ])
+      );
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --yes --dry-run) uses ANSI colors when FORCE_COLOR=1', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-dry-run-color-')
+    );
+    const oldCwd = process.cwd();
+    const originalForceColor = process.env.FORCE_COLOR;
+    const originalNoColor = process.env.NO_COLOR;
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
+
+    process.chdir(dir);
+    process.env.FORCE_COLOR = '1';
+    process.env.NO_COLOR = undefined;
+
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['add', 'resend', '--yes', '--dry-run'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(infoLines.join('\n')).toMatch(ANSI_ESCAPE_RE);
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+      if (originalForceColor === undefined) {
+        process.env.FORCE_COLOR = undefined;
+      } else {
+        process.env.FORCE_COLOR = originalForceColor;
+      }
+      if (originalNoColor === undefined) {
+        process.env.NO_COLOR = undefined;
+      } else {
+        process.env.NO_COLOR = originalNoColor;
+      }
+    }
+  });
+
+  test('run(add resend --yes --dry-run --json) treats formatting-only resend schema drift as skip', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-formatting-only-drift-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex', 'lib', 'plugins', 'resend'), {
+      recursive: true,
+    });
+    writeMinimalSchema(dir);
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'schema.ts'),
+      `${formatAsLegacySingleQuoteTs(RESEND_SCHEMA_TEMPLATE)}\n`
+    );
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'resend', '--yes', '--dry-run', '--json'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      const payload = JSON.parse(infoLines.at(-1) ?? '{}') as {
+        files?: Array<{ path: string; action: string }>;
+      };
+      expect(payload.files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: 'convex/lib/plugins/resend/schema.ts',
+            action: 'skip',
+          }),
+        ])
+      );
+      expect(
+        execaStub.mock.calls.some((call) =>
+          (
+            call as unknown as [string, string[], Record<string, unknown>]
+          )[1]?.includes(INIT_SHADCN_PACKAGE_SPEC)
+        )
+      ).toBe(false);
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --diff convex/plugins/resend.ts) prints focused preview diff', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-diff-preview-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
+
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'resend', '--yes', '--diff', 'convex/plugins/resend.ts'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      const output = infoLines.join('\n');
+      expect(output).toContain('convex/plugins/resend.ts');
+      expect(output).toContain('convex/plugins/resend.ts (create)');
+      expect(output).toContain('createResendHandler');
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add resend --yes --dry-run --json) auto-initializes baseline files when missing, then plans resend install', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-auto-init-resend-')
+    );
+    const oldCwd = process.cwd();
+    writePackageJson(dir);
+    process.chdir(dir);
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'resend', '--yes', '--dry-run', '--json'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      const payload = JSON.parse(infoLines.at(-1) ?? '{}') as {
+        files?: Array<{ path: string; kind: string; action: string }>;
+      };
+      expect(payload.files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: 'convex.json',
+            action: 'create',
+          }),
+          expect.objectContaining({
+            path: 'convex/functions/schema.ts',
+            kind: 'schema',
+            action: 'create',
+          }),
+          expect.objectContaining({
+            path: 'convex/functions/http.ts',
+            kind: 'scaffold',
+            action: 'create',
+          }),
+          expect.objectContaining({
+            path: 'convex/lib/crpc.ts',
+            kind: 'scaffold',
+            action: 'create',
+          }),
+          expect.objectContaining({
+            path: 'convex/functions/plugins/resend.ts',
+            kind: 'scaffold',
+          }),
+        ])
+      );
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add ratelimit --yes --no-codegen) auto-initializes baseline and wires ratelimit into crpc.ts', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-auto-init-ratelimit-')
+    );
+    const oldCwd = process.cwd();
+    writePackageJson(dir);
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'ratelimit', '--yes', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      const crpcSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'crpc.ts'),
+        'utf8'
+      );
+      expect(crpcSource).toContain(
+        "import { type RatelimitBucket, ratelimit } from './plugins/ratelimit/plugin';"
+      );
+      expect(crpcSource).toContain('ratelimit?: RatelimitBucket;');
+      expect(crpcSource).toContain(
+        'export const publicMutation = c.mutation.use(ratelimit.middleware());'
+      );
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'ratelimit', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'schema.ts'))
+      ).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
     }
   });
 
@@ -414,7 +1219,10 @@ describe('cli/cli', () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(execaStub).not.toHaveBeenCalled();
+      expectDependencyInstallCall(
+        execaStub.mock.calls as unknown as unknown[],
+        '@better-convex/resend'
+      );
       expect(
         fs.existsSync(
           path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts')
@@ -565,8 +1373,9 @@ describe('cli/cli', () => {
       expect(resendFunctionsSource).not.toContain('const internalQuery =');
       expect(resendFunctionsSource).not.toContain('const internalAction =');
       expect(resendFunctionsSource).toContain(
-        'export const cleanupOldEmails = privateMutation.use(resend.middleware())'
+        'export const cleanupOldEmails = privateMutation'
       );
+      expect(resendFunctionsSource).toContain('.use(resend.middleware())');
       expect(resendFunctionsSource).toContain(
         'async function cleanupEmailBatch('
       );
@@ -583,10 +1392,10 @@ describe('cli/cli', () => {
         'where: { id: { in: input.emailIds } }'
       );
       expect(resendFunctionsSource).toContain(
-        'export const getStatus = privateQuery.use(resend.middleware())'
+        'export const getStatus = privateQuery'
       );
       expect(resendFunctionsSource).toContain(
-        'export const callResendAPIWithBatch = privateAction.use(resend.middleware())'
+        'export const callResendAPIWithBatch = privateAction'
       );
       expect(resendFunctionsSource).not.toContain('RESEND_API_KEY is missing.');
       expect(resendFunctionsSource).not.toContain('ctx.runQuery(');
@@ -630,10 +1439,19 @@ describe('cli/cli', () => {
       );
       expect(resendEmailSource).toContain('import { privateAction } from');
       expect(resendEmailSource).toContain('../lib/crpc');
+      expect(resendEmailSource).toContain('import { getEnv } from');
+      expect(resendEmailSource).toContain('getEnv().RESEND_FROM_EMAIL');
+      expect(resendEmailSource).not.toContain('process.env.RESEND_FROM_EMAIL');
       expect(resendEmailSource).not.toContain('initCRPC.create(');
       expect(resendEmailSource).not.toContain('const c =');
       expect(resendWebhookSource).toContain('import { publicRoute } from');
       expect(resendWebhookSource).toContain('../../crpc');
+      expect(resendWebhookSource).toContain(
+        'const event = await ctx.api.resend.verifyWebhookEvent(c.req.raw)'
+      );
+      expect(resendWebhookSource).toContain('export const resendWebhook =');
+      expect(resendWebhookSource).not.toContain('registerResendWebhook');
+      expect(resendWebhookSource).not.toContain('verifyResendWebhookEvent');
       expect(resendWebhookSource).not.toContain('initCRPC.create(');
       expect(resendWebhookSource).not.toContain('const c =');
       expect(resendSchemaSource).toContain('export function resendExtension()');
@@ -690,6 +1508,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -726,15 +1545,17 @@ describe('cli/cli', () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(execaCalls).toHaveLength(1);
-      expect(execaCalls[0]?.cmd).toBe('bun lint:fix');
-      expect(execaCalls[0]?.args).toEqual([]);
-      expect(execaCalls[0]?.options).toMatchObject({
+      expect(execaCalls).toHaveLength(2);
+      expect(execaCalls[0]?.cmd).toBe('bun');
+      expect(execaCalls[0]?.args).toEqual(['add', '@better-convex/resend']);
+      expect(execaCalls[1]?.cmd).toBe('bun lint:fix');
+      expect(execaCalls[1]?.args).toEqual([]);
+      expect(execaCalls[1]?.options).toMatchObject({
         shell: true,
         stdio: 'inherit',
         reject: false,
       });
-      expect(execaCalls[0]?.options?.cwd).toContain(path.basename(dir));
+      expect(execaCalls[1]?.options?.cwd).toContain(path.basename(dir));
     } finally {
       process.chdir(oldCwd);
     }
@@ -746,6 +1567,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -783,6 +1605,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -834,7 +1657,10 @@ describe('cli/cli', () => {
       expect(ratelimitPluginSource).toContain('default: {');
       expect(ratelimitPluginSource).not.toContain('project/create:free');
       expect(ratelimitPluginSource).not.toContain('tag/create:free');
-      expect(execaStub).not.toHaveBeenCalled();
+      expectDependencyInstallCall(
+        execaStub.mock.calls as unknown as unknown[],
+        'better-convex'
+      );
       expect(generateMetaStub).not.toHaveBeenCalled();
     } finally {
       process.chdir(oldCwd);
@@ -847,6 +1673,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -879,9 +1706,11 @@ describe('cli/cli', () => {
       const firstCall = calls[0] as unknown[] | undefined;
       expect(firstCall).toBeDefined();
       const callArgs = firstCall![0] as {
+        message: string;
         initialValues: string[];
         options: Array<{ label: string; value: string; hint?: string }>;
       };
+      expect(callArgs.message).toContain('Enter to submit');
       expect(callArgs.initialValues).toEqual([
         'resend-email',
         'resend-functions',
@@ -946,6 +1775,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -982,6 +1812,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -1037,6 +1868,7 @@ describe('cli/cli', () => {
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -1111,6 +1943,7 @@ describe('cli/cli', () => {
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
     fs.writeFileSync(
       path.join(convexDir, 'plugins.lock.json'),
       JSON.stringify(
@@ -1192,6 +2025,7 @@ describe('cli/cli', () => {
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
     fs.writeFileSync(
       path.join(convexDir, 'plugins.lock.json'),
       JSON.stringify(
@@ -1256,6 +2090,7 @@ describe('cli/cli', () => {
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
     fs.writeFileSync(
       path.join(convexDir, 'plugins.lock.json'),
       JSON.stringify(
@@ -1324,6 +2159,7 @@ describe('cli/cli', () => {
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
     fs.writeFileSync(
       path.join(convexDir, 'plugins.lock.json'),
       JSON.stringify(
@@ -1430,6 +2266,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -1480,6 +2317,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -1500,7 +2338,10 @@ describe('cli/cli', () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(execaStub).not.toHaveBeenCalled();
+      expectDependencyInstallCall(
+        execaStub.mock.calls as unknown as unknown[],
+        '@better-convex/resend'
+      );
       expect(
         fs.existsSync(
           path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts')
@@ -1522,7 +2363,7 @@ describe('cli/cli', () => {
           path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'webhook.ts')
         )
       ).toBe(true);
-      expect(fs.existsSync(path.join(dir, 'convex', 'http.ts'))).toBe(false);
+      expect(fs.existsSync(path.join(dir, 'convex', 'http.ts'))).toBe(true);
     } finally {
       process.chdir(oldCwd);
     }
@@ -1553,6 +2394,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -1634,6 +2476,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -1666,12 +2509,12 @@ describe('cli/cli', () => {
         'utf8'
       );
       expect(resendEmailSource).toContain(
-        'import { getEnv } from "../lib/get-env";'
+        "import { getEnv } from '../lib/get-env';"
       );
       expect(resendEmailSource).toContain('getEnv().RESEND_FROM_EMAIL');
       expect(resendEmailSource).not.toContain('process.env.RESEND_FROM_EMAIL');
       expect(resendExtensionSource).toContain(
-        'import { getEnv } from "../../get-env";'
+        "import { getEnv } from '../../get-env';"
       );
       expect(resendExtensionSource).toContain(
         'apiKey: getEnv().RESEND_API_KEY'
@@ -1685,12 +2528,13 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(add resend) throws when paths.env is configured and scaffold content contains process.env', async () => {
+  test('run(add resend) throws when scaffold content contains process.env', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-add-env-guard-')
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     const descriptor = getPluginCatalogEntry('resend');
     const templates = descriptor.templates as unknown as Array<{
@@ -1711,13 +2555,7 @@ describe('cli/cli', () => {
       const execaStub = mock(async () => ({ exitCode: 0 }) as any);
       const generateMetaStub = mock(async () => {});
       const syncEnvStub = mock(async () => {});
-      const loadConfigStub = mock(() => ({
-        ...createDefaultConfig(),
-        paths: {
-          ...createDefaultConfig().paths,
-          env: 'convex/lib/get-env.ts',
-        },
-      }));
+      const loadConfigStub = mock(() => createDefaultConfig());
 
       await expect(
         run(['add', 'resend', '--no-codegen'], {
@@ -1727,7 +2565,7 @@ describe('cli/cli', () => {
           syncEnv: syncEnvStub as any,
           loadBetterConvexConfig: loadConfigStub as any,
         })
-      ).rejects.toThrow('contains process.env');
+      ).rejects.toThrow('contains process.env. Use getEnv() instead.');
     } finally {
       pluginTemplate.content = originalContent;
       process.chdir(oldCwd);
@@ -1920,6 +2758,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     const infoLines: string[] = [];
@@ -1968,6 +2807,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     const infoLines: string[] = [];
@@ -2036,6 +2876,7 @@ describe('cli/cli', () => {
     );
     const oldCwd = process.cwd();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     const infoLines: string[] = [];
@@ -2059,7 +2900,6 @@ describe('cli/cli', () => {
 
       expect(exitCode).toBe(0);
       const output = infoLines.join('\n');
-      expect(output).toContain('React Email dependencies are required');
       expect(output).toContain('@react-email/components');
       expect(output).toContain('@react-email/render');
       expect(output).toContain('react-email');
@@ -2069,7 +2909,10 @@ describe('cli/cli', () => {
       expect(output).toContain(
         'RESEND_API_KEY: Set before sending email through Resend.'
       );
-      expect(execaStub).not.toHaveBeenCalled();
+      expectDependencyInstallCall(
+        execaStub.mock.calls as unknown as unknown[],
+        '@better-convex/resend'
+      );
       expect(generateMetaStub).not.toHaveBeenCalled();
     } finally {
       console.info = originalInfo;
@@ -2084,6 +2927,7 @@ describe('cli/cli', () => {
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -2142,6 +2986,7 @@ describe('cli/cli', () => {
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     try {
@@ -2203,6 +3048,7 @@ describe('cli/cli', () => {
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     const infoLines: string[] = [];
@@ -2251,13 +3097,14 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(diff resend --json) reports changed and missing scaffold files', async () => {
+  test('run(view resend --json) reports planned updates from current files', async () => {
     const dir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'better-convex-cli-diff-json-')
+      path.join(os.tmpdir(), 'better-convex-cli-view-json-')
     );
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
     fs.mkdirSync(convexDir, { recursive: true });
+    writeMinimalSchema(dir);
 
     process.chdir(dir);
     const infoLines: string[] = [];
@@ -2286,7 +3133,7 @@ describe('cli/cli', () => {
       );
       fs.rmSync(path.join(convexDir, 'lib', 'plugins', 'resend', 'webhook.ts'));
 
-      const exitCode = await run(['diff', 'resend', '--json'], {
+      const exitCode = await run(['view', 'resend', '--json'], {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
         generateMeta: generateMetaStub as any,
@@ -2295,24 +3142,24 @@ describe('cli/cli', () => {
       });
 
       expect(exitCode).toBe(0);
-      const diffJson = infoLines.find((line) =>
-        line.includes('"command":"diff"')
+      const viewJson = infoLines.find((line) =>
+        line.includes('"command":"view"')
       );
-      const payload = JSON.parse(diffJson ?? '{}') as {
-        clean: boolean;
-        files: Array<{ path: string; status: string }>;
+      const payload = JSON.parse(viewJson ?? '{}') as {
+        selectionSource?: string;
+        files: Array<{ path: string; action: string }>;
       };
-      expect(payload.clean).toBe(false);
+      expect(payload.selectionSource).toBe('lockfile');
       expect(payload.files).toEqual(
         expect.arrayContaining([
-          {
+          expect.objectContaining({
             path: 'convex/lib/plugins/resend/plugin.ts',
-            status: 'changed',
-          },
-          {
+            action: 'update',
+          }),
+          expect.objectContaining({
             path: 'convex/lib/plugins/resend/webhook.ts',
-            status: 'missing',
-          },
+            action: 'create',
+          }),
         ])
       );
     } finally {
@@ -2321,9 +3168,9 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(diff resend) uses lockfile template path mapping', async () => {
+  test('run(view resend --json) uses lockfile template path mapping', async () => {
     const dir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'better-convex-cli-diff-lockfile-path-')
+      path.join(os.tmpdir(), 'better-convex-cli-view-lockfile-path-')
     );
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
@@ -2380,7 +3227,7 @@ describe('cli/cli', () => {
       const syncEnvStub = mock(async () => {});
       const loadConfigStub = mock(() => createDefaultConfig());
 
-      const exitCode = await run(['diff', 'resend', '--json'], {
+      const exitCode = await run(['view', 'resend', '--json'], {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
         generateMeta: generateMetaStub as any,
@@ -2390,20 +3237,16 @@ describe('cli/cli', () => {
 
       expect(exitCode).toBe(0);
       const payload = JSON.parse(infoLines[0] ?? '{}') as {
-        files: Array<{ path: string; status: string }>;
-        templateIdsUsed: string[];
+        files: Array<{ path: string; action: string }>;
+        selectedTemplateIds: string[];
       };
-      expect(payload.templateIdsUsed).toEqual(['resend-plugin']);
+      expect(payload.selectedTemplateIds).toEqual(['resend-plugin']);
       expect(payload.files).toEqual(
         expect.arrayContaining([
-          {
+          expect.objectContaining({
             path: 'convex/api.ts',
-            status: 'changed',
-          },
-          {
-            path: 'convex/plugins/resend.ts',
-            status: 'missing',
-          },
+            action: 'update',
+          }),
         ])
       );
     } finally {
@@ -2446,9 +3289,9 @@ describe('cli/cli', () => {
     );
   });
 
-  test('run(diff) prompts for plugin in interactive TTY mode when plugin arg is omitted', async () => {
+  test('run(view) prompts for plugin in interactive TTY mode when plugin arg is omitted', async () => {
     const dir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'better-convex-cli-diff-interactive-')
+      path.join(os.tmpdir(), 'better-convex-cli-view-interactive-')
     );
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
@@ -2504,7 +3347,7 @@ describe('cli/cli', () => {
       const loadConfigStub = mock(() => createDefaultConfig());
       const selectPromptStub = mock(async () => 'resend');
 
-      const exitCode = await run(['diff'], {
+      const exitCode = await run(['view'], {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
         generateMeta: generateMetaStub as any,
@@ -2538,9 +3381,9 @@ describe('cli/cli', () => {
     expect(source).not.toContain('PLUGIN_LOCKFILE_VERSION');
   });
 
-  test('run(list --json) reads schema extensions and lockfile without invoking convex cli', async () => {
+  test('run(info --json) reads schema extensions and lockfile without invoking convex cli', async () => {
     const dir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'better-convex-cli-list-plugins-')
+      path.join(os.tmpdir(), 'better-convex-cli-info-plugins-')
     );
     const oldCwd = process.cwd();
     const convexDir = path.join(dir, 'convex');
@@ -2591,7 +3434,7 @@ describe('cli/cli', () => {
       const syncEnvStub = mock(async () => {});
       const loadConfigStub = mock(() => createDefaultConfig());
 
-      const exitCode = await run(['list', '--json'], {
+      const exitCode = await run(['info', '--json'], {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
         generateMeta: generateMetaStub as any,
@@ -2601,16 +3444,65 @@ describe('cli/cli', () => {
 
       expect(exitCode).toBe(0);
       const payload = JSON.parse(infoLines.at(-1) ?? '{}') as {
-        installedPlugins?: string[];
+        installedPlugins?: Array<{ plugin: string }>;
         schemaPlugins?: string[];
       };
-      expect(payload.installedPlugins).toEqual(['ratelimit', 'resend']);
+      expect(payload.installedPlugins?.map((plugin) => plugin.plugin)).toEqual([
+        'ratelimit',
+        'resend',
+      ]);
       expect(payload.schemaPlugins).toEqual(['ratelimit', 'resend']);
       expect(execaStub).not.toHaveBeenCalled();
       expect(generateMetaStub).not.toHaveBeenCalled();
     } finally {
       console.info = originalInfo;
       process.chdir(oldCwd);
+    }
+  });
+
+  test('run(docs resend cli --json) returns local and public docs links', async () => {
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['docs', 'resend', 'cli', '--json'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      const payload = JSON.parse(infoLines.at(-1) ?? '{}') as {
+        topics?: Array<{
+          topic: string;
+          localPath: string;
+          publicUrl?: string;
+        }>;
+      };
+      expect(payload.topics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            topic: 'resend',
+            localPath: 'www/content/docs/plugins/resend.mdx',
+          }),
+          expect.objectContaining({
+            topic: 'cli',
+            localPath: 'www/content/docs/cli.mdx',
+          }),
+        ])
+      );
+    } finally {
+      console.info = originalInfo;
     }
   });
 

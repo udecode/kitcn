@@ -146,6 +146,7 @@ export const api = {
     'examples.uploadExample': { path: "/api/examples/upload", method: "POST" },
     'examples.webhook': { path: "/webhooks/example", method: "POST" },
     health: { path: "/api/health", method: "GET" },
+    resendWebhook: { path: "/resend-webhook", method: "POST" },
     'todos.create': { path: "/api/todos", method: "POST" },
     'todos.delete': { path: "/api/todos/:id", method: "DELETE" },
     'todos.download': { path: "/api/todos/export/:format", method: "GET" },

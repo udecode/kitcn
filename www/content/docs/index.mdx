@@ -65,7 +65,7 @@ const { data: posts } = useQuery(crpc.posts.list.queryOptions({ limit: 10 }));
 
 <Cards>
   <Card title="Quickstart" href="/docs/quickstart" />
-  <Card title="Templates" href="/docs/templates" />
+  <Card title="CLI" href="/docs/cli" />
   <Card title="Concepts" href="/docs/concepts" />
 </Cards>
 
@@ -79,7 +79,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 | Feature | Options | Default |
 |---------|---------|---------|
-| **Approach** | Top-down (copy from Templates), Bottom-up (follow docs step-by-step) | Top-down |
+| **Bootstrap** | CLI (`better-convex init` / `add`), Docs by section | CLI |
 | **React Framework** | Next.js App Router, TanStack Start, Other | Next.js App Router |
 | **Database** | ORM (`ctx.orm`) | ORM |
 
@@ -99,28 +99,24 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 ### After Selection
 
-**Top-down approach:**
-1. Copy relevant sections from [Templates](/docs/templates) based on choices
-2. Skip sections for features not selected
-3. Run bootstrap/codegen (`better-convex dev`) so generated API/meta exist before coding
-4. In non-interactive terminals, bootstrap explicitly with:
-   `bunx convex dev --once --configure new --team <team_slug> --project <project_slug> --dev-deployment local`
-5. If bootstrap fails with `Cannot prompt for input in non-interactive terminals`, re-run with explicit `--team` and `--project` values.
-6. `better-convex codegen` runs standalone (no `better-convex dev` needed). If it fails with missing schema, ensure `convex/functions/schema.ts` exists.
-7. For new local deployments, backend data is project-local in `.convex/`, so each worktree/clone has isolated state.
-8. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
+**CLI bootstrap:**
+1. Run `better-convex init` in an existing app, or `better-convex init -t next --yes` for the full curated Next.js scaffold
+2. Add only the features you chose with `better-convex add <plugin>`
+3. Init already generates the first Better Convex runtime pass. Run `better-convex dev` or `better-convex codegen` after later schema/procedure changes.
+4. For explicit non-interactive project-backed bootstrap, pass `--team <team_slug> --project <project_slug> --dev-deployment local` to `better-convex init`.
+5. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
 
-**Bottom-up approach:**
+**Docs-by-section approach:**
 1. Follow [Quickstart](/docs/quickstart) for initial setup
 2. Read individual docs for each feature needed
-3. Reference [Templates](/docs/templates) for production patterns
+3. Use [Templates](/docs/templates) only as snippet reference
 4. Confirm deployment/bootstrap is configured before relying on generated imports
 
 ### Quick Reference by Stack
 
 | Stack | Key Docs |
 |-------|----------|
-| Next.js + Better Auth | [Templates](/docs/templates), [Next.js Setup](/docs/nextjs), [Auth Server](/docs/auth/server) |
+| Next.js + Better Auth | [CLI](/docs/cli), [Next.js Setup](/docs/nextjs), [Auth Server](/docs/auth/server) |
 | Vite + No Auth | [React Setup](/docs/react), [Server Setup](/docs/server/setup) |
 | Any + Custom Auth | [Server Setup](/docs/server/setup), [Middlewares](/docs/server/middlewares) |
 
@@ -134,7 +130,8 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 |------|-------------|
 | [Quickstart](/docs/quickstart) | First-time setup. Follow step-by-step to get a working app. |
 | [Concepts](/docs/concepts) | Understand architecture, folder structure (`convex/functions/`, `convex/lib/`, `convex/shared/`), and design decisions. |
-| [Templates](/docs/templates) | **Copy-paste production code.** Complete files for schema, cRPC, providers, auth, triggers, rate limiting. Start here for fastest setup. |
+| [CLI](/docs/cli) | Bootstrap with `better-convex init`, add features with `better-convex add`, inspect plans with `view` and `info`. |
+| [Templates](/docs/templates) | Snippet reference for full-file patterns. Use when you want to study or copy a specific implementation. |
 
 ### Server (Backend)
 
@@ -202,7 +199,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 **New project setup:**
 1. [Quickstart](/docs/quickstart) → basic setup
-2. [Templates](/docs/templates) → copy production files
+2. [CLI](/docs/cli) → run `better-convex init` / `better-convex add`
 3. [Concepts](/docs/concepts) → understand folder structure
 
 **Add authentication:**

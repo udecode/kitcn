@@ -1,6 +1,7 @@
 import { expectTypeOf, test } from 'vitest';
 import { text, textEnum } from '../builders';
 import { defineRelations } from '../relations';
+import { defineSchema } from '../schema';
 import { convexTable } from '../table';
 import {
   defineMigration,
@@ -19,8 +20,13 @@ const schema = defineRelations({
   users,
   todos,
 });
+const schemaDefinition = defineSchema({
+  users,
+  todos,
+});
 
 type TestSchema = typeof schema;
+type TestSchemaDefinition = typeof schemaDefinition;
 
 test('defineMigration infers table doc type from step.table', () => {
   defineMigration<TestSchema>({
@@ -55,4 +61,28 @@ test('defineMigration rejects unknown table names for typed schemas', () => {
       migrateOne: async () => {},
     },
   });
+});
+
+test('defineMigration accepts defineSchema output directly', () => {
+  defineMigration<TestSchemaDefinition>({
+    id: '20260101_schema_definition',
+    up: {
+      table: 'todos',
+      migrateOne: async (ctx, todo) => {
+        expectTypeOf(ctx).toEqualTypeOf<
+          MigrationDocContext<TestSchemaDefinition>
+        >();
+        expectTypeOf(todo.priority).toEqualTypeOf<
+          'low' | 'medium' | 'high' | null | undefined
+        >();
+      },
+    },
+  });
+
+  expectTypeOf<'users'>().toMatchTypeOf<
+    MigrationTableName<TestSchemaDefinition>
+  >();
+  expectTypeOf<'todos'>().toMatchTypeOf<
+    MigrationTableName<TestSchemaDefinition>
+  >();
 });

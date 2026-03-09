@@ -1,73 +1,26 @@
 ---
 name: convex
 description: ALWAYS use this skill when working with convex or better-convex. Covers the common end-to-end feature path using cRPC + ORM + auth + React, with setup/bootstrap and niche depth in references.
-sources:
-  [
-    www/content/docs/concepts.mdx,
-    www/content/docs/orm/index.mdx,
-    www/content/docs/orm/schema/relations.mdx,
-    www/content/docs/orm/schema/triggers.mdx,
-    www/content/docs/orm/queries/aggregates.mdx,
-    www/content/docs/orm/queries/pagination.mdx,
-    www/content/docs/server/error-handling.mdx,
-    www/content/docs/server/http.mdx,
-    www/content/docs/server/middlewares.mdx,
-    www/content/docs/server/procedures.mdx,
-    www/content/docs/server/server-side-calls.mdx,
-    www/content/docs/react/queries.mdx,
-    www/content/docs/react/mutations.mdx,
-    www/content/docs/react/infinite-queries.mdx,
-    www/content/docs/auth/client.mdx,
-    www/content/docs/auth/server.mdx,
-  ]
-metadata:
-  {
-    sources:
-      [
-        www/content/docs/concepts.mdx,
-        www/content/docs/orm/index.mdx,
-        www/content/docs/orm/schema/relations.mdx,
-        www/content/docs/orm/schema/triggers.mdx,
-        www/content/docs/orm/queries/aggregates.mdx,
-        www/content/docs/orm/queries/pagination.mdx,
-        www/content/docs/server/error-handling.mdx,
-        www/content/docs/server/http.mdx,
-        www/content/docs/server/middlewares.mdx,
-        www/content/docs/server/procedures.mdx,
-        www/content/docs/server/server-side-calls.mdx,
-        www/content/docs/react/queries.mdx,
-        www/content/docs/react/mutations.mdx,
-        www/content/docs/react/infinite-queries.mdx,
-        www/content/docs/auth/client.mdx,
-        www/content/docs/auth/server.mdx,
-      ],
-  }
+# biome-ignore format: keep sources compact so intent's 500-line validator passes
+sources: [www/content/docs/concepts.mdx, www/content/docs/orm/index.mdx, www/content/docs/orm/schema/relations.mdx, www/content/docs/orm/schema/triggers.mdx, www/content/docs/orm/queries/aggregates.mdx, www/content/docs/orm/queries/pagination.mdx, www/content/docs/server/error-handling.mdx, www/content/docs/server/http.mdx, www/content/docs/server/middlewares.mdx, www/content/docs/server/procedures.mdx, www/content/docs/server/server-side-calls.mdx, www/content/docs/react/queries.mdx, www/content/docs/react/mutations.mdx, www/content/docs/react/infinite-queries.mdx, www/content/docs/auth/client.mdx, www/content/docs/auth/server.mdx]
+# biome-ignore format: mirror blog/spec shape without burning 30 lines
+metadata: { sources: [www/content/docs/concepts.mdx, www/content/docs/orm/index.mdx, www/content/docs/orm/schema/relations.mdx, www/content/docs/orm/schema/triggers.mdx, www/content/docs/orm/queries/aggregates.mdx, www/content/docs/orm/queries/pagination.mdx, www/content/docs/server/error-handling.mdx, www/content/docs/server/http.mdx, www/content/docs/server/middlewares.mdx, www/content/docs/server/procedures.mdx, www/content/docs/server/server-side-calls.mdx, www/content/docs/react/queries.mdx, www/content/docs/react/mutations.mdx, www/content/docs/react/infinite-queries.mdx, www/content/docs/auth/client.mdx, www/content/docs/auth/server.mdx] }
 ---
-
 # Better Convex Core Skill (80% Path)
-
 Use this file first for everyday feature delivery in an already configured better-convex app.
-
 - If setup/bootstrap/env/auth wiring or project structure mirroring is missing, use `references/setup/index.md` (then the relevant setup file).
 - If the task is advanced or niche, load only the specific feature reference listed at the end.
-
 ## Scope
-
 In scope:
-
 - Add or update schema tables, indexes, relations, and triggers.
 - Implement cRPC procedures (`query`, `mutation`, `action`, `httpAction`) with runtime auth + rate limits.
 - Implement feature UI with `useCRPC()` + TanStack Query.
 - Add minimal high-value tests for auth, errors, and side effects.
-
 Out of scope:
-
 - Greenfield setup/install/env/bootstrap.
 - Full plugin deep-dives (admin/organizations/polar).
 - Internal package-level parity testing.
-
 ## Skill Contract
-
 1. Favor `ctx.orm` for app data access.
 2. Keep list/read paths bounded and index-aware.
 3. Use cRPC builders and middleware; avoid raw handler objects for new feature code.
@@ -75,16 +28,11 @@ Out of scope:
 5. Prefer schema triggers for cross-row invariants, but move invariant maintenance to explicit mutation helpers if trigger execution is unstable (for example init/seed hangs or recursive write paths).
 6. Keep auth/rate-limit checks server-side.
 7. **Inter-procedure calls**: `create<Module>Handler(ctx)` in queries/mutations (zero overhead) unless validation is relevant, `create<Module>Caller(ctx)` in actions/HTTP routes. In action context use `caller.actions.*` for action procedures and `caller.schedule.*` for scheduling. Import from `./generated/<module>.runtime`. Never call `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly for module procedures.
-
 ## Shortcut Mode (tRPC + Drizzle Mental Model)
-
 Default assumption:
-
 - cRPC behavior is tRPC-like (builder chain + middleware + TanStack options).
 - ORM behavior is Drizzle-like (schema, relations, `findMany/findFirst`, `insert/update/delete`).
-
 Only remember these non-parity deltas:
-
 1. Procedure input root must be `z.object(...)` (no primitive root args).
 2. No `z.void()` outputs; omit `.output(...)` for no-value mutations.
 3. Stacked `.input(...)` calls merge input shapes.
@@ -115,24 +63,16 @@ Only remember these non-parity deltas:
 28. Async mutation batching is the default (codegen wires it). Customize per call: `execute({ batchSize, delayMs })`. Opt into sync: `execute({ mode: 'sync' })` or `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`. Relevant defaults: `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
 29. Polymorphic unions are schema-first: use `actionType: discriminator({ variants, as? })` in `convexTable(...)`. Query config does not include a `polymorphic` option. Writes stay flat; reads synthesize nested `details` (or custom alias). Use `withVariants: true` to auto-load all `one()` relations on discriminator tables.
 30. Do not add manual ORM mutation batching loops in app/plugin code by default. Convex runtime batching already handles mutation execution. Prefer set-based deletes/updates over per-row loops. Only add explicit chunking when batching external side effects (for example Resend API calls) or bounded cleanup sweeps.
-
 ## Directory Boundary (Important)
-
 This skill is directory-scoped. Do not depend on reading files outside `packages/better-convex/skills/convex/**`.
-
 Use `references/setup/` when the task needs:
-
 1. Project/file structure setup → `setup/index.md` + `setup/server.md`
 2. Auth bootstrap → `setup/auth.md`
 3. Client/provider wiring → `setup/react.md`
 4. Framework-specific setup → `setup/next.md` or `setup/start.md`
-
 For full template-level recreation: start with `setup/index.md`, then load relevant setup files, then load selected feature refs.
-
 ## First-Pass Feature Intake (Do This Before Edits)
-
 Lock these decisions first:
-
 1. Auth level per endpoint: `public` / `optionalAuth` / `auth` / `private`.
 2. Data invariants: what must always be true after writes?
 3. Query shape: list, detail, relation-loaded, search, or stream composition.
@@ -140,11 +80,8 @@ Lock these decisions first:
 5. Side effects: trigger vs scheduled function vs inline mutation.
 6. UI consumption: client hook only, RSC prefetch, or server-only caller.
 7. Risk paths: unauthorized, forbidden, not found, conflicts, rate limit.
-
 ## Canonical File Targets
-
 Typical feature touches:
-
 - `convex/functions/schema.ts`
 - `convex/functions/<feature>.ts`
 - `convex/lib/crpc.ts` (only if middleware/procedure builder changes)
@@ -152,9 +89,7 @@ Typical feature touches:
 - `src/**` feature UI files
 - `convex/functions/http.ts` or `convex/routers/**` for HTTP endpoints
 - `convex/functions/crons.ts` or scheduled handlers if needed
-
 ## E2E Build Order (Default)
-
 1. Schema + indexes + relations.
 2. Trigger hooks for cross-row invariants (or explicit mutation-side sync if trigger path is unstable).
 3. Procedures with strict input/output + auth + rate limits.

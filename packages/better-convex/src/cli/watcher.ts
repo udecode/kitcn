@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateMeta, getConvexConfig } from './codegen.js';
+import { logger } from './utils/logger.js';
 
 export function getWatchPatterns(functionsDir: string): string[] {
   // Watch function source files + HTTP route sources.
@@ -106,7 +107,7 @@ export async function startWatcher(opts?: {
         runGenerateMeta(sharedDir, generateOptions);
       }, debounceMs);
     })
-    .on('error', (err: unknown) => console.error('Watch error:', err));
+    .on('error', (err: unknown) => logger.error('Watch error:', err));
 }
 
 const isMain =
@@ -115,7 +116,7 @@ const isMain =
 
 if (isMain) {
   startWatcher().catch((error) => {
-    console.error('Watch error:', error);
+    logger.error('Watch error:', error);
     process.exitCode = 1;
   });
 }

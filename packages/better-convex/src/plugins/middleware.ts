@@ -24,7 +24,7 @@ export type PluginApiScope<TKey extends string, TApi extends object> = {
 type PluginMiddlewareHelpers<TKey extends string, TApi extends object> = {
   middleware: () => MiddlewareBuilder<
     any,
-    object,
+    any,
     PluginApiScope<TKey, TApi>,
     unknown
   >;
@@ -32,7 +32,7 @@ type PluginMiddlewareHelpers<TKey extends string, TApi extends object> = {
 
 type PluginMiddlewareFactory = (
   ...args: never[]
-) => MiddlewareBuilder<any, object, any, unknown>;
+) => MiddlewareBuilder<any, any, any, unknown>;
 
 export type PluginNamedMiddlewareFactories = Record<
   string,
@@ -70,7 +70,7 @@ export type Plugin<
   ) => Plugin<TKey, TOptions, TApi, TNextCtx, TMiddlewares>;
   readonly middleware: () => MiddlewareBuilder<
     any,
-    object,
+    any,
     PluginApiScope<TKey, TApi>,
     unknown
   >;
@@ -167,7 +167,7 @@ function createConfiguredPlugin<
 ): Plugin<TKey, TOptions, TApi, TCtx, TMiddlewares> {
   let plugin!: Plugin<TKey, TOptions, TApi, TCtx, TMiddlewares>;
   const createBaseMiddleware = () => {
-    const createMiddleware = createMiddlewareFactory<unknown, object>();
+    const createMiddleware = createMiddlewareFactory<unknown, any>();
     return createMiddleware<unknown, PluginApiScope<TKey, TApi>>(
       async ({ ctx, next }) => {
         const options = resolvePluginOptions(
@@ -224,7 +224,7 @@ function createConfiguredPlugin<
         ? middlewareOverride()
         : createBaseMiddleware()) as MiddlewareBuilder<
         any,
-        object,
+        any,
         PluginApiScope<TKey, TApi>,
         unknown
       >,

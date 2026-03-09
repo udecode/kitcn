@@ -35,6 +35,7 @@ import {
   publicQuery,
   publicRoute,
 } from './crpc';
+import { resend } from './plugins/resend/plugin';
 
 // Debug: Check what type publicRoute has
 type _DebugHttpAction = typeof publicRoute;
@@ -1013,6 +1014,15 @@ export const http_auth_use = authRoute
     const permissions: string[] = ctx.permissions;
     const userId: string = ctx.userId;
     return { permissions, userId };
+  });
+
+// 18.11 httpAction - reusable plugin middleware preserves ctx.api
+export const http_use_plugin_middleware = publicRoute
+  .use(resend.middleware())
+  .post('/api/plugin-middleware')
+  .mutation(async ({ ctx, c }) => {
+    await ctx.api.resend.verifyWebhookEvent(c.req.raw);
+    return null;
   });
 
 // ============================================================================

@@ -1,6 +1,7 @@
 ## Package
 
 - Project is in closed alpha with no external users. Breaking changes are allowed and recommended if they produce better results. No backward compatibility needed. Still confirm with the user before proceeding with a set of breaking changes.
+- Breaking changes: default to a hard cut. Do not add backward-compat aliases, deprecated shims, fallback parsing, migration bridges, or tests for the previous API unless the user explicitly asks. Remove the old surface and write tests only for the current behavior, as if the old API never existed.
 - Bundle size: Convex does not support dynamic imports. Each function entry bundles everything it statically imports. Prefer splittable per-module patterns (e.g. per-module callers, plugins) over monolithic globals. Keep each entry's import graph minimal.
 - Parity: Don't reinvent the wheel. Before designing APIs or architecture, study how proven OSS projects solve the same problem — Drizzle (schema/ORM), tRPC (procedures/middleware), shadcn (CLI/codegen), better-auth (plugin system/auth). Adopt their patterns when applicable. Do `ls` in `..` directory to find the respective repositories, then inspect their source code when needed.
 - DX: Optimize for the absolute best developer experience. CLI must be first-class for agents — deterministic, machine-readable output (--json), non-interactive defaults (--yes), composable commands. Every API surface should be intuitive for both humans and AI agents.
@@ -14,6 +15,10 @@
 - Do not write TDD cases for dead code/legacy removal assertions (for example: "should not contain old API X anymore"). Remove the dead path directly and keep tests focused on current behavior.
 - Never edit scaffolded example output first. Change package templates/source, then regenerate scaffold files via CLI.
 - Never update example plugin files directly. Update the package plugin template first, then regenerate with `better-convex add ... --overwrite`.
+- When changing `better-convex init` scaffold output, treat `templates/next/**` as generated fixture output from `bun run template:next:sync` — including `templates/next/package.json`. Do not patch fixture files by hand.
+- After any `init -t next` template or scaffold change, you must rerun `bun run template:next:sync` and `bun run check:templates`. No exceptions.
+- If `bun run template:next:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers first: `pkill -f 'convex/bin/main.js codegen' || true; pkill -f 'convex/bin/main.js dev' || true; pkill -f '@esbuild/.*/bin/esbuild --service' || true`, then rerun sync once. If `ps` still shows an esbuild worker stuck in `U` state after `kill -9`, stop bullshitting and reboot — that machine state is wedged.
+- After every template/scaffold change, regenerate the affected example with `better-convex add <plugin> --overwrite`, then verify with `better-convex add <plugin> --diff`. If diff still shows drift, the template is wrong: fix the template and regenerate again until diff is clean.
 - Prefer inline Zod schemas when used once; extract constants only when reused.
 
 ## General

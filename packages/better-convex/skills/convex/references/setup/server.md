@@ -1,5 +1,7 @@
 ## 5. Core Backend
 
+For production bootstrap, prefer `bunx better-convex init` and `bunx better-convex add <plugin>`. This file is the snippet reference path.
+
 ### 5.1 Define schema and relations
 
 **Create:** `convex/functions/schema.ts`
@@ -202,13 +204,13 @@ Do not fake generated files.
 
 Automation/non-interactive fallback (current CLI behavior):
 
-1. `better-convex dev` delegates to `convex dev` and may prompt for interactive setup when bootstrap is missing.
-2. For non-interactive agent terminals, bootstrap explicitly with:
-   `bunx convex dev --once --configure new --team <team_slug> --project <project_slug> --dev-deployment local`
-3. Confirm `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`, and `NEXT_PUBLIC_CONVEX_SITE_URL` were written.
-4. Then run `bunx better-convex dev` (this already runs codegen/API generation).
-5. If team/project values are unavailable, ask the user once and continue.
-6. If bootstrap is still blocked, use low-friction fallback tests from `references/testing.md` (extract helper logic + unit tests) until deployment setup is complete.
+1. `better-convex init` and `better-convex dev` try to generate the Better Convex runtime immediately.
+2. If project-backed bootstrap is required, run:
+   `bunx better-convex init --team <team_slug> --project <project_slug> --dev-deployment local`
+3. If explicit team/project input is unavailable, let the CLI use anonymous local bootstrap.
+4. Plain non-template `better-convex init` may leave a stubbed `convex/functions/generated/server.ts` only when real codegen is still unavailable. `init -t next` should fail instead.
+5. Confirm the generated runtime exists in `convex/functions/generated/server.ts`.
+6. Then run `bunx better-convex dev` for ongoing codegen/API refresh.
 
 Local deployment storage: New local and anonymous deployments store state under `.convex/` in the project root.
 

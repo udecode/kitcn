@@ -133,13 +133,14 @@ await actionCtx.scheduler.runAfter(
 ## 8. Wire Webhook Route
 
 ```ts title="convex/functions/http.ts" showLineNumbers
-import { httpRouter } from 'convex/server';
-import { registerResendWebhook } from '../lib/plugins/resend/webhook';
+import { router } from '../lib/crpc';
+import { resendWebhook } from '../lib/plugins/resend/webhook';
+import { health } from '../routers/health';
 
-const http = httpRouter();
-registerResendWebhook(http);
-
-export default http;
+export const httpRouter = router({
+  health,
+  resendWebhook,
+});
 ```
 
 ## 9. Optional Event Fanout

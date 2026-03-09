@@ -1,6 +1,11 @@
-export const RESEND_FUNCTIONS_TEMPLATE = `
+const FUNCTIONS_DIR_IMPORT_PLACEHOLDER = '__BETTER_CONVEX_FUNCTIONS_DIR__';
+const PROJECT_CRPC_IMPORT_PLACEHOLDER = '__BETTER_CONVEX_PROJECT_CRPC_IMPORT__';
+const PLUGIN_CONFIG_IMPORT_PLACEHOLDER =
+  '__BETTER_CONVEX_PLUGIN_CONFIG_IMPORT__';
+const PLUGIN_SCHEMA_IMPORT_PLACEHOLDER =
+  '__BETTER_CONVEX_PLUGIN_SCHEMA_IMPORT__';
 
-import {
+export const RESEND_FUNCTIONS_TEMPLATE = `import {
   canUpgradeStatus,
   getRetryDelayMs,
   getSegment,
@@ -10,23 +15,21 @@ import {
   parseEmailEvent,
   shouldRetry,
 } from '@better-convex/resend';
+import { eq, inArray } from 'better-convex/orm';
+import { z } from 'zod';
+import { privateAction, privateMutation, privateQuery } from '${PROJECT_CRPC_IMPORT_PLACEHOLDER}';
+import { resend } from '${PLUGIN_CONFIG_IMPORT_PLACEHOLDER}';
 import {
   resendContentTable,
   resendDeliveryEventsTable,
   resendEmailsTable,
   resendNextBatchRunTable,
-} from '__BETTER_CONVEX_PLUGIN_SCHEMA_IMPORT__';
-import { eq, inArray } from 'better-convex/orm';
-import { z } from 'zod';
+} from '${PLUGIN_SCHEMA_IMPORT_PLACEHOLDER}';
 import {
   createResendCaller,
   createResendHandler,
-} from '__BETTER_CONVEX_FUNCTIONS_DIR__/generated/plugins/resend.runtime';
-import {
-  type MutationCtx,
-} from '__BETTER_CONVEX_FUNCTIONS_DIR__/generated/server';
-import { privateAction, privateMutation, privateQuery } from '__BETTER_CONVEX_PROJECT_CRPC_IMPORT__';
-import { resend } from '__BETTER_CONVEX_PLUGIN_CONFIG_IMPORT__';
+} from '${FUNCTIONS_DIR_IMPORT_PLACEHOLDER}/generated/plugins/resend.runtime';
+import type { MutationCtx } from '${FUNCTIONS_DIR_IMPORT_PLACEHOLDER}/generated/server';
 
 const BATCH_SIZE = 100;
 const RESEND_ONE_CALL_EVERY_MS = 600;
@@ -73,7 +76,7 @@ async function scheduleBatchRun(ctx: MutationCtx) {
 
 async function cleanupEmailBatch(
   ctx: MutationCtx,
-  emails: Array<{ id: string; html: string | null; text: string | null }>,
+  emails: Array<{ id: string; html: string | null; text: string | null }>
 ) {
   if (emails.length === 0) {
     return;
@@ -85,8 +88,9 @@ async function cleanupEmailBatch(
       emails
         .flatMap((email) => [email.html, email.text])
         .filter(
-          (value): value is string => typeof value === 'string' && value.length > 0,
-        ),
+          (value): value is string =>
+            typeof value === 'string' && value.length > 0
+        )
     ),
   ];
 
@@ -104,7 +108,8 @@ async function cleanupEmailBatch(
   }
 }
 
-export const cleanupOldEmails = privateMutation.use(resend.middleware())
+export const cleanupOldEmails = privateMutation
+  .use(resend.middleware())
   .input(cleanupInputSchema)
   .mutation(async ({ ctx, input }) => {
     const olderThan = input.olderThan ?? FINALIZED_EMAIL_RETENTION_MS;
@@ -131,7 +136,8 @@ export const cleanupOldEmails = privateMutation.use(resend.middleware())
     return null;
   });
 
-export const cleanupAbandonedEmails = privateMutation.use(resend.middleware())
+export const cleanupAbandonedEmails = privateMutation
+  .use(resend.middleware())
   .input(cleanupInputSchema)
   .mutation(async ({ ctx, input }) => {
     const olderThan = input.olderThan ?? ABANDONED_EMAIL_RETENTION_MS;
@@ -160,7 +166,8 @@ export const cleanupAbandonedEmails = privateMutation.use(resend.middleware())
     return null;
   });
 
-export const sendEmail = privateMutation.use(resend.middleware())
+export const sendEmail = privateMutation
+  .use(resend.middleware())
   .input(
     z.object({
       from: z.string(),
@@ -173,7 +180,7 @@ export const sendEmail = privateMutation.use(resend.middleware())
       template: templateSchema.optional(),
       replyTo: z.array(z.string()).optional(),
       headers: headersSchema.optional(),
-    }),
+    })
   )
   .mutation(async ({ ctx, input }) => {
     const args = input;
@@ -264,7 +271,8 @@ export const sendEmail = privateMutation.use(resend.middleware())
     return email.id;
   });
 
-export const createManualEmail = privateMutation.use(resend.middleware())
+export const createManualEmail = privateMutation
+  .use(resend.middleware())
   .input(
     z.object({
       from: z.string(),
@@ -272,7 +280,7 @@ export const createManualEmail = privateMutation.use(resend.middleware())
       subject: z.string(),
       replyTo: z.array(z.string()).optional(),
       headers: headersSchema.optional(),
-    }),
+    })
   )
   .mutation(async ({ ctx, input }) => {
     const args = input;
@@ -299,14 +307,15 @@ export const createManualEmail = privateMutation.use(resend.middleware())
     return email.id;
   });
 
-export const updateManualEmail = privateMutation.use(resend.middleware())
+export const updateManualEmail = privateMutation
+  .use(resend.middleware())
   .input(
     z.object({
       emailId: z.string(),
       status: statusSchema,
       resendId: z.string().optional(),
       errorMessage: z.string().optional(),
-    }),
+    })
   )
   .mutation(async ({ ctx, input }) => {
     const args = input;
@@ -328,11 +337,12 @@ export const updateManualEmail = privateMutation.use(resend.middleware())
     return null;
   });
 
-export const cancelEmail = privateMutation.use(resend.middleware())
+export const cancelEmail = privateMutation
+  .use(resend.middleware())
   .input(
     z.object({
       emailId: z.string(),
-    }),
+    })
   )
   .mutation(async ({ ctx, input }) => {
     const query = ctx.orm.query;
@@ -358,11 +368,12 @@ export const cancelEmail = privateMutation.use(resend.middleware())
     return null;
   });
 
-export const getStatus = privateQuery.use(resend.middleware())
+export const getStatus = privateQuery
+  .use(resend.middleware())
   .input(
     z.object({
       emailId: z.string(),
-    }),
+    })
   )
   .query(async ({ ctx, input }) => {
     const query = ctx.orm.query;
@@ -386,11 +397,12 @@ export const getStatus = privateQuery.use(resend.middleware())
     };
   });
 
-export const get = privateQuery.use(resend.middleware())
+export const get = privateQuery
+  .use(resend.middleware())
   .input(
     z.object({
       emailId: z.string(),
-    }),
+    })
   )
   .query(async ({ ctx, input }) => {
     const query = ctx.orm.query;
@@ -430,7 +442,8 @@ export const get = privateQuery.use(resend.middleware())
     };
   });
 
-export const makeBatch = privateMutation.use(resend.middleware())
+export const makeBatch = privateMutation
+  .use(resend.middleware())
   .input(z.object({}))
   .mutation(async ({ ctx }) => {
     const caller = createResendCaller(ctx);
@@ -469,11 +482,12 @@ export const makeBatch = privateMutation.use(resend.middleware())
     return null;
   });
 
-export const getAllContentByIds = privateQuery.use(resend.middleware())
+export const getAllContentByIds = privateQuery
+  .use(resend.middleware())
   .input(
     z.object({
       contentIds: z.array(z.string()),
-    }),
+    })
   )
   .output(z.record(z.string(), z.string()))
   .query(async ({ ctx, input }) => {
@@ -504,11 +518,12 @@ export const getAllContentByIds = privateQuery.use(resend.middleware())
     return Object.fromEntries(entries);
   });
 
-export const getEmailsByIds = privateQuery.use(resend.middleware())
+export const getEmailsByIds = privateQuery
+  .use(resend.middleware())
   .input(
     z.object({
       emailIds: z.array(z.string()),
-    }),
+    })
   )
   .output(
     z.array(
@@ -525,8 +540,8 @@ export const getEmailsByIds = privateQuery.use(resend.middleware())
         template: templateSchema.nullable().optional(),
         replyTo: z.array(z.string()).nullable().optional(),
         headers: headersSchema.nullable().optional(),
-      }),
-    ),
+      })
+    )
   )
   .query(async ({ ctx, input }) => {
     if (input.emailIds.length === 0) {
@@ -544,13 +559,14 @@ export const getEmailsByIds = privateQuery.use(resend.middleware())
       .filter((row): row is NonNullable<typeof row> => !!row);
   });
 
-export const markEmailsFailed = privateMutation.use(resend.middleware())
+export const markEmailsFailed = privateMutation
+  .use(resend.middleware())
   .input(
     z.object({
       emailIds: z.array(z.string()),
       errorMessage: z.string(),
       attempt: z.number(),
-    }),
+    })
   )
   .mutation(async ({ ctx, input }) => {
     const existingEmails = await ctx.orm.query.resendEmails.findMany({
@@ -585,13 +601,14 @@ export const markEmailsFailed = privateMutation.use(resend.middleware())
     return null;
   });
 
-export const onEmailComplete = privateMutation.use(resend.middleware())
+export const onEmailComplete = privateMutation
+  .use(resend.middleware())
   .input(
     z.object({
       emailIds: z.array(z.string()),
       resendIds: z.array(z.string().nullable()),
       attempt: z.number(),
-    }),
+    })
   )
   .mutation(async ({ ctx, input }) => {
     for (let index = 0; index < input.emailIds.length; index += 1) {
@@ -628,12 +645,13 @@ export const onEmailComplete = privateMutation.use(resend.middleware())
     return null;
   });
 
-export const callResendAPIWithBatch = privateAction.use(resend.middleware())
+export const callResendAPIWithBatch = privateAction
+  .use(resend.middleware())
   .input(
     z.object({
       emailIds: z.array(z.string()),
       attempt: z.number(),
-    }),
+    })
   )
   .action(async ({ ctx, input }) => {
     const args = input;
@@ -694,9 +712,7 @@ export const callResendAPIWithBatch = privateAction.use(resend.middleware())
     if (!response.ok) {
       const statusCode = response.status;
       const errorText = await response.text();
-      if (
-        shouldRetry(statusCode, args.attempt, options.retryAttempts)
-      ) {
+      if (shouldRetry(statusCode, args.attempt, options.retryAttempts)) {
         const nextAttempt = args.attempt + 1;
         const delayMs = Math.max(
           RESEND_ONE_CALL_EVERY_MS,
@@ -714,8 +730,7 @@ export const callResendAPIWithBatch = privateAction.use(resend.middleware())
       await caller.markEmailsFailed({
         emailIds: queuedEmailIds,
         errorMessage:
-          errorText ||
-          \`Resend API request failed with status \${statusCode}.\`,
+          errorText || \`Resend API request failed with status \${statusCode}.\`,
         attempt: args.attempt,
       });
       await caller.makeBatch({});
@@ -742,11 +757,12 @@ export const callResendAPIWithBatch = privateAction.use(resend.middleware())
     return null;
   });
 
-export const getEmailByResendId = privateQuery.use(resend.middleware())
+export const getEmailByResendId = privateQuery
+  .use(resend.middleware())
   .input(
     z.object({
       resendId: z.string(),
-    }),
+    })
   )
   .query(async ({ ctx, input }) => {
     const query = ctx.orm.query;
@@ -755,11 +771,12 @@ export const getEmailByResendId = privateQuery.use(resend.middleware())
     });
   });
 
-export const handleEmailEvent = privateMutation.use(resend.middleware())
+export const handleEmailEvent = privateMutation
+  .use(resend.middleware())
   .input(
     z.object({
       event: z.unknown(),
-    }),
+    })
   )
   .mutation(async ({ ctx, input }) => {
     const event = parseEmailEvent(input.event);
@@ -863,18 +880,17 @@ export const handleEmailEvent = privateMutation.use(resend.middleware())
     return null;
   });
 
-export const onEmailEvent = privateMutation.use(resend.middleware())
+export const onEmailEvent = privateMutation
+  .use(resend.middleware())
   .input(
     z.object({
       id: z.string(),
       event: z.unknown(),
-    }),
+    })
   )
   .mutation(async ({ input }) => {
     // TODO: fan out delivery/open/click/bounce events to your app domain.
     void input;
     return null;
   });
-
-
 `;

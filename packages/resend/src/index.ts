@@ -1,7 +1,11 @@
 /** biome-ignore-all lint/performance/noBarrelFile: package entry */
 
-import { definePlugin } from 'better-convex/plugins';
-import type { ResendApi, ResendOptions } from './runtime-helpers';
+import { definePlugin, type Plugin } from 'better-convex/plugins';
+import {
+  type ResendApi,
+  type ResendOptions,
+  verifyResendWebhookEvent,
+} from './runtime-helpers';
 
 export type { ResendApi, ResendOptions } from './runtime-helpers';
 export {
@@ -13,7 +17,6 @@ export {
   normalizeRecipientList,
   parseEmailEvent,
   shouldRetry,
-  verifyResendWebhookEvent,
 } from './runtime-helpers';
 export type {
   EmailEvent,
@@ -24,13 +27,16 @@ export type {
   Template,
 } from './shared';
 
-export const ResendPlugin = definePlugin<'resend', ResendOptions, ResendApi>(
-  'resend',
-  ({ options }) => ({
-    apiKey: options?.apiKey ?? '',
-    webhookSecret: options?.webhookSecret ?? '',
-    initialBackoffMs: options?.initialBackoffMs ?? 30_000,
-    retryAttempts: options?.retryAttempts ?? 5,
-    testMode: options?.testMode ?? true,
-  })
-);
+export const ResendPlugin: Plugin<'resend', ResendOptions, ResendApi> =
+  definePlugin('resend', ({ options }) => {
+    const webhookSecret = options?.webhookSecret ?? '';
+    return {
+      apiKey: options?.apiKey ?? '',
+      webhookSecret,
+      initialBackoffMs: options?.initialBackoffMs ?? 30_000,
+      retryAttempts: options?.retryAttempts ?? 5,
+      testMode: options?.testMode ?? true,
+      verifyWebhookEvent: (req: Request) =>
+        verifyResendWebhookEvent(req, webhookSecret),
+    };
+  });

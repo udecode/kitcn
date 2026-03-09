@@ -1,4 +1,4 @@
-import type { ResendApi } from './index';
+import type { EmailEvent, ResendApi } from './index';
 
 const assertResendApi = (_value: ResendApi) => undefined;
 
@@ -8,4 +8,5 @@ assertResendApi({
   initialBackoffMs: 30_000,
   retryAttempts: 5,
   testMode: true,
+  verifyWebhookEvent: async () => ({}) as EmailEvent,
 });

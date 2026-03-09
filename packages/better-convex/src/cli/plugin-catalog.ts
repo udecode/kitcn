@@ -1,7 +1,11 @@
 import { RATELIMIT_PLUGIN_TEMPLATE } from './plugins/ratelimit/ratelimit-plugin.template.js';
 import { RATELIMIT_SCHEMA_TEMPLATE } from './plugins/ratelimit/ratelimit-schema.template.js';
-import { RESEND_FUNCTIONS_TEMPLATE } from './plugins/resend/resend.template.js';
+import { RESEND_CRONS_TEMPLATE } from './plugins/resend/resend-crons.template.js';
+import { RESEND_EMAIL_TEMPLATE } from './plugins/resend/resend-email.template.js';
+import { RESEND_FUNCTIONS_TEMPLATE } from './plugins/resend/resend-functions.template.js';
+import { RESEND_PLUGIN_TEMPLATE } from './plugins/resend/resend-plugin.template.js';
 import { RESEND_SCHEMA_TEMPLATE } from './plugins/resend/resend-schema.template.js';
+import { RESEND_WEBHOOK_TEMPLATE } from './plugins/resend/resend-webhook.template.js';
 export const FUNCTIONS_DIR_IMPORT_PLACEHOLDER =
   '__BETTER_CONVEX_FUNCTIONS_DIR__';
 export const PLUGIN_CONFIG_IMPORT_PLACEHOLDER =
@@ -14,8 +18,6 @@ export const PROJECT_SHARED_API_IMPORT_PLACEHOLDER =
   '__BETTER_CONVEX_PROJECT_SHARED_API_IMPORT__';
 export const PROJECT_GET_ENV_IMPORT_PLACEHOLDER =
   '__BETTER_CONVEX_PROJECT_GET_ENV_IMPORT__';
-export const PROJECT_GET_ENV_ACCESS_PLACEHOLDER =
-  '__BETTER_CONVEX_PROJECT_GET_ENV_ACCESS__';
 
 export const SUPPORTED_PLUGIN_KEYS = ['resend', 'ratelimit'] as const;
 export type SupportedPluginKey = (typeof SUPPORTED_PLUGIN_KEYS)[number];
@@ -46,6 +48,13 @@ export type PluginEnvField = {
 
 export type PluginCatalogEntry = {
   key: SupportedPluginKey;
+  label: string;
+  description: string;
+  keywords: readonly string[];
+  docs: {
+    localPath: string;
+    publicUrl: string;
+  };
   packageName: string;
   envFields?: readonly PluginEnvField[];
   schemaRegistration: {
@@ -58,229 +67,25 @@ export type PluginCatalogEntry = {
   templates: readonly PluginScaffoldTemplate[];
 };
 
-function emitResendFunctionsTemplate() {
-  return RESEND_FUNCTIONS_TEMPLATE;
-}
-
-function emitResendPluginTemplate() {
-  return `import { ResendPlugin } from "@better-convex/resend";
-${PROJECT_GET_ENV_IMPORT_PLACEHOLDER}
-
-export const resend = ResendPlugin.configure({
-  apiKey: ${PROJECT_GET_ENV_ACCESS_PLACEHOLDER}.RESEND_API_KEY,
-  webhookSecret: ${PROJECT_GET_ENV_ACCESS_PLACEHOLDER}.RESEND_WEBHOOK_SECRET,
-  initialBackoffMs: 30_000,
-  retryAttempts: 5,
-  // Set to false in production once your domain is ready.
-  testMode: true,
-});
-`;
-}
-
-function emitResendSchemaTemplate() {
-  return RESEND_SCHEMA_TEMPLATE;
-}
-
-function emitResendWebhookTemplate() {
-  return `import { verifyResendWebhookEvent } from "@better-convex/resend";
-import type { HttpRouter } from "convex/server";
-import { createResendCaller } from "${FUNCTIONS_DIR_IMPORT_PLACEHOLDER}/generated/plugins/resend.runtime";
-import { publicRoute } from "${PROJECT_CRPC_IMPORT_PLACEHOLDER}";
-import { resend } from "./plugin";
-
-const webhookHandler = publicRoute
-  .use(resend.middleware())
-  .post("/resend-webhook")
-  .mutation(async ({ ctx, c }) => {
-    const event = await verifyResendWebhookEvent(
-      c.req.raw,
-      ctx.api.resend.webhookSecret,
-    );
-    const caller = createResendCaller(ctx);
-    await caller.handleEmailEvent({ event });
-    return new Response(null, { status: 201 });
-  });
-
-export function registerResendWebhook(http: HttpRouter) {
-  http.route({
-    path: "/resend-webhook",
-    method: "POST",
-    handler: webhookHandler,
-  });
-}
-`;
-}
-
-function emitResendCronsTemplate() {
-  return `import { cronJobs } from "convex/server";
-import { internal } from "${FUNCTIONS_DIR_IMPORT_PLACEHOLDER}/_generated/api";
-
-const crons = cronJobs();
-
-crons.interval(
-  "cleanup resend plugin emails",
-  { hours: 1 },
-  internal.plugins.resend.cleanupOldEmails,
-  {},
-);
-
-crons.interval(
-  "cleanup resend abandoned plugin emails",
-  { hours: 6 },
-  internal.plugins.resend.cleanupAbandonedEmails,
-  {},
-);
-
-export default crons;
-`;
-}
-
-function emitResendEmailTemplate() {
-  return `'use node';
-
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
-import { render } from "@react-email/render";
-import { z } from "zod";
-import { createResendCaller } from "${FUNCTIONS_DIR_IMPORT_PLACEHOLDER}/generated/plugins/resend.runtime";
-import { privateAction } from "${PROJECT_CRPC_IMPORT_PLACEHOLDER}";
-${PROJECT_GET_ENV_IMPORT_PLACEHOLDER}
-
-type GenericEmailTemplateProps = {
-  title: string;
-  body: string;
-  ctaLabel?: string;
-  ctaUrl?: string;
-};
-
-function GenericEmailTemplate({
-  title,
-  body,
-  ctaLabel,
-  ctaUrl,
-}: GenericEmailTemplateProps) {
-  return (
-    <Html>
-      <Head />
-      <Preview>{title}</Preview>
-      <Body style={{ backgroundColor: "#f6f9fc", padding: "24px 0" }}>
-        <Container
-          style={{
-            backgroundColor: "#ffffff",
-            border: "1px solid #e5e7eb",
-            borderRadius: "8px",
-            margin: "0 auto",
-            maxWidth: "600px",
-            padding: "24px",
-          }}
-        >
-          <Heading style={{ fontSize: "24px", margin: "0 0 12px" }}>
-            {title}
-          </Heading>
-          <Text style={{ fontSize: "15px", lineHeight: "1.6", margin: "0" }}>
-            {body}
-          </Text>
-          {ctaLabel && ctaUrl ? (
-            <Section style={{ marginTop: "20px", textAlign: "center" }}>
-              <Button
-                href={ctaUrl}
-                style={{
-                  backgroundColor: "#111827",
-                  borderRadius: "6px",
-                  color: "#ffffff",
-                  display: "inline-block",
-                  fontSize: "14px",
-                  padding: "10px 16px",
-                  textDecoration: "none",
-                }}
-              >
-                {ctaLabel}
-              </Button>
-            </Section>
-          ) : null}
-        </Container>
-      </Body>
-    </Html>
-  );
-}
-
-export const sendTemplatedEmail = privateAction
-  .input(
-    z.object({
-      to: z.string(),
-      from: z.string().optional(),
-      subject: z.string(),
-      title: z.string(),
-      body: z.string(),
-      ctaLabel: z.string().optional(),
-      ctaUrl: z.string().optional(),
-    }),
-  )
-  .output(z.string())
-  .action(async ({ ctx, input }) => {
-    const from = input.from ?? ${PROJECT_GET_ENV_ACCESS_PLACEHOLDER}.RESEND_FROM_EMAIL;
-    if (!from) {
-      throw new Error(
-        'Missing sender email. Provide "from" or set RESEND_FROM_EMAIL.',
-      );
-    }
-
-    const html = await render(
-      <GenericEmailTemplate
-        title={input.title}
-        body={input.body}
-        ctaLabel={input.ctaLabel}
-        ctaUrl={input.ctaUrl}
-      />,
-    );
-
-    const caller = createResendCaller(ctx);
-    return await caller.sendEmail({
-      from,
-      to: [input.to],
-      subject: input.subject,
-      html,
-    });
-  });
-`;
-}
-
-function emitRatelimitPluginTemplate() {
-  return RATELIMIT_PLUGIN_TEMPLATE;
-}
-
-function emitRatelimitSchemaTemplate() {
-  return RATELIMIT_SCHEMA_TEMPLATE;
-}
-
 const RESEND_TEMPLATES: readonly PluginScaffoldTemplate[] = [
   {
     id: 'resend-schema',
     path: 'schema.ts',
     target: 'lib',
-    content: emitResendSchemaTemplate(),
+    content: RESEND_SCHEMA_TEMPLATE,
   },
   {
     id: 'resend-functions',
     path: 'resend.ts',
     target: 'functions',
-    content: emitResendFunctionsTemplate(),
+    content: RESEND_FUNCTIONS_TEMPLATE,
     requires: ['resend-schema'],
   },
   {
     id: 'resend-email',
     path: 'email.tsx',
     target: 'functions',
-    content: emitResendEmailTemplate(),
+    content: RESEND_EMAIL_TEMPLATE,
     requires: ['resend-functions', 'resend-plugin'],
     dependencyHintMessage: 'React Email dependencies are required',
     dependencyHints: [
@@ -295,21 +100,21 @@ const RESEND_TEMPLATES: readonly PluginScaffoldTemplate[] = [
     id: 'resend-plugin',
     path: 'plugin.ts',
     target: 'lib',
-    content: emitResendPluginTemplate(),
+    content: RESEND_PLUGIN_TEMPLATE,
     requires: ['resend-functions'],
   },
   {
     id: 'resend-webhook',
     path: 'webhook.ts',
     target: 'lib',
-    content: emitResendWebhookTemplate(),
+    content: RESEND_WEBHOOK_TEMPLATE,
     requires: ['resend-plugin', 'resend-functions'],
   },
   {
     id: 'resend-crons',
     path: 'crons.ts',
     target: 'lib',
-    content: emitResendCronsTemplate(),
+    content: RESEND_CRONS_TEMPLATE,
     requires: ['resend-functions'],
   },
 ];
@@ -319,13 +124,13 @@ const RATELIMIT_TEMPLATES: readonly PluginScaffoldTemplate[] = [
     id: 'ratelimit-schema',
     path: 'schema.ts',
     target: 'lib',
-    content: emitRatelimitSchemaTemplate(),
+    content: RATELIMIT_SCHEMA_TEMPLATE,
   },
   {
     id: 'ratelimit-plugin',
     path: 'plugin.ts',
     target: 'lib',
-    content: emitRatelimitPluginTemplate(),
+    content: RATELIMIT_PLUGIN_TEMPLATE,
     requires: ['ratelimit-schema'],
   },
 ];
@@ -333,6 +138,14 @@ const RATELIMIT_TEMPLATES: readonly PluginScaffoldTemplate[] = [
 const PLUGIN_CATALOG: Record<SupportedPluginKey, PluginCatalogEntry> = {
   resend: {
     key: 'resend',
+    label: 'Resend',
+    description:
+      'Transactional email plugin with queueing, webhook handling, and React Email scaffolds.',
+    keywords: ['email', 'resend', 'webhook', 'react-email'],
+    docs: {
+      localPath: 'www/content/docs/plugins/resend.mdx',
+      publicUrl: 'https://better-convex.vercel.app/docs/plugins/resend',
+    },
     packageName: '@better-convex/resend',
     envFields: [
       {
@@ -368,6 +181,14 @@ const PLUGIN_CATALOG: Record<SupportedPluginKey, PluginCatalogEntry> = {
   },
   ratelimit: {
     key: 'ratelimit',
+    label: 'Ratelimit',
+    description:
+      'Reusable server-side rate limiting plugin with schema-backed buckets.',
+    keywords: ['ratelimit', 'rate-limit', 'throttle'],
+    docs: {
+      localPath: 'www/content/docs/plugins/ratelimit.mdx',
+      publicUrl: 'https://better-convex.vercel.app/docs/plugins/ratelimit',
+    },
     packageName: 'better-convex',
     schemaRegistration: {
       importName: 'ratelimitExtension',

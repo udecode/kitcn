@@ -33,8 +33,30 @@ function writeScopedFixture(dir: string) {
   writeFile(
     path.join(dir, 'node_modules', 'better-convex', 'server.js'),
     `
+    const initCRPC = {
+      meta() {
+        return this;
+      },
+      dataModel() {
+        return this;
+      },
+      context() {
+        return this;
+      },
+      create() {
+        return {
+          query: {},
+          mutation: {},
+          action: {},
+          httpAction: {},
+          router: (...args) => args[0] ?? {},
+        };
+      },
+    };
+
     export const createApiLeaf = (fn, meta) =>
       Object.assign(fn, meta, { functionRef: fn });
+    export { initCRPC };
     `.trim()
   );
   writeFile(
@@ -811,6 +833,58 @@ describe('cli/codegen', () => {
       expect(runtimeGenerated).not.toContain('export function createCaller(');
       expect(runtimeGenerated).not.toContain('export function createHandler(');
     } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta supports scaffolded crpc imports during first-run placeholder generation', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+    const errorLines: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      errorLines.push(args.map(String).join(' '));
+    };
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'crpc.ts'),
+        `
+        import { initCRPC } from '../generated/server';
+
+        const c = initCRPC
+          .meta<{
+            auth?: 'optional' | 'required';
+          }>()
+          .create();
+
+        export const publicRoute = c.httpAction;
+        export const router = c.router;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'http.ts'),
+        `
+        import './lib/crpc';
+
+        export default {};
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).resolves.toBe(
+        undefined
+      );
+
+      expect(errorLines).toEqual([]);
+      const serverGenerated = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'server.ts'),
+        'utf8'
+      );
+      expect(serverGenerated).toContain('export const initCRPC =');
+    } finally {
+      console.error = originalError;
       process.chdir(oldCwd);
     }
   });
