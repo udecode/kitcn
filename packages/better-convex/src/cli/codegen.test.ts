@@ -516,43 +516,43 @@ describe('cli/codegen', () => {
         'createGenericHandlerFactory'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"scheduledMutationBatch": ["mutation", typedProcedureResolver(internal["generated"]["server"]["scheduledMutationBatch"]'
+        '"scheduledMutationBatch": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").scheduledMutationBatch>(internal, ["generated","server","scheduledMutationBatch"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"scheduledDelete": ["mutation", typedProcedureResolver(internal["generated"]["server"]["scheduledDelete"]'
+        '"scheduledDelete": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").scheduledDelete>(internal, ["generated","server","scheduledDelete"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"aggregateBackfill": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfill"]'
+        '"aggregateBackfill": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").aggregateBackfill>(internal, ["generated","server","aggregateBackfill"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"aggregateBackfillChunk": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfillChunk"]'
+        '"aggregateBackfillChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").aggregateBackfillChunk>(internal, ["generated","server","aggregateBackfillChunk"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"aggregateBackfillStatus": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfillStatus"]'
+        '"aggregateBackfillStatus": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").aggregateBackfillStatus>(internal, ["generated","server","aggregateBackfillStatus"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"migrationRun": ["mutation", typedProcedureResolver(internal["generated"]["server"]["migrationRun"]'
+        '"migrationRun": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").migrationRun>(internal, ["generated","server","migrationRun"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"migrationRunChunk": ["mutation", typedProcedureResolver(internal["generated"]["server"]["migrationRunChunk"]'
+        '"migrationRunChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").migrationRunChunk>(internal, ["generated","server","migrationRunChunk"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"migrationStatus": ["mutation", typedProcedureResolver(internal["generated"]["server"]["migrationStatus"]'
+        '"migrationStatus": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").migrationStatus>(internal, ["generated","server","migrationStatus"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"migrationCancel": ["mutation", typedProcedureResolver(internal["generated"]["server"]["migrationCancel"]'
+        '"migrationCancel": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").migrationCancel>(internal, ["generated","server","migrationCancel"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"resetChunk": ["mutation", typedProcedureResolver(internal["generated"]["server"]["resetChunk"]'
+        '"resetChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").resetChunk>(internal, ["generated","server","resetChunk"])'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"reset": ["action", typedProcedureResolver(internal["generated"]["server"]["reset"]'
+        '"reset": ["action", typedProcedureResolver(getGeneratedFunctionReference<"action", typeof import("./server").reset>(internal, ["generated","server","reset"])'
       );
       expect(nestedRuntimeGenerated).toContain(
         "import type { ActionCtx, MutationCtx, QueryCtx } from '../server';"
       );
       expect(nestedRuntimeGenerated).toContain(
-        '"internalOnly": ["query", typedProcedureResolver(internal["items"]["queries"]["internalOnly"], () => (require("../../items/queries") as Record<string, unknown>)["internalOnly"])],'
+        '"internalOnly": ["query", typedProcedureResolver(getGeneratedFunctionReference<"query", typeof import("../../items/queries").internalOnly>(internal, ["items","queries","internalOnly"]), () => (require("../../items/queries") as Record<string, unknown>)["internalOnly"])],'
       );
       expect(serverGenerated).toContain('aggregateBackfill');
       expect(serverGenerated).toContain('aggregateBackfillChunk');
@@ -746,7 +746,10 @@ describe('cli/codegen', () => {
         "import type { ActionCtx, MutationCtx, QueryCtx } from './server';"
       );
       expect(todosRuntimeGenerated).toContain(
-        '"list": ["query", typedProcedureResolver(api["todos"]["list"], () => (require("../todos") as Record<string, unknown>)["list"])],'
+        '/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unused-vars */'
+      );
+      expect(todosRuntimeGenerated).toContain(
+        '"list": ["query", typedProcedureResolver(getGeneratedFunctionReference<"query", typeof import("../todos").list>(api, ["todos","list"]), () => (require("../todos") as Record<string, unknown>)["list"])],'
       );
       expect(todosRuntimeGenerated).toContain(
         'export function createTodosCaller<TCtx extends ProcedureCallerContext>('

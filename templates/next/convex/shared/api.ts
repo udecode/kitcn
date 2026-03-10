@@ -10,7 +10,25 @@ import type { InferInsertModel, InferSelectModel } from "better-convex/orm";
 import type { httpRouter } from "../functions/http";
 import type { tables } from "../functions/schema";
 
+function getGeneratedValue(root: unknown, path: readonly string[]): unknown {
+  let current = root;
+
+  for (const segment of path) {
+    if (typeof current !== 'object' || current === null) {
+      throw new Error(`[better-convex] Invalid generated path: ${path.join('.')}`);
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return current;
+}
+
+
 export const api = {
+  messages: {
+    create: createApiLeaf<"mutation", typeof import("../functions/messages").create>(getGeneratedValue(convexApi, ["messages","create"]), { type: "mutation" }),
+    list: createApiLeaf<"query", typeof import("../functions/messages").list>(getGeneratedValue(convexApi, ["messages","list"]), { type: "query" }),
+  },
   http: undefined as unknown as typeof httpRouter,
   _http: {
   },

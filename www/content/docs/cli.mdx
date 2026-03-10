@@ -126,9 +126,13 @@ Behavior:
   - `package.json`
   - `tsconfig.json`
   - `.env.local`
+  - `app/convex/page.tsx`
   - `components/providers.tsx`
   - `lib/convex/*`
-  - the Better Convex baseline files above
+  - `convex/functions/messages.ts`
+  - `convex/functions/generated/messages.runtime.ts`
+  - the Better Convex baseline files above, with `convex/functions/schema.ts`
+    seeded with a starter `messages` table
 - template-mode init preserves shadcn-owned files such as `app/layout.tsx`, `app/page.tsx`, `app/globals.css`, `components/theme-provider.tsx`, `lib/utils.ts`, `components.json`, `eslint.config.mjs`, `next.config.mjs`, and `postcss.config.mjs`, and only patches:
   - `app/layout.tsx` to mount `Providers`
   - `tsconfig.json` to add `@convex/*`

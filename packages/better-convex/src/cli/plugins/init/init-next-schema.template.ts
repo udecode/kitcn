@@ -1,4 +1,4 @@
-import { convexTable, defineSchema, text } from 'better-convex/orm';
+export const INIT_NEXT_SCHEMA_TEMPLATE = `import { convexTable, defineSchema, text } from 'better-convex/orm';
 
 export const messagesTable = convexTable('messages', {
   body: text().notNull(),
@@ -9,3 +9,4 @@ export const tables = {
 };
 
 export default defineSchema(tables);
+`;

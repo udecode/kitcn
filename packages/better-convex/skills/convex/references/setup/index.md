@@ -106,11 +106,14 @@ bunx better-convex add resend
 
 `better-convex init -t next --yes` owns the Better Convex integration layer for:
 
+- `app/convex/page.tsx`
 - `package.json`
 - `tsconfig.json`
 - `.env.local`
 - `components/providers.tsx`
 - `lib/convex/*`
+- `convex/functions/messages.ts`
+- `convex/functions/generated/messages.runtime.ts`
 - `convex/functions/schema.ts`
 - `convex/functions/http.ts`
 - `convex/functions/generated/server.ts`
@@ -127,6 +130,8 @@ Template-mode init preserves the shadcn-owned shell (`app/layout.tsx`, `app/page
 - `package.json` to add `better-convex codegen` as `codegen` (or `convex:codegen` when `codegen` is already taken)
 
 Init also runs the first Better Convex codegen pass so `convex/lib/crpc.ts` can import `../functions/generated/server` immediately.
+Template-mode init also seeds a live messages demo route plus starter schema and
+procedures, so the scaffold has one working query/mutation flow out of the box.
 Template-mode init infers `src/` vs root app layouts and writes the Next client scaffold into the matching tree. Conflicting `src` + root layouts should fail instead of guessing.
 Backend resolves from `--backend`, then `meta["better-convex"].backend`, then `convex`.
 

@@ -10,6 +10,7 @@
 
 import type * as generated_auth from "../generated/auth.js";
 import type * as generated_server from "../generated/server.js";
+import type * as messages from "../messages.js";
 
 import type {
   ApiFromModules,
@@ -29,6 +30,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   generated_auth: typeof generated_auth;
   generated_server: typeof generated_server;
+  messages: typeof messages;
 }>;
 
 export declare const api: FilterApi<

@@ -9,6 +9,20 @@ import { api as convexApi } from "../_generated/api.js";
 import type { InferInsertModel, InferSelectModel } from "better-convex/orm";
 import type { tables } from "../schema";
 
+function getGeneratedValue(root: unknown, path: readonly string[]): unknown {
+  let current = root;
+
+  for (const segment of path) {
+    if (typeof current !== 'object' || current === null) {
+      throw new Error(`[better-convex] Invalid generated path: ${path.join('.')}`);
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return current;
+}
+
+
 export const api = {
   _http: {
   },
@@ -17,6 +31,7 @@ export const api = {
 export type Api = typeof api;
 export type ApiInputs = inferApiInputs<Api>;
 export type ApiOutputs = inferApiOutputs<Api>;
+
 export type TableName = keyof typeof tables;
 export type Select<T extends TableName> = InferSelectModel<(typeof tables)[T]>;
 export type Insert<T extends TableName> = InferInsertModel<(typeof tables)[T]>;

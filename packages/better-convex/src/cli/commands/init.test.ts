@@ -244,6 +244,16 @@ describe('cli/commands/init', () => {
       expect(
         fs.existsSync(path.join(expectedProjectDir, 'lib', 'convex', 'rsc.tsx'))
       ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(expectedProjectDir, 'app', 'convex', 'page.tsx')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(expectedProjectDir, 'convex', 'functions', 'messages.ts')
+        )
+      ).toBe(true);
       expect(fs.existsSync(path.join(expectedProjectDir, '.env.local'))).toBe(
         true
       );
@@ -349,6 +359,46 @@ describe('cli/commands/init', () => {
             'utf8'
           )
           .includes('createCallerFactory')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(
+            path.join(expectedProjectDir, 'app', 'convex', 'page.tsx'),
+            'utf8'
+          )
+          .includes('crpc.messages.list.queryOptions()')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(
+            path.join(expectedProjectDir, 'app', 'convex', 'page.tsx'),
+            'utf8'
+          )
+          .includes('crpc.messages.create.mutationOptions()')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(
+            path.join(expectedProjectDir, 'convex', 'functions', 'messages.ts'),
+            'utf8'
+          )
+          .includes('publicQuery')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(
+            path.join(expectedProjectDir, 'convex', 'functions', 'messages.ts'),
+            'utf8'
+          )
+          .includes('publicMutation')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(
+            path.join(expectedProjectDir, 'convex', 'functions', 'schema.ts'),
+            'utf8'
+          )
+          .includes('messagesTable')
       ).toBe(true);
       expect(
         fs
@@ -467,6 +517,9 @@ describe('cli/commands/init', () => {
         fs.existsSync(path.join(tmpDir, 'src', 'components', 'providers.tsx'))
       ).toBe(true);
       expect(
+        fs.existsSync(path.join(tmpDir, 'src', 'app', 'convex', 'page.tsx'))
+      ).toBe(true);
+      expect(
         fs.existsSync(path.join(tmpDir, 'src', 'lib', 'convex', 'crpc.tsx'))
       ).toBe(true);
       const tsconfig = JSON.parse(
@@ -495,6 +548,14 @@ describe('cli/commands/init', () => {
         fs
           .readFileSync(path.join(tmpDir, 'postcss.config.mjs'), 'utf8')
           .includes('"@tailwindcss/postcss"')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(
+            path.join(tmpDir, 'src', 'app', 'convex', 'page.tsx'),
+            'utf8'
+          )
+          .includes('crpc.messages.list.queryOptions()')
       ).toBe(true);
       expect(
         fs

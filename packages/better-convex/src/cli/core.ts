@@ -59,10 +59,13 @@ import {
 import { INIT_NEXT_CLIENT_CRPC_TEMPLATE } from './plugins/init/init-next-client-crpc.template.js';
 import { INIT_NEXT_CONVEX_PROVIDER_TEMPLATE } from './plugins/init/init-next-convex-provider.template.js';
 import { renderInitNextEnvLocalTemplate } from './plugins/init/init-next-env-local.template.js';
+import { INIT_NEXT_MESSAGES_TEMPLATE } from './plugins/init/init-next-messages.template.js';
+import { INIT_NEXT_MESSAGES_PAGE_TEMPLATE } from './plugins/init/init-next-messages-page.template.js';
 import { renderInitNextPackageJsonTemplate } from './plugins/init/init-next-package-json.template.js';
 import { INIT_NEXT_PROVIDERS_TEMPLATE } from './plugins/init/init-next-providers.template.js';
 import { INIT_NEXT_QUERY_CLIENT_TEMPLATE } from './plugins/init/init-next-query-client.template.js';
 import { INIT_NEXT_RSC_TEMPLATE } from './plugins/init/init-next-rsc.template.js';
+import { INIT_NEXT_SCHEMA_TEMPLATE } from './plugins/init/init-next-schema.template.js';
 import { INIT_NEXT_SERVER_TEMPLATE } from './plugins/init/init-next-server.template.js';
 import { INIT_SCHEMA_TEMPLATE } from './plugins/init/init-schema.template.js';
 import { isContentEquivalent } from './utils/compare.js';
@@ -1921,7 +1924,8 @@ function resolveInitNextScaffoldContext(): InitNextScaffoldContext {
 }
 
 function buildInitNextOwnedScaffoldFiles(
-  context: InitNextScaffoldContext
+  context: InitNextScaffoldContext,
+  functionsDirRelative: string
 ): readonly InitOwnedTemplateScaffoldFile[] {
   return [
     {
@@ -1990,6 +1994,30 @@ function buildInitNextOwnedScaffoldFiles(
       createReason: `Create baseline ${context.convexClientDir}/rsc.tsx for the Next scaffold.`,
       updateReason: `Update ${context.convexClientDir}/rsc.tsx for the Next scaffold.`,
       skipReason: `${context.convexClientDir}/rsc.tsx already matches the Next scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.appDir}/convex/page.tsx`,
+      content: INIT_NEXT_MESSAGES_PAGE_TEMPLATE,
+      createReason: `Create ${context.appDir}/convex/page.tsx as the minimal Better Convex demo route.`,
+      updateReason: `Update ${context.appDir}/convex/page.tsx for the Better Convex demo route.`,
+      skipReason: `${context.appDir}/convex/page.tsx already matches the Better Convex demo route.`,
+    },
+    {
+      kind: 'schema',
+      relativePath: `${functionsDirRelative}/schema.ts`,
+      content: INIT_NEXT_SCHEMA_TEMPLATE,
+      createReason: `Create ${functionsDirRelative}/schema.ts with the minimal Better Convex demo schema.`,
+      updateReason: `Update ${functionsDirRelative}/schema.ts with the minimal Better Convex demo schema.`,
+      skipReason: `${functionsDirRelative}/schema.ts already matches the Better Convex demo schema.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${functionsDirRelative}/messages.ts`,
+      content: INIT_NEXT_MESSAGES_TEMPLATE,
+      createReason: `Create ${functionsDirRelative}/messages.ts for the Better Convex demo route.`,
+      updateReason: `Update ${functionsDirRelative}/messages.ts for the Better Convex demo route.`,
+      skipReason: `${functionsDirRelative}/messages.ts already matches the Better Convex demo route.`,
     },
   ] as const;
 }
@@ -2267,13 +2295,17 @@ function renderInitTemplateContent(params: {
 
 function buildTemplateInitializationPlanFiles(params: {
   template?: string;
+  functionsDirRelative: string;
 }): PluginInstallPlanFile[] {
   if (params.template !== DEFAULT_INIT_TEMPLATE) {
     return [];
   }
 
   const context = resolveInitNextScaffoldContext();
-  const ownedFiles = buildInitNextOwnedScaffoldFiles(context).map((file) => {
+  const ownedFiles = buildInitNextOwnedScaffoldFiles(
+    context,
+    params.functionsDirRelative
+  ).map((file) => {
     const filePath = resolve(process.cwd(), file.relativePath);
     const existingContent = fs.existsSync(filePath)
       ? fs.readFileSync(filePath, 'utf8')
@@ -2414,6 +2446,7 @@ export function buildInitializationPlan(params: {
   const files: PluginInstallPlanFile[] = [];
   const templateFiles = buildTemplateInitializationPlanFiles({
     template: params.template,
+    functionsDirRelative,
   });
 
   if (functionsDirRelative !== 'convex' || fs.existsSync(convexConfigPath)) {
