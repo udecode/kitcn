@@ -197,3 +197,8 @@ type ProcedureMeta = {
 - Fix generated schedule caller types so `schedule.now`, `schedule.after`, and
   `schedule.at` return `GenericId<'_scheduled_functions'>`, and
   `schedule.cancel(...)` requires the same id type.
+- Fix gitignore bootstrap so Better Convex adds both `.convex/` and
+  `.concave/` entries during init/dev flows.
+- Fix `better-convex init -t next` tsconfig scaffolding so the root
+  `tsconfig.json` and generated `convex/tsconfig.json` both set
+  `strictFunctionTypes: false`.

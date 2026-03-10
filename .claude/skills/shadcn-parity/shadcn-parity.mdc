@@ -97,7 +97,7 @@ Repo automation adds one deliberate detail:
 To regenerate the checked-in fixture:
 
 ```bash
-bun run template:next:sync
+bun run template:sync
 ```
 
 To verify the fixture still matches fresh CLI output:
@@ -112,21 +112,25 @@ bun run check:templates
 bun install
 bun lint
 bun typecheck
-bun build
 ```
 
 It validates against the current local package under test, not the last
 published npm version:
 
-- build `packages/better-convex`
-- pack it to a local tarball
+- pack the current local `better-convex` package to a tarball
 - install that tarball into the generated temp app
+
+If you need the slower rebuild-first lane, use:
+
+```bash
+bun run check:templates:full
+```
 
 ### Agent Repro
 
 When checking parity or drift:
 
-1. run `bun run template:next:sync` instead of editing `templates/next` by hand
+1. run `bun run template:sync` instead of editing `templates/next` by hand
 2. run `bun run check:templates`
 3. if drift remains, fix `better-convex init -t next`, not the fixture
 
@@ -151,13 +155,11 @@ When checking parity or drift:
    - for template sync, the selected backend is Concave
    - outside that flow, backend still resolves normally from config/CLI
 5. validate the fresh generated app:
-   - build the local `better-convex` package
    - pack local `better-convex` to a tarball
    - rewrite the generated app to install that tarball
    - `bun install`
    - `bun lint`
    - `bun typecheck`
-   - `bun build`
 6. copy the generated app into `templates/next`
 7. apply repo-only normalization:
    - strip volatile artifacts (`node_modules`, `.next`, lockfiles, etc.)

@@ -1,5 +1,6 @@
 import {
   convexTable,
+  defineRelations,
   defineSchema,
   defineSchemaExtension,
   getSchemaRelations,
@@ -9,7 +10,11 @@ import {
   text,
   timestamp,
 } from './index';
-import { OrmSchemaExtensions } from './symbols';
+import {
+  OrmSchemaDefinition,
+  OrmSchemaExtensions,
+  OrmSchemaOptions,
+} from './symbols';
 
 function ratelimitExtension() {
   return defineSchemaExtension('ratelimit', {
@@ -259,6 +264,40 @@ test('defineSchema stores relations metadata from chained relations on default s
   expect(relations).toBeDefined();
   expect(relations).toHaveProperty('users');
   expect(relations).toHaveProperty('posts');
+});
+
+test('defineRelations(tables) preserves schema metadata from defineSchema(tables)', () => {
+  const users = convexTable('schema_tables_users', {
+    name: text().notNull(),
+  });
+  const posts = convexTable('schema_tables_posts', {
+    title: text().notNull(),
+    userId: id('schema_tables_users').notNull(),
+  });
+  const tables = { users, posts } as const;
+
+  const schema = defineSchema(tables, {
+    defaults: { defaultLimit: 7 },
+  });
+  const relations = defineRelations(tables, (r) => ({
+    users: {
+      posts: r.many.posts(),
+    },
+    posts: {
+      user: r.one.users({ from: r.posts.userId, to: r.users.id }),
+    },
+  }));
+
+  expect(
+    (relations as { [OrmSchemaDefinition]?: unknown })[OrmSchemaDefinition]
+  ).toBe(schema);
+  expect(
+    (
+      relations as {
+        [OrmSchemaOptions]?: { defaults?: { defaultLimit?: number } };
+      }
+    )[OrmSchemaOptions]?.defaults?.defaultLimit
+  ).toBe(7);
 });
 
 test('defineSchema stores trigger metadata from chained triggers on default schema export', () => {

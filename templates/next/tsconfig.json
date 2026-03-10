@@ -30,7 +30,8 @@
       "@convex/*": [
         "./convex/shared/*"
       ]
-    }
+    },
+    "strictFunctionTypes": false
   },
   "include": [
     "next-env.d.ts",

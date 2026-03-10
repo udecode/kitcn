@@ -440,5 +440,5 @@ export const getEnv = createEnv({
 
 - `templates/next` is a repo fixture, not the public contract.
 - The fixture is normalized for repo-local development only (`better-convex` rewritten to `workspace:*`, repo-safe package name, stripped volatile files).
-- The fixture comes from real `better-convex init -t next` output plus repo-only normalization. `check:templates` builds and packs the local `better-convex` package, validates a fresh generated app with install, lint, typecheck, and build, then compares the normalized snapshot. It fails if template init ever falls back to a stubbed runtime.
+- The fixture comes from real `better-convex init -t next` output plus repo-only normalization. `check:templates` packs the current local `better-convex` package, validates a fresh generated app with install, lint, and typecheck, then compares the normalized snapshot. Use `check:templates:full` when you want to rebuild the package first. It fails if template init ever falls back to a stubbed runtime.
 - If you want the scaffold, use `better-convex init -t next`. Do not cargo-cult the fixture.

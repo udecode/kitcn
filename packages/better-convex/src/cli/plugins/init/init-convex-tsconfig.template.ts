@@ -1,0 +1,24 @@
+export const INIT_CONVEX_TSCONFIG_TEMPLATE = `{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "strict": true,
+    "strictFunctionTypes": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["esnext", "dom"],
+    "types": ["bun-types"],
+    "target": "esnext",
+    "moduleDetection": "force",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts"]
+}
+`;

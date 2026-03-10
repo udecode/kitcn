@@ -5,11 +5,27 @@ import path from 'node:path';
 import {
   checkTemplate,
   generateTemplate,
+  parseTemplateNextArgs,
   validateGeneratedTemplateApp,
 } from './template-next';
 
 describe('tooling/template-next', () => {
-  test('generateTemplate runs init -t next through the public concave backend flag', async () => {
+  test('parseTemplateNextArgs defaults to concave and accepts convex override', () => {
+    expect(parseTemplateNextArgs(['sync'])).toEqual({
+      mode: 'sync',
+      backend: 'concave',
+    });
+
+    expect(parseTemplateNextArgs(['check', '--backend', 'convex'])).toEqual({
+      mode: 'check',
+      backend: 'convex',
+    });
+
+    expect(() => parseTemplateNextArgs(['check', '--backend', 'nope'])).toThrow(
+      'Invalid --backend value "nope". Expected one of: convex, concave.'
+    );
+  });
+  test('generateTemplate runs init -t next through the selected public backend flag', async () => {
     const calls: Array<{
       cmd: string[];
       cwd: string;
@@ -40,6 +56,7 @@ describe('tooling/template-next', () => {
       localCliPath: '/repo/packages/better-convex/src/cli/cli.ts',
       generatedAppName: 'next',
       runCommand: runCommand as any,
+      backend: 'convex',
     });
 
     const bunBinary = Bun.which('bun') ?? process.execPath;
@@ -49,7 +66,7 @@ describe('tooling/template-next', () => {
       bunBinary,
       '/repo/packages/better-convex/src/cli/cli.ts',
       '--backend',
-      'concave',
+      'convex',
       'init',
       '-t',
       'next',
@@ -63,7 +80,7 @@ describe('tooling/template-next', () => {
     expect(generatedAppDir).toBe(path.join(tempRoot, 'next'));
   });
 
-  test('validateGeneratedTemplateApp runs install, lint, typecheck, and build in order', async () => {
+  test('validateGeneratedTemplateApp runs install, lint, and typecheck in order', async () => {
     const tempDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'template-next-validate-')
     );
@@ -121,11 +138,6 @@ describe('tooling/template-next', () => {
           cwd: tempDir,
           allowNonZeroExit: false,
         },
-        {
-          cmd: ['bun', 'run', 'build'],
-          cwd: tempDir,
-          allowNonZeroExit: false,
-        },
       ]);
 
       const packageJson = JSON.parse(
@@ -166,11 +178,21 @@ describe('tooling/template-next', () => {
     });
     const runCommand = mock(
       async (
-        _cmd: string[],
+        cmd: string[],
         _cwd: string,
         options?: { allowNonZeroExit?: boolean }
       ) => {
         if (options?.allowNonZeroExit) {
+          expect(cmd).toEqual([
+            'git',
+            '--no-pager',
+            'diff',
+            '--no-index',
+            '--no-ext-diff',
+            '--',
+            path.join(tempRoot, '__fixture__'),
+            generatedAppDir,
+          ]);
           callOrder.push('diff');
         }
         return 0;

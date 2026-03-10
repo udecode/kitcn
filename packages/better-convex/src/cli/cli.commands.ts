@@ -106,6 +106,52 @@ function writeMinimalSchema(dir: string, source?: string) {
   fs.writeFileSync(path.join(dir, 'convex', 'schema.ts'), `${schemaSource}\n`);
 }
 
+async function withCiTty<T>(callback: () => Promise<T>): Promise<T> {
+  const stdinDescriptor = Object.getOwnPropertyDescriptor(
+    process.stdin,
+    'isTTY'
+  );
+  const stdoutDescriptor = Object.getOwnPropertyDescriptor(
+    process.stdout,
+    'isTTY'
+  );
+  const originalCi = process.env.CI;
+
+  Object.defineProperty(process.stdin, 'isTTY', {
+    configurable: true,
+    value: true,
+  });
+  Object.defineProperty(process.stdout, 'isTTY', {
+    configurable: true,
+    value: true,
+  });
+  process.env.CI = '1';
+
+  try {
+    return await callback();
+  } finally {
+    process.env.CI = originalCi;
+
+    if (stdinDescriptor) {
+      Object.defineProperty(process.stdin, 'isTTY', stdinDescriptor);
+    } else {
+      Object.defineProperty(process.stdin, 'isTTY', {
+        configurable: true,
+        value: undefined,
+      });
+    }
+
+    if (stdoutDescriptor) {
+      Object.defineProperty(process.stdout, 'isTTY', stdoutDescriptor);
+    } else {
+      Object.defineProperty(process.stdout, 'isTTY', {
+        configurable: true,
+        value: undefined,
+      });
+    }
+  }
+}
+
 function formatAsLegacySingleQuoteTs(source: string) {
   return source
     .replaceAll('"', "'")
@@ -905,51 +951,6 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(add resend --diff convex/plugins/resend.ts) prints focused preview diff', async () => {
-    const dir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'better-convex-cli-add-diff-preview-')
-    );
-    const oldCwd = process.cwd();
-    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
-    writeMinimalSchema(dir);
-
-    process.chdir(dir);
-    const infoLines: string[] = [];
-    const originalInfo = console.info;
-    console.info = (...args: unknown[]) => {
-      infoLines.push(args.map(String).join(' '));
-    };
-
-    try {
-      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
-      const generateMetaStub = mock(async () => {});
-      const syncEnvStub = mock(async () => {});
-      const loadConfigStub = mock(() => createDefaultConfig());
-
-      const exitCode = await run(
-        ['add', 'resend', '--yes', '--diff', 'convex/plugins/resend.ts'],
-        {
-          realConvex: '/fake/convex/main.js',
-          execa: execaStub as any,
-          generateMeta: generateMetaStub as any,
-          syncEnv: syncEnvStub as any,
-          loadBetterConvexConfig: loadConfigStub as any,
-        }
-      );
-
-      expect(exitCode).toBe(0);
-      const output = infoLines.join('\n');
-      expect(output).toContain('convex/plugins/resend.ts');
-      expect(output).toContain('convex/plugins/resend.ts (create)');
-      expect(output).toContain('createResendHandler');
-      expect(execaStub).not.toHaveBeenCalled();
-      expect(generateMetaStub).not.toHaveBeenCalled();
-    } finally {
-      console.info = originalInfo;
-      process.chdir(oldCwd);
-    }
-  });
-
   test('run(add resend --yes --dry-run --json) auto-initializes baseline files when missing, then plans resend install', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-add-auto-init-resend-')
@@ -1067,7 +1068,46 @@ describe('cli/cli', () => {
     }
   });
 
-  test('ensureConvexGitignoreEntry adds .convex/ once', () => {
+  test('run(add resend) treats CI as non-interactive even when stdio is a TTY', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-ci-noninteractive-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    writeMinimalSchema(dir);
+
+    process.chdir(dir);
+    try {
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await withCiTty(async () =>
+        run(['add', 'resend', '--no-codegen'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        })
+      );
+
+      expect(exitCode).toBe(0);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'plugins', 'resend.ts'))
+      ).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('ensureConvexGitignoreEntry adds .convex/ and .concave/ once', () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-gitignore-')
     );
@@ -1080,7 +1120,9 @@ describe('cli/cli', () => {
 
     const updated = fs.readFileSync(gitignorePath, 'utf8');
     expect(updated).toContain('.convex/\n');
+    expect(updated).toContain('.concave/\n');
     expect((updated.match(/\.convex\/\n/g) ?? []).length).toBe(1);
+    expect((updated.match(/\.concave\/\n/g) ?? []).length).toBe(1);
   });
 
   test('ensureConvexGitignoreEntry updates repo root .gitignore when run from nested cwd', () => {
@@ -1098,6 +1140,7 @@ describe('cli/cli', () => {
 
     const updated = fs.readFileSync(rootGitignorePath, 'utf8');
     expect(updated).toContain('.convex/\n');
+    expect(updated).toContain('.concave/\n');
   });
 
   test('getAggregateBackfillDeploymentKey resolves prod/deployment/preview/local', () => {

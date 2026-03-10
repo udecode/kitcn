@@ -188,6 +188,9 @@ describe('cli/commands/init', () => {
         fs.existsSync(path.join(expectedProjectDir, 'tsconfig.json'))
       ).toBe(true);
       expect(
+        fs.existsSync(path.join(expectedProjectDir, 'convex', 'tsconfig.json'))
+      ).toBe(true);
+      expect(
         fs.existsSync(path.join(expectedProjectDir, 'eslint.config.mjs'))
       ).toBe(true);
       expect(
@@ -260,10 +263,18 @@ describe('cli/commands/init', () => {
       const tsconfig = JSON.parse(
         fs.readFileSync(path.join(expectedProjectDir, 'tsconfig.json'), 'utf8')
       );
+      expect(tsconfig.compilerOptions.strictFunctionTypes).toBe(false);
       expect(tsconfig.compilerOptions.paths['@/*']).toEqual(['./*']);
       expect(tsconfig.compilerOptions.paths['@convex/*']).toEqual([
         './convex/shared/*',
       ]);
+      const convexTsconfig = JSON.parse(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'convex', 'tsconfig.json'),
+          'utf8'
+        )
+      );
+      expect(convexTsconfig.compilerOptions.strictFunctionTypes).toBe(false);
       const componentsConfig = JSON.parse(
         fs.readFileSync(
           path.join(expectedProjectDir, 'components.json'),
@@ -279,6 +290,14 @@ describe('cli/commands/init', () => {
             'utf8'
           )
           .includes('eslint-config-next/core-web-vitals')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(
+            path.join(expectedProjectDir, 'eslint.config.mjs'),
+            'utf8'
+          )
+          .includes('"**/*generated/**"')
       ).toBe(true);
       expect(
         fs
@@ -525,10 +544,15 @@ describe('cli/commands/init', () => {
       const tsconfig = JSON.parse(
         fs.readFileSync(path.join(tmpDir, 'tsconfig.json'), 'utf8')
       );
+      expect(tsconfig.compilerOptions.strictFunctionTypes).toBe(false);
       expect(tsconfig.compilerOptions.paths['@/*']).toEqual(['./src/*']);
       expect(tsconfig.compilerOptions.paths['@convex/*']).toEqual([
         './convex/shared/*',
       ]);
+      const convexTsconfig = JSON.parse(
+        fs.readFileSync(path.join(tmpDir, 'convex', 'tsconfig.json'), 'utf8')
+      );
+      expect(convexTsconfig.compilerOptions.strictFunctionTypes).toBe(false);
       expect(
         fs
           .readFileSync(path.join(tmpDir, 'components.json'), 'utf8')
@@ -538,6 +562,11 @@ describe('cli/commands/init', () => {
         fs
           .readFileSync(path.join(tmpDir, 'eslint.config.mjs'), 'utf8')
           .includes('eslint-config-next/typescript')
+      ).toBe(true);
+      expect(
+        fs
+          .readFileSync(path.join(tmpDir, 'eslint.config.mjs'), 'utf8')
+          .includes('"**/*generated/**"')
       ).toBe(true);
       expect(
         fs

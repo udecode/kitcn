@@ -571,6 +571,17 @@ function materializeBaseSchema<
   defineMetadata(convexSchema as object, OrmSchemaExtensions, frozenExtensions);
   defineMetadata(convexSchema as object, OrmSchemaDefinition, convexSchema);
   defineMetadata(convexSchema as object, OrmSchemaComposerState, state);
+  defineMetadata(state.schema as object, OrmSchemaOptions, {
+    strict,
+    defaults,
+  });
+  defineMetadata(
+    state.schema as object,
+    OrmSchemaExtensionTables,
+    frozenExtensionTableNames
+  );
+  defineMetadata(state.schema as object, OrmSchemaExtensions, frozenExtensions);
+  defineMetadata(state.schema as object, OrmSchemaDefinition, convexSchema);
 
   return convexSchema as SchemaResult<
     TSchema,

@@ -47,6 +47,7 @@ import {
   type SupportedPluginKey,
 } from './plugin-catalog.js';
 import { INIT_CONVEX_CONFIG_TEMPLATE } from './plugins/init/init-convex-config.template.js';
+import { INIT_CONVEX_TSCONFIG_TEMPLATE } from './plugins/init/init-convex-tsconfig.template.js';
 import {
   INIT_CRPC_IMPORT_MARKER,
   INIT_CRPC_TEMPLATE,
@@ -90,7 +91,7 @@ const convexPkg = require.resolve('convex/package.json');
 const realConvex = join(dirname(convexPkg), 'bin/main.js');
 const MISSING_BACKFILL_FUNCTION_RE =
   /could not find function|function .* was not found|unknown function/i;
-const GITIGNORE_CONVEX_ENTRY_RE = /(^|\r?\n)\.convex\/?\s*(\r?\n|$)/m;
+const GITIGNORE_RUNTIME_ENTRIES = ['.convex/', '.concave/'] as const;
 const TS_EXTENSION_RE = /\.ts$/;
 const DEFINE_SCHEMA_CALL_RE = /defineSchema\s*\(([\s\S]*?)\)/m;
 const CHAIN_EXTEND_RE = /\.extend\s*\(([\s\S]*?)\)/m;
@@ -654,9 +655,21 @@ function printCommandHelp(
   printRootHelp(backend);
 }
 
+function isCiEnvironment(): boolean {
+  const ci = process.env.CI;
+  if (typeof ci !== 'string') {
+    return false;
+  }
+  const normalized = ci.trim().toLowerCase();
+  return normalized.length > 0 && normalized !== '0' && normalized !== 'false';
+}
+
 function createPromptAdapter(): PromptAdapter {
   return {
-    isInteractive: () => Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    isInteractive: () =>
+      Boolean(
+        process.stdin.isTTY && process.stdout.isTTY && !isCiEnvironment()
+      ),
     confirm: async (message: string) => {
       const response = await confirm({ message });
       if (isCancel(response)) {
@@ -1927,6 +1940,11 @@ function buildInitNextOwnedScaffoldFiles(
   context: InitNextScaffoldContext,
   functionsDirRelative: string
 ): readonly InitOwnedTemplateScaffoldFile[] {
+  const convexDirRelative =
+    basename(functionsDirRelative) === 'functions'
+      ? dirname(functionsDirRelative)
+      : functionsDirRelative;
+
   return [
     {
       kind: 'config',
@@ -2002,6 +2020,14 @@ function buildInitNextOwnedScaffoldFiles(
       createReason: `Create ${context.appDir}/convex/page.tsx as the minimal Better Convex demo route.`,
       updateReason: `Update ${context.appDir}/convex/page.tsx for the Better Convex demo route.`,
       skipReason: `${context.appDir}/convex/page.tsx already matches the Better Convex demo route.`,
+    },
+    {
+      kind: 'config',
+      relativePath: join(convexDirRelative, 'tsconfig.json'),
+      content: INIT_CONVEX_TSCONFIG_TEMPLATE,
+      createReason: `Create ${join(convexDirRelative, 'tsconfig.json')} for Better Convex functions.`,
+      updateReason: `Update ${join(convexDirRelative, 'tsconfig.json')} for Better Convex functions.`,
+      skipReason: `${join(convexDirRelative, 'tsconfig.json')} already matches the Better Convex functions config.`,
     },
     {
       kind: 'schema',
@@ -2132,6 +2158,7 @@ function patchInitNextTsconfigContent(
       ...parsed,
       compilerOptions: {
         ...compilerOptions,
+        strictFunctionTypes: false,
         paths,
       },
     },
@@ -2171,6 +2198,26 @@ function patchInitNextComponentsJsonContent(
     null,
     2
   )}\n`;
+}
+
+function patchInitNextEslintConfigContent(source: string): string {
+  if (!source.includes('globalIgnores([')) {
+    throw new Error(
+      'Could not patch eslint.config.mjs: expected shadcn globalIgnores([...]) output.'
+    );
+  }
+
+  const generatedPattern = '"**/*generated/**"';
+  if (source.includes(generatedPattern)) {
+    return source.endsWith('\n') ? source : `${source}\n`;
+  }
+
+  const nextSource = source.replace(
+    'globalIgnores([',
+    `globalIgnores([\n    ${generatedPattern},`
+  );
+
+  return nextSource.endsWith('\n') ? nextSource : `${nextSource}\n`;
 }
 
 function buildInitNextLayoutPlanFile(
@@ -2241,6 +2288,29 @@ function buildInitNextComponentsJsonPlanFile(
       'Patch components.json only when the tailwind css path needs to match the resolved app root.',
     skipReason:
       'components.json already points at the correct shadcn tailwind css file.',
+  });
+}
+
+function buildInitNextEslintConfigPlanFile(): PluginInstallPlanFile {
+  const filePath = resolve(process.cwd(), 'eslint.config.mjs');
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      'Could not patch eslint.config.mjs: shadcn did not create an ESLint config.'
+    );
+  }
+
+  return createPlanFile({
+    kind: 'config',
+    filePath,
+    content: patchInitNextEslintConfigContent(
+      fs.readFileSync(filePath, 'utf8')
+    ),
+    updateReason:
+      'Patch eslint.config.mjs to ignore generated Better Convex files.',
+    createReason:
+      'Patch eslint.config.mjs to ignore generated Better Convex files.',
+    skipReason:
+      'eslint.config.mjs already ignores generated Better Convex files.',
   });
 }
 
@@ -2329,6 +2399,7 @@ function buildTemplateInitializationPlanFiles(params: {
     ...ownedFiles,
     buildInitNextTsconfigPlanFile(context),
     buildInitNextComponentsJsonPlanFile(context),
+    buildInitNextEslintConfigPlanFile(),
     buildInitNextLayoutPlanFile(context),
   ];
 }
@@ -2642,7 +2713,7 @@ export async function runInitCommandFlow(params: {
       params.ensureConvexGitignoreEntryFn(process.cwd());
     } catch (error) {
       logger.warn(
-        `⚠️  Failed to ensure .convex/ is ignored in .gitignore: ${(error as Error).message}`
+        `⚠️  Failed to ensure .convex/ and .concave/ are ignored in .gitignore: ${(error as Error).message}`
       );
     }
 
@@ -4006,16 +4077,26 @@ export function ensureConvexGitignoreEntry(cwd = process.cwd()): void {
   const existing = fs.existsSync(gitignorePath)
     ? fs.readFileSync(gitignorePath, 'utf8')
     : '';
-
-  if (GITIGNORE_CONVEX_ENTRY_RE.test(existing)) {
-    return;
-  }
-
   const normalized =
     existing.endsWith('\n') || existing.length === 0
       ? existing
       : `${existing}\n`;
-  fs.writeFileSync(gitignorePath, `${normalized}.convex/\n`);
+  const missingEntries = GITIGNORE_RUNTIME_ENTRIES.filter(
+    (entry) =>
+      !new RegExp(
+        `(^|\\r?\\n)${entry.replace('/', '\\/?')}\\s*(\\r?\\n|$)`,
+        'm'
+      ).test(existing)
+  );
+
+  if (missingEntries.length === 0) {
+    return;
+  }
+
+  fs.writeFileSync(
+    gitignorePath,
+    `${normalized}${missingEntries.join('\n')}\n`
+  );
 }
 
 // Track child processes for cleanup
@@ -5980,7 +6061,7 @@ export async function run(
         ensureConvexGitignoreEntryFn(process.cwd());
       } catch (error) {
         logger.warn(
-          `⚠️  Failed to ensure .convex/ is ignored in .gitignore: ${(error as Error).message}`
+          `⚠️  Failed to ensure .convex/ and .concave/ are ignored in .gitignore: ${(error as Error).message}`
         );
       }
     }

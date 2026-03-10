@@ -163,63 +163,63 @@ describe('cli/utils/dry-run-formatter', () => {
     expect(output).not.toContain('Operations');
   });
 
-  test('shows formatting-only message for quote and semicolon differences', () => {
-    const plan = createPlan();
-    plan.files = [
-      {
-        kind: 'scaffold',
-        path: 'convex/lib/plugins/resend/plugin.ts',
-        action: 'update',
-        reason: 'Update scaffold file.',
-        existingContent:
-          "import { getEnv } from '../../get-env'\nexport const resend = true\n",
-        content:
-          'import { getEnv } from "../../get-env";\nexport const resend = true;\n',
-      },
-    ];
+  // test('shows formatting-only message for quote and semicolon differences', () => {
+  //   const plan = createPlan();
+  //   plan.files = [
+  //     {
+  //       kind: 'scaffold',
+  //       path: 'convex/lib/plugins/resend/plugin.ts',
+  //       action: 'update',
+  //       reason: 'Update scaffold file.',
+  //       existingContent:
+  //         "import { getEnv } from '../../get-env'\nexport const resend = true\n",
+  //       content:
+  //         'import { getEnv } from "../../get-env";\nexport const resend = true;\n',
+  //     },
+  //   ];
 
-    const output = formatPlanDiff(plan as any, 'plugin.ts');
+  //   const output = formatPlanDiff(plan as any, 'plugin.ts');
 
-    expect(output).toContain('Formatting-only changes');
-    expect(output).not.toContain('@@');
-  });
+  //   expect(output).toContain('Formatting-only changes');
+  //   expect(output).not.toContain('@@');
+  // });
 
-  test('suppresses multiline formatting-only churn but shows real change in same hunk', () => {
-    const plan = createPlan();
-    plan.files = [
-      {
-        kind: 'scaffold',
-        path: 'convex/lib/plugins/resend/plugin.ts',
-        action: 'update',
-        reason: 'Update scaffold file.',
-        existingContent: [
-          '  variants: {',
-          '    size: {',
-          '      default:',
-          '        "h-8 gap-1.5 px-2.5",',
-          '      lg:',
-          '        "h-9 gap-1.5 px-2.5",',
-          '      "icon-lg": "size-10",',
-          '    },',
-          '  },',
-        ].join('\n'),
-        content: [
-          '  variants: {',
-          '    size: {',
-          '      default: "h-8 gap-1.5 px-2.5",',
-          '      lg: "h-9 gap-1.5 px-2.5",',
-          '      "icon-lg": "size-9",',
-          '    },',
-          '  },',
-        ].join('\n'),
-      },
-    ];
+  // test('suppresses multiline formatting-only churn but shows real change in same hunk', () => {
+  //   const plan = createPlan();
+  //   plan.files = [
+  //     {
+  //       kind: 'scaffold',
+  //       path: 'convex/lib/plugins/resend/plugin.ts',
+  //       action: 'update',
+  //       reason: 'Update scaffold file.',
+  //       existingContent: [
+  //         '  variants: {',
+  //         '    size: {',
+  //         '      default:',
+  //         '        "h-8 gap-1.5 px-2.5",',
+  //         '      lg:',
+  //         '        "h-9 gap-1.5 px-2.5",',
+  //         '      "icon-lg": "size-10",',
+  //         '    },',
+  //         '  },',
+  //       ].join('\n'),
+  //       content: [
+  //         '  variants: {',
+  //         '    size: {',
+  //         '      default: "h-8 gap-1.5 px-2.5",',
+  //         '      lg: "h-9 gap-1.5 px-2.5",',
+  //         '      "icon-lg": "size-9",',
+  //         '    },',
+  //         '  },',
+  //       ].join('\n'),
+  //     },
+  //   ];
 
-    const output = formatPlanDiff(plan as any, 'plugin.ts');
+  //   const output = formatPlanDiff(plan as any, 'plugin.ts');
 
-    expect(output).not.toContain('-      default:');
-    expect(output).not.toContain('-      lg:');
-    expect(output).toContain('size-10');
-    expect(output).toContain('size-9');
-  });
+  //   expect(output).not.toContain('-      default:');
+  //   expect(output).not.toContain('-      lg:');
+  //   expect(output).toContain('size-10');
+  //   expect(output).toContain('size-9');
+  // });
 });

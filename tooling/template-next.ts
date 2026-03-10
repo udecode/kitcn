@@ -26,6 +26,9 @@ const LOCAL_CLI_PATH = path.join(
 const GENERATED_APP_NAME = 'next';
 const FIXTURE_PACKAGE_NAME = 'better-convex-template-next';
 const VALIDATION_PACKAGE_NAME = 'better-convex-template-next-check';
+const VALID_TEMPLATE_BACKENDS = new Set(['convex', 'concave'] as const);
+
+type TemplateBackend = 'convex' | 'concave';
 const LINE_SPLIT_RE = /\r?\n/;
 const VOLATILE_ENTRY_NAMES = new Set([
   '.env',
@@ -201,12 +204,14 @@ export const generateTemplate = async (
     localCliPath?: string;
     generatedAppName?: string;
     runCommand?: typeof run;
+    backend?: TemplateBackend;
   } = {}
 ) => {
   const projectRoot = params.projectRoot ?? PROJECT_ROOT;
   const localCliPath = params.localCliPath ?? LOCAL_CLI_PATH;
   const generatedAppName = params.generatedAppName ?? GENERATED_APP_NAME;
   const runCommand = params.runCommand ?? run;
+  const backend = params.backend ?? 'concave';
   const tempRoot = mkdtempSync(
     path.join(tmpdir(), 'better-convex-template-next-')
   );
@@ -217,7 +222,7 @@ export const generateTemplate = async (
       bunBinary,
       localCliPath,
       '--backend',
-      'concave',
+      backend,
       'init',
       '-t',
       'next',
@@ -250,7 +255,6 @@ export const validateGeneratedTemplateApp = async (
   await runCommand(['bun', 'install'], generatedAppDir);
   await runCommand(['bun', 'run', 'lint'], generatedAppDir);
   await runCommand(['bun', 'run', 'typecheck'], generatedAppDir);
-  await runCommand(['bun', 'run', 'build'], generatedAppDir);
 };
 
 export const syncTemplate = async (
@@ -278,6 +282,41 @@ export const syncTemplate = async (
   }
 };
 
+export const parseTemplateNextArgs = (
+  argv: string[]
+): { mode: 'sync' | 'check'; backend: TemplateBackend } => {
+  const [mode, ...rest] = argv;
+
+  if (mode !== 'sync' && mode !== 'check') {
+    throw new Error(
+      'Usage: bun tooling/template-next.ts <sync|check> [--backend <convex|concave>]'
+    );
+  }
+
+  let backend: TemplateBackend = 'concave';
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (arg !== '--backend') {
+      throw new Error(
+        `Unknown template-next argument: ${arg}. Expected --backend <convex|concave>.`
+      );
+    }
+
+    const value = rest[index + 1];
+    if (!value || !VALID_TEMPLATE_BACKENDS.has(value as TemplateBackend)) {
+      throw new Error(
+        `Invalid --backend value "${value ?? ''}". Expected one of: convex, concave.`
+      );
+    }
+
+    backend = value as TemplateBackend;
+    index += 1;
+  }
+
+  return { mode, backend };
+};
+
 export const checkTemplate = async (
   params: {
     fixtureDir?: string;
@@ -299,7 +338,7 @@ export const checkTemplate = async (
   const logFn = params.logFn ?? log;
   if (!existsSync(fixtureDir)) {
     throw new Error(
-      'templates/next is missing. Run `bun run template:next:sync` first.'
+      'templates/next is missing. Run `bun run template:sync` first.'
     );
   }
 
@@ -319,6 +358,7 @@ export const checkTemplate = async (
     const diffExitCode = await runCommand(
       [
         'git',
+        '--no-pager',
         'diff',
         '--no-index',
         '--no-ext-diff',
@@ -342,7 +382,7 @@ export const checkTemplate = async (
     if (diffExitCode === 1) {
       logFn('');
       logFn(
-        'Template drift detected. Run `bun run template:next:sync` and commit the updated fixture.'
+        'Template drift detected. Run `bun run template:sync` and commit the updated fixture.'
       );
       process.exit(1);
     }
@@ -354,19 +394,20 @@ export const checkTemplate = async (
 };
 
 const main = async () => {
-  const mode = process.argv[2];
+  const { mode, backend } = parseTemplateNextArgs(process.argv.slice(2));
 
   if (mode === 'sync') {
-    await syncTemplate();
+    await syncTemplate({
+      generateTemplateFn: (params = {}) =>
+        generateTemplate({ ...params, backend }),
+    });
     return;
   }
 
-  if (mode === 'check') {
-    await checkTemplate();
-    return;
-  }
-
-  throw new Error('Usage: bun tooling/template-next.ts <sync|check>');
+  await checkTemplate({
+    generateTemplateFn: (params = {}) =>
+      generateTemplate({ ...params, backend }),
+  });
 };
 
 if (import.meta.main) {
