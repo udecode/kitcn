@@ -1115,3 +1115,161 @@ export function createGenericHandlerFactory<
     ) as RegistryHandlerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx>;
   };
 }
+
+export type GeneratedRegistryCallerFactory<
+  TQueryCtx,
+  TMutationCtx,
+  TRegistry extends GeneratedProcedureRegistry,
+  TActionCtx = never,
+> = <TCtx extends TQueryCtx | TMutationCtx | TActionCtx>(
+  ctx: TCtx
+) => RegistryCallerForContext<
+  TRegistry,
+  TCtx,
+  TQueryCtx,
+  TMutationCtx,
+  TActionCtx
+>;
+
+export type GeneratedRegistryHandlerFactory<
+  TQueryCtx,
+  TMutationCtx,
+  TRegistry extends GeneratedProcedureRegistry,
+> = <TCtx extends TQueryCtx | TMutationCtx>(
+  ctx: TCtx
+) => RegistryHandlerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx>;
+
+type GeneratedRegistryRuntime<
+  TQueryCtx,
+  TMutationCtx,
+  TCallerRegistry extends GeneratedProcedureRegistry,
+  TActionCtx = never,
+> = {
+  getCallerFactory: () => GeneratedRegistryCallerFactory<
+    TQueryCtx,
+    TMutationCtx,
+    TCallerRegistry,
+    TActionCtx
+  >;
+};
+
+type GeneratedRegistryRuntimeWithHandler<
+  TQueryCtx,
+  TMutationCtx,
+  TCallerRegistry extends GeneratedProcedureRegistry,
+  THandlerRegistry extends GeneratedProcedureRegistry,
+  TActionCtx = never,
+> = GeneratedRegistryRuntime<
+  TQueryCtx,
+  TMutationCtx,
+  TCallerRegistry,
+  TActionCtx
+> & {
+  getHandlerFactory: () => GeneratedRegistryHandlerFactory<
+    TQueryCtx,
+    TMutationCtx,
+    THandlerRegistry
+  >;
+};
+
+export function createGeneratedRegistryRuntime<
+  TQueryCtx,
+  TMutationCtx,
+  TCallerRegistry extends GeneratedProcedureRegistry,
+  TActionCtx = never,
+>(
+  createRegistry: () => {
+    procedureRegistry: TCallerRegistry;
+  }
+): GeneratedRegistryRuntime<
+  TQueryCtx,
+  TMutationCtx,
+  TCallerRegistry,
+  TActionCtx
+>;
+
+export function createGeneratedRegistryRuntime<
+  TQueryCtx,
+  TMutationCtx,
+  TCallerRegistry extends GeneratedProcedureRegistry,
+  TActionCtx = never,
+  THandlerRegistry extends
+    GeneratedProcedureRegistry = GeneratedProcedureRegistry,
+>(
+  createRegistry: () => {
+    procedureRegistry: TCallerRegistry;
+    handlerRegistry: THandlerRegistry;
+  }
+): GeneratedRegistryRuntimeWithHandler<
+  TQueryCtx,
+  TMutationCtx,
+  TCallerRegistry,
+  THandlerRegistry,
+  TActionCtx
+>;
+
+export function createGeneratedRegistryRuntime<
+  TQueryCtx,
+  TMutationCtx,
+  TCallerRegistry extends GeneratedProcedureRegistry,
+  TActionCtx = never,
+  THandlerRegistry extends GeneratedProcedureRegistry | undefined =
+    | GeneratedProcedureRegistry
+    | undefined,
+>(
+  createRegistry: () => {
+    procedureRegistry: TCallerRegistry;
+    handlerRegistry?: THandlerRegistry;
+  }
+) {
+  let cachedRegistry:
+    | {
+        procedureRegistry: TCallerRegistry;
+        handlerRegistry?: THandlerRegistry;
+      }
+    | undefined;
+  let cachedCallerFactory:
+    | GeneratedRegistryCallerFactory<
+        TQueryCtx,
+        TMutationCtx,
+        TCallerRegistry,
+        TActionCtx
+      >
+    | undefined;
+  let cachedHandlerFactory:
+    | GeneratedRegistryHandlerFactory<
+        TQueryCtx,
+        TMutationCtx,
+        Exclude<THandlerRegistry, undefined>
+      >
+    | undefined;
+
+  const getRegistry = () => {
+    cachedRegistry ??= createRegistry();
+    return cachedRegistry;
+  };
+
+  const getCallerFactory = () => {
+    cachedCallerFactory ??= createGenericCallerFactory<
+      TQueryCtx,
+      TMutationCtx,
+      TCallerRegistry,
+      TActionCtx
+    >(getRegistry().procedureRegistry);
+    return cachedCallerFactory;
+  };
+
+  const getHandlerFactory = () => {
+    cachedHandlerFactory ??= createGenericHandlerFactory<
+      TQueryCtx,
+      TMutationCtx,
+      Exclude<THandlerRegistry, undefined>
+    >(getRegistry().handlerRegistry as Exclude<THandlerRegistry, undefined>);
+    return cachedHandlerFactory;
+  };
+
+  return {
+    getCallerFactory,
+    getHandlerFactory,
+  };
+}
