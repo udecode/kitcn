@@ -25,15 +25,6 @@ The main differences between the packages:
 
 Let's migrate step by step.
 
-<Callout icon={<AlertTriangle />}>
-If the app you're migrating is already on `@convex-dev/better-auth@0.11` /
-Better Auth `1.5`, note two upstream changes before you move:
-- Passkey is no longer bundled in the component; install `@better-auth/passkey`
-  directly for local-install setups that still need it.
-- `oauthApplication.redirectURLs` was renamed to `redirectUrls`; migrate
-  existing data before deploy if you use OIDC provider records.
-</Callout>
-
 ## Step 1: Update Dependencies
 
 Install `better-convex`.
