@@ -263,7 +263,7 @@ type ProcedureActionCallerWithNamespaces<
   }
 >;
 
-type RegistryCallerForContext<
+export type GeneratedRegistryCallerForContext<
   TRegistry extends GeneratedProcedureRegistry,
   TCtx,
   TQueryCtx,
@@ -277,7 +277,7 @@ type RegistryCallerForContext<
       ? ProcedureCallerFromRegistry<TRegistry, 'query'>
       : never;
 
-type RegistryHandlerForContext<
+export type GeneratedRegistryHandlerForContext<
   TRegistry extends GeneratedProcedureRegistry,
   TCtx,
   TQueryCtx,
@@ -1075,7 +1075,7 @@ export function createGenericCallerFactory<
     TCtx extends TQueryCtx | TMutationCtx | TActionCtx,
   >(
     ctx: TCtx
-  ): RegistryCallerForContext<
+  ): GeneratedRegistryCallerForContext<
     TRegistry,
     TCtx,
     TQueryCtx,
@@ -1088,7 +1088,7 @@ export function createGenericCallerFactory<
       registry as RuntimeGeneratedRegistry,
       'caller',
       true
-    ) as RegistryCallerForContext<
+    ) as GeneratedRegistryCallerForContext<
       TRegistry,
       TCtx,
       TQueryCtx,
@@ -1105,14 +1105,24 @@ export function createGenericHandlerFactory<
 >(registry: TRegistry) {
   return function createHandler<TCtx extends TQueryCtx | TMutationCtx>(
     ctx: TCtx
-  ): RegistryHandlerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx> {
+  ): GeneratedRegistryHandlerForContext<
+    TRegistry,
+    TCtx,
+    TQueryCtx,
+    TMutationCtx
+  > {
     return createRegistryProxy(
       [],
       ctx,
       registry as RuntimeGeneratedRegistry,
       'handler',
       false
-    ) as RegistryHandlerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx>;
+    ) as GeneratedRegistryHandlerForContext<
+      TRegistry,
+      TCtx,
+      TQueryCtx,
+      TMutationCtx
+    >;
   };
 }
 
@@ -1123,7 +1133,7 @@ export type GeneratedRegistryCallerFactory<
   TActionCtx = never,
 > = <TCtx extends TQueryCtx | TMutationCtx | TActionCtx>(
   ctx: TCtx
-) => RegistryCallerForContext<
+) => GeneratedRegistryCallerForContext<
   TRegistry,
   TCtx,
   TQueryCtx,
@@ -1137,7 +1147,12 @@ export type GeneratedRegistryHandlerFactory<
   TRegistry extends GeneratedProcedureRegistry,
 > = <TCtx extends TQueryCtx | TMutationCtx>(
   ctx: TCtx
-) => RegistryHandlerForContext<TRegistry, TCtx, TQueryCtx, TMutationCtx>;
+) => GeneratedRegistryHandlerForContext<
+  TRegistry,
+  TCtx,
+  TQueryCtx,
+  TMutationCtx
+>;
 
 type GeneratedRegistryRuntime<
   TQueryCtx,

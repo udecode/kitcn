@@ -550,6 +550,43 @@ describe('httpAdapter', () => {
       },
     });
   });
+
+  test('updateMany and deleteMany reject mixed OR and AND where clauses', async () => {
+    const runQuery = mock(async () => ({}));
+    const runMutation = mock(async () => undefined);
+    const adapterFactory = httpAdapter({ runMutation, runQuery } as any, {
+      authFunctions: {
+        deleteOne: 'deleteOne',
+        findMany: 'findMany',
+        updateMany: 'updateMany',
+      } as any,
+    });
+    const adapter = adapterFactory({} as any);
+    const where = [
+      { connector: 'AND', field: 'email', operator: 'eq', value: 'a' },
+      { connector: 'OR', field: 'email', operator: 'eq', value: 'a' },
+    ] as any;
+
+    await expect(
+      adapter.updateMany({
+        model: 'user',
+        update: { name: 'updated' },
+        where,
+      })
+    ).rejects.toThrow(
+      'Mixed OR/AND where clauses are not supported for updateMany'
+    );
+    await expect(
+      adapter.deleteMany({
+        model: 'user',
+        where,
+      })
+    ).rejects.toThrow(
+      'Mixed OR/AND where clauses are not supported for deleteMany'
+    );
+    expect(runQuery).not.toHaveBeenCalled();
+    expect(runMutation).not.toHaveBeenCalled();
+  });
 });
 
 describe('dbAdapter', () => {
@@ -578,6 +615,46 @@ describe('dbAdapter', () => {
       store,
     };
   };
+
+  test('updateMany and deleteMany reject mixed OR and AND where clauses', async () => {
+    const { ctx, store } = createMemoryCtx({
+      'user-1': { _id: 'user-1', email: 'a', tenantId: 'tenant-1' },
+      'user-2': { _id: 'user-2', email: 'b', tenantId: 'tenant-1' },
+    });
+
+    const adapterFactory = dbAdapter(ctx, () => ({}) as any, {
+      authFunctions: {
+        deleteOne: 'deleteOne',
+        updateMany: 'updateMany',
+      } as any,
+      schema,
+    });
+    const adapter = adapterFactory({} as any);
+    const where = [
+      { connector: 'AND', field: 'email', operator: 'eq', value: 'a' },
+      { connector: 'OR', field: 'email', operator: 'eq', value: 'a' },
+    ] as any;
+
+    await expect(
+      adapter.updateMany({
+        model: 'user',
+        update: { name: 'updated' },
+        where,
+      })
+    ).rejects.toThrow(
+      'Mixed OR/AND where clauses are not supported for updateMany'
+    );
+    await expect(
+      adapter.deleteMany({
+        model: 'user',
+        where,
+      })
+    ).rejects.toThrow(
+      'Mixed OR/AND where clauses are not supported for deleteMany'
+    );
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+    expect(Array.from(store.keys())).toEqual(['user-1', 'user-2']);
+  });
 
   test('findOne OR tries each clause until a doc is found', async () => {
     const { ctx } = createMemoryCtx({

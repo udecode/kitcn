@@ -30,4 +30,4 @@ oauthApplication: {
 - Improve Next.js server-side token forwarding by forcing `accept-encoding: identity` for internal auth fetches behind proxy compression.
 - Fix auth adapter selection and OR-query handling so `id` selects preserve `_id`, nullish filters behave correctly, unsupported `experimental.joins` are rejected, and OR updates/deletes/counts dedupe by document id.
 - Improve auth route origin handling by filtering nullish `trustedOrigins` values before CORS matching.
-- Reduce generated runtime boilerplate by moving lazy registry and factory caching into shared server helpers without changing generated caller or handler types.
+- Reduce generated runtime boilerplate by moving lazy registry/factory caching and caller/handler context typing into shared server helpers without changing generated caller or handler types.

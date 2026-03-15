@@ -3,17 +3,22 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
-  createGenericCallerFactory,
-  createGenericHandlerFactory,
-  typedProcedureResolver,
-  type ProcedureActionCallerFromRegistry,
-  type ProcedureCallerFromRegistry,
-  type ProcedureScheduleCallerFromRegistry,
+  createGeneratedRegistryRuntime,
+  type GeneratedRegistryCallerForContext,
+  type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
-import { api, internal } from '../_generated/api.js';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
+import type { OrmTriggerContext } from 'better-convex/orm';
 
-const procedureRegistry = {
+type RuntimeServerModule = typeof import('better-convex/server');
+
+function createProcedureRegistry() {
+  const { typedProcedureResolver } =
+    (require('better-convex/server') as RuntimeServerModule);
+  const { api, internal } =
+    (require("../_generated/api.js") as typeof import('../_generated/api.js'));
+
+  const procedureRegistry = {
   "checkUserAdminStatus": ["query", typedProcedureResolver(api["admin"]["checkUserAdminStatus"], () => (require("../admin") as Record<string, unknown>)["checkUserAdminStatus"])],
   "getAllUsers": ["query", typedProcedureResolver(api["admin"]["getAllUsers"], () => (require("../admin") as Record<string, unknown>)["getAllUsers"])],
   "getDashboardStats": ["query", typedProcedureResolver(api["admin"]["getDashboardStats"], () => (require("../admin") as Record<string, unknown>)["getDashboardStats"])],
@@ -21,50 +26,62 @@ const procedureRegistry = {
   "updateUserRole": ["mutation", typedProcedureResolver(api["admin"]["updateUserRole"], () => (require("../admin") as Record<string, unknown>)["updateUserRole"])],
 } as const;
 
-type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;
+  const handlerRegistry = procedureRegistry;
+
+  return {
+    procedureRegistry,
+    handlerRegistry,
+  };
+}
+
+type ProcedureCallerRegistry = ReturnType<typeof createProcedureRegistry>['procedureRegistry'];
+type ProcedureHandlerRegistry = ReturnType<typeof createProcedureRegistry>['handlerRegistry'];
+
+
+const generatedRuntime = createGeneratedRegistryRuntime<
+  QueryCtx,
+  MutationCtx,
+  ProcedureCallerRegistry,
+  ActionCtx,
+  ProcedureHandlerRegistry
+>(
+  createProcedureRegistry
+);
+
+type MutationCallerContext = MutationCtx | OrmTriggerContext<any, MutationCtx>;
+type ProcedureCallerContext = QueryCtx | MutationCallerContext | ActionCtx;
 type GeneratedProcedureCaller<
   TCtx extends ProcedureCallerContext = ProcedureCallerContext,
-> = TCtx extends MutationCtx
-  ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'> & {
-      schedule: ProcedureScheduleCallerFromRegistry<typeof procedureRegistry>;
-    }
-  : TCtx extends ActionCtx
-    ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'> & {
-        actions: ProcedureActionCallerFromRegistry<typeof procedureRegistry>;
-        schedule: ProcedureScheduleCallerFromRegistry<typeof procedureRegistry>;
-      }
-    : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
+> = GeneratedRegistryCallerForContext<
+  ProcedureCallerRegistry,
+  TCtx,
+  QueryCtx,
+  MutationCallerContext,
+  ActionCtx
+>;
 
 type ProcedureHandlerContext = QueryCtx | MutationCtx;
 type GeneratedProcedureHandler<
   TCtx extends ProcedureHandlerContext = ProcedureHandlerContext,
-> = TCtx extends MutationCtx
-  ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'>
-  : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
-
-
-const createCallerFromRegistry = createGenericCallerFactory<
+> = GeneratedRegistryHandlerForContext<
+  ProcedureHandlerRegistry,
+  TCtx,
   QueryCtx,
-  MutationCtx,
-  typeof procedureRegistry,
-  ActionCtx
->(procedureRegistry);
-const createHandlerFromRegistry = createGenericHandlerFactory<
-  QueryCtx,
-  MutationCtx,
-  typeof procedureRegistry
->(procedureRegistry);
+  MutationCtx
+>;
 
 
 export function createAdminCaller<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
-  return createCallerFromRegistry(ctx) as GeneratedProcedureCaller<TCtx>;
+  return generatedRuntime.getCallerFactory()(
+    ctx as any
+  ) as GeneratedProcedureCaller<TCtx>;
 }
 
 export function createAdminHandler<TCtx extends ProcedureHandlerContext>(
   ctx: TCtx
 ): GeneratedProcedureHandler<TCtx> {
-  return createHandlerFromRegistry(ctx) as GeneratedProcedureHandler<TCtx>;
+  return generatedRuntime.getHandlerFactory()(ctx) as GeneratedProcedureHandler<TCtx>;
 }
 

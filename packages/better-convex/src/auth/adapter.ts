@@ -90,8 +90,27 @@ export type ConvexCleanedWhere = Where & {
   value: number[] | string[] | boolean | number | string | null;
 };
 
+type AdapterWhere = Where & { join?: undefined };
+
+const hasOrWhere = (where?: AdapterWhere[]): where is AdapterWhere[] =>
+  where?.some((clause) => clause.connector === 'OR') ?? false;
+
+const assertSupportedBulkOrWhere = (
+  where: AdapterWhere[] | undefined,
+  operation: 'deleteMany' | 'updateMany'
+) => {
+  if (
+    hasOrWhere(where) &&
+    !where?.every((clause) => clause.connector === 'OR')
+  ) {
+    throw new Error(
+      `Mixed OR/AND where clauses are not supported for ${operation}`
+    );
+  }
+};
+
 const parseWhere = (
-  where?: (Where & { join?: undefined }) | (Where & { join?: undefined })[]
+  where?: AdapterWhere | AdapterWhere[]
 ): ConvexCleanedWhere[] => {
   if (!where) {
     return [];
@@ -254,7 +273,7 @@ export const httpAdapter = <
 
       const collectIdsForOrWhere = async (data: {
         model: string;
-        where: (Where & { join?: undefined })[];
+        where: AdapterWhere[];
       }) => {
         const results = await asyncMap(data.where, async (w) =>
           handlePagination(
@@ -278,7 +297,7 @@ export const httpAdapter = <
         },
         count: async (data) => {
           // Yes, count is just findMany returning a number.
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          if (hasOrWhere(data.where)) {
             const results = await asyncMap(data.where, async (w) =>
               handlePagination(
                 async ({ paginationOpts }) =>
@@ -333,7 +352,8 @@ export const httpAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          assertSupportedBulkOrWhere(data.where, 'deleteMany');
+          if (hasOrWhere(data.where)) {
             const ids = await collectIdsForOrWhere({
               model: data.model,
               where: data.where,
@@ -366,7 +386,7 @@ export const httpAdapter = <
           if (data.offset) {
             throw new Error('offset not supported');
           }
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          if (hasOrWhere(data.where)) {
             const { select: _ignoredSelect, ...queryData } = data;
             const results = await asyncMap(data.where, async (w) =>
               handlePagination(
@@ -477,7 +497,8 @@ export const httpAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          assertSupportedBulkOrWhere(data.where, 'updateMany');
+          if (hasOrWhere(data.where)) {
             const ids = await collectIdsForOrWhere({
               model: data.model,
               where: data.where,
@@ -558,7 +579,7 @@ export const dbAdapter = <
 
       const collectIdsForOrWhere = async (data: {
         model: string;
-        where: (Where & { join?: undefined })[];
+        where: AdapterWhere[];
       }) => {
         const results = await asyncMap(data.where, async (w) =>
           handlePagination(
@@ -586,7 +607,7 @@ export const dbAdapter = <
           isRunMutationCtx: isRunMutationCtx(ctx),
         },
         count: async (data) => {
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          if (hasOrWhere(data.where)) {
             const results = await asyncMap(data.where, async (w) =>
               handlePagination(
                 async ({ paginationOpts }) =>
@@ -651,7 +672,8 @@ export const dbAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          assertSupportedBulkOrWhere(data.where, 'deleteMany');
+          if (hasOrWhere(data.where)) {
             const ids = await collectIdsForOrWhere({
               model: data.model,
               where: data.where,
@@ -684,7 +706,7 @@ export const dbAdapter = <
           if (data.offset) {
             throw new Error('offset not supported');
           }
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          if (hasOrWhere(data.where)) {
             const { select: _ignoredSelect, ...queryData } = data;
             const results = await asyncMap(data.where, async (w) =>
               handlePagination(
@@ -817,7 +839,8 @@ export const dbAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          assertSupportedBulkOrWhere(data.where, 'updateMany');
+          if (hasOrWhere(data.where)) {
             const ids = await collectIdsForOrWhere({
               model: data.model,
               where: data.where,

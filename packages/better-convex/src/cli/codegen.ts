@@ -849,9 +849,12 @@ function emitGeneratedModuleRuntimeFile(
 type ProcedureHandlerContext = QueryCtx | MutationCtx;
 type GeneratedProcedureHandler<
   TCtx extends ProcedureHandlerContext = ProcedureHandlerContext,
-> = TCtx extends MutationCtx
-  ? ProcedureCallerFromRegistry<ProcedureHandlerRegistry, 'mutation'>
-  : ProcedureCallerFromRegistry<ProcedureHandlerRegistry, 'query'>;
+> = GeneratedRegistryHandlerForContext<
+  ProcedureHandlerRegistry,
+  TCtx,
+  QueryCtx,
+  MutationCtx
+>;
 `
     : '';
   const generatedRuntimeTypeArgs = hasHandlerRegistry
@@ -884,9 +887,9 @@ export function ${handlerExportName}<TCtx extends ProcedureHandlerContext>(
 
 import {
   createGeneratedRegistryRuntime,
-  ProcedureActionCallerFromRegistry,
-  ProcedureCallerFromRegistry,
-  ProcedureScheduleCallerFromRegistry,
+  type GeneratedRegistryCallerForContext,${
+    hasHandlerRegistry ? '\n  type GeneratedRegistryHandlerForContext,' : ''
+  }
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from '${generatedServerImportPath}';
 import type { OrmTriggerContext } from 'better-convex/orm';
@@ -906,11 +909,10 @@ ${handlerRegistryDeclaration}
 ${hasHandlerRegistry ? '    handlerRegistry,\n' : ''}  };
 }
 
-type ProcedureRegistryBundle = ReturnType<typeof createProcedureRegistry>;
-type ProcedureCallerRegistry = ProcedureRegistryBundle['procedureRegistry'];
+type ProcedureCallerRegistry = ReturnType<typeof createProcedureRegistry>['procedureRegistry'];
 ${
   hasHandlerRegistry
-    ? `type ProcedureHandlerRegistry = ProcedureRegistryBundle['handlerRegistry'];
+    ? `type ProcedureHandlerRegistry = ReturnType<typeof createProcedureRegistry>['handlerRegistry'];
 `
     : ''
 }
@@ -923,22 +925,21 @@ type MutationCallerContext = MutationCtx | OrmTriggerContext<any, MutationCtx>;
 type ProcedureCallerContext = QueryCtx | MutationCallerContext | ActionCtx;
 type GeneratedProcedureCaller<
   TCtx extends ProcedureCallerContext = ProcedureCallerContext,
-> = TCtx extends MutationCallerContext
-  ? ProcedureCallerFromRegistry<ProcedureCallerRegistry, 'mutation'> & {
-      schedule: ProcedureScheduleCallerFromRegistry<ProcedureCallerRegistry>;
-    }
-  : TCtx extends ActionCtx
-    ? ProcedureCallerFromRegistry<ProcedureCallerRegistry, 'mutation'> & {
-        actions: ProcedureActionCallerFromRegistry<ProcedureCallerRegistry>;
-        schedule: ProcedureScheduleCallerFromRegistry<ProcedureCallerRegistry>;
-      }
-    : ProcedureCallerFromRegistry<ProcedureCallerRegistry, 'query'>;
+> = GeneratedRegistryCallerForContext<
+  ProcedureCallerRegistry,
+  TCtx,
+  QueryCtx,
+  MutationCallerContext,
+  ActionCtx
+>;
 ${handlerTypeDeclarations}
 
 export function ${callerExportName}<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
-  return generatedRuntime.getCallerFactory()(ctx) as GeneratedProcedureCaller<TCtx>;
+  return generatedRuntime.getCallerFactory()(
+    ctx as any
+  ) as GeneratedProcedureCaller<TCtx>;
 }
 ${handlerExport}
 `;
