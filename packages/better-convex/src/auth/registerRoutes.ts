@@ -5,21 +5,25 @@ import { toAuthErrorResponse } from './error-response';
 
 import type { GetAuth } from './types';
 
+type TrustedOriginsOption =
+  | (string | null | undefined)[]
+  | ((
+      request?: Request
+    ) =>
+      | (string | null | undefined)[]
+      | Promise<(string | null | undefined)[]>);
+
 type AuthRouteContract = {
   $context: Promise<{
     options: {
-      trustedOrigins?:
-        | string[]
-        | ((request: Request) => Promise<string[]> | string[]);
+      trustedOrigins?: TrustedOriginsOption;
     };
   }>;
   handler: (request: Request) => Promise<Response>;
   options: {
     basePath?: string;
     baseURL?: string;
-    trustedOrigins?:
-      | string[]
-      | ((request: Request) => Promise<string[]> | string[]);
+    trustedOrigins?: TrustedOriginsOption;
   };
 };
 
@@ -99,10 +103,7 @@ export const registerRoutes = (
     typeof opts.cors === 'boolean'
       ? { allowedHeaders: [], allowedOrigins: [], exposedHeaders: [] }
       : opts.cors;
-  let trustedOriginsOption:
-    | ((request: Request) => Promise<string[]> | string[])
-    | string[]
-    | undefined;
+  let trustedOriginsOption: TrustedOriginsOption | undefined;
   const cors = corsRouter(http, {
     allowCredentials: true,
 
@@ -117,13 +118,17 @@ export const registerRoutes = (
       corsOpts.exposedHeaders ?? []
     ),
     allowedOrigins: async (request) => {
-      trustedOriginsOption =
+      const resolvedTrustedOrigins =
         trustedOriginsOption ??
         (await staticAuth.$context).options.trustedOrigins ??
         [];
-      const trustedOrigins = Array.isArray(trustedOriginsOption)
-        ? trustedOriginsOption
-        : ((await trustedOriginsOption?.(request)) ?? []);
+      trustedOriginsOption = resolvedTrustedOrigins;
+      const rawOrigins = Array.isArray(resolvedTrustedOrigins)
+        ? resolvedTrustedOrigins
+        : ((await resolvedTrustedOrigins(request)) ?? []);
+      const trustedOrigins = rawOrigins.filter(
+        (origin): origin is string => typeof origin === 'string'
+      );
 
       return trustedOrigins
         .map((origin) =>

@@ -324,6 +324,45 @@ describe('httpAdapter', () => {
     expect(docs.map((d: any) => d.email)).toEqual(['a', 'b']);
   });
 
+  test('findMany OR path applies select after dedupe and limit', async () => {
+    const runQuery = mock(async (_handle: unknown, args: any) => {
+      const value = args.where?.[0]?.value;
+      return {
+        continueCursor: null,
+        isDone: true,
+        page:
+          value === 'a'
+            ? [{ _id: 'user-a', email: 'a' }]
+            : value === 'b'
+              ? [
+                  { _id: 'user-b', email: 'b' },
+                  { _id: 'user-a', email: 'a-duplicate' },
+                ]
+              : [],
+        pageStatus: 'Done' as const,
+      };
+    });
+
+    const adapterFactory = httpAdapter({ runQuery } as any, {
+      authFunctions: { findMany: 'findMany' } as any,
+    });
+    const adapter = adapterFactory({} as any);
+
+    const docs = await adapter.findMany({
+      limit: 1,
+      model: 'user',
+      select: ['id'],
+      sortBy: { direction: 'asc', field: 'email' },
+      where: [
+        { connector: 'OR', field: 'email', operator: 'eq', value: 'b' },
+        { connector: 'OR', field: 'email', operator: 'eq', value: 'a' },
+      ],
+    });
+
+    expect(docs).toHaveLength(1);
+    expect(docs[0]).toMatchObject({ id: 'user-a' });
+  });
+
   test('findOne returns the first truthy result when all where clauses are OR', async () => {
     const calls: unknown[] = [];
     const runQuery = mock(async (_handle: unknown, args: any) => {
@@ -437,6 +476,79 @@ describe('httpAdapter', () => {
       where: [{ field: 'email', operator: 'eq', value: 'a@b.com' }],
     });
     expect(deleted).toBe(2);
+  });
+
+  test('updateMany and deleteMany handle OR where clauses via id collection', async () => {
+    const runQuery = mock(async (_handle: unknown, args: any) => {
+      const value = args.where?.[0]?.value;
+      return {
+        continueCursor: null,
+        isDone: true,
+        page:
+          value === 'a'
+            ? [{ _id: 'user-a', email: 'a' }]
+            : value === 'b'
+              ? [{ _id: 'user-b', email: 'b' }]
+              : [],
+        pageStatus: 'Done' as const,
+      };
+    });
+    const runMutation = mock(async (handle: unknown, args: any) => {
+      if (handle === 'deleteOne') {
+        return null;
+      }
+      if (handle === 'updateMany') {
+        expect(args.input.where).toEqual([
+          { field: '_id', operator: 'in', value: ['user-a', 'user-b'] },
+        ]);
+        return {
+          continueCursor: null,
+          count: 2,
+          isDone: true,
+          pageStatus: 'Done' as const,
+        };
+      }
+      throw new Error(`Unexpected handle: ${String(handle)}`);
+    });
+
+    const adapterFactory = httpAdapter({ runMutation, runQuery } as any, {
+      authFunctions: {
+        deleteOne: 'deleteOne',
+        findMany: 'findMany',
+        updateMany: 'updateMany',
+      } as any,
+    });
+    const adapter = adapterFactory({} as any);
+
+    const where = [
+      { connector: 'OR', field: 'email', operator: 'eq', value: 'a' },
+      { connector: 'OR', field: 'email', operator: 'eq', value: 'b' },
+    ] as any;
+
+    const updated = await adapter.updateMany({
+      model: 'user',
+      update: { name: 'updated' },
+      where,
+    });
+    expect(updated).toBe(2);
+
+    const deleted = await adapter.deleteMany({
+      model: 'user',
+      where,
+    });
+    expect(deleted).toBe(2);
+    expect(runMutation).toHaveBeenCalledWith('deleteOne', {
+      input: {
+        model: 'user',
+        where: [{ field: '_id', operator: 'eq', value: 'user-a' }],
+      },
+    });
+    expect(runMutation).toHaveBeenCalledWith('deleteOne', {
+      input: {
+        model: 'user',
+        where: [{ field: '_id', operator: 'eq', value: 'user-b' }],
+      },
+    });
   });
 });
 

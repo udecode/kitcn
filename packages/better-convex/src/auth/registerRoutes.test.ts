@@ -231,4 +231,38 @@ describe('registerRoutes', () => {
       logSpy.mockRestore();
     }
   });
+
+  test('filters nullish trusted origins before CORS matching', async () => {
+    const http = httpRouter();
+
+    const getAuth = () => ({
+      handler: async () => new Response('ok'),
+      options: { basePath: '/api/auth' },
+      $context: Promise.resolve({
+        options: {
+          trustedOrigins: async () => [
+            undefined,
+            'https://trusted.example',
+            null,
+          ],
+        },
+      }),
+    });
+
+    registerRoutes(http as any, getAuth as any, { cors: true });
+
+    const optionsMatch = http.lookup('/api/auth/session', 'OPTIONS')!;
+    const optionsRes = await unwrapInvoke(
+      optionsMatch[0],
+      new UndiciRequest('https://example.convex.site/api/auth/session', {
+        method: 'OPTIONS',
+        headers: { origin: 'https://trusted.example' },
+      }) as any
+    );
+
+    expect(optionsRes.status).toBe(204);
+    expect(optionsRes.headers.get('access-control-allow-origin')).toBe(
+      'https://trusted.example'
+    );
+  });
 });
