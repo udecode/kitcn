@@ -20,9 +20,10 @@
 - Do not write TDD cases for dead code/legacy removal assertions (for example: "should not contain old API X anymore"). Remove the dead path directly and keep tests focused on current behavior.
 - Never edit scaffolded example output first. Change package templates/source, then regenerate scaffold files via CLI.
 - Never update example plugin files directly. Update the package plugin template first, then regenerate with `better-convex add ... --overwrite`.
-- When changing `better-convex init` scaffold output, treat `templates/next/**` as generated fixture output from `bun run template:next:sync` — including `templates/next/package.json`. Do not patch fixture files by hand.
-- After any `init -t next` template or scaffold change, you must rerun `bun run template:next:sync` and `bun run check:templates`. No exceptions.
-- If `bun run template:next:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers first: `pkill -f 'convex/bin/main.js codegen' || true; pkill -f 'convex/bin/main.js dev' || true; pkill -f '@esbuild/.*/bin/esbuild --service' || true`, then rerun sync once. If `ps` still shows an esbuild worker stuck in `U` state after `kill -9`, stop bullshitting and reboot — that machine state is wedged.
+- When changing `better-convex init` scaffold output, treat `templates/**` as generated fixture output from `bun run template:sync` — including committed template `package.json` files. Do not patch fixture files by hand.
+- After any init template or scaffold change, you must rerun `bun run template:sync` and `bun run check:templates`. No exceptions.
+- For manual runtime, never run committed `templates/**` in place. Materialize a tmp app with `bun run scenario:materialize <name>` and run it from `tmp/scenarios/<name>/project`, or use `bun run scenario:dev <name>`.
+- If `bun run template:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers first: `pkill -f 'convex/bin/main.js codegen' || true; pkill -f 'convex/bin/main.js dev' || true; pkill -f '@esbuild/.*/bin/esbuild --service' || true`, then rerun sync once. If `ps` still shows an esbuild worker stuck in `U` state after `kill -9`, stop bullshitting and reboot — that machine state is wedged.
 - After every template/scaffold change, regenerate the affected example with `better-convex add <plugin> --overwrite`, then verify with `better-convex add <plugin> --diff`. If diff still shows drift, the template is wrong: fix the template and regenerate again until diff is clean.
 - Prefer inline Zod schemas when used once; extract constants only when reused.
 
@@ -53,7 +54,7 @@ When using the following skills, override the default behavior.
 - If `agent-browser` gets blocked or loops on the same step, stop and ask the user to unblock. After the unblock works:
   - [Add browser learning]
 
-`workflows:*`:
+`ce-*`:
 
 - **Git:** Never git add, commit, push, or create PR unless the user explicitly asks.
 - **PR:** Before creating or updating a PR, run `bun check`. If it fails, stop and fix it or report the blocker. Do not open a PR with failing `bun check` unless the user explicitly says to.
@@ -95,7 +96,7 @@ When using the following skills, override the default behavior.
 - [ ] Typecheck (IF updated .ts files): Bash `bun typecheck`
 - [ ] Lint: Bash `bun lint:fix`
 - [ ] PR gate (IF creating/updating a PR): Bash `bun check`
-- [ ] Learn (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: Skill(learn) NOW to extract the knowledge (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
+- [ ] ce-compound (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: Skill(ce-compound) NOW after the fix is verified and follow its workflow to capture the solution in `docs/solutions/` (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
 
 ### Post Compact Recovery
 

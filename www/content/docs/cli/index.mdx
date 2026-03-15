@@ -1,0 +1,59 @@
+---
+title: CLI
+description: Bootstrap apps, add features, and drive backend workflows with the better-convex CLI.
+links:
+  doc: https://docs.convex.dev/cli
+---
+
+## Overview
+
+The CLI has two jobs:
+
+| Guide | Use it for |
+|------|-------------|
+| [Registry](/docs/cli/registry) | `init`, `create`, `add`, `view`, `info`, and `docs` |
+| [Backend](/docs/cli/backend) | `dev`, `codegen`, `env`, `deploy`, `aggregate`, `migrate`, `reset`, and `analyze` |
+
+## Installation
+
+```bash showLineNumbers
+bun add better-convex
+```
+
+Backend resolves in this order:
+
+1. `--backend <convex|concave>`
+2. `meta["better-convex"].backend` in `concave.json`
+3. default `convex`
+
+## Choose a guide
+
+<Cards>
+  <Card
+    title="Registry"
+    href="/docs/cli/registry"
+    description="Create or adopt a project, add auth/plugins, preview plans, and inspect registry drift."
+  />
+  <Card
+    title="Backend"
+    href="/docs/cli/backend"
+    description="Run dev/codegen, sync env, deploy, migrate, reset, and analyze bundles."
+  />
+</Cards>
+
+## Command Map
+
+| Area | Commands |
+|------|----------|
+| Project setup | `init`, `create` |
+| Feature layering | `add`, `view`, `info`, `docs` |
+| Backend workflow | `dev`, `codegen`, `env`, `deploy` |
+| Data lifecycle | `aggregate *`, `migrate *`, `reset` |
+| Diagnostics | `analyze` |
+
+## Next Steps
+
+<Cards>
+  <Card title="Registry" href="/docs/cli/registry" />
+  <Card title="Backend" href="/docs/cli/backend" />
+</Cards>

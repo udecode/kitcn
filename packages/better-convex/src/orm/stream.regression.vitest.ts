@@ -1,8 +1,8 @@
 import type { GenericDocument } from 'convex/server';
 import { defineSchema, defineTable } from 'convex/server';
 import { convexToJson, v } from 'convex/values';
-import { convexTest } from 'convex-test';
 import { describe, expect, test } from 'vitest';
+import { convexTest } from '../../../../convex/setup.testing';
 import type { IndexKey } from './stream';
 import { mergedStream, stream, streamIndexRange } from './stream';
 

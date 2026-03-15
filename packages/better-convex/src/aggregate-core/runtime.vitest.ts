@@ -5,8 +5,8 @@ import {
   type GenericMutationCtx,
 } from 'convex/server';
 import { v } from 'convex/values';
-import { convexTest } from 'convex-test';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { convexTest } from '../../../../convex/setup.testing';
 import { TableAggregate } from './runtime.js';
 import { AGGREGATE_NODE_TABLE, AGGREGATE_TREE_TABLE } from './schema.js';
 

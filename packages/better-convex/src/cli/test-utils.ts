@@ -182,6 +182,202 @@ export function writeShadcnNextApp(
   );
 }
 
+export function writeShadcnViteApp(
+  dir: string,
+  params: { usesSrc?: boolean } = {}
+) {
+  const usesSrc = params.usesSrc ?? true;
+  const rootPrefix = usesSrc ? path.join('src') : '';
+  const appDir = path.join(dir, rootPrefix);
+  const componentsDir = path.join(appDir, 'components');
+  const libDir = path.join(appDir, 'lib');
+  const aliasPath = usesSrc ? './src/*' : './*';
+  const tailwindCssPath = usesSrc ? 'src/index.css' : 'index.css';
+  const mainPath = path.join(appDir, 'main.tsx');
+
+  fs.mkdirSync(componentsDir, { recursive: true });
+  fs.mkdirSync(libDir, { recursive: true });
+
+  writePackageJson(dir, {
+    name: 'vite-app',
+    private: true,
+    version: '0.0.1',
+    type: 'module',
+    scripts: {
+      dev: 'vite',
+      build: 'tsc -b && vite build',
+      lint: 'eslint .',
+      format: 'prettier --write "**/*.{ts,tsx}"',
+      typecheck: 'tsc --noEmit',
+      preview: 'vite preview',
+    },
+    dependencies: {
+      '@tailwindcss/vite': '^4.1.17',
+      react: '^19.2.0',
+      'react-dom': '^19.2.0',
+      tailwindcss: '^4.1.17',
+    },
+    devDependencies: {
+      '@eslint/js': '^9.39.1',
+      '@types/node': '^24.10.1',
+      '@types/react': '^19.2.5',
+      '@types/react-dom': '^19.2.3',
+      '@vitejs/plugin-react': '^5.1.1',
+      eslint: '^9.39.1',
+      'eslint-plugin-react-hooks': '^7.0.1',
+      'eslint-plugin-react-refresh': '^0.4.24',
+      globals: '^16.5.0',
+      prettier: '^3.8.1',
+      'prettier-plugin-tailwindcss': '^0.7.2',
+      typescript: '~5.9.3',
+      'typescript-eslint': '^8.46.4',
+      vite: '^7.2.4',
+    },
+  });
+
+  fs.writeFileSync(
+    path.join(dir, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        files: [],
+        references: [
+          { path: './tsconfig.app.json' },
+          { path: './tsconfig.node.json' },
+        ],
+        compilerOptions: {
+          baseUrl: '.',
+          paths: {
+            '@/*': [aliasPath],
+          },
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'tsconfig.app.json'),
+    `{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["${aliasPath}"]
+    }
+  },
+  "include": ["${usesSrc ? 'src' : '.'}"]
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'tsconfig.node.json'),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          tsBuildInfoFile: './node_modules/.tmp/tsconfig.node.tsbuildinfo',
+          target: 'ES2023',
+          lib: ['ES2023'],
+          module: 'ESNext',
+          types: ['node'],
+          skipLibCheck: true,
+          moduleResolution: 'bundler',
+          allowImportingTsExtensions: true,
+          verbatimModuleSyntax: true,
+          moduleDetection: 'force',
+          noEmit: true,
+        },
+        include: ['vite.config.ts'],
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'vite.config.ts'),
+    `import path from "path"\nimport tailwindcss from "@tailwindcss/vite"\nimport react from "@vitejs/plugin-react"\nimport { defineConfig } from "vite"\n\nexport default defineConfig({\n  plugins: [react(), tailwindcss()],\n  resolve: {\n    alias: {\n      "@": path.resolve(__dirname, "${usesSrc ? './src' : '.'}"),\n    },\n  },\n})\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'eslint.config.js'),
+    `import js from "@eslint/js"\nimport globals from "globals"\nimport reactHooks from "eslint-plugin-react-hooks"\nimport reactRefresh from "eslint-plugin-react-refresh"\nimport tseslint from "typescript-eslint"\n\nexport default tseslint.config(\n  { ignores: ["dist"] },\n  {\n    extends: [js.configs.recommended, ...tseslint.configs.recommended],\n    files: ["**/*.{ts,tsx}"],\n    languageOptions: {\n      ecmaVersion: 2020,\n      globals: globals.browser,\n    },\n    plugins: {\n      "react-hooks": reactHooks,\n      "react-refresh": reactRefresh,\n    },\n    rules: {\n      ...reactHooks.configs.recommended.rules,\n      "react-refresh/only-export-components": [\n        "warn",\n        { allowConstantExport: true },\n      ],\n    },\n  }\n)\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'components.json'),
+    `${JSON.stringify(
+      {
+        $schema: 'https://ui.shadcn.com/schema.json',
+        style: 'base-nova',
+        rsc: false,
+        tsx: true,
+        tailwind: {
+          config: '',
+          css: tailwindCssPath,
+          baseColor: 'neutral',
+          cssVariables: true,
+          prefix: '',
+        },
+        aliases: {
+          components: '@/components',
+          utils: '@/lib/utils',
+          ui: '@/components/ui',
+          lib: '@/lib',
+          hooks: '@/hooks',
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    mainPath,
+    `import { StrictMode } from "react"\nimport { createRoot } from "react-dom/client"\n\nimport "./index.css"\nimport App from "./App.tsx"\nimport { ThemeProvider } from "@/components/theme-provider.tsx"\n\ncreateRoot(document.getElementById("root")!).render(\n  <StrictMode>\n    <ThemeProvider>\n      <App />\n    </ThemeProvider>\n  </StrictMode>\n)\n`
+  );
+
+  fs.writeFileSync(
+    path.join(appDir, 'App.tsx'),
+    `export function App() {\n  return (\n    <div className="flex min-h-svh p-6">\n      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">\n        <div>\n          <h1 className="font-medium">Project ready!</h1>\n          <p>You may now add components and start building.</p>\n        </div>\n      </div>\n    </div>\n  )\n}\n\nexport default App\n`
+  );
+
+  fs.writeFileSync(path.join(appDir, 'index.css'), '@import "tailwindcss";\n');
+
+  fs.writeFileSync(
+    path.join(componentsDir, 'theme-provider.tsx'),
+    `"use client"\n\nimport * as React from "react"\n\nexport function ThemeProvider({ children }: { children: React.ReactNode }) {\n  return <>{children}</>\n}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(libDir, 'utils.ts'),
+    'export function cn(...classes: Array<string | false | null | undefined>) {\n  return classes.filter(Boolean).join(" ")\n}\n'
+  );
+}
+
 export function writeMinimalSchema(dir: string, source?: string) {
   const schemaSource =
     source ??

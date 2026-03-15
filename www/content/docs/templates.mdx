@@ -1,17 +1,19 @@
 ---
 title: Templates
-description: Reference for the scaffold emitted by `better-convex init -t next`.
+description: Reference for the scaffold emitted by `better-convex create`.
 links:
   doc: https://docs.convex.dev
 ---
 
-Reference for the files that `better-convex init -t next --yes` writes.
+Reference for the files that `better-convex create` writes.
 
 Use the CLI first:
 
 ```bash showLineNumbers
 npx better-convex init
-npx better-convex init -t next --yes
+npx better-convex create -t next --yes
+npx better-convex create -t vite --yes
+npx better-convex add auth
 npx better-convex add resend
 npx better-convex add ratelimit
 ```
@@ -20,7 +22,7 @@ This page is not a second setup flow. It is the file-level reference for the sca
 
 ## Output
 
-`better-convex init -t next --yes` writes a complete minimal Next.js app, runs the first Better Convex codegen pass, and leaves the shadcn app shell in place.
+`better-convex create -t next --yes` writes a complete minimal Next.js app, runs the first Better Convex codegen pass, and leaves the shadcn app shell in place.
 
 ```plaintext showLineNumbers
 app/
@@ -75,7 +77,7 @@ tsconfig.json
 
 ## Ownership
 
-`init -t next` has two sources of truth:
+`create -t next` has two sources of truth:
 
 - shadcn owns the app shell and client utility files:
   - `app/layout.tsx`
@@ -100,6 +102,64 @@ tsconfig.json
 
 If the target app already uses `src/`, the same scaffold is written under `src/app`, `src/components`, and `src/lib`. Mixed `src` + root layouts fail fast instead of guessing.
 
+## Modes
+
+Public template keys stay concrete:
+
+- `next`
+- `vite`
+
+Internally, Better Convex only uses two scaffold modes:
+
+- `next-app`
+- `react`
+
+Framework detection maps:
+
+- `next-app` -> `next-app`
+- `next-pages`, `vite`, `react-router`, `tanstack-start`, `manual` -> `react`
+
+The rest fail clearly instead of getting a bullshit fallback.
+
+## Init vs Add
+
+`init` stays universal. It bootstraps the stack every app needs:
+
+- detected app shell
+- Better Convex client core
+- Better Convex server core
+- typed `get-env`
+- root + Convex tsconfig wiring
+- `.gitignore` entries for `.convex/` and `.concave/`
+- baseline scripts
+- Next-only `/convex` messages demo
+
+Optional capability layers on top through `add`:
+
+- `better-convex add auth`
+- `better-convex add ratelimit`
+- `better-convex add resend`
+
+`add auth` is the minimal auth bundle. It patches the init baseline with:
+
+- `convex/functions/auth.config.ts`
+- `convex/functions/auth.ts`
+- `convex/lib/plugins/auth/schema.ts`
+- `lib/convex/auth-client.ts`
+- `app/auth/page.tsx`
+- auth-aware updates to:
+  - `convex/functions/http.ts`
+  - `convex/lib/crpc.ts`
+  - `convex/lib/get-env.ts`
+  - `lib/convex/convex-provider.tsx`
+
+`add auth` intentionally does not scaffold role/admin policy, orgs, or other app-specific auth layers.
+
+Mode split:
+
+- `next-app`: includes the minimal `/auth` page
+- `react`: skips page/router UX in v1 and only scaffolds auth server/client/provider/env/cRPC wiring
+
 ## Root Config
 
 ### package.json
@@ -111,16 +171,18 @@ The scaffold keeps the standard Next scripts and adds the Better Convex baseline
   "scripts": {
     "dev": "next dev --turbopack",
     "codegen": "better-convex codegen",
+    "convex:dev": "better-convex dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck:convex": "tsc --noEmit --project convex/tsconfig.json",
+    "typecheck": "tsc --noEmit && bun run typecheck:convex"
   }
 }
 ```
 
-If `codegen` is already taken, the scaffold adds `convex:codegen` instead.
+If `codegen` is already taken, the scaffold adds `convex:codegen` instead. If `convex:dev` or `typecheck:convex` already exist, init leaves them alone.
 
 ### tsconfig.json
 
@@ -193,7 +255,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
 ### app/convex/page.tsx
 
-`init -t next` seeds a tiny live demo route instead of leaving the scaffold
+`create -t next` seeds a tiny live demo route instead of leaving the scaffold
 empty.
 
 ```tsx title="app/convex/page.tsx" showLineNumbers
@@ -370,13 +432,7 @@ and adds `messages` leaves to `convex/shared/api.ts`.
 ```ts title="convex/lib/crpc.ts" showLineNumbers
 import { initCRPC } from '../functions/generated/server';
 
-const c = initCRPC
-  .meta<{
-    auth?: 'optional' | 'required';
-    role?: 'admin';
-    ratelimit?: string;
-  }>()
-  .create();
+const c = initCRPC.create();
 
 export const publicQuery = c.query;
 export const publicAction = c.action;
@@ -389,6 +445,8 @@ export const privateAction = c.action.internal();
 export const publicRoute = c.httpAction;
 export const router = c.router;
 ```
+
+`add auth` owns the auth-aware `c.meta(...)` block plus `optionalAuth*` and `auth*` builders. Baseline init keeps `crpc.ts` policy-light.
 
 ### convex/functions/http.ts
 
@@ -440,5 +498,5 @@ export const getEnv = createEnv({
 
 - `templates/next` is a repo fixture, not the public contract.
 - The fixture is normalized for repo-local development only (`better-convex` rewritten to `workspace:*`, repo-safe package name, stripped volatile files).
-- The fixture comes from real `better-convex init -t next` output plus repo-only normalization. `check:templates` packs the current local `better-convex` package, validates a fresh generated app with install, lint, and typecheck, then compares the normalized snapshot. Use `check:templates:full` when you want to rebuild the package first. It fails if template init ever falls back to a stubbed runtime.
-- If you want the scaffold, use `better-convex init -t next`. Do not cargo-cult the fixture.
+- The fixture comes from real `better-convex create -t next` output plus repo-only normalization. `check:templates` packs the current local `better-convex` package, validates a fresh generated app with install, lint, and typecheck, then compares the normalized snapshot.
+- If you want the scaffold, use `better-convex create -t next`. Do not cargo-cult the fixture.

@@ -11,10 +11,22 @@ import type {
 import { convexTest as baseConvexTest } from 'convex-test';
 import { relations } from './schema';
 
+type ImportMetaWithGlob = ImportMeta & {
+  glob: (
+    globs: string | readonly string[]
+  ) => Record<string, () => Promise<unknown>>;
+};
+
+const convexModules = (import.meta as ImportMetaWithGlob).glob([
+  './**/*.{ts,tsx,js,jsx,mts,mjs}',
+  '!./**/*.test.{ts,tsx,js,jsx,mts,mjs}',
+  '!./**/*.typecheck.ts',
+]);
+
 export function convexTest<Schema extends SchemaDefinition<any, any>>(
   schema: Schema
 ) {
-  return baseConvexTest(schema);
+  return baseConvexTest(schema, convexModules);
 }
 
 export const withOrm = <

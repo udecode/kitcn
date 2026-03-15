@@ -5,6 +5,7 @@ export const serializeDryRunPlan = (plan: PluginInstallPlan) => {
     ...plan,
     dependency: {
       packageName: plan.dependency.packageName,
+      packageSpec: plan.dependency.packageSpec,
       packageJsonPath: plan.dependency.packageJsonPath?.replaceAll('\\', '/'),
       installed: plan.dependency.installed,
       skipped: plan.dependency.skipped,

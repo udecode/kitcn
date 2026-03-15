@@ -161,4 +161,4 @@ Reserved names — do not create tables with these names.
 
 - ORM: `./orm.md`
 - Triggers: docs at `/docs/orm/schema/triggers`
-- CLI: docs at `/docs/cli`
+- CLI Backend: docs at `/docs/cli/backend`

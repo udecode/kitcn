@@ -1,5 +1,5 @@
-import { convexTest } from 'convex-test';
 import { describe, expect, test } from 'vitest';
+import { convexTest } from '../../../../convex/setup.testing';
 import {
   boolean,
   convexTable,

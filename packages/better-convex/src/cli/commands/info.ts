@@ -1,36 +1,40 @@
 import fs from 'node:fs';
 import { relative, resolve } from 'node:path';
 import {
-  buildPluginInstallPlan,
-  collectInstalledPluginKeys,
-  collectPluginScaffoldTemplates,
-  filterScaffoldTemplatePathMap,
   formatInfoOutput as formatInfoOutputFn,
-  getPluginLockfilePath,
-  getSchemaFilePath,
-  inspectPluginDependencyInstall,
   parseArgs,
   type RunDeps,
   readPackageVersions,
-  readPluginLockfile,
   resolveConfiguredBackend,
-  resolvePresetScaffoldTemplates,
   resolveRunDeps,
-  resolveSchemaInstalledPlugins,
-  resolveTemplateSelectionSource,
-  resolveTemplatesByIdOrThrow,
-} from '../core.js';
+} from '../backend-core.js';
+import { inspectPluginDependencyInstall } from '../registry/dependencies.js';
 import {
   getPluginCatalogEntry,
   isSupportedPluginKey,
-} from '../plugin-catalog.js';
+} from '../registry/index.js';
+import { buildPluginInstallPlan } from '../registry/planner.js';
+import {
+  collectPluginScaffoldTemplates,
+  filterScaffoldTemplatePathMap,
+  resolvePresetScaffoldTemplates,
+  resolveTemplateSelectionSource,
+  resolveTemplatesByIdOrThrow,
+} from '../registry/selection.js';
+import {
+  collectInstalledPluginKeys,
+  getPluginLockfilePath,
+  getSchemaFilePath,
+  readPluginLockfile,
+  resolveSchemaInstalledPlugins,
+} from '../registry/state.js';
 import type { InstalledPluginState } from '../types.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/spinner.js';
 
 const HELP_FLAGS = new Set(['--help', '-h']);
 
-export { formatInfoOutput } from '../core.js';
+export { formatInfoOutput } from '../backend-core.js';
 
 export const INFO_HELP_TEXT = `Usage: better-convex info [options]
 

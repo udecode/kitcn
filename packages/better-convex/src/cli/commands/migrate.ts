@@ -11,7 +11,7 @@ import {
   runBackendFunction,
   runMigrationCreate,
   runMigrationFlow,
-} from '../core.js';
+} from '../backend-core.js';
 import { logger } from '../utils/logger.js';
 
 const HELP_FLAGS = new Set(['--help', '-h']);

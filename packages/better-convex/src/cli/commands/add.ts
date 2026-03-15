@@ -1,34 +1,40 @@
 import {
   applyDependencyInstallPlan,
-  applyPluginDependencyInstall,
   applyPluginInstallPlanFiles,
   buildInitializationPlan,
-  buildPluginInstallPlan,
-  collectPluginScaffoldTemplates,
-  filterScaffoldTemplatePathMap,
-  getPluginLockfilePath,
   isBetterConvexInitialized,
   parseArgs,
-  promptForPluginSelection,
-  promptForScaffoldTemplateSelection,
   type RunDeps,
-  readPluginLockfile,
-  resolveAddTemplateDefaults,
   resolveConfiguredBackend,
-  resolvePluginPreset,
-  resolvePluginScaffoldRoots,
-  resolvePresetScaffoldTemplates,
   resolveRunDeps,
-  resolveTemplateSelectionSource,
-  resolveTemplatesByIdOrThrow,
   runAfterScaffoldScript,
   runConfiguredCodegen,
-} from '../core.js';
+} from '../backend-core.js';
+import { applyPluginDependencyInstall } from '../registry/dependencies.js';
 import {
   getPluginCatalogEntry,
   getSupportedPluginKeys,
   isSupportedPluginKey,
-} from '../plugin-catalog.js';
+} from '../registry/index.js';
+import {
+  buildPluginInstallPlan,
+  resolvePluginScaffoldRoots,
+} from '../registry/planner.js';
+import {
+  collectPluginScaffoldTemplates,
+  filterScaffoldTemplatePathMap,
+  promptForPluginSelection,
+  promptForScaffoldTemplateSelection,
+  resolveAddTemplateDefaults,
+  resolvePluginPreset,
+  resolvePresetScaffoldTemplates,
+  resolveTemplateSelectionSource,
+  resolveTemplatesByIdOrThrow,
+} from '../registry/selection.js';
+import {
+  getPluginLockfilePath,
+  readPluginLockfile,
+} from '../registry/state.js';
 import { serializeDryRunPlan } from '../utils/dry-run.js';
 import {
   formatPlanDiff,
@@ -327,6 +333,7 @@ export const handleAddCommand = async (
     ...serializeDryRunPlan(plan),
     dependency: {
       packageName: dependencyInstall.packageName,
+      packageSpec: dependencyInstall.packageSpec,
       packageJsonPath: dependencyInstall.packageJsonPath?.replaceAll('\\', '/'),
       installed: dependencyInstall.installed,
       skipped: dependencyInstall.skipped,
@@ -362,7 +369,9 @@ export const handleAddCommand = async (
       }
     }
     if (dependencyInstall.installed) {
-      logger.success(`Installed ${dependencyInstall.packageName}.`);
+      logger.success(
+        `Installed ${dependencyInstall.packageSpec ?? dependencyInstall.packageName}.`
+      );
     }
     if (plan.dependencyHints.length > 0) {
       logger.write(

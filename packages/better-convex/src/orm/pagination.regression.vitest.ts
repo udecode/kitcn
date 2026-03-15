@@ -1,8 +1,8 @@
 import type { GenericDocument } from 'convex/server';
 import { defineSchema, defineTable } from 'convex/server';
 import { type GenericId, v } from 'convex/values';
-import { convexTest } from 'convex-test';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { convexTest } from '../../../../convex/setup.testing';
 import type { IndexKey } from './pagination';
 import { getPage, paginator } from './pagination';
 

@@ -1,7 +1,9 @@
+import type { ProjectScaffoldContext } from './project-context.js';
 import type {
   PluginCatalogEntry,
+  PluginScaffoldTarget,
   SupportedPluginKey,
-} from './plugin-catalog.js';
+} from './registry/types.js';
 
 export type SupportedPlugin = SupportedPluginKey;
 
@@ -15,6 +17,7 @@ export type PluginEnvReminder = {
 
 export type PluginDependencyInstallResult = {
   packageName?: string;
+  packageSpec?: string;
   packageJsonPath?: string;
   installed: boolean;
   skipped: boolean;
@@ -44,6 +47,7 @@ export type PluginInstallPlanFile = {
   reason: string;
   content: string;
   existingContent?: string;
+  managedBaselineContent?: string;
 };
 
 export type PluginInstallPlanOperation = {
@@ -89,4 +93,50 @@ export type CliDocEntry = {
   localPath: string;
   publicUrl?: string;
   keywords?: readonly string[];
+};
+
+export type CliSelectOption<TValue extends string> = {
+  value: TValue;
+  label: string;
+  hint?: string;
+};
+
+export type PromptAdapter = {
+  isInteractive: () => boolean;
+  confirm: (message: string) => Promise<boolean>;
+  select: <TValue extends string>(params: {
+    message: string;
+    options: readonly CliSelectOption<TValue>[];
+  }) => Promise<TValue | symbol>;
+  multiselect: <TValue extends string>(params: {
+    message: string;
+    options: readonly CliSelectOption<TValue>[];
+    initialValues?: readonly TValue[];
+    required?: boolean;
+  }) => Promise<TValue[] | symbol>;
+};
+
+export type PluginLockfile = {
+  plugins: Record<string, { package: string; files?: Record<string, string> }>;
+};
+
+export type ScaffoldTemplate = {
+  id: string;
+  path: string;
+  content: string;
+  target: PluginScaffoldTarget;
+  requires: string[];
+  dependencyHintMessage?: string;
+  dependencyHints: string[];
+};
+
+export type ResolvedScaffoldRoots = {
+  functionsRootDir: string;
+  libRootDir: string;
+  appRootDir: string | null;
+  clientLibRootDir: string | null;
+  crpcFilePath: string;
+  sharedApiFilePath: string;
+  envFilePath: string;
+  projectContext: ProjectScaffoldContext | null;
 };

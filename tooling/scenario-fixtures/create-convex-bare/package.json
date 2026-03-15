@@ -1,0 +1,25 @@
+{
+  "name": "app",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "convex dev",
+    "predev": "convex dev --until-success && convex dashboard",
+    "logs": "convex logs",
+    "lint": "tsc -p convex && eslint . --report-unused-disable-directives --max-warnings 0"
+  },
+  "dependencies": {
+    "convex": "^1.33.0"
+  },
+  "devDependencies": {
+    "@convex-dev/eslint-plugin": "^1.1.1",
+    "@eslint/eslintrc": "^3.3.5",
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^24.12.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^9.39.3",
+    "globals": "^17.4.0",
+    "typescript": "^5.9.3"
+  }
+}

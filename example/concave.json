@@ -11,7 +11,8 @@
       },
       "dev": {
         "debug": false,
-        "args": []
+        "args": [],
+        "preRun": "init"
       },
       "codegen": {
         "debug": false,

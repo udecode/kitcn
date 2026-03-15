@@ -1,26 +1,26 @@
-import {
-  assertSchemaFileExists,
-  buildPluginInstallPlan,
-  collectInstalledPluginKeys,
-  collectPluginScaffoldTemplates,
-  filterScaffoldTemplatePathMap,
-  getPluginLockfilePath,
-  parseArgs,
-  promptForPluginSelection,
-  type RunDeps,
-  readPluginLockfile,
-  resolvePluginPreset,
-  resolvePresetScaffoldTemplates,
-  resolveRunDeps,
-  resolveSchemaInstalledPlugins,
-  resolveTemplateSelectionSource,
-  resolveTemplatesByIdOrThrow,
-} from '../core.js';
+import { parseArgs, type RunDeps, resolveRunDeps } from '../backend-core.js';
 import {
   getPluginCatalogEntry,
   getSupportedPluginKeys,
   isSupportedPluginKey,
-} from '../plugin-catalog.js';
+} from '../registry/index.js';
+import { buildPluginInstallPlan } from '../registry/planner.js';
+import {
+  collectPluginScaffoldTemplates,
+  filterScaffoldTemplatePathMap,
+  promptForPluginSelection,
+  resolvePluginPreset,
+  resolvePresetScaffoldTemplates,
+  resolveTemplateSelectionSource,
+  resolveTemplatesByIdOrThrow,
+} from '../registry/selection.js';
+import {
+  assertSchemaFileExists,
+  collectInstalledPluginKeys,
+  getPluginLockfilePath,
+  readPluginLockfile,
+  resolveSchemaInstalledPlugins,
+} from '../registry/state.js';
 import { serializeDryRunPlan } from '../utils/dry-run.js';
 import { formatPluginView } from '../utils/dry-run-formatter.js';
 import { logger } from '../utils/logger.js';

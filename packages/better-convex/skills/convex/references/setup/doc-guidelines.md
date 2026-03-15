@@ -115,7 +115,7 @@ rg -n "ctx\\.table\\(|ctx\\.table\\b|convex-ents|defineEnt\\(" packages/better-c
 
 3. `SKILL.md` remains setup-free (manual + grep check):
 ```bash
-rg -n "create-next-app|Installation|convex\\.json|\\.env|env sync|one-time setup" packages/better-convex/skills/convex/SKILL.md
+rg -n "create-next-app|Installation|convex\\.json|\\.env|env push|one-time setup" packages/better-convex/skills/convex/SKILL.md
 ```
 
 4. Every advanced reference has a discoverable pointer from core when relevant (manual review required).

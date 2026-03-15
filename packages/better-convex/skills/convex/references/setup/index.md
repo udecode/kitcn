@@ -30,7 +30,7 @@ Ask these questions before editing files.
 
 | Feature         | Options                                                              | Default            |
 | --------------- | -------------------------------------------------------------------- | ------------------ |
-| Bootstrap       | CLI (`better-convex init` / `add`), Docs by section                  | CLI                |
+| Bootstrap       | CLI (`better-convex create` / `init` / `add`), Docs by section      | CLI                |
 | React Framework | Next.js App Router, TanStack Start, Other                            | Next.js App Router |
 | Database        | ORM (`ctx.orm`)                                                      | ORM                |
 
@@ -52,7 +52,7 @@ Ask these questions before editing files.
 
 Use this exact structure:
 
-1. Bootstrap: CLI (`better-convex init` / `add`) or docs by section?
+1. Bootstrap: CLI (`better-convex create` / `init` / `add`) or docs by section?
 2. Framework: Next.js App Router, TanStack Start, or other?
 3. Database: ORM (`ctx.orm`) or other?
 4. Auth: Better Auth, custom auth, or no auth?
@@ -91,20 +91,24 @@ bunx better-convex init
 bunx better-convex --backend concave init --yes
 
 # New Next.js app with deterministic shadcn bootstrap + curated minimal scaffold
-bunx better-convex init -t next --yes
+bunx better-convex create -t next --yes
+
+# New Vite app with the React baseline
+bunx better-convex create -t vite --yes
 
 # Nested app target
-bunx better-convex init -t next --yes --cwd apps --name web
+bunx better-convex create -t next --yes --cwd apps --name web
 ```
 
 Then add only the features you want:
 
 ```bash
+bunx better-convex add auth
 bunx better-convex add ratelimit
 bunx better-convex add resend
 ```
 
-`better-convex init -t next --yes` owns the Better Convex integration layer for:
+`better-convex create -t next --yes` owns the Better Convex integration layer for:
 
 - `app/convex/page.tsx`
 - `package.json`
@@ -122,18 +126,58 @@ bunx better-convex add resend
 - `convex/shared/api.ts`
 - `concave.json`
 
-Template-mode init preserves the shadcn-owned shell (`app/layout.tsx`, `app/page.tsx`, `app/globals.css`, `components/theme-provider.tsx`, `lib/utils.ts`, `components.json`, `eslint.config.mjs`, `next.config.mjs`, `postcss.config.mjs`) and only patches:
+Template-mode create preserves the shadcn-owned shell (`app/layout.tsx`, `app/page.tsx`, `app/globals.css`, `components/theme-provider.tsx`, `lib/utils.ts`, `components.json`, `eslint.config.mjs`, `next.config.mjs`, `postcss.config.mjs`) and only patches:
 
 - `app/layout.tsx` to mount `Providers`
 - `tsconfig.json` to add `@convex/*`
 - `components.json` when `tailwind.css` needs to follow the resolved app root
 - `package.json` to add `better-convex codegen` as `codegen` (or `convex:codegen` when `codegen` is already taken)
 
-Init also runs the first Better Convex codegen pass so `convex/lib/crpc.ts` can import `../functions/generated/server` immediately.
-Template-mode init also seeds a live messages demo route plus starter schema and
+Create also runs the first Better Convex codegen pass so `convex/lib/crpc.ts` can import `../functions/generated/server` immediately.
+Template-mode create also seeds a live messages demo route plus starter schema and
 procedures, so the scaffold has one working query/mutation flow out of the box.
-Template-mode init infers `src/` vs root app layouts and writes the Next client scaffold into the matching tree. Conflicting `src` + root layouts should fail instead of guessing.
+Template-mode create infers `src/` vs root app layouts and writes the Next client scaffold into the matching tree. Conflicting `src` + root layouts should fail instead of guessing.
 Backend resolves from `--backend`, then `meta["better-convex"].backend`, then `convex`.
+
+Universal scaffold rule:
+
+1. `create -t next` owns the stack everyone needs:
+   - typed `get-env`
+   - client core
+   - server core
+   - root + Convex tsconfig wiring
+   - `.gitignore` entries for `.convex/` and `.concave/`
+   - baseline scripts
+   - fixed `/convex` messages demo
+2. Optional capability belongs in `add`, not `init`:
+   - `add auth`
+   - `add ratelimit`
+   - `add resend`
+3. `add auth` is the minimal auth bundle. It owns auth server/client files,
+   auth-aware provider wiring, auth env fields, and auth cRPC families.
+4. `add auth` does not own role/admin policy, orgs, or other app-policy layers.
+
+Public template keys stay concrete:
+
+- `next`
+- `vite`
+
+Internal scaffold modes stay broad:
+
+- `next-app`
+- `react`
+
+Framework mapping:
+
+- `next-app` -> `next-app`
+- `next-pages`, `vite`, `react-router`, `tanstack-start`, `manual` -> `react`
+
+React-mode notes:
+
+1. `create -t vite` scaffolds the universal baseline plus the React client core.
+2. It does not scaffold RSC helpers.
+3. It does not scaffold the `/convex` messages demo in v1.
+4. `add auth` on the React baseline follows the Better Auth React/Vite SPA shape and skips auth page/router UX in v1.
 
 ### 3.2 Manual app creation and baseline packages
 
@@ -521,14 +565,19 @@ Recommended scripts:
 ```json
 {
   "scripts": {
-    "convex:dev": "convex dev --until-success --run init && better-convex dev",
-    "reset": "convex run reset:reset && sleep 5 && convex run init",
+    "preconvex:dev": "convex init",
+    "convex:dev": "better-convex dev",
+    "convex:once": "better-convex dev --once --typecheck disable",
+    "reset": "better-convex reset --yes --after init",
     "seed": "convex run seed:seed",
-    "sync:jwks": "better-convex env sync --auth",
-    "sync:rotate": "convex run auth:rotateKeys | convex env set JWKS"
+    "env:push": "better-convex env push --auth",
+    "env:push:rotate": "better-convex env push --auth --rotate"
   }
 }
 ```
+
+Set `meta["better-convex"].dev.preRun = "init"` in `concave.json` when the
+app owns an `init.ts` preflight.
 
 CLI commands:
 
@@ -538,9 +587,9 @@ bunx better-convex dev
 bunx better-convex dev --once --typecheck disable
 # optional fallback only if dev cannot run and backend is already active:
 bunx better-convex codegen
-bunx better-convex env sync
-bunx better-convex env sync --auth
-bunx better-convex env sync --auth --prod
+bunx better-convex env push
+bunx better-convex env push --auth
+bunx better-convex env push --auth --prod
 # deploy with automatic aggregate backfill:
 bunx better-convex deploy --prod
 # aggregate index management:
@@ -597,7 +646,7 @@ Then sanity-check auth runtime paths:
 4. `schema.ts` + `relations` + generated `initCRPC` wiring are in place.
 5. `crpc.ts` builders exported and app procedures use `ctx.orm`.
 6. `better-convex dev` runs and generates `_generated` + `api.ts`.
-7. If auth enabled: `auth.config.ts`, `auth.ts`, `http.ts`, env sync complete.
+7. If auth enabled: `auth.config.ts`, `auth.ts`, `http.ts`, env push complete.
 8. Client `CRPCProvider` + QueryClient + Convex provider are mounted.
 9. Framework branch is complete (Next.js or TanStack Start).
 10. If using typed envs: `convex/lib/get-env.ts` exists and Convex code reads through `getEnv()`.
@@ -642,7 +691,8 @@ Source coverage mapping used to build this runbook:
 | `www/content/docs/auth/plugins/admin.mdx`            | Section 10.1                     |
 | `www/content/docs/auth/plugins/organizations.mdx`    | Section 10.2                     |
 | `www/content/docs/auth/plugins/polar.mdx`            | Section 10.3                     |
-| `www/content/docs/cli.mdx`                           | Section 11                       |
+| `www/content/docs/cli/registry.mdx`                 | Section 11                       |
+| `www/content/docs/cli/backend.mdx`                   | Section 11                       |
 
 ### Template Coverage (Recreation Target)
 
@@ -667,14 +717,14 @@ This runbook + references map to the canonical template shape as follows:
 | Symptom                                                                               | Likely Cause                                                                                    | Fix                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@convex/api` not found                                                               | `better-convex dev` not run                                                                     | Run `bunx better-convex dev` and regenerate API metadata                                                                                                                                     |
-| `Cannot prompt for input in non-interactive terminals` during bootstrap               | Convex setup needs explicit bootstrap input                                                     | Re-run `bunx better-convex init --team <team_slug> --project <project_slug> --dev-deployment local`, or let init/dev fall back to anonymous local bootstrap when project-backed setup is not needed |
+| `Cannot prompt for input in non-interactive terminals` during bootstrap               | Convex deployment selection still needs a local choice                                          | Export `CONVEX_AGENT_MODE=anonymous`, run `bunx convex init`, or pass `--env-file` / deployment-target args so Convex can resolve the deployment without prompting |
 | Can't find new local backend files under `~/.convex`                                  | Convex now stores new local deployment state per project                                        | Check `.convex/local/default/` in the current project root; treat `~/.convex/**` as legacy storage                                                                                          |
-| `better-convex env sync --auth` says anonymous deployment or fails to set vars        | No active deployment connection                                                                 | Start `bunx better-convex dev` (or `bunx convex dev`) first, then rerun sync                                                                                                                |
-| `Failed to analyze auth.js` with `Unexpected token` / `map is not a function` on JWKS | Static `JWKS` value is malformed JSON                                                           | Unset/fix `JWKS`; use `getAuthConfigProvider()` fallback or resync with `bunx better-convex env sync --auth`                                                                                |
+| `better-convex env push --auth` fails to set vars                                     | Convex deployment is not initialized                                                            | Run `bunx convex init`, then rerun `bunx better-convex env push --auth`                                                                                                                     |
+| `Failed to analyze auth.js` with `Unexpected token` / `map is not a function` on JWKS | Static `JWKS` value is malformed JSON                                                           | Unset/fix `JWKS`; use `getAuthConfigProvider()` fallback or repush with `bunx better-convex env push --auth`                                                                                |
 | `Local backend isn't running` during manual `better-convex codegen`                   | Convex local deployment not active                                                              | Prefer `bunx better-convex dev` (it already codegens); use manual `codegen` only as fallback with active backend                                                                            |
 | HTTP calls fail but queries work                                                      | `.site` URL missing or wrong                                                                    | Set `NEXT_PUBLIC_CONVEX_SITE_URL` correctly                                                                                                                                                 |
-| Auth works locally but fails in prod                                                  | JWKS not synced                                                                                 | Run `bunx better-convex env sync --auth --prod`                                                                                                                                             |
-| Sign-in fails on `/auth` (loop, no session, or immediate sign-out)                    | Auth route/env/provider wiring mismatch                                                         | Recheck Sections 6.5-6.7 (`authMiddleware`, route registration, env sync), verify provider credentials/URLs, then rerun Section 11.3                                                        |
+| Auth works locally but fails in prod                                                  | JWKS not pushed                                                                                 | Run `bunx better-convex env push --auth --prod`                                                                                                                                             |
+| Sign-in fails on `/auth` (loop, no session, or immediate sign-out)                    | Auth route/env/provider wiring mismatch                                                         | Recheck Sections 6.5-6.7 (`authMiddleware`, route registration, env push), verify provider credentials/URLs, then rerun Section 11.3                                                        |
 | `UNAUTHORIZED` on protected procedures                                                | auth middleware not attaching `userId`                                                          | Ensure `getAuth(ctx)` + `getHeaders(ctx)` session lookup is in middleware                                                                                                                   |
 | `ctx.orm` missing in handlers                                                         | Generated `initCRPC` not used                                                                  | Use `initCRPC` from `../functions/generated/server` — ORM context is pre-wired                                                                                                              |
 | `Property 'insert'/'update' does not exist on type 'OrmReader'`                       | Using query context for mutations                                                               | Ensure mutation handlers use `publicMutation` / `protectedMutation` builders                                                                                                                 |
@@ -682,7 +732,7 @@ This runbook + references map to the canonical template shape as follows:
 | Route auth cookies not set                                                            | Missing CORS auth headers                                                                       | Add `Better-Auth-Cookie` allow/expose headers + credentials                                                                                                                                 |
 | TanStack Start auth helper import errors                                              | Using `better-convex/auth/nextjs` in Start app                                                  | Use TanStack Start exception with `@convex-dev/better-auth/*` helpers                                                                                                                       |
 | `Returned promise will never resolve` from internal function                          | Trigger path is recursively querying/updating related rows or stale component wiring still runs | Isolate failing write with logs, disable/move trigger-side sync into explicit mutation helper, rerun `bunx better-convex dev --once --typecheck disable`, then retry bootstrap smoke checks |
-| Better Auth secret mismatch/warnings in setup flows                                   | `BETTER_AUTH_SECRET` manually set inconsistently or low entropy                                 | Generate and sync via `bunx better-convex env sync --auth`; avoid manual secret setting unless explicitly needed                                                                            |
+| Better Auth secret mismatch/warnings in setup flows                                   | `BETTER_AUTH_SECRET` manually set inconsistently or low entropy                                 | Generate and push via `bunx better-convex env push --auth`; avoid manual secret setting unless explicitly needed                                                                            |
 | `Invalid orderBy value. Use a column or asc()/desc()`                                 | Wrong `orderBy` shape (`[{ field, direction }]`)                                                | Use object form only, e.g. `orderBy: { updatedAt: "desc" }`                                                                                                                                 |
 | `Invalid argument id for db.get` while testing `NOT_FOUND`                            | Fabricated Convex document ID                                                                   | Use real inserted IDs or non-ID lookup keys (slug/name/email) for not-found tests                                                                                                           |
 | Trigger side effects too slow                                                         | Heavy sync work inside trigger                                                                  | Move heavy work to scheduled actions via `ctx.scheduler`                                                                                                                                    |

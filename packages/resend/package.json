@@ -20,6 +20,6 @@
     "svix": "^1.84.1"
   },
   "peerDependencies": {
-    "convex": ">=1.32"
+    "convex": ">=1.33"
   }
 }

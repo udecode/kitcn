@@ -16,6 +16,7 @@ export default defineConfig([
       '**/out/**',
       '**/build/**',
       'templates/**',
+      'tooling/scenario-fixtures/**',
       '**/tmp/**',
       '**/coverage/**',
       '**/coverage-*/**',

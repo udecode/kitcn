@@ -45,6 +45,7 @@ export type BetterConvexConfig = {
   dev: {
     debug: boolean;
     args: string[];
+    preRun?: string;
     aggregateBackfill: AggregateBackfillConfig;
     migrations: MigrationConfig;
   };
@@ -187,6 +188,19 @@ function parsePositiveInteger(
   }
   throw new Error(
     `Invalid ${fieldName} in ${configPath}: expected a positive integer.`
+  );
+}
+
+function parseNonEmptyString(
+  value: unknown,
+  fieldName: string,
+  configPath: string
+): string {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value;
+  }
+  throw new Error(
+    `Invalid ${fieldName} in ${configPath}: expected non-empty string.`
   );
 }
 
@@ -430,6 +444,7 @@ function parseCommandConfig(
 ): {
   debug?: boolean;
   args?: string[];
+  preRun?: string;
   scope?: CodegenScope;
   trimSegments?: string[];
   aggregateBackfill?: Partial<AggregateBackfillConfig>;
@@ -441,7 +456,7 @@ function parseCommandConfig(
   assertNoUnknownKeys(
     value,
     fieldName === 'dev'
-      ? ['debug', 'args', 'aggregateBackfill', 'migrations']
+      ? ['debug', 'args', 'preRun', 'aggregateBackfill', 'migrations']
       : ['debug', 'args', 'scope', 'trimSegments'],
     configPath,
     fieldName
@@ -450,6 +465,7 @@ function parseCommandConfig(
   const parsed: {
     debug?: boolean;
     args?: string[];
+    preRun?: string;
     scope?: CodegenScope;
     trimSegments?: string[];
     aggregateBackfill?: Partial<AggregateBackfillConfig>;
@@ -462,6 +478,13 @@ function parseCommandConfig(
 
   if ('args' in value) {
     parsed.args = parseStringArray(value.args, `${fieldName}.args`, configPath);
+  }
+  if (fieldName === 'dev' && 'preRun' in value && value.preRun !== undefined) {
+    parsed.preRun = parseNonEmptyString(
+      value.preRun,
+      `${fieldName}.preRun`,
+      configPath
+    );
   }
 
   if (
@@ -756,6 +779,9 @@ export function loadBetterConvexConfig(
     }
     if (parsed.args !== undefined) {
       config.dev.args = parsed.args;
+    }
+    if (parsed.preRun !== undefined) {
+      config.dev.preRun = parsed.preRun;
     }
     if (parsed.aggregateBackfill !== undefined) {
       config.dev.aggregateBackfill = {

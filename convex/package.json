@@ -1,6 +1,9 @@
 {
   "name": "test-convex",
   "private": true,
+  "dependencies": {
+    "better-convex": "workspace:*"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   }

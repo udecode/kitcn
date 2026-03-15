@@ -67,17 +67,155 @@ For the current Next scaffold, the acceptable shell patches are narrow:
 If you find yourself authoring a full replacement for a shadcn-owned file,
 you are probably doing it wrong.
 
+## Universal Init Matrix
+
+Public templates stay concrete:
+
+- `better-convex init -t next`
+- `better-convex init -t vite`
+
+Internally, Better Convex only has two scaffold modes:
+
+- `next-app`
+- `react`
+
+Framework detection should feel like shadcn, not like a fake Better Convex
+abstraction:
+
+- `next-app` maps to `next-app`
+- `next-pages`, `vite`, `react-router`, `tanstack-start`, and `manual` map to
+  `react`
+- unsupported frameworks should fail clearly
+
+`init` stays universal. Keep it narrow.
+
+Init always owns:
+
+- the detected app shell plus the Better Convex seam
+- `convex/functions/schema.ts`
+- `convex/functions/http.ts`
+- `convex/lib/crpc.ts`
+- `convex/lib/get-env.ts`
+- `convex/tsconfig.json`
+- root `tsconfig.json` patch
+- `.gitignore` entries for `.convex/` and `.concave/`
+- `components/providers.tsx`
+- `lib/convex/*`
+- `.env.local`
+- baseline scripts: `codegen`, `convex:dev`, `typecheck:convex`, root `typecheck`
+
+Next-only baseline pieces:
+
+- `/convex` messages demo
+- `lib/convex/server.ts`
+- `lib/convex/rsc.tsx`
+- narrow shell seam patches:
+  - `layout.tsx`
+  - `tsconfig.json`
+  - `components.json`
+
+React-mode baseline keeps the client core only:
+
+- no RSC files
+- no Next-only provider/server helpers
+- no `/convex` demo in v1
+- Vite is the concrete reference for this mode
+
+Init options stay narrow:
+
+- `-t next`
+- `-t vite`
+- `--backend convex|concave`
+- `--cwd`
+- `--name`
+- `--yes`
+- `--team`
+- `--project`
+- `--dev-deployment`
+
+Do not grow `init` with fake feature flags.
+
+Optional capability belongs in `add`:
+
+- `better-convex add auth`
+- `better-convex add ratelimit`
+- `better-convex add resend`
+
+Auth is the first real bundle. It patches the init baseline and owns:
+
+- auth server config/runtime
+- auth client files
+- auth-aware provider wiring
+- auth env through `get-env`
+- auth cRPC families:
+  - `optionalAuth*`
+  - `auth*`
+
+Mode split:
+
+- `next-app`: minimal `/auth` page + provider/client/server wiring
+- `react`: auth server config/runtime, auth client, provider wiring, auth env,
+  and auth cRPC families only
+
+Auth v1 does not own:
+
+- role/admin policy
+- orgs/invitations
+- anonymous upgrade flows
+- app-specific auth UX beyond minimal sign-in/session wiring
+
+Rule:
+
+- universal stack = `init`
+- optional/invasive/app-policy features = `add`
+- if a capability already fits cleanly as a first-party plugin, do not stuff it into `init`
+
+## Registry Comparison
+
+Better Convex should match shadcn on the data model as closely as possible.
+
+Same shape:
+
+- one item module per folder under
+  `packages/better-convex/src/cli/registry/items/<item>/<item>-item.ts`
+- each item declares files
+- each item declares package dependencies
+- each item declares internal item dependencies
+
+Current Better Convex divergence:
+
+- the registry stays internal for now
+- install is not just file copy
+- add flows patch existing Better Convex seam files based on project mode
+
+That extra install layer is what Better Convex adds beyond plain shadcn
+registry resolution:
+
+- register schema extensions into `schema.ts`
+- patch `crpc.ts`, `http.ts`, providers, and `get-env.ts`
+- resolve different roots for `next-app` vs `react`
+- maintain `plugins.lock.json`
+- install pinned package specs when needed
+- run codegen and post-add hooks
+
+Rule:
+
+- keep the item files as close to shadcn `RegistryItem` as possible
+- keep the dynamic patching in install/runtime code
+- do not shove Better Convex-specific behavior back into the item shape unless
+  shadcn has a real equivalent
+
 ## Init
 
-`templates/next` is not hand-authored. It is a normalized snapshot of real
+`templates/*` is not hand-authored. It is a normalized snapshot of real
 CLI output.
 
 The important bit:
 
-- `templates/next/convex/functions/_generated/*` comes from real Better Convex
-  codegen during `better-convex init -t next`
+- committed template `_generated/*` output comes from real Better Convex
+  codegen during `better-convex init`
 - it is not copied from repo fixtures
-- it is not written by `tooling/template-next.ts`
+- it is not written by hand
 - template-mode init must fail if real codegen cannot be produced
 - do not call `better-convex codegen` directly from the fixture script
 
@@ -89,20 +227,22 @@ Why not direct `better-convex codegen`?
   scaffold -> dependency install -> codegen -> bootstrap retry -> codegen retry
 - the fixture script should consume that contract, not reimplement half of it
 
-Repo automation adds one deliberate detail:
+Repo automation adds two deliberate details:
 
-- `tooling/template-next.ts` runs local
-  `better-convex init -t next --backend concave`
+- `tooling/templates.ts` owns committed starters:
+  `next`, `next-auth`, `vite`, `vite-auth`
 - that uses the same public backend selector users can use elsewhere
 - template sync intentionally chooses Concave because it is more agent/CI-friendly here
 - default CLI behavior is still backend `convex` unless config or `--backend` says otherwise
+- manual runtime lives in `tooling/scenarios.ts`, materialized under
+  `tmp/scenarios/*`
 
 ### Human Repro
 
 To regenerate the checked-in fixture:
 
 ```bash
-bun run template:next:sync
+bun run template:sync
 ```
 
 To verify the fixture still matches fresh CLI output:
@@ -111,39 +251,70 @@ To verify the fixture still matches fresh CLI output:
 bun run check:templates
 ```
 
+To materialize runnable tmp apps for manual runtime:
+
+```bash
+bun run scenario:materialize all
+```
+
+Why this exists:
+
+- committed `templates/*/package.json` stays normalized to `workspace:*`
+- `check:templates` swaps that to a packed local tarball before validation
+- manual runtime happens in `tmp/scenarios/*`, never in `templates/*`
+
+For manual runtime, prefer the root scripts:
+
+```bash
+bun run scenario:codegen next-auth
+bun run scenario:dev next-auth
+```
+
 `check:templates` is not just a diff. It validates the fresh generated app with:
 
 ```bash
 bun install
-bun lint
 bun typecheck
-bun build
 ```
+
+Next starters also run `bun lint`. Vite starters intentionally skip lint in
+this lane because shadcn's default `eslint .` sweeps generated/runtime files.
 
 It validates against the current local package under test, not the last
 published npm version:
 
-- build `packages/better-convex`
-- pack it to a local tarball
+- pack the current local `better-convex` package to a tarball
 - install that tarball into the generated temp app
+
+If you need the slower rebuild-first lane, use:
+
+```bash
+bun run check:templates:full
+```
 
 ### Agent Repro
 
 When checking parity or drift:
 
-1. run `bun run template:next:sync` instead of editing `templates/next` by hand
+1. run `bun run template:sync` instead of editing `templates/*` by hand
 2. run `bun run check:templates`
 3. if drift remains, fix `better-convex init -t next`, not the fixture
 
 ### Real Generation Flow
 
-`tooling/template-next.ts` does this:
+`tooling/templates.ts` does this:
 
 1. create a temp directory
-2. run the local CLI:
+2. for each committed starter, run the local CLI:
 
    ```bash
-   bun packages/better-convex/src/cli/cli.ts --backend concave init -t next --yes --cwd <tmp> --name next
+   bunx better-convex --backend concave init -t <next|vite> --yes --cwd <tmp> --name <starter>
+   ```
+
+   For auth starters, follow with:
+
+   ```bash
+   bunx better-convex --backend concave add auth --yes
    ```
 
 3. let `init` run the actual scaffold flow:
@@ -156,14 +327,12 @@ When checking parity or drift:
    - for template sync, the selected backend is Concave
    - outside that flow, backend still resolves normally from config/CLI
 5. validate the fresh generated app:
-   - build the local `better-convex` package
    - pack local `better-convex` to a tarball
    - rewrite the generated app to install that tarball
    - `bun install`
-   - `bun lint`
    - `bun typecheck`
-   - `bun build`
-6. copy the generated app into `templates/next`
+   - `bun lint` only for templates whose registry entry enables lint
+6. copy the generated app into `templates/<starter>`
 7. apply repo-only normalization:
    - strip volatile artifacts (`node_modules`, `.next`, lockfiles, etc.)
    - rewrite `better-convex` to `workspace:*`
@@ -175,7 +344,7 @@ allowed to invent user-facing files.
 Do not change this into:
 
 ```bash
-bun packages/better-convex/src/cli/cli.ts init -t next --yes --cwd <tmp> --name next
+bunx better-convex init -t next --yes --cwd <tmp> --name next
 cd <tmp>/next
 bunx better-convex codegen
 ```

@@ -13,5 +13,11 @@
     "jsx": "react-jsx",
     "lib": ["dom", "dom.iterable", "esnext"]
   },
-  "include": ["src", "../../tooling/global.d.ts"]
+  "include": ["src", "../../tooling/global.d.ts"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.vitest.ts",
+    "src/**/*.vitest.tsx"
+  ]
 }

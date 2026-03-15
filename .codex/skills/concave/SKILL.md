@@ -54,6 +54,7 @@ These are the Concave-only facts worth keeping in your head.
 ### Configuration / API differences
 
 - `concave.config.ts` is real Concave surface area.
+- `convex.json` works now. That matters here because Better Convex already uses it.
 - Bun/Node use `createConcave(...)`.
 - Cloudflare uses explicit `defineConcaveRuntime(...)` wiring.
 - Adapter choice is part of the product, not hidden infra:
@@ -66,7 +67,6 @@ These are the Concave-only facts worth keeping in your head.
 
 - Vector search is only basic/brute-force in built-in adapters.
 - Crons are planned, not done.
-- Components are not supported.
 - Convex Auth is not supported.
 - Streaming exports are not supported.
 
@@ -140,13 +140,15 @@ Keep it small. This is a smoke lane, not a migration plan.
 
 ### Template sync/check uses the public backend selector
 
-`tooling/template-next.ts` runs local `better-convex init -t next --backend concave`.
+`tooling/templates.ts` runs local committed starter sync with
+`better-convex init -t <next|vite> --backend concave`.
 
 That means:
 
-- `templates/next/convex/functions/_generated/*` comes from the init flow running Better Convex codegen against Concave-backed bootstrap
+- committed `templates/*/convex/functions/_generated/*` comes from the init
+  flow running Better Convex codegen against Concave-backed bootstrap
 - template-mode Concave codegen intentionally uses `concave codegen --static`
-- `tooling/template-next.ts` itself must not shell out to raw `better-convex codegen`
+- `tooling/templates.ts` itself must not shell out to raw `better-convex codegen`
 
 ### `_generated/*` drift is expected
 
@@ -188,11 +190,13 @@ The right model is:
 
 Start with repo wiring:
 
-- `packages/better-convex/src/cli/core.ts`
+- `packages/better-convex/src/cli/backend-core.ts`
 - `packages/better-convex/src/cli/commands/init.ts`
 - `packages/better-convex/src/cli/commands/init.test.ts`
-- `tooling/template-next.ts`
-- `tooling/template-next.test.ts`
+- `tooling/templates.ts`
+- `tooling/templates.test.ts`
+- `tooling/scenarios.ts`
+- `tooling/scenarios.test.ts`
 - `test/concave/run-smoke.ts`
 - `test/concave/fixture/**`
 - `.github/workflows/ci.yml`
@@ -214,10 +218,11 @@ Then read Concave docs starting from:
 When touching Concave repo-runtime wiring, run:
 
 ```bash
-bun test packages/better-convex/src/cli/commands/init.test.ts ./tooling/template-next.test.ts
+bun test packages/better-convex/src/cli/commands/init.test.ts ./tooling/templates.test.ts ./tooling/scenarios.test.ts
 bun test packages/better-convex/src/cli/cli.test.ts
 bun run test:concave
 bun run check:templates
+bun run check:scenarios
 ```
 
 If package code changed too, also run:
@@ -238,13 +243,15 @@ When Concave docs or repo usage changes, update this skill with this exact loop.
 ```bash
 rg -n "backend|concave-bun|test:concave|createConcave|@concavejs|Concave|--backend" \
   package.json \
-  packages/better-convex/src/cli/core.ts \
+  packages/better-convex/src/cli/backend-core.ts \
   packages/better-convex/src/cli/config.ts \
   packages/better-convex/src/cli/cli.ts \
   packages/better-convex/src/cli/commands/init.ts \
   packages/better-convex/src/cli/commands/init.test.ts \
-  tooling/template-next.ts \
-  tooling/template-next.test.ts \
+  tooling/templates.ts \
+  tooling/templates.test.ts \
+  tooling/scenarios.ts \
+  tooling/scenarios.test.ts \
   test/concave \
   .github/workflows/ci.yml \
   -g '!**/_generated/**'

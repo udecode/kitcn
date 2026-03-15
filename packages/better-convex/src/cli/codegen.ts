@@ -868,6 +868,7 @@ function emitGeneratedAuthFile(
     : 'missing_auth_file';
   const authRuntimeImportSpecifiers = [
     'type BetterAuthOptionsWithoutDatabase',
+    'type AuthRuntime',
     'defineAuth as baseDefineAuth',
     'createAuthRuntime',
     'type GenericAuthDefinition',
@@ -912,22 +913,24 @@ export function defineAuth<
 
 ${
   hasAuthDefaultExport
-    ? `type AuthDefinitionFromFile = Extract<
-  typeof authDefinitionModule extends { default: infer T } ? T : never,
-  (...args: unknown[]) => unknown
->;
+    ? `type AuthDefinitionFromFile = typeof authDefinitionModule.default;
 
-const authDefinition = ((ctx: GenericCtx) =>
-  resolveGeneratedAuthDefinition<AuthDefinitionFromFile>(
-    authDefinitionModule,
-    getGeneratedAuthDisabledReason(${JSON.stringify(disabledAuthReasonKind)})
-  )(ctx)) as AuthDefinitionFromFile;
+const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>(
+  authDefinitionModule,
+  getGeneratedAuthDisabledReason(${JSON.stringify(disabledAuthReasonKind)})
+);
 `
     : ''
 }
-const authRuntime = ${
+const authRuntime: ${
     hasAuthDefaultExport
-      ? `createAuthRuntime<
+      ? `AuthRuntime<
+  DataModel,
+  typeof schema,
+  MutationCtx,
+  GenericCtx,
+  ReturnType<AuthDefinitionFromFile>
+> = createAuthRuntime<
   DataModel,
   typeof schema,
   MutationCtx,
@@ -939,7 +942,12 @@ const authRuntime = ${
   schema,
   auth: authDefinition,${hasRelationsMetadata ? '\n  context: withOrm,' : ''}
 })`
-      : `createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({
+      : `AuthRuntime<
+  DataModel,
+  typeof schema,
+  MutationCtx,
+  GenericCtx
+> = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({
   reason: getGeneratedAuthDisabledReason(${JSON.stringify(disabledAuthReasonKind)}),
 })`
   };

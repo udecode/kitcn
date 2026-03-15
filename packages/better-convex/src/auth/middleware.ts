@@ -27,11 +27,8 @@ export interface AuthMiddlewareOptions {
  * export default createHttpRouter(app, httpRouter);
  * ```
  */
-export function authMiddleware(
-  getAuth: GetAuth<
-    unknown,
-    { handler: (request: Request) => Promise<Response> }
-  >,
+export function authMiddleware<Ctx = unknown>(
+  getAuth: GetAuth<Ctx, { handler: (request: Request) => Promise<Response> }>,
   opts: AuthMiddlewareOptions = {}
 ): MiddlewareHandler {
   const basePath = opts.basePath ?? '/api/auth';
@@ -50,7 +47,7 @@ export function authMiddleware(
         console.log('request headers', c.req.raw.headers);
       }
 
-      const auth = getAuth(c.env as any);
+      const auth = getAuth(c.env as Ctx);
       let response: Response;
       try {
         response = await auth.handler(c.req.raw);

@@ -257,6 +257,7 @@ describe('cli/config', () => {
       dev: {
         debug: true,
         args: ['--team', 'dev-team'],
+        preRun: 'init',
         aggregateBackfill: {
           enabled: 'on',
           wait: false,
@@ -309,6 +310,7 @@ describe('cli/config', () => {
         dev: {
           debug: true,
           args: ['--team', 'dev-team'],
+          preRun: 'init',
           aggregateBackfill: {
             enabled: 'on',
             wait: false,
@@ -354,6 +356,24 @@ describe('cli/config', () => {
           },
         },
       });
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('loads dev.preRun from config', () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    writeBetterConvexConfig(dir, {
+      dev: {
+        preRun: 'init',
+      },
+    });
+
+    process.chdir(dir);
+    try {
+      expect(loadBetterConvexConfig().dev.preRun).toBe('init');
     } finally {
       process.chdir(oldCwd);
     }
@@ -410,6 +430,24 @@ describe('cli/config', () => {
       expect(() => loadBetterConvexConfig()).toThrow(
         'Invalid codegen.trimSegments in'
       );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('throws for invalid dev.preRun values', () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    writeBetterConvexConfig(dir, {
+      dev: {
+        preRun: '',
+      },
+    });
+
+    process.chdir(dir);
+    try {
+      expect(() => loadBetterConvexConfig()).toThrow('Invalid dev.preRun in');
     } finally {
       process.chdir(oldCwd);
     }

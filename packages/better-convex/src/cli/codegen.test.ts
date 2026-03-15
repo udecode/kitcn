@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-
 import { generateMeta, getConvexConfig } from './codegen';
+import { writeGeneratedConcaveApiTypes } from './concave-api-types';
 
 const RESERVED_HTTP_NAMESPACE_ERROR = /root "http" namespace is reserved/i;
 const RESERVED_RUNTIME_NAMESPACE_ERROR = /reserved runtime caller namespace/i;
@@ -114,6 +114,53 @@ function writeScopedFixture(dir: string) {
 }
 
 describe('cli/codegen', () => {
+  test('writeGeneratedConcaveApiTypes emits source-backed api types', () => {
+    const dir = mkTempDir();
+    const functionsDir = path.join(dir, 'convex');
+
+    writeFile(
+      path.join(functionsDir, 'messages.ts'),
+      `
+      import { query, mutation } from "./_generated/server";
+      import { v } from "convex/values";
+
+      export const list = query({
+        args: {},
+        handler: async () => [{ body: "hi" }],
+      });
+
+      export const send = mutation({
+        args: { body: v.string() },
+        handler: async () => null,
+      });
+      `.trim()
+    );
+    writeFile(
+      path.join(functionsDir, 'generated', 'auth.ts'),
+      `
+      export const create = {};
+      `.trim()
+    );
+
+    writeGeneratedConcaveApiTypes(functionsDir);
+
+    const output = fs.readFileSync(
+      path.join(functionsDir, '_generated', 'api.d.ts'),
+      'utf-8'
+    );
+
+    expect(output).toContain(
+      'import type * as messages from "../messages.js";'
+    );
+    expect(output).toContain(
+      'import type * as generated_auth from "../generated/auth.js";'
+    );
+    expect(output).toContain('declare const fullApi: ApiFromModules<{');
+    expect(output).toContain('"messages": typeof messages,');
+    expect(output).toContain('"generated/auth": typeof generated_auth,');
+    expect(output).toContain('export declare const components: AnyComponents;');
+  });
+
   test('getConvexConfig uses defaults when convex.json is missing', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
@@ -148,6 +195,47 @@ describe('cli/codegen', () => {
         functionsDir: path.join(cwd, 'fn'),
         outputFile: path.join(cwd, 'out', 'meta', 'api.ts'),
       });
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta supports a file and directory with the same name', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'items.ts'),
+        `
+        export const rootQuery = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'items', 'list.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      await generateMeta('convex/shared');
+
+      const generated = fs.readFileSync(
+        path.join(dir, 'convex', 'shared', 'api.ts'),
+        'utf8'
+      );
+      expect(generated).toContain('rootQuery');
+      expect(generated).toContain('list: {');
     } finally {
       process.chdir(oldCwd);
     }
@@ -1668,12 +1756,16 @@ describe('cli/codegen', () => {
       expect(generatedAuth).toContain(
         "import * as authDefinitionModule from '../auth';"
       );
+      expect(generatedAuth).toContain('type AuthRuntime,');
       expect(generatedAuth).toContain('getGeneratedAuthDisabledReason,');
-      expect(generatedAuth).toContain('type AuthDefinitionFromFile = Extract<');
-      expect(generatedAuth).toContain('createAuthRuntime<');
+      expect(generatedAuth).toContain(
+        'type AuthDefinitionFromFile = typeof authDefinitionModule.default;'
+      );
+      expect(generatedAuth).toContain('const authRuntime: AuthRuntime<');
+      expect(generatedAuth).toContain('= createAuthRuntime<');
       expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
       expect(generatedAuth).toContain(
-        'resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
+        'const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
       );
       expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("default_export_unavailable")'
@@ -1789,7 +1881,9 @@ describe('cli/codegen', () => {
         "import * as authDefinitionModule from '../auth';"
       );
       expect(generatedAuth).toContain('getGeneratedAuthDisabledReason,');
-      expect(generatedAuth).toContain('type AuthDefinitionFromFile = Extract<');
+      expect(generatedAuth).toContain(
+        'type AuthDefinitionFromFile = typeof authDefinitionModule.default;'
+      );
       expect(generatedAuth).toContain('createAuthRuntime<');
       expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
       expect(generatedAuth).toContain(
@@ -1883,8 +1977,9 @@ describe('cli/codegen', () => {
       );
       const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
       expect(generatedAuth).toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).toContain('const authRuntime: AuthRuntime<');
       expect(generatedAuth).toContain(
-        'const authRuntime = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
+        '> = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
       );
       expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_auth_file")'

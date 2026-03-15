@@ -1,0 +1,14 @@
+{
+  "plugins": {
+    "auth": {
+      "package": "better-auth",
+      "files": {
+        "auth-client": "lib/convex/auth-client.ts",
+        "auth-config": "convex/functions/auth.config.ts",
+        "auth-page": "app/auth/page.tsx",
+        "auth-runtime": "convex/functions/auth.ts",
+        "auth-schema": "convex/lib/plugins/auth/schema.ts"
+      }
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import type { Auth as BetterAuthInstance } from 'better-auth';
 import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
 import type {
   GenericDataModel,
@@ -37,8 +38,6 @@ export const getGeneratedAuthDisabledReason = (
 const DEFAULT_DISABLED_AUTH_MESSAGE =
   getGeneratedAuthDisabledReason('missing_auth_file');
 
-type UnknownFn = (...args: unknown[]) => unknown;
-
 type AuthDefinitionModule<
   GenericCtx,
   DataModel extends GenericDataModel,
@@ -57,7 +56,7 @@ type AuthDefinitionInput<
   | GenericAuthDefinition<GenericCtx, DataModel, Schema, AuthOptions>
   | AuthDefinitionModule<GenericCtx, DataModel, Schema, AuthOptions>;
 
-export const resolveGeneratedAuthDefinition = <Definition extends UnknownFn>(
+export const resolveGeneratedAuthDefinition = <Definition>(
   input: unknown,
   reason: string
 ): Definition => {
@@ -106,6 +105,11 @@ const withoutTriggers = <
 const createDisabledError = (message: string, exportName: string) => () => {
   throw new Error(`${message} (${exportName})`);
 };
+
+const createDisabledRuntimeExport = <T>(
+  message: string,
+  exportName: string
+): T => createDisabledError(message, exportName) as T;
 
 const createLazyAuthProxy = <Auth extends ReturnType<typeof betterAuth>>(
   resolve: () => Auth
@@ -183,6 +187,41 @@ const decorateAuthRuntimeProcedures = <T extends Record<string, unknown>>(
   return exportsObject;
 };
 
+export type AuthRuntime<
+  DataModel extends GenericDataModel,
+  Schema extends SchemaDefinition<GenericSchema, true>,
+  TriggerCtx extends
+    GenericMutationCtx<DataModel> = GenericMutationCtx<DataModel>,
+  GenericCtx = GenericMutationCtx<DataModel>,
+  AuthOptions extends
+    BetterAuthOptionsWithoutDatabase = BetterAuthOptionsWithoutDatabase,
+> = {
+  auth: BetterAuthInstance<
+    AuthOptions & {
+      database: BetterAuthOptions['database'];
+    }
+  >;
+  authClient: ReturnType<typeof createClient<DataModel, Schema, TriggerCtx>>;
+  authEnabled: boolean;
+  getAuth: (ctx: GenericCtx) => BetterAuthInstance<
+    AuthOptions & {
+      database: BetterAuthOptions['database'];
+    }
+  >;
+} & ReturnType<
+  typeof createApi<
+    Schema,
+    DataModel,
+    GenericCtx,
+    TriggerCtx,
+    BetterAuthInstance<
+      AuthOptions & {
+        database: BetterAuthOptions['database'];
+      }
+    >
+  >
+>;
+
 export const createAuthRuntime = <
   DataModel extends GenericDataModel,
   Schema extends SchemaDefinition<GenericSchema, true>,
@@ -199,7 +238,7 @@ export const createAuthRuntime = <
   context?: (
     ctx: GenericMutationCtx<DataModel>
   ) => TriggerCtx | Promise<TriggerCtx>;
-}) => {
+}): AuthRuntime<DataModel, Schema, TriggerCtx, GenericCtx, AuthOptions> => {
   const authDefinition = resolveGeneratedAuthDefinition<
     GenericAuthDefinition<GenericCtx, DataModel, Schema, AuthOptions>
   >(
@@ -241,7 +280,13 @@ export const createAuthRuntime = <
     triggers: resolveRuntimeTriggers,
   });
   const decoratedAuthApi = decorateAuthRuntimeProcedures(authApi);
-  let staticAuth: ReturnType<typeof betterAuth> | undefined;
+  let staticAuth:
+    | BetterAuthInstance<
+        AuthOptions & {
+          database: BetterAuthOptions['database'];
+        }
+      >
+    | undefined;
   const getStaticAuth = () => {
     staticAuth ??= betterAuth(resolveAuthOptions({} as GenericCtx));
     return staticAuth;
@@ -253,7 +298,7 @@ export const createAuthRuntime = <
     getAuth,
     auth: createLazyAuthProxy(getStaticAuth),
     ...decoratedAuthApi,
-  };
+  } as AuthRuntime<DataModel, Schema, TriggerCtx, GenericCtx, AuthOptions>;
 };
 
 export const createDisabledAuthRuntime = <
@@ -262,10 +307,19 @@ export const createDisabledAuthRuntime = <
   TriggerCtx extends
     GenericMutationCtx<DataModel> = GenericMutationCtx<DataModel>,
   GenericCtx = GenericMutationCtx<DataModel>,
+  AuthOptions extends
+    BetterAuthOptionsWithoutDatabase = BetterAuthOptionsWithoutDatabase,
 >(config?: {
   reason?: string;
-}) => {
+}): AuthRuntime<DataModel, Schema, TriggerCtx, GenericCtx, AuthOptions> => {
   const message = config?.reason ?? DEFAULT_DISABLED_AUTH_MESSAGE;
+  type Runtime = AuthRuntime<
+    DataModel,
+    Schema,
+    TriggerCtx,
+    GenericCtx,
+    AuthOptions
+  >;
 
   return {
     authEnabled: false as const,
@@ -283,18 +337,42 @@ export const createDisabledAuthRuntime = <
           throw new Error(`${message} (auth)`);
         },
       }
-    ) as ReturnType<typeof betterAuth>,
+    ) as Runtime['auth'],
     getAuth: createDisabledError(message, 'getAuth') as (
       ctx: GenericCtx
-    ) => ReturnType<typeof betterAuth>,
-    create: createDisabledError(message, 'create'),
-    deleteMany: createDisabledError(message, 'deleteMany'),
-    deleteOne: createDisabledError(message, 'deleteOne'),
-    findMany: createDisabledError(message, 'findMany'),
-    findOne: createDisabledError(message, 'findOne'),
-    updateMany: createDisabledError(message, 'updateMany'),
-    updateOne: createDisabledError(message, 'updateOne'),
-    getLatestJwks: createDisabledError(message, 'getLatestJwks'),
-    rotateKeys: createDisabledError(message, 'rotateKeys'),
+    ) => Runtime['auth'],
+    create: createDisabledRuntimeExport<Runtime['create']>(message, 'create'),
+    deleteMany: createDisabledRuntimeExport<Runtime['deleteMany']>(
+      message,
+      'deleteMany'
+    ),
+    deleteOne: createDisabledRuntimeExport<Runtime['deleteOne']>(
+      message,
+      'deleteOne'
+    ),
+    findMany: createDisabledRuntimeExport<Runtime['findMany']>(
+      message,
+      'findMany'
+    ),
+    findOne: createDisabledRuntimeExport<Runtime['findOne']>(
+      message,
+      'findOne'
+    ),
+    updateMany: createDisabledRuntimeExport<Runtime['updateMany']>(
+      message,
+      'updateMany'
+    ),
+    updateOne: createDisabledRuntimeExport<Runtime['updateOne']>(
+      message,
+      'updateOne'
+    ),
+    getLatestJwks: createDisabledRuntimeExport<Runtime['getLatestJwks']>(
+      message,
+      'getLatestJwks'
+    ),
+    rotateKeys: createDisabledRuntimeExport<Runtime['rotateKeys']>(
+      message,
+      'rotateKeys'
+    ),
   };
 };

@@ -1,6 +1,6 @@
 ## 5. Core Backend
 
-For production bootstrap, prefer `bunx better-convex init` and `bunx better-convex add <plugin>`. This file is the snippet reference path.
+For production bootstrap, prefer `bunx better-convex create` for fresh apps, `bunx better-convex init` for adoption, and `bunx better-convex add <plugin>`. This file is the snippet reference path.
 
 ### 5.1 Define schema and relations
 
@@ -199,18 +199,16 @@ Run:
 bunx better-convex dev
 ```
 
-If this requires interactive Convex setup, pause and complete bootstrap before continuing.
+If this requires interactive Convex setup, run `bunx convex init` first, then continue.
 Do not fake generated files.
 
-Automation/non-interactive fallback (current CLI behavior):
+Automation/non-interactive path:
 
-1. `better-convex init` and `better-convex dev` try to generate the Better Convex runtime immediately.
-2. If project-backed bootstrap is required, run:
-   `bunx better-convex init --team <team_slug> --project <project_slug> --dev-deployment local`
-3. If explicit team/project input is unavailable, let the CLI use anonymous local bootstrap.
-4. Plain non-template `better-convex init` may leave a stubbed `convex/functions/generated/server.ts` only when real codegen is still unavailable. `init -t next` should fail instead.
-5. Confirm the generated runtime exists in `convex/functions/generated/server.ts`.
-6. Then run `bunx better-convex dev` for ongoing codegen/API refresh.
+1. Export `CONVEX_AGENT_MODE=anonymous` when you want local anonymous setup.
+2. Run `bunx convex init`.
+3. Run `bunx better-convex dev --once --typecheck disable`.
+4. Confirm the generated runtime exists in `convex/functions/generated/server.ts`.
+5. Then run `bunx better-convex dev` for ongoing codegen/API refresh.
 
 Local deployment storage: New local and anonymous deployments store state under `.convex/` in the project root.
 
@@ -226,6 +224,7 @@ Agent command policy:
 2. `better-convex dev` already runs codegen/API generation.
 3. Do not run `bunx better-convex codegen` as a separate default step.
 4. Use manual `bunx better-convex codegen` only as fallback when `better-convex dev` cannot be run and backend is already active.
+5. Use `bunx better-convex insights` for cloud-deployment debugging; it forwards to the upstream Convex insights CLI.
 
 One-time codegen (optional; use only when `better-convex dev` is not running):
 
@@ -235,9 +234,9 @@ bunx better-convex codegen
 
 Codegen runtime rule:
 
-1. `better-convex codegen` still requires an active Convex backend connection.
-2. If you see `Local backend isn't running`, start `bunx better-convex dev` in another terminal and retry.
-3. If this remains blocked in agent mode, pause and ask the user to run `bunx better-convex dev`, then continue after it is live.
+1. `better-convex codegen` still requires a configured Convex deployment.
+2. If you see deployment/bootstrap errors, run `bunx convex init` first.
+3. If you see `Local backend isn't running`, use `bunx better-convex dev --once --typecheck disable` instead of hand-holding a second terminal.
 
 ### 5.6 Import rules (hard requirement)
 

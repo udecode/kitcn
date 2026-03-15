@@ -75,7 +75,7 @@ Use this workflow when release docs must match current changeset content.
 
 ### Phase: /example-to-doc Crosswalk (required)
 
-- [ ] `example/convex/shared/api.ts` -> `www/content/docs/cli.mdx`, `www/content/docs/react/infer-types.mdx` — pending
+- [ ] `example/convex/shared/api.ts` -> `www/content/docs/cli/backend.mdx`, `www/content/docs/react/infer-types.mdx` — pending
 - [ ] `example/src/lib/convex/crpc.tsx` -> `www/content/docs/react/index.mdx` — pending
 - [ ] `example/src/lib/convex/rsc.tsx` -> `www/content/docs/nextjs/index.mdx`, `www/content/docs/server/server-side-calls.mdx` — pending
 - [ ] `example/src/lib/convex/server.ts` -> `www/content/docs/nextjs/index.mdx` — pending

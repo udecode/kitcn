@@ -5,7 +5,13 @@ import {
   type RunDeps,
   resolveRunDeps,
   runInitCommandFlow,
-} from '../core.js';
+} from '../backend-core.js';
+
+export {
+  detectProjectFramework,
+  mapFrameworkToScaffoldMode,
+} from '../project-context.js';
+
 import { logger } from '../utils/logger.js';
 
 const HELP_FLAGS = new Set(['--help', '-h']);
@@ -13,23 +19,18 @@ const HELP_FLAGS = new Set(['--help', '-h']);
 export const INIT_HELP_TEXT = `Usage: better-convex init [options]
 
 Options:
-  --template, -t    App template (only "next" is supported)
   --cwd             Target directory
-  --name            Project name when creating a fresh app
-  --team            Convex team slug for non-interactive bootstrap
-  --project         Convex project slug for non-interactive bootstrap
-  --dev-deployment  Convex dev deployment kind (cloud|local, default: local)
+  --prod            Forward to \`convex init\`
+  --preview-name    Forward to \`convex init\`
+  --deployment-name Forward to \`convex init\`
+  --env-file        Forward to \`convex init\`
   --yes, -y         Deterministic non-interactive mode
-  --defaults        Use default shadcn init answers
   --json            Machine-readable command output`;
 
 export {
-  INIT_SHADCN_PACKAGE_SPEC,
   parseInitCommandArgs,
-  resolveInitProjectDir,
   resolveInitTargetCwd,
-  resolveSupportedInitTemplate,
-} from '../core.js';
+} from '../backend-core.js';
 
 export const handleInitCommand = async (
   argv: string[],

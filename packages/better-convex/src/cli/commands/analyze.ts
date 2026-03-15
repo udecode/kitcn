@@ -1,5 +1,10 @@
-import type { RunDeps } from '../core.js';
-import { run as runCore } from '../core.js';
+import { parseArgs, type RunDeps, resolveRunDeps } from '../backend-core.js';
 
-export const handleAnalyzeCommand = (argv: string[], deps?: Partial<RunDeps>) =>
-  runCore(argv, deps);
+export const handleAnalyzeCommand = async (
+  argv: string[],
+  deps: Partial<RunDeps> = {}
+) => {
+  const parsed = parseArgs(argv);
+  const { runAnalyze } = resolveRunDeps(deps);
+  return runAnalyze(parsed.restArgs);
+};

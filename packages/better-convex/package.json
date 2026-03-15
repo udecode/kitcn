@@ -72,14 +72,16 @@
   },
   "devDependencies": {
     "@rollup/plugin-babel": "^6.1.0",
+    "@tanstack/query-core": "5.90.20",
     "@tanstack/intent": "0.0.13",
+    "@types/common-tags": "^1.8.4",
     "babel-plugin-react-compiler": "^1.0.0",
     "tsdown": "^0.20.3"
   },
   "peerDependencies": {
     "@tanstack/react-query": ">=5",
-    "better-auth": ">=1.4.9",
-    "convex": ">=1.32",
+    "better-auth": "1.4.9",
+    "convex": ">=1.33",
     "hono": ">=4",
     "next": ">=14",
     "react": ">=18",

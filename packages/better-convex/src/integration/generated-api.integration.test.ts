@@ -393,11 +393,13 @@ describe('integration/generated-api', () => {
       expect(generatedAuth).toContain(
         "import * as authDefinitionModule from '../auth';"
       );
-      expect(generatedAuth).toContain('type AuthDefinitionFromFile = Extract<');
+      expect(generatedAuth).toContain(
+        'type AuthDefinitionFromFile = typeof authDefinitionModule.default;'
+      );
       expect(generatedAuth).toContain('createAuthRuntime<');
       expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
       expect(generatedAuth).toContain(
-        'resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
+        'const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
       );
       expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("default_export_unavailable")'
@@ -486,8 +488,9 @@ describe('integration/generated-api', () => {
       const generatedAuth = fs.readFileSync(generatedServerFile, 'utf-8');
 
       expect(generatedAuth).toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).toContain('const authRuntime: AuthRuntime<');
       expect(generatedAuth).toContain(
-        'const authRuntime = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
+        '> = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
       );
       expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_auth_file")'

@@ -79,7 +79,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 | Feature | Options | Default |
 |---------|---------|---------|
-| **Bootstrap** | CLI (`better-convex init` / `add`), Docs by section | CLI |
+| **Bootstrap** | CLI (`better-convex create` / `init` / `add`), Docs by section | CLI |
 | **React Framework** | Next.js App Router, TanStack Start, Other | Next.js App Router |
 | **Database** | ORM (`ctx.orm`) | ORM |
 
@@ -100,11 +100,15 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 ### After Selection
 
 **CLI bootstrap:**
-1. Run `better-convex init` in an existing app, or `better-convex init -t next --yes` for the full curated Next.js scaffold
-2. Add only the features you chose with `better-convex add <plugin>`
-3. Init already generates the first Better Convex runtime pass. Run `better-convex dev` or `better-convex codegen` after later schema/procedure changes.
-4. For explicit non-interactive project-backed bootstrap, pass `--team <team_slug> --project <project_slug> --dev-deployment local` to `better-convex init`.
-5. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
+1. Run `better-convex init` in an existing app, or `better-convex create -t next --yes` for a fresh scaffold
+2. Add only the features you chose with `better-convex add <plugin>`:
+   - `better-convex add auth`
+   - `better-convex add ratelimit`
+   - `better-convex add resend`
+3. On backend `convex`, `create`, `init`, and `dev` run `convex init` before Better Convex codegen.
+4. For auth bootstrap, use `better-convex dev --once --typecheck disable`, then `better-convex env push --auth`.
+5. Use `better-convex insights` when you need the upstream Convex insights view from the same CLI entrypoint.
+6. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
 
 **Docs-by-section approach:**
 1. Follow [Quickstart](/docs/quickstart) for initial setup
@@ -116,7 +120,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 | Stack | Key Docs |
 |-------|----------|
-| Next.js + Better Auth | [CLI](/docs/cli), [Next.js Setup](/docs/nextjs), [Auth Server](/docs/auth/server) |
+| Next.js + Better Auth | [CLI Registry](/docs/cli/registry), [Next.js Setup](/docs/nextjs), [Auth Server](/docs/auth/server) |
 | Vite + No Auth | [React Setup](/docs/react), [Server Setup](/docs/server/setup) |
 | Any + Custom Auth | [Server Setup](/docs/server/setup), [Middlewares](/docs/server/middlewares) |
 
@@ -130,7 +134,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 |------|-------------|
 | [Quickstart](/docs/quickstart) | First-time setup. Follow step-by-step to get a working app. |
 | [Concepts](/docs/concepts) | Understand architecture, folder structure (`convex/functions/`, `convex/lib/`, `convex/shared/`), and design decisions. |
-| [CLI](/docs/cli) | Bootstrap with `better-convex init`, add features with `better-convex add`, inspect plans with `view` and `info`. |
+| [CLI Registry](/docs/cli/registry) | Create starters with `better-convex create`, adopt apps with `better-convex init`, add features with `better-convex add`, inspect plans with `view` and `info`. |
 | [Templates](/docs/templates) | Snippet reference for full-file patterns. Use when you want to study or copy a specific implementation. |
 
 ### Server (Backend)
@@ -191,7 +195,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 | Page | When to Use |
 |------|-------------|
-| [CLI](/docs/cli) | `better-convex dev` for codegen. Procedure metadata generation. |
+| [CLI Backend](/docs/cli/backend) | `better-convex dev` for codegen. Procedure metadata generation. |
 | [Migrations](/docs/migrations/convex) | Migration hub with paths for Core, ORM, and Auth. |
 | [Comparison](/docs/comparison/convex) | Compare with tRPC, Convex hooks, other patterns. |
 
@@ -199,7 +203,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 **New project setup:**
 1. [Quickstart](/docs/quickstart) → basic setup
-2. [CLI](/docs/cli) → run `better-convex init` / `better-convex add`
+2. [CLI Registry](/docs/cli/registry) → run `better-convex create` / `better-convex init` / `better-convex add`
 3. [Concepts](/docs/concepts) → understand folder structure
 
 **Add authentication:**

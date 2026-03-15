@@ -2,6 +2,6 @@
   "name": "better-convex-concave-fixture",
   "private": true,
   "dependencies": {
-    "convex": "1.32.0"
+    "convex": "1.33.0"
   }
 }

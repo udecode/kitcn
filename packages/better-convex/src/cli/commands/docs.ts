@@ -4,13 +4,13 @@ import {
   type RunDeps,
   resolveDocTopic,
   resolveRunDeps,
-} from '../core.js';
+} from '../backend-core.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/spinner.js';
 
 const HELP_FLAGS = new Set(['--help', '-h']);
 
-export { formatDocsOutput } from '../core.js';
+export { formatDocsOutput } from '../backend-core.js';
 
 export const DOCS_HELP_TEXT = `Usage: better-convex docs <topic...> [options]
 

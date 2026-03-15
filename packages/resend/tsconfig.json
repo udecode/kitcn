@@ -1,6 +1,10 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "better-convex/plugins": ["../better-convex/src/plugins/index.ts"]
+    },
     "outDir": "dist"
   },
   "include": ["src/**/*.ts"],

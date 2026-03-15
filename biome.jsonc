@@ -231,7 +231,12 @@
       }
     },
     {
-      "includes": ["convex/**", "test/**", "**/*.test.*"],
+      "includes": [
+        "convex/**",
+        "test/**",
+        "tooling/scenario-fixtures/**",
+        "**/*.test.*"
+      ],
       "linter": {
         "enabled": false
       }

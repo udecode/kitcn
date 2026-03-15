@@ -19,6 +19,7 @@ describe('cli/utils/dry-run', () => {
       nextSteps: [],
       dependency: {
         packageName: '@better-convex/resend',
+        packageSpec: '@better-convex/resend',
         packageJsonPath: 'apps\\web\\package.json',
         installed: false,
         skipped: true,
@@ -27,5 +28,6 @@ describe('cli/utils/dry-run', () => {
     } as any);
 
     expect(payload.dependency.packageJsonPath).toBe('apps/web/package.json');
+    expect(payload.dependency.packageSpec).toBe('@better-convex/resend');
   });
 });

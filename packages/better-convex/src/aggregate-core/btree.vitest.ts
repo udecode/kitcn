@@ -1,8 +1,8 @@
 /* biome-ignore-all lint: Upstream aggregate parity tests intentionally keep original structure. */
 import { fc, test as fcTest } from '@fast-check/vitest';
 import { ConvexError, convexToJson, jsonToConvex } from 'convex/values';
-import { convexTest } from 'convex-test';
 import { describe, expect, test, vi } from 'vitest';
+import { convexTest } from '../../../../convex/setup.testing';
 import { arbitraryValue } from './arbitrary.helpers.js';
 import {
   aggregateBetweenBatchHandler,

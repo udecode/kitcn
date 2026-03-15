@@ -1,4 +1,4 @@
-import { isContentEquivalent } from './compare';
+import { isContentEquivalent } from './content-compare';
 
 describe('cli/utils/compare', () => {
   test('treats formatting-only TypeScript changes as equivalent', () => {
