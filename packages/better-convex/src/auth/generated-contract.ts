@@ -1,4 +1,5 @@
 import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
+import type { Auth } from 'better-auth/types';
 import type {
   GenericDataModel,
   GenericMutationCtx,
@@ -107,10 +108,13 @@ const createDisabledError = (message: string, exportName: string) => () => {
   throw new Error(`${message} (${exportName})`);
 };
 
-const createLazyAuthProxy = <Auth extends ReturnType<typeof betterAuth>>(
-  resolve: () => Auth
+type BetterAuthRuntime<Options extends BetterAuthOptions = BetterAuthOptions> =
+  Auth<Options>;
+
+const createLazyAuthProxy = <AuthRuntime extends object>(
+  resolve: () => AuthRuntime
 ) =>
-  new Proxy({} as Auth, {
+  new Proxy({} as AuthRuntime, {
     get(_target, prop, receiver) {
       const auth = resolve();
       const value = Reflect.get(auth, prop, receiver);
@@ -236,12 +240,13 @@ export const createAuthRuntime = <
       (_ctx) => authClient.adapter(_ctx as AdapterCtx, adapterGetAuthOptions)
     );
   const getAuth = (ctx: GenericCtx) => betterAuth(resolveAuthOptions(ctx));
+  type GeneratedAuth = BetterAuthRuntime<ReturnType<typeof resolveAuthOptions>>;
   const authApi = createApi(config.schema, getAuth, {
     ...(config.context ? { context: config.context } : {}),
     triggers: resolveRuntimeTriggers,
   });
   const decoratedAuthApi = decorateAuthRuntimeProcedures(authApi);
-  let staticAuth: ReturnType<typeof betterAuth> | undefined;
+  let staticAuth: GeneratedAuth | undefined;
   const getStaticAuth = () => {
     staticAuth ??= betterAuth(resolveAuthOptions({} as GenericCtx));
     return staticAuth;
@@ -283,10 +288,10 @@ export const createDisabledAuthRuntime = <
           throw new Error(`${message} (auth)`);
         },
       }
-    ) as ReturnType<typeof betterAuth>,
+    ) as BetterAuthRuntime,
     getAuth: createDisabledError(message, 'getAuth') as (
       ctx: GenericCtx
-    ) => ReturnType<typeof betterAuth>,
+    ) => BetterAuthRuntime,
     create: createDisabledError(message, 'create'),
     deleteMany: createDisabledError(message, 'deleteMany'),
     deleteOne: createDisabledError(message, 'deleteOne'),

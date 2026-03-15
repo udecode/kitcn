@@ -3,16 +3,21 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
-  createGenericCallerFactory,
-  typedProcedureResolver,
-  type ProcedureActionCallerFromRegistry,
-  type ProcedureCallerFromRegistry,
-  type ProcedureScheduleCallerFromRegistry,
+  createGeneratedRegistryRuntime,
+  type GeneratedRegistryCallerForContext,
 } from 'better-convex/server';
-import { api, internal } from '../_generated/api.js';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
+import type { OrmTriggerContext } from 'better-convex/orm';
 
-const callerRegistry = {
+type RuntimeServerModule = typeof import('better-convex/server');
+
+function createProcedureRegistry() {
+  const { typedProcedureResolver } =
+    (require('better-convex/server') as RuntimeServerModule);
+  const { api, internal } =
+    (require("../_generated/api.js") as typeof import('../_generated/api.js'));
+
+  const procedureRegistry = {
   "aggregateBackfill": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfill"], () => (require("./server") as Record<string, unknown>)["aggregateBackfill"])],
   "aggregateBackfillChunk": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfillChunk"], () => (require("./server") as Record<string, unknown>)["aggregateBackfillChunk"])],
   "aggregateBackfillStatus": ["mutation", typedProcedureResolver(internal["generated"]["server"]["aggregateBackfillStatus"], () => (require("./server") as Record<string, unknown>)["aggregateBackfillStatus"])],
@@ -26,31 +31,41 @@ const callerRegistry = {
   "scheduledMutationBatch": ["mutation", typedProcedureResolver(internal["generated"]["server"]["scheduledMutationBatch"], () => (require("./server") as Record<string, unknown>)["scheduledMutationBatch"])],
 } as const;
 
-type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;
-type GeneratedProcedureCaller<
-  TCtx extends ProcedureCallerContext = ProcedureCallerContext,
-> = TCtx extends MutationCtx
-  ? ProcedureCallerFromRegistry<typeof callerRegistry, 'mutation'> & {
-      schedule: ProcedureScheduleCallerFromRegistry<typeof callerRegistry>;
-    }
-  : TCtx extends ActionCtx
-    ? ProcedureCallerFromRegistry<typeof callerRegistry, 'mutation'> & {
-        actions: ProcedureActionCallerFromRegistry<typeof callerRegistry>;
-        schedule: ProcedureScheduleCallerFromRegistry<typeof callerRegistry>;
-      }
-    : ProcedureCallerFromRegistry<typeof callerRegistry, 'query'>;
+  return {
+    procedureRegistry,
+  };
+}
+
+type ProcedureCallerRegistry = ReturnType<typeof createProcedureRegistry>['procedureRegistry'];
 
 
-const createCallerFromRegistry = createGenericCallerFactory<
+const generatedRuntime = createGeneratedRegistryRuntime<
   QueryCtx,
   MutationCtx,
-  typeof callerRegistry,
+  ProcedureCallerRegistry,
   ActionCtx
->(callerRegistry);
+>(
+  createProcedureRegistry
+);
+
+type MutationCallerContext = MutationCtx | OrmTriggerContext<any, MutationCtx>;
+type ProcedureCallerContext = QueryCtx | MutationCallerContext | ActionCtx;
+type GeneratedProcedureCaller<
+  TCtx extends ProcedureCallerContext = ProcedureCallerContext,
+> = GeneratedRegistryCallerForContext<
+  ProcedureCallerRegistry,
+  TCtx,
+  QueryCtx,
+  MutationCallerContext,
+  ActionCtx
+>;
+
 
 export function createServerCaller<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
-  return createCallerFromRegistry(ctx) as GeneratedProcedureCaller<TCtx>;
+  return generatedRuntime.getCallerFactory()(
+    ctx as any
+  ) as GeneratedProcedureCaller<TCtx>;
 }
 
