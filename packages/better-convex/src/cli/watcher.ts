@@ -3,12 +3,17 @@ import { fileURLToPath } from 'node:url';
 import { generateMeta, getConvexConfig } from './codegen.js';
 import { logger } from './utils/logger.js';
 
+type WatcherLike = {
+  on: (event: string, cb: (...args: unknown[]) => void) => WatcherLike;
+};
+
 export function getWatchPatterns(functionsDir: string): string[] {
-  // Watch function source files + HTTP route sources.
+  // Watch function source files + Convex generated inputs.
   // Note: routers/ is sibling to functions/, not inside it.
   const convexDir = path.dirname(functionsDir);
   return [
     path.join(functionsDir, '**', '*.ts'),
+    path.join(functionsDir, '_generated', '**', '*.js'),
     path.join(convexDir, 'routers', '**', '*.ts'),
   ];
 }
@@ -42,11 +47,23 @@ function parseTrimSegmentsEnv(value: string | undefined): string[] | undefined {
         return parseFromArray(parsed);
       }
     } catch {
-      // fall through to CSV parsing
+      // Fall through to CSV parsing.
     }
   }
 
   return parseFromArray(trimmed.split(','));
+}
+
+export function getIgnoredWatchPatterns(
+  functionsDir: string,
+  outputFile: string
+): string[] {
+  return [
+    path.join(functionsDir, 'generated', '**', '*.ts'),
+    path.join(functionsDir, '**', '*.runtime.ts'),
+    path.join(functionsDir, 'generated.ts'),
+    outputFile,
+  ];
 }
 
 export async function startWatcher(opts?: {
@@ -57,8 +74,8 @@ export async function startWatcher(opts?: {
   debounceMs?: number;
   watch?: (
     patterns: string[],
-    options: { ignoreInitial: boolean }
-  ) => { on: (event: string, cb: (...args: any[]) => void) => any };
+    options: { ignoreInitial: boolean; ignored: string[] }
+  ) => WatcherLike;
   generateMeta?: typeof generateMeta;
   getConvexConfig?: typeof getConvexConfig;
 }) {
@@ -80,33 +97,78 @@ export async function startWatcher(opts?: {
   const resolveConfig = opts?.getConvexConfig ?? getConvexConfig;
   const runGenerateMeta = opts?.generateMeta ?? generateMeta;
 
-  const { functionsDir } = resolveConfig(sharedDir);
+  const { functionsDir, outputFile } = resolveConfig(sharedDir);
   const watchPatterns = getWatchPatterns(functionsDir);
+  const ignoredWatchPatterns = getIgnoredWatchPatterns(
+    functionsDir,
+    outputFile
+  );
 
   const watch = opts?.watch ?? (await import('chokidar')).watch;
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let generateMetaInFlight = false;
+  let generateMetaQueued = false;
 
-  watch(watchPatterns, { ignoreInitial: true })
-    .on('change', () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        const generateOptions: {
-          debug: boolean;
-          silent: boolean;
-          scope: 'all' | 'auth' | 'orm';
-          trimSegments?: string[];
-        } = {
-          debug,
-          silent: true,
-          scope,
-        };
-        if (trimSegments && trimSegments.length > 0) {
-          generateOptions.trimSegments = trimSegments;
-        }
-        runGenerateMeta(sharedDir, generateOptions);
-      }, debounceMs);
-    })
+  const createGenerateOptions = (): {
+    debug: boolean;
+    silent: boolean;
+    scope: 'all' | 'auth' | 'orm';
+    trimSegments?: string[];
+  } => {
+    const generateOptions: {
+      debug: boolean;
+      silent: boolean;
+      scope: 'all' | 'auth' | 'orm';
+      trimSegments?: string[];
+    } = {
+      debug,
+      silent: true,
+      scope,
+    };
+
+    if (trimSegments && trimSegments.length > 0) {
+      generateOptions.trimSegments = trimSegments;
+    }
+
+    return generateOptions;
+  };
+
+  const runGenerateMetaSafely = async () => {
+    if (generateMetaInFlight) {
+      generateMetaQueued = true;
+      return;
+    }
+
+    generateMetaInFlight = true;
+    try {
+      await runGenerateMeta(sharedDir, createGenerateOptions());
+    } catch (error) {
+      logger.error('Watch codegen error:', error);
+    } finally {
+      generateMetaInFlight = false;
+      if (generateMetaQueued) {
+        generateMetaQueued = false;
+        scheduleGenerateMeta();
+      }
+    }
+  };
+
+  const scheduleGenerateMeta = () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      void runGenerateMetaSafely();
+    }, debounceMs);
+  };
+
+  watch(watchPatterns, {
+    ignoreInitial: true,
+    ignored: ignoredWatchPatterns,
+  })
+    .on('add', scheduleGenerateMeta)
+    .on('change', scheduleGenerateMeta)
+    .on('unlink', scheduleGenerateMeta)
     .on('error', (err: unknown) => logger.error('Watch error:', err));
 }
 

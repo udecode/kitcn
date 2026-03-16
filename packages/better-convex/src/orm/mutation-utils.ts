@@ -36,6 +36,7 @@ import {
 import type { ConvexTable } from './table';
 import {
   CREATED_AT_MIGRATION_MESSAGE,
+  hasUserCreatedAtColumn,
   INTERNAL_CREATION_TIME_FIELD,
   PUBLIC_CREATED_AT_FIELD,
   usesSystemCreatedAtAlias,
@@ -336,13 +337,18 @@ export const normalizeDateFieldsForWrite = <T extends Record<string, unknown>>(
   value: T
 ): T => {
   const useSystemCreatedAt = usesSystemCreatedAtAlias(table);
+  const hasUserCreatedAt = hasUserCreatedAtColumn(table);
   const temporalColumns = getTemporalColumnDescriptors(table);
   const result = { ...value } as Record<string, unknown>;
 
   if (Object.hasOwn(result, INTERNAL_CREATION_TIME_FIELD)) {
     throw new Error(CREATED_AT_MIGRATION_MESSAGE);
   }
-  if (useSystemCreatedAt && Object.hasOwn(result, PUBLIC_CREATED_AT_FIELD)) {
+  if (
+    useSystemCreatedAt &&
+    !hasUserCreatedAt &&
+    Object.hasOwn(result, PUBLIC_CREATED_AT_FIELD)
+  ) {
     // createdAt is a reserved public alias for system _creationTime.
     // Writes must never set _creationTime explicitly (Convex controls it).
     delete result[PUBLIC_CREATED_AT_FIELD];

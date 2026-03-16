@@ -3,17 +3,22 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
-  createGenericCallerFactory,
-  createGenericHandlerFactory,
-  typedProcedureResolver,
-  type ProcedureActionCallerFromRegistry,
-  type ProcedureCallerFromRegistry,
-  type ProcedureScheduleCallerFromRegistry,
+  createGeneratedRegistryRuntime,
+  type GeneratedRegistryCallerForContext,
+  type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
-import { api, internal } from '../_generated/api.js';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
+import type { OrmTriggerContext } from 'better-convex/orm';
 
-const procedureRegistry = {
+type RuntimeServerModule = typeof import('better-convex/server');
+
+function createProcedureRegistry() {
+  const { typedProcedureResolver } =
+    (require('better-convex/server') as RuntimeServerModule);
+  const { api, internal } =
+    (require("../_generated/api.js") as typeof import('../_generated/api.js'));
+
+  const procedureRegistry = {
   "create": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["create"], () => (require("./auth") as Record<string, unknown>)["create"])],
   "deleteMany": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["deleteMany"], () => (require("./auth") as Record<string, unknown>)["deleteMany"])],
   "deleteOne": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["deleteOne"], () => (require("./auth") as Record<string, unknown>)["deleteOne"])],
@@ -25,50 +30,62 @@ const procedureRegistry = {
   "updateOne": ["mutation", typedProcedureResolver(internal["generated"]["auth"]["updateOne"], () => (require("./auth") as Record<string, unknown>)["updateOne"])],
 } as const;
 
-type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;
+  const handlerRegistry = procedureRegistry;
+
+  return {
+    procedureRegistry,
+    handlerRegistry,
+  };
+}
+
+type ProcedureCallerRegistry = ReturnType<typeof createProcedureRegistry>['procedureRegistry'];
+type ProcedureHandlerRegistry = ReturnType<typeof createProcedureRegistry>['handlerRegistry'];
+
+
+const generatedRuntime = createGeneratedRegistryRuntime<
+  QueryCtx,
+  MutationCtx,
+  ProcedureCallerRegistry,
+  ActionCtx,
+  ProcedureHandlerRegistry
+>(
+  createProcedureRegistry
+);
+
+type MutationCallerContext = MutationCtx | OrmTriggerContext<any, MutationCtx>;
+type ProcedureCallerContext = QueryCtx | MutationCallerContext | ActionCtx;
 type GeneratedProcedureCaller<
   TCtx extends ProcedureCallerContext = ProcedureCallerContext,
-> = TCtx extends MutationCtx
-  ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'> & {
-      schedule: ProcedureScheduleCallerFromRegistry<typeof procedureRegistry>;
-    }
-  : TCtx extends ActionCtx
-    ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'> & {
-        actions: ProcedureActionCallerFromRegistry<typeof procedureRegistry>;
-        schedule: ProcedureScheduleCallerFromRegistry<typeof procedureRegistry>;
-      }
-    : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
+> = GeneratedRegistryCallerForContext<
+  ProcedureCallerRegistry,
+  TCtx,
+  QueryCtx,
+  MutationCallerContext,
+  ActionCtx
+>;
 
 type ProcedureHandlerContext = QueryCtx | MutationCtx;
 type GeneratedProcedureHandler<
   TCtx extends ProcedureHandlerContext = ProcedureHandlerContext,
-> = TCtx extends MutationCtx
-  ? ProcedureCallerFromRegistry<typeof procedureRegistry, 'mutation'>
-  : ProcedureCallerFromRegistry<typeof procedureRegistry, 'query'>;
-
-
-const createCallerFromRegistry = createGenericCallerFactory<
+> = GeneratedRegistryHandlerForContext<
+  ProcedureHandlerRegistry,
+  TCtx,
   QueryCtx,
-  MutationCtx,
-  typeof procedureRegistry,
-  ActionCtx
->(procedureRegistry);
-const createHandlerFromRegistry = createGenericHandlerFactory<
-  QueryCtx,
-  MutationCtx,
-  typeof procedureRegistry
->(procedureRegistry);
+  MutationCtx
+>;
 
 
 export function createAuthCaller<TCtx extends ProcedureCallerContext>(
   ctx: TCtx
 ): GeneratedProcedureCaller<TCtx> {
-  return createCallerFromRegistry(ctx) as GeneratedProcedureCaller<TCtx>;
+  return generatedRuntime.getCallerFactory()(
+    ctx as any
+  ) as GeneratedProcedureCaller<TCtx>;
 }
 
 export function createAuthHandler<TCtx extends ProcedureHandlerContext>(
   ctx: TCtx
 ): GeneratedProcedureHandler<TCtx> {
-  return createHandlerFromRegistry(ctx) as GeneratedProcedureHandler<TCtx>;
+  return generatedRuntime.getHandlerFactory()(ctx) as GeneratedProcedureHandler<TCtx>;
 }
 

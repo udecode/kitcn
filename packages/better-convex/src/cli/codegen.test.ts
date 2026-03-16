@@ -577,16 +577,83 @@ describe('cli/codegen', () => {
         'export type ProcedureHandlerContext = QueryCtx | MutationCtx;'
       );
       expect(nestedRuntimeGenerated).toContain(
-        'type ProcedureCallerContext = QueryCtx | MutationCtx | ActionCtx;'
+        'type ProcedureCallerContext = QueryCtx | MutationCallerContext | ActionCtx;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        "import type { OrmTriggerContext } from 'better-convex/orm';"
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type MutationCallerContext = MutationCtx | OrmTriggerContext<any, MutationCtx>;'
       );
       expect(nestedRuntimeGenerated).toContain(
         'type ProcedureHandlerContext = QueryCtx | MutationCtx;'
       );
-      expect(nestedRuntimeGenerated).not.toContain(
-        'export type GeneratedProcedureCaller<'
+      expect(nestedRuntimeGenerated).toContain(
+        "type RuntimeServerModule = typeof import('better-convex/server');"
       );
       expect(nestedRuntimeGenerated).toContain(
-        'const createHandlerFromRegistry = createGenericHandlerFactory<'
+        'createGeneratedRegistryRuntime,'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'function createProcedureRegistry() {'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        "type ProcedureCallerRegistry = ReturnType<typeof createProcedureRegistry>['procedureRegistry'];"
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type GeneratedProcedureCaller<'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type GeneratedProcedureHandler<'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type GeneratedRegistryCallerForContext,'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type GeneratedRegistryHandlerForContext,'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'const generatedRuntime = createGeneratedRegistryRuntime<'
+      );
+      expect(nestedRuntimeGenerated).toContain('ProcedureHandlerRegistry');
+      expect(nestedRuntimeGenerated).toContain(
+        '>(\n  createProcedureRegistry\n);'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        "const { typedProcedureResolver } =\n    (require('better-convex/server') as RuntimeServerModule);"
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'return generatedRuntime.getCallerFactory()(\n    ctx as any\n  ) as GeneratedProcedureCaller<TCtx>;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'return generatedRuntime.getHandlerFactory()(ctx) as GeneratedProcedureHandler<TCtx>;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'const { api, internal } =\n    (require("../../_generated/api.js") as typeof import(\'../../_generated/api.js\'));'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        "import { api, internal } from '../_generated/api.js';"
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'import {\n  createGenericCallerFactory,'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'function createCallerFromRegistryFactory() {'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'let cachedProcedureRegistry: ProcedureRegistryBundle | undefined;'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'function getCreateCallerFromRegistry(): CallerFactory {'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'ProcedureActionCallerFromRegistry'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'ProcedureScheduleCallerFromRegistry'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'ProcedureCallerFromRegistry'
       );
       expect(nestedRuntimeGenerated).toContain(
         'export function createItemsQueriesCaller<TCtx extends ProcedureCallerContext>('
@@ -837,7 +904,22 @@ describe('cli/codegen', () => {
         '/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unused-vars */'
       );
       expect(todosRuntimeGenerated).toContain(
+        "import type { OrmTriggerContext } from 'better-convex/orm';"
+      );
+      expect(todosRuntimeGenerated).toContain(
+        "type RuntimeServerModule = typeof import('better-convex/server');"
+      );
+      expect(todosRuntimeGenerated).toContain(
+        'const generatedRuntime = createGeneratedRegistryRuntime<'
+      );
+      expect(todosRuntimeGenerated).toContain(
         '"list": ["query", typedProcedureResolver(getGeneratedFunctionReference<"query", typeof import("../todos").list>(api, ["todos","list"]), () => (require("../todos") as Record<string, unknown>)["list"])],'
+      );
+      expect(todosRuntimeGenerated).toContain(
+        'return generatedRuntime.getCallerFactory()(\n    ctx as any\n  ) as GeneratedProcedureCaller<TCtx>;'
+      );
+      expect(todosRuntimeGenerated).not.toContain(
+        "import { api, internal } from './_generated/api.js';"
       );
       expect(todosRuntimeGenerated).toContain(
         'export function createTodosCaller<TCtx extends ProcedureCallerContext>('
@@ -1510,6 +1592,98 @@ describe('cli/codegen', () => {
     }
   });
 
+  test('generateMeta prefers dedicated triggers file when triggers export exists there', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'package.json'),
+        JSON.stringify({
+          name: 'better-convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'better-convex', 'server.js'),
+        `
+        export const createApiLeaf = (fn, meta) =>
+          Object.assign(fn, meta, { functionRef: fn });
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        export const tables = {
+          todos: { table: 'todos' },
+        };
+        export const relations = {
+          todos: {},
+        };
+        export default {};
+        `.trim()
+      );
+
+      writeFile(
+        path.join(dir, 'convex', 'triggers.ts'),
+        `
+        export const triggers = {
+          todos: {},
+        };
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServerFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'server.ts'
+      );
+      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
+      expect(generatedServer).toContain(
+        "import schema, { relations } from '../schema';"
+      );
+      expect(generatedServer).toContain(
+        "import { triggers } from '../triggers';"
+      );
+      expect(generatedServer).not.toContain(
+        "import schema, { relations, triggers } from '../schema';"
+      );
+      expect(generatedServer).toContain('triggers,');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta wires migrations manifest into generated server when present', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
@@ -1596,13 +1770,9 @@ describe('cli/codegen', () => {
         export default {};
         `.trim()
       );
-
-      await generateMeta(undefined, { silent: true });
-      const generatedServer = fs.readFileSync(
-        path.join(dir, 'convex', 'generated', 'server.ts'),
-        'utf-8'
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        "triggers require a 'relations' export from schema.ts"
       );
-      expect(generatedServer).not.toContain('createOrm');
     } finally {
       process.chdir(oldCwd);
     }

@@ -6,12 +6,15 @@ import {
   defineRelations,
   defineSchema,
   defineTriggers,
+  type GenericOrmCtx,
   type InferSelectModel,
   type OrmBeforeResult,
   type OrmTriggerChange,
   type OrmTriggerContext,
   text,
 } from 'better-convex/orm';
+import { createGenericCallerFactory } from 'better-convex/server';
+import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server';
 import { type Equal, Expect } from './utils';
 
 type IsUnknown<T> = Equal<T, unknown>;
@@ -31,6 +34,9 @@ const relations = defineRelations({ users, posts });
 type UsersDoc = InferSelectModel<typeof users>;
 type UsersAggregateCtx = OrmTriggerContext<typeof relations>;
 type UsersAggregateChange = OrmTriggerChange<UsersDoc>;
+type QueryCtx = GenericOrmCtx<GenericQueryCtx<any>, typeof relations>;
+type MutationCtx = GenericOrmCtx<GenericMutationCtx<any>, typeof relations>;
+type TriggerMutationCtx = OrmTriggerContext<typeof relations, MutationCtx>;
 
 const usersAggregate = new TableAggregate({
   name: 'usersTriggerTypes',
@@ -47,7 +53,39 @@ Expect<
 >;
 void usersAggregateHandler;
 
-const triggers = defineTriggers(relations, {
+const createUsersCaller = createGenericCallerFactory<
+  QueryCtx,
+  MutationCtx | TriggerMutationCtx,
+  {
+    'users.sendWelcomeEmail': readonly [
+      'mutation',
+      () => {
+        _handler: (
+          ctx: MutationCtx,
+          input: { userId: string }
+        ) => Promise<{ ok: true }>;
+      },
+    ];
+  }
+>({
+  'users.sendWelcomeEmail': [
+    'mutation',
+    () => ({
+      _handler: async (_ctx: MutationCtx, _input: { userId: string }) => ({
+        ok: true as const,
+      }),
+    }),
+  ],
+});
+
+declare const triggerMutationCtx: TriggerMutationCtx;
+const triggerMutationCaller = createUsersCaller(triggerMutationCtx);
+triggerMutationCaller.schedule.now.users.sendWelcomeEmail({ userId: 'u_1' });
+triggerMutationCaller.schedule.after(1000).users.sendWelcomeEmail({
+  userId: 'u_1',
+});
+
+const triggers = defineTriggers<typeof relations, MutationCtx>(relations, {
   users: {
     create: {
       before: (data, ctx) => {
@@ -62,6 +100,8 @@ const triggers = defineTriggers(relations, {
       after: (doc, ctx) => {
         doc.name;
         ctx.orm.insert(users).values({ name: 'Ada' });
+        const caller = createUsersCaller(ctx);
+        caller.schedule.now.users.sendWelcomeEmail({ userId: doc.id });
       },
     },
     update: {

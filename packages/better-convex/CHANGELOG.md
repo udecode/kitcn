@@ -1,5 +1,95 @@
 # better-convex
 
+## 0.11.0
+
+### Minor Changes
+
+- [#135](https://github.com/udecode/better-convex/pull/135) [`2977aa6`](https://github.com/udecode/better-convex/commit/2977aa68204f239bce5214582f111901affdc2ee) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Breaking changes
+  - Drop Better Auth `1.4` support and align auth integrations with Better Auth `1.5.3` and `@convex-dev/better-auth@0.11.1`.
+  - Remove bundled passkey schema assumptions and follow the upstream `oauthApplication.redirectUrls` rename during `0.11` migrations.
+
+  ```ts
+  // Before
+  "better-auth": "1.4.9";
+  "@convex-dev/better-auth": "0.10.11";
+
+  oauthApplication: {
+    redirectURLs: ["https://example.com/callback"];
+  }
+
+  // After
+  "better-auth": "1.5.3";
+  "@convex-dev/better-auth": "0.11.1";
+
+  oauthApplication: {
+    redirectUrls: ["https://example.com/callback"];
+  }
+  ```
+
+  ## Patches
+  - Improve Next.js server-side token forwarding by forcing `accept-encoding: identity` for internal auth fetches behind proxy compression.
+  - Fix auth adapter selection and OR-query handling so `id` selects preserve `_id`, nullish filters behave correctly, unsupported `experimental.joins` are rejected, and OR updates/deletes/counts dedupe by document id.
+  - Improve auth route origin handling by filtering nullish `trustedOrigins` values before CORS matching.
+  - Reduce generated runtime boilerplate by moving lazy registry/factory caching and caller/handler context typing into shared server helpers without changing generated caller or handler types.
+
+## 0.10.3
+
+### Patch Changes
+
+- [#132](https://github.com/udecode/better-convex/pull/132) [`7182e18`](https://github.com/udecode/better-convex/commit/7182e18a00ee038d64d14c0078a456678fa9e79f) Thanks [@thuillart](https://github.com/thuillart)! - Support loading ORM triggers from `triggers.ts` during codegen, with fallback to `schema.ts` for backward compatibility. This keeps `schema.ts` schema-safe when triggers need generated runtime helpers like `createXCaller(...)`.
+
+## 0.10.2
+
+### Patch Changes
+
+- [#129](https://github.com/udecode/better-convex/pull/129) [`9262e6f`](https://github.com/udecode/better-convex/commit/9262e6fe823bf8ededc84c1ee2ba9087efa96aa9) Thanks [@thuillart](https://github.com/thuillart)! - Fix trigger-generated callers in `schema.ts` so they stay schema-safe during Convex pushes, and preserve mutation scheduling APIs when triggers are parameterized with `MutationCtx`.
+
+## 0.10.1
+
+### Patch Changes
+
+- [#128](https://github.com/udecode/better-convex/pull/128) [`24e1e60`](https://github.com/udecode/better-convex/commit/24e1e60877b1a0c46631abc6d4118058d42acd4e) Thanks [@thuillart](https://github.com/thuillart)! - ## Patches
+  - Fix `better-convex dev` codegen watch mode so added, changed, and removed procedure files regenerate runtime artifacts more reliably during local development.
+
+## 0.10.0
+
+### Minor Changes
+
+- [#121](https://github.com/udecode/better-convex/pull/121) [`7aa4f16`](https://github.com/udecode/better-convex/commit/7aa4f1643b2538627d3c6e51a6e5ab34bec0b500) Thanks [@carere](https://github.com/carere)! - ## Features
+  - Add SolidJS flavor with full feature parity to React integration
+  - Add `ConvexProvider`, `ConvexProviderWithAuth`, `useConvex`, and `useConvexAuth` for SolidJS
+  - Add `createConvexQueryClient` and `useConvexQuery` bridging Convex subscriptions to TanStack Solid Query
+  - Add cRPC layer for SolidJS with typed query/mutation/action proxies
+  - Add `useConvexInfiniteQuery` for paginated queries in SolidJS
+  - Add `createConvexHTTPProxy` for SSR-compatible HTTP client in SolidJS
+  - Add auth mutation helpers (`useSignIn`, `useSignUp`, `useSignOut`) for SolidJS
+  - Add `useRateLimit` hook for SolidJS using `client.onUpdate()` subscriptions
+  - Add `./solid` and `./plugins/ratelimit/solid` package exports
+
+### Patch Changes
+
+- [#126](https://github.com/udecode/better-convex/pull/126) [`0c88268`](https://github.com/udecode/better-convex/commit/0c88268d8efe4160a734ff119aba859d8b4b3fb3) Thanks [@thuillart](https://github.com/thuillart)! - Preserve real `createdAt` columns during ORM writes so auth records keep schema-defaulted timestamps when created through the generated auth runtime.
+
+## 0.9.2
+
+### Patch Changes
+
+- [#123](https://github.com/udecode/better-convex/pull/123) [`ba8ce1a`](https://github.com/udecode/better-convex/commit/ba8ce1aaf23c7a152047115763d5e4b7a3e84a64) Thanks [@thuillart](https://github.com/thuillart)! - Pass the Convex deployment URL through the SSR server caller instead of falling back to `NEXT_PUBLIC_CONVEX_URL`.
+
+  `createCallerFactory` now derives the `.convex.cloud` URL from `convexSiteUrl` by default and also accepts an explicit `convexUrl` override for frameworks that do not use Next.js env naming.
+
+- [#124](https://github.com/udecode/better-convex/pull/124) [`e19de1d`](https://github.com/udecode/better-convex/commit/e19de1d431857851012f9e5e4a1dfa276700c2cd) Thanks [@thuillart](https://github.com/thuillart)! - fix(auth): persist createdAt for auth records
+
+## 0.9.1
+
+### Patch Changes
+
+- [#116](https://github.com/udecode/better-convex/pull/116) [`2c98958`](https://github.com/udecode/better-convex/commit/2c98958f35953dfb4514ee038d2363e3ac92df88) Thanks [@thuillart](https://github.com/thuillart)! - Fix `createEnv` throwing "Invalid environment variables" during `better-convex dev`. The CLI now sets a `globalThis.__BETTER_CONVEX_CODEGEN__` sentinel before importing Convex files via jiti, and `createEnv` reads that sentinel (instead of `process.env`) to activate a safe fallback — using `options[0]` for `z.enum` fields instead of `""` to avoid false validation failures.
+
+- [#120](https://github.com/udecode/better-convex/pull/120) [`c50c99b`](https://github.com/udecode/better-convex/commit/c50c99b5585721e9e6dccc371c3007def1abd09c) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix SSR auth token refresh when Convex requests `forceRefreshToken` during pending Better Auth session hydration.
+
+  `ConvexAuthProvider` now fetches a fresh JWT instead of reusing the cached SSR token in that forced-refresh path, so Convex can schedule preemptive refresh instead of waiting for an auth failure.
+
 ## 0.9.0
 
 ### Minor Changes

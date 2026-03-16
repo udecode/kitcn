@@ -8,7 +8,8 @@
 import { type FunctionReference, getFunctionName } from 'convex/server';
 
 import { convexInfiniteQueryOptions, convexQuery } from '../crpc/query-options';
-import type { CRPCClient, InfiniteQueryOptsParam, Meta } from '../crpc/types';
+import type { Meta } from '../crpc/types';
+import type { CRPCClient, InfiniteQueryOptsParam } from '../react/crpc-types';
 import type { HttpCRPCClientFromRouter } from '../react/http-proxy';
 import type { CRPCHttpRouter, HttpRouterRecord } from '../server/http-router';
 import {

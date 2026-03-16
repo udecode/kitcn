@@ -2,6 +2,7 @@ import type { GenericId } from 'convex/values';
 import { z } from 'zod';
 import { initCRPC } from './builder';
 import {
+  createGeneratedRegistryRuntime,
   createGenericCallerFactory,
   createGenericHandlerFactory,
   createProcedureCallerFactory,
@@ -861,5 +862,54 @@ describe('server/procedure-caller', () => {
         model: 'user',
       })
     ).rejects.toThrow(/cannot call mutation procedures from query context/i);
+  });
+
+  test('generated registry runtime caches registry and factory creation', async () => {
+    const procedureRegistry = {
+      'math.query': ['query', async () => queryProcedure],
+      'math.mutate': ['mutation', async () => mutationProcedure],
+      'math.act': [
+        'action',
+        async () => ({
+          _crpcMeta: { type: 'action' as const },
+          _handler: async () => ({ ok: true as const }),
+        }),
+      ],
+    } as const;
+
+    const createRegistry = mock(() => ({
+      procedureRegistry,
+      handlerRegistry: procedureRegistry,
+    }));
+
+    const runtime = createGeneratedRegistryRuntime<
+      QueryCtx,
+      MutationCtx,
+      typeof procedureRegistry,
+      ActionCtx,
+      typeof procedureRegistry
+    >(createRegistry);
+
+    const callerFactoryA = runtime.getCallerFactory();
+    const callerFactoryB = runtime.getCallerFactory();
+    expect(callerFactoryA).toBe(callerFactoryB);
+    expect(createRegistry).toHaveBeenCalledTimes(1);
+
+    const handlerFactoryA = runtime.getHandlerFactory();
+    const handlerFactoryB = runtime.getHandlerFactory();
+    expect(handlerFactoryA).toBe(handlerFactoryB);
+    expect(createRegistry).toHaveBeenCalledTimes(1);
+
+    const queryCaller = callerFactoryA(queryCtx);
+    await expect(queryCaller.math.query({ id: 'q_1' })).resolves.toEqual({
+      ctxKind: 'query',
+      id: 'q_1',
+    });
+
+    const mutationHandler = handlerFactoryA(mutationCtx);
+    await expect(mutationHandler.math.mutate({ name: 'ok' })).resolves.toEqual({
+      ok: true,
+      name: 'ok',
+    });
   });
 });

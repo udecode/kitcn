@@ -19,7 +19,6 @@ import { httpAction, internalMutation } from '../_generated/server';
 import schema from '../schema';
 import { migrations } from '../migrations/manifest';
 
-
 const ormFunctions = (internal as unknown as Record<string, any>)["generated"]["server"] as OrmFunctions;
 
 export const orm = createOrm({

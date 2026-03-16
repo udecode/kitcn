@@ -21,18 +21,14 @@ import type { FunctionArgs, FunctionReference } from 'convex/server';
 import { getFunctionName } from 'convex/server';
 import { convexAction, convexQuery } from '../crpc/query-options';
 import type { DataTransformerOptions } from '../crpc/transformer';
-import {
-  type ConvexQueryHookOptions,
-  type CRPCClient,
-  FUNC_REF_SYMBOL,
-  type InfiniteQueryOptsParam,
-} from '../crpc/types';
+import { type ConvexQueryHookOptions, FUNC_REF_SYMBOL } from '../crpc/types';
 import type { CallerMeta } from '../server/caller';
 import {
   getFuncRef,
   getFunctionMeta,
   getFunctionType,
 } from '../shared/meta-utils';
+import type { CRPCClient, InfiniteQueryOptsParam } from './crpc-types';
 import {
   useConvexActionOptions,
   useConvexActionQueryOptions,

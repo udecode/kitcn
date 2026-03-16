@@ -13,8 +13,8 @@ const withQueryLeafMeta = (api: {
   ({
     posts: {
       list: Object.assign(api.posts.list, {
-        type: 'query',
         functionRef: api.posts.list,
+        type: 'query',
       }),
     },
   }) as const;
@@ -59,8 +59,8 @@ describe('server/caller-factory', () => {
 
     const { createContext } = createCallerFactory({
       api: apiWithMeta,
-      convexSiteUrl: 'https://example.convex.site',
       auth: { getToken },
+      convexSiteUrl: 'https://example.convex.site',
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -68,6 +68,61 @@ describe('server/caller-factory', () => {
       ctx.caller.posts.list({}, { skipUnauth: true })
     ).resolves.toBeNull();
     expect(fetchQuerySpy.mock.calls.length).toBe(0);
+  });
+
+  test('passes a Convex deployment url to server fetch helpers', async () => {
+    const fetchQuerySpy = spyOn(convexNextjs, 'fetchQuery').mockImplementation(
+      async () => 'ok'
+    );
+
+    const api = {
+      posts: { list: makeFunctionReference<'query'>('posts:list') },
+    };
+    const apiWithMeta = withQueryLeafMeta(api);
+
+    const getToken = mock(async () => ({ isFresh: true, token: 't0' }));
+
+    const { createContext } = createCallerFactory({
+      api: apiWithMeta,
+      auth: { getToken },
+      convexSiteUrl: 'https://example.convex.site',
+    });
+
+    const ctx = await createContext({ headers: new Headers() });
+    await expect(ctx.caller.posts.list({})).resolves.toBe('ok');
+
+    expect(fetchQuerySpy.mock.calls[0]?.[2]).toMatchObject({
+      token: 't0',
+      url: 'https://example.convex.cloud',
+    });
+  });
+
+  test('prefers an explicit convexUrl when provided', async () => {
+    const fetchQuerySpy = spyOn(convexNextjs, 'fetchQuery').mockImplementation(
+      async () => 'ok'
+    );
+
+    const api = {
+      posts: { list: makeFunctionReference<'query'>('posts:list') },
+    };
+    const apiWithMeta = withQueryLeafMeta(api);
+
+    const getToken = mock(async () => ({ isFresh: true, token: 't0' }));
+
+    const { createContext } = createCallerFactory({
+      api: apiWithMeta,
+      auth: { getToken },
+      convexSiteUrl: 'https://example.convex.site',
+      convexUrl: 'https://custom.example.convex.cloud',
+    });
+
+    const ctx = await createContext({ headers: new Headers() });
+    await expect(ctx.caller.posts.list({})).resolves.toBe('ok');
+
+    expect(fetchQuerySpy.mock.calls[0]?.[2]).toMatchObject({
+      token: 't0',
+      url: 'https://custom.example.convex.cloud',
+    });
   });
 
   test('returns null for unauthorized errors (no retry)', async () => {
@@ -84,11 +139,10 @@ describe('server/caller-factory', () => {
     };
     const apiWithMeta = withQueryLeafMeta(api);
 
-    const getToken = mock(async () => ({ token: 't0', isFresh: true }));
+    const getToken = mock(async () => ({ isFresh: true, token: 't0' }));
 
     const { createContext } = createCallerFactory({
       api: apiWithMeta,
-      convexSiteUrl: 'https://example.convex.site',
       auth: {
         getToken,
         isUnauthorized: (e) =>
@@ -97,6 +151,7 @@ describe('server/caller-factory', () => {
           'code' in e &&
           (e as any).code === 'UNAUTHORIZED',
       },
+      convexSiteUrl: 'https://example.convex.site',
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -122,15 +177,15 @@ describe('server/caller-factory', () => {
 
     const getToken = mock(
       async (_siteUrl: string, _headers: Headers, opts?: any) => {
-        if (opts?.forceRefresh) return { token: 't1', isFresh: true };
-        return { token: 't0', isFresh: false };
+        if (opts?.forceRefresh) return { isFresh: true, token: 't1' };
+        return { isFresh: false, token: 't0' };
       }
     );
 
     const { createContext } = createCallerFactory({
       api: apiWithMeta,
-      convexSiteUrl: 'https://example.convex.site',
       auth: { getToken, isUnauthorized: () => false },
+      convexSiteUrl: 'https://example.convex.site',
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -160,14 +215,13 @@ describe('server/caller-factory', () => {
 
     const getToken = mock(
       async (_siteUrl: string, _headers: Headers, opts?: any) => {
-        if (opts?.forceRefresh) return { token: 't1', isFresh: true };
-        return { token: 't0', isFresh: false };
+        if (opts?.forceRefresh) return { isFresh: true, token: 't1' };
+        return { isFresh: false, token: 't0' };
       }
     );
 
     const { createContext } = createCallerFactory({
       api: apiWithMeta,
-      convexSiteUrl: 'https://example.convex.site',
       auth: {
         getToken,
         isUnauthorized: (e) =>
@@ -176,6 +230,7 @@ describe('server/caller-factory', () => {
           'code' in e &&
           (e as any).code === 'UNAUTHORIZED',
       },
+      convexSiteUrl: 'https://example.convex.site',
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -201,12 +256,12 @@ describe('server/caller-factory', () => {
     };
     const apiWithMeta = withQueryLeafMeta(api);
 
-    const getToken = mock(async () => ({ token: 't0', isFresh: true }));
+    const getToken = mock(async () => ({ isFresh: true, token: 't0' }));
 
     const { createContext } = createCallerFactory({
       api: apiWithMeta,
-      convexSiteUrl: 'https://example.convex.site',
       auth: { getToken, isUnauthorized: () => false },
+      convexSiteUrl: 'https://example.convex.site',
     });
 
     const ctx = await createContext({ headers: new Headers() });
@@ -231,20 +286,20 @@ describe('server/caller-factory', () => {
     };
     const apiWithMeta = withQueryLeafMeta(api);
 
-    const getToken = mock(async () => ({ token: 't0', isFresh: true }));
+    const getToken = mock(async () => ({ isFresh: true, token: 't0' }));
 
     const { createContext } = createCallerFactory({
       api: apiWithMeta,
-      convexSiteUrl: 'https://example.convex.site',
       auth: { getToken, isUnauthorized: () => false },
+      convexSiteUrl: 'https://example.convex.site',
       transformer: {
         input: {
-          serialize: (value: unknown) => ({ $in: value }),
           deserialize: (value: unknown) => value,
+          serialize: (value: unknown) => ({ $in: value }),
         },
         output: {
-          serialize: (value: unknown) => value,
           deserialize: (value: unknown) => (value as any)?.$out ?? value,
+          serialize: (value: unknown) => value,
         },
       },
     });

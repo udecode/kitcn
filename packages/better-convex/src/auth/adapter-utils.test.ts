@@ -41,6 +41,13 @@ describe('selectFields', () => {
       email: 'a@b.com',
     });
   });
+
+  test('keeps _id when Better Auth requests id', async () => {
+    const doc = { _id: 'u1', email: 'a@b.com', name: 'alice' };
+    expect(await selectFields(doc as any, ['id'])).toEqual({
+      _id: 'u1',
+    });
+  });
 });
 
 describe('checkUniqueFields', () => {

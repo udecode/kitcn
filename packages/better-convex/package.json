@@ -1,6 +1,6 @@
 {
   "name": "better-convex",
-  "version": "0.9.0",
+  "version": "0.11.0",
   "description": "Better Convex - React Query integration and CLI tools for Convex",
   "keywords": [
     "convex",
@@ -33,6 +33,7 @@
     "./react": "./dist/react/index.js",
     "./rsc": "./dist/rsc/index.js",
     "./server": "./dist/server/index.js",
+    "./solid": "./dist/solid/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -55,7 +56,7 @@
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "@babel/parser": "^7.28.4",
-    "@convex-dev/better-auth": "^0.10.11",
+    "@convex-dev/better-auth": "^0.11.1",
     "chokidar": "^5.0.0",
     "common-tags": "^1.8.2",
     "dotenv": "^17.3.1",
@@ -76,18 +77,28 @@
     "@tanstack/intent": "0.0.13",
     "@types/common-tags": "^1.8.4",
     "babel-plugin-react-compiler": "^1.0.0",
+    "rolldown-plugin-solid": "^0.2.1",
     "tsdown": "^0.20.3"
   },
   "peerDependencies": {
+    "@tanstack/query-core": ">=5",
     "@tanstack/react-query": ">=5",
-    "better-auth": "1.4.9",
+    "@tanstack/solid-query": ">=5",
+    "better-auth": ">=1.5.0 <1.6.0",
     "convex": ">=1.33",
     "hono": ">=4",
     "next": ">=14",
     "react": ">=18",
+    "solid-js": ">=1.8",
     "zod": ">=4"
   },
   "peerDependenciesMeta": {
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "@tanstack/solid-query": {
+      "optional": true
+    },
     "better-auth": {
       "optional": true
     },
@@ -98,6 +109,9 @@
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "solid-js": {
       "optional": true
     }
   },

@@ -1,4 +1,5 @@
 import pluginBabel from '@rollup/plugin-babel';
+import solid from 'rolldown-plugin-solid';
 import { defineConfig } from 'tsdown';
 
 const babelPlugin = pluginBabel({
@@ -26,6 +27,19 @@ export default defineConfig([
     dts: true,
     banner: "'use client';",
     plugins: [babelPlugin],
+    checks: { pluginTimings: false },
+  },
+  // SolidJS client builds - no "use client", no React Compiler
+  {
+    entry: {
+      'solid/index': 'src/solid/index.ts',
+    },
+    platform: 'neutral',
+    target: 'esnext',
+    tsconfig: 'tooling/tsconfig.build.solid.json',
+    exports: true,
+    dts: true,
+    plugins: [solid()],
     checks: { pluginTimings: false },
   },
   // Server-safe builds (crpc, rsc, server, orm) - no "use client"

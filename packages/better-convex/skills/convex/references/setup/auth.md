@@ -5,7 +5,7 @@ Feature gate: only apply this section if auth is enabled.
 ### 6.1 Install auth dependencies
 
 ```bash
-bun add better-auth@1.4.9 better-convex hono
+bun add better-auth@1.5.3 better-convex hono
 ```
 
 ### 6.2 Auth config provider

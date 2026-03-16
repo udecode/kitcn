@@ -1,28 +1,44 @@
 import path from 'node:path';
 
-import { getWatchPatterns, startWatcher } from './watcher';
+import {
+  getIgnoredWatchPatterns,
+  getWatchPatterns,
+  startWatcher,
+} from './watcher';
 
 describe('cli/watcher', () => {
-  test('getWatchPatterns includes function sources and routers/**/*.ts', () => {
+  test('getWatchPatterns includes function, convex-generated-js, and router sources', () => {
     const functionsDir = '/repo/convex';
     expect(getWatchPatterns(functionsDir)).toEqual([
       path.join(functionsDir, '**', '*.ts'),
+      path.join(functionsDir, '_generated', '**', '*.js'),
       path.join('/repo', 'routers', '**', '*.ts'),
     ]);
   });
 
-  test('startWatcher debounces change events and calls generateMeta', async () => {
-    const calls: any[] = [];
-    const generateMetaStub = (...args: any[]) => {
+  test('getIgnoredWatchPatterns excludes better-convex outputs', () => {
+    const functionsDir = '/repo/convex';
+    expect(getIgnoredWatchPatterns(functionsDir, '/repo/out/api.ts')).toEqual([
+      path.join(functionsDir, 'generated', '**', '*.ts'),
+      path.join(functionsDir, '**', '*.runtime.ts'),
+      path.join(functionsDir, 'generated.ts'),
+      '/repo/out/api.ts',
+    ]);
+  });
+
+  test('startWatcher debounces add/change/unlink events and calls generateMeta', async () => {
+    const calls: unknown[][] = [];
+    const generateMetaStub = async (...args: unknown[]) => {
       calls.push(args);
     };
 
     let watchedPatterns: string[] | null = null;
-    let watchedOptions: { ignoreInitial: boolean } | null = null;
-    const handlers: Record<string, (...args: any[]) => void> = {};
+    let watchedOptions: { ignoreInitial: boolean; ignored: string[] } | null =
+      null;
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
 
     const watcher = {
-      on(event: string, cb: (...args: any[]) => void) {
+      on(event: string, cb: (...args: unknown[]) => void) {
         handlers[event] = cb;
         return watcher;
       },
@@ -30,11 +46,11 @@ describe('cli/watcher', () => {
 
     const watchStub = (
       patterns: string[],
-      options: { ignoreInitial: boolean }
+      options: { ignoreInitial: boolean; ignored: string[] }
     ) => {
       watchedPatterns = patterns;
       watchedOptions = options;
-      return watcher as any;
+      return watcher;
     };
 
     const getConvexConfigStub = (sharedDir?: string) => {
@@ -48,24 +64,28 @@ describe('cli/watcher', () => {
       scope: 'orm',
       trimSegments: ['plugins'],
       debounceMs: 10,
-      watch: watchStub as any,
-      generateMeta: generateMetaStub as any,
-      getConvexConfig: getConvexConfigStub as any,
+      watch: watchStub,
+      generateMeta: generateMetaStub as typeof generateMetaStub,
+      getConvexConfig: getConvexConfigStub as typeof getConvexConfigStub,
     });
 
-    if (!watchedOptions) throw new Error('Expected watcher to be configured');
-    if (!watchedPatterns) throw new Error('Expected watcher to be configured');
+    if (!watchedOptions || !watchedPatterns) {
+      throw new Error('Expected watcher to be configured');
+    }
 
-    expect(watchedOptions as unknown).toEqual({ ignoreInitial: true });
-    expect(watchedPatterns as unknown).toEqual(
-      getWatchPatterns('/repo/convex')
-    );
+    expect(watchedOptions).toEqual({
+      ignoreInitial: true,
+      ignored: getIgnoredWatchPatterns('/repo/convex', '/repo/out/api.ts'),
+    });
+    expect(watchedPatterns).toEqual(getWatchPatterns('/repo/convex'));
+    expect(typeof handlers.add).toBe('function');
     expect(typeof handlers.change).toBe('function');
+    expect(typeof handlers.unlink).toBe('function');
 
-    // Two rapid changes => one codegen call after debounce.
+    handlers.add();
     handlers.change();
-    handlers.change();
-    await new Promise((r) => setTimeout(r, 25));
+    handlers.unlink();
+    await new Promise((resolve) => setTimeout(resolve, 25));
 
     expect(calls).toEqual([
       [
@@ -80,43 +100,93 @@ describe('cli/watcher', () => {
     ]);
   });
 
-  test('startWatcher uses BETTER_CONVEX_CODEGEN_SCOPE fallback when options are missing', async () => {
+  test('startWatcher queues a rerun when changes land during codegen', async () => {
+    const calls: unknown[][] = [];
+    const pendingRuns: Array<() => void> = [];
+    const generateMetaStub = (...args: unknown[]) => {
+      calls.push(args);
+      return new Promise<void>((resolve) => {
+        pendingRuns.push(resolve);
+      });
+    };
+
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const watcher = {
+      on(event: string, cb: (...args: unknown[]) => void) {
+        handlers[event] = cb;
+        return watcher;
+      },
+    };
+
+    await startWatcher({
+      sharedDir: 'out',
+      debounceMs: 10,
+      watch: () => watcher,
+      generateMeta: generateMetaStub as typeof generateMetaStub,
+      getConvexConfig: (() => ({
+        functionsDir: '/repo/convex',
+        outputFile: '/repo/out/api.ts',
+      })) as () => { functionsDir: string; outputFile: string },
+    });
+
+    handlers.add?.();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(calls).toHaveLength(1);
+
+    handlers.change?.();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(calls).toHaveLength(1);
+
+    const finishCurrentRun = pendingRuns.shift();
+    if (!finishCurrentRun) {
+      throw new Error('Expected generateMeta to start');
+    }
+    finishCurrentRun();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(calls).toEqual([
+      ['out', { debug: false, silent: true, scope: 'all' }],
+      ['out', { debug: false, silent: true, scope: 'all' }],
+    ]);
+  });
+
+  test('startWatcher uses BETTER_CONVEX_CODEGEN_* fallbacks when options are missing', async () => {
     const prevOutputDir = process.env.BETTER_CONVEX_API_OUTPUT_DIR;
     const prevDebug = process.env.BETTER_CONVEX_DEBUG;
     const prevCodegenScope = process.env.BETTER_CONVEX_CODEGEN_SCOPE;
     const prevTrimSegments = process.env.BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS;
+
     process.env.BETTER_CONVEX_API_OUTPUT_DIR = 'env-out';
     process.env.BETTER_CONVEX_DEBUG = '1';
     process.env.BETTER_CONVEX_CODEGEN_SCOPE = 'orm';
     process.env.BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS =
       'plugins,generated,plugins';
 
-    const calls: any[] = [];
-    const generateMetaStub = (...args: any[]) => {
+    const calls: unknown[][] = [];
+    const generateMetaStub = async (...args: unknown[]) => {
       calls.push(args);
     };
-    const handlers: Record<string, (...args: any[]) => void> = {};
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
     const watcher = {
-      on(event: string, cb: (...args: any[]) => void) {
+      on(event: string, cb: (...args: unknown[]) => void) {
         handlers[event] = cb;
         return watcher;
       },
     };
-    const watchStub = () => watcher as any;
 
     try {
       await startWatcher({
         debounceMs: 10,
-        watch: watchStub as any,
-        generateMeta: generateMetaStub as any,
-        getConvexConfig: () => ({
+        watch: () => watcher,
+        generateMeta: generateMetaStub as typeof generateMetaStub,
+        getConvexConfig: (() => ({
           functionsDir: '/repo/convex',
           outputFile: '/repo/out/api.ts',
-        }),
+        })) as () => { functionsDir: string; outputFile: string },
       });
 
-      handlers.change();
-      await new Promise((r) => setTimeout(r, 25));
+      handlers.add?.();
+      await new Promise((resolve) => setTimeout(resolve, 25));
 
       expect(calls).toEqual([
         [

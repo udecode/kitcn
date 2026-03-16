@@ -9,9 +9,9 @@ import {
 } from 'convex/server';
 import type { GenericId } from 'convex/values';
 import { z } from 'zod';
-import type { CRPCClient } from '../crpc/types';
 import type { GenericOrmCtx } from '../orm';
 import { createCRPCContext } from '../react/context';
+import type { CRPCClient } from '../react/crpc-types';
 import { createServerCRPCProxy } from '../rsc/proxy-server';
 import { createApiLeaf } from '../server/api-entry';
 import type { ServerCaller } from '../server/caller';

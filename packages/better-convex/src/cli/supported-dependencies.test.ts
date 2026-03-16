@@ -9,7 +9,7 @@ import {
 describe('cli/supported-dependencies', () => {
   test('extracts package names from install specs', () => {
     expect(getPackageNameFromInstallSpec('convex@1.33.0')).toBe('convex');
-    expect(getPackageNameFromInstallSpec('better-auth@1.4.9')).toBe(
+    expect(getPackageNameFromInstallSpec('better-auth@1.5.3')).toBe(
       'better-auth'
     );
     expect(getPackageNameFromInstallSpec('@scope/pkg@1.2.3')).toBe(

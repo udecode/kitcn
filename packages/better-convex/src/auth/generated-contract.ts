@@ -1,5 +1,6 @@
 import type { Auth as BetterAuthInstance } from 'better-auth';
 import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
+import type { Auth } from 'better-auth/types';
 import type {
   GenericDataModel,
   GenericMutationCtx,
@@ -38,6 +39,8 @@ export const getGeneratedAuthDisabledReason = (
 const DEFAULT_DISABLED_AUTH_MESSAGE =
   getGeneratedAuthDisabledReason('missing_auth_file');
 
+type UnknownFn = (...args: unknown[]) => unknown;
+
 type AuthDefinitionModule<
   GenericCtx,
   DataModel extends GenericDataModel,
@@ -56,7 +59,7 @@ type AuthDefinitionInput<
   | GenericAuthDefinition<GenericCtx, DataModel, Schema, AuthOptions>
   | AuthDefinitionModule<GenericCtx, DataModel, Schema, AuthOptions>;
 
-export const resolveGeneratedAuthDefinition = <Definition>(
+export const resolveGeneratedAuthDefinition = <Definition extends UnknownFn>(
   input: unknown,
   reason: string
 ): Definition => {
@@ -111,10 +114,13 @@ const createDisabledRuntimeExport = <T>(
   exportName: string
 ): T => createDisabledError(message, exportName) as T;
 
-const createLazyAuthProxy = <Auth extends ReturnType<typeof betterAuth>>(
-  resolve: () => Auth
+type BetterAuthRuntime<Options extends BetterAuthOptions = BetterAuthOptions> =
+  Auth<Options>;
+
+const createLazyAuthProxy = <AuthRuntime extends object>(
+  resolve: () => AuthRuntime
 ) =>
-  new Proxy({} as Auth, {
+  new Proxy({} as AuthRuntime, {
     get(_target, prop, receiver) {
       const auth = resolve();
       const value = Reflect.get(auth, prop, receiver);
@@ -275,18 +281,13 @@ export const createAuthRuntime = <
       (_ctx) => authClient.adapter(_ctx as AdapterCtx, adapterGetAuthOptions)
     );
   const getAuth = (ctx: GenericCtx) => betterAuth(resolveAuthOptions(ctx));
+  type GeneratedAuth = BetterAuthRuntime<ReturnType<typeof resolveAuthOptions>>;
   const authApi = createApi(config.schema, getAuth, {
     ...(config.context ? { context: config.context } : {}),
     triggers: resolveRuntimeTriggers,
   });
   const decoratedAuthApi = decorateAuthRuntimeProcedures(authApi);
-  let staticAuth:
-    | BetterAuthInstance<
-        AuthOptions & {
-          database: BetterAuthOptions['database'];
-        }
-      >
-    | undefined;
+  let staticAuth: GeneratedAuth | undefined;
   const getStaticAuth = () => {
     staticAuth ??= betterAuth(resolveAuthOptions({} as GenericCtx));
     return staticAuth;

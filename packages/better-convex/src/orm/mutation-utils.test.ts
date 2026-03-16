@@ -344,7 +344,7 @@ describe('mutation-utils', () => {
     ).toThrow(/use `createdAt`/i);
   });
 
-  test('normalizeDateFieldsForWrite reserves createdAt for system alias', () => {
+  test('normalizeDateFieldsForWrite preserves explicit user createdAt columns', () => {
     const normalized = normalizeDateFieldsForWrite(usersWithCreatedAt, {
       name: 'Alice',
       createdAt: 123,
@@ -352,12 +352,12 @@ describe('mutation-utils', () => {
 
     expect(normalized).toMatchObject({
       name: 'Alice',
+      createdAt: 123,
     });
     expect(normalized).not.toHaveProperty('_creationTime');
-    expect(normalized).not.toHaveProperty('createdAt');
   });
 
-  test('normalizeDateFieldsForWrite drops defaulted createdAt without writing _creationTime', () => {
+  test('normalizeDateFieldsForWrite preserves defaulted user createdAt without writing _creationTime', () => {
     const withDefaults = applyDefaults(usersWithTimestampCreatedAt, {
       name: 'Alice',
     }) as { name: string; createdAt?: unknown };
@@ -367,8 +367,10 @@ describe('mutation-utils', () => {
     ) as any;
 
     expect(withDefaults.createdAt).toBeInstanceOf(Date);
-    expect(normalized).toMatchObject({ name: 'Alice' });
-    expect(normalized).not.toHaveProperty('createdAt');
+    expect(normalized).toMatchObject({
+      name: 'Alice',
+      createdAt: (withDefaults.createdAt as Date).getTime(),
+    });
     expect(normalized).not.toHaveProperty('_creationTime');
   });
 

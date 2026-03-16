@@ -9,11 +9,11 @@ import type { FunctionArgs, FunctionReference } from 'convex/server';
 import { getFunctionName } from 'convex/server';
 
 import type {
-  ConvexActionOptions,
-  ConvexInfiniteQueryOptions,
+  BaseConvexActionOptions,
+  BaseConvexInfiniteQueryOptions,
+  BaseConvexQueryOptions,
+  BaseInfiniteQueryOptsParam,
   ConvexQueryMeta,
-  ConvexQueryOptions,
-  InfiniteQueryOptsParam,
   Meta,
 } from './types';
 
@@ -26,7 +26,7 @@ export function convexQuery<T extends FunctionReference<'query'>>(
   args?: FunctionArgs<T> | 'skip',
   meta?: Meta,
   opts?: { skipUnauth?: boolean }
-): ConvexQueryOptions<T> & { meta: ConvexQueryMeta } {
+): BaseConvexQueryOptions<T> & { meta: ConvexQueryMeta } {
   const finalArgs = args ?? {};
   const isSkip = finalArgs === 'skip';
 
@@ -56,7 +56,7 @@ export function convexQuery<T extends FunctionReference<'query'>>(
       skipUnauth,
       subscribe: true, // default, can be overridden
     },
-  } as ConvexQueryOptions<T> & { meta: ConvexQueryMeta };
+  } as BaseConvexQueryOptions<T> & { meta: ConvexQueryMeta };
 }
 
 /**
@@ -81,7 +81,7 @@ export function convexAction<T extends FunctionReference<'action'>>(
   args?: FunctionArgs<T> | 'skip',
   meta?: Meta,
   opts?: { skipUnauth?: boolean }
-): ConvexActionOptions<T> & { meta: ConvexQueryMeta } {
+): BaseConvexActionOptions<T> & { meta: ConvexQueryMeta } {
   const finalArgs = args ?? {};
   const isSkip = finalArgs === 'skip';
 
@@ -108,7 +108,7 @@ export function convexAction<T extends FunctionReference<'action'>>(
       skipUnauth,
       subscribe: false, // actions don't subscribe
     },
-  } as ConvexActionOptions<T> & { meta: ConvexQueryMeta };
+  } as BaseConvexActionOptions<T> & { meta: ConvexQueryMeta };
 }
 
 /**
@@ -122,9 +122,9 @@ export function convexInfiniteQueryOptions<
 >(
   funcRef: T,
   args: Record<string, unknown> | 'skip',
-  opts: InfiniteQueryOptsParam<T> = {},
+  opts: BaseInfiniteQueryOptsParam<T> & Record<string, unknown> = {},
   meta?: Meta
-): ConvexInfiniteQueryOptions<T> {
+): BaseConvexInfiniteQueryOptions<T> & Record<string, unknown> {
   // Extract our custom options, pass through the rest as TanStack Query options
   const { limit, skipUnauth, enabled, ...queryOptions } = opts;
 

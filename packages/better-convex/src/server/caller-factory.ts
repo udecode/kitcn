@@ -21,6 +21,8 @@ import {
 } from './caller';
 import { createLazyCaller, type LazyCaller } from './lazy-caller';
 
+const CONVEX_SITE_URL_RE = /\.convex\.site(?=\/|$)/;
+
 // Token result from getToken
 type TokenResult = {
   token?: string;
@@ -47,6 +49,11 @@ type CreateCallerFactoryOptions<TApi> = {
   api: TApi;
   /** Convex site URL (must end in `.convex.site`). */
   convexSiteUrl: string;
+  /**
+   * Convex deployment URL (must end in `.convex.cloud`).
+   * Defaults to `convexSiteUrl` with the domain swapped.
+   */
+  convexUrl?: string;
   /** Auth options. Pass to enable authenticated calls with JWT caching. */
   auth?: AuthOptions;
   /** Optional wire transformer for request/response payloads (always composed with Date). */
@@ -60,8 +67,12 @@ type OptionalArgs<FuncRef extends FunctionReference<any, any>> =
 
 const getArgsAndOptions = <FuncRef extends FunctionReference<any, any>>(
   args: OptionalArgs<FuncRef>,
-  token?: string
-): ArgsAndOptions<FuncRef, { token?: string }> => [args[0], { token }];
+  token?: string,
+  url?: string
+): ArgsAndOptions<FuncRef, { token?: string; url?: string }> => [
+  args[0],
+  { token, url },
+];
 
 const parseConvexSiteUrl = (url: string) => {
   if (!url) {
@@ -75,6 +86,14 @@ const parseConvexSiteUrl = (url: string) => {
     );
   }
   return url;
+};
+
+const getConvexUrl = (siteUrl: string, convexUrl?: string) => {
+  if (convexUrl) {
+    return convexUrl;
+  }
+
+  return siteUrl.replace(CONVEX_SITE_URL_RE, '.convex.cloud');
 };
 
 // Context shape returned by createContext
@@ -103,6 +122,7 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
   opts: CreateCallerFactoryOptions<TApi>
 ) {
   const siteUrl = parseConvexSiteUrl(opts.convexSiteUrl);
+  const convexUrl = getConvexUrl(siteUrl, opts.convexUrl);
   const getToken = opts.auth?.getToken ?? noAuthGetToken;
   const isUnauthorized = opts.auth?.isUnauthorized;
   const crpcMeta = buildMetaIndex(opts.api);
@@ -163,7 +183,7 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
       }
       return callWithTokenAndRetry(
         (token) => {
-          const argsAndOptions = getArgsAndOptions([args], token);
+          const argsAndOptions = getArgsAndOptions([args], token, convexUrl);
           return fetchQuery(query, argsAndOptions[0], argsAndOptions[1]);
         },
         tokenResult,
@@ -183,7 +203,7 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
       }
       return callWithTokenAndRetry(
         (token) => {
-          const argsAndOptions = getArgsAndOptions([args], token);
+          const argsAndOptions = getArgsAndOptions([args], token, convexUrl);
           return fetchMutation(mutation, argsAndOptions[0], argsAndOptions[1]);
         },
         tokenResult,
@@ -201,7 +221,7 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
       }
       return callWithTokenAndRetry(
         (token) => {
-          const argsAndOptions = getArgsAndOptions([args], token);
+          const argsAndOptions = getArgsAndOptions([args], token, convexUrl);
           return fetchAction(action, argsAndOptions[0], argsAndOptions[1]);
         },
         tokenResult,
@@ -210,15 +230,15 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
     };
 
     return {
-      token: tokenResult.token,
-      isAuthenticated: !!tokenResult.token,
       caller: createServerCaller(opts.api, {
-        fetchQuery: fetchAuthQuery,
-        fetchMutation: fetchAuthMutation,
         fetchAction: fetchAuthAction,
+        fetchMutation: fetchAuthMutation,
+        fetchQuery: fetchAuthQuery,
         meta: crpcMeta,
         transformer: opts.transformer,
       }),
+      isAuthenticated: !!tokenResult.token,
+      token: tokenResult.token,
     };
   };
 
@@ -227,5 +247,5 @@ export function createCallerFactory<TApi extends Record<string, unknown>>(
     ctxFn: () => Promise<ConvexContext<TApi>>
   ): LazyCaller<TApi> => createLazyCaller(opts.api, ctxFn);
 
-  return { createContext, createCaller };
+  return { createCaller, createContext };
 }

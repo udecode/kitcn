@@ -12,13 +12,15 @@ import type {
   PaginationResult,
   SchemaDefinition,
 } from 'convex/server';
-import { prop, sortBy, uniqueBy } from 'remeda';
+import { prop, sortBy } from 'remeda';
 import type { SetOptional } from 'type-fest';
 import { asyncMap } from '../internal/upstream';
 import type { GenericCtx } from '../server/context-utils';
 import { isRunMutationCtx } from '../server/context-utils';
 import { findManyHandler, findOneHandler } from './create-api';
 import type { AuthFunctions } from './create-client';
+
+let didWarnExperimentalJoinsUnsupported = false;
 
 export const handlePagination = async (
   next: ({
@@ -88,8 +90,27 @@ export type ConvexCleanedWhere = Where & {
   value: number[] | string[] | boolean | number | string | null;
 };
 
+type AdapterWhere = Where & { join?: undefined };
+
+const hasOrWhere = (where?: AdapterWhere[]): where is AdapterWhere[] =>
+  where?.some((clause) => clause.connector === 'OR') ?? false;
+
+const assertSupportedBulkOrWhere = (
+  where: AdapterWhere[] | undefined,
+  operation: 'deleteMany' | 'updateMany'
+) => {
+  if (
+    hasOrWhere(where) &&
+    !where?.every((clause) => clause.connector === 'OR')
+  ) {
+    throw new Error(
+      `Mixed OR/AND where clauses are not supported for ${operation}`
+    );
+  }
+};
+
 const parseWhere = (
-  where?: (Where & { join?: undefined }) | (Where & { join?: undefined })[]
+  where?: AdapterWhere | AdapterWhere[]
 ): ConvexCleanedWhere[] => {
   if (!where) {
     return [];
@@ -106,14 +127,55 @@ const parseWhere = (
   }) as ConvexCleanedWhere[];
 };
 
-const uniqueDocs = (docs: any[]) =>
-  uniqueBy(docs, (doc) => {
-    if (doc && typeof doc === 'object') {
-      return doc._id ?? doc.id ?? doc;
-    }
+type DocWithFlexibleId = {
+  _id?: string | null;
+  id?: string | null;
+};
 
+const getDocId = (doc: DocWithFlexibleId) => {
+  if (doc?._id !== undefined && doc?._id !== null) {
+    return String(doc._id);
+  }
+  if (doc?.id !== undefined && doc?.id !== null) {
+    return String(doc.id);
+  }
+  return undefined;
+};
+
+const dedupeDocsById = <T extends DocWithFlexibleId>(docs: T[]) => {
+  const seen = new Set<string>();
+  const deduped: T[] = [];
+  for (const doc of docs) {
+    const id = getDocId(doc);
+    if (!id) {
+      deduped.push(doc);
+      continue;
+    }
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    deduped.push(doc);
+  }
+  return deduped;
+};
+
+const selectDocFields = (
+  doc: DocWithFlexibleId & Record<string, unknown>,
+  select?: string[]
+) => {
+  if (!select?.length) {
     return doc;
-  });
+  }
+  return select.reduce(
+    (acc, field) => {
+      const sourceField = field === 'id' && '_id' in doc ? '_id' : field;
+      acc[sourceField] = doc[sourceField];
+      return acc;
+    },
+    {} as Record<string, unknown>
+  );
+};
 
 export const adapterConfig = {
   adapterId: 'convex',
@@ -196,6 +258,37 @@ export const httpAdapter = <
     adapter: ({ options }) => {
       // Disable telemetry in all cases because it requires Node
       options.telemetry = { enabled: false };
+      if (options.experimental?.joins) {
+        options.experimental = {
+          ...options.experimental,
+          joins: false,
+        };
+        if (!didWarnExperimentalJoinsUnsupported) {
+          didWarnExperimentalJoinsUnsupported = true;
+          console.warn(
+            '[better-convex] Better Auth experimental.joins is not supported by the Convex adapter yet. Forcing experimental.joins = false.'
+          );
+        }
+      }
+
+      const collectIdsForOrWhere = async (data: {
+        model: string;
+        where: AdapterWhere[];
+      }) => {
+        const results = await asyncMap(data.where, async (w) =>
+          handlePagination(
+            async ({ paginationOpts }) =>
+              await ctx.runQuery(authFunctions.findMany, {
+                model: data.model,
+                paginationOpts,
+                where: parseWhere(w),
+              })
+          )
+        );
+        return dedupeDocsById(results.flatMap((result) => result.docs))
+          .map((doc) => getDocId(doc))
+          .flatMap((id) => (id ? [id] : []));
+      };
 
       return {
         id: 'convex',
@@ -204,7 +297,7 @@ export const httpAdapter = <
         },
         count: async (data) => {
           // Yes, count is just findMany returning a number.
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          if (hasOrWhere(data.where)) {
             const results = await asyncMap(data.where, async (w) =>
               handlePagination(
                 async ({ paginationOpts }) =>
@@ -215,7 +308,7 @@ export const httpAdapter = <
                   })
               )
             );
-            const docs = uniqueDocs(results.flatMap((r) => r.docs));
+            const docs = dedupeDocsById(results.flatMap((r) => r.docs));
 
             return docs.length;
           }
@@ -259,6 +352,22 @@ export const httpAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
+          assertSupportedBulkOrWhere(data.where, 'deleteMany');
+          if (hasOrWhere(data.where)) {
+            const ids = await collectIdsForOrWhere({
+              model: data.model,
+              where: data.where,
+            });
+            await asyncMap(ids, async (id) => {
+              await ctx.runMutation(authFunctions.deleteOne, {
+                input: {
+                  model: data.model,
+                  where: [{ field: '_id', operator: 'eq', value: id }],
+                },
+              });
+            });
+            return ids.length;
+          }
 
           const result = await handlePagination(
             async ({ paginationOpts }) =>
@@ -277,30 +386,32 @@ export const httpAdapter = <
           if (data.offset) {
             throw new Error('offset not supported');
           }
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          if (hasOrWhere(data.where)) {
+            const { select: _ignoredSelect, ...queryData } = data;
             const results = await asyncMap(data.where, async (w) =>
               handlePagination(
                 async ({ paginationOpts }) =>
                   await ctx.runQuery(authFunctions.findMany, {
-                    ...data,
+                    ...queryData,
                     paginationOpts,
                     where: parseWhere(w),
                   }),
                 { limit: data.limit }
               )
             );
-            const docs = uniqueDocs(results.flatMap((r) => r.docs));
+            let docs = dedupeDocsById(results.flatMap((r) => r.docs));
 
             if (data.sortBy) {
-              const result = sortBy(docs, [
+              docs = sortBy(docs, [
                 prop(data.sortBy.field),
                 data.sortBy.direction,
               ]);
-
-              return result;
+            }
+            if (data.limit !== undefined) {
+              docs = docs.slice(0, data.limit);
             }
 
-            return docs;
+            return docs.map((doc) => selectDocFields(doc, data.select));
           }
 
           const result = await handlePagination(
@@ -386,6 +497,28 @@ export const httpAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
+          assertSupportedBulkOrWhere(data.where, 'updateMany');
+          if (hasOrWhere(data.where)) {
+            const ids = await collectIdsForOrWhere({
+              model: data.model,
+              where: data.where,
+            });
+            if (!ids.length) {
+              return 0;
+            }
+            const result = await handlePagination(
+              async ({ paginationOpts }) =>
+                await ctx.runMutation(authFunctions.updateMany, {
+                  input: {
+                    ...(data as any),
+                    where: [{ field: '_id', operator: 'in', value: ids }],
+                  },
+                  paginationOpts,
+                }),
+              { limit: ids.length }
+            );
+            return result.count;
+          }
 
           const result = await handlePagination(
             async ({ paginationOpts }) =>
@@ -431,6 +564,42 @@ export const dbAdapter = <
     adapter: ({ options }) => {
       // Disable telemetry in all cases because it requires Node
       options.telemetry = { enabled: false };
+      if (options.experimental?.joins) {
+        options.experimental = {
+          ...options.experimental,
+          joins: false,
+        };
+        if (!didWarnExperimentalJoinsUnsupported) {
+          didWarnExperimentalJoinsUnsupported = true;
+          console.warn(
+            '[better-convex] Better Auth experimental.joins is not supported by the Convex adapter yet. Forcing experimental.joins = false.'
+          );
+        }
+      }
+
+      const collectIdsForOrWhere = async (data: {
+        model: string;
+        where: AdapterWhere[];
+      }) => {
+        const results = await asyncMap(data.where, async (w) =>
+          handlePagination(
+            async ({ paginationOpts }) =>
+              await findManyHandler(
+                ctx,
+                {
+                  model: data.model,
+                  paginationOpts,
+                  where: parseWhere(w),
+                },
+                schema,
+                betterAuthSchema
+              )
+          )
+        );
+        return dedupeDocsById(results.flatMap((result) => result.docs))
+          .map((doc) => getDocId(doc))
+          .flatMap((id) => (id ? [id] : []));
+      };
 
       return {
         id: 'convex',
@@ -438,7 +607,7 @@ export const dbAdapter = <
           isRunMutationCtx: isRunMutationCtx(ctx),
         },
         count: async (data) => {
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          if (hasOrWhere(data.where)) {
             const results = await asyncMap(data.where, async (w) =>
               handlePagination(
                 async ({ paginationOpts }) =>
@@ -454,7 +623,7 @@ export const dbAdapter = <
                   )
               )
             );
-            const docs = uniqueDocs(results.flatMap((r) => r.docs));
+            const docs = dedupeDocsById(results.flatMap((r) => r.docs));
 
             return docs.length;
           }
@@ -503,6 +672,22 @@ export const dbAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
+          assertSupportedBulkOrWhere(data.where, 'deleteMany');
+          if (hasOrWhere(data.where)) {
+            const ids = await collectIdsForOrWhere({
+              model: data.model,
+              where: data.where,
+            });
+            await asyncMap(ids, async (id) => {
+              await ctx.runMutation(authFunctions.deleteOne, {
+                input: {
+                  model: data.model,
+                  where: [{ field: '_id', operator: 'eq', value: id }],
+                },
+              });
+            });
+            return ids.length;
+          }
 
           const result = await handlePagination(
             async ({ paginationOpts }) =>
@@ -521,14 +706,15 @@ export const dbAdapter = <
           if (data.offset) {
             throw new Error('offset not supported');
           }
-          if (data.where?.some((w) => w.connector === 'OR')) {
+          if (hasOrWhere(data.where)) {
+            const { select: _ignoredSelect, ...queryData } = data;
             const results = await asyncMap(data.where, async (w) =>
               handlePagination(
                 async ({ paginationOpts }) =>
                   await findManyHandler(
                     ctx,
                     {
-                      ...data,
+                      ...queryData,
                       paginationOpts,
                       where: parseWhere(w),
                     },
@@ -538,18 +724,19 @@ export const dbAdapter = <
                 { limit: data.limit }
               )
             );
-            const docs = uniqueDocs(results.flatMap((r) => r.docs));
+            let docs = dedupeDocsById(results.flatMap((r) => r.docs));
 
             if (data.sortBy) {
-              const result = sortBy(docs, [
+              docs = sortBy(docs, [
                 prop(data.sortBy.field),
                 data.sortBy.direction,
               ]);
-
-              return result;
+            }
+            if (data.limit !== undefined) {
+              docs = docs.slice(0, data.limit);
             }
 
-            return docs;
+            return docs.map((doc) => selectDocFields(doc, data.select));
           }
 
           const result = await handlePagination(
@@ -651,6 +838,28 @@ export const dbAdapter = <
         updateMany: async (data) => {
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
+          }
+          assertSupportedBulkOrWhere(data.where, 'updateMany');
+          if (hasOrWhere(data.where)) {
+            const ids = await collectIdsForOrWhere({
+              model: data.model,
+              where: data.where,
+            });
+            if (!ids.length) {
+              return 0;
+            }
+            const result = await handlePagination(
+              async ({ paginationOpts }) =>
+                await ctx.runMutation(authFunctions.updateMany, {
+                  input: {
+                    ...(data as any),
+                    where: [{ field: '_id', operator: 'in', value: ids }],
+                  },
+                  paginationOpts,
+                }),
+              { limit: ids.length }
+            );
+            return result.count;
           }
 
           const result = await handlePagination(

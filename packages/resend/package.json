@@ -21,5 +21,8 @@
   },
   "peerDependencies": {
     "convex": ">=1.33"
+  },
+  "devDependencies": {
+    "tsdown": "^0.20.3"
   }
 }

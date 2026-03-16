@@ -14,6 +14,7 @@ describe('server public exports', () => {
     expect(typeof server.createProcedureHandlerFactory).toBe('function');
     expect(typeof server.createGenericCallerFactory).toBe('function');
     expect(typeof server.createGenericHandlerFactory).toBe('function');
+    expect(typeof server.createGeneratedRegistryRuntime).toBe('function');
     expect(typeof server.typedProcedureResolver).toBe('function');
     expect(typeof server.defineProcedure).toBe('function');
     expect(typeof server.createLazyCaller).toBe('function');
