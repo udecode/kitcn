@@ -104,14 +104,14 @@ Your database needs tables for users, sessions, accounts, and more. You have two
     The easiest approach is to let the Better Auth CLI generate the tables based on your plugins:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
     ```
 
     Then import in your schema:
 
     ```ts title="convex/schema.ts" showLineNumbers {2,5}
     import { defineSchema } from 'convex/server';
-    import { authSchema } from './authSchema';
+    import { tables as authSchema } from './authSchema';
 
     export default defineSchema({
       ...authSchema,
@@ -334,7 +334,7 @@ See [CLI Reference](/docs/cli#env) for more options.
 That's it for the basic setup! Your auth is now configured. To rotate keys later (this invalidates all tokens):
 
 ```bash
-npx convex run auth:rotateKeys | npx convex env set JWKS
+npx convex run generated/auth:rotateKeys | npx convex env set JWKS
 ```
 
 ## Framework Integration
@@ -470,7 +470,7 @@ Authentication will fail at this point - that's expected.
 Run from your local machine with Convex CLI authenticated:
 
 ```bash
-npx convex run auth:getLatestJwks --prod | npx convex env set JWKS --prod
+npx convex run generated/auth:getLatestJwks --prod | npx convex env set JWKS --prod
 ```
 
 This generates new signing keys (if none exist) and sets the JWKS environment variable.
@@ -488,7 +488,7 @@ Test a protected endpoint or sign in through your app. Authentication should now
 Need to rotate signing keys? Maybe for security compliance or after a suspected compromise:
 
 ```bash
-npx convex run auth:rotateKeys --prod | npx convex env set JWKS --prod
+npx convex run generated/auth:rotateKeys --prod | npx convex env set JWKS --prod
 ```
 
 <Callout icon={<InfoIcon />}>

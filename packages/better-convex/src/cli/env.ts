@@ -68,7 +68,7 @@ export async function syncEnv(options: SyncOptions = {}) {
       ) {
         console.info('🔐 Generating JWKS...');
         childProcess.execSync(
-          `npx convex run auth:getLatestJwks${prodFlag} | npx convex env set JWKS${prodFlag}`,
+          `npx convex run generated/auth:getLatestJwks${prodFlag} | npx convex env set JWKS${prodFlag}`,
           { stdio: 'inherit' }
         );
         console.info('✅ JWKS initialized');
@@ -77,7 +77,7 @@ export async function syncEnv(options: SyncOptions = {}) {
       }
     } catch {
       console.warn(
-        '⚠️  Could not generate JWKS (auth:getLatestJwks not available yet)'
+        '⚠️  Could not generate JWKS (generated/auth:getLatestJwks not available yet)'
       );
     }
   }
