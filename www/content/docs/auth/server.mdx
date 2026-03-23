@@ -105,14 +105,14 @@ Your database needs tables for users, sessions, accounts, and more. You have two
     The easiest approach is to let the Better Auth CLI generate the tables based on your plugins:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
     ```
 
     Then import in your schema:
 
     ```ts title="convex/schema.ts" showLineNumbers {2,5}
     import { defineSchema } from 'convex/server';
-    import { authSchema } from './authSchema';
+    import { tables as authSchema } from './authSchema';
 
     export default defineSchema({
       ...authSchema,

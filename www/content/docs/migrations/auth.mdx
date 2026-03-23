@@ -545,14 +545,14 @@ If you were using the auto-generated component schema, you'll now define auth ta
     Generate auth tables:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
     ```
 
     Merge generated auth tables into your ORM schema:
 
     ```ts title="convex/functions/schema.ts" showLineNumbers
     import { defineSchema } from 'better-convex/orm';
-    import { authSchema } from './authSchema';
+    import { tables as authSchema } from './authSchema';
 
     export const tables = {
       ...authSchema,
@@ -570,14 +570,14 @@ If you were using the auto-generated component schema, you'll now define auth ta
     Generate auth tables:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
     ```
 
     Merge generated auth tables into your Convex schema:
 
     ```ts title="convex/functions/schema.ts" showLineNumbers
     import { defineSchema } from 'convex/server';
-    import { authSchema } from './authSchema';
+    import { tables as authSchema } from './authSchema';
 
     export default defineSchema({
       ...authSchema,
@@ -1050,7 +1050,7 @@ npx better-convex codegen
 Use generated config entrypoint (not `auth.ts`):
 
 ```bash
-npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated.ts
+npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
 ```
 
 If it still fails, re-run `better-convex codegen` first so generated exports are up to date.

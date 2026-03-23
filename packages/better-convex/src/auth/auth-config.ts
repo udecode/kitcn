@@ -36,7 +36,7 @@ export const getAuthConfigProvider = (opts?: {
    *
    * Example:
    * ```bash
-   * npx convex run auth:generateJwk | npx convex env set JWKS
+   * npx convex run generated/auth:generateJwk | npx convex env set JWKS
    * ```
    *
    * Then use it in your auth config:
