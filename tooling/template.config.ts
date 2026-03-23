@@ -25,7 +25,7 @@ export const TEMPLATE_DEFINITIONS: Record<TemplateKey, TemplateDefinition> = {
     label: 'next',
     setup: [],
     successMessage:
-      'templates/next matches fresh `better-convex create -t next` output.',
+      'fixtures/next matches fresh `better-convex init -t next` output.',
     validation: {
       lint: true,
     },
@@ -35,7 +35,7 @@ export const TEMPLATE_DEFINITIONS: Record<TemplateKey, TemplateDefinition> = {
     label: 'next + auth',
     setup: [['add', 'auth', '--yes']],
     successMessage:
-      'templates/next-auth matches fresh `better-convex create -t next && better-convex add auth` output.',
+      'fixtures/next-auth matches fresh `better-convex init -t next && better-convex add auth` output.',
     validation: {
       lint: true,
     },
@@ -45,7 +45,7 @@ export const TEMPLATE_DEFINITIONS: Record<TemplateKey, TemplateDefinition> = {
     label: 'vite',
     setup: [],
     successMessage:
-      'templates/vite matches fresh `better-convex create -t vite` output.',
+      'fixtures/vite matches fresh `better-convex init -t vite` output.',
     validation: {
       lint: false,
     },
@@ -55,7 +55,7 @@ export const TEMPLATE_DEFINITIONS: Record<TemplateKey, TemplateDefinition> = {
     label: 'vite + auth',
     setup: [['add', 'auth', '--yes']],
     successMessage:
-      'templates/vite-auth matches fresh `better-convex create -t vite && better-convex add auth` output.',
+      'fixtures/vite-auth matches fresh `better-convex init -t vite && better-convex add auth` output.',
     validation: {
       lint: false,
     },

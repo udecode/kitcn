@@ -51,6 +51,7 @@ export type PluginSchemaRegistration = {
 export type PluginRegistryResolveScaffoldRootsParams = {
   config: BetterConvexConfig;
   functionsDir: string;
+  preset: string;
   roots: ResolvedScaffoldRoots;
 };
 
@@ -72,6 +73,9 @@ export type PluginRegistryIntegration = {
   buildPlanFiles?: (
     params: PluginRegistryBuildPlanFilesParams
   ) => readonly PluginInstallPlanFile[];
+  buildSchemaRegistrationPlanFile?: (
+    params: PluginRegistryBuildPlanFilesParams
+  ) => PluginInstallPlanFile | undefined;
 };
 
 export type PluginCatalogEntry = {

@@ -35,6 +35,7 @@ export type PlanFileAction = 'create' | 'update' | 'skip';
 export type PlanOperationKind =
   | 'dependency_install'
   | 'codegen'
+  | 'env_push'
   | 'post_add_hook'
   | 'env_reminder';
 export type PlanOperationStatus = 'pending' | 'skipped' | 'applied';

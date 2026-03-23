@@ -43,9 +43,6 @@ import {
 import type { PluginEnvField } from './types.js';
 
 const DEFINE_SCHEMA_CALL_RE = /defineSchema\s*\(([\s\S]*?)\)/m;
-const CHAIN_EXTEND_RE = /\.extend\s*\(([\s\S]*?)\)/m;
-const CHAIN_RELATIONS_RE = /\.relations\s*\(/m;
-const CHAIN_TRIGGERS_RE = /\.triggers\s*\(/m;
 const DEFAULT_ENV_HELPER_BASENAME = 'get-env.ts';
 export const LOCAL_CONVEX_ENV_TEMPLATE_ID = '__better-convex-local-env__';
 export const BETTER_CONVEX_CONFIG_TEMPLATE_ID = '__better-convex-config__';
@@ -69,6 +66,7 @@ const BASE_ENV_FIELDS: readonly PluginEnvField[] = [
   },
 ] as const;
 const ENV_SCHEMA_RE = /(const\s+\w+\s*=\s*z\.object\(\{\n)([\s\S]*?)(\n\}\);)/m;
+const WHITESPACE_RE = /\s/;
 
 type ScaffoldFile = {
   templateId: string;
@@ -367,7 +365,8 @@ const resolvePluginEnvReminders = (
 export const resolvePluginScaffoldRoots = (
   functionsDir: string,
   descriptor: PluginDescriptor,
-  config: BetterConvexConfig
+  config: BetterConvexConfig,
+  preset = descriptor.defaultPreset
 ): ResolvedScaffoldRoots => {
   const libDir = normalizeRelativePathOrThrow(config.paths.lib, 'paths.lib');
   const libRoot = resolve(process.cwd(), libDir);
@@ -398,6 +397,7 @@ export const resolvePluginScaffoldRoots = (
     ...descriptor.integration?.resolveScaffoldRoots?.({
       config,
       functionsDir,
+      preset,
       roots: defaultRoots,
     }),
   };
@@ -446,7 +446,8 @@ const resolvePluginScaffoldFiles = (
   roots: ResolvedScaffoldRoots,
   functionsDir: string,
   existingTemplatePathMap: Record<string, string> | undefined,
-  descriptor: PluginDescriptor
+  descriptor: PluginDescriptor,
+  preset: string
 ): ScaffoldFile[] =>
   templates.map((template) => {
     let rootDir: string;
@@ -457,14 +458,14 @@ const resolvePluginScaffoldFiles = (
     } else if (template.target === 'app') {
       if (!roots.appRootDir) {
         throw new Error(
-          `${descriptor.label} scaffolding requires a supported app baseline. Run \`better-convex create -t next\` or \`better-convex create -t vite\` first.`
+          `${descriptor.label} scaffolding requires a supported app baseline. Run \`better-convex init --yes\` in a supported app, or bootstrap one with \`better-convex init -t <next|vite>\` first.`
         );
       }
       rootDir = roots.appRootDir;
     } else {
       if (!roots.clientLibRootDir) {
         throw new Error(
-          `${descriptor.label} scaffolding requires a supported app baseline. Run \`better-convex create -t next\` or \`better-convex create -t vite\` first.`
+          `${descriptor.label} scaffolding requires a supported app baseline. Run \`better-convex init --yes\` in a supported app, or bootstrap one with \`better-convex init -t <next|vite>\` first.`
         );
       }
       rootDir = roots.clientLibRootDir;
@@ -506,7 +507,9 @@ const resolvePluginScaffoldFiles = (
         resolvePluginSchemaImportPrefix(filePath, roots.libRootDir)
       );
 
+    const allowProcessEnv = descriptor.key === 'auth' && preset === 'convex';
     if (
+      !allowProcessEnv &&
       (template.target === 'functions' || template.target === 'lib') &&
       content.includes('process.env')
     ) {
@@ -529,6 +532,108 @@ const getPlannedFileContent = (
 ): string | undefined => {
   const normalizedPath = normalizePath(relative(process.cwd(), absolutePath));
   return files?.find((file) => file.path === normalizedPath)?.content;
+};
+
+const skipWhitespace = (source: string, start: number) => {
+  let index = start;
+  while (index < source.length && WHITESPACE_RE.test(source[index] ?? '')) {
+    index += 1;
+  }
+  return index;
+};
+
+const findBalancedParenEnd = (source: string, openParenIndex: number) => {
+  let depth = 0;
+
+  for (let index = openParenIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+
+    if (char !== ')') {
+      continue;
+    }
+
+    depth -= 1;
+    if (depth === 0) {
+      return index;
+    }
+  }
+
+  return -1;
+};
+
+const findSchemaExtensionInsertIndex = (source: string) => {
+  const defineSchemaIndex = source.indexOf('defineSchema(');
+  if (defineSchemaIndex < 0) {
+    return { closeParenIndex: -1, hasExtend: false, insertIndex: -1 };
+  }
+
+  const defineSchemaOpenParenIndex = source.indexOf('(', defineSchemaIndex);
+  if (defineSchemaOpenParenIndex < 0) {
+    return { closeParenIndex: -1, hasExtend: false, insertIndex: -1 };
+  }
+
+  const defineSchemaCloseParenIndex = findBalancedParenEnd(
+    source,
+    defineSchemaOpenParenIndex
+  );
+  if (defineSchemaCloseParenIndex < 0) {
+    return { closeParenIndex: -1, hasExtend: false, insertIndex: -1 };
+  }
+
+  const cursor = defineSchemaCloseParenIndex + 1;
+
+  while (cursor < source.length) {
+    const nextSegmentIndex = skipWhitespace(source, cursor);
+
+    if (
+      source.startsWith('.relations(', nextSegmentIndex) ||
+      source.startsWith('.triggers(', nextSegmentIndex)
+    ) {
+      return {
+        closeParenIndex: -1,
+        hasExtend: false,
+        insertIndex: nextSegmentIndex,
+      };
+    }
+
+    if (!source.startsWith('.extend(', nextSegmentIndex)) {
+      return {
+        closeParenIndex: -1,
+        hasExtend: false,
+        insertIndex: nextSegmentIndex,
+      };
+    }
+
+    const extendOpenParenIndex = source.indexOf('(', nextSegmentIndex);
+    if (extendOpenParenIndex < 0) {
+      return { closeParenIndex: -1, hasExtend: false, insertIndex: -1 };
+    }
+
+    const extendCloseParenIndex = findBalancedParenEnd(
+      source,
+      extendOpenParenIndex
+    );
+    if (extendCloseParenIndex < 0) {
+      return { closeParenIndex: -1, hasExtend: false, insertIndex: -1 };
+    }
+
+    return {
+      closeParenIndex: extendCloseParenIndex,
+      hasExtend: true,
+      insertIndex: extendCloseParenIndex,
+    };
+  }
+
+  return {
+    closeParenIndex: -1,
+    hasExtend: false,
+    insertIndex: cursor,
+  };
 };
 
 const buildSchemaRegistrationPlanFile = (
@@ -565,22 +670,11 @@ const buildSchemaRegistrationPlanFile = (
       source = `import { ${pluginFactory} } from '${pluginImportPath}';\n${source}`;
     }
 
-    if (CHAIN_EXTEND_RE.test(source)) {
-      source = source.replace(
-        CHAIN_EXTEND_RE,
-        (_match, inner: string) =>
-          `.extend(${pluginFactory}(), ${inner.trim()})`
-      );
-    } else if (CHAIN_RELATIONS_RE.test(source)) {
-      source = source.replace(
-        CHAIN_RELATIONS_RE,
-        `.extend(${pluginFactory}()).relations(`
-      );
-    } else if (CHAIN_TRIGGERS_RE.test(source)) {
-      source = source.replace(
-        CHAIN_TRIGGERS_RE,
-        `.extend(${pluginFactory}()).triggers(`
-      );
+    const extensionTarget = findSchemaExtensionInsertIndex(source);
+    if (extensionTarget.hasExtend && extensionTarget.closeParenIndex >= 0) {
+      source = `${source.slice(0, extensionTarget.closeParenIndex)}, ${pluginFactory}()${source.slice(extensionTarget.closeParenIndex)}`;
+    } else if (extensionTarget.insertIndex >= 0) {
+      source = `${source.slice(0, extensionTarget.insertIndex)}.extend(${pluginFactory}())${source.slice(extensionTarget.insertIndex)}`;
     } else if (DEFINE_SCHEMA_CALL_RE.test(source)) {
       source = source.replace(
         DEFINE_SCHEMA_CALL_RE,
@@ -630,6 +724,8 @@ export const buildPluginInstallPlan = async (params: {
   bootstrapFiles?: readonly PluginInstallPlanFile[];
   bootstrapOperations?: readonly PluginInstallPlanOperation[];
 }): Promise<PluginInstallPlan> => {
+  const rawConvexAuthPreset =
+    params.selectedPlugin === 'auth' && params.preset === 'convex';
   const hasBootstrappedSchema = (params.bootstrapFiles ?? []).some(
     (file) =>
       file.path ===
@@ -655,12 +751,14 @@ export const buildPluginInstallPlan = async (params: {
   const roots = resolvePluginScaffoldRoots(
     params.functionsDir,
     params.descriptor,
-    effectiveConfig
+    effectiveConfig,
+    params.preset
   );
   const effectiveTemplates =
     params.descriptor.integration?.resolveTemplates?.({
       config: effectiveConfig,
       functionsDir: params.functionsDir,
+      preset: params.preset,
       roots,
       templates: params.selectedTemplates,
     }) ?? params.selectedTemplates;
@@ -669,7 +767,8 @@ export const buildPluginInstallPlan = async (params: {
     roots,
     params.functionsDir,
     params.existingTemplatePathMap,
-    params.descriptor
+    params.descriptor,
+    params.preset
   );
   const dependency = await inspectPluginDependencyInstall({
     descriptor: params.descriptor,
@@ -683,13 +782,18 @@ export const buildPluginInstallPlan = async (params: {
     dependencyHints.length > 0
       ? `bun add ${dependencyHints.join(' ')}`
       : undefined;
-  const envReminders = resolvePluginEnvReminders(
-    params.functionsDir,
-    params.descriptor.envFields ?? []
-  );
+  const envReminders = rawConvexAuthPreset
+    ? []
+    : resolvePluginEnvReminders(
+        params.functionsDir,
+        params.descriptor.envFields ?? []
+      );
   const nextSteps = dependencyHintCommand
     ? [`Install scaffold dependencies: ${dependencyHintCommand}`]
     : [];
+  const codegenCommand = rawConvexAuthPreset
+    ? 'better-convex codegen --scope auth'
+    : 'better-convex codegen';
 
   const pluginScaffoldPaths = {
     ...params.existingTemplatePathMap,
@@ -716,8 +820,22 @@ export const buildPluginInstallPlan = async (params: {
     params.descriptor.integration?.buildPlanFiles?.({
       config: effectiveConfig,
       functionsDir: params.functionsDir,
+      preset: params.preset,
       roots,
     }) ?? [];
+  const schemaRegistrationFile =
+    params.descriptor.integration?.buildSchemaRegistrationPlanFile?.({
+      config: effectiveConfig,
+      functionsDir: params.functionsDir,
+      preset: params.preset,
+      roots,
+    }) ??
+    buildSchemaRegistrationPlanFile(
+      params.functionsDir,
+      params.descriptor,
+      roots,
+      params.bootstrapFiles
+    );
 
   const fileMap = new Map<string, PluginInstallPlanFile>();
   for (const file of [
@@ -752,12 +870,7 @@ export const buildPluginInstallPlan = async (params: {
         skipReason: 'Scaffold file is already up to date.',
       })
     ),
-    buildSchemaRegistrationPlanFile(
-      params.functionsDir,
-      params.descriptor,
-      roots,
-      params.bootstrapFiles
-    ),
+    schemaRegistrationFile,
     createLockfilePlanFile(params.functionsDir, nextLockfile),
   ]) {
     fileMap.set(file.path, file);
@@ -794,8 +907,24 @@ export const buildPluginInstallPlan = async (params: {
       reason: params.noCodegen
         ? 'Codegen disabled by flag.'
         : 'Run codegen after scaffold changes.',
-      command: params.noCodegen ? undefined : 'better-convex codegen',
+      command: params.noCodegen ? undefined : codegenCommand,
     },
+    ...(rawConvexAuthPreset
+      ? [
+          {
+            kind: 'env_push' as const,
+            status: params.noCodegen
+              ? ('skipped' as const)
+              : ('pending' as const),
+            reason: params.noCodegen
+              ? 'Auth env push skipped because codegen is disabled by flag.'
+              : 'Push auth env after scaffold changes.',
+            command: params.noCodegen
+              ? undefined
+              : 'better-convex env push --auth',
+          },
+        ]
+      : []),
     ...effectiveConfig.hooks.postAdd.map((script) => ({
       kind: 'post_add_hook' as const,
       status: 'pending' as const,

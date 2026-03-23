@@ -17,7 +17,7 @@ describe('server/env', () => {
         .transform((s) => (s ? s.split(',') : []))
         .pipe(z.array(z.string())),
       BC_TEST_REQUIRED_20260213: z.string(),
-      SITE_URL: z.string().default('http://localhost:3005'),
+      SITE_URL: z.string().default('http://localhost:3000'),
     });
 
     const getEnv = createEnv({
@@ -30,7 +30,7 @@ describe('server/env', () => {
     expect(getEnv()).toEqual({
       ADMIN: [],
       BC_TEST_REQUIRED_20260213: 'secret',
-      SITE_URL: 'http://localhost:3005',
+      SITE_URL: 'http://localhost:3000',
     });
   });
 
@@ -135,7 +135,7 @@ describe('server/env', () => {
         .transform((s) => (s ? s.split(',') : []))
         .pipe(z.array(z.string())),
       BC_REQUIRED_A: z.string(),
-      SITE_URL: z.string().default('http://localhost:3005'),
+      SITE_URL: z.string().default('http://localhost:3000'),
     });
 
     const getEnv = createEnv({
@@ -146,7 +146,7 @@ describe('server/env', () => {
     expect(getEnv()).toEqual({
       ADMIN: [],
       BC_REQUIRED_A: '',
-      SITE_URL: 'http://localhost:3005',
+      SITE_URL: 'http://localhost:3000',
     });
   });
 

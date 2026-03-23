@@ -1,6 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { useAuth, useFetchAccessToken } from '../react/auth-store';
+import {
+  useAuth,
+  useAuthStore,
+  useFetchAccessToken,
+} from '../react/auth-store';
 import { ConvexAuthProvider } from './convex-auth-provider';
 
 const makeJwt = (expSecondsFromNow: number) => {
@@ -276,6 +280,66 @@ describe('ConvexAuthProvider', () => {
     expect(convexToken).toHaveBeenCalledTimes(1);
     expect(convexToken).toHaveBeenCalledWith({
       fetchOptions: { throw: false },
+    });
+  });
+
+  test('passes the cached session token as bearer auth when it is not a JWT', async () => {
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    const convexJwt = makeJwt(7200);
+    const convexToken = mock(async (_opts?: unknown) => ({
+      data: { token: convexJwt },
+    }));
+
+    const authClient = {
+      useSession: () => ({
+        data: { session: { id: 'session-1' } },
+        isPending: false,
+      }),
+      convex: { token: convexToken },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+    };
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ConvexAuthProvider authClient={authClient as any} client={client as any}>
+        {children}
+      </ConvexAuthProvider>
+    );
+
+    const { result } = renderHook(
+      () => ({
+        fetchAccessToken: useFetchAccessToken(),
+        store: useAuthStore(),
+      }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      result.current.store.set('token', 'session-token');
+      result.current.store.set('expiresAt', null);
+    });
+
+    let fetched: string | null = null;
+    await act(async () => {
+      fetched = await result.current.fetchAccessToken!({
+        forceRefreshToken: true,
+      });
+    });
+
+    expect(fetched as string | null).toBe(convexJwt);
+    expect(convexToken).toHaveBeenCalledTimes(1);
+    expect(convexToken).toHaveBeenCalledWith({
+      fetchOptions: {
+        headers: {
+          Authorization: 'Bearer session-token',
+        },
+        throw: false,
+      },
     });
   });
 

@@ -3,6 +3,8 @@ const SUPPORTED_CONVEX_VERSION = '1.33.0';
 const SUPPORTED_BETTER_AUTH_VERSION = '1.5.3';
 
 export const BETTER_CONVEX_INSTALL_SPEC_ENV = 'BETTER_CONVEX_INSTALL_SPEC';
+export const BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV =
+  'BETTER_CONVEX_RESEND_INSTALL_SPEC';
 
 export function getMinimumVersionRange(version: string): string {
   const match = EXACT_VERSION_RE.exec(version);
@@ -39,6 +41,25 @@ export function getPackageNameFromInstallSpec(spec: string): string {
   return versionSeparator >= 0
     ? normalized.slice(0, versionSeparator)
     : normalized;
+}
+
+const LOCAL_INSTALL_SPEC_ENV_BY_PACKAGE_NAME = {
+  'better-convex': BETTER_CONVEX_INSTALL_SPEC_ENV,
+  '@better-convex/resend': BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV,
+} as const;
+
+export function resolveSupportedDependencyInstallSpec(
+  spec: string,
+  env: Record<string, string | undefined> = process.env
+) {
+  const envKey =
+    LOCAL_INSTALL_SPEC_ENV_BY_PACKAGE_NAME[
+      getPackageNameFromInstallSpec(
+        spec
+      ) as keyof typeof LOCAL_INSTALL_SPEC_ENV_BY_PACKAGE_NAME
+    ];
+  const override = envKey ? env[envKey]?.trim() : undefined;
+  return override && override.length > 0 ? override : spec;
 }
 
 export const SUPPORTED_DEPENDENCY_VERSIONS = {

@@ -1,4 +1,5 @@
 **/tsconfig.tsbuildinfo
+.netrc
 
 # dependencies
 src/generated

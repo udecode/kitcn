@@ -7,6 +7,7 @@ links:
 
 import { AlertTriangle, InfoIcon } from "lucide-react"
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion"
+import { Tab, Tabs } from "fumadocs-ui/components/tabs"
 
 In this guide, we'll migrate from `@convex-dev/better-auth` (the component-based auth package) to `better-convex`. You'll remove the component pattern, update imports, and configure the new trigger system.
 
@@ -25,15 +26,7 @@ The main differences between the packages:
 
 Let's migrate step by step.
 
-## Step 1: Update Dependencies
-
-Install `better-convex`.
-
-```bash
-bun add better-convex
-```
-
-## Step 2: Remove Component Pattern
+## Step 1: Remove Component Pattern
 
 Next, we'll remove the Convex component configuration. This is the biggest architectural change.
 
@@ -146,7 +139,50 @@ Next, we'll remove the Convex component configuration. This is the biggest archi
   </Accordion>
 </Accordions>
 
-## Step 3: Update auth.config.ts
+## Step 2: Rebuild Auth
+
+From here, choose the path that matches how you want to migrate the auth files.
+
+<Tabs groupId="auth-migration-path" items={["CLI", "Manual"]} persist>
+  <Tab value="CLI">
+    If you only want auth and you are keeping this as a plain Convex app, use
+    the CLI path.
+
+    ### Run the auth scaffold
+
+    ```bash
+    npx convex init
+    npx better-convex add auth --preset convex --yes
+    ```
+
+    This scaffolds the auth files, runs the auth bootstrap, and keeps the app
+    on the plain Convex path.
+
+    ### Review the generated auth config
+
+    The generated `auth.config.ts` starts with `getAuthConfigProvider()`. That
+    first pass is intentional. It lets the initial bootstrap complete before
+    `JWKS` exists. Once that bootstrap is done, switch to the static `JWKS`
+    version shown in the Manual tab's `auth.config.ts` step.
+
+    ### Done
+
+    That's it. The CLI path already updates the auth contract, HTTP routes,
+    client wiring, provider wiring, and schema integration for you.
+  </Tab>
+  <Tab value="Manual">
+    If you want full control over each file, work through these steps in
+    order.
+
+### Update Dependencies
+
+Install `better-convex`.
+
+```bash
+bun add better-convex
+```
+
+### Update auth.config.ts
 
 The auth config stays similar. We just need to ensure we're passing the static JWKS.
 
@@ -177,7 +213,7 @@ The auth config stays similar. We just need to ensure we're passing the static J
 Passing a static JWKS avoids database queries during token verification.
 </Callout>
 
-## Step 4: Generate Runtime
+### Generate Runtime
 
 If using cRPC, run `better-convex dev` (generates all runtime including cRPC modules):
 
@@ -191,7 +227,7 @@ Otherwise, run a scoped generation pass:
 npx better-convex codegen --scope auth
 ```
 
-## Step 5: Migrate auth.ts
+### Migrate auth.ts
 
 This is the biggest change in the migration. We're replacing the component-based pattern — where you manually created a client, wired up adapters, and exported runtime helpers — with a single `defineAuth` contract. You declare your auth options and triggers in one place, and `better-convex` generates all the runtime for you.
 
@@ -280,7 +316,7 @@ Here's a summary of what changed and why:
 **Context-aware adapter:** The generated `getAuth(ctx)` automatically picks the right adapter. In queries and mutations, it uses direct DB access for performance. In actions and HTTP contexts, it uses the HTTP adapter with `ctx.run*` APIs.
 </Callout>
 
-## Step 6: Update http.ts
+### Update http.ts
 
 If you're not using cRPC, keep Convex's built-in `httpRouter` and use `registerRoutes`.
 Use Hono only when you need cRPC or Hono middleware.
@@ -383,7 +419,7 @@ Use Hono only when you need cRPC or Hono middleware.
   </CompareItem>
 </Compare>
 
-## Step 7: Update auth-client.ts
+### Update auth-client.ts
 
 Now we'll update the client-side auth setup.
 
@@ -430,7 +466,7 @@ Now we'll update the client-side auth setup.
 
 The new `createAuthMutations` helper generates TanStack Query mutation options for common auth operations.
 
-## Step 8: Update Provider
+### Update Provider
 
 Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
 
@@ -496,11 +532,11 @@ Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
 - `onMutationUnauthorized` - Handle auth errors on mutations
 - `onQueryUnauthorized` - Handle auth errors on queries (includes `queryName` for debugging)
 
-## Step 9: Remove AuthBoundary
+### Remove AuthBoundary
 
-Remove `AuthBoundary` and use the provider's `onQueryUnauthorized` and `onMutationUnauthorized` callbacks instead (configured in Step 8).
+Remove `AuthBoundary` and use the provider's `onQueryUnauthorized` and `onMutationUnauthorized` callbacks instead.
 
-## Step 10: Update Schema
+### Update Schema
 
 If you were using the auto-generated component schema, you'll now define auth tables in your main schema.
 
@@ -553,7 +589,10 @@ If you were using the auto-generated component schema, you'll now define auth ta
 
 For fully manual table definitions, see [Auth Server Setup](/docs/auth/server#4-update-schema).
 
-## Step 11: Migrate Helper Methods
+  </Tab>
+</Tabs>
+
+## Step 3: Migrate Helper Methods
 
 The component pattern provided several helper methods on `authComponent`. These now use direct `ctx.db` access.
 

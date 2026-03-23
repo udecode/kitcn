@@ -1,4 +1,5 @@
 import {
+  cpSync,
   existsSync,
   mkdtempSync,
   readdirSync,
@@ -9,7 +10,10 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { BETTER_CONVEX_INSTALL_SPEC_ENV } from '../packages/better-convex/src/cli/supported-dependencies';
+import {
+  BETTER_CONVEX_INSTALL_SPEC_ENV,
+  BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV,
+} from '../packages/better-convex/src/cli/supported-dependencies';
 import type { TemplateBackend } from './template.config';
 
 export const PROJECT_ROOT = process.cwd();
@@ -17,6 +21,11 @@ export const LOCAL_PACKAGE_DIR = path.join(
   PROJECT_ROOT,
   'packages',
   'better-convex'
+);
+export const LOCAL_RESEND_PACKAGE_DIR = path.join(
+  PROJECT_ROOT,
+  'packages',
+  'resend'
 );
 export const LOCAL_CLI_PATH = path.join(
   PROJECT_ROOT,
@@ -44,8 +53,21 @@ export const VOLATILE_ENTRY_NAMES = new Set([
 ]);
 export const VOLATILE_ENTRY_PATTERNS = [/^better-convex-.*\.tgz$/];
 const LINE_SPLIT_RE = /\r?\n/;
+const LOCAL_DEV_PORT = '3005';
+const LOCAL_DEV_SITE_URL = `http://localhost:${LOCAL_DEV_PORT}`;
+const TRAILING_NEWLINES_RE = /\n*$/;
+const SCRIPT_PORT_FLAG_RE = /(?:^|\s)--port(?:=|\s)\d+\b/;
+const NEXT_DEV_SCRIPT_RE = /\bnext\s+dev\b/;
+const VITE_DEV_SCRIPT_RE = /^vite(?:\s|$)/;
+const ENV_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
+const GET_ENV_SITE_URL_DEFAULT_RE =
+  /SITE_URL:\s*z\.string\(\)\.default\((['"])http:\/\/localhost:3000\1\)/;
+const NEXT_PUBLIC_SITE_URL_ENV_RE =
+  /NEXT_PUBLIC_(?:CONVEX_URL|CONVEX_SITE_URL|SITE_URL)=/;
+const VITE_SITE_URL_ENV_RE = /VITE_(?:CONVEX_URL|CONVEX_SITE_URL|SITE_URL)=/;
 const BUILT_LOCAL_PACKAGE_DIRS = new Set<string>();
 let localBetterConvexInstallSpec: string | undefined;
+let localResendInstallSpec: string | undefined;
 
 export type WorkspacePackageJson = {
   dependencies?: Record<string, string>;
@@ -147,6 +169,45 @@ export const getLocalBetterConvexInstallSpec = () => {
   return localBetterConvexInstallSpec;
 };
 
+const createPackableLocalResendPackageDir = () => {
+  const tempRoot = mkdtempSync(
+    path.join(tmpdir(), 'better-convex-resend-pack-')
+  );
+  const packageDir = path.join(tempRoot, 'package');
+  cpSync(
+    path.join(LOCAL_RESEND_PACKAGE_DIR, 'dist'),
+    path.join(packageDir, 'dist'),
+    { recursive: true }
+  );
+
+  const packageJsonPath = path.join(packageDir, 'package.json');
+  const packageJson = readJson<WorkspacePackageJson>(
+    path.join(LOCAL_RESEND_PACKAGE_DIR, 'package.json')
+  );
+  if (packageJson.dependencies?.['better-convex']) {
+    packageJson.dependencies['better-convex'] =
+      getLocalBetterConvexInstallSpec();
+    writeJson(packageJsonPath, packageJson);
+  }
+
+  return packageDir;
+};
+
+export const getLocalResendInstallSpec = () => {
+  if (localResendInstallSpec) {
+    return localResendInstallSpec;
+  }
+
+  const outputDir = mkdtempSync(
+    path.join(tmpdir(), 'better-convex-local-resend-install-spec-')
+  );
+  const packageDir = createPackableLocalResendPackageDir();
+  localResendInstallSpec = packLocalBetterConvexPackage(outputDir, packageDir, {
+    skipBuild: true,
+  });
+  return localResendInstallSpec;
+};
+
 export const runLocalCliSteps = async (
   steps: ReadonlyArray<readonly string[]>,
   cwd: string,
@@ -163,6 +224,7 @@ export const runLocalCliSteps = async (
     await runCommand(buildLocalCliCommand(step, params), cwd, {
       env: {
         [BETTER_CONVEX_INSTALL_SPEC_ENV]: getLocalBetterConvexInstallSpec(),
+        [BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV]: getLocalResendInstallSpec(),
       },
     });
   }
@@ -187,7 +249,7 @@ export const generateFreshApp = async (params: {
   await runCommand(
     buildLocalCliCommand(
       [
-        'create',
+        'init',
         '-t',
         params.initTemplate,
         '--yes',
@@ -205,6 +267,7 @@ export const generateFreshApp = async (params: {
     {
       env: {
         [BETTER_CONVEX_INSTALL_SPEC_ENV]: getLocalBetterConvexInstallSpec(),
+        [BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV]: getLocalResendInstallSpec(),
       },
     }
   );
@@ -217,9 +280,14 @@ export const generateFreshApp = async (params: {
 
 export const packLocalBetterConvexPackage = (
   outputDir: string,
-  packageDir = LOCAL_PACKAGE_DIR
+  packageDir = LOCAL_PACKAGE_DIR,
+  options: {
+    skipBuild?: boolean;
+  } = {}
 ) => {
-  ensureLocalBetterConvexBuild(packageDir);
+  if (!options.skipBuild) {
+    ensureLocalBetterConvexBuild(packageDir);
+  }
 
   const result = Bun.spawnSync({
     cmd: ['npm', 'pack', packageDir, '--pack-destination', outputDir, '--json'],
@@ -332,6 +400,129 @@ export const normalizeEnvLocal = (directory: string) => {
     .trimEnd();
 
   writeFileSync(envLocalPath, `${normalizedEnvLocal}\n`);
+};
+
+const normalizeLocalDevScript = (script: string | undefined) => {
+  if (!script) {
+    return script;
+  }
+
+  if (!NEXT_DEV_SCRIPT_RE.test(script) && !VITE_DEV_SCRIPT_RE.test(script)) {
+    return script;
+  }
+
+  if (SCRIPT_PORT_FLAG_RE.test(script)) {
+    return script.replace(SCRIPT_PORT_FLAG_RE, ` --port ${LOCAL_DEV_PORT}`);
+  }
+
+  return `${script} --port ${LOCAL_DEV_PORT}`;
+};
+
+const upsertEnvEntries = (
+  filePath: string,
+  entries: Record<string, string>,
+  options: {
+    createIfMissing?: boolean;
+  } = {}
+) => {
+  if (!existsSync(filePath) && !options.createIfMissing) {
+    return false;
+  }
+
+  const source = existsSync(filePath) ? readFileSync(filePath, 'utf8') : '';
+  const lines = source.split(LINE_SPLIT_RE);
+  const pending = new Map(Object.entries(entries));
+  const nextLines = lines.map((line) => {
+    const match = line.match(ENV_ASSIGNMENT_RE);
+    if (!match) {
+      return line;
+    }
+
+    const [, key] = match;
+    const nextValue = pending.get(key);
+    if (nextValue === undefined) {
+      return line;
+    }
+
+    pending.delete(key);
+    return `${key}=${nextValue}`;
+  });
+
+  if (pending.size > 0) {
+    const hasContent = nextLines.some((line) => line.trim().length > 0);
+    if (hasContent && nextLines.at(-1)?.trim().length !== 0) {
+      nextLines.push('');
+    }
+    for (const [key, value] of pending) {
+      nextLines.push(`${key}=${value}`);
+    }
+  }
+
+  const nextSource = `${nextLines.join('\n').replace(TRAILING_NEWLINES_RE, '')}\n`;
+  if (nextSource === source) {
+    return false;
+  }
+
+  writeFileSync(filePath, nextSource);
+  return true;
+};
+
+export const patchPreparedLocalDevPort = (directory: string) => {
+  const packageJsonPath = path.join(directory, 'package.json');
+  if (existsSync(packageJsonPath)) {
+    const packageJson = readJson<WorkspacePackageJson>(packageJsonPath);
+    const nextScripts = { ...(packageJson.scripts ?? {}) };
+    let packageJsonChanged = false;
+
+    for (const scriptName of ['dev', 'dev:frontend'] as const) {
+      const normalized = normalizeLocalDevScript(nextScripts[scriptName]);
+      if (normalized && normalized !== nextScripts[scriptName]) {
+        nextScripts[scriptName] = normalized;
+        packageJsonChanged = true;
+      }
+    }
+
+    if (packageJsonChanged) {
+      writeJson(packageJsonPath, {
+        ...packageJson,
+        scripts: nextScripts,
+      });
+    }
+  }
+
+  const envLocalPath = path.join(directory, '.env.local');
+  if (existsSync(envLocalPath)) {
+    const envLocalSource = readFileSync(envLocalPath, 'utf8');
+    const envEntries: Record<string, string> = {};
+
+    if (NEXT_PUBLIC_SITE_URL_ENV_RE.test(envLocalSource)) {
+      envEntries.NEXT_PUBLIC_SITE_URL = LOCAL_DEV_SITE_URL;
+    }
+    if (VITE_SITE_URL_ENV_RE.test(envLocalSource)) {
+      envEntries.VITE_SITE_URL = LOCAL_DEV_SITE_URL;
+    }
+
+    if (Object.keys(envEntries).length > 0) {
+      upsertEnvEntries(envLocalPath, envEntries);
+    }
+  }
+
+  upsertEnvEntries(path.join(directory, 'convex', '.env'), {
+    SITE_URL: LOCAL_DEV_SITE_URL,
+  });
+
+  const getEnvPath = path.join(directory, 'convex', 'lib', 'get-env.ts');
+  if (existsSync(getEnvPath)) {
+    const source = readFileSync(getEnvPath, 'utf8');
+    const nextSource = source.replace(
+      GET_ENV_SITE_URL_DEFAULT_RE,
+      `SITE_URL: z.string().default('${LOCAL_DEV_SITE_URL}')`
+    );
+
+    if (nextSource !== source) {
+      writeFileSync(getEnvPath, nextSource);
+    }
+  }
 };
 
 export const readPackageScripts = (directory: string) =>

@@ -15,7 +15,6 @@ import { ADD_HELP_TEXT, handleAddCommand } from './commands/add.js';
 import { handleAggregateCommand } from './commands/aggregate.js';
 import { handleAnalyzeCommand } from './commands/analyze.js';
 import { CODEGEN_HELP_TEXT, handleCodegenCommand } from './commands/codegen.js';
-import { CREATE_HELP_TEXT, handleCreateCommand } from './commands/create.js';
 import { handleDeployCommand } from './commands/deploy.js';
 import { DEV_HELP_TEXT, handleDevCommand } from './commands/dev.js';
 import { DOCS_HELP_TEXT, handleDocsCommand } from './commands/docs.js';
@@ -33,6 +32,8 @@ const __filename = fileURLToPath(import.meta.url);
 const HELP_FLAGS = new Set(['--help', '-h']);
 const VERSION_FLAGS = new Set(['--version', '-v']);
 const packageJson = readOwnPackageJson(import.meta.url);
+const REMOVED_CREATE_MESSAGE =
+  'Removed `better-convex create`. Use `better-convex init -t <next|vite>` for fresh app scaffolding.';
 
 export {
   ensureConvexGitignoreEntry,
@@ -45,7 +46,6 @@ export { collectPluginScaffoldTemplates } from './registry/selection.js';
 
 const COMMAND_HELP: Record<string, string> = {
   init: INIT_HELP_TEXT,
-  create: CREATE_HELP_TEXT,
   add: ADD_HELP_TEXT,
   view: VIEW_HELP_TEXT,
   info: INFO_HELP_TEXT,
@@ -58,7 +58,6 @@ const COMMAND_HELP: Record<string, string> = {
 
 const COMMAND_HANDLERS = {
   init: handleInitCommand,
-  create: handleCreateCommand,
   add: handleAddCommand,
   view: handleViewCommand,
   info: handleInfoCommand,
@@ -106,8 +105,7 @@ Global options:
   --backend <convex|concave>   Backend CLI to drive
 
 Commands:
-  init                         Bootstrap Better Convex into the current app
-  create                       Create a fresh Better Convex starter app
+  init                         Bootstrap Better Convex into a new or existing supported app
   dev                          Run dev workflow with codegen/watch passthrough
   codegen                      Generate Better Convex outputs
   add [plugin]                 Add a plugin scaffold + schema registration
@@ -236,8 +234,14 @@ export async function run(argv: string[], deps?: Partial<RunDeps>) {
     return 0;
   }
   if (argv[0] === 'help') {
+    if (argv[1] === 'create') {
+      throw new Error(REMOVED_CREATE_MESSAGE);
+    }
     printCommandHelp(argv[1] ?? '', getBackend());
     return 0;
+  }
+  if (parsed.command === 'create') {
+    throw new Error(REMOVED_CREATE_MESSAGE);
   }
   if (
     parsed.command in COMMAND_HELP &&

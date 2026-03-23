@@ -8,57 +8,23 @@ import {
   writeShadcnViteApp,
 } from '../test-utils';
 import {
-  CREATE_HELP_TEXT,
-  handleCreateCommand,
-  INIT_SHADCN_PACKAGE_SPEC,
-  parseCreateCommandArgs,
-  resolveCreateProjectDir,
-  resolveSupportedCreateTemplate,
-} from './create';
-import {
   detectProjectFramework,
   handleInitCommand,
   INIT_HELP_TEXT,
+  INIT_SHADCN_PACKAGE_SPEC,
   mapFrameworkToScaffoldMode,
   parseInitCommandArgs,
-  resolveInitTargetCwd,
+  resolveInitProjectDir,
+  resolveSupportedInitTemplate,
 } from './init';
 
 const SHADCN_LAYOUT_PROVIDERS_RE =
   /ThemeProvider>\s*<Providers>\{children\}<\/Providers>\s*<\/ThemeProvider>/s;
 
 describe('cli/commands/init', () => {
-  test('parseInitCommandArgs supports cwd, yes, json, and Convex target args', () => {
+  test('parseInitCommandArgs supports template, cwd, name, defaults, yes, json, and Convex target args', () => {
     expect(
       parseInitCommandArgs([
-        '--cwd',
-        'apps/web',
-        '--yes',
-        '--json',
-        '--env-file',
-        '.env.agent',
-        '--prod',
-      ])
-    ).toEqual({
-      yes: true,
-      json: true,
-      cwd: 'apps/web',
-      targetArgs: ['--env-file', '.env.agent', '--prod'],
-    });
-  });
-
-  test('parseInitCommandArgs rejects create flags and removed bootstrap flags', () => {
-    expect(() => parseInitCommandArgs(['-t', 'next'])).toThrow(
-      '`better-convex init` adopts the current app. Use `better-convex create -t <next|vite>` for fresh app creation.'
-    );
-    expect(() => parseInitCommandArgs(['--team', 'acme'])).toThrow(
-      'Removed `better-convex init` bootstrap flags. Use `convex init` for deployment setup.'
-    );
-  });
-
-  test('parseCreateCommandArgs supports template, cwd, name, defaults, yes, json, and Convex target args', () => {
-    expect(
-      parseCreateCommandArgs([
         '--template',
         'next',
         '--cwd',
@@ -68,9 +34,9 @@ describe('cli/commands/init', () => {
         '--defaults',
         '--yes',
         '--json',
-        '--env-file=.env.agent',
-        '--deployment-name',
-        'staging',
+        '--env-file',
+        '.env.agent',
+        '--prod',
       ])
     ).toEqual({
       yes: true,
@@ -79,16 +45,22 @@ describe('cli/commands/init', () => {
       template: 'next',
       cwd: 'apps',
       name: 'web',
-      targetArgs: ['--env-file=.env.agent', '--deployment-name', 'staging'],
+      targetArgs: ['--env-file', '.env.agent', '--prod'],
     });
   });
 
-  test('resolveSupportedCreateTemplate allows next and vite', () => {
-    expect(resolveSupportedCreateTemplate('next')).toBe('next');
-    expect(resolveSupportedCreateTemplate('vite')).toBe('vite');
-    expect(resolveSupportedCreateTemplate(undefined)).toBeUndefined();
-    expect(() => resolveSupportedCreateTemplate('nope')).toThrow(
-      'Unsupported create template "nope". Expected one of: next, vite.'
+  test('parseInitCommandArgs rejects removed bootstrap flags', () => {
+    expect(() => parseInitCommandArgs(['--team', 'acme'])).toThrow(
+      'Removed `better-convex init` bootstrap flags. Use `convex init` for deployment setup.'
+    );
+  });
+
+  test('resolveSupportedInitTemplate allows next and vite', () => {
+    expect(resolveSupportedInitTemplate('next')).toBe('next');
+    expect(resolveSupportedInitTemplate('vite')).toBe('vite');
+    expect(resolveSupportedInitTemplate(undefined)).toBeUndefined();
+    expect(() => resolveSupportedInitTemplate('nope')).toThrow(
+      'Unsupported init template "nope". Expected one of: next, vite.'
     );
   });
 
@@ -143,9 +115,9 @@ describe('cli/commands/init', () => {
     expect(mapFrameworkToScaffoldMode('manual')).toBe('react');
   });
 
-  test('resolveInitTargetCwd uses cwd when provided', () => {
+  test('resolveInitProjectDir uses cwd when provided', () => {
     expect(
-      resolveInitTargetCwd({
+      resolveInitProjectDir({
         yes: false,
         json: false,
         cwd: 'apps/web',
@@ -153,9 +125,9 @@ describe('cli/commands/init', () => {
     ).toBe(path.resolve('apps/web'));
   });
 
-  test('resolveCreateProjectDir nests under cwd when name is provided', () => {
+  test('resolveInitProjectDir nests under cwd when name is provided', () => {
     expect(
-      resolveCreateProjectDir({
+      resolveInitProjectDir({
         yes: false,
         json: false,
         defaults: false,
@@ -190,32 +162,7 @@ describe('cli/commands/init', () => {
     }
   });
 
-  test('handleCreateCommand(--help) prints create help', async () => {
-    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
-    const generateMetaStub = mock(async () => {});
-    const syncEnvStub = mock(async () => {});
-    const loadConfigStub = mock(() => createDefaultConfig());
-    const infoLines: string[] = [];
-    const originalInfo = console.info;
-    console.info = (...args: unknown[]) => {
-      infoLines.push(args.map(String).join(' '));
-    };
-    try {
-      const exitCode = await handleCreateCommand(['create', '--help'], {
-        realConvex: '/fake/convex/main.js',
-        execa: execaStub as any,
-        generateMeta: generateMetaStub as any,
-        syncEnv: syncEnvStub as any,
-        loadBetterConvexConfig: loadConfigStub as any,
-      });
-      expect(exitCode).toBe(0);
-      expect(infoLines.join('\n')).toContain(CREATE_HELP_TEXT);
-    } finally {
-      console.info = originalInfo;
-    }
-  });
-
-  test('handleCreateCommand scaffolds the next baseline', async () => {
+  test('handleInitCommand scaffolds the next baseline with -t next', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-create-command-next-')
     );
@@ -244,8 +191,8 @@ describe('cli/commands/init', () => {
     const originalCwd = process.cwd();
     process.chdir(tmpDir);
     try {
-      const exitCode = await handleCreateCommand(
-        ['create', '-t', 'next', '--yes', '--cwd', 'apps', '--name', 'web'],
+      const exitCode = await handleInitCommand(
+        ['init', '-t', 'next', '--yes', '--cwd', 'apps', '--name', 'web'],
         {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
@@ -305,7 +252,7 @@ describe('cli/commands/init', () => {
     }
   });
 
-  test('handleCreateCommand scaffolds the vite baseline', async () => {
+  test('handleInitCommand scaffolds the vite baseline with -t vite', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-create-command-vite-')
     );
@@ -332,8 +279,8 @@ describe('cli/commands/init', () => {
     const originalCwd = process.cwd();
     process.chdir(tmpDir);
     try {
-      const exitCode = await handleCreateCommand(
-        ['create', '-t', 'vite', '--yes'],
+      const exitCode = await handleInitCommand(
+        ['init', '-t', 'vite', '--yes'],
         {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
@@ -471,29 +418,38 @@ describe('cli/commands/init', () => {
     }
   });
 
-  test('handleInitCommand rejects template flags and points to create', async () => {
+  test('handleInitCommand fails in an empty dir without a template', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-init-command-empty-dir-')
+    );
     const execaStub = mock(
       async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
     );
     const generateMetaStub = mock(async () => {});
     const syncEnvStub = mock(async () => {});
     const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
 
-    await expect(
-      handleInitCommand(['init', '-t', 'next', '--yes'], {
-        realConvex: '/fake/convex/main.js',
-        execa: execaStub as any,
-        generateMeta: generateMetaStub as any,
-        syncEnv: syncEnvStub as any,
-        loadBetterConvexConfig: loadConfigStub as any,
-      })
-    ).rejects.toThrow(
-      '`better-convex init` adopts the current app. Use `better-convex create -t <next|vite>` for fresh app creation.'
-    );
-    expect(execaStub).not.toHaveBeenCalled();
+    try {
+      await expect(
+        handleInitCommand(['init', '--yes'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow(
+        'Could not detect a supported app scaffold. Use `better-convex init -t <next|vite>` for a fresh app.'
+      );
+      expect(execaStub).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+    }
   });
 
-  test('handleCreateCommand rejects target dirs that already have a supported scaffold', async () => {
+  test('handleInitCommand rejects template mode when the target already has a supported scaffold', async () => {
     const nextDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-create-command-existing-next-')
     );
@@ -509,7 +465,7 @@ describe('cli/commands/init', () => {
     process.chdir(nextDir);
     try {
       await expect(
-        handleCreateCommand(['create', '-t', 'next', '--yes'], {
+        handleInitCommand(['init', '-t', 'next', '--yes'], {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
           generateMeta: generateMetaStub as any,
@@ -562,6 +518,7 @@ describe('cli/commands/init', () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-init-command-concave-')
     );
+    writeShadcnNextApp(tmpDir);
     const fakeConcaveCliPath = path.join(tmpDir, 'concave-cli.mjs');
     fs.writeFileSync(fakeConcaveCliPath, 'export {};\n');
     const execaStub = mock(async (_cmd: string, args: string[]) => {
@@ -632,7 +589,7 @@ describe('cli/commands/init', () => {
     }
   });
 
-  test('handleCreateCommand uses concave static codegen for fresh template create', async () => {
+  test('handleInitCommand uses concave static codegen for fresh template init', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-create-command-concave-template-')
     );
@@ -674,8 +631,8 @@ describe('cli/commands/init', () => {
     const originalCwd = process.cwd();
     process.chdir(tmpDir);
     try {
-      const exitCode = await handleCreateCommand(
-        ['--backend', 'concave', 'create', '-t', 'next', '--yes'],
+      const exitCode = await handleInitCommand(
+        ['--backend', 'concave', 'init', '-t', 'next', '--yes'],
         {
           realConvex: '/fake/convex/main.js',
           realConcave: fakeConcaveCliPath,
@@ -713,6 +670,7 @@ describe('cli/commands/init', () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-init-command-concave-missing-')
     );
+    writeShadcnNextApp(tmpDir);
     const execaStub = mock(
       async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
     );
@@ -737,7 +695,7 @@ describe('cli/commands/init', () => {
     }
   });
 
-  test('handleCreateCommand fails when template codegen cannot be produced', async () => {
+  test('handleInitCommand fails when template codegen cannot be produced', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-create-command-template-fail-')
     );
@@ -769,7 +727,7 @@ describe('cli/commands/init', () => {
     process.chdir(tmpDir);
     try {
       await expect(
-        handleCreateCommand(['create', '-t', 'next', '--yes'], {
+        handleInitCommand(['init', '-t', 'next', '--yes'], {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
           generateMeta: generateMetaStub as any,

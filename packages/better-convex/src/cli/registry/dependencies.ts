@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { execa } from 'execa';
+import { resolveSupportedDependencyInstallSpec } from '../supported-dependencies.js';
 import type {
   PluginDependencyInstallResult,
   PluginDescriptor,
@@ -41,25 +42,36 @@ const hasDependency = (
   });
 };
 
+const resolvePackageJsonInstallTarget = () => {
+  const packageJsonPath = findNearestPackageJsonPath(process.cwd());
+  return {
+    packageJsonPath: packageJsonPath ?? join(process.cwd(), 'package.json'),
+    packageJson: packageJsonPath
+      ? (JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as Record<
+          string,
+          unknown
+        >)
+      : null,
+  };
+};
+
 export const inspectPluginDependencyInstall = async (params: {
   descriptor: PluginDescriptor;
 }): Promise<PluginDependencyInstallResult> => {
   const packageName = params.descriptor.packageName;
-  const packageSpec =
-    params.descriptor.packageInstallSpec ?? params.descriptor.packageName;
-  const packageJsonPath = findNearestPackageJsonPath(process.cwd());
-  if (!packageJsonPath) {
+  const packageSpec = resolveSupportedDependencyInstallSpec(
+    params.descriptor.packageInstallSpec ?? params.descriptor.packageName
+  );
+  const { packageJsonPath, packageJson } = resolvePackageJsonInstallTarget();
+  if (!packageJson) {
     return {
       packageName,
       packageSpec,
-      packageJsonPath: join(process.cwd(), 'package.json'),
+      packageJsonPath,
       installed: false,
       skipped: false,
     };
   }
-  const packageJson = JSON.parse(
-    fs.readFileSync(packageJsonPath, 'utf8')
-  ) as Record<string, unknown>;
   if (hasDependency(packageJson, packageName)) {
     return {
       packageName,
@@ -78,6 +90,37 @@ export const inspectPluginDependencyInstall = async (params: {
     installed: false,
     skipped: false,
   };
+};
+
+export const resolveMissingDependencyHints = (
+  dependencyHints: readonly string[]
+) => {
+  const { packageJson } = resolvePackageJsonInstallTarget();
+  if (!packageJson) {
+    return [...dependencyHints];
+  }
+
+  return dependencyHints.filter(
+    (dependencyHint) => !hasDependency(packageJson, dependencyHint)
+  );
+};
+
+export const applyDependencyHintsInstall = async (
+  dependencyHints: readonly string[],
+  execaFn: typeof execa
+) => {
+  const missingDependencyHints = resolveMissingDependencyHints(dependencyHints);
+  if (missingDependencyHints.length === 0) {
+    return [];
+  }
+
+  const { packageJsonPath } = resolvePackageJsonInstallTarget();
+  await execaFn('bun', ['add', ...missingDependencyHints], {
+    cwd: dirname(packageJsonPath),
+    stdio: 'inherit',
+  });
+
+  return missingDependencyHints;
 };
 
 export const applyPluginDependencyInstall = async (

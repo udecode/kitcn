@@ -3,6 +3,24 @@
 
 <!-- Source: .claude/AGENTS.md -->
 
+- `.claude/AGENTS.md` and `.claude/skills/*/*.mdc` are source of truth. After editing them, run `bun install` to sync. Never edit `SKILL.md` directly.
+- In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
+
+- If you get `failed to load config from /Users/zbeyens/GitHub/better-convex/vitest.config.mts`, rimraf `**/node_modules` and install again.
+- Run `convex:logs` to watch the Convex logs
+
+## Git
+
+- **Git:** Never git add, commit, push, or create PR unless the user explicitly asks, or the active command/skill explicitly requires it.
+- **Push scope:** When you do commit and push, include unrelated dirty files outside src; those are often manual user changes or synced skill/docs updates, so do not silently leave them behind.
+- **PR:** Before creating or updating a PR, run `check`. If it fails, stop and fix it or report the blocker. Do not open a PR with failing `check` unless the user explicitly says to.
+- **PR branch:** If the user explicitly says to open or create a PR, do not ask for confirmation. If the current branch is `main`, create a new `codex/` branch first, then commit/push/open the PR. If already on a non-`main` branch, proceed directly.
+- Dirty workspace: Never pause to ask about unrelated local changes. Continue work and ignore unrelated diffs.
+- Never browse GitHub files. For library/API questions or unfamiliar deps, inspect the repo at `..`; if missing, clone `https://github.com/{owner}/{repo}.git` to `../{repo-name}`.
+- For repo research, use `spawn_agent(... agent_type="explorer")` and return file-backed findings from docs, structure, exports, examples, and tests only.
+
+- When using git worktree, copy `example/.env.local` and `example/convex/.env` to the worktree directory.
+
 ## Package
 
 - Project is in closed alpha with no external users. Breaking changes are allowed and recommended if they produce better results. No backward compatibility needed. Still confirm with the user before proceeding with a set of breaking changes.
@@ -15,29 +33,25 @@
 - Plugins: ALWAYS read packages/better-convex/skills/convex/references/features/create-plugins.md before creating or modifying plugins. Keep it synced when any plugin API changes in the package.
 - Intent maintainer loop: use `bunx intent scaffold` when you need new skills or a major skill reshuffle; for normal work, update docs and `packages/better-convex/skills/convex/**` in the same diff; run `bunx intent validate skills` and `bunx intent stale`; keep `@tanstack/intent`, `bin/intent.js`, `bin.intent`, and package `files` wired; verify with `npm pack --json --dry-run ./packages/better-convex`; after release, treat `intent feedback` as product input — tighten the skill if wording is wrong, fix the API if the same workaround keeps repeating.
 - Always use @.claude/skills/changeset/changeset.mdc when updating packages to write a changeset before completing
-- After any package modification, run `bun --cwd packages/better-convex build`, then touch `example/convex/functions/schema.ts` to trigger a re-build
+- After any package modification, run `bun --cwd packages/better-convex build`
 - Use tdd skill for package updates that add or change live behavior.
 - Do not write TDD cases for dead code/legacy removal assertions (for example: "should not contain old API X anymore"). Remove the dead path directly and keep tests focused on current behavior.
-- Never edit scaffolded example output first. Change package templates/source, then regenerate scaffold files via CLI.
+- Never edit scaffolded example output first. Change package scaffold source, then regenerate scaffold files via CLI.
 - Never update example plugin files directly. Update the package plugin template first, then regenerate with `better-convex add ... --overwrite`.
-- When changing `better-convex init` scaffold output, treat `templates/**` as generated fixture output from `bun run template:sync` — including committed template `package.json` files. Do not patch fixture files by hand.
-- After any init template or scaffold change, you must rerun `bun run template:sync` and `bun run check:templates`. No exceptions.
-- For manual runtime, never run committed `templates/**` in place. Materialize a tmp app with `bun run scenario:materialize <name>` and run it from `tmp/scenarios/<name>/project`, or use `bun run scenario:dev <name>`.
-- If `bun run template:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers first: `pkill -f 'convex/bin/main.js codegen' || true; pkill -f 'convex/bin/main.js dev' || true; pkill -f '@esbuild/.*/bin/esbuild --service' || true`, then rerun sync once. If `ps` still shows an esbuild worker stuck in `U` state after `kill -9`, stop bullshitting and reboot — that machine state is wedged.
-- After every template/scaffold change, regenerate the affected example with `better-convex add <plugin> --overwrite`, then verify with `better-convex add <plugin> --diff`. If diff still shows drift, the template is wrong: fix the template and regenerate again until diff is clean.
+- When changing `better-convex init -t` scaffold output, treat `fixtures/**` as generated fixture output from `bun run fixtures:sync` — including committed fixture `package.json` files. Do not patch fixture files by hand.
+- After any `init -t` template or scaffold change, you must rerun `bun run fixtures:sync` and `bun run fixtures:check`. No exceptions.
+- For manual runtime, never run committed `fixtures/**` in place. Materialize a tmp app with `bun run scenario:prepare <name>` and run it from `tmp/scenarios/<name>/project`, or use `bun run scenario:dev <name>`.
+- Use @.claude/skills/scenarios/scenarios.mdc for fixture and scenario runtime proof. It owns when to stop at `scenario:dev`, when to add `test:auth` or `test:e2e`, and when `scenario:check` is the only honest lane.
+- If `bun run fixtures:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers first: `pkill -f 'convex/bin/main.js codegen' || true; pkill -f 'convex/bin/main.js dev' || true; pkill -f '@esbuild/.*/bin/esbuild --service' || true`, then rerun sync once. If `ps` still shows an esbuild worker stuck in `U` state after `kill -9`, stop bullshitting and reboot — that machine state is wedged.
+- After every template/scaffold change, verify with `bun run fixtures:sync`, `bun run fixtures:check`, and prepared scenario apps under `tmp/scenarios/**`. Do not touch `example/` unless the user explicitly asks.
 - Prefer inline Zod schemas when used once; extract constants only when reused.
 
-## General
+## Skill
 
-- In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
-- ALWAYS read and understand relevant files before proposing edits. Do not speculate about code you have not inspected.
-- Never browse GitHub, use `gh` instead. Use `dig` skill when the user asks a question about a library, needs to understand a library's API, or when you need information about a library that you don't know about.
-- When using git worktree, copy `example/.env.local` and `example/convex/.env` to the worktree directory.
-- Dirty workspace: Never pause to ask about unrelated local changes. Continue work and ignore unrelated diffs.
-- If you get `failed to load config from /Users/zbeyens/GitHub/better-convex/vitest.config.mts`, rimraf `**/node_modules` and install again.
-- Use `bun convex:logs` to watch the Convex logs
+Use those skills when relevant:
 
-## Skill Overrides
+- `tdd`
+- `ce-review` when doing a code review
 
 When using the following skills, override the default behavior.
 
@@ -56,8 +70,6 @@ When using the following skills, override the default behavior.
 
 `ce-*`:
 
-- **Git:** Never git add, commit, push, or create PR unless the user explicitly asks.
-- **PR:** Before creating or updating a PR, run `bun check`. If it fails, stop and fix it or report the blocker. Do not open a PR with failing `bun check` unless the user explicitly says to.
 - **plan:** Include test-browser in acceptance criteria for browser features
 - **deepen-plan:** Context7 only when not covered by skills
 - **work:** UI tasks require test-browser BEFORE marking complete. Never guess.
@@ -70,33 +82,39 @@ When using the following skills, override the default behavior.
 
 **Instructions:**
 • DO NOT edit until skill analysis is complete.
-• Use `TodoWrite` only if that tool is available in the current runtime.
-• If `TodoWrite` is unavailable, run the same checklist inline.
+• Use `update_plan` only if that tool is available in the current runtime.
+• If `update_plan` is unavailable, run the same checklist inline.
 • Condition NO -> mark completed -> proceed
 • Condition YES -> work through steps -> mark completed -> proceed
 • Skipping skill analysis = FAILED to follow instructions
 
 **Skill Analysis Checklist:**
-☐ Skill analysis (SKIP if 'quick' in message): (1) STOP rationalizing ('simple question', 'overkill', 'might be relevant') (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓. Only ✗ if DEFINITELY not related (4) Skill(...) for ALL ✓ IN ONE PARALLEL CALL - do NOT load one then wait (5) Output '[Skills: X available, Y loaded: name1, name2]' CRITICAL: 'Might be relevant' = MUST load. '1% chance' = MUST load.
+☐ Skill analysis (SKIP if 'quick' in message): (1) STOP rationalizing ('simple question', 'overkill', 'might be relevant') (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓. Only ✗ if DEFINITELY not related (4) Load all ✓ skills in one pass; do NOT load one then wait (5) Output '[Skills: X available, Y loaded: name1, name2]' CRITICAL: 'Might be relevant' = MUST load. '1% chance' = MUST load.
+
+**Default Skill Gates:**
+
+- Before non-trivial bug/feature work on existing code, load `learnings-researcher` and check `docs/solutions` first.
+- For multi-step work, anything likely to be compacted / use a full context window, or any task that starts trivial but grows into that shape, start/update `planning-with-files` immediately. Do not wait for compaction or the next turn.
+- For bug fixes or behavior changes with a sane test seam, use `tdd` before the fix.
 
 ### Verification Checklist
 
 🔒 VERIFICATION REQUIRED - NO COMPLETION WITHOUT FRESH EVIDENCE
 
 **Instructions:**
-• Track ALL verification items below (use `TodoWrite` if available, otherwise inline)
+• Track ALL verification items below (use `update_plan` if available, otherwise inline)
 • Condition NO -> mark completed and skip
 • Condition YES -> in_progress -> verify -> completed
-• NEVER git commit unless explicitly asked
-• Avoid unnecessary `bun dev` or `bun run build`
-• Use Skill(agent-browser) for all browser testing instead of next-devtools browser_eval
+• Avoid unnecessary `build` check
+• No final "done", "fixed", or "works" message without fresh same-turn evidence for every required item below, or an explicit blocker.
 
 **Verification Checklist:**
 
-- [ ] Typecheck (IF updated .ts files): Bash `bun typecheck`
-- [ ] Lint: Bash `bun lint:fix`
-- [ ] PR gate (IF creating/updating a PR): Bash `bun check`
-- [ ] ce-compound (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: Skill(ce-compound) NOW after the fix is verified and follow its workflow to capture the solution in `docs/solutions/` (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
+- [ ] Typecheck (IF updated .ts files): Run `typecheck`
+- [ ] Lint: Run `lint:fix`
+- [ ] PR gate (IF creating/updating a PR): Run `check`
+- [ ] Browser verification (IF a browser surface changed): verify with `agent-browser` before done
+- [ ] ce-compound (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: load `ce-compound` after the fix is verified and follow its workflow to capture the solution in `docs/solutions/` (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
 
 ### Post Compact Recovery
 
@@ -106,10 +124,11 @@ When using the following skills, override the default behavior.
 • STOP. Context compaction DELETED all skills. You FORGOT everything.
 • DO NOT proceed until skill reload complete
 • DO NOT assume you remember skills - they are GONE
+• If `planning-with-files` should already have been active, load it immediately during recovery before continuing.
 • Skipping = GUARANTEED FAILURE
 
 **Skill Reload Checklist:**
-☐ Skill reload (MANDATORY): (1) Check current task tracking (TodoWrite if available, otherwise inline) (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓ (4) Skill(...) for ALL ✓ IN ONE PARALLEL CALL - do NOT load one then wait (5) ONLY after reload, resume task CRITICAL: ALL skills GONE. MUST reload. 'Might apply' = MUST load.
+☐ Skill reload (MANDATORY): (1) Check current task tracking (`update_plan` if available, otherwise inline) (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓ (4) Load all ✓ skills in one pass; do NOT load one then wait (5) If the task is already multi-step, near compaction, or obviously should have had a file plan, load `planning-with-files` now before resuming (6) ONLY after reload, resume task CRITICAL: ALL skills GONE. MUST reload. 'Might apply' = MUST load.
 
 
 

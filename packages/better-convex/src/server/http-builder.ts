@@ -23,13 +23,6 @@ import type {
   UnsetMarker,
 } from './types';
 
-type InferHttpMiddlewareContextOverrides<TMiddleware> =
-  TMiddleware extends MiddlewareFunction<any, any, any, infer TContext, any>
-    ? TContext
-    : TMiddleware extends MiddlewareBuilder<any, any, infer TContext, any>
-      ? TContext
-      : never;
-
 // Extract path parameter names from a path template
 export function extractPathParams(path: string): string[] {
   const matches = path.match(/:([a-zA-Z_][a-zA-Z0-9_]*)/g);
@@ -423,20 +416,24 @@ export interface HttpProcedureBuilder<
   >;
 
   /** Add middleware to the procedure */
-  use<
-    TMiddleware extends
-      | MiddlewareFunction<TCtx, TMeta, UnsetMarker, object, unknown>
+  use<$ContextOverridesOut extends object>(
+    middlewareOrBuilder:
+      | MiddlewareFunction<
+          TCtx,
+          TMeta,
+          UnsetMarker,
+          $ContextOverridesOut,
+          unknown
+        >
       | MiddlewareBuilder<
           any, // Allow reusable middleware with any context
-          any,
-          any,
+          TMeta,
+          $ContextOverridesOut,
           unknown
-        >,
-  >(
-    middlewareOrBuilder: TMiddleware
+        >
   ): HttpProcedureBuilder<
     TInitialCtx,
-    Overwrite<TCtx, InferHttpMiddlewareContextOverrides<TMiddleware>>,
+    Overwrite<TCtx, $ContextOverridesOut>,
     TInput,
     TOutput,
     TParams,

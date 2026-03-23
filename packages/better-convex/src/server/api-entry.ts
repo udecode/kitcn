@@ -9,6 +9,7 @@ import { getFunctionName, makeFunctionReference } from 'convex/server';
 import type { CRPCFunctionTypeHint } from './builder';
 
 type ApiFunctionType = 'query' | 'mutation' | 'action';
+type GeneratedFunctionVisibility = 'public' | 'internal';
 
 type InferArgsFromExport<TExport> =
   TExport extends CRPCFunctionTypeHint<infer TArgs, any>
@@ -50,11 +51,44 @@ type ApiFunctionRefFromExport<
   InferReturnFromExport<TExport>
 >;
 
+type GeneratedFunctionRefFromExport<
+  TType extends ApiFunctionType,
+  TVisibility extends GeneratedFunctionVisibility,
+  TExport,
+> = FunctionReference<
+  TType,
+  TVisibility,
+  CoerceArgs<InferArgsFromExport<TExport>>,
+  InferReturnFromExport<TExport>
+>;
+
 type ApiFunctionLeafMeta = {
   type: ApiFunctionType;
   auth?: 'required' | 'optional';
   [key: string]: unknown;
 };
+
+type CreateApiLeafArgs<TMeta extends ApiFunctionLeafMeta> =
+  | [fn: unknown, meta: TMeta]
+  | [root: unknown, path: readonly string[], meta: TMeta];
+
+export function getGeneratedValue<TValue = unknown>(
+  root: unknown,
+  path: readonly string[]
+): TValue {
+  let current: any = root;
+
+  for (const segment of path) {
+    if (typeof current !== 'object' || current === null) {
+      throw new Error(
+        `[better-convex] Invalid generated path: ${path.join('.')}`
+      );
+    }
+    current = current[segment];
+  }
+
+  return current as TValue;
+}
 
 /**
  * Build a generated API leaf from a Convex FunctionReference name.
@@ -65,12 +99,20 @@ export function createApiLeaf<
   TExport,
   TMeta extends ApiFunctionLeafMeta = ApiFunctionLeafMeta,
 >(
-  fn: unknown,
-  meta: TMeta
+  ...args: CreateApiLeafArgs<TMeta>
 ): ApiFunctionRefFromExport<TType, TExport> &
   TMeta & {
     functionRef: ApiFunctionRefFromExport<TType, TExport>;
   } {
+  const [fnOrRoot, pathOrMeta, maybeMeta] = args as [
+    unknown,
+    readonly string[] | TMeta,
+    TMeta?,
+  ];
+  const meta = (maybeMeta ?? pathOrMeta) as TMeta;
+  const fn = Array.isArray(pathOrMeta)
+    ? getGeneratedValue(fnOrRoot, pathOrMeta)
+    : fnOrRoot;
   const functionRef = makeFunctionReference<
     TType,
     CoerceArgs<InferArgsFromExport<TExport>>,
@@ -84,4 +126,16 @@ export function createApiLeaf<
   return Object.assign(functionRef, meta, {
     functionRef,
   });
+}
+
+export function createGeneratedFunctionReference<
+  TType extends ApiFunctionType,
+  TVisibility extends GeneratedFunctionVisibility,
+  TExport,
+>(name: string): GeneratedFunctionRefFromExport<TType, TVisibility, TExport> {
+  return makeFunctionReference<
+    TType,
+    CoerceArgs<InferArgsFromExport<TExport>>,
+    InferReturnFromExport<TExport>
+  >(name) as GeneratedFunctionRefFromExport<TType, TVisibility, TExport>;
 }

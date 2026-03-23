@@ -27,9 +27,9 @@ type AuthRouteContract = {
   };
 };
 
-export const registerRoutes = (
+export const registerRoutes = <Ctx>(
   http: HttpRouter,
-  getAuth: GetAuth<unknown, AuthRouteContract>,
+  getAuth: GetAuth<Ctx, AuthRouteContract>,
   opts: {
     cors?:
       | {

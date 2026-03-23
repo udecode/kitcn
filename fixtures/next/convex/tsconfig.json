@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "strict": true,
+    "strictFunctionTypes": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": [
+      "esnext",
+      "dom"
+    ],
+    "types": [
+      "bun-types"
+    ],
+    "target": "esnext",
+    "moduleDetection": "force",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "paths": {
+      "better-convex/aggregate": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/aggregate/index.ts"
+      ],
+      "better-convex/auth": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/auth/index.ts"
+      ],
+      "better-convex/auth/client": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/auth-client/index.ts"
+      ],
+      "better-convex/auth/config": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/auth-config/index.ts"
+      ],
+      "better-convex/auth/generated": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/auth/generated.ts"
+      ],
+      "better-convex/auth/http": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/auth-http/index.ts"
+      ],
+      "better-convex/auth/nextjs": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/auth-nextjs/index.ts"
+      ],
+      "better-convex/crpc": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/crpc/index.ts"
+      ],
+      "better-convex/orm": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/orm/index.ts"
+      ],
+      "better-convex/plugins": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/plugins/index.ts"
+      ],
+      "better-convex/ratelimit": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/ratelimit/index.ts"
+      ],
+      "better-convex/ratelimit/react": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/ratelimit/react/index.ts"
+      ],
+      "better-convex/react": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/react/index.ts"
+      ],
+      "better-convex/rsc": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/rsc/index.ts"
+      ],
+      "better-convex/server": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/server/index.ts"
+      ],
+      "better-convex/solid": [
+        "../../../../../../../../Users/zbeyens/git/better-convex/packages/better-convex/src/solid/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
+}

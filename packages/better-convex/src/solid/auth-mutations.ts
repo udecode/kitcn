@@ -7,7 +7,7 @@
 import type { DefaultError, SolidMutationOptions } from '@tanstack/solid-query';
 
 import type { AuthStore } from './auth-store';
-import { useAuthStore } from './auth-store';
+import { decodeJwtExp, useAuthStore } from './auth-store';
 import { useConvexQueryClient } from './context';
 
 export { AuthMutationError, isAuthMutationError } from '../crpc/auth-error';
@@ -20,18 +20,6 @@ type MutationOptionsHook<TData, TVariables = void> = (
     'mutationFn'
   >
 ) => SolidMutationOptions<TData, DefaultError, TVariables>;
-
-/** Poll until token is null (max 5s) */
-const waitForTokenClear = async (
-  store: AuthStore,
-  timeout = 5000
-): Promise<void> => {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    if (!store.get('token')) return;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-};
 
 /** Poll until JWT token exists (auth complete) (max 5s) */
 const waitForAuth = async (
@@ -60,6 +48,34 @@ const ensureAuth = async (store: AuthStore) => {
   }
 
   throw authStateTimeoutError();
+};
+
+const readReturnedToken = (value: unknown): string | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as {
+    data?: unknown;
+    session?: unknown;
+    token?: unknown;
+  };
+
+  if (typeof record.token === 'string' && record.token.length > 0) {
+    return record.token;
+  }
+
+  return readReturnedToken(record.data) ?? readReturnedToken(record.session);
+};
+
+const seedReturnedToken = (store: AuthStore, value: unknown) => {
+  const token = readReturnedToken(value);
+  if (!token) {
+    return;
+  }
+
+  store.set('token', token);
+  store.set('expiresAt', decodeJwtExp(token));
 };
 
 type AnyFn = (...args: any[]) => Promise<any>;
@@ -136,7 +152,8 @@ export function createAuthMutations<T extends AuthClient>(
         if (res?.error) {
           throw new AuthMutationError(res.error);
         }
-        await waitForTokenClear(authStoreApi);
+        authStoreApi.set('token', null);
+        authStoreApi.set('expiresAt', null);
         return res;
       },
     };
@@ -152,6 +169,7 @@ export function createAuthMutations<T extends AuthClient>(
         if (res?.error) {
           throw new AuthMutationError(res.error);
         }
+        seedReturnedToken(authStoreApi, res);
         await ensureAuth(authStoreApi);
         return res;
       },
@@ -168,6 +186,7 @@ export function createAuthMutations<T extends AuthClient>(
         if (res?.error) {
           throw new AuthMutationError(res.error);
         }
+        seedReturnedToken(authStoreApi, res);
         await ensureAuth(authStoreApi);
         return res;
       },
@@ -184,6 +203,7 @@ export function createAuthMutations<T extends AuthClient>(
         if (res?.error) {
           throw new AuthMutationError(res.error);
         }
+        seedReturnedToken(authStoreApi, res);
         await ensureAuth(authStoreApi);
         return res;
       },

@@ -98,23 +98,38 @@ describe('cli/commands/migrate', () => {
     const calls: { cmd: string; args: string[] }[] = [];
     const execaStub = mock(async (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
-      if (args.includes('generated/server:migrationRun')) {
-        return {
-          exitCode: 0,
-          stdout: '{"status":"running","runId":"mr_concave"}\n',
-          stderr: '',
-        } as any;
-      }
-      if (args.includes('generated/server:migrationStatus')) {
-        return {
-          exitCode: 0,
-          stdout:
-            '{"status":"idle","runs":[{"status":"completed","currentIndex":1,"migrationIds":["m1"]}]}\n',
-          stderr: '',
-        } as any;
-      }
       return { exitCode: 0 } as any;
     });
+    const fetchCalls: Array<{ url: string; body: unknown }> = [];
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (
+      input: URL | RequestInfo,
+      init?: RequestInit
+    ) => {
+      fetchCalls.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? '{}')),
+      });
+      if (fetchCalls.length === 1) {
+        return Response.json({
+          result: {
+            status: 'running',
+            runId: 'mr_concave',
+          },
+        });
+      }
+      return Response.json({
+        result: {
+          status: 'idle',
+          runs: [
+            {
+              status: 'completed',
+              currentIndex: 1,
+              migrationIds: ['m1'],
+            },
+          ],
+        },
+      });
+    }) as any);
     const generateMetaStub = mock(async () => {});
     const syncEnvStub = mock(async () => {});
     const loadConfigStub = mock(() => ({
@@ -142,19 +157,47 @@ describe('cli/commands/migrate', () => {
     );
 
     expect(exitCode).toBe(0);
-    expect(calls[0]).toEqual({
-      cmd: 'bun',
-      args: [
-        concaveCliPath,
-        'run',
-        '--url',
-        'http://localhost:3210',
-        'generated/server:migrationRun',
-        '{"direction":"up","batchSize":256,"allowDrift":false}',
-      ],
-    });
-    expect(calls[1]?.cmd).toBe('bun');
-    expect(calls[1]?.args).toContain('generated/server:migrationStatus');
-    expect(calls[1]?.args).toContain('--url');
+    expect(calls).toEqual([]);
+    expect(fetchCalls).toEqual([
+      {
+        url: 'http://localhost:3210/api/execute',
+        body: {
+          path: '_system:systemExecuteFunction',
+          type: 'mutation',
+          format: 'json',
+          args: {
+            functionPath: 'generated/server:migrationRun',
+            args: {
+              direction: 'up',
+              batchSize: 256,
+              allowDrift: false,
+            },
+            functionType: 'mutation',
+          },
+          auth: {
+            tokenType: 'System',
+          },
+        },
+      },
+      {
+        url: 'http://localhost:3210/api/execute',
+        body: {
+          path: '_system:systemExecuteFunction',
+          type: 'mutation',
+          format: 'json',
+          args: {
+            functionPath: 'generated/server:migrationStatus',
+            args: {
+              runId: 'mr_concave',
+            },
+            functionType: 'mutation',
+          },
+          auth: {
+            tokenType: 'System',
+          },
+        },
+      },
+    ]);
+    fetchSpy.mockRestore();
   });
 });

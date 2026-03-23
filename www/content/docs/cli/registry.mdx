@@ -1,259 +1,247 @@
 ---
-title: Registry
-description: Create or adopt a Better Convex app, add optional features, and inspect install plans.
+title: CLI Registry
+description: Bootstrap a new or existing app with `better-convex init`, add features with `add`, and inspect plans with `view`, `info`, and `docs`.
 links:
   doc: https://docs.convex.dev/cli
 ---
 
+Run the CLI first. `better-convex init` is the bootstrap command. It can
+scaffold a fresh app when you pass `-t`, or adopt the current supported app in
+place when you do not.
+
+## Start Here
+
+Use this table when you want the blunt version:
+
+| Goal | Command |
+| ---- | ------- |
+| Start a new Next.js app | `better-convex init -t next --yes` |
+| Start a new Vite app | `better-convex init -t vite --yes` |
+| Adopt the current supported app | `better-convex init --yes` |
+| Add a capability | `better-convex add <plugin>` |
+| Preview a plugin plan | `better-convex view <plugin>` |
+| Inspect installed state | `better-convex info` |
+| Open docs from the CLI | `better-convex docs <topic...>` |
+
 ## init
 
-Adopt the current app in place.
+We'll start with `init`, because it owns bootstrap in both directions.
+
+### Scaffold a fresh app
+
+Pass `-t next` or `-t vite` when you want Better Convex to create the app shell
+and patch its integration layer in one pass.
 
 ```bash showLineNumbers
-npx better-convex init
+npx better-convex init -t next --yes
+npx better-convex init -t vite --yes
+npx better-convex init -t next --yes --cwd apps --name web
+npx better-convex --backend concave init -t next --yes
+```
+
+For a fresh Next.js app, `init -t next` creates the shadcn shell, then layers
+in the Better Convex seam:
+
+- `components/providers.tsx`
+- `lib/convex/*`
+- `.env.local`
+- `convex/functions/schema.ts`
+- `convex/functions/http.ts`
+- `convex/functions/messages.ts`
+- `convex/functions/generated/messages.runtime.ts`
+- `convex/lib/crpc.ts`
+- `convex/lib/get-env.ts`
+- `convex/shared/api.ts`
+- `concave.json`
+
+It also applies a few narrow shell patches where they belong:
+
+- `app/layout.tsx` mounts `Providers`
+- `tsconfig.json` gets the `@convex/*` alias
+- `package.json` gets the Better Convex scripts and baseline dependency patch
+
+For a fresh Vite app, `init -t vite` keeps the flow smaller. It writes the
+React client core, the backend baseline, and the shared env/codegen wiring.
+That means provider and cRPC setup are ready without pretending Vite is a Next
+app.
+
+### Adopt the current app in place
+
+Run `init --yes` inside a supported app when the app shell already exists and
+you only want Better Convex layered in place.
+
+```bash showLineNumbers
 npx better-convex init --yes
 npx better-convex --backend concave init --yes
-npx better-convex init --cwd apps/web
 npx better-convex init --env-file .env.agent --yes
 ```
 
-Behavior:
+This path detects the current app, keeps the existing shell, and patches the
+Better Convex baseline into the right root. If the current directory is not a
+supported app, `init` fails fast instead of guessing.
 
-- `better-convex init` writes the Better Convex baseline only:
-  - `convex/functions/schema.ts`
-  - `convex/functions/http.ts`
-  - `convex/lib/crpc.ts`
-  - `convex/lib/get-env.ts`
-  - `concave.json`
-- On backend `convex`, `better-convex init` runs `convex init` before the first Better Convex codegen pass.
-- Convex deployment-targeting flags such as `--prod`, `--preview-name`, `--deployment-name`, and `--env-file` are forwarded to `convex init`.
-- feature bundles stay out of `init`. Layer them with:
-  - `better-convex add auth`
-  - `better-convex add ratelimit`
-  - `better-convex add resend`
-- `--cwd` picks the target directory for in-place adoption.
-- `--json` includes `codegen` (`generated` or `stubbed`) and `convexBootstrap` (`existing`, `created`, or `missing`) for automation.
-- backend resolves from `--backend`, then `meta["better-convex"].backend`, then `convex`
+### What `init` owns
 
-Options:
+The rule is simple:
+
+- `init` owns the Better Convex integration layer
+- the framework tool owns the framework shell
+- `add` owns optional capabilities
+
+That means `init` owns things like `convex/functions/*`, `convex/lib/*`,
+`convex/shared/api.ts`, env bootstrap, provider wiring, and baseline scripts.
+It does not pretend to own your whole application.
+
+### Backend bootstrap
+
+On backend `convex`, `init` also drives `convex init` before the first Better
+Convex codegen pass. Deployment-targeting flags such as `--prod`,
+`--preview-name`, `--deployment-name`, and `--env-file` are forwarded to
+`convex init`.
+
+Backend resolution order stays:
+
+1. `--backend`
+2. `meta["better-convex"].backend`
+3. `convex`
+
+### Options
 
 | Flag | Description |
-|------|-------------|
+| ---- | ----------- |
+| `-t, --template <next\|vite>` | Fresh app template |
+| `--cwd <cwd>` | Target directory, or parent when used with `--name` |
+| `--name <name>` | New app directory name |
 | `--backend <convex\|concave>` | Backend CLI to drive |
-| `--cwd <cwd>` | Target directory |
 | `--prod` | Forward to `convex init` |
 | `--preview-name <name>` | Forward to `convex init` |
 | `--deployment-name <name>` | Forward to `convex init` |
 | `--env-file <path>` | Forward to `convex init` |
 | `--yes` | Deterministic non-interactive mode |
-| `--json` | Machine-readable command output |
-
-## create
-
-Create a fresh starter app, then layer Better Convex on top.
-
-```bash showLineNumbers
-npx better-convex create -t next --yes
-npx better-convex create -t vite --yes
-npx better-convex create -t next --yes --cwd apps --name web
-npx better-convex create -t next --yes --env-file .env.agent
-```
-
-Behavior:
-
-- `better-convex create -t next` creates a shadcn Next.js app, then patches in:
-  - `app/convex/page.tsx`
-  - `components/providers.tsx`
-  - `lib/convex/*`
-  - `convex/functions/messages.ts`
-  - `convex/functions/generated/messages.runtime.ts`
-  - the Better Convex baseline files
-- `better-convex create -t vite` creates a Vite app, then adds:
-  - `components/providers.tsx`
-  - `lib/convex/query-client.ts`
-  - `lib/convex/crpc.tsx`
-  - `lib/convex/convex-provider.tsx`
-  - `.env.local`
-  - the Better Convex baseline files
-- Template creation preserves shadcn-owned shell files and only patches the Better Convex seams.
-- Template creation detects `src/` vs root app layouts and writes the client scaffold into the matching tree. Mixed `src` + root layouts fail fast instead of guessing.
-- On backend `convex`, `better-convex create` runs `convex init` before the first Better Convex codegen pass.
-- Convex deployment-targeting flags such as `--prod`, `--preview-name`, `--deployment-name`, and `--env-file` are forwarded to `convex init`.
-- After scaffold creation, layer optional bundles with:
-  - `better-convex add auth`
-  - `better-convex add ratelimit`
-  - `better-convex add resend`
-
-Options:
-
-| Flag | Description |
-|------|-------------|
-| `-t, --template <template>` | Project template to create. Supported values: `next`, `vite`. |
-| `--backend <convex\|concave>` | Backend CLI to drive |
-| `--cwd <cwd>` | Parent directory for the new app |
-| `--name <name>` | Name for a new target directory |
-| `--prod` | Forward to `convex init` |
-| `--preview-name <name>` | Forward to `convex init` |
-| `--deployment-name <name>` | Forward to `convex init` |
-| `--env-file <path>` | Forward to `convex init` |
-| `--yes` | Deterministic non-interactive mode |
-| `--defaults` | Use default shadcn answers without enabling the rest of `--yes` |
+| `--defaults` | Use default shadcn answers without widening the rest of `--yes` |
 | `--json` | Machine-readable command output |
 
 ## add
 
-Scaffold plugin files and register the plugin in `schema.ts` idempotently.
+Once the baseline is in place, use `add` for feature layers.
 
 ```bash showLineNumbers
-npx better-convex add <plugin>
+npx better-convex add auth --yes
+npx better-convex add ratelimit --yes
+npx better-convex add resend --yes
 ```
 
-If `<plugin>` is omitted in a TTY, the CLI prompts you to select one interactively.
+`add` is idempotent. It can preview the full repo delta, scaffold missing files,
+patch existing Better Convex seams, install package dependencies, run codegen,
+and keep `plugins.lock.json` in sync.
 
-In interactive TTY mode, `add` also prompts for scaffold files:
-
-- File list = all templates exposed by the plugin manifest.
-- Default selection:
-  - lockfile mappings for that plugin if present
-  - otherwise templates from the resolved preset
-- You can add/remove files before scaffolding.
-- Empty selection is rejected.
-
-In non-interactive mode (`--yes` or no TTY), `add` uses the same resolved default template set directly.
-
-By default, scaffold files are created under:
-
-- `<functionsDir>/plugins/<plugin>.ts` for Convex function exports.
-- `convex/<paths.lib>/plugins/<plugin>/...` for helper modules.
-
-Write behavior for selected files:
-
-- Missing file: created.
-- Existing identical file: skipped.
-- Existing changed file:
-  - `--overwrite`: overwrite directly.
-  - Interactive TTY without `--overwrite`: prompt per file.
-  - Non-interactive without `--overwrite`: skip and report.
-
-Options:
-
-| Flag | Description |
-|------|-------------|
-| `--yes` | Deterministic non-interactive mode |
-| `--json` | Machine-readable command output |
-| `--dry-run` | Show the full install plan without writing files |
-| `--diff [path]` | Show unified diffs for planned file changes (implies `--dry-run`) |
-| `--view [path]` | Show planned file contents (implies `--dry-run`) |
-| `--overwrite` | Overwrite existing changed files without prompt |
-| `--no-codegen` | Skip automatic codegen after add |
-| `--preset <name>` | Plugin preset override (plugin-specific allowed values) |
-
-If the Better Convex baseline is missing, `add` bootstraps it first. The preview surface covers the full repo delta:
-
-- scaffold files
-- env helper bootstrap
-- `concave.json`
-- `convex.json` when `functionsDir` is `convex/functions`
-- `<functionsDir>/schema.ts`
-- `<functionsDir>/http.ts`
-- `<paths.lib>/crpc.ts`
-- `<functionsDir>/plugins.lock.json`
-- dependency install status
-- codegen and `hooks.postAdd`
-- env reminders
-
-Preview output uses semantic comparisons for `.ts`, `.tsx`, `.js`, `.jsx`, and `.json`, so formatter-only changes are treated as unchanged.
-
-`--diff [path]` and `--view [path]` accept workspace-relative output paths. Matching is exact path first, then substring, then suffix.
-
-Examples:
+Preview the plan before writing files:
 
 ```bash showLineNumbers
-npx better-convex add <plugin> --preset <preset>
+npx better-convex add resend --dry-run
 npx better-convex add resend --diff convex/plugins/resend.ts
 npx better-convex add resend --view convex/schema.ts
 ```
 
-Plugin helper scaffold location is configurable via `meta["better-convex"].paths.lib` in `concave.json` (no CLI path flag).  
-Plugin function modules scaffold to `<functionsDir>/plugins/<plugin>.ts`.
+The preview surface covers:
+
+- scaffold files
+- env helper bootstrap
+- `concave.json`
+- `convex.json` when needed
+- `schema.ts`
+- `http.ts`
+- cRPC wiring
+- dependency install status
+- codegen and `hooks.postAdd`
+- env reminders
+
+### Auth presets
+
+`add auth` has two honest modes.
+
+The default path is Better Convex-first:
+
+```bash showLineNumbers
+npx better-convex init -t next --yes
+npx better-convex add auth --yes
+```
+
+This keeps the Better Convex auth stack, including the richer Next.js auth
+surface.
+
+The raw Convex path stays minimal:
+
+```bash showLineNumbers
+npx better-convex init --yes
+npx convex init
+npx better-convex add auth --preset convex --yes
+```
+
+`--preset convex` keeps the app on the plain Convex backend path. It still
+patches the supported frontend shell in place, but it stays conservative:
+
+- Next.js gets provider and auth client wiring, not a larger Better Convex auth
+  stack
+- React/Vite gets provider and auth client wiring, not invented routes
+- no fake page generation outside the supported shell boundary
+
+### Options
+
+| Flag | Description |
+| ---- | ----------- |
+| `--yes` | Deterministic non-interactive mode |
+| `--json` | Machine-readable command output |
+| `--dry-run` | Show the full install plan without writing files |
+| `--diff [path]` | Show unified diffs for planned file changes |
+| `--view [path]` | Show planned file contents |
+| `--overwrite` | Overwrite existing changed files without prompt |
+| `--no-codegen` | Skip automatic codegen after add |
+| `--preset <name>` | Plugin preset override |
 
 ## view
 
-Inspect a plugin install plan without writing files:
+Use `view` when you want the resolved plugin plan without writing files.
 
 ```bash showLineNumbers
-npx better-convex view <plugin>
+npx better-convex view auth
+npx better-convex view resend --json
 ```
 
-If `<plugin>` is omitted in a TTY, the CLI prompts you to choose a plugin.
-
-Template selection is deterministic:
-
-- Default source is `plugins.lock.json` template mappings.
-- If lockfile mappings are missing, fallback is the resolved preset template set.
-- Passing `--preset` forces that preset template set.
-
-`view` prints the resolved preset, selection source, docs link, planned files, and planned operations. `--json` returns the same plan payload shape as `add --dry-run --json`.
-
-Options:
-
-| Flag | Description |
-|------|-------------|
-| `--json` | Machine-readable install plan output |
-| `--preset <name>` | Plugin preset override |
+`view` shows the resolved preset, selection source, docs link, planned files,
+and planned operations. It uses the same install-plan engine as `add`.
 
 ## info
 
-Inspect project and installed plugin state:
+Use `info` when you want to inspect the current project state.
 
 ```bash showLineNumbers
 npx better-convex info
+npx better-convex info --json
 ```
 
-`info` reports:
-
-- resolved backend
-- detected config paths
-- installed `better-convex` and backend package versions
-- schema and lockfile presence
-- installed plugins
-- schema/lockfile mismatches
-- missing package dependencies
-- scaffold drift per plugin
-
-Options:
-
-| Flag | Description |
-|------|-------------|
-| `--json` | Machine-readable inspection output |
+It reports the resolved backend, config paths, installed versions, plugin state,
+schema/lockfile mismatches, missing dependencies, and scaffold drift.
 
 ## docs
 
-Show local and public docs links for CLI topics and plugins:
+Use `docs` when you want local and public doc links from the CLI.
 
 ```bash showLineNumbers
-npx better-convex docs resend cli
+npx better-convex docs cli
+npx better-convex docs auth
+npx better-convex docs resend --json
 ```
 
-Supported topics include:
-
-- `cli`
-- `plugins`
-- `auth`
-- `orm`
-- `migrations`
-- `resend`
-- `ratelimit`
-
-Options:
-
-| Flag | Description |
-|------|-------------|
-| `--json` | Machine-readable docs link output |
+Supported topics include `cli`, `plugins`, `auth`, `orm`, `migrations`,
+`resend`, and `ratelimit`.
 
 ## Next Steps
 
+You now have the command map. From here, pick the next seam you actually need.
+
 <Cards>
   <Card title="CLI Backend" href="/docs/cli/backend" />
-  <Card title="Templates" href="/docs/templates" />
+  <Card title="Auth Server" href="/docs/auth/server" />
+  <Card title="Server Setup" href="/docs/server/setup" />
 </Cards>

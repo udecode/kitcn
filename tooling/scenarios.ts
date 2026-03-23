@@ -8,38 +8,58 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import { parseEnv } from 'node:util';
+import {
+  BETTER_CONVEX_INSTALL_SPEC_ENV,
+  BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV,
+} from '../packages/better-convex/src/cli/supported-dependencies';
+import { runAuthE2E } from './auth-e2e';
+import { runAuthSmoke } from './auth-smoke';
 import {
   buildLocalCliCommand,
   generateFreshApp,
+  getLocalBetterConvexInstallSpec,
+  getLocalResendInstallSpec,
   installLocalBetterConvex,
   LOCAL_CLI_PATH,
   log,
   normalizeEnvLocal,
   PROJECT_ROOT,
   packLocalBetterConvexPackage,
+  patchPreparedLocalDevPort,
   readJson,
+  readPackageScripts,
   run,
   runAppValidation,
-  runLocalCliSteps,
   runPackageScriptIfPresent,
   stripVolatileArtifacts,
-  type WorkspacePackageJson,
 } from './scaffold-utils';
 import {
+  DEFAULT_CHECK_SCENARIO_KEYS,
   SCENARIO_DEFINITIONS,
   SCENARIO_KEYS,
   type ScenarioKey,
 } from './scenario.config';
 import type { TemplateBackend } from './template.config';
 
-export type ScenarioMode =
-  | 'materialize'
-  | 'check'
-  | 'typecheck'
-  | 'codegen'
-  | 'dev';
+export type ScenarioMode = 'prepare' | 'check' | 'codegen' | 'dev' | 'test';
 
 export type ScenarioTarget = 'all' | ScenarioKey;
+export type ScenarioProofPath =
+  | 'runtime'
+  | 'auth-demo'
+  | 'auth-runtime'
+  | 'check';
+
+type ScenarioSpawnedProcess = {
+  exited: Promise<number>;
+  kill: (signal?: string) => void;
+  killed?: boolean;
+};
+
+type RunningScenarioProcess = ScenarioSpawnedProcess & {
+  exitCode?: number;
+};
 
 const DEFAULT_OUTPUT_ROOT = path.join(PROJECT_ROOT, 'tmp', 'scenarios');
 const SCENARIO_FIXTURE_ROOT = path.join(
@@ -55,6 +75,26 @@ const CLEARED_CONVEX_ENV = {
   CONVEX_SELF_HOSTED_URL: undefined,
   CONVEX_SELF_HOSTED_ADMIN_KEY: undefined,
 } as const;
+const DEV_SCRIPT_OWNS_BACKEND_RE =
+  /\bconvex:dev\b|\bdev:backend\b|\bbetter-convex dev\b|\bconvex dev\b/;
+const BETTER_CONVEX_DEV_RE = /\bbetter-convex dev\b/;
+const VITE_DEV_RE = /\bvite(?:\s|$)/;
+const VITE_CONFIG_FILES = [
+  'vite.config.ts',
+  'vite.config.mts',
+  'vite.config.js',
+  'vite.config.mjs',
+] as const;
+const DEFAULT_SCENARIO_READY_URL = 'http://127.0.0.1:3210/_dashboard';
+const READY_POLL_INTERVAL_MS = 250;
+const READY_TIMEOUT_MS = 30_000;
+const TRAILING_SLASH_RE = /\/+$/;
+const BOOTSTRAP_CHECK_SCENARIOS = new Set<ScenarioKey>([
+  'convex-next-auth-bootstrap',
+  'convex-vite-auth-bootstrap',
+  'convex-next-all',
+  'create-convex-nextjs-shadcn-auth',
+]);
 
 const getScenarioDir = (
   scenarioKey: ScenarioKey,
@@ -73,7 +113,28 @@ const getScenarioMetadataDir = (
   path.join(getScenarioDir(scenarioKey, outputRoot), '.better-convex-scenario');
 
 const getTemplateFixtureDir = (templateKey: string) =>
-  path.join(PROJECT_ROOT, 'templates', templateKey);
+  path.join(PROJECT_ROOT, 'fixtures', templateKey);
+
+const getScenarioPluginsLockPath = (projectDir: string) =>
+  path.join(projectDir, 'convex', 'functions', 'plugins.lock.json');
+
+const getScenarioLocalConvexEnvPath = (projectDir: string) =>
+  path.join(projectDir, 'convex', '.env');
+
+const getPreparedScenarioProjectDir = (
+  scenarioKey: ScenarioKey,
+  outputRoot = DEFAULT_OUTPUT_ROOT
+) => {
+  const projectDir = getScenarioProjectDir(scenarioKey, outputRoot);
+  const packageJsonPath = path.join(projectDir, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    throw new Error(
+      `Scenario "${scenarioKey}" is not prepared. Run \`bun run scenario:prepare -- ${scenarioKey}\` or \`bun run scenario:check -- ${scenarioKey}\` first.`
+    );
+  }
+
+  return projectDir;
+};
 
 const extractLocalConvexPort = (projectDir: string) => {
   const envLocalPath = path.join(projectDir, '.env.local');
@@ -131,6 +192,54 @@ const stopScenarioBackends = (outputRoot = DEFAULT_OUTPUT_ROOT) => {
 const resolveScenarioKeys = (target: ScenarioTarget = 'all') =>
   target === 'all' ? [...SCENARIO_KEYS] : [target];
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const trimTrailingSlash = (value: string) =>
+  value.replace(TRAILING_SLASH_RE, '');
+
+const readScenarioSiteUrl = (projectDir: string) => {
+  const envLocalPath = path.join(projectDir, '.env.local');
+  if (!existsSync(envLocalPath)) {
+    return undefined;
+  }
+
+  const parsed = parseEnv(readFileSync(envLocalPath, 'utf8'));
+  return parsed.NEXT_PUBLIC_SITE_URL ?? parsed.VITE_SITE_URL;
+};
+
+const resolveScenarioReadyUrl = (projectDir: string) =>
+  trimTrailingSlash(
+    readScenarioSiteUrl(projectDir) ?? DEFAULT_SCENARIO_READY_URL
+  );
+
+export const resolvePrepareBootstrapSteps = (
+  scenarioKey: ScenarioKey,
+  projectDir: string
+) => {
+  const scenario = SCENARIO_DEFINITIONS[scenarioKey];
+  if (scenario.source.kind !== 'template') {
+    return [] as Array<readonly string[]>;
+  }
+
+  const pluginsLockPath = getScenarioPluginsLockPath(projectDir);
+  if (!existsSync(pluginsLockPath)) {
+    return [] as Array<readonly string[]>;
+  }
+
+  const pluginsLock = readJson<{
+    plugins?: Record<string, unknown>;
+  }>(pluginsLockPath);
+  if (!pluginsLock.plugins?.auth) {
+    return [] as Array<readonly string[]>;
+  }
+
+  if (existsSync(getScenarioLocalConvexEnvPath(projectDir))) {
+    return [] as Array<readonly string[]>;
+  }
+
+  return [['add', 'auth', '--overwrite', '--yes', '--no-codegen']] as const;
+};
+
 const getScenarioBackend = (
   scenarioKey: ScenarioKey,
   backend?: TemplateBackend
@@ -169,6 +278,322 @@ const createScenarioRunCommand = (
     });
 };
 
+const resolveScenarioProcessEnv = (scenarioKey: ScenarioKey) => {
+  const scenarioEnv = SCENARIO_DEFINITIONS[scenarioKey].env;
+  if (!scenarioEnv) {
+    return {
+      ...process.env,
+      ...CLEARED_CONVEX_ENV,
+    };
+  }
+
+  const scenarioHome =
+    scenarioEnv.CONVEX_AGENT_MODE === 'anonymous'
+      ? path.join(PROJECT_ROOT, 'tmp', 'scenario-homes', scenarioKey)
+      : undefined;
+
+  return {
+    ...process.env,
+    ...CLEARED_CONVEX_ENV,
+    ...(scenarioHome
+      ? {
+          HOME: scenarioHome,
+        }
+      : {}),
+    ...scenarioEnv,
+  };
+};
+
+const spawnScenarioCommand = (
+  scenarioKey: ScenarioKey,
+  cmd: string[],
+  cwd: string
+): ScenarioSpawnedProcess =>
+  Bun.spawn({
+    cmd,
+    cwd,
+    env: resolveScenarioProcessEnv(scenarioKey),
+    stdio: ['ignore', 'inherit', 'inherit'],
+  });
+
+const devScriptOwnsBackend = (scripts: Record<string, string>) =>
+  DEV_SCRIPT_OWNS_BACKEND_RE.test(scripts.dev ?? '');
+
+const isCreateConvexFixtureScenario = (scenarioKey: ScenarioKey) => {
+  const source = SCENARIO_DEFINITIONS[scenarioKey].source;
+  return (
+    source.kind === 'fixture' && source.fixture.startsWith('create-convex')
+  );
+};
+
+const convexDevOwnsFrontend = (
+  backend: TemplateBackend,
+  scripts: Record<string, string>
+) =>
+  backend === 'concave' &&
+  BETTER_CONVEX_DEV_RE.test(scripts['convex:dev'] ?? '') &&
+  VITE_DEV_RE.test(scripts.dev ?? '');
+
+const isViteScenarioProject = (projectDir: string) =>
+  VITE_CONFIG_FILES.some((fileName) =>
+    existsSync(path.join(projectDir, fileName))
+  );
+
+const buildBackendOnlyDevCommand = (
+  backend: TemplateBackend,
+  scripts: Record<string, string>
+) => {
+  if (scripts['convex:dev']) {
+    return ['bun', 'run', 'convex:dev', '--', '--frontend', 'no'];
+  }
+
+  return buildLocalCliCommand(['dev', '--frontend', 'no'], {
+    backend,
+    localCliPath: LOCAL_CLI_PATH,
+  });
+};
+
+const resolveScenarioDevCommands = (
+  scenarioKey: ScenarioKey,
+  params: {
+    backend?: TemplateBackend;
+    outputRoot?: string;
+  } = {}
+) => {
+  const backend = getScenarioBackend(scenarioKey, params.backend);
+  const projectDir = getPreparedScenarioProjectDir(
+    scenarioKey,
+    params.outputRoot
+  );
+  const scripts = readPackageScripts(projectDir);
+  const isViteProject = isViteScenarioProject(projectDir);
+
+  if (isCreateConvexFixtureScenario(scenarioKey)) {
+    if (scripts['convex:dev'] && scripts['dev:frontend']) {
+      if (backend === 'concave' && isViteProject) {
+        return {
+          commands: [
+            buildBackendOnlyDevCommand(backend, scripts),
+            ['bun', 'run', 'dev:frontend'],
+          ],
+          projectDir,
+        };
+      }
+
+      if (
+        convexDevOwnsFrontend(backend, {
+          ...scripts,
+          dev: scripts['dev:frontend'],
+        })
+      ) {
+        return {
+          commands: [['bun', 'run', 'convex:dev']],
+          projectDir,
+        };
+      }
+
+      return {
+        commands: [
+          ['bun', 'run', 'convex:dev'],
+          ['bun', 'run', 'dev:frontend'],
+        ],
+        projectDir,
+      };
+    }
+
+    if (scripts['convex:dev']) {
+      return {
+        commands: [['bun', 'run', 'convex:dev']],
+        projectDir,
+      };
+    }
+
+    return {
+      commands: [
+        buildLocalCliCommand(['dev'], {
+          backend,
+          localCliPath: LOCAL_CLI_PATH,
+        }),
+      ],
+      projectDir,
+    };
+  }
+
+  if (
+    backend === 'concave' &&
+    isViteProject &&
+    scripts.dev &&
+    VITE_DEV_RE.test(scripts.dev ?? '')
+  ) {
+    return {
+      commands: [
+        buildBackendOnlyDevCommand(backend, scripts),
+        ['bun', 'run', 'dev'],
+      ],
+      projectDir,
+    };
+  }
+
+  if (convexDevOwnsFrontend(backend, scripts) && scripts['convex:dev']) {
+    return {
+      commands: [['bun', 'run', 'convex:dev']],
+      projectDir,
+    };
+  }
+
+  if (scripts.dev && scripts['convex:dev'] && !devScriptOwnsBackend(scripts)) {
+    return {
+      commands: [
+        ['bun', 'run', 'convex:dev'],
+        ['bun', 'run', 'dev'],
+      ],
+      projectDir,
+    };
+  }
+
+  if (scripts.dev) {
+    return {
+      commands: [['bun', 'run', 'dev']],
+      projectDir,
+    };
+  }
+
+  if (scripts['convex:dev']) {
+    return {
+      commands: [['bun', 'run', 'convex:dev']],
+      projectDir,
+    };
+  }
+
+  throw new Error(
+    `Scenario "${scenarioKey}" has no runnable dev script. Expected \`dev\` or \`convex:dev\`, found: ${Object.keys(scripts).join(', ') || 'none'}.`
+  );
+};
+
+const startScenarioProcesses = (
+  scenarioKey: ScenarioKey,
+  projectDir: string,
+  commands: string[][],
+  spawnCommand: (
+    scenarioKey: ScenarioKey,
+    cmd: string[],
+    cwd: string
+  ) => ScenarioSpawnedProcess
+) =>
+  commands.map((cmd) => {
+    const process = spawnCommand(scenarioKey, cmd, projectDir);
+    const runningProcess: RunningScenarioProcess = {
+      exited: process.exited,
+      kill: (signal?: string) => {
+        process.kill(signal);
+      },
+      killed: process.killed,
+      exitCode: undefined,
+    };
+    process.exited.then((exitCode) => {
+      runningProcess.exitCode = exitCode;
+    });
+    return runningProcess;
+  });
+
+const stopRunningScenarioProcesses = async (
+  processes: readonly RunningScenarioProcess[]
+) => {
+  for (const process of processes) {
+    if (!process.killed && process.exitCode === undefined) {
+      process.kill('SIGTERM');
+    }
+  }
+
+  await Promise.allSettled(processes.map((process) => process.exited));
+};
+
+const waitForScenarioReady = async (
+  scenarioKey: ScenarioKey,
+  projectDir: string,
+  processes: readonly RunningScenarioProcess[],
+  fetchFn: typeof fetch = fetch,
+  timeoutMs = READY_TIMEOUT_MS
+) => {
+  const readyUrl = resolveScenarioReadyUrl(projectDir);
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    for (const process of processes) {
+      if (process.exitCode !== undefined) {
+        throw new Error(
+          `Scenario "${scenarioKey}" dev exited with code ${process.exitCode}.`
+        );
+      }
+    }
+
+    try {
+      const response = await fetchFn(readyUrl, {
+        method: 'GET',
+        redirect: 'manual',
+      });
+      if (response.ok) {
+        return;
+      }
+    } catch {}
+
+    await sleep(READY_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    `Scenario "${scenarioKey}" did not become ready at ${readyUrl} within ${timeoutMs}ms.`
+  );
+};
+
+export const resolveScenarioProofPath = (
+  scenarioKey: ScenarioKey
+): ScenarioProofPath => {
+  if (BOOTSTRAP_CHECK_SCENARIOS.has(scenarioKey)) {
+    return 'check';
+  }
+  if (scenarioKey === 'next-auth') {
+    return 'auth-demo';
+  }
+  if (scenarioKey === 'vite-auth') {
+    return 'auth-runtime';
+  }
+  return 'runtime';
+};
+
+const runSpawnedScenarioProcesses = async (
+  scenarioKey: ScenarioKey,
+  projectDir: string,
+  commands: string[][],
+  spawnCommand: (
+    scenarioKey: ScenarioKey,
+    cmd: string[],
+    cwd: string
+  ) => ScenarioSpawnedProcess
+) => {
+  const processes = commands.map((cmd) =>
+    spawnCommand(scenarioKey, cmd, projectDir)
+  );
+  const firstExit = await Promise.race(
+    processes.map((process, index) =>
+      process.exited.then((exitCode) => ({ exitCode, index }))
+    )
+  );
+
+  for (const [index, process] of processes.entries()) {
+    if (index !== firstExit.index && !process.killed) {
+      process.kill('SIGTERM');
+    }
+  }
+
+  await Promise.allSettled(processes.map((process) => process.exited));
+
+  if (firstExit.exitCode !== 0 && firstExit.exitCode !== 130) {
+    throw new Error(
+      `Scenario "${scenarioKey}" dev exited with code ${firstExit.exitCode}.`
+    );
+  }
+};
+
 const resolveScenarioCommand = (
   step: readonly string[],
   params: {
@@ -203,7 +628,28 @@ const resolveScenarioCommand = (
     return [convexBin, ...rest];
   }
 
-  return [...step];
+  return buildLocalCliCommand(step, {
+    backend: params.backend,
+    localCliPath: LOCAL_CLI_PATH,
+  });
+};
+
+export const resolveScenarioStepEnv = (
+  step: readonly string[],
+  params: {
+    betterConvexInstallSpec: string;
+    resendInstallSpec: string;
+  }
+) => {
+  const [command] = step;
+  if (command === 'convex') {
+    return undefined;
+  }
+
+  return {
+    [BETTER_CONVEX_INSTALL_SPEC_ENV]: params.betterConvexInstallSpec,
+    [BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV]: params.resendInstallSpec,
+  };
 };
 
 const runScenarioCommands = async (
@@ -214,21 +660,27 @@ const runScenarioCommands = async (
     runCommand: typeof run;
   }
 ) => {
+  const localCliEnv = {
+    betterConvexInstallSpec: getLocalBetterConvexInstallSpec(),
+    resendInstallSpec: getLocalResendInstallSpec(),
+  };
+
   for (const step of steps) {
+    const env = resolveScenarioStepEnv(step, localCliEnv);
     await params.runCommand(
       resolveScenarioCommand(step, {
         backend: params.backend,
         projectDir: params.projectDir,
       }),
-      params.projectDir
+      params.projectDir,
+      env ? { env } : undefined
     );
   }
 };
 
-export const resolveScenarioKeysForCheck = () =>
-  SCENARIO_KEYS.filter(
-    (scenarioKey) => SCENARIO_DEFINITIONS[scenarioKey].check
-  );
+export const resolveScenarioKeysForCheck = () => [
+  ...DEFAULT_CHECK_SCENARIO_KEYS,
+];
 
 export const parseScenarioArgs = (
   argv: string[]
@@ -238,14 +690,14 @@ export const parseScenarioArgs = (
 } => {
   const [mode, targetArg] = argv;
   if (
-    mode !== 'materialize' &&
+    mode !== 'prepare' &&
     mode !== 'check' &&
-    mode !== 'typecheck' &&
+    mode !== 'test' &&
     mode !== 'codegen' &&
     mode !== 'dev'
   ) {
     throw new Error(
-      `Usage: bun tooling/scenarios.ts <materialize|check|typecheck|codegen|dev> [all|${SCENARIO_KEYS.join('|')}]`
+      `Usage: bun tooling/scenarios.ts <prepare|check|test|codegen|dev> [all|${SCENARIO_KEYS.join('|')}]`
     );
   }
 
@@ -289,7 +741,7 @@ const writeScenarioMetadata = (
   );
 };
 
-const materializeScenarioSource = async (
+const prepareScenarioSource = async (
   scenarioKey: ScenarioKey,
   params: {
     backend?: TemplateBackend;
@@ -339,11 +791,22 @@ const materializeScenarioSource = async (
   stripVolatileArtifacts(projectDir);
   normalizeEnvLocal(projectDir);
 
-  await runLocalCliSteps(scenario.setup, projectDir, {
+  await runScenarioCommands(
+    resolvePrepareBootstrapSteps(scenarioKey, projectDir),
+    {
+      backend,
+      projectDir,
+      runCommand,
+    }
+  );
+
+  await runScenarioCommands(scenario.setup, {
     backend,
-    localCliPath: LOCAL_CLI_PATH,
+    projectDir,
     runCommand,
   });
+
+  patchPreparedLocalDevPort(projectDir);
 
   const betterConvexPackageSpec = packLocalBetterConvexPackage(metadataDir);
   await installLocalBetterConvex(projectDir, {
@@ -360,7 +823,7 @@ const materializeScenarioSource = async (
   return { metadataDir, projectDir, scenarioDir };
 };
 
-export const materializeScenario = async (
+export const prepareScenario = async (
   scenarioKey: ScenarioKey,
   params: {
     backend?: TemplateBackend;
@@ -373,29 +836,28 @@ export const materializeScenario = async (
     scenarioKey,
     params.runCommand ?? run
   );
-  const { projectDir } = await materializeScenarioSource(scenarioKey, {
+  const { projectDir } = await prepareScenarioSource(scenarioKey, {
     ...params,
     runCommand,
   });
   (params.logFn ?? log)(
-    `Materialized ${scenarioKey} -> ${path.relative(PROJECT_ROOT, projectDir)}`
+    `Prepared ${scenarioKey} -> ${path.relative(PROJECT_ROOT, projectDir)}`
   );
   return projectDir;
 };
 
-export const materializeScenarios = async (
+export const prepareScenarios = async (
   params: {
     backend?: TemplateBackend;
-    materializeScenarioFn?: typeof materializeScenario;
+    prepareScenarioFn?: typeof prepareScenario;
     outputRoot?: string;
     target?: ScenarioTarget;
   } = {}
 ) => {
-  const materializeScenarioFn =
-    params.materializeScenarioFn ?? materializeScenario;
+  const prepareScenarioFn = params.prepareScenarioFn ?? prepareScenario;
 
   for (const scenarioKey of resolveScenarioKeys(params.target)) {
-    await materializeScenarioFn(scenarioKey, {
+    await prepareScenarioFn(scenarioKey, {
       backend: params.backend,
       outputRoot: params.outputRoot,
     });
@@ -418,7 +880,7 @@ export const checkScenario = async (
   );
   const backend = getScenarioBackend(scenarioKey, params.backend);
   stopScenarioBackends(params.outputRoot);
-  const { projectDir } = await materializeScenarioSource(scenarioKey, {
+  const { projectDir } = await prepareScenarioSource(scenarioKey, {
     ...params,
     backend,
     runCommand,
@@ -470,38 +932,6 @@ export const checkScenarios = async (
   }
 };
 
-export const typecheckScenarios = async (
-  params: {
-    backend?: TemplateBackend;
-    outputRoot?: string;
-    runCommand?: typeof run;
-    target?: ScenarioTarget;
-  } = {}
-) => {
-  const baseRunCommand = params.runCommand ?? run;
-
-  for (const scenarioKey of resolveScenarioKeys(params.target)) {
-    const runCommand = createScenarioRunCommand(scenarioKey, baseRunCommand);
-    const { projectDir } = await materializeScenarioSource(scenarioKey, {
-      ...params,
-      backend: getScenarioBackend(scenarioKey, params.backend),
-      runCommand,
-    });
-    await runPackageScriptIfPresent(projectDir, 'codegen', runCommand);
-    await runPackageScriptIfPresent(projectDir, 'typecheck', runCommand);
-
-    const packageJson = readJson<WorkspacePackageJson>(
-      path.join(projectDir, 'package.json')
-    );
-    if (
-      packageJson.scripts?.['typecheck:convex'] &&
-      !packageJson.scripts.typecheck?.includes('typecheck:convex')
-    ) {
-      await runCommand(['bun', 'run', 'typecheck:convex'], projectDir);
-    }
-  }
-};
-
 export const codegenScenarios = async (
   params: {
     backend?: TemplateBackend;
@@ -514,7 +944,7 @@ export const codegenScenarios = async (
 
   for (const scenarioKey of resolveScenarioKeys(params.target)) {
     const runCommand = createScenarioRunCommand(scenarioKey, baseRunCommand);
-    const { projectDir } = await materializeScenarioSource(scenarioKey, {
+    const { projectDir } = await prepareScenarioSource(scenarioKey, {
       ...params,
       backend: getScenarioBackend(scenarioKey, params.backend),
       runCommand,
@@ -529,37 +959,140 @@ export const runScenarioDev = async (
     backend?: TemplateBackend;
     outputRoot?: string;
     runCommand?: typeof run;
+    spawnCommand?: (
+      scenarioKey: ScenarioKey,
+      cmd: string[],
+      cwd: string
+    ) => ScenarioSpawnedProcess;
   } = {}
 ) => {
   const runCommand = createScenarioRunCommand(
     scenarioKey,
     params.runCommand ?? run
   );
-  const backend = getScenarioBackend(scenarioKey, params.backend);
-  const { projectDir } = await materializeScenarioSource(scenarioKey, {
-    ...params,
-    backend,
-    runCommand,
+  const spawnCommand = params.spawnCommand ?? spawnScenarioCommand;
+  const { commands, projectDir } = resolveScenarioDevCommands(scenarioKey, {
+    backend: params.backend,
+    outputRoot: params.outputRoot,
   });
-  const localBin = path.join(
-    projectDir,
-    'node_modules',
-    '.bin',
-    'better-convex'
-  );
 
-  if (!existsSync(localBin)) {
-    throw new Error(`Missing better-convex binary for ${scenarioKey}.`);
+  if (commands.length === 1) {
+    await runCommand(commands[0]!, projectDir);
+    return;
   }
 
-  await runCommand([localBin, 'dev'], projectDir);
+  await runSpawnedScenarioProcesses(
+    scenarioKey,
+    projectDir,
+    commands,
+    spawnCommand
+  );
+};
+
+export const runScenarioRuntimeProof = async (
+  scenarioKey: ScenarioKey,
+  params: {
+    backend?: TemplateBackend;
+    outputRoot?: string;
+    spawnCommand?: (
+      scenarioKey: ScenarioKey,
+      cmd: string[],
+      cwd: string
+    ) => ScenarioSpawnedProcess;
+    waitForReadyFn?: (
+      scenarioKey: ScenarioKey,
+      projectDir: string,
+      processes: readonly RunningScenarioProcess[]
+    ) => Promise<void>;
+    afterReadyFn?: (scenarioKey: ScenarioKey) => Promise<void>;
+  } = {}
+) => {
+  const spawnCommand = params.spawnCommand ?? spawnScenarioCommand;
+  const waitForReadyFn = params.waitForReadyFn ?? waitForScenarioReady;
+  const { commands, projectDir } = resolveScenarioDevCommands(scenarioKey, {
+    backend: params.backend,
+    outputRoot: params.outputRoot,
+  });
+  const processes = startScenarioProcesses(
+    scenarioKey,
+    projectDir,
+    commands,
+    spawnCommand
+  );
+
+  try {
+    await waitForReadyFn(scenarioKey, projectDir, processes);
+    await params.afterReadyFn?.(scenarioKey);
+  } finally {
+    await stopRunningScenarioProcesses(processes);
+  }
+};
+
+export const runScenarioTest = async (
+  scenarioKey: ScenarioKey,
+  params: {
+    backend?: TemplateBackend;
+    outputRoot?: string;
+    prepareScenarioFn?: typeof prepareScenario;
+    checkScenarioFn?: typeof checkScenario;
+    runScenarioRuntimeProofFn?: typeof runScenarioRuntimeProof;
+    runAuthSmokeFn?: typeof runAuthSmoke;
+    runAuthE2EFn?: typeof runAuthE2E;
+  } = {}
+) => {
+  const proofPath = resolveScenarioProofPath(scenarioKey);
+
+  if (proofPath === 'check') {
+    await (params.checkScenarioFn ?? checkScenario)(scenarioKey, {
+      backend: params.backend,
+      outputRoot: params.outputRoot,
+    });
+    return;
+  }
+
+  await (params.prepareScenarioFn ?? prepareScenario)(scenarioKey, {
+    backend: params.backend,
+    outputRoot: params.outputRoot,
+  });
+  await (params.runScenarioRuntimeProofFn ?? runScenarioRuntimeProof)(
+    scenarioKey,
+    {
+      backend: params.backend,
+      outputRoot: params.outputRoot,
+      afterReadyFn:
+        proofPath === 'auth-demo'
+          ? async (readyScenarioKey) => {
+              await (params.runAuthSmokeFn ?? runAuthSmoke)([readyScenarioKey]);
+              await (params.runAuthE2EFn ?? runAuthE2E)([readyScenarioKey]);
+            }
+          : undefined,
+    }
+  );
+};
+
+export const testScenarios = async (
+  params: {
+    backend?: TemplateBackend;
+    outputRoot?: string;
+    target?: ScenarioTarget;
+    runScenarioTestFn?: typeof runScenarioTest;
+  } = {}
+) => {
+  const runScenarioTestFn = params.runScenarioTestFn ?? runScenarioTest;
+
+  for (const scenarioKey of resolveScenarioKeys(params.target)) {
+    await runScenarioTestFn(scenarioKey, {
+      backend: params.backend,
+      outputRoot: params.outputRoot,
+    });
+  }
 };
 
 const main = async () => {
   const { mode, target } = parseScenarioArgs(process.argv.slice(2));
 
-  if (mode === 'materialize') {
-    await materializeScenarios({ target });
+  if (mode === 'prepare') {
+    await prepareScenarios({ target });
     return;
   }
 
@@ -568,13 +1101,13 @@ const main = async () => {
     return;
   }
 
-  if (mode === 'typecheck') {
-    await typecheckScenarios({ target });
+  if (mode === 'codegen') {
+    await codegenScenarios({ target });
     return;
   }
 
-  if (mode === 'codegen') {
-    await codegenScenarios({ target });
+  if (mode === 'test') {
+    await testScenarios({ target });
     return;
   }
 

@@ -52,17 +52,17 @@ Source of truth: `git status --short --untracked-files=all`
       — reviewed; covered by messages scaffold changes
 - [x] `packages/better-convex/src/cli/plugins/init/init-next-schema.template.ts`
       — reviewed; covered by messages scaffold changes
-- [x] `templates/next/app/convex/page.tsx` — reviewed; documented as scaffolded
+- [x] `fixtures/next/app/convex/page.tsx` — reviewed; documented as scaffolded
       demo route
-- [x] `templates/next/convex/functions/_generated/api.d.ts` — reviewed;
+- [x] `fixtures/next/convex/functions/_generated/api.d.ts` — reviewed;
       documented via generated messages API note
-- [x] `templates/next/convex/functions/generated/messages.runtime.ts` —
+- [x] `fixtures/next/convex/functions/generated/messages.runtime.ts` —
       reviewed; documented via generated messages runtime note
-- [x] `templates/next/convex/functions/messages.ts` — reviewed; documented as
+- [x] `fixtures/next/convex/functions/messages.ts` — reviewed; documented as
       scaffolded procedure module
-- [x] `templates/next/convex/functions/schema.ts` — reviewed; documented as
+- [x] `fixtures/next/convex/functions/schema.ts` — reviewed; documented as
       messages starter schema
-- [x] `templates/next/convex/shared/api.ts` — reviewed; documented via
+- [x] `fixtures/next/convex/shared/api.ts` — reviewed; documented via
       generated shared API note
 - [x] `www/content/docs/cli.mdx` — updated for `init -t next` messages-owned
       scaffold files
@@ -265,7 +265,7 @@ Source of truth: `git status --short --untracked-files=all`
   `verifyResendWebhookEvent(...)`, and corrected the ratelimit "before" import
   path to `better-convex/plugins/ratelimit`.
 - A second merge-base audit on `## Patches` showed `main` had no
-  `better-convex init`, no `templates/next` scaffold, no `packages/resend`,
+  `better-convex init`, no `fixtures/next` scaffold, no `packages/resend`,
   no `defineSchemaExtension(...)`, and no plugin-plan preview/apply flow. Those
   bullets were reclassified into `## Features`, leaving only main-backed fixes
   in `## Patches`.

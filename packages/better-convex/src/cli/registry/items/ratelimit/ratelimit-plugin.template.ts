@@ -1,11 +1,8 @@
 const FUNCTIONS_DIR_IMPORT_PLACEHOLDER = '__BETTER_CONVEX_FUNCTIONS_DIR__';
-const PROJECT_SHARED_API_IMPORT_PLACEHOLDER =
-  '__BETTER_CONVEX_PROJECT_SHARED_API_IMPORT__';
 
 export const RATELIMIT_PLUGIN_TEMPLATE = `import { getSessionNetworkSignals } from "better-convex/auth";
 import { MINUTE, Ratelimit, RatelimitPlugin } from "better-convex/ratelimit";
 import type { MutationCtx } from "${FUNCTIONS_DIR_IMPORT_PLACEHOLDER}/generated/server";
-import type { Select } from "${PROJECT_SHARED_API_IMPORT_PLACEHOLDER}";
 
 const fixed = (rate: number) => Ratelimit.fixedWindow(rate, MINUTE);
 
@@ -24,7 +21,6 @@ type RatelimitUser = {
   id: string;
   isAdmin?: boolean;
   plan?: "premium" | "team" | null;
-  session?: Select<"session"> | null;
 };
 
 type RatelimitCtx = MutationCtx & {
@@ -53,8 +49,7 @@ export const ratelimit = RatelimitPlugin.configure({
   getIdentifier: ({ user }: { user: RatelimitUser | null }) =>
     user?.id ?? "anonymous",
   getTier: getUserTier,
-  getSignals: ({ ctx, user }: { ctx: RatelimitCtx; user: RatelimitUser | null }) =>
-    getSessionNetworkSignals(ctx, user?.session ?? null),
+  getSignals: ({ ctx }: { ctx: RatelimitCtx }) => getSessionNetworkSignals(ctx),
   prefix: ({ bucket, tier }) => \`ratelimit:\${bucket}:\${tier}\`,
   failureMode: "closed",
   enableProtection: true,

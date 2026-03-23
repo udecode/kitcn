@@ -149,7 +149,7 @@ describe('cli/env', () => {
     process.chdir(dir);
 
     const calls: string[][] = [];
-    let uploadedEnvFile = '';
+    const uploadedEnvFiles: string[] = [];
 
     try {
       await pushEnv(
@@ -169,7 +169,7 @@ describe('cli/env', () => {
               };
             }
             if (args[0] === 'env' && args[1] === 'set') {
-              uploadedEnvFile = fs.readFileSync(args[3]!, 'utf8');
+              uploadedEnvFiles.push(fs.readFileSync(args[3]!, 'utf8'));
               return { exitCode: 0, stdout: '', stderr: '' };
             }
             throw new Error(`Unexpected command: ${args.join(' ')}`);
@@ -178,14 +178,18 @@ describe('cli/env', () => {
       );
 
       expect(calls).toEqual([
+        ['env', 'set', '--from-file', expect.any(String)],
         ['run', 'generated/auth:getLatestJwks'],
         ['env', 'set', '--from-file', expect.any(String)],
       ]);
       expect(
         fs.readFileSync(path.join(dir, 'convex', '.env'), 'utf8')
       ).toContain('BETTER_AUTH_SECRET=secret-123');
-      expect(uploadedEnvFile).toContain('BETTER_AUTH_SECRET=secret-123');
-      expect(uploadedEnvFile).toContain('JWKS=jwks-json');
+      expect(uploadedEnvFiles).toHaveLength(2);
+      expect(uploadedEnvFiles[0]).toContain('BETTER_AUTH_SECRET=secret-123');
+      expect(uploadedEnvFiles[0]).not.toContain('JWKS=');
+      expect(uploadedEnvFiles[1]).toContain('BETTER_AUTH_SECRET=secret-123');
+      expect(uploadedEnvFiles[1]).toContain('JWKS=jwks-json');
     } finally {
       process.chdir(oldCwd);
     }
@@ -199,6 +203,7 @@ describe('cli/env', () => {
     process.chdir(dir);
 
     const calls: string[][] = [];
+    const uploadedEnvFiles: string[] = [];
 
     try {
       await pushEnv(
@@ -226,6 +231,7 @@ describe('cli/env', () => {
               };
             }
             if (args[0] === 'env' && args[1] === 'set') {
+              uploadedEnvFiles.push(fs.readFileSync(args[3]!, 'utf8'));
               return { exitCode: 0, stdout: '', stderr: '' };
             }
             throw new Error(`Unexpected command: ${args.join(' ')}`);
@@ -234,6 +240,16 @@ describe('cli/env', () => {
       );
 
       expect(calls).toEqual([
+        [
+          'env',
+          'set',
+          '--from-file',
+          expect.any(String),
+          '--force',
+          '--prod',
+          '--env-file',
+          '.env.agent',
+        ],
         [
           'run',
           'generated/auth:rotateKeys',
@@ -259,6 +275,10 @@ describe('cli/env', () => {
           '.env.agent',
         ],
       ]);
+      expect(uploadedEnvFiles).toHaveLength(2);
+      expect(uploadedEnvFiles[0]).toContain('BETTER_AUTH_SECRET=secret-456');
+      expect(uploadedEnvFiles[0]).not.toContain('JWKS=');
+      expect(uploadedEnvFiles[1]).toContain('JWKS=jwks-rotated');
     } finally {
       process.chdir(oldCwd);
     }

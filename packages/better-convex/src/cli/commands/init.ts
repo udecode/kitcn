@@ -19,18 +19,26 @@ const HELP_FLAGS = new Set(['--help', '-h']);
 export const INIT_HELP_TEXT = `Usage: better-convex init [options]
 
 Options:
-  --cwd             Target directory
+  --template, -t    App template ("next" or "vite") for fresh app scaffolding
+  --cwd             Target directory (or parent when used with --name)
+  --name            Project name when scaffolding a fresh app
   --prod            Forward to \`convex init\`
   --preview-name    Forward to \`convex init\`
   --deployment-name Forward to \`convex init\`
   --env-file        Forward to \`convex init\`
   --yes, -y         Deterministic non-interactive mode
+  --defaults        Use default shadcn init answers
   --json            Machine-readable command output`;
 
 export {
+  INIT_SHADCN_PACKAGE_SPEC,
   parseInitCommandArgs,
+  resolveBetterConvexScaffoldInstallSpec,
+  resolveInitProjectDir,
   resolveInitTargetCwd,
+  resolveSupportedInitTemplate,
 } from '../backend-core.js';
+export { BETTER_CONVEX_INSTALL_SPEC_ENV } from '../supported-dependencies.js';
 
 export const handleInitCommand = async (
   argv: string[],

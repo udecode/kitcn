@@ -11,8 +11,10 @@ import {
 } from '@/lib/convex/auth-client';
 
 export default function AuthPage() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { data: session } = authClient.useSession();
+  const { hasSession, isLoading } = useAuth();
+  const authSession = authClient.useSession();
+  const session = authSession.data;
+  const user = session?.user ?? null;
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -31,7 +33,7 @@ export default function AuthPage() {
     signIn.isPending || signUp.isPending || signOut.isPending;
 
   function getCallbackURL() {
-    return process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
+    return '/';
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -54,7 +56,7 @@ export default function AuthPage() {
     });
   }
 
-  if (isLoading) {
+  if (isLoading && !hasSession) {
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-md items-center px-6 py-16">
         <p className="text-sm text-muted-foreground">Loading auth…</p>
@@ -62,15 +64,17 @@ export default function AuthPage() {
     );
   }
 
-  if (isAuthenticated) {
+  if (hasSession) {
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center gap-6 px-6 py-16">
         <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">Signed in</p>
           <h1 className="text-3xl font-semibold tracking-tight">
-            {session?.user.name || session?.user.email}
+            {user?.name || user?.email || email}
           </h1>
-          <p className="text-sm text-muted-foreground">{session?.user.email}</p>
+          <p className="text-sm text-muted-foreground">
+            {user?.email || email}
+          </p>
         </div>
         <button
           className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-60"

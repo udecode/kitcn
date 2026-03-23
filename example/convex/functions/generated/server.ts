@@ -6,8 +6,12 @@ import {
   createOrm,
   type GenericOrmCtx,
   type OrmFunctions,
+  
 } from 'better-convex/orm';
-import { initCRPC as baseInitCRPC } from 'better-convex/server';
+import {
+  getGeneratedValue,
+  initCRPC as baseInitCRPC,
+} from 'better-convex/server';
 import { internal } from '../_generated/api.js';
 import type { DataModel } from '../_generated/dataModel';
 import type {
@@ -17,18 +21,22 @@ import type {
 } from '../_generated/server';
 import { httpAction, internalMutation } from '../_generated/server';
 import schema from '../schema';
+
 import { migrations } from '../migrations/manifest';
 
-const ormFunctions = (internal as unknown as Record<string, any>)["generated"]["server"] as OrmFunctions;
+
+
+const ormFunctions = getGeneratedValue(internal, ["generated","server"]) as OrmFunctions;
+const ormSchema = schema;
 
 export const orm = createOrm({
-  schema,
+  schema: ormSchema,
   ormFunctions,
   migrations,
   internalMutation,
 });
 
-export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof schema>;
+export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof ormSchema>;
 export type QueryCtx = OrmCtx<ServerQueryCtx>;
 export type MutationCtx = OrmCtx<ServerMutationCtx>;
 export type ActionCtx = ServerActionCtx;

@@ -221,12 +221,6 @@ type DocsCommandArgs = {
 export type InitCommandArgs = {
   yes: boolean;
   json: boolean;
-  cwd?: string;
-  targetArgs?: string[];
-};
-export type CreateCommandArgs = {
-  yes: boolean;
-  json: boolean;
   defaults: boolean;
   template?: string;
   cwd?: string;
@@ -428,7 +422,7 @@ Options:
   --yes, -y         Deterministic non-interactive mode
   --json            Machine-readable command output`;
 
-const SUPPORTED_CREATE_TEMPLATES = ['next', 'vite'] as const;
+const SUPPORTED_INIT_TEMPLATES = ['next', 'vite'] as const;
 const REACT_APP_MOUNT_RE = /<App\s*\/>/;
 
 const DOCS_BASE_URL = 'https://better-convex.vercel.app/docs';
@@ -593,8 +587,7 @@ Global options:
   --backend <convex|concave>   Backend CLI to drive
 
 Commands:
-  init                         Bootstrap a Better Convex app in-place
-  create                       Create a fresh Better Convex starter app
+  init                         Bootstrap Better Convex into a new or existing supported app
   dev                          Run dev workflow with codegen/watch passthrough
   codegen                      Generate Better Convex outputs
   add [plugin]                 Add a plugin scaffold + schema registration
@@ -620,7 +613,7 @@ function printCommandHelp(
   command: string,
   backend: BetterConvexBackend = 'convex'
 ): void {
-  if (command === 'init' || command === 'create') {
+  if (command === 'init') {
     logger.write(INIT_HELP_TEXT);
     return;
   }
@@ -923,96 +916,6 @@ function parseAddCommandArgs(args: string[]): AddCommandArgs {
 export function parseInitCommandArgs(args: string[]): InitCommandArgs {
   let yes = false;
   let json = false;
-  let cwd: string | undefined;
-  const targetArgs: string[] = [];
-
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i];
-    if (arg === '--yes' || arg === '-y') {
-      yes = true;
-      continue;
-    }
-    if (arg === '--json') {
-      json = true;
-      continue;
-    }
-    if (arg === '--cwd') {
-      const value = args[i + 1];
-      if (!value) {
-        throw new Error('Missing value for --cwd.');
-      }
-      cwd = value;
-      i += 1;
-      continue;
-    }
-    if (arg.startsWith('--cwd=')) {
-      const value = arg.slice('--cwd='.length);
-      if (!value) {
-        throw new Error('Missing value for --cwd.');
-      }
-      cwd = value;
-      continue;
-    }
-    if (arg === '--template' || arg === '-t' || arg.startsWith('--template=')) {
-      throw new Error(
-        '`better-convex init` adopts the current app. Use `better-convex create -t <next|vite>` for fresh app creation.'
-      );
-    }
-    if (arg === '--name' || arg.startsWith('--name=') || arg === '--defaults') {
-      throw new Error(
-        '`better-convex init` only supports in-place adoption. Use `better-convex create` for fresh app scaffolding options.'
-      );
-    }
-    if (
-      arg === '--team' ||
-      arg.startsWith('--team=') ||
-      arg === '--project' ||
-      arg.startsWith('--project=') ||
-      arg === '--dev-deployment' ||
-      arg.startsWith('--dev-deployment=')
-    ) {
-      throw new Error(
-        'Removed `better-convex init` bootstrap flags. Use `convex init` for deployment setup.'
-      );
-    }
-    if (arg === '--prod') {
-      targetArgs.push(arg);
-      continue;
-    }
-    if (
-      arg === '--preview-name' ||
-      arg === '--deployment-name' ||
-      arg === '--env-file' ||
-      arg === '--component'
-    ) {
-      const { value, nextIndex } = readFlagValue(args, i, arg);
-      targetArgs.push(arg, value);
-      i = nextIndex;
-      continue;
-    }
-    if (
-      arg.startsWith('--preview-name=') ||
-      arg.startsWith('--deployment-name=') ||
-      arg.startsWith('--env-file=') ||
-      arg.startsWith('--component=')
-    ) {
-      targetArgs.push(arg);
-      continue;
-    }
-    throw new Error(`Unknown init flag "${arg}".`);
-  }
-
-  return {
-    yes,
-    json,
-    cwd,
-    targetArgs,
-  };
-}
-
-export function parseCreateCommandArgs(args: string[]): CreateCommandArgs {
-  let yes = false;
-  let json = false;
   let defaults = false;
   let template: string | undefined;
   let cwd: string | undefined;
@@ -1093,7 +996,7 @@ export function parseCreateCommandArgs(args: string[]): CreateCommandArgs {
       arg.startsWith('--dev-deployment=')
     ) {
       throw new Error(
-        'Removed `better-convex create` bootstrap flags. Use `convex init` for deployment setup.'
+        'Removed `better-convex init` bootstrap flags. Use `convex init` for deployment setup.'
       );
     }
     if (arg === '--prod') {
@@ -1120,7 +1023,7 @@ export function parseCreateCommandArgs(args: string[]): CreateCommandArgs {
       targetArgs.push(arg);
       continue;
     }
-    throw new Error(`Unknown create flag "${arg}".`);
+    throw new Error(`Unknown init flag "${arg}".`);
   }
 
   return {
@@ -1323,28 +1226,7 @@ type InitializationPlan = {
   initialized: boolean;
 };
 
-export function resolveSupportedCreateTemplate(
-  template?: string
-): string | undefined {
-  if (!template) {
-    return undefined;
-  }
-  if (!(SUPPORTED_CREATE_TEMPLATES as readonly string[]).includes(template)) {
-    throw new Error(
-      `Unsupported create template "${template}". Expected one of: ${SUPPORTED_CREATE_TEMPLATES.join(', ')}.`
-    );
-  }
-  return template;
-}
-
 export function resolveInitTargetCwd(args: InitCommandArgs): string {
-  if (args.cwd) {
-    return resolve(process.cwd(), args.cwd);
-  }
-  return process.cwd();
-}
-
-export function resolveCreateProjectDir(args: CreateCommandArgs): string {
   if (args.cwd && args.name) {
     return resolve(process.cwd(), args.cwd, args.name);
   }
@@ -1355,6 +1237,20 @@ export function resolveCreateProjectDir(args: CreateCommandArgs): string {
     return resolve(process.cwd(), args.name);
   }
   return process.cwd();
+}
+
+export const resolveInitProjectDir = resolveInitTargetCwd;
+
+export function resolveSupportedInitTemplate(template: string | undefined) {
+  if (template === undefined) {
+    return undefined;
+  }
+  if ((SUPPORTED_INIT_TEMPLATES as readonly string[]).includes(template)) {
+    return template;
+  }
+  throw new Error(
+    `Unsupported init template "${template}". Expected one of: ${SUPPORTED_INIT_TEMPLATES.join(', ')}.`
+  );
 }
 
 function buildInitNextOwnedScaffoldFiles(
@@ -2429,61 +2325,60 @@ export async function runInitCommandFlow(params: {
   realConvexPath: string;
   realConcavePath?: string;
 }): Promise<InitRunResult> {
-  return runScaffoldCommandFlow({
-    projectDir: resolveInitTargetCwd(params.initArgs),
-    yes: params.initArgs.yes,
-    targetArgs: params.initArgs.targetArgs,
-    backendArg: params.backendArg,
-    configPath: params.configPath,
-    execaFn: params.execaFn,
-    generateMetaFn: params.generateMetaFn,
-    loadBetterConvexConfigFn: params.loadBetterConvexConfigFn,
-    ensureConvexGitignoreEntryFn: params.ensureConvexGitignoreEntryFn,
-    promptAdapter: params.promptAdapter,
-    realConvexPath: params.realConvexPath,
-    realConcavePath: params.realConcavePath,
-  });
-}
-
-export async function runCreateCommandFlow(params: {
-  createArgs: CreateCommandArgs;
-  backendArg?: BetterConvexBackend;
-  configPath?: string;
-  execaFn: typeof execa;
-  generateMetaFn: typeof generateMeta;
-  loadBetterConvexConfigFn: typeof loadBetterConvexConfig;
-  ensureConvexGitignoreEntryFn: typeof ensureConvexGitignoreEntry;
-  promptAdapter: PromptAdapter;
-  realConvexPath: string;
-  realConcavePath?: string;
-}): Promise<InitRunResult> {
-  const template = resolveSupportedCreateTemplate(params.createArgs.template);
-  if (!template) {
-    throw new Error(
-      'Missing create template. Use `better-convex create -t <next|vite>`.'
-    );
-  }
-
-  const projectDir = resolveCreateProjectDir(params.createArgs);
+  const template = resolveSupportedInitTemplate(params.initArgs.template);
+  const projectDir = resolveInitProjectDir(params.initArgs);
   const existingProjectContext = resolveProjectScaffoldContext({
     cwd: projectDir,
     allowMissing: true,
     allowUnsupported: true,
   });
-  if (existingProjectContext) {
+  const wantsFreshScaffold =
+    template !== undefined ||
+    params.initArgs.defaults ||
+    params.initArgs.name !== undefined;
+
+  if (wantsFreshScaffold) {
+    if (!template) {
+      throw new Error(
+        'Fresh app scaffolding requires `better-convex init -t <next|vite>`.'
+      );
+    }
+    if (existingProjectContext) {
+      throw new Error(
+        `Existing supported app scaffold detected. Run \`better-convex init --yes\` in ${normalizePath(
+          relative(process.cwd(), projectDir) || '.'
+        )} to adopt the current project.`
+      );
+    }
+
+    return runScaffoldCommandFlow({
+      projectDir,
+      template,
+      yes: params.initArgs.yes,
+      defaults: params.initArgs.defaults,
+      targetArgs: params.initArgs.targetArgs,
+      backendArg: params.backendArg,
+      configPath: params.configPath,
+      execaFn: params.execaFn,
+      generateMetaFn: params.generateMetaFn,
+      loadBetterConvexConfigFn: params.loadBetterConvexConfigFn,
+      ensureConvexGitignoreEntryFn: params.ensureConvexGitignoreEntryFn,
+      promptAdapter: params.promptAdapter,
+      realConvexPath: params.realConvexPath,
+      realConcavePath: params.realConcavePath,
+    });
+  }
+
+  if (!existingProjectContext) {
     throw new Error(
-      `Existing supported app scaffold detected. Run \`better-convex init --yes\` in ${normalizePath(
-        relative(process.cwd(), projectDir) || '.'
-      )} to adopt the current project.`
+      'Could not detect a supported app scaffold. Use `better-convex init -t <next|vite>` for a fresh app.'
     );
   }
 
   return runScaffoldCommandFlow({
     projectDir,
-    template,
-    yes: params.createArgs.yes,
-    defaults: params.createArgs.defaults,
-    targetArgs: params.createArgs.targetArgs,
+    yes: params.initArgs.yes,
+    targetArgs: params.initArgs.targetArgs,
     backendArg: params.backendArg,
     configPath: params.configPath,
     execaFn: params.execaFn,
@@ -2702,8 +2597,10 @@ export async function applyPluginInstallPlanFiles(
 
     const requiresConfirmation =
       file.kind === 'config' ||
-      file.kind === 'scaffold' ||
-      (file.kind === 'env' && file.templateId !== LOCAL_CONVEX_ENV_TEMPLATE_ID);
+      (file.kind === 'scaffold' && file.templateId !== undefined) ||
+      (file.kind === 'env' &&
+        file.templateId !== LOCAL_CONVEX_ENV_TEMPLATE_ID &&
+        file.templateId !== BETTER_CONVEX_ENV_HELPER_TEMPLATE_ID);
     const matchesManagedBaseline =
       typeof file.existingContent === 'string' &&
       typeof file.managedBaselineContent === 'string' &&
@@ -4222,6 +4119,75 @@ export async function runBackendFunction(
     echoOutput?: boolean;
   }
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  if (
+    backendAdapter.publicName === 'concave' &&
+    functionName.startsWith('generated/server:')
+  ) {
+    const baseUrl = resolveConcaveRunBaseUrl(targetArgs);
+    const executeUrl = new URL('/api/execute', baseUrl).toString();
+    const authToken =
+      process.env.SYSTEM_TOKEN ??
+      process.env.CONCAVE_SYSTEM_TOKEN ??
+      process.env.CONCAVE_SYSTEM_KEY;
+    const auth = authToken
+      ? { tokenType: 'System' as const, token: authToken }
+      : { tokenType: 'System' as const };
+
+    let stdout = '';
+    let stderr = '';
+    let exitCode = 1;
+
+    try {
+      const response = await fetch(executeUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          path: '_system:systemExecuteFunction',
+          type: 'mutation',
+          format: 'json',
+          args: {
+            functionPath: functionName,
+            args,
+            functionType: 'mutation',
+          },
+          auth,
+        }),
+      });
+
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          result?: unknown;
+          value?: unknown;
+        };
+        const result =
+          payload.result !== undefined ? payload.result : payload.value;
+        stdout = `${JSON.stringify(result ?? null)}\n`;
+        exitCode = 0;
+      } else {
+        stderr = await response.text();
+      }
+    } catch (error) {
+      stderr = error instanceof Error ? error.message : String(error);
+    }
+
+    if (options?.echoOutput !== false) {
+      if (stdout) {
+        process.stdout.write(stdout);
+      }
+      if (stderr) {
+        process.stderr.write(stderr.endsWith('\n') ? stderr : `${stderr}\n`);
+      }
+    }
+
+    return {
+      exitCode,
+      stdout,
+      stderr,
+    };
+  }
+
   const result = await execaFn(
     backendAdapter.command,
     [
@@ -4255,6 +4221,34 @@ export async function runBackendFunction(
     stdout,
     stderr,
   };
+}
+
+function resolveConcaveRunBaseUrl(targetArgs: string[]): string {
+  for (let index = 0; index < targetArgs.length; index += 1) {
+    const arg = targetArgs[index];
+    if (arg === '--url') {
+      const value = targetArgs[index + 1];
+      if (value) {
+        return value;
+      }
+      continue;
+    }
+    if (arg.startsWith('--url=')) {
+      return arg.slice('--url='.length);
+    }
+    if (arg === '--port') {
+      const value = targetArgs[index + 1];
+      if (value) {
+        return `http://127.0.0.1:${value}`;
+      }
+      continue;
+    }
+    if (arg.startsWith('--port=')) {
+      return `http://127.0.0.1:${arg.slice('--port='.length)}`;
+    }
+  }
+
+  return 'http://127.0.0.1:3000';
 }
 
 export async function runConvexDevPreRun(params: {
@@ -5010,7 +5004,6 @@ export async function run(
 
   if (
     (command === 'init' ||
-      command === 'create' ||
       command === 'add' ||
       command === 'view' ||
       command === 'info' ||
@@ -5025,7 +5018,13 @@ export async function run(
 
   assertNoRemovedDevPreRunFlag(argv);
 
-  if (command === 'init' || command === 'create') {
+  if (command === 'create') {
+    throw new Error(
+      'Removed `better-convex create`. Use `better-convex init -t <next|vite>` for fresh app scaffolding.'
+    );
+  }
+
+  if (command === 'init') {
     const initArgs = parseInitCommandArgs(restArgs);
     const result = await runInitCommandFlow({
       initArgs,

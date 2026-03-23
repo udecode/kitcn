@@ -247,6 +247,34 @@ export async function pushEnv(
     `🔄 Pushing environment variables to Convex...${force ? ' (FORCE MODE)' : ''}${targetArgs.includes('--prod') ? ' (PRODUCTION)' : ''}\n`
   );
 
+  const pushFilteredEnvEntries = async (vars: Record<string, string>) => {
+    const filteredVars = filterPushEnvEntries(vars);
+    if (Object.keys(filteredVars).length === 0) {
+      return false;
+    }
+
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-env-')
+    );
+    const tempEnvPath = path.join(tempDir, '.env.push');
+
+    try {
+      fs.writeFileSync(tempEnvPath, `${serializeEnvEntries(filteredVars)}\n`);
+      await runConvexCommand(
+        runCommand,
+        cwd,
+        buildEnvSetArgs({
+          envFilePath: tempEnvPath,
+          force,
+          targetArgs,
+        })
+      );
+      return true;
+    } finally {
+      fs.rmSync(tempDir, { force: true, recursive: true });
+    }
+  };
+
   if (auth) {
     const authSecret = ensureAuthSecret({
       envPath,
@@ -254,6 +282,8 @@ export async function pushEnv(
       secretGenerator,
     });
     nextVars.BETTER_AUTH_SECRET = authSecret;
+
+    await pushFilteredEnvEntries(nextVars);
 
     if (rotate) {
       await runConvexCommand(runCommand, cwd, [
@@ -272,28 +302,10 @@ export async function pushEnv(
     nextVars.JWKS = parseConvexRunValue(jwksResult.stdout);
   }
 
-  const filteredVars = filterPushEnvEntries(nextVars);
-  if (Object.keys(filteredVars).length === 0) {
+  const pushed = await pushFilteredEnvEntries(nextVars);
+  if (!pushed) {
     logger.warn('No environment variables to push.');
     return;
-  }
-
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-env-'));
-  const tempEnvPath = path.join(tempDir, '.env.push');
-
-  try {
-    fs.writeFileSync(tempEnvPath, `${serializeEnvEntries(filteredVars)}\n`);
-    await runConvexCommand(
-      runCommand,
-      cwd,
-      buildEnvSetArgs({
-        envFilePath: tempEnvPath,
-        force,
-        targetArgs,
-      })
-    );
-  } finally {
-    fs.rmSync(tempDir, { force: true, recursive: true });
   }
 
   logger.success('\nEnvironment push complete');

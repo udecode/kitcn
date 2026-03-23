@@ -54,8 +54,13 @@ function writeScopedFixture(dir: string) {
       },
     };
 
-    export const createApiLeaf = (fn, meta) =>
-      Object.assign(fn, meta, { functionRef: fn });
+    export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+      const meta = maybeMeta ?? pathOrMeta;
+      const fn = Array.isArray(pathOrMeta)
+        ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+        : fnOrRoot;
+      return Object.assign(fn, meta, { functionRef: fn });
+    };
     export { initCRPC };
     `.trim()
   );
@@ -82,11 +87,16 @@ function writeScopedFixture(dir: string) {
   writeFile(
     path.join(dir, 'convex', 'schema.ts'),
     `
+    const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
     const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
     export const tables = {
       todos: { table: 'todos' },
     };
     const schema = { tables };
+    Object.defineProperty(schema, OrmSchemaOptions, {
+      value: {},
+      enumerable: false,
+    });
     Object.defineProperty(schema, OrmSchemaRelations, {
       value: {
         todos: { table: tables.todos },
@@ -178,6 +188,94 @@ describe('cli/codegen', () => {
     }
   });
 
+  test('generateMeta keeps api and runtime lookup boilerplate package-owned', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+
+      await generateMeta(undefined, { silent: true });
+
+      const { outputFile } = getConvexConfig();
+      const generatedApi = fs.readFileSync(outputFile, 'utf-8');
+      const generatedRuntime = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'todos.runtime.ts'),
+        'utf-8'
+      );
+
+      expect(generatedApi).not.toContain('function getGeneratedValue(');
+      expect(generatedApi).toContain(
+        'createApiLeaf<"query", typeof import("../todos").list>(convexApi, ["todos","list"], { type: "query" })'
+      );
+
+      expect(generatedRuntime).not.toContain('function getGeneratedValue(');
+      expect(generatedRuntime).not.toContain('type ProcedureArgsFromExport<');
+      expect(generatedRuntime).not.toContain(
+        'type ProcedureFunctionReference<'
+      );
+      expect(generatedRuntime).not.toContain(
+        'function createProcedureRegistry()'
+      );
+      expect(generatedRuntime).toContain('createGeneratedFunctionReference,');
+      expect(generatedRuntime).toContain('typedProcedureResolver,');
+      expect(generatedRuntime).toContain('const procedureRegistry = {');
+      expect(generatedRuntime).toContain(
+        'type ProcedureCallerRegistry = typeof procedureRegistry;'
+      );
+      expect(generatedRuntime).not.toContain('_generated/api.js');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta emits runtime refs without _generated api namespace indexing', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'items', 'queries.ts'),
+        `
+        export const list = {
+          _handler: () => [],
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        export const internalOnly = {
+          _handler: () => null,
+          _crpcMeta: {
+            type: 'query',
+            internal: true,
+          },
+        };
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const moduleRuntime = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'items', 'queries.runtime.ts'),
+        'utf-8'
+      );
+      expect(moduleRuntime).toContain('createGeneratedFunctionReference,');
+      expect(moduleRuntime).not.toContain('getGeneratedFunctionReference(');
+      expect(moduleRuntime).not.toContain('_generated/api.js');
+      expect(moduleRuntime).toContain(
+        'createGeneratedFunctionReference<"query", "public", typeof import("../../items/queries").list>("items/queries:list")'
+      );
+      expect(moduleRuntime).toContain(
+        'createGeneratedFunctionReference<"query", "internal", typeof import("../../items/queries").internalOnly>("items/queries:internalOnly")'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('getConvexConfig respects convex.json functions dir and sharedDir override', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
@@ -260,8 +358,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -330,12 +433,17 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
         const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
         export const tables = {
           users: { table: 'users' },
           todos: { table: 'todos' },
         };
         const schema = { tables };
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: {},
+          enumerable: false,
+        });
         Object.defineProperty(schema, OrmSchemaRelations, {
           value: {
             users: { table: tables.users },
@@ -519,6 +627,10 @@ describe('cli/codegen', () => {
       expect(generated).not.toContain('ApiFunctionEntry');
       expect(generated).not.toContain('ApiFunctionLeafMeta');
       expect(generated).not.toContain('ApiFunctionRefFromExport');
+      expect(generated).not.toContain('function getGeneratedValue(');
+      expect(generated).toContain(
+        'createApiLeaf<"query", typeof import("../items/queries").list>(convexApi, ["items","queries","list"], { auth: "optional", dev: true, ratelimit: 10, role: "admin", type: "query" })'
+      );
       expect(generated).not.toContain('shouldBeIgnored');
       expect(generated).not.toContain('shouldBeIgnoredAuth');
 
@@ -528,9 +640,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).toContain('import {\n  createOrm,');
       expect(serverGenerated).not.toContain('requireSchemaRelations');
       expect(serverGenerated).not.toContain('getSchemaTriggers');
-      expect(serverGenerated).toContain(
-        "import { initCRPC as baseInitCRPC } from 'better-convex/server';"
-      );
+      expect(serverGenerated).toContain('initCRPC as baseInitCRPC,');
       expect(serverGenerated).toContain("import schema from '../schema';");
       expect(serverGenerated).not.toContain('const relations =');
       expect(serverGenerated).toContain(
@@ -550,7 +660,7 @@ describe('cli/codegen', () => {
       expect(serverGenerated).not.toContain('export type MigrationCtx =');
       expect(serverGenerated).toContain('export type OrmCtx<');
       expect(serverGenerated).toContain(
-        'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof schema>;'
+        'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof ormSchema>;'
       );
       expect(serverGenerated).not.toContain('ResolveOrmSchema');
       expect(serverGenerated).not.toContain('export function defineAuth<');
@@ -589,16 +699,30 @@ describe('cli/codegen', () => {
         'type ProcedureHandlerContext = QueryCtx | MutationCtx;'
       );
       expect(nestedRuntimeGenerated).toContain(
-        "type RuntimeServerModule = typeof import('better-convex/server');"
-      );
-      expect(nestedRuntimeGenerated).toContain(
         'createGeneratedRegistryRuntime,'
       );
       expect(nestedRuntimeGenerated).toContain(
-        'function createProcedureRegistry() {'
+        'createGeneratedFunctionReference,'
+      );
+      expect(nestedRuntimeGenerated).toContain('typedProcedureResolver,');
+      expect(nestedRuntimeGenerated).not.toContain(
+        'function getGeneratedValue('
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'type ProcedureArgsFromExport<'
+      );
+      expect(nestedRuntimeGenerated).not.toContain(
+        'type ProcedureFunctionReference<'
+      );
+      expect(nestedRuntimeGenerated).toContain('const procedureRegistry = {');
+      expect(nestedRuntimeGenerated).toContain(
+        'const handlerRegistry = procedureRegistry;'
       );
       expect(nestedRuntimeGenerated).toContain(
-        "type ProcedureCallerRegistry = ReturnType<typeof createProcedureRegistry>['procedureRegistry'];"
+        'type ProcedureCallerRegistry = typeof procedureRegistry;'
+      );
+      expect(nestedRuntimeGenerated).toContain(
+        'type ProcedureHandlerRegistry = typeof handlerRegistry;'
       );
       expect(nestedRuntimeGenerated).toContain(
         'type GeneratedProcedureCaller<'
@@ -617,10 +741,7 @@ describe('cli/codegen', () => {
       );
       expect(nestedRuntimeGenerated).toContain('ProcedureHandlerRegistry');
       expect(nestedRuntimeGenerated).toContain(
-        '>(\n  createProcedureRegistry\n);'
-      );
-      expect(nestedRuntimeGenerated).toContain(
-        "const { typedProcedureResolver } =\n    (require('better-convex/server') as RuntimeServerModule);"
+        'procedureRegistry,\n  handlerRegistry,\n});'
       );
       expect(nestedRuntimeGenerated).toContain(
         'return generatedRuntime.getCallerFactory()(\n    ctx as any\n  ) as GeneratedProcedureCaller<TCtx>;'
@@ -628,9 +749,7 @@ describe('cli/codegen', () => {
       expect(nestedRuntimeGenerated).toContain(
         'return generatedRuntime.getHandlerFactory()(ctx) as GeneratedProcedureHandler<TCtx>;'
       );
-      expect(nestedRuntimeGenerated).toContain(
-        'const { api, internal } =\n    (require("../../_generated/api.js") as typeof import(\'../../_generated/api.js\'));'
-      );
+      expect(nestedRuntimeGenerated).not.toContain('_generated/api.js');
       expect(nestedRuntimeGenerated).not.toContain(
         "import { api, internal } from '../_generated/api.js';"
       );
@@ -671,43 +790,43 @@ describe('cli/codegen', () => {
         'createGenericHandlerFactory'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"scheduledMutationBatch": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").scheduledMutationBatch>(internal, ["generated","server","scheduledMutationBatch"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").scheduledMutationBatch>("generated/server:scheduledMutationBatch")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"scheduledDelete": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").scheduledDelete>(internal, ["generated","server","scheduledDelete"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").scheduledDelete>("generated/server:scheduledDelete")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"aggregateBackfill": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").aggregateBackfill>(internal, ["generated","server","aggregateBackfill"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").aggregateBackfill>("generated/server:aggregateBackfill")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"aggregateBackfillChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").aggregateBackfillChunk>(internal, ["generated","server","aggregateBackfillChunk"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").aggregateBackfillChunk>("generated/server:aggregateBackfillChunk")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"aggregateBackfillStatus": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").aggregateBackfillStatus>(internal, ["generated","server","aggregateBackfillStatus"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").aggregateBackfillStatus>("generated/server:aggregateBackfillStatus")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"migrationRun": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").migrationRun>(internal, ["generated","server","migrationRun"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").migrationRun>("generated/server:migrationRun")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"migrationRunChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").migrationRunChunk>(internal, ["generated","server","migrationRunChunk"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").migrationRunChunk>("generated/server:migrationRunChunk")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"migrationStatus": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").migrationStatus>(internal, ["generated","server","migrationStatus"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").migrationStatus>("generated/server:migrationStatus")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"migrationCancel": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").migrationCancel>(internal, ["generated","server","migrationCancel"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").migrationCancel>("generated/server:migrationCancel")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"resetChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference<"mutation", typeof import("./server").resetChunk>(internal, ["generated","server","resetChunk"])'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").resetChunk>("generated/server:resetChunk")'
       );
       expect(serverRuntimeGenerated).toContain(
-        '"reset": ["action", typedProcedureResolver(getGeneratedFunctionReference<"action", typeof import("./server").reset>(internal, ["generated","server","reset"])'
+        'createGeneratedFunctionReference<"action", "internal", typeof import("./server").reset>("generated/server:reset")'
       );
       expect(nestedRuntimeGenerated).toContain(
         "import type { ActionCtx, MutationCtx, QueryCtx } from '../server';"
       );
       expect(nestedRuntimeGenerated).toContain(
-        '"internalOnly": ["query", typedProcedureResolver(getGeneratedFunctionReference<"query", typeof import("../../items/queries").internalOnly>(internal, ["items","queries","internalOnly"]), () => (require("../../items/queries") as Record<string, unknown>)["internalOnly"])],'
+        'createGeneratedFunctionReference<"query", "internal", typeof import("../../items/queries").internalOnly>("items/queries:internalOnly")'
       );
       expect(serverGenerated).toContain('aggregateBackfill');
       expect(serverGenerated).toContain('aggregateBackfillChunk');
@@ -789,8 +908,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -906,14 +1030,12 @@ describe('cli/codegen', () => {
       expect(todosRuntimeGenerated).toContain(
         "import type { OrmTriggerContext } from 'better-convex/orm';"
       );
-      expect(todosRuntimeGenerated).toContain(
-        "type RuntimeServerModule = typeof import('better-convex/server');"
-      );
+      expect(todosRuntimeGenerated).not.toContain('type RuntimeServerModule =');
       expect(todosRuntimeGenerated).toContain(
         'const generatedRuntime = createGeneratedRegistryRuntime<'
       );
       expect(todosRuntimeGenerated).toContain(
-        '"list": ["query", typedProcedureResolver(getGeneratedFunctionReference<"query", typeof import("../todos").list>(api, ["todos","list"]), () => (require("../todos") as Record<string, unknown>)["list"])],'
+        'createGeneratedFunctionReference<"query", "public", typeof import("../todos").list>("todos:list")'
       );
       expect(todosRuntimeGenerated).toContain(
         'return generatedRuntime.getCallerFactory()(\n    ctx as any\n  ) as GeneratedProcedureCaller<TCtx>;'
@@ -921,6 +1043,7 @@ describe('cli/codegen', () => {
       expect(todosRuntimeGenerated).not.toContain(
         "import { api, internal } from './_generated/api.js';"
       );
+      expect(todosRuntimeGenerated).not.toContain('_generated/api.js');
       expect(todosRuntimeGenerated).toContain(
         'export function createTodosCaller<TCtx extends ProcedureCallerContext>('
       );
@@ -957,8 +1080,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1081,8 +1209,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1160,8 +1293,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1233,8 +1371,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1308,8 +1451,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1394,8 +1542,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1521,8 +1674,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1551,12 +1709,17 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
         const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
         const OrmSchemaTriggers = Symbol.for('better-convex:OrmSchemaTriggers');
         export const tables = {
           todos: { table: 'todos' },
         };
         const schema = { tables };
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: {},
+          enumerable: false,
+        });
         Object.defineProperty(schema, OrmSchemaRelations, {
           value: {
             todos: { table: tables.todos },
@@ -1585,7 +1748,8 @@ describe('cli/codegen', () => {
       expect(generatedServer).toContain("import schema from '../schema';");
       expect(generatedServer).not.toContain('const relations =');
       expect(generatedServer).not.toContain('const triggers =');
-      expect(generatedServer).toContain('schema,');
+      expect(generatedServer).toContain('const ormSchema = schema;');
+      expect(generatedServer).toContain('schema: ormSchema,');
       expect(generatedServer).toContain('ormFunctions,');
     } finally {
       process.chdir(oldCwd);
@@ -1611,8 +1775,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1670,15 +1839,18 @@ describe('cli/codegen', () => {
       );
       const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
       expect(generatedServer).toContain(
-        "import schema, { relations } from '../schema';"
+        "import { relations } from '../schema';"
       );
       expect(generatedServer).toContain(
         "import { triggers } from '../triggers';"
       );
       expect(generatedServer).not.toContain(
-        "import schema, { relations, triggers } from '../schema';"
+        "import schema, { relations } from '../schema';"
       );
-      expect(generatedServer).toContain('triggers,');
+      expect(generatedServer).toContain('OrmSchemaTriggers,');
+      expect(generatedServer).toContain(
+        'const ormSchema = attachGeneratedTriggers(relations, triggers);'
+      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -1751,8 +1923,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
       writeFile(
@@ -1797,8 +1974,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
 
@@ -1862,8 +2044,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
       writeFile(
@@ -1889,11 +2076,16 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
         const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
         export const tables = {
           todos: { table: 'todos' },
         };
         const schema = { tables };
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: {},
+          enumerable: false,
+        });
         Object.defineProperty(schema, OrmSchemaRelations, {
           value: {
             todos: { table: tables.todos },
@@ -1994,8 +2186,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
       writeFile(
@@ -2100,8 +2297,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
       writeFile(
@@ -2154,11 +2356,14 @@ describe('cli/codegen', () => {
       expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_auth_file")'
       );
+      expect(generatedAuth).toContain("} from 'better-convex/auth/generated';");
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).toContain('authEnabled,');
       expect(generatedAuth).not.toContain(
         "import * as authDefinitionModule from '../auth';"
       );
+      expect(generatedAuth).not.toContain("} from 'better-convex/auth';");
+      expect(generatedAuth).not.toContain('createAuthRuntime,');
       expect(generatedAuth).not.toContain('createAuthRuntime<DataModel');
     } finally {
       process.chdir(oldCwd);
@@ -2184,8 +2389,13 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
         `
-        export const createApiLeaf = (fn, meta) =>
-          Object.assign(fn, meta, { functionRef: fn });
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
         `.trim()
       );
       writeFile(
@@ -2236,10 +2446,13 @@ describe('cli/codegen', () => {
       expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_default_export")'
       );
+      expect(generatedAuth).toContain("} from 'better-convex/auth/generated';");
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).not.toContain(
         "import * as authDefinitionModule from '../auth';"
       );
+      expect(generatedAuth).not.toContain("} from 'better-convex/auth';");
+      expect(generatedAuth).not.toContain('createAuthRuntime,');
     } finally {
       process.chdir(oldCwd);
     }
@@ -2667,6 +2880,70 @@ describe('cli/codegen', () => {
     }
   });
 
+  test('generateMeta suppresses expected http.ts bootstrap warnings when better-convex is not installed yet', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+    const originalError = console.error;
+    const errorLines: string[] = [];
+
+    console.error = (...args: unknown[]) => {
+      errorLines.push(args.map(String).join(' '));
+    };
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      fs.rmSync(path.join(dir, 'node_modules', 'better-convex'), {
+        force: true,
+        recursive: true,
+      });
+      writeFile(
+        path.join(dir, 'convex', 'http.ts'),
+        `
+        import { createHttpRouter } from 'better-convex/server';
+
+        export const http = createHttpRouter({});
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      expect(errorLines.join('\n')).not.toContain('Failed to parse http.ts');
+    } finally {
+      console.error = originalError;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta still logs unexpected http.ts parse failures', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+    const originalError = console.error;
+    const errorLines: string[] = [];
+
+    console.error = (...args: unknown[]) => {
+      errorLines.push(args.map(String).join(' '));
+    };
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'http.ts'),
+        `
+        throw new Error('parse failure');
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      expect(errorLines.join('\n')).toContain('Failed to parse http.ts');
+    } finally {
+      console.error = originalError;
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta regenerates stale runtime files that still import generated/crpc', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
@@ -2975,6 +3252,45 @@ describe('cli/codegen', () => {
       );
       expect(crpcSource).toContain('action: (ctx) => ctx,');
       expect(serverSource).not.toContain('better-convex/plugins/resend');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta treats defineSchema() output as ORM-backed without a relations export', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: { strict: true },
+          enumerable: false,
+        });
+
+        export const tables = {};
+        export default schema;
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const serverSource = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'server.ts'),
+        'utf8'
+      );
+      expect(serverSource).toContain('import {\n  createOrm,');
+      expect(serverSource).toContain(
+        'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
+      );
+      expect(serverSource).toContain('query: (ctx) => withOrm(ctx),');
     } finally {
       process.chdir(oldCwd);
     }

@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { parseEnv } from 'node:util';
 import {
   applyDependencyInstallPlan,
   applyPluginInstallPlanFiles,
@@ -10,7 +13,11 @@ import {
   runAfterScaffoldScript,
   runConfiguredCodegen,
 } from '../backend-core.js';
-import { applyPluginDependencyInstall } from '../registry/dependencies.js';
+import { resolveProjectScaffoldContext } from '../project-context.js';
+import {
+  applyDependencyHintsInstall,
+  applyPluginDependencyInstall,
+} from '../registry/dependencies.js';
 import {
   getPluginCatalogEntry,
   getSupportedPluginKeys,
@@ -45,6 +52,9 @@ import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/spinner.js';
 
 const HELP_FLAGS = new Set(['--help', '-h']);
+const RAW_CONVEX_AUTH_PRESET = 'convex';
+const RAW_CONVEX_AUTH_DEPLOYMENT_ERROR =
+  'Raw Convex auth adoption requires an initialized Convex deployment. Run `convex init` first, then re-run `better-convex add auth --preset convex`.';
 
 export const ADD_HELP_TEXT = `Usage: better-convex add [plugin] [options]
 
@@ -165,6 +175,32 @@ export const parseAddCommandArgs = (args: string[]) => {
   };
 };
 
+const isRawConvexAuthPreset = (plugin: string, preset: string) =>
+  plugin === 'auth' && preset === RAW_CONVEX_AUTH_PRESET;
+
+const readProjectLocalEnv = () => {
+  const envLocalPath = resolve(process.cwd(), '.env.local');
+  if (!existsSync(envLocalPath)) {
+    return {} as Record<string, string>;
+  }
+
+  return parseEnv(readFileSync(envLocalPath, 'utf8'));
+};
+
+const assertRawConvexAuthDeploymentReady = () => {
+  const projectContext = resolveProjectScaffoldContext();
+  if (!projectContext) {
+    throw new Error(RAW_CONVEX_AUTH_DEPLOYMENT_ERROR);
+  }
+  const localEnv = readProjectLocalEnv();
+  const deployment = localEnv.CONVEX_DEPLOYMENT?.trim();
+  const convexUrl = localEnv[projectContext.convexUrlEnvKey]?.trim();
+
+  if (!deployment || !convexUrl) {
+    throw new Error(RAW_CONVEX_AUTH_DEPLOYMENT_ERROR);
+  }
+};
+
 export const handleAddCommand = async (
   argv: string[],
   deps: Partial<RunDeps> = {}
@@ -185,6 +221,7 @@ export const handleAddCommand = async (
     getConvexConfig: getConvexConfigFn,
     loadBetterConvexConfig: loadBetterConvexConfigFn,
     promptAdapter,
+    syncEnv: syncEnvFn,
     realConvex: realConvexPath,
     realConcave: realConcavePath,
   } = resolveRunDeps(deps);
@@ -210,26 +247,33 @@ export const handleAddCommand = async (
 
   dryRunSpinner.start();
   const pluginDescriptor = getPluginCatalogEntry(selectedPlugin);
-  const initializationPlan = isBetterConvexInitialized({
-    functionsDir,
-    config,
-  })
-    ? null
-    : buildInitializationPlan({
-        config,
-        configPathArg: parsed.configPath,
-        envFields: pluginDescriptor.envFields ?? [],
-      });
-  const effectiveConfig = initializationPlan?.config ?? config;
-  const effectiveSharedDir = parsed.sharedDir ?? effectiveConfig.paths.shared;
-  const effectiveFunctionsDir =
-    initializationPlan?.functionsDir ??
-    getConvexConfigFn(effectiveSharedDir).functionsDir;
   const resolvedPreset = await resolvePluginPreset(
     pluginDescriptor,
     promptAdapter,
     addArgs.preset
   );
+  const rawConvexAuthPreset = isRawConvexAuthPreset(
+    selectedPlugin,
+    resolvedPreset
+  );
+  const shouldSkipInitializationBootstrap = rawConvexAuthPreset;
+  const initializationPlan = isBetterConvexInitialized({
+    functionsDir,
+    config,
+  })
+    ? null
+    : shouldSkipInitializationBootstrap
+      ? null
+      : buildInitializationPlan({
+          config,
+          configPathArg: parsed.configPath,
+          envFields: pluginDescriptor.envFields ?? [],
+        });
+  const effectiveConfig = initializationPlan?.config ?? config;
+  const effectiveSharedDir = parsed.sharedDir ?? effectiveConfig.paths.shared;
+  const effectiveFunctionsDir =
+    initializationPlan?.functionsDir ??
+    getConvexConfigFn(effectiveSharedDir).functionsDir;
   const allTemplates = collectPluginScaffoldTemplates(pluginDescriptor);
   const presetTemplates = resolvePresetScaffoldTemplates(
     pluginDescriptor,
@@ -257,7 +301,8 @@ export const handleAddCommand = async (
   const scaffoldRoots = resolvePluginScaffoldRoots(
     effectiveFunctionsDir,
     pluginDescriptor,
-    effectiveConfig
+    effectiveConfig,
+    resolvedPreset
   );
   const selectedTemplateIds =
     !addArgs.yes && promptAdapter.isInteractive()
@@ -289,7 +334,10 @@ export const handleAddCommand = async (
     lockfile,
     existingTemplatePathMap,
     noCodegen: addArgs.noCodegen,
-    includeEnvBootstrap: initializationPlan ? false : undefined,
+    includeEnvBootstrap:
+      initializationPlan || shouldSkipInitializationBootstrap
+        ? false
+        : undefined,
     bootstrapFiles: initializationPlan?.files,
     bootstrapOperations: initializationPlan?.operations,
   });
@@ -314,6 +362,10 @@ export const handleAddCommand = async (
     return 0;
   }
 
+  if (rawConvexAuthPreset) {
+    assertRawConvexAuthDeploymentReady();
+  }
+
   const applyResult = await applyPluginInstallPlanFiles(plan.files, {
     overwrite: addArgs.overwrite,
     yes: addArgs.yes,
@@ -325,6 +377,10 @@ export const handleAddCommand = async (
   );
   const dependencyInstall = await applyPluginDependencyInstall(
     plan.dependency,
+    execaFn
+  );
+  const installedDependencyHints = await applyDependencyHintsInstall(
+    plan.dependencyHints,
     execaFn
   );
   const payload = {
@@ -373,7 +429,11 @@ export const handleAddCommand = async (
         `Installed ${dependencyInstall.packageSpec ?? dependencyInstall.packageName}.`
       );
     }
-    if (plan.dependencyHints.length > 0) {
+    if (installedDependencyHints.length > 0) {
+      logger.success(
+        `Installed scaffold dependencies: ${installedDependencyHints.join(', ')}.`
+      );
+    } else if (plan.dependencyHints.length > 0) {
       logger.write(
         `Dependencies:\n${plan.dependencyHints.map((hint) => `  - ${hint}`).join('\n')}`
       );
@@ -401,8 +461,17 @@ export const handleAddCommand = async (
   }
 
   if (!addArgs.noCodegen) {
+    const codegenConfig = rawConvexAuthPreset
+      ? {
+          ...effectiveConfig,
+          codegen: {
+            ...effectiveConfig.codegen,
+            scope: 'auth' as const,
+          },
+        }
+      : effectiveConfig;
     const codegenExitCode = await runConfiguredCodegen({
-      config: effectiveConfig,
+      config: codegenConfig,
       sharedDir: effectiveSharedDir,
       debug: parsed.debug || effectiveConfig.codegen.debug,
       generateMetaFn,
@@ -416,6 +485,12 @@ export const handleAddCommand = async (
     });
     if (codegenExitCode !== 0) {
       return codegenExitCode;
+    }
+
+    if (rawConvexAuthPreset) {
+      await syncEnvFn({
+        auth: true,
+      });
     }
   }
 

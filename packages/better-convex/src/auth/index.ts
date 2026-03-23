@@ -10,5 +10,6 @@ export type { AuthFunctions, Triggers } from './create-client';
 export { createClient } from './create-client';
 export * from './define-auth';
 export * from './generated-contract';
+export type { AuthRuntime } from './generated-contract-disabled';
 export * from './helpers';
 export * from './types';

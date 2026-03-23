@@ -140,15 +140,15 @@ Keep it small. This is a smoke lane, not a migration plan.
 
 ### Template sync/check uses the public backend selector
 
-`tooling/templates.ts` runs local committed starter sync with
+`tooling/fixtures.ts` runs local committed starter sync with
 `better-convex init -t <next|vite> --backend concave`.
 
 That means:
 
-- committed `templates/*/convex/functions/_generated/*` comes from the init
+- committed `fixtures/*/convex/functions/_generated/*` comes from the create
   flow running Better Convex codegen against Concave-backed bootstrap
 - template-mode Concave codegen intentionally uses `concave codegen --static`
-- `tooling/templates.ts` itself must not shell out to raw `better-convex codegen`
+- `tooling/fixtures.ts` itself must not shell out to raw `better-convex codegen`
 
 ### `_generated/*` drift is expected
 
@@ -160,8 +160,8 @@ Read the diff before calling it a bug.
 
 Current repo finding:
 
-- `templates/next/convex.json` sets `codegen.staticDataModel: true`
-- Concave-generated `templates/next/convex/functions/_generated/dataModel.d.ts` is still dynamic
+- `fixtures/next/convex.json` sets `codegen.staticDataModel: true`
+- Concave-generated `fixtures/next/convex/functions/_generated/dataModel.d.ts` is still dynamic
 
 So today, in this repo path, Concave is not honoring that flag.
 
@@ -193,8 +193,8 @@ Start with repo wiring:
 - `packages/better-convex/src/cli/backend-core.ts`
 - `packages/better-convex/src/cli/commands/init.ts`
 - `packages/better-convex/src/cli/commands/init.test.ts`
-- `tooling/templates.ts`
-- `tooling/templates.test.ts`
+- `tooling/fixtures.ts`
+- `tooling/fixtures.test.ts`
 - `tooling/scenarios.ts`
 - `tooling/scenarios.test.ts`
 - `test/concave/run-smoke.ts`
@@ -218,18 +218,17 @@ Then read Concave docs starting from:
 When touching Concave repo-runtime wiring, run:
 
 ```bash
-bun test packages/better-convex/src/cli/commands/init.test.ts ./tooling/templates.test.ts ./tooling/scenarios.test.ts
+bun test packages/better-convex/src/cli/commands/init.test.ts ./tooling/fixtures.test.ts ./tooling/scenarios.test.ts
 bun test packages/better-convex/src/cli/cli.test.ts
 bun run test:concave
-bun run check:templates
-bun run check:scenarios
+bun run fixtures:check
+bun run scenario:check
 ```
 
 If package code changed too, also run:
 
 ```bash
 bun --cwd packages/better-convex build
-touch example/convex/functions/schema.ts
 bun lint:fix
 bun typecheck
 ```
@@ -248,8 +247,8 @@ rg -n "backend|concave-bun|test:concave|createConcave|@concavejs|Concave|--backe
   packages/better-convex/src/cli/cli.ts \
   packages/better-convex/src/cli/commands/init.ts \
   packages/better-convex/src/cli/commands/init.test.ts \
-  tooling/templates.ts \
-  tooling/templates.test.ts \
+  tooling/fixtures.ts \
+  tooling/fixtures.test.ts \
   tooling/scenarios.ts \
   tooling/scenarios.test.ts \
   test/concave \

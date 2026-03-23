@@ -150,9 +150,24 @@ function ConvexAuthProviderInner({
           return pendingTokenRef.current;
         }
 
+        const cachedToken = authStore.get('token');
+        const fetchOptions: {
+          headers?: {
+            Authorization: string;
+          };
+          throw: false;
+        } = {
+          throw: false,
+        };
+        if (cachedToken && decodeJwtExp(cachedToken) === null) {
+          fetchOptions.headers = {
+            Authorization: `Bearer ${cachedToken}`,
+          };
+        }
+
         // biome-ignore lint/suspicious/noExplicitAny: convex plugin type
         pendingTokenRef.current = (authClient as any).convex
-          .token({ fetchOptions: { throw: false } })
+          .token({ fetchOptions })
           .then((result: { data?: { token?: string | null } | null }) => {
             const jwt = result.data?.token || null;
 

@@ -1,6 +1,6 @@
 ## 5. Core Backend
 
-For production bootstrap, prefer `bunx better-convex create` for fresh apps, `bunx better-convex init` for adoption, and `bunx better-convex add <plugin>`. This file is the snippet reference path.
+For production bootstrap, start in the CLI Registry: use `bunx better-convex init -t <next|vite> --yes` for a fresh app, `bunx better-convex init --yes` to adopt the current app, and `bunx better-convex add <plugin>` for feature layers. This file is the manual backend wiring reference.
 
 ### 5.1 Define schema and relations
 

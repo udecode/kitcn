@@ -47,6 +47,33 @@ type _pluginPostsRelation = Expect<
   HasKey<NonNullable<typeof relations>['posts']['relations'], 'user'>
 >;
 
+function createRelationExtension() {
+  return defineSchemaExtension('relation-plugin-factory', {
+    users,
+    posts,
+  }).relations((r) => ({
+    users: {
+      posts: r.many.posts(),
+    },
+    posts: {
+      user: r.one.users({
+        from: r.posts.userId,
+        to: r.users.id,
+      }),
+    },
+  }));
+}
+
+const schemaFromFactory = defineSchema({}).extend(createRelationExtension());
+const factoryRelations = getSchemaRelations(schemaFromFactory);
+
+type _factoryUsersRelation = Expect<
+  HasKey<NonNullable<typeof factoryRelations>['users']['relations'], 'posts'>
+>;
+type _factoryPostsRelation = Expect<
+  HasKey<NonNullable<typeof factoryRelations>['posts']['relations'], 'user'>
+>;
+
 const mergedSchema = defineSchema({})
   .extend(relationExtension)
   .relations((r) => ({

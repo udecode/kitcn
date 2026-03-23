@@ -156,10 +156,24 @@ function ConvexAuthProviderInner(
       return pendingTokenPromise;
     }
 
+    const fetchOptions: {
+      headers?: {
+        Authorization: string;
+      };
+      throw: false;
+    } = {
+      throw: false,
+    };
+    if (cachedToken && decodeJwtExp(cachedToken) === null) {
+      fetchOptions.headers = {
+        Authorization: `Bearer ${cachedToken}`,
+      };
+    }
+
     // Fetch fresh JWT
     // biome-ignore lint/suspicious/noExplicitAny: convex plugin type
     pendingTokenPromise = (props.authClient as any).convex
-      .token({ fetchOptions: { throw: false } })
+      .token({ fetchOptions })
       .then((result: { data?: { token?: string | null } | null }) => {
         const jwt = result.data?.token || null;
 

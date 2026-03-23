@@ -248,16 +248,10 @@ function syncTextTargets() {
 async function validatePinnedDependencies() {
   await run(['bun', 'install']);
   await run(['bun', '--cwd', 'packages/better-convex', 'build']);
-  fs.closeSync(
-    fs.openSync(
-      path.join(PROJECT_ROOT, 'example/convex/functions/schema.ts'),
-      'a'
-    )
-  );
-  await run(['bun', 'run', 'template:sync']);
-  await run(['bun', 'run', 'check:templates']);
-  await run(['bun', 'run', 'check:scenarios']);
-  await run(['bun', 'run', 'check:scenarios:convex']);
+  await run(['bun', 'run', 'fixtures:sync']);
+  await run(['bun', 'run', 'fixtures:check']);
+  await run(['bun', 'run', 'scenario:check']);
+  await run(['bun', 'run', 'scenario:check:convex']);
   await run(['bun', 'run', 'test:concave']);
   await run(['bun', 'typecheck']);
   await run(['bun', 'lint:fix']);

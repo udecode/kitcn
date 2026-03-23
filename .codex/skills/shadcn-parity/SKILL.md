@@ -67,7 +67,7 @@ For the current Next scaffold, the acceptable shell patches are narrow:
 If you find yourself authoring a full replacement for a shadcn-owned file,
 you are probably doing it wrong.
 
-## Universal Init Matrix
+## Universal Create Matrix
 
 Public templates stay concrete:
 
@@ -87,9 +87,9 @@ abstraction:
   `react`
 - unsupported frameworks should fail clearly
 
-`init` stays universal. Keep it narrow.
+`init -t` stays universal. Keep it narrow.
 
-Init always owns:
+`init -t` always owns:
 
 - the detected app shell plus the Better Convex seam
 - `convex/functions/schema.ts`
@@ -121,19 +121,21 @@ React-mode baseline keeps the client core only:
 - no `/convex` demo in v1
 - Vite is the concrete reference for this mode
 
-Init options stay narrow:
+`init -t` options stay narrow:
 
 - `-t next`
 - `-t vite`
 - `--backend convex|concave`
 - `--cwd`
 - `--name`
+- `--defaults`
 - `--yes`
-- `--team`
-- `--project`
-- `--dev-deployment`
+- `--prod`
+- `--preview-name`
+- `--deployment-name`
+- `--env-file`
 
-Do not grow `init` with fake feature flags.
+Do not grow `init -t` with fake feature flags.
 
 Optional capability belongs in `add`:
 
@@ -141,7 +143,7 @@ Optional capability belongs in `add`:
 - `better-convex add ratelimit`
 - `better-convex add resend`
 
-Auth is the first real bundle. It patches the init baseline and owns:
+Auth is the first real bundle. It patches the `init -t` baseline and owns:
 
 - auth server config/runtime
 - auth client files
@@ -166,9 +168,10 @@ Auth v1 does not own:
 
 Rule:
 
-- universal stack = `init`
+- universal starter scaffold = `init -t`
+- in-place adoption = `init`
 - optional/invasive/app-policy features = `add`
-- if a capability already fits cleanly as a first-party plugin, do not stuff it into `init`
+- if a capability already fits cleanly as a first-party plugin, do not stuff it into `init -t`
 
 ## Registry Comparison
 
@@ -205,31 +208,31 @@ Rule:
 - do not shove Better Convex-specific behavior back into the item shape unless
   shadcn has a real equivalent
 
-## Init
+## Create
 
-`templates/*` is not hand-authored. It is a normalized snapshot of real
+`fixtures/*` is not hand-authored. It is a normalized snapshot of real
 CLI output.
 
 The important bit:
 
 - committed template `_generated/*` output comes from real Better Convex
-  codegen during `better-convex init`
+  codegen during `better-convex init -t`
 - it is not copied from repo fixtures
 - it is not written by hand
-- template-mode init must fail if real codegen cannot be produced
+- template-mode `init -t` must fail if real codegen cannot be produced
 - do not call `better-convex codegen` directly from the fixture script
 
 Why not direct `better-convex codegen`?
 
 - a fresh temp app may still need Convex bootstrap before codegen can succeed
-- that bootstrap can become interactive if you bypass init's bootstrap flow
+- that bootstrap can become interactive if you bypass create's bootstrap flow
 - `better-convex init -t next` already owns the whole sequence:
   scaffold -> dependency install -> codegen -> bootstrap retry -> codegen retry
 - the fixture script should consume that contract, not reimplement half of it
 
 Repo automation adds two deliberate details:
 
-- `tooling/templates.ts` owns committed starters:
+- `tooling/fixtures.ts` owns committed starters:
   `next`, `next-auth`, `vite`, `vite-auth`
 - that uses the same public backend selector users can use elsewhere
 - template sync intentionally chooses Concave because it is more agent/CI-friendly here
@@ -242,35 +245,31 @@ Repo automation adds two deliberate details:
 To regenerate the checked-in fixture:
 
 ```bash
-bun run template:sync
+bun run fixtures:sync
 ```
 
 To verify the fixture still matches fresh CLI output:
 
 ```bash
-bun run check:templates
+bun run fixtures:check
 ```
 
 To materialize runnable tmp apps for manual runtime:
 
 ```bash
-bun run scenario:materialize all
+bun run scenario:prepare all
 ```
 
 Why this exists:
 
-- committed `templates/*/package.json` stays normalized to `workspace:*`
-- `check:templates` swaps that to a packed local tarball before validation
-- manual runtime happens in `tmp/scenarios/*`, never in `templates/*`
+- committed `fixtures/*/package.json` stays normalized to `workspace:*`
+- `fixtures:check` swaps that to a packed local tarball before validation
+- manual runtime happens in `tmp/scenarios/*`, never in `fixtures/*`
+- use @.claude/skills/scenarios/scenarios.mdc for runtime proof after prepare;
+  it owns which scenario keys stop at `scenario:dev`, which ones add
+  `test:auth` and `test:e2e`, and which ones must use `scenario:check`
 
-For manual runtime, prefer the root scripts:
-
-```bash
-bun run scenario:codegen next-auth
-bun run scenario:dev next-auth
-```
-
-`check:templates` is not just a diff. It validates the fresh generated app with:
+`fixtures:check` is not just a diff. It validates the fresh generated app with:
 
 ```bash
 bun install
@@ -289,20 +288,20 @@ published npm version:
 If you need the slower rebuild-first lane, use:
 
 ```bash
-bun run check:templates:full
+bun run fixtures:check:full
 ```
 
 ### Agent Repro
 
 When checking parity or drift:
 
-1. run `bun run template:sync` instead of editing `templates/*` by hand
-2. run `bun run check:templates`
+1. run `bun run fixtures:sync` instead of editing `fixtures/*` by hand
+2. run `bun run fixtures:check`
 3. if drift remains, fix `better-convex init -t next`, not the fixture
 
 ### Real Generation Flow
 
-`tooling/templates.ts` does this:
+`tooling/fixtures.ts` does this:
 
 1. create a temp directory
 2. for each committed starter, run the local CLI:
@@ -317,12 +316,12 @@ When checking parity or drift:
    bunx better-convex --backend concave add auth --yes
    ```
 
-3. let `init` run the actual scaffold flow:
+3. let `create` run the actual scaffold flow:
    - run `shadcn init -t next`
    - apply Better Convex overlay files and patches
    - install Better Convex baseline deps
    - run Better Convex codegen via the init-owned backend adapter
-4. if codegen needs Convex bootstrap, `init` bootstraps Convex and reruns real
+4. if codegen needs Convex bootstrap, `create` bootstraps Convex and reruns real
    codegen
    - for template sync, the selected backend is Concave
    - outside that flow, backend still resolves normally from config/CLI
@@ -332,7 +331,7 @@ When checking parity or drift:
    - `bun install`
    - `bun typecheck`
    - `bun lint` only for templates whose registry entry enables lint
-6. copy the generated app into `templates/<starter>`
+6. copy the generated app into `fixtures/<starter>`
 7. apply repo-only normalization:
    - strip volatile artifacts (`node_modules`, `.next`, lockfiles, etc.)
    - rewrite `better-convex` to `workspace:*`
@@ -349,12 +348,12 @@ cd <tmp>/next
 bunx better-convex codegen
 ```
 
-That skips the point of init owning bootstrap/codegen orchestration and can
+That skips the point of create owning bootstrap/codegen orchestration and can
 reintroduce interactive or half-bootstrapped failure modes.
 
 ### Rule
 
-If `templates/next` differs from fresh output, assume the CLI is wrong first.
+If `fixtures/next` differs from fresh output, assume the CLI is wrong first.
 Do not "fix" fixture drift by patching the fixture directly unless the change is
 strictly part of repo-only normalization.
 

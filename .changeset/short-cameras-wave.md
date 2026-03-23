@@ -157,14 +157,25 @@ type ProcedureMeta = {
 };
 ```
 
+- Use `better-convex init` as the single bootstrap command. Fresh app
+  scaffolding now lives behind `better-convex init -t <next|vite>`, while
+  `better-convex init --yes` adopts the current supported app in place.
+
+```bash
+# Before
+npx better-convex create -t next --yes
+npx better-convex init
+
+# After
+npx better-convex init -t next --yes
+npx better-convex init --yes
+```
+
 ## Features
 
 - Add packaged Convex agent skills plus TanStack Intent metadata and shim files
   so `better-convex` can be discovered from installed npm packages by agent
   tooling.
-- Split scaffolding into `better-convex create` for fresh starter apps and
-  `better-convex init` for in-place adoption, with `create` owning
-  `--template`, `--cwd`, `--name`, `--defaults`, and `--yes`.
 - Add plan-driven plugin UX across `add`, `view`, and `info`, with one shared
   install plan covering scaffold files, root-schema validation, env bootstrap,
   `concave.json`, schema registration, `plugins.lock.json`, dependency install
@@ -195,14 +206,14 @@ type ProcedureMeta = {
 - Add builder-only `unionOf(...)` and wider `objectOf(...)` support so schema
   code can stay on ORM builders for mixed scalar unions and homogeneous object
   values.
-- Add concrete starter templates through `better-convex create -t next` and
-  `better-convex create -t vite`.
-- Add `better-convex add auth` as the first auth bundle on top of the init
-  baseline, scaffolding Better Auth server/client files, auth-aware provider
-  wiring, auth env fields through `get-env`, auth cRPC families, and a minimal
-  `/auth` page.
+- Add concrete starter templates through `better-convex init -t next` and
+  `better-convex init -t vite`.
+- Add `better-convex add auth` with the Better Convex baseline by default and
+  a raw `--preset convex` adoption path for `create-convex` apps that patches
+  plain Convex providers and `http.ts` without `concave.json`, `get-env.ts`,
+  cRPC scaffolds, or demo auth routes.
 - Add `meta["better-convex"].dev.preRun`, run `convex init` automatically
-  before Convex-backed `create`, `init`, and `dev`, and batch auth/env pushes
+  before Convex-backed `init` and `dev`, and batch auth/env pushes
   through `better-convex env push --auth --rotate`.
 - Support Convex 1.33 across the package, starter templates, example app, and
   scenario fixtures, and bump the minimum supported Convex peer dependency to
@@ -210,12 +221,18 @@ type ProcedureMeta = {
 
 ## Patches
 
-- Fix generated placeholder runtime files so the temporary CommonJS `require`
-  shims no longer trip ESLint before full codegen output exists.
 - Fix `createEnv(...)` during codegen and auth-config analysis so missing
   optional env vars do not get treated as required.
+- Fix disabled generated auth output so non-auth apps import a cold
+  `better-convex/auth/generated` surface instead of pulling the full auth
+  stack
+  into local runtime.
 - Fix generated schedule caller types so `schedule.now`, `schedule.after`, and
   `schedule.at` return `GenericId<'_scheduled_functions'>`, and
   `schedule.cancel(...)` requires the same id type.
 - Fix gitignore bootstrap so Better Convex adds both `.convex/` and
   `.concave/` entries during init/dev flows.
+- Fix auth mutations so sign-in and sign-up seed returned session tokens
+  immediately, sign-out clears local auth state without waiting on a stale
+  session hook, and scaffolded auth pages can flip into signed-in state as
+  soon as the backend exchange succeeds.

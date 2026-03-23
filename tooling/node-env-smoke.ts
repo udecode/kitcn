@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { parse } from 'dotenv';
+import { parseEnv } from 'node:util';
 import { generateFreshApp, log, PROJECT_ROOT, run } from './scaffold-utils';
 
 const DIST_CLI_PATH = path.join(
@@ -69,7 +69,7 @@ export const runNodeEnvSmoke = async () => {
       path.join(generatedAppDir, 'convex', '.env.remote'),
       'utf8'
     );
-    const parsed = parse(pulledEnv);
+    const parsed = parseEnv(pulledEnv);
     if (
       parsed.NODE_ENV_SMOKE !== '1' ||
       parsed.MULTILINE !== 'hello\nworld' ||

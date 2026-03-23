@@ -85,14 +85,19 @@ describe('integration/generated-api', () => {
       expect(generated).toContain('export type Insert<T extends TableName>');
       expect(generated).not.toContain('WithHttpRouter');
       expect(generatedServer).toContain(
-        'export type QueryCtx = ServerQueryCtx;'
+        "import { relations } from '../schema';"
       );
-      expect(generatedServer).not.toContain('createOrm');
+      expect(generatedServer).toContain('createOrm');
+      expect(generatedServer).toContain('initCRPC as baseInitCRPC,');
+      expect(generatedServer).toContain('getGeneratedValue,');
       expect(generatedServer).toContain(
-        "import { initCRPC as baseInitCRPC } from 'better-convex/server';"
+        'const ormFunctions = getGeneratedValue(internal, ["generated","server"]) as OrmFunctions;'
       );
       expect(generatedServer).toContain(
-        'export type MutationCtx = ServerMutationCtx;'
+        'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
+      );
+      expect(generatedServer).toContain(
+        'export type MutationCtx = OrmCtx<ServerMutationCtx>;'
       );
       expect(generatedServer).toContain(
         'export type ActionCtx = ServerActionCtx;'
@@ -102,16 +107,26 @@ describe('integration/generated-api', () => {
       );
       expect(generatedServer).not.toContain('export type MigrationCtx =');
       expect(generatedServer).toContain(
-        'export type OrmCtx<Ctx = QueryCtx> = Ctx;'
+        'export type OrmCtx<Ctx extends ServerQueryCtx | ServerMutationCtx = ServerQueryCtx> = GenericOrmCtx<Ctx, typeof ormSchema>;'
       );
       expect(generatedServer).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
-      expect(generatedServer).toContain('query: (ctx) => ctx,');
-      expect(generatedServer).toContain('mutation: (ctx) => ctx,');
+      expect(generatedServer).toContain('const ormSchema = relations;');
+      expect(generatedServer).toContain('query: (ctx) => withOrm(ctx),');
+      expect(generatedServer).toContain('mutation: (ctx) => withOrm(ctx),');
       expect(generatedServer).toContain('action: (ctx) => ctx,');
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedMigrations).toContain('export function defineMigration(');
+      expect(generatedMigrations).toContain(
+        "import { relations } from '../schema';"
+      );
+      expect(generatedMigrations).toContain(
+        'migration: MigrationDefinition<typeof relations>'
+      );
+      expect(generatedMigrations).toContain(
+        'return baseDefineMigration<typeof relations>(migration);'
+      );
       expect(generatedMigrations).not.toContain('defineMigrationSet');
     } finally {
       process.chdir(oldCwd);
@@ -406,7 +421,7 @@ describe('integration/generated-api', () => {
       );
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).toContain('auth: authDefinition,');
-      expect(generatedAuth).not.toContain('context: withOrm,');
+      expect(generatedAuth).toContain('context: withOrm,');
       expect(generatedAuth).toContain('authEnabled,');
       expect(generatedAuth).not.toContain('createDisabledAuthRuntime');
       expect(generatedAuth).not.toContain('const authFunctions: AuthFunctions');
@@ -495,11 +510,14 @@ describe('integration/generated-api', () => {
       expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_auth_file")'
       );
+      expect(generatedAuth).toContain("} from 'better-convex/auth/generated';");
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).toContain('authEnabled,');
       expect(generatedAuth).not.toContain(
         "import * as authDefinitionModule from './auth';"
       );
+      expect(generatedAuth).not.toContain("} from 'better-convex/auth';");
+      expect(generatedAuth).not.toContain('createAuthRuntime,');
       expect(generatedAuth).not.toContain('createAuthRuntime<DataModel');
     } finally {
       process.chdir(oldCwd);
@@ -590,10 +608,13 @@ describe('integration/generated-api', () => {
       expect(generatedAuth).toContain(
         'getGeneratedAuthDisabledReason("missing_default_export")'
       );
+      expect(generatedAuth).toContain("} from 'better-convex/auth/generated';");
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).not.toContain(
         "import * as authDefinitionModule from './auth';"
       );
+      expect(generatedAuth).not.toContain("} from 'better-convex/auth';");
+      expect(generatedAuth).not.toContain('createAuthRuntime,');
     } finally {
       process.chdir(oldCwd);
     }

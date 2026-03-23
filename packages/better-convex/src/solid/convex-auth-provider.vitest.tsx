@@ -113,6 +113,57 @@ describe('ConvexAuthProvider', () => {
     });
   });
 
+  test('passes the cached session token as bearer auth when it is not a JWT', async () => {
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    const convexJwt = makeJwt(7200);
+    const convexToken = vi.fn(async (_opts?: unknown) => ({
+      data: { token: convexJwt },
+    }));
+
+    const authClient = {
+      useSession: () =>
+        makeSessionAccessor({ session: { id: 'session-1' } }, false),
+      convex: { token: convexToken },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+    };
+
+    const wrapper = (props: { children: JSX.Element }) => (
+      <ConvexAuthProvider authClient={authClient as any} client={client as any}>
+        {props.children}
+      </ConvexAuthProvider>
+    );
+
+    const { result } = renderHook(
+      () => ({
+        fetchAccessToken: useFetchAccessToken(),
+        store: useAuthStore(),
+      }),
+      { wrapper }
+    );
+
+    result.store.set('token', 'session-token');
+    result.store.set('expiresAt', null);
+
+    const fetched = await result.fetchAccessToken!({ forceRefreshToken: true });
+
+    expect(fetched).toBe(convexJwt);
+    expect(convexToken).toHaveBeenCalledTimes(1);
+    expect(convexToken).toHaveBeenCalledWith({
+      fetchOptions: {
+        headers: {
+          Authorization: 'Bearer session-token',
+        },
+        throw: false,
+      },
+    });
+  });
+
   test('deduplicates concurrent token fetches', async () => {
     const client = {
       setAuth: () => {},

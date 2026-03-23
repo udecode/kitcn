@@ -1,16 +1,5 @@
-import pluginBabel from '@rollup/plugin-babel';
 import solid from 'rolldown-plugin-solid';
 import { defineConfig } from 'tsdown';
-
-const babelPlugin = pluginBabel({
-  babelHelpers: 'bundled',
-  parserOpts: {
-    sourceType: 'module',
-    plugins: ['jsx', 'typescript'],
-  },
-  plugins: ['babel-plugin-react-compiler'],
-  extensions: ['.js', '.jsx', '.ts', '.tsx'],
-});
 
 export default defineConfig([
   // Client builds (auth/client, react) - need "use client" directive
@@ -26,7 +15,6 @@ export default defineConfig([
     exports: true,
     dts: true,
     banner: "'use client';",
-    plugins: [babelPlugin],
     checks: { pluginTimings: false },
   },
   // SolidJS client builds - no "use client", no React Compiler
@@ -47,6 +35,7 @@ export default defineConfig([
     entry: {
       'aggregate/index': 'src/aggregate/index.ts',
       'auth/config/index': 'src/auth-config/index.ts',
+      'auth/generated/index': 'src/auth/generated.ts',
       'auth/http/index': 'src/auth-http/index.ts',
       'auth/index': 'src/auth/index.ts',
       'auth/nextjs/index': 'src/auth-nextjs/index.ts',

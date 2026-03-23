@@ -8,6 +8,7 @@ import {
   createProcedureCallerFactory,
   createProcedureHandlerFactory,
   defineProcedure,
+  getGeneratedFunctionReference,
   typedProcedureResolver,
 } from './procedure-caller';
 
@@ -911,5 +912,43 @@ describe('server/procedure-caller', () => {
       ok: true,
       name: 'ok',
     });
+  });
+
+  test('generated registry runtime accepts a prebuilt registry object', async () => {
+    const procedureRegistry = {
+      'math.query': ['query', async () => queryProcedure],
+      'math.mutate': ['mutation', async () => mutationProcedure],
+    } as const;
+
+    const runtime = createGeneratedRegistryRuntime<
+      QueryCtx,
+      MutationCtx,
+      typeof procedureRegistry,
+      never,
+      typeof procedureRegistry
+    >({
+      procedureRegistry,
+      handlerRegistry: procedureRegistry,
+    });
+
+    const caller = runtime.getCallerFactory()(queryCtx);
+    await expect(caller.math.query({ id: 'q_2' })).resolves.toEqual({
+      ctxKind: 'query',
+      id: 'q_2',
+    });
+
+    const handler = runtime.getHandlerFactory()(mutationCtx);
+    await expect(handler.math.mutate({ name: 'prebuilt' })).resolves.toEqual({
+      ok: true,
+      name: 'prebuilt',
+    });
+  });
+
+  test('getGeneratedFunctionReference preserves typed refs from generated roots', () => {
+    const ref = getGeneratedFunctionReference({
+      [Symbol.for('functionName')]: 'math:query',
+    } as any);
+
+    expect((ref as any)[Symbol.for('functionName')]).toBe('math:query');
   });
 });

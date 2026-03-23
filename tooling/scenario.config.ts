@@ -7,6 +7,16 @@ export const SCENARIO_KEYS = [
   'vite-auth',
   'convex-next-auth-bootstrap',
   'convex-vite-auth-bootstrap',
+  'convex-next-all',
+  'create-convex-nextjs-shadcn-auth',
+  'create-convex-bare',
+  'create-convex-nextjs-shadcn',
+  'create-convex-react-vite-shadcn',
+] as const;
+
+export const DEFAULT_CHECK_SCENARIO_KEYS = [
+  'convex-next-auth-bootstrap',
+  'convex-vite-auth-bootstrap',
   'create-convex-bare',
   'create-convex-nextjs-shadcn',
   'create-convex-react-vite-shadcn',
@@ -15,6 +25,8 @@ export const SCENARIO_KEYS = [
 export const FULL_CONVEX_SCENARIO_KEYS = [
   'convex-next-auth-bootstrap',
   'convex-vite-auth-bootstrap',
+  'convex-next-all',
+  'create-convex-nextjs-shadcn-auth',
 ] as const;
 
 export type ScenarioKey = (typeof SCENARIO_KEYS)[number];
@@ -139,10 +151,58 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
       template: 'vite',
     },
   },
+  'convex-next-all': {
+    backend: 'convex',
+    check: true,
+    env: {
+      CONVEX_AGENT_MODE: 'anonymous',
+    },
+    label: 'convex next all',
+    setup: [
+      ['add', 'ratelimit', '--yes', '--no-codegen'],
+      ['add', 'auth', '--yes', '--no-codegen'],
+      ['add', 'resend', '--yes', '--no-codegen'],
+    ],
+    validation: {
+      beforeCheck: [
+        ['convex', 'init'],
+        ['better-convex', 'dev', '--once', '--typecheck', 'disable'],
+        ['better-convex', 'env', 'push', '--auth'],
+      ],
+      lint: true,
+    },
+    source: {
+      kind: 'fresh',
+      template: 'next',
+    },
+  },
+  'create-convex-nextjs-shadcn-auth': {
+    backend: 'convex',
+    check: false,
+    env: {
+      CONVEX_AGENT_MODE: 'anonymous',
+    },
+    label: 'create-convex nextjs-shadcn auth adoption',
+    setup: [],
+    validation: {
+      beforeCheck: [
+        ['convex', 'init'],
+        ['better-convex', 'add', 'auth', '--preset', 'convex', '--yes'],
+      ],
+      lint: false,
+    },
+    source: {
+      kind: 'fixture',
+      fixture: 'create-convex-nextjs-shadcn',
+    },
+  },
   'create-convex-bare': {
     check: true,
-    label: 'create-convex bare adoption',
-    setup: [['init', '--yes']],
+    env: {
+      CONVEX_AGENT_MODE: 'anonymous',
+    },
+    label: 'create-convex bare runtime',
+    setup: [],
     validation: {
       lint: false,
     },
@@ -153,6 +213,9 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   },
   'create-convex-nextjs-shadcn': {
     check: true,
+    env: {
+      CONVEX_AGENT_MODE: 'anonymous',
+    },
     label: 'create-convex nextjs-shadcn adoption',
     setup: [['init', '--yes']],
     validation: {
@@ -165,6 +228,9 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   },
   'create-convex-react-vite-shadcn': {
     check: true,
+    env: {
+      CONVEX_AGENT_MODE: 'anonymous',
+    },
     label: 'create-convex react-vite-shadcn adoption',
     setup: [['init', '--yes']],
     validation: {

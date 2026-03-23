@@ -23,6 +23,7 @@
     "./auth": "./dist/auth/index.js",
     "./auth/client": "./dist/auth/client/index.js",
     "./auth/config": "./dist/auth/config/index.js",
+    "./auth/generated": "./dist/auth/generated/index.js",
     "./auth/http": "./dist/auth/http/index.js",
     "./auth/nextjs": "./dist/auth/nextjs/index.js",
     "./crpc": "./dist/crpc/index.js",

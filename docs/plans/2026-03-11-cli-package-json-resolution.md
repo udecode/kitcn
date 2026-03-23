@@ -10,7 +10,7 @@
 3. Fix resolution to work from both source and bundled dist output.
 4. Add a red test for `init --backend concave` writing `meta["better-convex"].backend`.
 5. Wire the resolved backend into config bootstrap.
-6. Verify with targeted tests and a real `templates/next` codegen run.
+6. Verify with targeted tests and a real `fixtures/next` codegen run.
 
 ## Progress
 - [x] Plan file created

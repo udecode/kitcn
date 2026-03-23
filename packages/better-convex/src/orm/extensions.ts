@@ -20,7 +20,7 @@ type SchemaExtensionRelationsAuthoringConfig<TTables extends object> = {
 };
 
 type BivariantCallback<TCallback extends (...args: any[]) => unknown> = {
-  bivarianceHack: TCallback;
+  bivarianceHack(...args: Parameters<TCallback>): ReturnType<TCallback>;
 }['bivarianceHack'];
 
 export type SchemaExtensionRelationsFactory<

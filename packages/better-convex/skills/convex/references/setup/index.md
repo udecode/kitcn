@@ -30,7 +30,7 @@ Ask these questions before editing files.
 
 | Feature         | Options                                                              | Default            |
 | --------------- | -------------------------------------------------------------------- | ------------------ |
-| Bootstrap       | CLI (`better-convex create` / `init` / `add`), Docs by section      | CLI                |
+| Bootstrap       | CLI (`better-convex init` / `add`), Docs by section                 | CLI                |
 | React Framework | Next.js App Router, TanStack Start, Other                            | Next.js App Router |
 | Database        | ORM (`ctx.orm`)                                                      | ORM                |
 
@@ -52,7 +52,7 @@ Ask these questions before editing files.
 
 Use this exact structure:
 
-1. Bootstrap: CLI (`better-convex create` / `init` / `add`) or docs by section?
+1. Bootstrap: CLI (`better-convex init` / `add`) or docs by section?
 2. Framework: Next.js App Router, TanStack Start, or other?
 3. Database: ORM (`ctx.orm`) or other?
 4. Auth: Better Auth, custom auth, or no auth?
@@ -84,20 +84,20 @@ Map answers to setup execution in this order:
 Use the CLI first:
 
 ```bash
-# Existing app
-bunx better-convex init
+# Adopt the current supported app in place
+bunx better-convex init --yes
 
-# Existing app on Concave
+# Adopt the current supported app on Concave
 bunx better-convex --backend concave init --yes
 
 # New Next.js app with deterministic shadcn bootstrap + curated minimal scaffold
-bunx better-convex create -t next --yes
+bunx better-convex init -t next --yes
 
 # New Vite app with the React baseline
-bunx better-convex create -t vite --yes
+bunx better-convex init -t vite --yes
 
 # Nested app target
-bunx better-convex create -t next --yes --cwd apps --name web
+bunx better-convex init -t next --yes --cwd apps --name web
 ```
 
 Then add only the features you want:
@@ -108,7 +108,7 @@ bunx better-convex add ratelimit
 bunx better-convex add resend
 ```
 
-`better-convex create -t next --yes` owns the Better Convex integration layer for:
+`better-convex init -t next --yes` owns the Better Convex integration layer for:
 
 - `app/convex/page.tsx`
 - `package.json`
@@ -126,22 +126,22 @@ bunx better-convex add resend
 - `convex/shared/api.ts`
 - `concave.json`
 
-Template-mode create preserves the shadcn-owned shell (`app/layout.tsx`, `app/page.tsx`, `app/globals.css`, `components/theme-provider.tsx`, `lib/utils.ts`, `components.json`, `eslint.config.mjs`, `next.config.mjs`, `postcss.config.mjs`) and only patches:
+Template-mode `init -t next` preserves the shadcn-owned shell (`app/layout.tsx`, `app/page.tsx`, `app/globals.css`, `components/theme-provider.tsx`, `lib/utils.ts`, `components.json`, `eslint.config.mjs`, `next.config.mjs`, `postcss.config.mjs`) and only patches:
 
 - `app/layout.tsx` to mount `Providers`
 - `tsconfig.json` to add `@convex/*`
 - `components.json` when `tailwind.css` needs to follow the resolved app root
 - `package.json` to add `better-convex codegen` as `codegen` (or `convex:codegen` when `codegen` is already taken)
 
-Create also runs the first Better Convex codegen pass so `convex/lib/crpc.ts` can import `../functions/generated/server` immediately.
-Template-mode create also seeds a live messages demo route plus starter schema and
+`init -t` also runs the first Better Convex codegen pass so `convex/lib/crpc.ts` can import `../functions/generated/server` immediately.
+Template-mode `init -t` also seeds a live messages demo route plus starter schema and
 procedures, so the scaffold has one working query/mutation flow out of the box.
-Template-mode create infers `src/` vs root app layouts and writes the Next client scaffold into the matching tree. Conflicting `src` + root layouts should fail instead of guessing.
+Template-mode `init -t` infers `src/` vs root app layouts and writes the Next client scaffold into the matching tree. Conflicting `src` + root layouts should fail instead of guessing.
 Backend resolves from `--backend`, then `meta["better-convex"].backend`, then `convex`.
 
 Universal scaffold rule:
 
-1. `create -t next` owns the stack everyone needs:
+1. `init -t next` owns the stack everyone needs:
    - typed `get-env`
    - client core
    - server core
@@ -149,13 +149,14 @@ Universal scaffold rule:
    - `.gitignore` entries for `.convex/` and `.concave/`
    - baseline scripts
    - fixed `/convex` messages demo
-2. Optional capability belongs in `add`, not `init`:
+2. `better-convex init` bootstraps the app in both modes: with `-t` for fresh scaffold, without `-t` for in-place adoption.
+3. Optional capability belongs in `add`, not the base scaffold:
    - `add auth`
    - `add ratelimit`
    - `add resend`
-3. `add auth` is the minimal auth bundle. It owns auth server/client files,
+4. `add auth` is the minimal auth bundle. It owns auth server/client files,
    auth-aware provider wiring, auth env fields, and auth cRPC families.
-4. `add auth` does not own role/admin policy, orgs, or other app-policy layers.
+5. `add auth` does not own role/admin policy, orgs, or other app-policy layers.
 
 Public template keys stay concrete:
 
@@ -174,7 +175,7 @@ Framework mapping:
 
 React-mode notes:
 
-1. `create -t vite` scaffolds the universal baseline plus the React client core.
+1. `init -t vite` scaffolds the universal baseline plus the React client core.
 2. It does not scaffold RSC helpers.
 3. It does not scaffold the `/convex` messages demo in v1.
 4. `add auth` on the React baseline follows the Better Auth React/Vite SPA shape and skips auth page/router UX in v1.
@@ -670,7 +671,7 @@ Source coverage mapping used to build this runbook:
 
 | Source                                               | Mapped In Setup                  |
 | ---------------------------------------------------- | -------------------------------- |
-| `www/content/docs/templates.mdx`                     | Sections 3, 4, 5, 6, 7, 8, 9, 11 |
+| `www/content/docs/cli/registry.mdx`                  | Sections 3, 11                   |
 | `www/content/docs/quickstart.mdx`                    | Sections 3, 4, 5, 12             |
 | `www/content/docs/server/setup.mdx`                  | Section 5.3                      |
 | `www/content/docs/auth/server.mdx`                   | Sections 6.1 - 6.10              |
@@ -691,7 +692,6 @@ Source coverage mapping used to build this runbook:
 | `www/content/docs/auth/plugins/admin.mdx`            | Section 10.1                     |
 | `www/content/docs/auth/plugins/organizations.mdx`    | Section 10.2                     |
 | `www/content/docs/auth/plugins/polar.mdx`            | Section 10.3                     |
-| `www/content/docs/cli/registry.mdx`                 | Section 11                       |
 | `www/content/docs/cli/backend.mdx`                   | Section 11                       |
 
 ### Template Coverage (Recreation Target)

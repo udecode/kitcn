@@ -43,6 +43,10 @@ describe('cli/registry', () => {
       'auth-runtime',
       'auth-client',
       'auth-page',
+      'auth-schema-convex',
+      'auth-config-convex',
+      'auth-runtime-convex',
+      'auth-client-convex',
     ]);
     expect(
       descriptor.templates.find((template) => template.id === 'auth-page')
@@ -57,7 +61,24 @@ describe('cli/registry', () => {
         key: 'default',
         description:
           'Scaffold minimal Better Auth server + client wiring on top of init.',
-        templateIds,
+        templateIds: [
+          'auth-schema',
+          'auth-config',
+          'auth-runtime',
+          'auth-client',
+          'auth-page',
+        ],
+      },
+      {
+        key: 'convex',
+        description:
+          'Adopt a raw Convex app with auth only, without Better Convex baseline files.',
+        templateIds: [
+          'auth-schema-convex',
+          'auth-config-convex',
+          'auth-runtime-convex',
+          'auth-client-convex',
+        ],
       },
     ]);
   });

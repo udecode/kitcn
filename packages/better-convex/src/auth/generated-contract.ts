@@ -1,4 +1,3 @@
-import type { Auth as BetterAuthInstance } from 'better-auth';
 import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
 import type { Auth } from 'better-auth/types';
 import type {
@@ -14,32 +13,17 @@ import type {
   GenericAuthDefinition,
   GenericAuthTriggers,
 } from './define-auth';
+import type { AuthRuntime } from './generated-contract-disabled';
 
-export type GeneratedAuthDisabledReasonKind =
-  | 'default_export_unavailable'
-  | 'missing_auth_file'
-  | 'missing_default_export';
+export {
+  createDisabledAuthRuntime,
+  type GeneratedAuthDisabledReasonKind,
+  getGeneratedAuthDisabledReason,
+} from './generated-contract-disabled';
 
-const GENERATED_AUTH_DISABLED_REASONS: Record<
-  GeneratedAuthDisabledReasonKind,
-  string
-> = {
-  default_export_unavailable:
-    'Auth runtime is disabled. convex/functions/auth.ts default export is unavailable. Export `default defineAuth((ctx) => ({ ...options, triggers }))` and run `better-convex codegen`.',
-  missing_auth_file:
-    'Auth runtime is disabled. Create convex/functions/auth.ts with `export default defineAuth(...)` and run `better-convex codegen`.',
-  missing_default_export:
-    'Auth runtime is disabled. convex/functions/auth.ts exists but does not export a default auth definition. Export `default defineAuth((ctx) => ({ ...options, triggers }))` and run `better-convex codegen`.',
-};
+type UnknownFn = (...args: never[]) => unknown;
 
-export const getGeneratedAuthDisabledReason = (
-  kind: GeneratedAuthDisabledReasonKind
-): string => GENERATED_AUTH_DISABLED_REASONS[kind];
-
-const DEFAULT_DISABLED_AUTH_MESSAGE =
-  getGeneratedAuthDisabledReason('missing_auth_file');
-
-type UnknownFn = (...args: unknown[]) => unknown;
+const GENERATED_AUTH_TDZ_RE = /before initialization/i;
 
 type AuthDefinitionModule<
   GenericCtx,
@@ -63,18 +47,45 @@ export const resolveGeneratedAuthDefinition = <Definition extends UnknownFn>(
   input: unknown,
   reason: string
 ): Definition => {
-  const resolved =
-    typeof input === 'function'
-      ? input
-      : typeof input === 'object' &&
-          input !== null &&
-          'default' in input &&
-          typeof input.default === 'function'
-        ? input.default
-        : undefined;
+  const createDeferredResolver = () =>
+    ((...args: Parameters<Definition>) => {
+      const deferred = resolveValue();
+      if (typeof deferred === 'function') {
+        return deferred(...args);
+      }
+      throw new Error(reason);
+    }) as Definition;
+
+  const resolveValue = () => {
+    if (typeof input === 'function') {
+      return input;
+    }
+    if (typeof input !== 'object' || input === null || !('default' in input)) {
+      return undefined;
+    }
+    const defaultExport = input.default;
+    return typeof defaultExport === 'function' ? defaultExport : undefined;
+  };
+
+  let resolved: unknown;
+  try {
+    resolved = resolveValue();
+  } catch (error) {
+    if (
+      error instanceof ReferenceError &&
+      GENERATED_AUTH_TDZ_RE.test(error.message)
+    ) {
+      return createDeferredResolver();
+    }
+    throw error;
+  }
 
   if (typeof resolved === 'function') {
     return resolved as Definition;
+  }
+
+  if (typeof input === 'object' && input !== null && 'default' in input) {
+    return createDeferredResolver();
   }
 
   throw new Error(reason);
@@ -104,15 +115,6 @@ const withoutTriggers = <
   const { triggers: _triggers, ...options } = authOptions;
   return options as AuthOptions;
 };
-
-const createDisabledError = (message: string, exportName: string) => () => {
-  throw new Error(`${message} (${exportName})`);
-};
-
-const createDisabledRuntimeExport = <T>(
-  message: string,
-  exportName: string
-): T => createDisabledError(message, exportName) as T;
 
 type BetterAuthRuntime<Options extends BetterAuthOptions = BetterAuthOptions> =
   Auth<Options>;
@@ -193,41 +195,6 @@ const decorateAuthRuntimeProcedures = <T extends Record<string, unknown>>(
   return exportsObject;
 };
 
-export type AuthRuntime<
-  DataModel extends GenericDataModel,
-  Schema extends SchemaDefinition<GenericSchema, true>,
-  TriggerCtx extends
-    GenericMutationCtx<DataModel> = GenericMutationCtx<DataModel>,
-  GenericCtx = GenericMutationCtx<DataModel>,
-  AuthOptions extends
-    BetterAuthOptionsWithoutDatabase = BetterAuthOptionsWithoutDatabase,
-> = {
-  auth: BetterAuthInstance<
-    AuthOptions & {
-      database: BetterAuthOptions['database'];
-    }
-  >;
-  authClient: ReturnType<typeof createClient<DataModel, Schema, TriggerCtx>>;
-  authEnabled: boolean;
-  getAuth: (ctx: GenericCtx) => BetterAuthInstance<
-    AuthOptions & {
-      database: BetterAuthOptions['database'];
-    }
-  >;
-} & ReturnType<
-  typeof createApi<
-    Schema,
-    DataModel,
-    GenericCtx,
-    TriggerCtx,
-    BetterAuthInstance<
-      AuthOptions & {
-        database: BetterAuthOptions['database'];
-      }
-    >
-  >
->;
-
 export const createAuthRuntime = <
   DataModel extends GenericDataModel,
   Schema extends SchemaDefinition<GenericSchema, true>,
@@ -300,80 +267,4 @@ export const createAuthRuntime = <
     auth: createLazyAuthProxy(getStaticAuth),
     ...decoratedAuthApi,
   } as AuthRuntime<DataModel, Schema, TriggerCtx, GenericCtx, AuthOptions>;
-};
-
-export const createDisabledAuthRuntime = <
-  DataModel extends GenericDataModel,
-  Schema extends SchemaDefinition<GenericSchema, true>,
-  TriggerCtx extends
-    GenericMutationCtx<DataModel> = GenericMutationCtx<DataModel>,
-  GenericCtx = GenericMutationCtx<DataModel>,
-  AuthOptions extends
-    BetterAuthOptionsWithoutDatabase = BetterAuthOptionsWithoutDatabase,
->(config?: {
-  reason?: string;
-}): AuthRuntime<DataModel, Schema, TriggerCtx, GenericCtx, AuthOptions> => {
-  const message = config?.reason ?? DEFAULT_DISABLED_AUTH_MESSAGE;
-  type Runtime = AuthRuntime<
-    DataModel,
-    Schema,
-    TriggerCtx,
-    GenericCtx,
-    AuthOptions
-  >;
-
-  return {
-    authEnabled: false as const,
-    authClient: {
-      authFunctions: {} as AuthFunctions,
-      triggers: undefined,
-      adapter: createDisabledError(message, 'authClient.adapter'),
-    } as unknown as ReturnType<
-      typeof createClient<DataModel, Schema, TriggerCtx>
-    >,
-    auth: new Proxy(
-      {},
-      {
-        get() {
-          throw new Error(`${message} (auth)`);
-        },
-      }
-    ) as Runtime['auth'],
-    getAuth: createDisabledError(message, 'getAuth') as (
-      ctx: GenericCtx
-    ) => Runtime['auth'],
-    create: createDisabledRuntimeExport<Runtime['create']>(message, 'create'),
-    deleteMany: createDisabledRuntimeExport<Runtime['deleteMany']>(
-      message,
-      'deleteMany'
-    ),
-    deleteOne: createDisabledRuntimeExport<Runtime['deleteOne']>(
-      message,
-      'deleteOne'
-    ),
-    findMany: createDisabledRuntimeExport<Runtime['findMany']>(
-      message,
-      'findMany'
-    ),
-    findOne: createDisabledRuntimeExport<Runtime['findOne']>(
-      message,
-      'findOne'
-    ),
-    updateMany: createDisabledRuntimeExport<Runtime['updateMany']>(
-      message,
-      'updateMany'
-    ),
-    updateOne: createDisabledRuntimeExport<Runtime['updateOne']>(
-      message,
-      'updateOne'
-    ),
-    getLatestJwks: createDisabledRuntimeExport<Runtime['getLatestJwks']>(
-      message,
-      'getLatestJwks'
-    ),
-    rotateKeys: createDisabledRuntimeExport<Runtime['rotateKeys']>(
-      message,
-      'rotateKeys'
-    ),
-  };
 };

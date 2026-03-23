@@ -9,7 +9,6 @@ import {
   createAuthMutations,
   isAuthMutationError,
 } from './auth-mutations';
-import type { AuthStore } from './auth-store';
 import { AuthProvider, useAuthStore } from './auth-store';
 import * as contextModule from './context';
 
@@ -77,7 +76,7 @@ describe('createAuthMutations', () => {
     return {} as any;
   }
 
-  test('signOut: sets isAuthenticated=false, unsubscribes auth queries, and waits for token to clear', async () => {
+  test('signOut: sets isAuthenticated=false, unsubscribes auth queries, and clears auth state after success', async () => {
     const unsubscribeAuthQueries = vi.fn(() => {});
     useConvexQueryClientSpy = vi
       .spyOn(contextModule, 'useConvexQueryClient')
@@ -103,11 +102,10 @@ describe('createAuthMutations', () => {
       { wrapper }
     );
 
-    // Clear the token as part of the authClient call to simulate auth completion.
-    (authClient.signOut as any).mockImplementation(async (args: unknown) => {
-      result.store.set('token', null as any);
-      return { ok: true, args };
-    });
+    (authClient.signOut as any).mockImplementation(async (args: unknown) => ({
+      ok: true,
+      args,
+    }));
 
     const res = await result.opts.mutationFn?.(
       { reason: 'logout' },
@@ -121,6 +119,7 @@ describe('createAuthMutations', () => {
 
     expect(result.store.get('isAuthenticated')).toBe(false);
     expect(result.store.get('token')).toBeNull();
+    expect(result.store.get('expiresAt')).toBeNull();
   });
 
   test('signIn(email): throws AuthMutationError when better-auth returns an error payload', async () => {
@@ -156,37 +155,31 @@ describe('createAuthMutations', () => {
     ).rejects.toBeInstanceOf(AuthMutationError);
   });
 
-  test('signUp(email): waits for auth token before returning', async () => {
+  test('signIn(email): seeds the auth store from a returned token', async () => {
     useConvexQueryClientSpy = vi
       .spyOn(contextModule, 'useConvexQueryClient')
       .mockReturnValue(null as any);
-
-    let storeRef: AuthStore | null = null;
 
     const authClient = {
       signOut: vi.fn(async () => ({})),
       signIn: {
         social: vi.fn(async () => ({})),
-        email: vi.fn(async () => ({})),
+        email: vi.fn(async (args: unknown) => ({
+          args,
+          token: 'returned-sign-in-token',
+        })),
       },
       signUp: {
-        email: vi.fn(async (args: unknown) => {
-          storeRef?.set('token', 'new-token');
-          return { ok: true, args };
-        }),
+        email: vi.fn(async () => ({})),
       },
     };
 
-    const { useSignUpMutationOptions } = createAuthMutations(authClient as any);
+    const { useSignInMutationOptions } = createAuthMutations(authClient as any);
 
     const wrapper = makeWrapper({ token: null });
 
     const { result } = renderHook(
-      () => {
-        const store = useAuthStore();
-        storeRef = store;
-        return { store, opts: useSignUpMutationOptions() };
-      },
+      () => ({ store: useAuthStore(), opts: useSignInMutationOptions() }),
       { wrapper }
     );
 
@@ -197,9 +190,50 @@ describe('createAuthMutations', () => {
       },
       makeMutationCtx()
     );
-    expect(res).toMatchObject({ ok: true });
+    expect(res).toMatchObject({ token: 'returned-sign-in-token' });
 
-    expect(result.store.get('token')).toBe('new-token');
+    expect(result.store.get('token')).toBe('returned-sign-in-token');
+    expect(authClient.signIn.email).toHaveBeenCalledTimes(1);
+  });
+
+  test('signUp(email): seeds the auth store from a returned token', async () => {
+    useConvexQueryClientSpy = vi
+      .spyOn(contextModule, 'useConvexQueryClient')
+      .mockReturnValue(null as any);
+
+    const authClient = {
+      signOut: vi.fn(async () => ({})),
+      signIn: {
+        social: vi.fn(async () => ({})),
+        email: vi.fn(async () => ({})),
+      },
+      signUp: {
+        email: vi.fn(async (args: unknown) => ({
+          args,
+          token: 'returned-sign-up-token',
+        })),
+      },
+    };
+
+    const { useSignUpMutationOptions } = createAuthMutations(authClient as any);
+
+    const wrapper = makeWrapper({ token: null });
+
+    const { result } = renderHook(
+      () => ({ store: useAuthStore(), opts: useSignUpMutationOptions() }),
+      { wrapper }
+    );
+
+    const res = await result.opts.mutationFn?.(
+      {
+        email: 'a@b.com',
+        password: 'pw',
+      },
+      makeMutationCtx()
+    );
+    expect(res).toMatchObject({ token: 'returned-sign-up-token' });
+
+    expect(result.store.get('token')).toBe('returned-sign-up-token');
     expect(authClient.signUp.email).toHaveBeenCalledTimes(1);
   });
 });

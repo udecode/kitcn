@@ -389,6 +389,12 @@ export function typedProcedureResolver<
   return typedResolver;
 }
 
+export function getGeneratedFunctionReference<
+  TFunctionReference extends AnyProcedureFunctionReference,
+>(functionReference: TFunctionReference): TFunctionReference {
+  return functionReference;
+}
+
 function isRecord(value: unknown): value is RecordLike {
   return typeof value === 'object' && value !== null;
 }
@@ -1217,61 +1223,62 @@ type GeneratedRegistryRuntimeWithHandler<
   >;
 };
 
-export function createGeneratedRegistryRuntime<
+type GeneratedRegistryBundle<
+  TCallerRegistry extends GeneratedProcedureRegistry,
+  THandlerRegistry extends GeneratedProcedureRegistry | undefined = undefined,
+> = {
+  procedureRegistry: TCallerRegistry;
+  handlerRegistry?: THandlerRegistry;
+};
+
+type GeneratedRegistrySource<
+  TCallerRegistry extends GeneratedProcedureRegistry,
+  THandlerRegistry extends GeneratedProcedureRegistry | undefined = undefined,
+> =
+  | GeneratedRegistryBundle<TCallerRegistry, THandlerRegistry>
+  | (() => GeneratedRegistryBundle<TCallerRegistry, THandlerRegistry>);
+
+type GeneratedRegistryRuntimeResult<
   TQueryCtx,
   TMutationCtx,
   TCallerRegistry extends GeneratedProcedureRegistry,
-  TActionCtx = never,
->(
-  createRegistry: () => {
-    procedureRegistry: TCallerRegistry;
-  }
-): GeneratedRegistryRuntime<
-  TQueryCtx,
-  TMutationCtx,
-  TCallerRegistry,
-  TActionCtx
->;
+  TActionCtx,
+  THandlerRegistry extends GeneratedProcedureRegistry | undefined,
+> = THandlerRegistry extends GeneratedProcedureRegistry
+  ? GeneratedRegistryRuntimeWithHandler<
+      TQueryCtx,
+      TMutationCtx,
+      TCallerRegistry,
+      Exclude<THandlerRegistry, undefined>,
+      TActionCtx
+    >
+  : GeneratedRegistryRuntime<
+      TQueryCtx,
+      TMutationCtx,
+      TCallerRegistry,
+      TActionCtx
+    >;
 
 export function createGeneratedRegistryRuntime<
   TQueryCtx,
   TMutationCtx,
   TCallerRegistry extends GeneratedProcedureRegistry,
   TActionCtx = never,
-  THandlerRegistry extends
-    GeneratedProcedureRegistry = GeneratedProcedureRegistry,
+  THandlerRegistry extends GeneratedProcedureRegistry | undefined = undefined,
 >(
-  createRegistry: () => {
-    procedureRegistry: TCallerRegistry;
-    handlerRegistry: THandlerRegistry;
-  }
-): GeneratedRegistryRuntimeWithHandler<
+  createRegistryOrRegistry: GeneratedRegistrySource<
+    TCallerRegistry,
+    THandlerRegistry
+  >
+): GeneratedRegistryRuntimeResult<
   TQueryCtx,
   TMutationCtx,
   TCallerRegistry,
-  THandlerRegistry,
-  TActionCtx
->;
-
-export function createGeneratedRegistryRuntime<
-  TQueryCtx,
-  TMutationCtx,
-  TCallerRegistry extends GeneratedProcedureRegistry,
-  TActionCtx = never,
-  THandlerRegistry extends GeneratedProcedureRegistry | undefined =
-    | GeneratedProcedureRegistry
-    | undefined,
->(
-  createRegistry: () => {
-    procedureRegistry: TCallerRegistry;
-    handlerRegistry?: THandlerRegistry;
-  }
-) {
+  TActionCtx,
+  THandlerRegistry
+> {
   let cachedRegistry:
-    | {
-        procedureRegistry: TCallerRegistry;
-        handlerRegistry?: THandlerRegistry;
-      }
+    | GeneratedRegistryBundle<TCallerRegistry, THandlerRegistry>
     | undefined;
   let cachedCallerFactory:
     | GeneratedRegistryCallerFactory<
@@ -1290,7 +1297,10 @@ export function createGeneratedRegistryRuntime<
     | undefined;
 
   const getRegistry = () => {
-    cachedRegistry ??= createRegistry();
+    cachedRegistry ??=
+      typeof createRegistryOrRegistry === 'function'
+        ? createRegistryOrRegistry()
+        : createRegistryOrRegistry;
     return cachedRegistry;
   };
 
@@ -1316,5 +1326,11 @@ export function createGeneratedRegistryRuntime<
   return {
     getCallerFactory,
     getHandlerFactory,
-  };
+  } as GeneratedRegistryRuntimeResult<
+    TQueryCtx,
+    TMutationCtx,
+    TCallerRegistry,
+    TActionCtx,
+    THandlerRegistry
+  >;
 }

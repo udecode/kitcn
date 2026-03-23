@@ -32,4 +32,22 @@ describe('createApiLeaf', () => {
 
     expect(getFunctionName(ref as any)).toBe('projects:listForDropdown');
   });
+
+  it('resolves generated paths when building a leaf from a root object', () => {
+    const leaf = createApiLeaf<'query', unknown>(
+      {
+        projects: {
+          listForDropdown: (anyApi as any).projects.listForDropdown,
+        },
+      },
+      ['projects', 'listForDropdown'],
+      { type: 'query', auth: 'required' }
+    );
+
+    expect(getFunctionName(leaf as any)).toBe('projects:listForDropdown');
+    expect(getFunctionName((leaf as any).functionRef)).toBe(
+      'projects:listForDropdown'
+    );
+    expect((leaf as any).auth).toBe('required');
+  });
 });

@@ -77,3 +77,4 @@ After switching to `Auth<Options>`:
 ## Related
 
 - `docs/solutions/integration-issues/better-auth-mutation-error-handling.md`
+- `docs/solutions/integration-issues/generated-auth-definition-variance-constraint-20260316.md`
