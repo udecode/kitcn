@@ -15,21 +15,31 @@ export type GeneratedAuthDisabledReasonKind =
   | 'missing_auth_file'
   | 'missing_default_export';
 
-const GENERATED_AUTH_DISABLED_REASONS: Record<
-  GeneratedAuthDisabledReasonKind,
-  string
-> = {
-  default_export_unavailable:
-    'Auth runtime is disabled. convex/functions/auth.ts default export is unavailable. Export `default defineAuth((ctx) => ({ ...options, triggers }))` and run `better-convex codegen`.',
-  missing_auth_file:
-    'Auth runtime is disabled. Create convex/functions/auth.ts with `export default defineAuth(...)` and run `better-convex codegen`.',
-  missing_default_export:
-    'Auth runtime is disabled. convex/functions/auth.ts exists but does not export a default auth definition. Export `default defineAuth((ctx) => ({ ...options, triggers }))` and run `better-convex codegen`.',
+export const DEFAULT_AUTH_DEFINITION_PATH = 'convex/auth.ts';
+
+const resolveAuthDefinitionPath = (authDefinitionPath?: string): string => {
+  const normalized = authDefinitionPath?.trim();
+  return normalized && normalized.length > 0
+    ? normalized
+    : DEFAULT_AUTH_DEFINITION_PATH;
 };
 
 export const getGeneratedAuthDisabledReason = (
-  kind: GeneratedAuthDisabledReasonKind
-): string => GENERATED_AUTH_DISABLED_REASONS[kind];
+  kind: GeneratedAuthDisabledReasonKind,
+  authDefinitionPath?: string
+): string => {
+  const resolvedAuthDefinitionPath =
+    resolveAuthDefinitionPath(authDefinitionPath);
+
+  switch (kind) {
+    case 'default_export_unavailable':
+      return `Auth runtime is disabled. ${resolvedAuthDefinitionPath} default export is unavailable. Export \`default defineAuth((ctx) => ({ ...options, triggers }))\` and run \`better-convex codegen\`.`;
+    case 'missing_auth_file':
+      return `Auth runtime is disabled. Create ${resolvedAuthDefinitionPath} with \`export default defineAuth(...)\` and run \`better-convex codegen\`.`;
+    case 'missing_default_export':
+      return `Auth runtime is disabled. ${resolvedAuthDefinitionPath} exists but does not export a default auth definition. Export \`default defineAuth((ctx) => ({ ...options, triggers }))\` and run \`better-convex codegen\`.`;
+  }
+};
 
 const DEFAULT_DISABLED_AUTH_MESSAGE =
   getGeneratedAuthDisabledReason('missing_auth_file');

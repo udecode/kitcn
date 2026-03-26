@@ -4,24 +4,22 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "create": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["tags"]["create"]), () => (require("../tags") as Record<string, unknown>)["create"])],
-  "deleteTag": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["tags"]["deleteTag"]), () => (require("../tags") as Record<string, unknown>)["deleteTag"])],
-  "list": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["tags"]["list"]), () => (require("../tags") as Record<string, unknown>)["list"])],
-  "merge": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["tags"]["merge"]), () => (require("../tags") as Record<string, unknown>)["merge"])],
-  "popular": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["tags"]["popular"]), () => (require("../tags") as Record<string, unknown>)["popular"])],
-  "update": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["tags"]["update"]), () => (require("../tags") as Record<string, unknown>)["update"])],
+  "create": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../tags").create>("tags:create"), () => (require("../tags") as Record<string, unknown>)["create"])],
+  "deleteTag": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../tags").deleteTag>("tags:deleteTag"), () => (require("../tags") as Record<string, unknown>)["deleteTag"])],
+  "list": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../tags").list>("tags:list"), () => (require("../tags") as Record<string, unknown>)["list"])],
+  "merge": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../tags").merge>("tags:merge"), () => (require("../tags") as Record<string, unknown>)["merge"])],
+  "popular": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../tags").popular>("tags:popular"), () => (require("../tags") as Record<string, unknown>)["popular"])],
+  "update": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../tags").update>("tags:update"), () => (require("../tags") as Record<string, unknown>)["update"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

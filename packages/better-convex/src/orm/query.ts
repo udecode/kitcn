@@ -387,6 +387,16 @@ export class GelRelationalQuery<
     return fieldName;
   }
 
+  private _toPublicFilterFieldName(fieldName: string): string {
+    if (fieldName === INTERNAL_ID_FIELD) {
+      return PUBLIC_ID_FIELD;
+    }
+    if (fieldName === INTERNAL_CREATION_TIME_FIELD) {
+      return PUBLIC_CREATED_AT_FIELD;
+    }
+    return fieldName;
+  }
+
   private _normalizeComparableValue(
     fieldName: string,
     value: unknown,
@@ -2631,7 +2641,7 @@ export class GelRelationalQuery<
 
       const operator = direction === 'desc' ? 'lt' : 'gt';
       const cursorWhere = {
-        [orderField]: {
+        [this._toPublicFilterFieldName(orderField)]: {
           [operator]: cursorValue,
         },
       };
@@ -2757,7 +2767,7 @@ export class GelRelationalQuery<
 
       const operator = direction === 'desc' ? 'lt' : 'gt';
       const cursorWhere = {
-        [orderField]: {
+        [this._toPublicFilterFieldName(orderField)]: {
           [operator]: cursorValue,
         },
       };

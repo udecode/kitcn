@@ -16,7 +16,6 @@ export type AuthCoverageId =
   | 'link-account-non-anonymous'
   | 'on-link-account-bio-migration'
   | 'linked-source-anonymous-deleted'
-  | 'delete-anonymous-endpoint'
   | 'disable-delete-anonymous-user-option'
   | 'generate-random-email-precedence';
 
@@ -107,17 +106,6 @@ export const AUTH_COVERAGE_DEFINITIONS: readonly AuthCoverageDefinition[] = [
     example: 'anonymous source user missing after signUpEmail link',
     expectation: 'success',
     probeMode: 'live',
-  },
-  {
-    id: 'delete-anonymous-endpoint',
-    feature: 'delete anonymous endpoint',
-    status: 'missing',
-    reason:
-      'Current Better Auth version in this repo does not expose deleteAnonymousUser API.',
-    example: 'authClient.deleteAnonymousUser / auth.api.deleteAnonymousUser',
-    expectation: 'failure',
-    probeMode: 'static',
-    errorCode: 'NOT_AVAILABLE',
   },
   {
     id: 'disable-delete-anonymous-user-option',

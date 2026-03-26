@@ -9,10 +9,9 @@ import {
   
 } from 'better-convex/orm';
 import {
-  getGeneratedValue,
+  createGeneratedFunctionReference,
   initCRPC as baseInitCRPC,
 } from 'better-convex/server';
-import { internal } from '../_generated/api.js';
 import type { DataModel } from '../_generated/dataModel';
 import type {
   ActionCtx as ServerActionCtx,
@@ -25,7 +24,13 @@ import schema from '../schema';
 
 
 
-const ormFunctions = getGeneratedValue(internal, ["generated","server"]) as OrmFunctions;
+const ormFunctions: OrmFunctions = {
+  scheduledMutationBatch: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:scheduledMutationBatch"),
+  scheduledDelete: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:scheduledDelete"),
+  aggregateBackfillChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:aggregateBackfillChunk"),
+  migrationRunChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:migrationRunChunk"),
+  resetChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:resetChunk"),
+};
 const ormSchema = schema;
 
 export const orm = createOrm({

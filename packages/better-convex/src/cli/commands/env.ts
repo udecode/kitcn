@@ -43,7 +43,6 @@ Commands:
 Push options:
   --from-file <path>         Push values from a file instead of convex/.env
   --force                    Overwrite conflicting remote values
-  --auth                     Include BETTER_AUTH_SECRET and JWKS
   --rotate                   Rotate auth keys before fetching JWKS
 
 Pull options:
@@ -57,23 +56,6 @@ Target options:
 
 const isHelpRequest = (args: string[]) =>
   args.some((arg) => HELP_FLAGS.has(arg));
-
-const assertConvexEnvBackend = (
-  args: string[],
-  deps: Pick<RunDeps, 'loadBetterConvexConfig' | 'realConcave' | 'realConvex'>
-) => {
-  const parsed = parseArgs(args);
-  const config = deps.loadBetterConvexConfig(parsed.configPath);
-  const backend = resolveConfiguredBackend({
-    backendArg: parsed.backend,
-    config,
-  });
-  if (backend === 'concave') {
-    throw new Error(
-      '`better-convex env` is only supported on the Convex backend.'
-    );
-  }
-};
 
 const readPipedStdin = () => {
   try {
@@ -139,7 +121,6 @@ const parseTargetArgs = (args: string[]) => {
 };
 
 const parsePushArgs = (args: string[]) => {
-  let auth = false;
   let force = false;
   let fromFilePath: string | undefined;
   let rotate = false;
@@ -148,10 +129,6 @@ const parsePushArgs = (args: string[]) => {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (!arg) {
-      continue;
-    }
-    if (arg === '--auth') {
-      auth = true;
       continue;
     }
     if (arg === '--force') {
@@ -172,7 +149,6 @@ const parsePushArgs = (args: string[]) => {
   }
 
   return {
-    auth,
     force,
     fromFilePath,
     rotate,
@@ -234,16 +210,23 @@ export const handleEnvCommand = async (
     );
   }
 
-  assertConvexEnvBackend(argv, {
-    loadBetterConvexConfig: loadBetterConvexConfigFn,
-    realConcave: realConcavePath,
-    realConvex: realConvexPath,
+  const config = loadBetterConvexConfigFn(parsed.configPath);
+  const backend = resolveConfiguredBackend({
+    backendArg: parsed.backend,
+    config,
   });
+  if (backend === 'concave') {
+    throw new Error(
+      '`better-convex env` is only supported on the Convex backend.'
+    );
+  }
 
   if (subcommand === 'push') {
     const pushArgs = parsePushArgs(parsed.convexArgs.slice(1));
     await pushEnvFn({
+      authSyncMode: 'auto',
       ...pushArgs,
+      sharedDir: parsed.sharedDir ?? config.paths.shared,
       sourceContent:
         pushArgs.fromFilePath === undefined ? readPipedStdin() : undefined,
     });

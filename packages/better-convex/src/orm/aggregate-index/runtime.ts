@@ -4,6 +4,11 @@ import type {
 } from 'convex/server';
 import type { GenericId, Value } from 'convex/values';
 import { Columns } from '../symbols';
+import {
+  INTERNAL_CREATION_TIME_FIELD,
+  PUBLIC_CREATED_AT_FIELD,
+  usesSystemCreatedAtAlias,
+} from '../timestamp-mode';
 import type { TableRelationalConfig, TablesRelationalConfig } from '../types';
 import {
   AGGREGATE_BUCKET_TABLE,
@@ -18,6 +23,8 @@ const FLOAT64_MASK = (1n << 64n) - 1n;
 const DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS = 4096;
 const DEFAULT_AGGREGATE_WORK_BUDGET = 16_384;
 const RANGE_PREFIX_WORK_UNIT_BASE = 2;
+const PUBLIC_ID_FIELD = 'id';
+const INTERNAL_ID_FIELD = '_id';
 export const AGGREGATE_STATE_KIND_METRIC = 'metric';
 export const AGGREGATE_STATE_KIND_RANK = 'rank';
 
@@ -243,11 +250,33 @@ const intersectConstraintSets = (
   return result;
 };
 
-const getColumnNames = (tableConfig: TableRelationalConfig): Set<string> =>
-  new Set(Object.keys((tableConfig.table as any)[Columns] ?? {}));
+const getColumnNames = (tableConfig: TableRelationalConfig): Set<string> => {
+  const names = new Set(Object.keys((tableConfig.table as any)[Columns] ?? {}));
+  names.add(INTERNAL_ID_FIELD);
+  if (usesSystemCreatedAtAlias(tableConfig.table)) {
+    names.add(INTERNAL_CREATION_TIME_FIELD);
+  }
+  return names;
+};
 
 const getRelationNames = (tableConfig: TableRelationalConfig): Set<string> =>
   new Set(Object.keys(tableConfig.relations ?? {}));
+
+const normalizeFilterFieldName = (
+  tableConfig: TableRelationalConfig,
+  fieldName: string
+): string => {
+  if (fieldName === PUBLIC_ID_FIELD) {
+    return INTERNAL_ID_FIELD;
+  }
+  if (
+    fieldName === PUBLIC_CREATED_AT_FIELD &&
+    usesSystemCreatedAtAlias(tableConfig.table)
+  ) {
+    return INTERNAL_CREATION_TIME_FIELD;
+  }
+  return fieldName;
+};
 
 const createError = (code: string, message: string): Error =>
   new Error(`${code}: ${message}`);
@@ -539,7 +568,8 @@ const parseFiniteOrBranch = (options: {
   const relationNames = getRelationNames(tableConfig);
   const constraints = new Map<string, FieldConstraint>();
   for (const [key, value] of Object.entries(branch)) {
-    if (!columnNames.has(key)) {
+    const normalizedKey = normalizeFilterFieldName(tableConfig, key);
+    if (!columnNames.has(normalizedKey)) {
       if (relationNames.has(key)) {
         throw createFilterError(
           codes,
@@ -553,7 +583,7 @@ const parseFiniteOrBranch = (options: {
         `filter field '${key}' is not recognized.`
       );
     }
-    parseFieldFilter(key, value, constraints, codes, methodName);
+    parseFieldFilter(normalizedKey, value, constraints, codes, methodName);
   }
 
   normalizeConstraints(constraints, codes, methodName);
@@ -806,8 +836,9 @@ const parseWhereObject = (
       continue;
     }
 
-    if (columnNames.has(key)) {
-      parseFieldFilter(key, value, target, codes, methodName);
+    const normalizedKey = normalizeFilterFieldName(tableConfig, key);
+    if (columnNames.has(normalizedKey)) {
+      parseFieldFilter(normalizedKey, value, target, codes, methodName);
       continue;
     }
 
@@ -944,12 +975,19 @@ const pickRangeAggregateIndex = (
       continue;
     }
 
-    const rangeFieldPosition = definition.fields.indexOf(rangeFieldName);
+    const usesImplicitCreationTimeSuffix =
+      rangeFieldName === INTERNAL_CREATION_TIME_FIELD;
+    const rangeFieldPosition = usesImplicitCreationTimeSuffix
+      ? definition.fields.length
+      : definition.fields.indexOf(rangeFieldName);
     if (rangeFieldPosition < 0) {
       continue;
     }
 
     const indexFieldSet = new Set(definition.fields);
+    if (usesImplicitCreationTimeSuffix) {
+      indexFieldSet.add(INTERNAL_CREATION_TIME_FIELD);
+    }
     const hasUnknownConstraint = [...constrainedFields].some(
       (field) => !indexFieldSet.has(field)
     );

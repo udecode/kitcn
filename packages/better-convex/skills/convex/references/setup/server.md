@@ -1,6 +1,6 @@
 ## 5. Core Backend
 
-For production bootstrap, start in the CLI Registry: use `bunx better-convex init -t <next|vite> --yes` for a fresh app, `bunx better-convex init --yes` to adopt the current app, and `bunx better-convex add <plugin>` for feature layers. This file is the manual backend wiring reference.
+For production bootstrap, start in the CLI Registry: use `bunx better-convex init -t <next|vite> --yes` for the shortest fresh local path, `bunx better-convex init --yes` to adopt the current app and finish the first local Convex bootstrap in one command, and `bunx better-convex add <plugin>` for feature layers. This file is the manual backend wiring reference.
 
 ### 5.1 Define schema and relations
 
@@ -199,16 +199,15 @@ Run:
 bunx better-convex dev
 ```
 
-If this requires interactive Convex setup, run `bunx convex init` first, then continue.
+If this requires interactive Convex setup, let `bunx better-convex dev` drive it first. Use `bunx convex init` only when you need to resolve deployment targeting separately.
 Do not fake generated files.
 
 Automation/non-interactive path:
 
-1. Export `CONVEX_AGENT_MODE=anonymous` when you want local anonymous setup.
-2. Run `bunx convex init`.
-3. Run `bunx better-convex dev --once --typecheck disable`.
-4. Confirm the generated runtime exists in `convex/functions/generated/server.ts`.
-5. Then run `bunx better-convex dev` for ongoing codegen/API refresh.
+1. Run `bunx better-convex init --yes` when you want scaffold or adoption plus the one-shot local Convex bootstrap in one command.
+2. Run `bunx better-convex verify` when you want a non-interactive local runtime proof in the current app. It reuses an existing local deployment when one is already configured, and only falls back to anonymous fresh-local setup when it has to.
+3. Confirm the generated runtime exists in `convex/functions/generated/server.ts`.
+4. Then run `bunx better-convex dev` for ongoing codegen/API refresh.
 
 Local deployment storage: New local and anonymous deployments store state under `.convex/` in the project root.
 
@@ -220,11 +219,12 @@ This generates:
 
 Agent command policy:
 
-1. Default to `bunx better-convex dev` (or one-shot `bunx better-convex dev --once --typecheck disable`).
+1. Default to `bunx better-convex dev`.
 2. `better-convex dev` already runs codegen/API generation.
 3. Do not run `bunx better-convex codegen` as a separate default step.
-4. Use manual `bunx better-convex codegen` only as fallback when `better-convex dev` cannot be run and backend is already active.
-5. Use `bunx better-convex insights` for cloud-deployment debugging; it forwards to the upstream Convex insights CLI.
+4. Use `bunx better-convex verify` for one-shot local runtime proof in CI or agent runs.
+5. Use manual `bunx better-convex codegen` only as fallback when `better-convex dev` cannot be run and backend is already active.
+6. Use `bunx better-convex insights` for cloud-deployment debugging; it forwards to the upstream Convex insights CLI.
 
 One-time codegen (optional; use only when `better-convex dev` is not running):
 
@@ -235,8 +235,8 @@ bunx better-convex codegen
 Codegen runtime rule:
 
 1. `better-convex codegen` still requires a configured Convex deployment.
-2. If you see deployment/bootstrap errors, run `bunx convex init` first.
-3. If you see `Local backend isn't running`, use `bunx better-convex dev --once --typecheck disable` instead of hand-holding a second terminal.
+2. If you need a runtime proof without a long-running dev session, use `bunx better-convex verify`.
+3. If you see `Local backend isn't running`, use `bunx better-convex verify` instead of hand-holding a second terminal.
 
 ### 5.6 Import rules (hard requirement)
 
@@ -335,7 +335,7 @@ const scores = convexTable(
 
 No trigger wiring needed — `aggregateIndex` and `rankIndex` are maintained automatically by the ORM.
 
-If Aggregates are **disabled**, remove `aggregateIndex`/`rankIndex` declarations from table definitions and re-run `bunx better-convex dev --once --typecheck disable`.
+If Aggregates are **disabled**, remove `aggregateIndex`/`rankIndex` declarations from table definitions and re-run `bunx better-convex verify`.
 
 ### 9.4 Rate limiting gate
 

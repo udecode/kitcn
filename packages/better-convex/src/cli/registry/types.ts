@@ -1,6 +1,10 @@
 import type { BetterConvexConfig } from '../config.js';
 import type {
+  PluginApplyScope,
   PluginInstallPlanFile,
+  PluginLiveBootstrapTarget,
+  PluginLockfile,
+  PromptAdapter,
   ResolvedScaffoldRoots,
   ScaffoldTemplate,
 } from '../types.js';
@@ -48,6 +52,11 @@ export type PluginSchemaRegistration = {
   target: 'functions' | 'lib';
 };
 
+export type PluginLiveBootstrap = {
+  mode: PluginLiveBootstrapTarget;
+  presets?: readonly string[];
+};
+
 export type PluginRegistryResolveScaffoldRootsParams = {
   config: BetterConvexConfig;
   functionsDir: string;
@@ -61,7 +70,21 @@ export type PluginRegistryResolveTemplatesParams =
   };
 
 export type PluginRegistryBuildPlanFilesParams =
-  PluginRegistryResolveScaffoldRootsParams;
+  PluginRegistryResolveScaffoldRootsParams & {
+    applyScope?: PluginApplyScope;
+    lockfile: PluginLockfile;
+    overwrite: boolean;
+    preview: boolean;
+    promptAdapter: PromptAdapter;
+    yes: boolean;
+  };
+
+export type PluginResolvedScaffoldFile = {
+  templateId: string;
+  filePath: string;
+  lockfilePath: string;
+  content: string;
+};
 
 export type PluginRegistryIntegration = {
   resolveScaffoldRoots?: (
@@ -70,12 +93,24 @@ export type PluginRegistryIntegration = {
   resolveTemplates?: (
     params: PluginRegistryResolveTemplatesParams
   ) => readonly ScaffoldTemplate[];
+  reconcileScaffoldFiles?: (
+    params: PluginRegistryResolveScaffoldRootsParams & {
+      scaffoldFiles: readonly PluginResolvedScaffoldFile[];
+    }
+  ) =>
+    | readonly PluginResolvedScaffoldFile[]
+    | Promise<readonly PluginResolvedScaffoldFile[]>;
   buildPlanFiles?: (
     params: PluginRegistryBuildPlanFilesParams
-  ) => readonly PluginInstallPlanFile[];
+  ) =>
+    | readonly PluginInstallPlanFile[]
+    | Promise<readonly PluginInstallPlanFile[]>;
   buildSchemaRegistrationPlanFile?: (
     params: PluginRegistryBuildPlanFilesParams
-  ) => PluginInstallPlanFile | undefined;
+  ) =>
+    | PluginInstallPlanFile
+    | undefined
+    | Promise<PluginInstallPlanFile | undefined>;
 };
 
 export type PluginCatalogEntry = {
@@ -90,6 +125,7 @@ export type PluginCatalogEntry = {
   packageName: string;
   packageInstallSpec?: string;
   envFields?: readonly PluginEnvField[];
+  liveBootstrap?: PluginLiveBootstrap;
   schemaRegistration: PluginSchemaRegistration;
   defaultPreset: string;
   presets: readonly PluginPreset[];
@@ -121,6 +157,7 @@ export type InternalPluginRegistryPreset = {
 export type InternalPluginRegistryMeta = {
   localDocsPath: string;
   envFields?: readonly PluginEnvField[];
+  liveBootstrap?: PluginLiveBootstrap;
   schemaRegistration: PluginSchemaRegistration;
   defaultPreset: string;
   presets: readonly InternalPluginRegistryPreset[];

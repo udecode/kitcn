@@ -70,6 +70,7 @@ export const handleInfoCommand = async (
   const {
     getConvexConfig: getConvexConfigFn,
     loadBetterConvexConfig: loadBetterConvexConfigFn,
+    promptAdapter,
   } = resolveRunDeps(deps);
   const infoSpinner = createSpinner('Inspecting project...', {
     silent: infoArgs.json,
@@ -136,6 +137,10 @@ export const handleInfoCommand = async (
           lockfile,
           existingTemplatePathMap,
           noCodegen: false,
+          overwrite: false,
+          preview: true,
+          promptAdapter,
+          yes: false,
         })
       : null;
     const driftedFiles = plan

@@ -5,10 +5,39 @@
 
 ## Breaking changes
 
-- Replace standalone plugin drift and inventory commands with plan-driven
-  inspection. Use `better-convex add <plugin> --dry-run|--diff [path]|--view [path]`,
-  `better-convex view <plugin>`, `better-convex info`, and
-  `better-convex docs <topic...>`. `better-convex diff` and
+- Use `concave.json` as the Better Convex config file. `better-convex.json`
+  and `better-convex.config.ts` are not loaded.
+
+```ts
+// Before
+export default {
+  outputDir: "convex/shared",
+};
+
+// After
+{
+  "meta": {
+    "better-convex": {
+      "paths": {
+        "shared": "convex/shared"
+      }
+    }
+  }
+}
+```
+
+- Use `better-convex init` as the scaffold and adoption entrypoint. The old
+  `create` flow is gone.
+
+```bash
+# Before
+npx better-convex create -t next --yes
+
+# After
+npx better-convex init -t next --yes
+```
+
+- Use plan-driven plugin commands. `better-convex diff` and
   `better-convex list` are gone.
 
 ```bash
@@ -22,71 +51,18 @@ npx better-convex view resend --json
 npx better-convex info --json
 ```
 
-- Use `concave.json` as the only Better Convex config source. Legacy
-  `better-convex.json` and `better-convex.config.ts` are not loaded.
-  Removed config keys include top-level `outputDir`,
-  `meta["better-convex"].plugins`, `meta["better-convex"].api`,
-  `meta["better-convex"].auth`, and plugin scaffold hooks outside
-  `hooks.postAdd`.
-
-```ts
-// Before
-// better-convex.config.ts
-export default {
-  outputDir: "convex/shared",
-  plugins: {
-    afterScaffold: ["bun run format"],
-  },
-};
-
-// After
-// concave.json
-{
-  "meta": {
-    "better-convex": {
-      "paths": {
-        "shared": "convex/shared",
-        "lib": "convex/lib"
-      },
-      "hooks": {
-        "postAdd": ["bun run format"]
-      },
-      "codegen": {
-        "scope": "all",
-        "trimSegments": ["generated"]
-      }
-    }
-  }
-}
-```
-
-- Replace package-provided schema plugins with chained app-owned extensions.
-  Opt-in schema plugin entrypoints are gone.
-
-```ts
-// Before
-import { defineSchema } from "better-convex/orm";
-import { ratelimitPlugin } from "better-convex/plugins/ratelimit";
-
-export default defineSchema(tables, {
-  plugins: [ratelimitPlugin()],
-});
-
-// After
-import { defineSchema } from "better-convex/orm";
-import { ratelimitExtension } from "../lib/plugins/ratelimit/schema";
-
-export default defineSchema(tables).extend(ratelimitExtension());
-```
-
-- Move root schema relations into `defineSchema(...).relations(...)` instead of
-  a separate `defineRelations(...)` export.
+- Use app-owned schema composition. Package-provided schema plugin entrypoints
+  are gone, root relations move into `defineSchema(...).relations(...)`, and
+  `createOrm(...)` reads the schema export directly.
 
 ```ts
 // Before
 import { defineRelations, defineSchema } from "better-convex/orm";
+import { ratelimitPlugin } from "better-convex/plugins/ratelimit";
 
-export const schema = defineSchema(tables);
+export const schema = defineSchema(tables, {
+  plugins: [ratelimitPlugin()],
+});
 
 export const relations = defineRelations(tables, (r) => ({
   users: {
@@ -96,143 +72,83 @@ export const relations = defineRelations(tables, (r) => ({
 
 // After
 import { defineSchema } from "better-convex/orm";
+import { ratelimitExtension } from "../lib/plugins/ratelimit/schema";
 
-export default defineSchema(tables).relations((r) => ({
-  users: {
-    posts: r.many.posts(),
-  },
-}));
+export default defineSchema(tables)
+  .extend(ratelimitExtension())
+  .relations((r) => ({
+    users: {
+      posts: r.many.posts(),
+    },
+  }));
 ```
 
-- Use schema exports directly with `createOrm(...)`. App wiring no longer needs
-  a separate `triggers` argument.
-
-```ts
-// Before
-const orm = createOrm({
-  schema: relations,
-  triggers,
-  ormFunctions,
-});
-
-// After
-const orm = createOrm({
-  schema,
-  ormFunctions,
-});
-```
-
-- Replace `better-convex env sync` with first-class `env push` / `env pull`
-  commands, and use owned `env set|get|list|remove` wrappers for the rest of
-  the Convex env surface.
+- Use `better-convex env push` / `env pull` and the owned env wrappers. `env sync`
+  and the old auth-specific flag flow are gone.
 
 ```bash
 # Before
 npx better-convex env sync --auth
-npx better-convex env sync --auth --rotate
 
 # After
-npx better-convex env push --auth
-npx better-convex env push --auth --rotate
+npx better-convex env push
 ```
 
-- Rename and relocate the public ratelimit surface to
-  `better-convex/ratelimit` with `Ratelimit*` / `ratelimit` casing.
+- Use the new ratelimit surface under `better-convex/ratelimit`. The old
+  `better-convex/plugins/ratelimit` import path is gone.
 
 ```ts
 // Before
 import { calculateRateLimit } from "better-convex/plugins/ratelimit";
 import { useRateLimit } from "better-convex/plugins/ratelimit/react";
 
-type ProcedureMeta = {
-  rateLimit?: string;
-};
-
 // After
 import { calculateRatelimit } from "better-convex/ratelimit";
 import { useRatelimit } from "better-convex/ratelimit/react";
-
-type ProcedureMeta = {
-  ratelimit?: string;
-};
-```
-
-- Use `better-convex init` as the single bootstrap command. Fresh app
-  scaffolding now lives behind `better-convex init -t <next|vite>`, while
-  `better-convex init --yes` adopts the current supported app in place.
-
-```bash
-# Before
-npx better-convex create -t next --yes
-npx better-convex init
-
-# After
-npx better-convex init -t next --yes
-npx better-convex init --yes
 ```
 
 ## Features
 
-- Add packaged Convex agent skills plus TanStack Intent metadata and shim files
-  so `better-convex` can be discovered from installed npm packages by agent
-  tooling.
-- Add plan-driven plugin UX across `add`, `view`, and `info`, with one shared
-  install plan covering scaffold files, root-schema validation, env bootstrap,
-  `concave.json`, schema registration, `plugins.lock.json`, dependency install
-  status, codegen/hooks, env reminders, stable JSON output, and
-  formatter-insensitive preview/diff output.
-- Add plugin docs metadata plus `better-convex docs <topic...>` for local and
-  public docs links.
-- Add app-owned resend and ratelimit scaffolds that register like any other
-  scaffolded file, bootstrap `get-env.ts` + `paths.env`, and keep generated
-  config in app code.
-- Add `better-convex/plugins` authoring helpers with `definePlugin`,
-  `resolvePluginOptions`, and `.extend(...)` preset composition.
-- Add `@better-convex/resend` with `ResendPlugin`, typed `ctx.api.resend`
-  runtime access, scaffolded webhook verification helpers, project-owned
-  runtime/config files, and an optional React Email starter.
-- Add `defineSchemaExtension("<key>", tables)` with chained `relations(...)`
-  and `triggers(...)` for app-owned extension tables, typed
-  `getSchemaRelations(schema)` access, and composition validation.
-- Add a ratelimit scaffold with default `public`, `free`, and
-  `premium` buckets, typed bucket overrides, plugin-owned middleware,
-  `schema-only` support, and camelCase app schema keys over unchanged storage
-  tables.
-- Add plugin authoring support for
-  `.extend(({ middleware }) => ({ middleware: ..., namedPreset: ... }))`
-  without dropping configured middleware methods.
-- Add `codegen.trimSegments` to keep generated runtime export names stable by
-  default.
-- Add builder-only `unionOf(...)` and wider `objectOf(...)` support so schema
-  code can stay on ORM builders for mixed scalar unions and homogeneous object
-  values.
-- Add concrete starter templates through `better-convex init -t next` and
-  `better-convex init -t vite`.
-- Add `better-convex add auth` with the Better Convex baseline by default and
-  a raw `--preset convex` adoption path for `create-convex` apps that patches
-  plain Convex providers and `http.ts` without `concave.json`, `get-env.ts`,
-  cRPC scaffolds, or demo auth routes.
-- Add `meta["better-convex"].dev.preRun`, run `convex init` automatically
-  before Convex-backed `init` and `dev`, and batch auth/env pushes
-  through `better-convex env push --auth --rotate`.
-- Support Convex 1.33 across the package, starter templates, example app, and
-  scenario fixtures, and bump the minimum supported Convex peer dependency to
-  `>=1.33`.
+- Add a full CLI registry flow with `init`, `add`, `view`, `info`, and `docs`,
+  plus deterministic dry-run and diff output for plugin installs.
+- Add first-class starter templates for Next.js and Vite, scenario fixtures,
+  fixture sync/check tooling, and runtime verification lanes for prepared apps.
+- Add `better-convex verify` for one-shot local runtime proof and make local
+  bootstrap flows agent-friendly.
+- Add packaged Convex skills and TanStack Intent metadata so installed
+  `better-convex` packages carry their own agent guidance.
+- Add scaffolded auth adoption for both the Better Convex baseline and raw
+  Convex apps, including `add auth --only schema --yes` for schema-only auth
+  refresh.
+- Add one-pass managed auth schema ownership so auth installs claim `jwks`
+  immediately, export stable auth table identifiers, and keep organization auth
+  helper fields in sync with generated schema output.
+- Add the `@better-convex/resend` package and project-owned Resend scaffolding,
+  including webhook, email, cron, and schema helpers.
+- Add app-owned schema extensions, typed plugin authoring helpers, and the new
+  ratelimit scaffold with project-owned schema and middleware files.
+- Add plugin docs metadata, `better-convex docs <topic...>`, and repo-owned
+  scenario/runtime tooling for auth smoke and browser proof.
+- Add `codegen.trimSegments`, builder-side `unionOf(...)`, and broader
+  `objectOf(...)` support for generated exports and schema builders.
 
 ## Patches
 
-- Fix `createEnv(...)` during codegen and auth-config analysis so missing
-  optional env vars do not get treated as required.
-- Fix disabled generated auth output so non-auth apps import a cold
-  `better-convex/auth/generated` surface instead of pulling the full auth
-  stack
-  into local runtime.
-- Fix generated schedule caller types so `schedule.now`, `schedule.after`, and
-  `schedule.at` return `GenericId<'_scheduled_functions'>`, and
-  `schedule.cancel(...)` requires the same id type.
-- Fix gitignore bootstrap so Better Convex adds both `.convex/` and
-  `.concave/` entries during init/dev flows.
-- Fix auth mutations so sign-in and sign-up seed returned session tokens
-  immediately, sign-out clears local auth state without waiting on a stale
-  session hook, and scaffolded auth pages can flip into signed-in state as
-  soon as the backend exchange succeeds.
+- Improve local Convex dev, codegen, and init flows so auth env bootstrap,
+  JWKS sync, generated runtime output, and runtime verification behave
+  consistently in real apps and scenarios.
+- Improve local Convex bootstrap so `dev` watches `convex/.env`, `dev.preRun`
+  uses native `convex dev --run`, and local runtime commands re-exec under a
+  supported Node automatically when Bun launches them under the wrong one.
+- Improve generated auth and runtime output so local scaffolds stay cold when
+  auth is absent and avoid self-import or duplicate-context failures when auth
+  is present.
+- Improve auth runtime behavior so local auth metadata routes stay quiet,
+  sign-in and sign-out update state immediately, and optional env values do not
+  break codegen or auth-config analysis.
+- Fix ratelimit storage and scaffolding so generated apps use the real
+  `ratelimitState`, `ratelimitDynamicLimit`, and `ratelimitProtectionHit`
+  tables instead of failing with bogus missing-table guidance.
+- Improve fixture and scenario sync so committed manifests, generated fixtures,
+  and prepared apps stay on the same pinned dependency baseline.
+- Update the scaffolded Hono baseline to `4.12.9`.

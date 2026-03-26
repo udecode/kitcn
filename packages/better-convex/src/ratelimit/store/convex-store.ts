@@ -7,9 +7,9 @@ import type {
   RatelimitState,
 } from '../types';
 
-export const RATE_LIMIT_STATE_TABLE = 'ratelimit_state';
-export const RATE_LIMIT_DYNAMIC_TABLE = 'ratelimit_dynamic_limit';
-export const RATE_LIMIT_HIT_TABLE = 'ratelimit_protection_hit';
+export const RATE_LIMIT_STATE_TABLE = 'ratelimitState';
+export const RATE_LIMIT_DYNAMIC_TABLE = 'ratelimitDynamicLimit';
+export const RATE_LIMIT_HIT_TABLE = 'ratelimitProtectionHit';
 const RATE_LIMIT_TABLE_NAMES = [
   RATE_LIMIT_STATE_TABLE,
   RATE_LIMIT_DYNAMIC_TABLE,

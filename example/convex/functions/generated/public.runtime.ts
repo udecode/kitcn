@@ -4,19 +4,17 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "hello": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["public"]["hello"]), () => (require("../public") as Record<string, unknown>)["hello"])],
+  "hello": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../public").hello>("public:hello"), () => (require("../public") as Record<string, unknown>)["hello"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

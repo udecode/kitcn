@@ -15,7 +15,8 @@ export function createPlanFile(params: {
   filePath: string;
   content: string;
   templateId?: string;
-  managedBaselineContent?: string;
+  managedBaselineContent?: string | readonly string[];
+  requiresExplicitOverwrite?: boolean;
   createReason: string;
   updateReason: string;
   skipReason: string;
@@ -34,6 +35,7 @@ export function createPlanFile(params: {
       reason: params.createReason,
       content: params.content,
       managedBaselineContent: params.managedBaselineContent,
+      requiresExplicitOverwrite: params.requiresExplicitOverwrite,
     };
   }
 
@@ -54,6 +56,7 @@ export function createPlanFile(params: {
       content: params.content,
       existingContent,
       managedBaselineContent: params.managedBaselineContent,
+      requiresExplicitOverwrite: params.requiresExplicitOverwrite,
     };
   }
 
@@ -66,6 +69,7 @@ export function createPlanFile(params: {
     content: params.content,
     existingContent,
     managedBaselineContent: params.managedBaselineContent,
+    requiresExplicitOverwrite: params.requiresExplicitOverwrite,
   };
 }
 

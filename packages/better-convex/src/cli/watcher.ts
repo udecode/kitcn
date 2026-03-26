@@ -5,17 +5,18 @@ import { logger } from './utils/logger.js';
 
 type WatcherLike = {
   on: (event: string, cb: (...args: unknown[]) => void) => WatcherLike;
+  close?: () => Promise<void> | void;
 };
 
-export function getWatchPatterns(functionsDir: string): string[] {
-  // Watch function source files + Convex generated inputs.
-  // Note: routers/ is sibling to functions/, not inside it.
+type WatchOptions = {
+  ignoreInitial: boolean;
+  ignored: (watchedPath: string) => boolean;
+};
+
+export function getWatchRoots(functionsDir: string): string[] {
+  // Watch the real roots. chokidar v5 dropped glob support.
   const convexDir = path.dirname(functionsDir);
-  return [
-    path.join(functionsDir, '**', '*.ts'),
-    path.join(functionsDir, '_generated', '**', '*.js'),
-    path.join(convexDir, 'routers', '**', '*.ts'),
-  ];
+  return [functionsDir, path.join(convexDir, 'routers')];
 }
 
 function parseTrimSegmentsEnv(value: string | undefined): string[] | undefined {
@@ -54,16 +55,33 @@ function parseTrimSegmentsEnv(value: string | undefined): string[] | undefined {
   return parseFromArray(trimmed.split(','));
 }
 
-export function getIgnoredWatchPatterns(
+export function shouldIgnoreWatchPath(
+  watchedPath: string,
   functionsDir: string,
   outputFile: string
-): string[] {
-  return [
-    path.join(functionsDir, 'generated', '**', '*.ts'),
-    path.join(functionsDir, '**', '*.runtime.ts'),
-    path.join(functionsDir, 'generated.ts'),
-    outputFile,
-  ];
+): boolean {
+  const normalizedPath = path.resolve(watchedPath);
+  const normalizedFunctionsDir = path.resolve(functionsDir);
+  const normalizedOutputFile = path.resolve(outputFile);
+  const generatedDir = path.join(normalizedFunctionsDir, 'generated');
+  const generatedFile = path.join(normalizedFunctionsDir, 'generated.ts');
+
+  if (normalizedPath === normalizedOutputFile) {
+    return true;
+  }
+
+  if (normalizedPath === generatedFile) {
+    return true;
+  }
+
+  if (
+    normalizedPath === generatedDir ||
+    normalizedPath.startsWith(`${generatedDir}${path.sep}`)
+  ) {
+    return true;
+  }
+
+  return normalizedPath.endsWith('.runtime.ts');
 }
 
 export async function startWatcher(opts?: {
@@ -72,13 +90,10 @@ export async function startWatcher(opts?: {
   scope?: 'all' | 'auth' | 'orm';
   trimSegments?: string[];
   debounceMs?: number;
-  watch?: (
-    patterns: string[],
-    options: { ignoreInitial: boolean; ignored: string[] }
-  ) => WatcherLike;
+  watch?: (patterns: string[], options: WatchOptions) => WatcherLike;
   generateMeta?: typeof generateMeta;
   getConvexConfig?: typeof getConvexConfig;
-}) {
+}): Promise<WatcherLike> {
   const sharedDir =
     opts?.sharedDir ?? (process.env.BETTER_CONVEX_API_OUTPUT_DIR || undefined);
   const debug = opts?.debug ?? process.env.BETTER_CONVEX_DEBUG === '1';
@@ -98,11 +113,7 @@ export async function startWatcher(opts?: {
   const runGenerateMeta = opts?.generateMeta ?? generateMeta;
 
   const { functionsDir, outputFile } = resolveConfig(sharedDir);
-  const watchPatterns = getWatchPatterns(functionsDir);
-  const ignoredWatchPatterns = getIgnoredWatchPatterns(
-    functionsDir,
-    outputFile
-  );
+  const watchRoots = getWatchRoots(functionsDir);
 
   const watch = opts?.watch ?? (await import('chokidar')).watch;
 
@@ -143,6 +154,7 @@ export async function startWatcher(opts?: {
     generateMetaInFlight = true;
     try {
       await runGenerateMeta(sharedDir, createGenerateOptions());
+      logger.success('Convex api updated');
     } catch (error) {
       logger.error('Watch codegen error:', error);
     } finally {
@@ -162,14 +174,17 @@ export async function startWatcher(opts?: {
     }, debounceMs);
   };
 
-  watch(watchPatterns, {
+  const watcher = watch(watchRoots, {
     ignoreInitial: true,
-    ignored: ignoredWatchPatterns,
+    ignored: (watchedPath: string) =>
+      shouldIgnoreWatchPath(watchedPath, functionsDir, outputFile),
   })
     .on('add', scheduleGenerateMeta)
     .on('change', scheduleGenerateMeta)
     .on('unlink', scheduleGenerateMeta)
     .on('error', (err: unknown) => logger.error('Watch error:', err));
+
+  return watcher;
 }
 
 const isMain =

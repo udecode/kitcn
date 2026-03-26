@@ -5,6 +5,9 @@ import {
   BETTER_CONVEX_INSTALL_SPEC_ENV,
   BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV,
   getPackageNameFromInstallSpec,
+  OPENTELEMETRY_API_INSTALL_SPEC,
+  PINNED_HONO_INSTALL_SPEC,
+  PINNED_TANSTACK_REACT_QUERY_INSTALL_SPEC,
   resolveSupportedDependencyInstallSpec,
   SUPPORTED_DEPENDENCY_VERSIONS,
 } from './supported-dependencies';
@@ -26,8 +29,23 @@ describe('cli/supported-dependencies', () => {
     expect(BASELINE_DEPENDENCY_INSTALL_SPECS).toContain(
       `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`
     );
+    expect(BASELINE_DEPENDENCY_INSTALL_SPECS).toContain(
+      PINNED_TANSTACK_REACT_QUERY_INSTALL_SPEC
+    );
+    expect(BASELINE_DEPENDENCY_INSTALL_SPECS).toContain(
+      PINNED_HONO_INSTALL_SPEC
+    );
     expect(BETTER_AUTH_INSTALL_SPEC).toBe(
       `better-auth@${SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact}`
+    );
+    expect(OPENTELEMETRY_API_INSTALL_SPEC).toBe(
+      `@opentelemetry/api@${SUPPORTED_DEPENDENCY_VERSIONS.opentelemetryApi.exact}`
+    );
+    expect(PINNED_TANSTACK_REACT_QUERY_INSTALL_SPEC).toBe(
+      `@tanstack/react-query@${SUPPORTED_DEPENDENCY_VERSIONS.tanstackReactQuery.exact}`
+    );
+    expect(PINNED_HONO_INSTALL_SPEC).toBe(
+      `hono@${SUPPORTED_DEPENDENCY_VERSIONS.hono.exact}`
     );
     expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.range).toBe(
       `^${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`

@@ -4,25 +4,23 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "addComment": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todoComments"]["addComment"]), () => (require("../todoComments") as Record<string, unknown>)["addComment"])],
-  "cleanupOrphanedComments": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["todoComments"]["cleanupOrphanedComments"]), () => (require("../todoComments") as Record<string, unknown>)["cleanupOrphanedComments"])],
-  "deleteComment": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todoComments"]["deleteComment"]), () => (require("../todoComments") as Record<string, unknown>)["deleteComment"])],
-  "getCommentThread": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["todoComments"]["getCommentThread"]), () => (require("../todoComments") as Record<string, unknown>)["getCommentThread"])],
-  "getTodoComments": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["todoComments"]["getTodoComments"]), () => (require("../todoComments") as Record<string, unknown>)["getTodoComments"])],
-  "getUserComments": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["todoComments"]["getUserComments"]), () => (require("../todoComments") as Record<string, unknown>)["getUserComments"])],
-  "updateComment": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todoComments"]["updateComment"]), () => (require("../todoComments") as Record<string, unknown>)["updateComment"])],
+  "addComment": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todoComments").addComment>("todoComments:addComment"), () => (require("../todoComments") as Record<string, unknown>)["addComment"])],
+  "cleanupOrphanedComments": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("../todoComments").cleanupOrphanedComments>("todoComments:cleanupOrphanedComments"), () => (require("../todoComments") as Record<string, unknown>)["cleanupOrphanedComments"])],
+  "deleteComment": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todoComments").deleteComment>("todoComments:deleteComment"), () => (require("../todoComments") as Record<string, unknown>)["deleteComment"])],
+  "getCommentThread": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../todoComments").getCommentThread>("todoComments:getCommentThread"), () => (require("../todoComments") as Record<string, unknown>)["getCommentThread"])],
+  "getTodoComments": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../todoComments").getTodoComments>("todoComments:getTodoComments"), () => (require("../todoComments") as Record<string, unknown>)["getTodoComments"])],
+  "getUserComments": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../todoComments").getUserComments>("todoComments:getUserComments"), () => (require("../todoComments") as Record<string, unknown>)["getUserComments"])],
+  "updateComment": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todoComments").updateComment>("todoComments:updateComment"), () => (require("../todoComments") as Record<string, unknown>)["updateComment"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

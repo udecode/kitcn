@@ -4,20 +4,18 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from '../server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../../_generated/api.js") as typeof import('../../_generated/api.js'));
 
 const procedureRegistry = {
-  "get": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["items"]["queries"]["get"]), () => (require("../../items/queries") as Record<string, unknown>)["get"])],
-  "list": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["items"]["queries"]["list"]), () => (require("../../items/queries") as Record<string, unknown>)["list"])],
+  "get": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../../items/queries").get>("items/queries:get"), () => (require("../../items/queries") as Record<string, unknown>)["get"])],
+  "list": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../../items/queries").list>("items/queries:list"), () => (require("../../items/queries") as Record<string, unknown>)["list"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

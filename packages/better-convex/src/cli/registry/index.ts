@@ -65,6 +65,7 @@ function toPluginCatalogEntry(
     packageName: getPackageNameFromInstallSpec(installDependency),
     packageInstallSpec: installDependency,
     envFields: internal.envFields,
+    liveBootstrap: internal.liveBootstrap,
     schemaRegistration: internal.schemaRegistration,
     defaultPreset: internal.defaultPreset,
     presets: internal.presets.map(toPluginPreset),

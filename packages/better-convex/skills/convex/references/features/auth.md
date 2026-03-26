@@ -61,134 +61,108 @@ Client auto-refreshes expired JWTs with 60s leeway.
 
 Below is the reference for auth patterns.
 
-### 1. Auth Config
+### 1. Install auth with CLI
+
+Use the CLI-first path:
+
+```bash
+npx better-convex add auth --yes
+```
+
+If Better Convex is not bootstrapped yet, start with `npx better-convex init -t next --yes` for a fresh app or `npx better-convex init --yes` for in-place adoption.
+
+On local Convex, `add auth --yes` also finishes the first auth bootstrap pass: generated runtime, `BETTER_AUTH_SECRET`, and `JWKS`.
+
+### 2. Auth Config
 
 ```ts
 // convex/functions/auth.config.ts
 import { getAuthConfigProvider } from 'better-convex/auth/config';
+import { getEnv } from '../lib/get-env';
+
 export default {
-  providers: [getAuthConfigProvider({ jwks: process.env.JWKS })],
+  providers: [
+    getEnv().JWKS
+      ? getAuthConfigProvider({ jwks: getEnv().JWKS })
+      : getAuthConfigProvider(),
+  ],
 } satisfies AuthConfig;
 ```
 
-### 2. Generate Runtime
+### 3. Generate Runtime
 
-Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
+Start `better-convex dev` for the long-running local runtime. It runs Convex,
+watches for changes, and regenerates runtime files automatically:
 
 ```bash
 npx better-convex dev
 ```
 
-### 3. Define Auth Contract
+### 4. Define Auth Contract
+
+The auth definition lives at `<functionsDir>/auth.ts`. `functionsDir` comes
+from `convex.json.functions` (default: `convex`), so scaffolded Better Convex
+apps use `convex/functions/auth.ts`.
 
 ```ts
 // convex/functions/auth.ts
-import { admin } from 'better-auth/plugins';
 import { convex } from 'better-convex/auth';
+import { getEnv } from '../lib/get-env';
 import authConfig from './auth.config';
 import { defineAuth } from './generated/auth';
 
-export default defineAuth((ctx) => ({
-  baseURL: process.env.SITE_URL!,
+export default defineAuth(() => ({
+  emailAndPassword: {
+    enabled: true,
+  },
+  baseURL: getEnv().SITE_URL,
   plugins: [
     convex({
       authConfig,
-      jwks: process.env.JWKS,
+      jwks: getEnv().JWKS,
     }),
-    admin(),
   ],
-  trustedOrigins: [process.env.SITE_URL ?? 'http://localhost:3000'],
-  triggers: {
-    user: {
-      create: {
-        before: async (data, triggerCtx) => {
-          const username =
-            data.username?.trim() ?? data.email?.split('@')[0] ?? `user-${Date.now()}`;
-          return { data: { ...data, username } };
-        },
-        after: async (user, triggerCtx) => {
-          // triggerCtx has orm/scheduler access
-        },
-      },
-    },
+  session: {
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24 * 15,
   },
+  telemetry: { enabled: false },
+  trustedOrigins: [getEnv().SITE_URL],
 }));
 ```
 
-Use runtime exports (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `auth`) from `convex/functions/generated/auth`.
+Use runtime exports (`getAuth`, CRUD/JWKS handlers, trigger handlers, static `auth`) from `<functionsDir>/generated/auth`.
 
-### 4. Schema (ORM API)
+### 5. Schema (ORM API)
 
-Generate with CLI or define manually:
+Default Better Convex path:
 
 ```bash
-npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth
+npx better-convex add auth --yes
+npx better-convex add auth --only schema --yes
 ```
 
-Manual template (auth-specific tables):
-```ts
-import { boolean, convexTable, defineSchema, id, index, integer, text, timestamp } from 'better-convex/orm';
+That path patches auth-owned table blocks directly into `<functionsDir>/schema.ts`
+and records ownership in `<functionsDir>/plugins.lock.json`.
 
-export const user = convexTable('user', {
-  name: text().notNull(),
-  email: text().notNull(),
-  emailVerified: boolean().notNull(),
-  image: text(),
-  createdAt: timestamp().notNull().defaultNow(),
-  updatedAt: integer().notNull(),
-  role: text(),                  // admin plugin
-  banned: boolean(),             // admin plugin
-  banReason: text(),
-  banExpires: integer(),
-}, (t) => [index('email').on(t.email)]);
+Raw Convex path:
 
-export const session = convexTable('session', {
-  token: text().notNull(),
-  expiresAt: integer().notNull(),
-  createdAt: timestamp().notNull().defaultNow(),
-  updatedAt: integer().notNull(),
-  ipAddress: text(),
-  userAgent: text(),
-  userId: id('user').notNull(),
-  impersonatedBy: text(),        // admin plugin
-}, (t) => [index('token').on(t.token), index('userId').on(t.userId)]);
-
-export const account = convexTable('account', {
-  accountId: text().notNull(),
-  providerId: text().notNull(),
-  userId: id('user').notNull(),
-  accessToken: text(),
-  refreshToken: text(),
-  idToken: text(),
-  accessTokenExpiresAt: integer(),
-  refreshTokenExpiresAt: integer(),
-  scope: text(),
-  password: text(),
-  createdAt: timestamp().notNull().defaultNow(),
-  updatedAt: integer().notNull(),
-}, (t) => [index('accountId').on(t.accountId), index('userId').on(t.userId)]);
-
-export const verification = convexTable('verification', {
-  identifier: text().notNull(),
-  value: text().notNull(),
-  expiresAt: integer().notNull(),
-  createdAt: timestamp(),
-  updatedAt: integer(),
-}, (t) => [index('identifier').on(t.identifier)]);
-
-export const jwks = convexTable('jwks', {
-  publicKey: text().notNull(),
-  privateKey: text().notNull(),
-  createdAt: timestamp().notNull().defaultNow(),
-});
+```bash
+npx better-convex add auth --preset convex --yes
 ```
 
-### 5. Auth HTTP Runtime
+That path refreshes `<functionsDir>/authSchema.ts` and patches
+`<functionsDir>/schema.ts`. It assumes the raw Convex app is already
+initialized and does not support `--only schema`.
+
+If you want to own the auth tables by hand, use `setup/server.md`.
+
+### 6. Auth HTTP Runtime
 
 Import auth route helpers from `better-convex/auth/http`.
 That entrypoint auto-installs the Convex-safe `MessageChannel` polyfill.
 
-### 6. HTTP Routes
+### 7. HTTP Routes
 
 Three options — cRPC (recommended), plain Convex, or Hono:
 
@@ -198,11 +172,12 @@ import { authMiddleware } from 'better-convex/auth/http';
 import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { getEnv } from '../lib/get-env';
 import { getAuth } from './generated/auth';
 
 const app = new Hono();
 app.use('/api/*', cors({
-  origin: process.env.SITE_URL!,
+  origin: getEnv().SITE_URL,
   allowHeaders: ['Content-Type', 'Authorization', 'Better-Auth-Cookie'],
   exposeHeaders: ['Set-Better-Auth-Cookie'],
   credentials: true,
@@ -211,28 +186,28 @@ app.use(authMiddleware(getAuth));
 export default createHttpRouter(app, httpRouter);
 ```
 
-### 7. Environment Variables
+### 8. Environment Variables
 
 ```bash
 # convex/.env
 SITE_URL=http://localhost:3000
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-# Auto-generated by: npx better-convex env push --auth
+# Auto-generated during local auth bootstrap and prod env sync
 BETTER_AUTH_SECRET=...
 JWKS=...
 ```
 
-`npx better-convex env push --auth` behavior:
-1. Syncs `convex/.env` values into the active deployment.
-2. Auto-generates `BETTER_AUTH_SECRET` + `JWKS` when missing.
-3. Does not require a long-running `better-convex dev` session.
+Local Convex:
+1. `init --yes`, `dev`, and `add auth --yes` drive the first auth bootstrap when they own the flow.
+2. While `better-convex dev` is running on backend `convex`, later edits to `convex/.env` auto-sync.
+3. For the normal local path, `SITE_URL` should stay on `http://localhost:3000`.
 
-Prerequisite:
-1. Run `npx convex init`.
-2. If the auth runtime has not been generated yet, run `npx better-convex dev --once --typecheck disable`.
+Remote / repair:
+1. Use `npx better-convex env push` when the target deployment is already active.
+2. Use `npx better-convex env push --prod` for production sync.
 
-Key rotation: `npx better-convex env push --auth --rotate` (invalidates all tokens).
+Key rotation: `npx better-convex env push --rotate` (invalidates all tokens).
 
 ---
 
@@ -396,7 +371,7 @@ import { ConvexProviderWithAuth } from 'better-convex/react';
 
 ## Auth Triggers
 
-Define triggers in `auth.ts` via `defineAuth((ctx) => ({ triggers }))`. Triggers run inline in the same CRUD transaction.
+Define triggers in `auth.ts` via `defineAuth(() => ({ triggers }))`. Triggers run inline in the same CRUD transaction.
 
 ### Trigger Shape
 

@@ -6,11 +6,12 @@ import {
   createDefaultConfig,
   writeMinimalSchema,
   writePackageJson,
+  writeShadcnNextApp,
 } from '../test-utils';
 import { ADD_HELP_TEXT, handleAddCommand, parseAddCommandArgs } from './add';
 
 describe('cli/commands/add', () => {
-  test('parseAddCommandArgs supports dry-run, diff, view, overwrite, no-codegen, and preset', () => {
+  test('parseAddCommandArgs supports dry-run, diff, view, overwrite, no-codegen, only, and preset', () => {
     expect(
       parseAddCommandArgs([
         'resend',
@@ -21,6 +22,8 @@ describe('cli/commands/add', () => {
         '--view=convex/schema.ts',
         '--overwrite',
         '--no-codegen',
+        '--only',
+        'schema',
         '--preset',
         'default',
       ])
@@ -31,6 +34,7 @@ describe('cli/commands/add', () => {
       dryRun: true,
       overwrite: true,
       noCodegen: true,
+      only: 'schema',
       preset: 'default',
       diff: 'convex/plugins/resend.ts',
       view: 'convex/schema.ts',
@@ -101,6 +105,122 @@ describe('cli/commands/add', () => {
       process.chdir(originalCwd);
       process.env.FORCE_COLOR = originalForceColor;
       console.info = originalInfo;
+    }
+  });
+
+  test('handleAddCommand reuses a running local convex backend for auth live bootstrap', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-add-auth-live-bootstrap-reuse-')
+    );
+    const originalCwd = process.cwd();
+    process.chdir(dir);
+
+    writeShadcnNextApp(dir);
+    fs.mkdirSync(path.join(dir, 'convex', 'functions'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'schema.ts'),
+      'import { defineSchema } from "better-convex/orm";\n\nexport default defineSchema({});\n'
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const syncEnvStub = mock(async () => {});
+    const runLocalBootstrapStub = mock(async () => 0);
+    const generateMetaStub = mock(async (sharedDir: string) => {
+      const generatedAuthPath = path.join(
+        dir,
+        sharedDir,
+        '..',
+        'functions',
+        'generated',
+        'auth.ts'
+      );
+      fs.mkdirSync(path.dirname(generatedAuthPath), { recursive: true });
+      fs.writeFileSync(generatedAuthPath, 'export {};\n');
+    });
+
+    try {
+      const exitCode = await handleAddCommand(['add', 'auth', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        loadBetterConvexConfig: (() => createDefaultConfig()) as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+        syncEnv: syncEnvStub as any,
+      } as any);
+
+      expect(exitCode).toBe(0);
+      expect(syncEnvStub).toHaveBeenCalledWith({
+        authSyncMode: 'auto',
+        force: true,
+        sharedDir: 'convex/shared',
+        targetArgs: [],
+      });
+      expect(runLocalBootstrapStub).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleAddCommand falls back to local bootstrap when auth live bootstrap probe fails', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-add-auth-live-bootstrap-fallback-')
+    );
+    const originalCwd = process.cwd();
+    process.chdir(dir);
+
+    writeShadcnNextApp(dir);
+    fs.mkdirSync(path.join(dir, 'convex', 'functions'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'schema.ts'),
+      'import { defineSchema } from "better-convex/orm";\n\nexport default defineSchema({});\n'
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const syncEnvModes: string[] = [];
+    const syncEnvStub = mock(async (params: { authSyncMode?: string }) => {
+      syncEnvModes.push(params.authSyncMode ?? 'auto');
+      throw new Error('local backend unavailable');
+    });
+    const runLocalBootstrapStub = mock(async () => 0);
+    const generateMetaStub = mock(async (sharedDir: string) => {
+      const generatedAuthPath = path.join(
+        dir,
+        sharedDir,
+        '..',
+        'functions',
+        'generated',
+        'auth.ts'
+      );
+      fs.mkdirSync(path.dirname(generatedAuthPath), { recursive: true });
+      fs.writeFileSync(generatedAuthPath, 'export {};\n');
+    });
+
+    try {
+      const exitCode = await handleAddCommand(['add', 'auth', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        loadBetterConvexConfig: (() => createDefaultConfig()) as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+        syncEnv: syncEnvStub as any,
+      } as any);
+
+      expect(exitCode).toBe(0);
+      expect(syncEnvModes).toEqual(['prepare', 'complete', 'auto']);
+      expect(runLocalBootstrapStub).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authSyncMode: 'auto',
+          debug: false,
+          sharedDir: 'convex/shared',
+          targetArgs: [],
+        })
+      );
+    } finally {
+      process.chdir(originalCwd);
     }
   });
 });

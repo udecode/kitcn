@@ -78,13 +78,38 @@ export function getGeneratedValue<TValue = unknown>(
 ): TValue {
   let current: any = root;
 
-  for (const segment of path) {
+  for (let index = 0; index < path.length; index += 1) {
+    const segment = path[index]!;
     if (typeof current !== 'object' || current === null) {
       throw new Error(
         `[better-convex] Invalid generated path: ${path.join('.')}`
       );
     }
-    current = current[segment];
+
+    const directValue = current[segment];
+    if (directValue !== undefined) {
+      current = directValue;
+      continue;
+    }
+
+    let matched = false;
+    for (let end = path.length - 1; end > index; end -= 1) {
+      const collapsedSegment = path.slice(index, end + 1).join('/');
+      const collapsedValue = current[collapsedSegment];
+      if (collapsedValue === undefined) {
+        continue;
+      }
+      current = collapsedValue;
+      index = end;
+      matched = true;
+      break;
+    }
+
+    if (!matched) {
+      throw new Error(
+        `[better-convex] Invalid generated path: ${path.join('.')}`
+      );
+    }
   }
 
   return current as TValue;

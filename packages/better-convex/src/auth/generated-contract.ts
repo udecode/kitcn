@@ -6,6 +6,7 @@ import type {
   GenericSchema,
   SchemaDefinition,
 } from 'convex/server';
+import { createGeneratedFunctionReference } from '../server/api-entry';
 import { createApi } from './create-api';
 import { type AuthFunctions, createClient } from './create-client';
 import type {
@@ -14,6 +15,7 @@ import type {
   GenericAuthTriggers,
 } from './define-auth';
 import type { AuthRuntime } from './generated-contract-disabled';
+import { DEFAULT_AUTH_DEFINITION_PATH } from './generated-contract-disabled';
 
 export {
   createDisabledAuthRuntime,
@@ -24,6 +26,28 @@ export {
 type UnknownFn = (...args: never[]) => unknown;
 
 const GENERATED_AUTH_TDZ_RE = /before initialization/i;
+
+const BETTER_CONVEX_DISABLED_RATE_LIMIT_RULES = {
+  '/convex/.well-known/openid-configuration': false,
+  '/convex/jwks': false,
+  '/convex/latest-jwks': false,
+  '/convex/rotate-keys': false,
+} as const;
+
+const resolveAuthDefinitionPath = (authDefinitionPath?: string): string => {
+  const normalized = authDefinitionPath?.trim();
+  return normalized && normalized.length > 0
+    ? normalized
+    : DEFAULT_AUTH_DEFINITION_PATH;
+};
+
+export const getInvalidAuthDefinitionExportReason = (
+  authDefinitionPath?: string
+): string => {
+  const resolvedAuthDefinitionPath =
+    resolveAuthDefinitionPath(authDefinitionPath);
+  return `Invalid auth definition export. Expected ${resolvedAuthDefinitionPath} default export to be \`defineAuth((ctx) => ({ ... }))\`.`;
+};
 
 type AuthDefinitionModule<
   GenericCtx,
@@ -103,6 +127,25 @@ const withDatabase = <
   database: adapter(ctx),
 });
 
+const withBetterConvexAuthDefaults = <
+  AuthOptions extends BetterAuthOptionsWithoutDatabase,
+>(
+  authOptions: AuthOptions
+): AuthOptions => {
+  const nextRateLimit = {
+    ...(authOptions.rateLimit ?? {}),
+    customRules: {
+      ...BETTER_CONVEX_DISABLED_RATE_LIMIT_RULES,
+      ...(authOptions.rateLimit?.customRules ?? {}),
+    },
+  };
+
+  return {
+    ...authOptions,
+    rateLimit: nextRateLimit,
+  };
+};
+
 const withoutTriggers = <
   DataModel extends GenericDataModel,
   Schema extends SchemaDefinition<any, any>,
@@ -155,6 +198,57 @@ const AUTH_RUNTIME_PROCEDURE_TYPES = {
   updateMany: 'mutation',
   updateOne: 'mutation',
 } as const satisfies Record<string, ProcedureType>;
+
+const createGeneratedInternalFunctionReference = <TType extends ProcedureType>(
+  name: string
+) => createGeneratedFunctionReference<TType, 'internal', unknown>(name);
+
+const resolveAuthFunctions = (
+  internal: unknown,
+  moduleName: string
+): AuthFunctions => {
+  const existing = ((internal as Record<string, Partial<AuthFunctions>>)?.[
+    moduleName
+  ] ?? {}) as Partial<AuthFunctions>;
+
+  return {
+    create:
+      existing.create ??
+      createGeneratedInternalFunctionReference<'mutation'>(
+        `${moduleName}:create`
+      ),
+    deleteMany:
+      existing.deleteMany ??
+      createGeneratedInternalFunctionReference<'mutation'>(
+        `${moduleName}:deleteMany`
+      ),
+    deleteOne:
+      existing.deleteOne ??
+      createGeneratedInternalFunctionReference<'mutation'>(
+        `${moduleName}:deleteOne`
+      ),
+    findMany:
+      existing.findMany ??
+      createGeneratedInternalFunctionReference<'query'>(
+        `${moduleName}:findMany`
+      ),
+    findOne:
+      existing.findOne ??
+      createGeneratedInternalFunctionReference<'query'>(
+        `${moduleName}:findOne`
+      ),
+    updateMany:
+      existing.updateMany ??
+      createGeneratedInternalFunctionReference<'mutation'>(
+        `${moduleName}:updateMany`
+      ),
+    updateOne:
+      existing.updateOne ??
+      createGeneratedInternalFunctionReference<'mutation'>(
+        `${moduleName}:updateOne`
+      ),
+  };
+};
 
 const decorateProcedureExport = (
   value: unknown,
@@ -214,13 +308,11 @@ export const createAuthRuntime = <
 }): AuthRuntime<DataModel, Schema, TriggerCtx, GenericCtx, AuthOptions> => {
   const authDefinition = resolveGeneratedAuthDefinition<
     GenericAuthDefinition<GenericCtx, DataModel, Schema, AuthOptions>
-  >(
-    config.auth,
-    'Invalid auth definition export. Expected convex/functions/auth.ts default export to be `defineAuth((ctx) => ({ ... }))`.'
-  );
-  const authFunctions = (config.internal as Record<string, AuthFunctions>)[
+  >(config.auth, getInvalidAuthDefinitionExportReason());
+  const authFunctions = resolveAuthFunctions(
+    config.internal,
     config.moduleName
-  ];
+  );
   const resolveRuntimeTriggers = (
     ctx: TriggerCtx
   ): GenericAuthTriggers<DataModel, Schema, TriggerCtx> | undefined =>
@@ -243,7 +335,9 @@ export const createAuthRuntime = <
 
   const resolveAuthOptions = (ctx: GenericCtx) =>
     withDatabase(
-      withoutTriggers<DataModel, Schema, AuthOptions>(authDefinition(ctx)),
+      withBetterConvexAuthDefaults(
+        withoutTriggers<DataModel, Schema, AuthOptions>(authDefinition(ctx))
+      ),
       ctx,
       (_ctx) => authClient.adapter(_ctx as AdapterCtx, adapterGetAuthOptions)
     );

@@ -21,8 +21,15 @@ export type PluginDependencyInstallResult = {
   packageJsonPath?: string;
   installed: boolean;
   skipped: boolean;
-  reason?: 'missing_package_json' | 'already_present' | 'dry_run';
+  reason?:
+    | 'missing_package_json'
+    | 'already_present'
+    | 'dry_run'
+    | 'scoped_apply';
 };
+
+export type PluginApplyScope = 'schema';
+export type PluginLiveBootstrapTarget = 'local';
 
 export type PlanSelectionSource = 'preset' | 'lockfile';
 export type PlanFileKind =
@@ -35,7 +42,7 @@ export type PlanFileAction = 'create' | 'update' | 'skip';
 export type PlanOperationKind =
   | 'dependency_install'
   | 'codegen'
-  | 'env_push'
+  | 'live_bootstrap'
   | 'post_add_hook'
   | 'env_reminder';
 export type PlanOperationStatus = 'pending' | 'skipped' | 'applied';
@@ -48,7 +55,9 @@ export type PluginInstallPlanFile = {
   reason: string;
   content: string;
   existingContent?: string;
-  managedBaselineContent?: string;
+  managedBaselineContent?: string | readonly string[];
+  requiresExplicitOverwrite?: boolean;
+  schemaOwnershipLock?: PluginRootSchemaOwnership | null;
 };
 
 export type PluginInstallPlanOperation = {
@@ -65,6 +74,7 @@ export type PluginInstallPlanOperation = {
 export type PluginInstallPlan = {
   plugin: SupportedPlugin;
   preset: string;
+  applyScope?: PluginApplyScope;
   selectionSource: PlanSelectionSource;
   presetTemplateIds: string[];
   selectedTemplateIds: string[];
@@ -104,7 +114,7 @@ export type CliSelectOption<TValue extends string> = {
 
 export type PromptAdapter = {
   isInteractive: () => boolean;
-  confirm: (message: string) => Promise<boolean>;
+  confirm: (message: string, defaultValue?: boolean) => Promise<boolean>;
   select: <TValue extends string>(params: {
     message: string;
     options: readonly CliSelectOption<TValue>[];
@@ -117,8 +127,28 @@ export type PromptAdapter = {
   }) => Promise<TValue[] | symbol>;
 };
 
+export type PluginRootSchemaTableOwnership =
+  | {
+      owner: 'local';
+    }
+  | {
+      checksum: string;
+      owner: 'managed';
+    };
+
+export type PluginRootSchemaOwnership = {
+  path: string;
+  tables: Record<string, PluginRootSchemaTableOwnership>;
+};
+
+export type PluginLockfileEntry = {
+  package: string;
+  files?: Record<string, string>;
+  schema?: PluginRootSchemaOwnership;
+};
+
 export type PluginLockfile = {
-  plugins: Record<string, { package: string; files?: Record<string, string> }>;
+  plugins: Record<string, PluginLockfileEntry>;
 };
 
 export type ScaffoldTemplate = {

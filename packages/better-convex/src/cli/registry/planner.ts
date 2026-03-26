@@ -17,12 +17,15 @@ import {
   PROJECT_SHARED_API_IMPORT_PLACEHOLDER,
 } from '../scaffold-placeholders.js';
 import type {
+  PluginApplyScope,
   PluginDescriptor,
   PluginEnvReminder,
   PluginInstallPlan,
   PluginInstallPlanFile,
   PluginInstallPlanOperation,
+  PluginLiveBootstrapTarget,
   PluginLockfile,
+  PromptAdapter,
   ResolvedScaffoldRoots,
   ScaffoldTemplate,
   SupportedPlugin,
@@ -40,7 +43,7 @@ import {
   getSchemaFilePath,
   renderPluginLockfileContent,
 } from './state.js';
-import type { PluginEnvField } from './types.js';
+import type { PluginEnvField, PluginResolvedScaffoldFile } from './types.js';
 
 const DEFINE_SCHEMA_CALL_RE = /defineSchema\s*\(([\s\S]*?)\)/m;
 const DEFAULT_ENV_HELPER_BASENAME = 'get-env.ts';
@@ -67,13 +70,6 @@ const BASE_ENV_FIELDS: readonly PluginEnvField[] = [
 ] as const;
 const ENV_SCHEMA_RE = /(const\s+\w+\s*=\s*z\.object\(\{\n)([\s\S]*?)(\n\}\);)/m;
 const WHITESPACE_RE = /\s/;
-
-type ScaffoldFile = {
-  templateId: string;
-  filePath: string;
-  lockfilePath: string;
-  content: string;
-};
 
 export const resolveEnvBootstrapPlanFileDetails = (templateId: string) => {
   if (templateId === BETTER_CONVEX_CONFIG_TEMPLATE_ID) {
@@ -278,7 +274,7 @@ export const buildEnvBootstrapFiles = (
   envFields: readonly PluginEnvField[]
 ): {
   config: BetterConvexConfig;
-  files: ScaffoldFile[];
+  files: PluginResolvedScaffoldFile[];
 } => {
   const envPath = config.paths.env ?? resolveDefaultEnvHelperPath(config);
   const nextConfig = config.paths.env
@@ -306,7 +302,7 @@ export const buildEnvBootstrapFiles = (
       : undefined
   );
 
-  const files: ScaffoldFile[] = [
+  const files: PluginResolvedScaffoldFile[] = [
     {
       templateId: BETTER_CONVEX_ENV_HELPER_TEMPLATE_ID,
       filePath: envFilePath,
@@ -448,7 +444,7 @@ const resolvePluginScaffoldFiles = (
   existingTemplatePathMap: Record<string, string> | undefined,
   descriptor: PluginDescriptor,
   preset: string
-): ScaffoldFile[] =>
+): PluginResolvedScaffoldFile[] =>
   templates.map((template) => {
     let rootDir: string;
     if (template.target === 'lib') {
@@ -636,7 +632,7 @@ const findSchemaExtensionInsertIndex = (source: string) => {
   };
 };
 
-const buildSchemaRegistrationPlanFile = (
+export const buildSchemaRegistrationPlanFile = (
   functionsDir: string,
   descriptor: PluginDescriptor,
   roots: ResolvedScaffoldRoots,
@@ -707,6 +703,7 @@ const createLockfilePlanFile = (
   });
 
 export const buildPluginInstallPlan = async (params: {
+  applyScope?: PluginApplyScope;
   descriptor: PluginDescriptor;
   selectedPlugin: SupportedPlugin;
   preset: string;
@@ -720,9 +717,14 @@ export const buildPluginInstallPlan = async (params: {
   lockfile: PluginLockfile;
   existingTemplatePathMap: Record<string, string>;
   noCodegen: boolean;
+  overwrite: boolean;
+  preview: boolean;
+  promptAdapter: PromptAdapter;
+  yes: boolean;
   includeEnvBootstrap?: boolean;
   bootstrapFiles?: readonly PluginInstallPlanFile[];
   bootstrapOperations?: readonly PluginInstallPlanOperation[];
+  liveBootstrapTarget?: PluginLiveBootstrapTarget;
 }): Promise<PluginInstallPlan> => {
   const rawConvexAuthPreset =
     params.selectedPlugin === 'auth' && params.preset === 'convex';
@@ -770,6 +772,14 @@ export const buildPluginInstallPlan = async (params: {
     params.descriptor,
     params.preset
   );
+  const reconciledScaffoldFiles =
+    (await params.descriptor.integration?.reconcileScaffoldFiles?.({
+      config: effectiveConfig,
+      functionsDir: params.functionsDir,
+      preset: params.preset,
+      roots,
+      scaffoldFiles,
+    })) ?? scaffoldFiles;
   const dependency = await inspectPluginDependencyInstall({
     descriptor: params.descriptor,
   });
@@ -794,11 +804,21 @@ export const buildPluginInstallPlan = async (params: {
   const codegenCommand = rawConvexAuthPreset
     ? 'better-convex codegen --scope auth'
     : 'better-convex codegen';
+  const liveBootstrap =
+    params.liveBootstrapTarget &&
+    params.descriptor.liveBootstrap?.mode === params.liveBootstrapTarget &&
+    (params.descriptor.liveBootstrap.presets === undefined ||
+      params.descriptor.liveBootstrap.presets.includes(params.preset))
+      ? params.descriptor.liveBootstrap
+      : null;
 
   const pluginScaffoldPaths = {
     ...params.existingTemplatePathMap,
     ...Object.fromEntries(
-      scaffoldFiles.map((file) => [file.templateId, file.lockfilePath])
+      reconciledScaffoldFiles.map((file) => [
+        file.templateId,
+        file.lockfilePath,
+      ])
     ),
   };
   const nextPluginEntry =
@@ -810,32 +830,49 @@ export const buildPluginInstallPlan = async (params: {
       : {
           package: params.descriptor.packageName,
         };
-  const nextLockfile: PluginLockfile = {
-    plugins: {
-      ...params.lockfile.plugins,
-      [params.selectedPlugin]: nextPluginEntry,
-    },
-  };
   const integrationFiles =
-    params.descriptor.integration?.buildPlanFiles?.({
+    (await params.descriptor.integration?.buildPlanFiles?.({
       config: effectiveConfig,
       functionsDir: params.functionsDir,
+      applyScope: params.applyScope,
+      lockfile: params.lockfile,
+      overwrite: params.overwrite,
       preset: params.preset,
+      preview: params.preview,
+      promptAdapter: params.promptAdapter,
       roots,
-    }) ?? [];
+      yes: params.yes,
+    })) ?? [];
   const schemaRegistrationFile =
-    params.descriptor.integration?.buildSchemaRegistrationPlanFile?.({
+    (await params.descriptor.integration?.buildSchemaRegistrationPlanFile?.({
       config: effectiveConfig,
       functionsDir: params.functionsDir,
+      applyScope: params.applyScope,
+      lockfile: params.lockfile,
+      overwrite: params.overwrite,
       preset: params.preset,
+      preview: params.preview,
+      promptAdapter: params.promptAdapter,
       roots,
-    }) ??
+      yes: params.yes,
+    })) ??
     buildSchemaRegistrationPlanFile(
       params.functionsDir,
       params.descriptor,
       roots,
       params.bootstrapFiles
     );
+  const nextLockfile: PluginLockfile = {
+    plugins: {
+      ...params.lockfile.plugins,
+      [params.selectedPlugin]: {
+        ...nextPluginEntry,
+        ...(schemaRegistrationFile.schemaOwnershipLock
+          ? { schema: schemaRegistrationFile.schemaOwnershipLock }
+          : {}),
+      },
+    },
+  };
 
   const fileMap = new Map<string, PluginInstallPlanFile>();
   for (const file of [
@@ -859,7 +896,7 @@ export const buildPluginInstallPlan = async (params: {
       });
     }),
     ...integrationFiles,
-    ...scaffoldFiles.map((file) =>
+    ...reconciledScaffoldFiles.map((file) =>
       createPlanFile({
         kind: 'scaffold',
         templateId: file.templateId,
@@ -909,19 +946,19 @@ export const buildPluginInstallPlan = async (params: {
         : 'Run codegen after scaffold changes.',
       command: params.noCodegen ? undefined : codegenCommand,
     },
-    ...(rawConvexAuthPreset
+    ...(liveBootstrap
       ? [
           {
-            kind: 'env_push' as const,
+            kind: 'live_bootstrap' as const,
             status: params.noCodegen
               ? ('skipped' as const)
               : ('pending' as const),
             reason: params.noCodegen
-              ? 'Auth env push skipped because codegen is disabled by flag.'
-              : 'Push auth env after scaffold changes.',
+              ? 'Local bootstrap skipped because codegen is disabled by flag.'
+              : 'Run local bootstrap after scaffold changes.',
             command: params.noCodegen
               ? undefined
-              : 'better-convex env push --auth',
+              : 'better-convex dev --bootstrap',
           },
         ]
       : []),
@@ -944,6 +981,7 @@ export const buildPluginInstallPlan = async (params: {
   return {
     plugin: params.selectedPlugin,
     preset: params.preset,
+    applyScope: params.applyScope,
     selectionSource: params.selectionSource,
     presetTemplateIds: params.presetTemplateIds,
     selectedTemplateIds: params.selectedTemplateIds,

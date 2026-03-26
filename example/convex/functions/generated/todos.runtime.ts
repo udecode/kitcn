@@ -4,27 +4,25 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "bulkDelete": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["bulkDelete"]), () => (require("../todos") as Record<string, unknown>)["bulkDelete"])],
-  "create": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["create"]), () => (require("../todos") as Record<string, unknown>)["create"])],
-  "deleteTodo": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["deleteTodo"]), () => (require("../todos") as Record<string, unknown>)["deleteTodo"])],
-  "get": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["get"]), () => (require("../todos") as Record<string, unknown>)["get"])],
-  "list": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["list"]), () => (require("../todos") as Record<string, unknown>)["list"])],
-  "restore": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["restore"]), () => (require("../todos") as Record<string, unknown>)["restore"])],
-  "search": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["search"]), () => (require("../todos") as Record<string, unknown>)["search"])],
-  "toggleComplete": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["toggleComplete"]), () => (require("../todos") as Record<string, unknown>)["toggleComplete"])],
-  "update": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["todos"]["update"]), () => (require("../todos") as Record<string, unknown>)["update"])],
+  "bulkDelete": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todos").bulkDelete>("todos:bulkDelete"), () => (require("../todos") as Record<string, unknown>)["bulkDelete"])],
+  "create": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todos").create>("todos:create"), () => (require("../todos") as Record<string, unknown>)["create"])],
+  "deleteTodo": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todos").deleteTodo>("todos:deleteTodo"), () => (require("../todos") as Record<string, unknown>)["deleteTodo"])],
+  "get": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../todos").get>("todos:get"), () => (require("../todos") as Record<string, unknown>)["get"])],
+  "list": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../todos").list>("todos:list"), () => (require("../todos") as Record<string, unknown>)["list"])],
+  "restore": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todos").restore>("todos:restore"), () => (require("../todos") as Record<string, unknown>)["restore"])],
+  "search": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../todos").search>("todos:search"), () => (require("../todos") as Record<string, unknown>)["search"])],
+  "toggleComplete": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todos").toggleComplete>("todos:toggleComplete"), () => (require("../todos") as Record<string, unknown>)["toggleComplete"])],
+  "update": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../todos").update>("todos:update"), () => (require("../todos") as Record<string, unknown>)["update"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

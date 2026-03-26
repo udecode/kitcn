@@ -19,10 +19,10 @@ The main differences between the packages:
 |--------|------------------------|---------------|
 | Architecture | Convex component pattern | Direct integration |
 | Triggers | Not built-in | `triggers: { user, session }` |
-| Auth Contract | `createAuthOptions/getAuth` split | `default defineAuth((ctx) => ({ ...options, triggers }))` |
+| Auth Contract | `createAuthOptions/getAuth` split | `default defineAuth(() => ({ ...options, triggers }))` |
 | DB Adapter | `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` (context-aware adapter) |
 | Provider | `ConvexBetterAuthProvider` | `ConvexAuthProvider` |
-| React Utils | `AuthBoundary` | `createAuthMutations()`, auth store |
+| React Utils | `AuthBoundary` | `createAuthMutations()` on the Better Convex path, plain `authClient` on the raw Convex preset |
 
 Let's migrate step by step.
 
@@ -151,7 +151,6 @@ From here, choose the path that matches how you want to migrate the auth files.
     ### Run the auth scaffold
 
     ```bash
-    npx convex init
     npx better-convex add auth --preset convex --yes
     ```
 
@@ -160,15 +159,15 @@ From here, choose the path that matches how you want to migrate the auth files.
 
     ### Review the generated auth config
 
-    The generated `auth.config.ts` starts with `getAuthConfigProvider()`. That
-    first pass is intentional. It lets the initial bootstrap complete before
-    `JWKS` exists. Once that bootstrap is done, switch to the static `JWKS`
-    version shown in the Manual tab's `auth.config.ts` step.
+    The generated `auth.config.ts` starts with `getAuthConfigProvider()`. Keep
+    that generated file as-is on the raw Convex preset. This path does not
+    switch over to the Better Convex `getEnv()`-based config shape.
 
     ### Done
 
     That's it. The CLI path already updates the auth contract, HTTP routes,
-    client wiring, provider wiring, and schema integration for you.
+    client wiring, provider wiring, and schema integration for you without
+    pulling in the wider Better Convex scaffold.
   </Tab>
   <Tab value="Manual">
     If you want full control over each file, work through these steps in
@@ -274,7 +273,7 @@ Here's what the before and after looks like:
     import authConfig from "./auth.config";
     import { defineAuth } from "./generated/auth";
 
-    export default defineAuth((ctx) => ({
+    export default defineAuth(() => ({
       baseURL: process.env.SITE_URL!,
       emailAndPassword: { enabled: true },
       plugins: [
@@ -306,8 +305,8 @@ Here's a summary of what changed and why:
 
 | Before | After | Why |
 |--------|-------|-----|
-| `createAuthOptions`/`getAuth` split | Single `defineAuth((ctx) => ({ ... }))` | One contract, less boilerplate |
-| Runtime exports from `auth.ts` | Generated runtime in `convex/functions/generated.ts` | Codegen handles wiring for you |
+| `createAuthOptions`/`getAuth` split | Single `defineAuth(() => ({ ... }))` | One contract, less boilerplate |
+| Runtime exports from `auth.ts` | Generated runtime in `<functionsDir>/generated/auth.ts` | Codegen handles wiring for you |
 | `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` with context-aware adapter | Automatic direct DB in queries, HTTP adapter in actions |
 | Trigger signature `(ctx, ...)` | Trigger signatures `(..., ctx)` | Full parity with ORM `defineTriggers` callbacks |
 | Component namespace routing | Generated contract + `internal.generated.*` handlers | No more component indirection |
@@ -466,6 +465,13 @@ Now we'll update the client-side auth setup.
 
 The new `createAuthMutations` helper generates TanStack Query mutation options for common auth operations.
 
+<Callout icon={<InfoIcon />}>
+This is the Better Convex client surface. If you are keeping a plain Convex app
+with `better-convex add auth --preset convex --yes`, keep the generated auth
+client scaffold. That preset uses `createAuthClient(...)` plus `convexClient()`
+and does not add `createAuthMutations`.
+</Callout>
+
 ### Update Provider
 
 Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
@@ -532,6 +538,12 @@ Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
 - `onMutationUnauthorized` - Handle auth errors on mutations
 - `onQueryUnauthorized` - Handle auth errors on queries (includes `queryName` for debugging)
 
+<Callout icon={<InfoIcon />}>
+If you are keeping the raw Convex preset, keep the provider shell the preset
+patched in place. The raw path adds `ConvexAuthProvider`, but it does not
+assume the larger Better Convex provider layout.
+</Callout>
+
 ### Remove AuthBoundary
 
 Remove `AuthBoundary` and use the provider's `onQueryUnauthorized` and `onMutationUnauthorized` callbacks instead.
@@ -542,52 +554,31 @@ If you were using the auto-generated component schema, you'll now define auth ta
 
 <Tabs groupId="schema-style" items={["ORM", "DB"]} persist>
   <Tab value="ORM">
-    Generate auth tables:
+    Refresh the full auth scaffold once:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
+    npx better-convex add auth --yes
     ```
 
-    Merge generated auth tables into your ORM schema:
+    After changing plugins or auth fields in `<functionsDir>/auth.ts`, refresh
+    only the auth-owned schema blocks:
 
-    ```ts title="convex/functions/schema.ts" showLineNumbers
-    import { defineSchema } from 'better-convex/orm';
-    import { tables as authSchema } from './authSchema';
-
-    export const tables = {
-      ...authSchema,
-      // ...your app convexTable definitions
-    };
-
-    export default defineSchema(tables, { strict: false });
+    ```bash
+    npx better-convex add auth --only schema --yes
     ```
-
-    <Callout icon={<InfoIcon />}>
-    CLI emits ORM-flavored output (`convexTable`, `defineSchema`) when ORM schema metadata is detected.
-    </Callout>
   </Tab>
   <Tab value="DB">
-    Generate auth tables:
+    Refresh the auth tables:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
+    npx better-convex add auth --preset convex --yes
     ```
 
-    Merge generated auth tables into your Convex schema:
-
-    ```ts title="convex/functions/schema.ts" showLineNumbers
-    import { defineSchema } from 'convex/server';
-    import { tables as authSchema } from './authSchema';
-
-    export default defineSchema({
-      ...authSchema,
-      // ...your app defineTable definitions
-    });
-    ```
+    Better Convex refreshes `<functionsDir>/authSchema.ts` and patches `<functionsDir>/schema.ts` to import and spread `authSchema`.
   </Tab>
 </Tabs>
 
-For fully manual table definitions, see [Auth Server Setup](/docs/auth/server#4-update-schema).
+For fully manual table definitions, see [Auth Server Setup](/docs/auth/server#refresh-auth-owned-schema).
 
   </Tab>
 </Tabs>
@@ -663,7 +654,7 @@ The component pattern provided several helper methods on `authComponent`. These 
 
     // Option 2: Use Better Auth API directly
     const headers = await getHeaders(ctx);
-    const auth = getAuth(ctx); // generated getAuth from convex/functions/generated.ts
+    const auth = getAuth(ctx); // generated getAuth from <functionsDir>/generated/auth.ts
     const session = await auth.api.getSession({ headers });
     ```
   </CompareItem>
@@ -699,16 +690,27 @@ The component pattern provided several helper methods on `authComponent`. These 
 - [ ] **convex.config.ts:** Remove `app.use(betterAuth)` line
 - [ ] **Component data:** Migrate `betterAuth` component data to app namespace before deletion
 - [ ] **betterAuth folder:** Delete the entire `convex/betterAuth/` directory
-- [ ] **auth.config.ts:** Add `jwks: process.env.JWKS` option
-- [ ] **Generated runtime:** Run `npx better-convex dev` so `convex/functions/generated.ts` exists
-- [ ] **auth.ts:** Rewrite to `export default defineAuth((ctx) => ({ ...options, triggers }))`
-- [ ] **auth-client.ts:** Add `createAuthMutations`, update imports
-- [ ] **Provider:** Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`
-- [ ] **AuthBoundary:** Remove and use provider callbacks
+- [ ] **auth.ts:** Rewrite to `export default defineAuth(() => ({ ...options, triggers }))`
 - [ ] **Helper methods:** Replace `authComponent.getAuthUser` etc with `ctx.db` access
-- [ ] **Schema:** Generate or define auth tables in main schema
-- [ ] **Env vars:** Run `npx better-convex env push --auth` for JWKS
 - [ ] **Test:** Verify sign-in, sign-up, session persistence, and token refresh
+
+### Better Convex path
+
+- [ ] Run `npx better-convex add auth --yes`
+- [ ] Use `npx better-convex add auth --only schema --yes` after auth table changes
+- [ ] Use the `getEnv()`-based auth config shape
+- [ ] Add `createAuthMutations`, update auth client imports
+- [ ] Replace provider wiring with the Better Convex auth-aware provider surface
+- [ ] Use `npx better-convex dev` for ongoing local runtime and codegen
+
+### Raw Convex preset
+
+- [ ] Run `npx better-convex add auth --preset convex --yes`
+- [ ] Keep generated `auth.config.ts` scaffolded with `getAuthConfigProvider()`
+- [ ] Keep the generated plain auth client scaffold; do not add `createAuthMutations` unless you are choosing the richer Better Convex client surface yourself
+- [ ] Re-run the full preset command after auth schema changes; `--only schema` does not apply here
+- [ ] Keep the app on the plain Convex provider/router shape the preset patched in place
+- [ ] Use `npx better-convex env push --prod` for production JWKS sync
 
 ## Next.js Migration
 
@@ -1029,12 +1031,12 @@ export function SignOutButton() {
 
 ### "Auth runtime is disabled ..."
 
-Generated runtime can be disabled when `convex/functions/auth.ts` is missing or lacks a default export.
+Generated runtime can be disabled when `<functionsDir>/auth.ts` is missing or lacks a default export. `functionsDir` comes from `convex.json.functions` (default: `convex`), so scaffolded Better Convex apps use `convex/functions/auth.ts`.
 
 ```ts
 import { defineAuth } from './generated/auth';
 
-export default defineAuth((ctx) => ({
+export default defineAuth(() => ({
   // ...options
 }));
 ```
@@ -1047,13 +1049,21 @@ npx better-convex codegen
 
 ### Better Auth CLI says config is invalid / cannot read auth config
 
-Use generated config entrypoint (not `auth.ts`):
+Use the Better Convex auth scaffold command for your mode:
 
 ```bash
-npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
+npx better-convex add auth --yes
+npx better-convex add auth --only schema --yes
 ```
 
-If it still fails, re-run `better-convex codegen` first so generated exports are up to date.
+For raw Convex adoption, use:
+
+```bash
+npx better-convex add auth --preset convex --yes
+```
+
+This path assumes the raw Convex app is already initialized. If it still fails,
+re-run `better-convex codegen` first so generated exports are up to date.
 
 ## Next Steps
 

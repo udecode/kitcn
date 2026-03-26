@@ -1,6 +1,9 @@
 const EXACT_VERSION_RE = /^(\d+)\.(\d+)\.\d+$/;
 const SUPPORTED_CONVEX_VERSION = '1.33.0';
 const SUPPORTED_BETTER_AUTH_VERSION = '1.5.3';
+const SUPPORTED_HONO_VERSION = '4.12.9';
+const SUPPORTED_OPENTELEMETRY_API_VERSION = '1.9.0';
+const SUPPORTED_TANSTACK_REACT_QUERY_VERSION = '5.95.2';
 
 export const BETTER_CONVEX_INSTALL_SPEC_ENV = 'BETTER_CONVEX_INSTALL_SPEC';
 export const BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV =
@@ -71,16 +74,28 @@ export const SUPPORTED_DEPENDENCY_VERSIONS = {
   betterAuth: {
     exact: SUPPORTED_BETTER_AUTH_VERSION,
   },
+  hono: {
+    exact: SUPPORTED_HONO_VERSION,
+  },
+  opentelemetryApi: {
+    exact: SUPPORTED_OPENTELEMETRY_API_VERSION,
+  },
+  tanstackReactQuery: {
+    exact: SUPPORTED_TANSTACK_REACT_QUERY_VERSION,
+  },
 } as const;
 
 export const PINNED_CONVEX_INSTALL_SPEC = `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`;
 export const BETTER_AUTH_INSTALL_SPEC = `better-auth@${SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact}`;
+export const PINNED_HONO_INSTALL_SPEC = `hono@${SUPPORTED_DEPENDENCY_VERSIONS.hono.exact}`;
+export const OPENTELEMETRY_API_INSTALL_SPEC = `@opentelemetry/api@${SUPPORTED_DEPENDENCY_VERSIONS.opentelemetryApi.exact}`;
+export const PINNED_TANSTACK_REACT_QUERY_INSTALL_SPEC = `@tanstack/react-query@${SUPPORTED_DEPENDENCY_VERSIONS.tanstackReactQuery.exact}`;
 
 export const BASELINE_DEPENDENCY_INSTALL_SPECS = [
   PINNED_CONVEX_INSTALL_SPEC,
   'zod',
-  '@tanstack/react-query',
-  'hono',
+  PINNED_TANSTACK_REACT_QUERY_INSTALL_SPEC,
+  PINNED_HONO_INSTALL_SPEC,
 ] as const;
 
 export const INIT_TEMPLATE_DEPENDENCY_INSTALL_SPECS = ['superjson'] as const;

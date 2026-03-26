@@ -4,24 +4,26 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
+import type {
+  api as generatedApi,
+  internal as generatedInternal,
+} from '../_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "consumeInteractive": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["ratelimitDemo"]["consumeInteractive"]), () => (require("../ratelimitDemo") as Record<string, unknown>)["consumeInteractive"])],
-  "getInteractiveStatus": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["ratelimitDemo"]["getInteractiveStatus"]), () => (require("../ratelimitDemo") as Record<string, unknown>)["getInteractiveStatus"])],
-  "getSnapshot": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["ratelimitDemo"]["getSnapshot"]), () => (require("../ratelimitDemo") as Record<string, unknown>)["getSnapshot"])],
-  "resetInteractive": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["ratelimitDemo"]["resetInteractive"]), () => (require("../ratelimitDemo") as Record<string, unknown>)["resetInteractive"])],
-  "runCoverage": ["action", typedProcedureResolver(getGeneratedFunctionReference(api["ratelimitDemo"]["runCoverage"]), () => (require("../ratelimitDemo") as Record<string, unknown>)["runCoverage"])],
-  "runCoverageProbe": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["ratelimitDemo"]["runCoverageProbe"]), () => (require("../ratelimitDemo") as Record<string, unknown>)["runCoverageProbe"])],
+  "consumeInteractive": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["ratelimitDemo"]["consumeInteractive"]>("ratelimitDemo:consumeInteractive"), () => (require("../ratelimitDemo") as Record<string, unknown>)["consumeInteractive"])],
+  "getInteractiveStatus": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["ratelimitDemo"]["getInteractiveStatus"]>("ratelimitDemo:getInteractiveStatus"), () => (require("../ratelimitDemo") as Record<string, unknown>)["getInteractiveStatus"])],
+  "getSnapshot": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["ratelimitDemo"]["getSnapshot"]>("ratelimitDemo:getSnapshot"), () => (require("../ratelimitDemo") as Record<string, unknown>)["getSnapshot"])],
+  "resetInteractive": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["ratelimitDemo"]["resetInteractive"]>("ratelimitDemo:resetInteractive"), () => (require("../ratelimitDemo") as Record<string, unknown>)["resetInteractive"])],
+  "runCoverage": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "public", typeof generatedApi["ratelimitDemo"]["runCoverage"]>("ratelimitDemo:runCoverage"), () => (require("../ratelimitDemo") as Record<string, unknown>)["runCoverage"])],
+  "runCoverageProbe": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["ratelimitDemo"]["runCoverageProbe"]>("ratelimitDemo:runCoverageProbe"), () => (require("../ratelimitDemo") as Record<string, unknown>)["runCoverageProbe"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

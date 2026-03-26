@@ -5,8 +5,32 @@
       "files": {
         "auth-client": "src/lib/convex/auth-client.ts",
         "auth-config": "convex/functions/auth.config.ts",
-        "auth-runtime": "convex/functions/auth.ts",
-        "auth-schema": "convex/lib/plugins/auth/schema.ts"
+        "auth-runtime": "convex/functions/auth.ts"
+      },
+      "schema": {
+        "path": "convex/functions/schema.ts",
+        "tables": {
+          "account": {
+            "checksum": "5a9e3baeae57",
+            "owner": "managed"
+          },
+          "jwks": {
+            "checksum": "68e9a48ed9f7",
+            "owner": "managed"
+          },
+          "session": {
+            "checksum": "40cd0c065848",
+            "owner": "managed"
+          },
+          "user": {
+            "checksum": "c64d9849ba88",
+            "owner": "managed"
+          },
+          "verification": {
+            "checksum": "bcdfc6bc46bb",
+            "owner": "managed"
+          }
+        }
       }
     }
   }

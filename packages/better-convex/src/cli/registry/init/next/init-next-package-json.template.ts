@@ -12,6 +12,7 @@ type ProjectPackageJson = {
 
 type InitPackageJsonTemplateOptions = {
   backend?: 'convex' | 'concave';
+  functionsDirRelative?: string;
 };
 
 const INIT_NEXT_PACKAGE_JSON_SCRIPTS = {
@@ -29,8 +30,10 @@ const INIT_NEXT_FALLBACK_CODEGEN_SCRIPT_NAME = 'convex:codegen';
 const INIT_NEXT_CONVEX_DEV_SCRIPT_NAME = 'convex:dev';
 const INIT_NEXT_CONVEX_DEV_SCRIPT = 'better-convex dev';
 const INIT_NEXT_CONVEX_TYPECHECK_SCRIPT_NAME = 'typecheck:convex';
-const INIT_NEXT_CONVEX_TYPECHECK_SCRIPT =
-  'tsc --noEmit --project convex/tsconfig.json';
+
+const getInitNextConvexTypecheckScript = (
+  functionsDirRelative = 'convex/functions'
+) => `tsc --noEmit --project ${functionsDirRelative}/tsconfig.json`;
 
 const INIT_NEXT_PACKAGE_JSON_DEPENDENCIES = {
   superjson: '2.2.6',
@@ -75,7 +78,7 @@ export function renderInitNextPackageJsonTemplate(
 
   if (!nextScripts[INIT_NEXT_CONVEX_TYPECHECK_SCRIPT_NAME]) {
     nextScripts[INIT_NEXT_CONVEX_TYPECHECK_SCRIPT_NAME] =
-      INIT_NEXT_CONVEX_TYPECHECK_SCRIPT;
+      getInitNextConvexTypecheckScript(options.functionsDirRelative);
   }
 
   return `${JSON.stringify(

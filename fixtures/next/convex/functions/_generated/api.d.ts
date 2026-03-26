@@ -1,18 +1,18 @@
 /* eslint-disable */
 /**
- * Generated `api` utility with precise source types.
+ * Generated `api` utility.
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
- * To regenerate, run `better-convex codegen`.
+ * To regenerate, run `npx concave codegen`.
  * @module
  */
 
 import type * as generated_auth from "../generated/auth.js";
+import type * as generated_server from "../generated/server.js";
 import type * as messages from "../messages.js";
 
 import type {
-  AnyComponents,
   ApiFromModules,
   FilterApi,
   FunctionReference,
@@ -27,8 +27,9 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  "generated/auth": typeof generated_auth,
-  "messages": typeof messages,
+  "generated/auth": typeof generated_auth;
+  "generated/server": typeof generated_server;
+  "messages": typeof messages;
 }>;
 
 export declare const api: FilterApi<
@@ -41,4 +42,4 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: AnyComponents;
+export declare const components: {};

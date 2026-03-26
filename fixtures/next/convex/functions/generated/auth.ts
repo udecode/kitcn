@@ -32,7 +32,10 @@ const authRuntime: AuthRuntime<
   MutationCtx,
   GenericCtx
 > = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({
-  reason: getGeneratedAuthDisabledReason("missing_auth_file"),
+  reason: getGeneratedAuthDisabledReason(
+    "missing_auth_file",
+    "convex/functions/auth.ts"
+  ),
 });
 
 export const {

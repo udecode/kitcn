@@ -4,23 +4,25 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
+import type {
+  api as generatedApi,
+  internal as generatedInternal,
+} from '../_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "cleanupSeedData": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["seed"]["cleanupSeedData"]), () => (require("../seed") as Record<string, unknown>)["cleanupSeedData"])],
-  "generateSamples": ["action", typedProcedureResolver(getGeneratedFunctionReference(api["seed"]["generateSamples"]), () => (require("../seed") as Record<string, unknown>)["generateSamples"])],
-  "generateSamplesBatch": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["seed"]["generateSamplesBatch"]), () => (require("../seed") as Record<string, unknown>)["generateSamplesBatch"])],
-  "seed": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["seed"]["seed"]), () => (require("../seed") as Record<string, unknown>)["seed"])],
-  "seedUsers": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["seed"]["seedUsers"]), () => (require("../seed") as Record<string, unknown>)["seedUsers"])],
+  "cleanupSeedData": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["seed"]["cleanupSeedData"]>("seed:cleanupSeedData"), () => (require("../seed") as Record<string, unknown>)["cleanupSeedData"])],
+  "generateSamples": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "public", typeof generatedApi["seed"]["generateSamples"]>("seed:generateSamples"), () => (require("../seed") as Record<string, unknown>)["generateSamples"])],
+  "generateSamplesBatch": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["seed"]["generateSamplesBatch"]>("seed:generateSamplesBatch"), () => (require("../seed") as Record<string, unknown>)["generateSamplesBatch"])],
+  "seed": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["seed"]["seed"]>("seed:seed"), () => (require("../seed") as Record<string, unknown>)["seed"])],
+  "seedUsers": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["seed"]["seedUsers"]>("seed:seedUsers"), () => (require("../seed") as Record<string, unknown>)["seedUsers"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

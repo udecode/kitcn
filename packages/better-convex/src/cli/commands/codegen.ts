@@ -34,6 +34,7 @@ export const handleCodegenCommand = async (
     execa: execaFn,
     generateMeta: generateMetaFn,
     loadBetterConvexConfig: loadBetterConvexConfigFn,
+    syncEnv: syncEnvFn,
     realConvex: realConvexPath,
     realConcave: realConcavePath,
   } = resolveRunDeps(deps);
@@ -59,6 +60,7 @@ export const handleCodegenCommand = async (
       debug,
       generateMetaFn,
       execaFn,
+      syncEnvFn,
       realConvexPath,
       realConcavePath,
       additionalConvexArgs: parsed.convexArgs,
@@ -72,6 +74,7 @@ export const handleCodegenCommand = async (
     debug,
     generateMetaFn,
     execaFn,
+    syncEnvFn,
     realConvexPath,
     realConcavePath,
     additionalConvexArgs: parsed.convexArgs,

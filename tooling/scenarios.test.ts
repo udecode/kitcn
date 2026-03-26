@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import fs from 'node:fs';
+import { createServer } from 'node:net';
 import path from 'node:path';
 import {
   BETTER_CONVEX_INSTALL_SPEC_ENV,
@@ -16,8 +17,11 @@ import {
 } from './scenario.config';
 import {
   checkScenarios,
+  findAvailableScenarioDevPort,
   parseScenarioArgs,
+  prepareScenario,
   resolvePrepareBootstrapSteps,
+  resolveScenarioInstallSpecs,
   resolveScenarioKeysForCheck,
   resolveScenarioProofPath,
   resolveScenarioStepEnv,
@@ -199,6 +203,34 @@ describe('tooling/scenarios', () => {
     ).toBeUndefined();
   });
 
+  test('resolveScenarioInstallSpecs reuses the prepared app package specs', async () => {
+    const rootDir = `/tmp/better-convex-scenario-install-specs-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const projectDir = `${rootDir}/project`;
+
+    await Bun.write(
+      `${projectDir}/package.json`,
+      JSON.stringify({
+        name: 'scenario-install-specs',
+        private: true,
+        dependencies: {
+          'better-convex': 'file:/tmp/scenario-better-convex.tgz',
+          '@better-convex/resend': 'file:/tmp/scenario-resend.tgz',
+        },
+      })
+    );
+
+    try {
+      expect(resolveScenarioInstallSpecs(projectDir)).toEqual({
+        betterConvexInstallSpec: 'file:/tmp/scenario-better-convex.tgz',
+        resendInstallSpec: 'file:/tmp/scenario-resend.tgz',
+      });
+    } finally {
+      await Bun.$`rm -rf ${rootDir}`.quiet();
+    }
+  });
+
   test('resolvePrepareBootstrapSteps backfills auth env for auth template scenarios', async () => {
     const rootDir = `/tmp/better-convex-scenario-prepare-auth-${Date.now()}-${Math.random()
       .toString(36)
@@ -243,6 +275,91 @@ describe('tooling/scenarios', () => {
     }
   });
 
+  test('prepareScenario installs local better-convex before auth env backfill steps', async () => {
+    const outputRoot = `/tmp/better-convex-scenario-prepare-order-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const events: string[] = [];
+
+    const runCommand = mock(async (cmd: string[]) => {
+      if (cmd.at(0) === 'bun' && cmd.at(1) === 'install') {
+        events.push('bun-install');
+      }
+      if (cmd.includes('add') && cmd.includes('auth')) {
+        events.push('auth-bootstrap');
+      }
+      return 0;
+    });
+    const installLocalBetterConvexFn = mock(
+      async (
+        _directory: string,
+        _params?: {
+          betterConvexPackageSpec?: string;
+          outputDir?: string;
+          packageName?: string;
+          runCommand?: typeof runCommand;
+        }
+      ) => {
+        events.push('install-local');
+        return 'file:/tmp/better-convex.tgz';
+      }
+    );
+
+    try {
+      await prepareScenario('next-auth', {
+        outputRoot,
+        runCommand: runCommand as never,
+        installLocalBetterConvexFn: installLocalBetterConvexFn as never,
+        packLocalBetterConvexPackageFn: mock(
+          () => 'file:/tmp/better-convex.tgz'
+        ) as never,
+        logFn: mock(() => {}) as never,
+      });
+
+      expect(events).toContain('install-local');
+      expect(events).toContain('auth-bootstrap');
+      expect(events.indexOf('install-local')).toBeLessThan(
+        events.indexOf('auth-bootstrap')
+      );
+    } finally {
+      await Bun.$`rm -rf ${outputRoot}`.quiet();
+    }
+  }, 15_000);
+
+  test('prepareScenario patches the prepared app with an available local dev port', async () => {
+    const outputRoot = `/tmp/better-convex-scenario-prepare-port-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const patched: Array<{ directory: string; port: number }> = [];
+
+    try {
+      await prepareScenario('next', {
+        findAvailableScenarioDevPortFn: mock(async () => 3017) as never,
+        installLocalBetterConvexFn: mock(
+          async () => 'file:/tmp/better-convex.tgz'
+        ) as never,
+        logFn: mock(() => {}) as never,
+        outputRoot,
+        packLocalBetterConvexPackageFn: mock(
+          () => 'file:/tmp/better-convex.tgz'
+        ) as never,
+        patchPreparedLocalDevPortFn: mock((directory: string, port: number) => {
+          patched.push({ directory, port });
+        }) as never,
+        runCommand: mock(async () => 0) as never,
+      });
+
+      expect(patched).toEqual([
+        {
+          directory: `${outputRoot}/next/project`,
+          port: 3017,
+        },
+      ]);
+    } finally {
+      await Bun.$`rm -rf ${outputRoot}`.quiet();
+    }
+  }, 15_000);
+
   test('scenario registry skips lint for slow adoption checks', () => {
     expect(SCENARIO_DEFINITIONS['convex-next-auth-bootstrap'].backend).toBe(
       'convex'
@@ -252,15 +369,14 @@ describe('tooling/scenarios', () => {
     ).toBe('anonymous');
     expect(
       SCENARIO_DEFINITIONS['convex-next-auth-bootstrap'].validation.beforeCheck
-    ).toEqual([
-      ['convex', 'init'],
-      ['better-convex', 'dev', '--once', '--typecheck', 'disable'],
-      ['better-convex', 'env', 'push', '--auth'],
-    ]);
+    ).toEqual([['init', '--yes', '--json']]);
     expect(SCENARIO_DEFINITIONS['convex-vite-auth-bootstrap']).toMatchObject({
       backend: 'convex',
       check: true,
     });
+    expect(
+      SCENARIO_DEFINITIONS['convex-vite-auth-bootstrap'].validation.beforeCheck
+    ).toEqual([['init', '--yes', '--json']]);
     expect(FULL_CONVEX_SCENARIO_KEYS).toEqual([
       'convex-next-auth-bootstrap',
       'convex-vite-auth-bootstrap',
@@ -280,11 +396,7 @@ describe('tooling/scenarios', () => {
         ['add', 'resend', '--yes', '--no-codegen'],
       ],
       validation: {
-        beforeCheck: [
-          ['convex', 'init'],
-          ['better-convex', 'dev', '--once', '--typecheck', 'disable'],
-          ['better-convex', 'env', 'push', '--auth'],
-        ],
+        beforeCheck: [['init', '--yes', '--json']],
         lint: true,
       },
     });
@@ -316,22 +428,52 @@ describe('tooling/scenarios', () => {
       SCENARIO_DEFINITIONS['create-convex-nextjs-shadcn'].validation.lint
     ).toBe(false);
     expect(SCENARIO_DEFINITIONS['create-convex-nextjs-shadcn'].setup).toEqual([
-      ['init', '--yes'],
+      ['init', '--yes', '--json'],
     ]);
     expect(
       SCENARIO_DEFINITIONS['create-convex-react-vite-shadcn'].validation.lint
     ).toBe(false);
     expect(
       SCENARIO_DEFINITIONS['create-convex-react-vite-shadcn'].setup
-    ).toEqual([['init', '--yes']]);
+    ).toEqual([['init', '--yes', '--json']]);
   });
 
-  test('patchPreparedLocalDevPort rewrites local temp apps to port 3005', async () => {
+  test('findAvailableScenarioDevPort falls back when the preferred port is busy', async () => {
+    const server = createServer();
+    const occupiedPort = await new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, () => {
+        resolve((server.address() as { port: number }).port);
+      });
+    });
+
+    try {
+      expect(
+        await findAvailableScenarioDevPort({
+          maxAttempts: 5,
+          preferredPort: occupiedPort,
+        })
+      ).toBe(occupiedPort + 1);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
+
+  test('patchPreparedLocalDevPort rewrites local temp apps to the selected port', async () => {
     const rootDir = `/tmp/better-convex-scenario-port-patch-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const nextDir = `${rootDir}/next`;
     const viteDir = `${rootDir}/vite`;
+    const localPort = 3017;
 
     await Bun.write(
       `${nextDir}/package.json`,
@@ -370,8 +512,8 @@ describe('tooling/scenarios', () => {
     );
 
     try {
-      patchPreparedLocalDevPort(nextDir);
-      patchPreparedLocalDevPort(viteDir);
+      patchPreparedLocalDevPort(nextDir, localPort);
+      patchPreparedLocalDevPort(viteDir, localPort);
 
       const nextPackageJson = JSON.parse(
         fs.readFileSync(`${nextDir}/package.json`, 'utf8')
@@ -381,23 +523,23 @@ describe('tooling/scenarios', () => {
       ) as { scripts?: Record<string, string> };
 
       expect(nextPackageJson.scripts?.dev).toBe(
-        'next dev --turbopack --port 3005'
+        'next dev --turbopack --port 3017'
       );
       expect(nextPackageJson.scripts?.['dev:frontend']).toBe(
-        'next dev --turbopack --port 3005'
+        'next dev --turbopack --port 3017'
       );
-      expect(vitePackageJson.scripts?.dev).toBe('vite --port 3005');
+      expect(vitePackageJson.scripts?.dev).toBe('vite --port 3017');
       expect(vitePackageJson.scripts?.['dev:frontend']).toBe(
-        'vite --open --port 3005'
+        'vite --open --port 3017'
       );
       expect(fs.readFileSync(`${nextDir}/.env.local`, 'utf8')).toContain(
-        'NEXT_PUBLIC_SITE_URL=http://localhost:3005'
+        'NEXT_PUBLIC_SITE_URL=http://localhost:3017'
       );
       expect(fs.readFileSync(`${viteDir}/.env.local`, 'utf8')).toContain(
-        'VITE_SITE_URL=http://localhost:3005'
+        'VITE_SITE_URL=http://localhost:3017'
       );
       expect(fs.readFileSync(`${nextDir}/convex/.env`, 'utf8')).toContain(
-        'SITE_URL=http://localhost:3005'
+        'SITE_URL=http://localhost:3017'
       );
     } finally {
       await Bun.$`rm -rf ${rootDir}`.quiet();
@@ -517,7 +659,7 @@ describe('tooling/scenarios', () => {
         cwd: projectDir,
       },
     ]);
-    expect(kills).toEqual([{ signal: 'SIGTERM' }]);
+    expect(kills).toEqual([{ signal: 'SIGINT' }]);
   });
 
   test('runScenarioDev fails clearly when the scenario has not been prepared yet', async () => {
@@ -655,7 +797,7 @@ describe('tooling/scenarios', () => {
         cwd: projectDir,
       },
     ]);
-    expect(kills).toEqual([{ signal: 'SIGTERM' }]);
+    expect(kills).toEqual([{ signal: 'SIGINT' }]);
   });
 
   test('runScenarioDev runs Vite scenarios on the prepared frontend port by splitting backend and frontend ownership', async () => {
@@ -724,7 +866,7 @@ describe('tooling/scenarios', () => {
         cwd: projectDir,
       },
     ]);
-    expect(kills).toEqual([{ signal: 'SIGTERM' }]);
+    expect(kills).toEqual([{ signal: 'SIGINT' }]);
   });
 
   test('runScenarioDev splits raw create-convex Vite fixtures so better-convex owns only the backend', async () => {
@@ -795,6 +937,6 @@ describe('tooling/scenarios', () => {
         cwd: projectDir,
       },
     ]);
-    expect(kills).toEqual([{ signal: 'SIGTERM' }]);
+    expect(kills).toEqual([{ signal: 'SIGINT' }]);
   });
 });

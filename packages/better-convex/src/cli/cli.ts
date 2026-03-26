@@ -16,13 +16,18 @@ import { handleAggregateCommand } from './commands/aggregate.js';
 import { handleAnalyzeCommand } from './commands/analyze.js';
 import { CODEGEN_HELP_TEXT, handleCodegenCommand } from './commands/codegen.js';
 import { handleDeployCommand } from './commands/deploy.js';
-import { DEV_HELP_TEXT, handleDevCommand } from './commands/dev.js';
+import {
+  DEV_HELP_TEXT,
+  handleDevCommand,
+  resolveSupportedLocalNodeEnvOverrides,
+} from './commands/dev.js';
 import { DOCS_HELP_TEXT, handleDocsCommand } from './commands/docs.js';
 import { ENV_HELP_TEXT, handleEnvCommand } from './commands/env.js';
 import { handleInfoCommand, INFO_HELP_TEXT } from './commands/info.js';
 import { handleInitCommand, INIT_HELP_TEXT } from './commands/init.js';
 import { handleMigrateCommand, MIGRATE_HELP_TEXT } from './commands/migrate.js';
 import { handleResetCommand } from './commands/reset.js';
+import { handleVerifyCommand, VERIFY_HELP_TEXT } from './commands/verify.js';
 import { handleViewCommand, VIEW_HELP_TEXT } from './commands/view.js';
 import type { BetterConvexBackend } from './config.js';
 import { handleCliError } from './utils/handle-error.js';
@@ -34,6 +39,14 @@ const VERSION_FLAGS = new Set(['--version', '-v']);
 const packageJson = readOwnPackageJson(import.meta.url);
 const REMOVED_CREATE_MESSAGE =
   'Removed `better-convex create`. Use `better-convex init -t <next|vite>` for fresh app scaffolding.';
+const LOCAL_NODE_REEXEC_ENV = 'BETTER_CONVEX_NODE_REEXEC';
+const LOCAL_NODE_REEXEC_COMMANDS = new Set([
+  'add',
+  'codegen',
+  'dev',
+  'init',
+  'verify',
+]);
 
 export {
   ensureConvexGitignoreEntry,
@@ -51,6 +64,7 @@ const COMMAND_HELP: Record<string, string> = {
   info: INFO_HELP_TEXT,
   docs: DOCS_HELP_TEXT,
   dev: DEV_HELP_TEXT,
+  verify: VERIFY_HELP_TEXT,
   codegen: CODEGEN_HELP_TEXT,
   env: ENV_HELP_TEXT,
   migrate: MIGRATE_HELP_TEXT,
@@ -62,6 +76,7 @@ const COMMAND_HANDLERS = {
   view: handleViewCommand,
   info: handleInfoCommand,
   docs: handleDocsCommand,
+  verify: handleVerifyCommand,
   codegen: handleCodegenCommand,
   env: handleEnvCommand,
   deploy: handleDeployCommand,
@@ -107,6 +122,7 @@ Global options:
 Commands:
   init                         Bootstrap Better Convex into a new or existing supported app
   dev                          Run dev workflow with codegen/watch passthrough
+  verify                       Run one-shot local runtime proof
   codegen                      Generate Better Convex outputs
   add [plugin]                 Add a plugin scaffold + schema registration
   view [plugin]                Inspect a plugin install plan without writing
@@ -207,8 +223,58 @@ const handlePassthroughCommand = async (
   return result.exitCode ?? 0;
 };
 
+export async function maybeReexecUnderSupportedNode(params: {
+  argv: string[];
+  command: string;
+  deps?: Partial<RunDeps>;
+  currentArgv?: string[];
+  currentNodeVersion?: string;
+  runtimeName?: string;
+}): Promise<number | null> {
+  if (!LOCAL_NODE_REEXEC_COMMANDS.has(params.command)) {
+    return null;
+  }
+  if (process.env[LOCAL_NODE_REEXEC_ENV] === '1') {
+    return null;
+  }
+
+  const { execa: execaFn } = resolveRunDeps(params.deps);
+  const envOverrides = await resolveSupportedLocalNodeEnvOverrides({
+    currentNodeVersion: params.currentNodeVersion,
+    execaFn,
+    runtimeName: params.runtimeName,
+  });
+  if (!envOverrides.PATH) {
+    return null;
+  }
+
+  const result = await execaFn(
+    'node',
+    params.currentArgv ?? process.argv.slice(1),
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        ...envOverrides,
+        [LOCAL_NODE_REEXEC_ENV]: '1',
+      },
+      reject: false,
+      stdio: 'inherit',
+    }
+  );
+  return result.exitCode ?? 0;
+}
+
 export async function run(argv: string[], deps?: Partial<RunDeps>) {
   if (argv.length === 0) {
+    const reexecExitCode = await maybeReexecUnderSupportedNode({
+      argv,
+      command: 'dev',
+      deps,
+    });
+    if (reexecExitCode !== null) {
+      return reexecExitCode;
+    }
     return handleDevCommand(argv, deps);
   }
   if (VERSION_FLAGS.has(argv[0]!)) {
@@ -217,6 +283,14 @@ export async function run(argv: string[], deps?: Partial<RunDeps>) {
   }
 
   const parsed = parseArgs(argv);
+  const reexecExitCode = await maybeReexecUnderSupportedNode({
+    argv,
+    command: parsed.command,
+    deps,
+  });
+  if (reexecExitCode !== null) {
+    return reexecExitCode;
+  }
   let resolvedBackend: BetterConvexBackend | undefined;
   const getBackend = () => {
     resolvedBackend ??= resolveConfiguredBackend({

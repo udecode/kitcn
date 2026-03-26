@@ -4,35 +4,37 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
+import type {
+  api as generatedApi,
+  internal as generatedInternal,
+} from '../../_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from '../server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../../_generated/api.js") as typeof import('../../_generated/api.js'));
 
 const procedureRegistry = {
-  "callResendAPIWithBatch": ["action", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["callResendAPIWithBatch"]), () => (require("../../plugins/resend") as Record<string, unknown>)["callResendAPIWithBatch"])],
-  "cancelEmail": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["cancelEmail"]), () => (require("../../plugins/resend") as Record<string, unknown>)["cancelEmail"])],
-  "cleanupAbandonedEmails": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["cleanupAbandonedEmails"]), () => (require("../../plugins/resend") as Record<string, unknown>)["cleanupAbandonedEmails"])],
-  "cleanupOldEmails": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["cleanupOldEmails"]), () => (require("../../plugins/resend") as Record<string, unknown>)["cleanupOldEmails"])],
-  "createManualEmail": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["createManualEmail"]), () => (require("../../plugins/resend") as Record<string, unknown>)["createManualEmail"])],
-  "get": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["get"]), () => (require("../../plugins/resend") as Record<string, unknown>)["get"])],
-  "getAllContentByIds": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["getAllContentByIds"]), () => (require("../../plugins/resend") as Record<string, unknown>)["getAllContentByIds"])],
-  "getEmailByResendId": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["getEmailByResendId"]), () => (require("../../plugins/resend") as Record<string, unknown>)["getEmailByResendId"])],
-  "getEmailsByIds": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["getEmailsByIds"]), () => (require("../../plugins/resend") as Record<string, unknown>)["getEmailsByIds"])],
-  "getStatus": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["getStatus"]), () => (require("../../plugins/resend") as Record<string, unknown>)["getStatus"])],
-  "handleEmailEvent": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["handleEmailEvent"]), () => (require("../../plugins/resend") as Record<string, unknown>)["handleEmailEvent"])],
-  "makeBatch": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["makeBatch"]), () => (require("../../plugins/resend") as Record<string, unknown>)["makeBatch"])],
-  "markEmailsFailed": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["markEmailsFailed"]), () => (require("../../plugins/resend") as Record<string, unknown>)["markEmailsFailed"])],
-  "onEmailComplete": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["onEmailComplete"]), () => (require("../../plugins/resend") as Record<string, unknown>)["onEmailComplete"])],
-  "onEmailEvent": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["onEmailEvent"]), () => (require("../../plugins/resend") as Record<string, unknown>)["onEmailEvent"])],
-  "sendEmail": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["sendEmail"]), () => (require("../../plugins/resend") as Record<string, unknown>)["sendEmail"])],
-  "updateManualEmail": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["plugins"]["resend"]["updateManualEmail"]), () => (require("../../plugins/resend") as Record<string, unknown>)["updateManualEmail"])],
+  "callResendAPIWithBatch": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "internal", typeof generatedInternal["plugins"]["resend"]["callResendAPIWithBatch"]>("plugins/resend:callResendAPIWithBatch"), () => (require("../../plugins/resend") as Record<string, unknown>)["callResendAPIWithBatch"])],
+  "cancelEmail": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["cancelEmail"]>("plugins/resend:cancelEmail"), () => (require("../../plugins/resend") as Record<string, unknown>)["cancelEmail"])],
+  "cleanupAbandonedEmails": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["cleanupAbandonedEmails"]>("plugins/resend:cleanupAbandonedEmails"), () => (require("../../plugins/resend") as Record<string, unknown>)["cleanupAbandonedEmails"])],
+  "cleanupOldEmails": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["cleanupOldEmails"]>("plugins/resend:cleanupOldEmails"), () => (require("../../plugins/resend") as Record<string, unknown>)["cleanupOldEmails"])],
+  "createManualEmail": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["createManualEmail"]>("plugins/resend:createManualEmail"), () => (require("../../plugins/resend") as Record<string, unknown>)["createManualEmail"])],
+  "get": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["plugins"]["resend"]["get"]>("plugins/resend:get"), () => (require("../../plugins/resend") as Record<string, unknown>)["get"])],
+  "getAllContentByIds": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["plugins"]["resend"]["getAllContentByIds"]>("plugins/resend:getAllContentByIds"), () => (require("../../plugins/resend") as Record<string, unknown>)["getAllContentByIds"])],
+  "getEmailByResendId": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["plugins"]["resend"]["getEmailByResendId"]>("plugins/resend:getEmailByResendId"), () => (require("../../plugins/resend") as Record<string, unknown>)["getEmailByResendId"])],
+  "getEmailsByIds": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["plugins"]["resend"]["getEmailsByIds"]>("plugins/resend:getEmailsByIds"), () => (require("../../plugins/resend") as Record<string, unknown>)["getEmailsByIds"])],
+  "getStatus": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["plugins"]["resend"]["getStatus"]>("plugins/resend:getStatus"), () => (require("../../plugins/resend") as Record<string, unknown>)["getStatus"])],
+  "handleEmailEvent": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["handleEmailEvent"]>("plugins/resend:handleEmailEvent"), () => (require("../../plugins/resend") as Record<string, unknown>)["handleEmailEvent"])],
+  "makeBatch": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["makeBatch"]>("plugins/resend:makeBatch"), () => (require("../../plugins/resend") as Record<string, unknown>)["makeBatch"])],
+  "markEmailsFailed": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["markEmailsFailed"]>("plugins/resend:markEmailsFailed"), () => (require("../../plugins/resend") as Record<string, unknown>)["markEmailsFailed"])],
+  "onEmailComplete": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["onEmailComplete"]>("plugins/resend:onEmailComplete"), () => (require("../../plugins/resend") as Record<string, unknown>)["onEmailComplete"])],
+  "onEmailEvent": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["onEmailEvent"]>("plugins/resend:onEmailEvent"), () => (require("../../plugins/resend") as Record<string, unknown>)["onEmailEvent"])],
+  "sendEmail": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["sendEmail"]>("plugins/resend:sendEmail"), () => (require("../../plugins/resend") as Record<string, unknown>)["sendEmail"])],
+  "updateManualEmail": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["plugins"]["resend"]["updateManualEmail"]>("plugins/resend:updateManualEmail"), () => (require("../../plugins/resend") as Record<string, unknown>)["updateManualEmail"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

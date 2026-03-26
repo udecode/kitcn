@@ -4,13 +4,107 @@ import os from 'node:os';
 import path from 'node:path';
 import { createDefaultConfig } from '../test-utils';
 import {
+  filterDevStartupLine,
   handleDevCommand,
   resolveConcaveLocalDevContract,
   resolveConcaveLocalSiteUrl,
   resolveDevStartupRetryDelayMs,
+  resolveSupportedLocalNodeEnvOverrides,
   resolveWatcherCommand,
   runDevStartupRetryLoop,
 } from './dev';
+
+function createPendingProcess() {
+  let resolveExit!: (value: { exitCode: number }) => void;
+  const processPromise: any = new Promise<{ exitCode: number }>((resolve) => {
+    resolveExit = resolve;
+  });
+  processPromise.killed = false;
+  processPromise.kill = mock((signal?: string) => {
+    processPromise.killed = true;
+    processPromise.lastSignal = signal;
+  });
+  return {
+    process: processPromise,
+    resolveExit,
+  };
+}
+
+function createPersistentProcess() {
+  let resolveExit!: (value: { exitCode: number }) => void;
+  const stdoutListeners: Array<(chunk: string) => void> = [];
+  const stderrListeners: Array<(chunk: string) => void> = [];
+  const stdoutEndListeners: Array<() => void> = [];
+  const stderrEndListeners: Array<() => void> = [];
+  const processPromise: any = new Promise<{ exitCode: number }>((resolve) => {
+    resolveExit = resolve;
+  });
+  processPromise.killed = false;
+  processPromise.kill = mock((signal?: string) => {
+    processPromise.killed = true;
+    processPromise.lastSignal = signal;
+  });
+  processPromise.stdout = {
+    on: mock((event: string, cb: ((chunk: string) => void) | (() => void)) => {
+      if (event === 'data') {
+        stdoutListeners.push(cb as (chunk: string) => void);
+      }
+      if (event === 'end' || event === 'close') {
+        stdoutEndListeners.push(cb as () => void);
+      }
+      return processPromise.stdout;
+    }),
+  };
+  processPromise.stderr = {
+    on: mock((event: string, cb: ((chunk: string) => void) | (() => void)) => {
+      if (event === 'data') {
+        stderrListeners.push(cb as (chunk: string) => void);
+      }
+      if (event === 'end' || event === 'close') {
+        stderrEndListeners.push(cb as () => void);
+      }
+      return processPromise.stderr;
+    }),
+  };
+
+  return {
+    process: processPromise,
+    emitStdout(chunk: string) {
+      for (const listener of stdoutListeners) {
+        listener(chunk);
+      }
+    },
+    emitStderr(chunk: string) {
+      for (const listener of stderrListeners) {
+        listener(chunk);
+      }
+    },
+    endStdout() {
+      for (const listener of stdoutEndListeners) {
+        listener();
+      }
+    },
+    endStderr() {
+      for (const listener of stderrEndListeners) {
+        listener();
+      }
+    },
+    resolveExit,
+  };
+}
+
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 2000
+): Promise<void> {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error('Timed out waiting for condition.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
 describe('cli/commands/dev', () => {
   test('resolveWatcherCommand uses the source watcher during ts execution', () => {
@@ -32,8 +126,52 @@ describe('cli/commands/dev', () => {
         '/repo/node_modules/better-convex/dist'
       )
     ).toEqual({
-      runtime: process.execPath,
+      runtime: 'node',
       watcherPath: '/repo/node_modules/better-convex/dist/watcher.mjs',
+    });
+  });
+
+  test('resolveSupportedLocalNodeEnvOverrides prefers a supported node from PATH', async () => {
+    const execaStub = mock((cmd: string, args: string[]) => {
+      if (cmd === 'which') {
+        expect(args).toEqual(['-a', 'node']);
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: [
+            '/opt/homebrew/bin/node',
+            '/Users/test/.local/state/fnm_multishells/1/bin/node',
+          ].join('\n'),
+          stderr: '',
+        });
+      }
+      if (cmd === '/opt/homebrew/bin/node') {
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: '25.8.1',
+          stderr: '',
+        });
+      }
+      if (cmd === '/Users/test/.local/state/fnm_multishells/1/bin/node') {
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: '22.22.1',
+          stderr: '',
+        });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const overrides = await resolveSupportedLocalNodeEnvOverrides({
+      currentNodeVersion: 'v25.8.1',
+      env: {
+        PATH: '/opt/homebrew/bin:/Users/test/.local/state/fnm_multishells/1/bin:/usr/bin',
+      },
+      execaFn: execaStub as any,
+      runtimeName: 'node',
+    });
+
+    expect(overrides).toEqual({
+      PATH: '/Users/test/.local/state/fnm_multishells/1/bin:/opt/homebrew/bin:/usr/bin',
     });
   });
 
@@ -68,7 +206,7 @@ describe('cli/commands/dev', () => {
   test('resolveConcaveLocalDevContract defaults concave dev to Convex local ports', () => {
     expect(resolveConcaveLocalDevContract([], 'http://localhost:3000')).toEqual(
       {
-        backendArgs: ['--port', '3210'],
+        backendArgs: [],
         targetArgs: ['--url', 'http://127.0.0.1:3210'],
         backendEnv: {
           CONVEX_SITE_URL: 'http://127.0.0.1:3211',
@@ -153,6 +291,299 @@ describe('cli/commands/dev', () => {
     expect(infoCalls).toEqual([]);
   });
 
+  test('filterDevStartupLine suppresses Convex nags and rewrites ready lines', () => {
+    expect(
+      filterDevStartupLine(
+        'Run `npx convex login` at any time to create an account and link this deployment.'
+      )
+    ).toEqual({
+      kind: 'skip',
+    });
+
+    expect(
+      filterDevStartupLine(
+        'A minor update is available for Convex (1.33.0 → 1.34.0)'
+      )
+    ).toEqual({
+      kind: 'skip',
+    });
+
+    expect(
+      filterDevStartupLine(
+        'CONVEX_AGENT_MODE=anonymous mode is in beta, functionality may change in the future.'
+      )
+    ).toEqual({
+      kind: 'skip',
+    });
+
+    expect(
+      filterDevStartupLine(
+        "3/25/2026, 8:11:05 PM [CONVEX H(GET /api/auth/convex/jwks)] [WARN] '2026-03-25T19:11:05.836Z WARN [Better Auth]: Rate limiting skipped: could not determine client IP address. If you're behind a reverse proxy, make sure to configure `trustedProxies` in your auth config.'"
+      )
+    ).toEqual({
+      kind: 'skip',
+    });
+
+    expect(
+      filterDevStartupLine('13:35:25 Convex functions ready! (1.22s)')
+    ).toEqual({
+      kind: 'ready',
+      message: 'Convex ready',
+    });
+
+    expect(filterDevStartupLine('user function log line')).toEqual({
+      kind: 'pass',
+      line: 'user function log line',
+    });
+  });
+
+  test('handleDevCommand(dev) preserves raw Convex dev output', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-dev-raw-convex-logs-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPersistentProcess();
+    const stdoutWrites: string[] = [];
+    const stdoutSpy = spyOn(process.stdout, 'write').mockImplementation(((
+      chunk: string | Uint8Array
+    ) => {
+      stdoutWrites.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
+
+    const execaStub = mock((cmd: string, args: string[], _opts?: any): any => {
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(['dev'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      } as any);
+
+      await waitFor(() =>
+        execaStub.mock.calls.some((call) => {
+          const [, args] = call as unknown as [string, string[]];
+          return args[1] === 'dev';
+        })
+      );
+
+      convexProcess.emitStdout(
+        'Run `npx convex login` at any time to create an account and link this deployment.\n'
+      );
+      convexProcess.emitStdout(
+        'A minor update is available for Convex (1.33.0 → 1.34.0)\n'
+      );
+      convexProcess.emitStdout(
+        "3/25/2026, 8:11:05 PM [CONVEX H(GET /api/auth/convex/jwks)] [WARN] '2026-03-25T19:11:05.836Z WARN [Better Auth]: Rate limiting skipped: could not determine client IP address. If you're behind a reverse proxy, make sure to configure `trustedProxies` in your auth config.'\n"
+      );
+      convexProcess.emitStdout('13:35:25 Convex functions ready! (1.22s)\n');
+      convexProcess.resolveExit({ exitCode: 0 });
+
+      const exitCode = await runPromise;
+
+      expect(exitCode).toBe(0);
+      expect(stdoutWrites.join('')).toContain('npx convex login');
+      expect(stdoutWrites.join('')).toContain(
+        'A minor update is available for Convex'
+      );
+      expect(stdoutWrites.join('')).not.toContain(
+        'Rate limiting skipped: could not determine client IP address'
+      );
+      expect(stdoutWrites.join('')).toContain(
+        '13:35:25 Convex functions ready! (1.22s)'
+      );
+      expect(stdoutWrites.join('')).not.toContain('Convex ready');
+    } finally {
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
+      stdoutSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand waits for backend stderr drain before returning a fast failure', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-dev-failure-output-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPersistentProcess();
+    const stderrWrites: string[] = [];
+    const stderrSpy = spyOn(process.stderr, 'write').mockImplementation(((
+      chunk: string | Uint8Array
+    ) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write);
+
+    const execaStub = mock((cmd: string, args: string[], _opts?: any): any => {
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      let settled = false;
+      const runPromise = handleDevCommand(['dev', '--once'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      } as any).then((value) => {
+        settled = true;
+        return value;
+      });
+
+      await waitFor(() =>
+        execaStub.mock.calls.some((call) => {
+          const [, args] = call as unknown as [string, string[]];
+          return args[1] === 'dev';
+        })
+      );
+
+      convexProcess.resolveExit({ exitCode: 1 });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(settled).toBe(false);
+
+      convexProcess.emitStderr(
+        '✖ A local backend is still running on port 3210. Please stop it and run this command again.\n'
+      );
+      convexProcess.endStdout();
+      convexProcess.endStderr();
+
+      const exitCode = await runPromise;
+
+      expect(exitCode).toBe(1);
+      expect(stderrWrites.join('')).toContain(
+        'A local backend is still running on port 3210'
+      );
+    } finally {
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
+      stderrSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand prints failing convex init output before returning', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-dev-init-failure-output-')
+    );
+    const oldCwd = process.cwd();
+    const stderrWrites: string[] = [];
+    const stderrSpy = spyOn(process.stderr, 'write').mockImplementation(((
+      chunk: string | Uint8Array
+    ) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write);
+
+    const execaStub = mock((_cmd: string, args: string[], _opts?: any): any => {
+      if (args[1] === 'init') {
+        return Promise.resolve({
+          exitCode: 1,
+          stdout: '',
+          stderr:
+            '✖ A local backend is still running on port 3210. Please stop it and run this command again.\n',
+        });
+      }
+      throw new Error(`Unexpected command: ${args.join(' ')}`);
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    process.chdir(dir);
+
+    try {
+      const exitCode = await handleDevCommand(['dev'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      } as any);
+
+      expect(exitCode).toBe(1);
+      expect(stderrWrites.join('')).toContain(
+        'A local backend is still running on port 3210'
+      );
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(oldCwd);
+      stderrSpy.mockRestore();
+    }
+  });
+
   test('handleDevCommand applies the concave local dev contract', async () => {
     const calls: { cmd: string; args: string[]; opts?: any }[] = [];
     const concaveCliPath = path.join(
@@ -228,24 +659,647 @@ describe('cli/commands/dev', () => {
         targetOrigin: 'http://127.0.0.1:3210',
       });
       expect(calls).toHaveLength(2);
-      expect(calls[1]).toEqual({
-        cmd: 'bun',
-        args: [concaveCliPath, 'dev', '--port', '3210'],
-        opts: {
-          stdio: 'inherit',
-          cwd: process.cwd(),
-          env: expect.objectContaining({
-            CONVEX_SITE_URL: 'http://127.0.0.1:3211',
-            SITE_URL: 'http://localhost:3000',
+      expect(calls[1]).toEqual(
+        expect.objectContaining({
+          cmd: 'bun',
+          args: [concaveCliPath, 'dev'],
+          opts: expect.objectContaining({
+            stdio: 'pipe',
+            cwd: process.cwd(),
+            env: expect.objectContaining({
+              CONVEX_SITE_URL: 'http://127.0.0.1:3211',
+              SITE_URL: 'http://localhost:3000',
+            }),
+            reject: false,
           }),
-          reject: false,
-        },
-      });
+        })
+      );
       expect(syncEnvStub).not.toHaveBeenCalled();
       expect(watcherProcess.kill).toHaveBeenCalledWith('SIGTERM');
       expect(concaveProcess.kill).toHaveBeenCalledWith('SIGTERM');
       expect(siteProxy.kill).toHaveBeenCalledWith('SIGTERM');
     } finally {
+      onSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand prepares auth env before startup and completes auth env sync before returning', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-dev-auth-env-sync-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'functions', 'generated'), {
+      recursive: true,
+    });
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'auth.ts'),
+      'export default {};\n'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'generated', 'auth.ts'),
+      'export {};\n'
+    );
+
+    const watcherProcess: any = new Promise(() => {});
+    watcherProcess.killed = false;
+    watcherProcess.kill = mock((signal?: string) => {
+      watcherProcess.killed = true;
+      watcherProcess.lastSignal = signal;
+    });
+
+    const convexProcess: any = Promise.resolve({ exitCode: 0 });
+    convexProcess.killed = false;
+    convexProcess.kill = mock((signal?: string) => {
+      convexProcess.killed = true;
+      convexProcess.lastSignal = signal;
+    });
+
+    let releaseCompleteSync!: () => void;
+    const completeSyncGate = new Promise<void>((resolve) => {
+      releaseCompleteSync = resolve;
+    });
+    let resolvePrepareSyncStarted!: () => void;
+    const prepareSyncStarted = new Promise<void>((resolve) => {
+      resolvePrepareSyncStarted = resolve;
+    });
+    let resolveCompleteSyncStarted!: () => void;
+    const completeSyncStarted = new Promise<void>((resolve) => {
+      resolveCompleteSyncStarted = resolve;
+    });
+    const syncEnvStub = mock(async (options?: Record<string, unknown>) => {
+      if (options?.authSyncMode === 'prepare') {
+        resolvePrepareSyncStarted();
+      }
+      if (options?.authSyncMode === 'complete') {
+        resolveCompleteSyncStarted();
+        await completeSyncGate;
+      }
+    });
+
+    const execaStub = mock((cmd: string, args: string[], _opts?: any): any => {
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess;
+    });
+    const generateMetaStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      let settled = false;
+      const runPromise = handleDevCommand(['dev', '--once'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      } as any).then((value) => {
+        settled = true;
+        return value;
+      });
+
+      await prepareSyncStarted;
+
+      expect(syncEnvStub.mock.calls).toEqual([
+        [
+          {
+            authSyncMode: 'prepare',
+            force: true,
+            sharedDir: 'convex/shared',
+            silent: true,
+            targetArgs: [],
+          },
+        ],
+      ]);
+      expect(settled).toBe(false);
+
+      await completeSyncStarted;
+
+      expect(syncEnvStub.mock.calls).toEqual([
+        [
+          {
+            authSyncMode: 'prepare',
+            force: true,
+            sharedDir: 'convex/shared',
+            silent: true,
+            targetArgs: [],
+          },
+        ],
+        [
+          {
+            authSyncMode: 'complete',
+            force: true,
+            sharedDir: 'convex/shared',
+            silent: true,
+            targetArgs: [],
+          },
+        ],
+      ]);
+
+      releaseCompleteSync();
+
+      const exitCode = await runPromise;
+      expect(exitCode).toBe(0);
+      expect(watcherProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(convexProcess.kill).toHaveBeenCalledWith('SIGTERM');
+    } finally {
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand(--bootstrap) runs one-shot local convex bootstrap without watcher', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-dev-bootstrap-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex', 'functions'), {
+      recursive: true,
+    });
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'auth.ts'),
+      'export default {};\n'
+    );
+
+    const calls: { cmd: string; args: string[]; opts?: any }[] = [];
+    const convexProcess = createPersistentProcess();
+    const syncEnvStub = mock(async () => {});
+    const generateMetaStub = mock(
+      async (
+        sharedDir: string,
+        options?: {
+          debug?: boolean;
+          scope?: 'all' | 'auth' | 'orm';
+          silent?: boolean;
+        }
+      ) => {
+        expect(options?.silent).toBe(true);
+        expect(options?.scope).toBe('all');
+        const generatedAuthPath = path.join(
+          dir,
+          sharedDir,
+          '..',
+          'functions',
+          'generated',
+          'auth.ts'
+        );
+        fs.mkdirSync(path.dirname(generatedAuthPath), { recursive: true });
+        fs.writeFileSync(generatedAuthPath, 'export {};\n');
+      }
+    );
+    const execaStub = mock((cmd: string, args: string[], opts?: any): any => {
+      calls.push({ cmd, args, opts });
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        throw new Error('bootstrap should not start watcher');
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const infoMessages: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoMessages.push(args.join(' '));
+    };
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(['dev', '--bootstrap'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: (() => ({
+          ...createDefaultConfig(),
+          dev: {
+            ...createDefaultConfig().dev,
+            aggregateBackfill: {
+              ...createDefaultConfig().dev.aggregateBackfill,
+              enabled: 'off' as const,
+            },
+            migrations: {
+              ...createDefaultConfig().dev.migrations,
+              enabled: 'off' as const,
+            },
+          },
+        })) as any,
+      } as any);
+      await waitFor(() => calls.length >= 2);
+      convexProcess.emitStdout(
+        'Run `npx convex login` at any time to create an account and link this deployment.\n'
+      );
+      convexProcess.emitStdout(
+        'A minor update is available for Convex (1.33.0 → 1.34.0)\n'
+      );
+      convexProcess.emitStdout(
+        'Changelog: https://github.com/get-convex/convex-js/blob/main/CHANGELOG.md#changelog\n'
+      );
+      convexProcess.emitStdout('13:35:25 Convex functions ready! (1.22s)\n');
+      convexProcess.emitStdout('✔ Finished running function "init"\n');
+      convexProcess.resolveExit({ exitCode: 0 });
+
+      const exitCode = await runPromise;
+
+      expect(exitCode).toBe(0);
+      expect(calls).toHaveLength(2);
+      expect(calls[1]).toEqual({
+        cmd: 'node',
+        args: [
+          '/fake/convex/main.js',
+          'dev',
+          '--once',
+          '--typecheck',
+          'disable',
+        ],
+        opts: expect.objectContaining({
+          cwd: process.cwd(),
+          reject: false,
+          stdio: 'pipe',
+        }),
+      });
+      expect(syncEnvStub.mock.calls).toEqual([
+        [
+          {
+            authSyncMode: 'prepare',
+            force: true,
+            sharedDir: 'convex/shared',
+            silent: true,
+            targetArgs: [],
+          },
+        ],
+        [
+          {
+            authSyncMode: 'complete',
+            force: true,
+            sharedDir: 'convex/shared',
+            silent: true,
+            targetArgs: [],
+          },
+        ],
+      ]);
+      expect(
+        infoMessages.some((line) => line.includes('Bootstrapping local Convex'))
+      ).toBe(true);
+      expect(infoMessages.some((line) => line.includes('Convex ready'))).toBe(
+        true
+      );
+      expect(infoMessages.join('\n')).not.toContain('npx convex login');
+      expect(infoMessages.join('\n')).not.toContain(
+        'A minor update is available for Convex'
+      );
+      expect(infoMessages.join('\n')).not.toContain(
+        'Finished running function "init"'
+      );
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('handleDevCommand(--bootstrap) rejects backend concave', async () => {
+    await expect(
+      handleDevCommand(['dev', '--backend', 'concave', '--bootstrap'], {
+        loadBetterConvexConfig: (() => ({
+          ...createDefaultConfig(),
+          backend: 'concave' as const,
+        })) as any,
+      } as any)
+    ).rejects.toThrow(
+      '`better-convex dev --bootstrap` is only supported for backend convex.'
+    );
+  });
+
+  test('handleDevCommand watches convex/.env and auto-syncs local edits on backend convex', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-dev-env-watch-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPendingProcess();
+    const syncEnvStub = mock(async () => {});
+    const execaStub = mock((cmd: string, args: string[], _opts?: any): any => {
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(['dev'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      } as any);
+
+      await waitFor(() => syncEnvStub.mock.calls.length >= 1);
+      expect(syncEnvStub.mock.calls[0]).toEqual([
+        {
+          authSyncMode: 'skip',
+          force: true,
+          sharedDir: 'convex/shared',
+          silent: true,
+          targetArgs: [],
+        },
+      ]);
+
+      await waitFor(
+        () =>
+          execaStub.mock.calls.some((call) => {
+            const [, args] = call as unknown as [string, string[]];
+            return args[1] === 'dev';
+          }),
+        2000
+      );
+      await new Promise((resolve) => setTimeout(resolve, 120));
+
+      fs.appendFileSync(
+        path.join(dir, 'convex', '.env'),
+        'FEATURE_FLAG=true\n',
+        'utf8'
+      );
+
+      await waitFor(() => syncEnvStub.mock.calls.length >= 2);
+      expect(syncEnvStub.mock.calls[1]).toEqual([
+        {
+          authSyncMode: 'auto',
+          force: true,
+          sharedDir: 'convex/shared',
+          silent: true,
+          targetArgs: [],
+        },
+      ]);
+
+      convexProcess.resolveExit({ exitCode: 0 });
+      const exitCode = await runPromise;
+      expect(exitCode).toBe(0);
+    } finally {
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand waits for backend readiness before aggregate backfill kickoff', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-dev-backfill-ready-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPersistentProcess();
+    const warnMessages: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnMessages.push(args.join(' '));
+    };
+
+    const execaStub = mock((cmd: string, args: string[], _opts?: any): any => {
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      if (args.includes('generated/server:aggregateBackfill')) {
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: '{"targets":0,"scheduled":0}\n',
+          stderr: '',
+        });
+      }
+      if (args.includes('generated/server:aggregateBackfillStatus')) {
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: '[]\n',
+          stderr: '',
+        });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'on' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(['dev', '--once'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      } as any);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(
+        execaStub.mock.calls.some((call) => {
+          const [, args] = call as unknown as [string, string[]];
+          return args.includes('generated/server:aggregateBackfill');
+        })
+      ).toBe(false);
+
+      convexProcess.emitStdout('13:35:25 Convex functions ready! (1.22s)\n');
+
+      await waitFor(() =>
+        execaStub.mock.calls.some((call) => {
+          const [, args] = call as unknown as [string, string[]];
+          return args.includes('generated/server:aggregateBackfill');
+        })
+      );
+
+      convexProcess.resolveExit({ exitCode: 0 });
+      const exitCode = await runPromise;
+
+      expect(exitCode).toBe(0);
+      expect(warnMessages.join('\n')).not.toContain(
+        'aggregateBackfill kickoff failed in dev'
+      );
+    } finally {
+      console.warn = originalWarn;
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand ignores convex/.env follow-up events caused by sync writes', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-dev-env-watch-loop-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPendingProcess();
+    const syncEnvStub = mock(async (options?: Record<string, unknown>) => {
+      if (options?.authSyncMode === 'auto') {
+        fs.writeFileSync(
+          path.join(dir, 'convex', '.env'),
+          'SITE_URL=http://localhost:3000\nFEATURE_FLAG=true\nBETTER_AUTH_SECRET=generated-secret\n',
+          'utf8'
+        );
+      }
+    });
+    const execaStub = mock((cmd: string, args: string[], _opts?: any): any => {
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(['dev'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      } as any);
+
+      await waitFor(() => syncEnvStub.mock.calls.length >= 1);
+      await waitFor(
+        () =>
+          execaStub.mock.calls.some((call) => {
+            const [, args] = call as unknown as [string, string[]];
+            return args[1] === 'dev';
+          }),
+        2000
+      );
+      await new Promise((resolve) => setTimeout(resolve, 120));
+
+      fs.writeFileSync(
+        path.join(dir, 'convex', '.env'),
+        'SITE_URL=http://localhost:3000\nFEATURE_FLAG=true\n',
+        'utf8'
+      );
+
+      await waitFor(() => syncEnvStub.mock.calls.length >= 2);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      expect(syncEnvStub.mock.calls).toHaveLength(2);
+
+      convexProcess.resolveExit({ exitCode: 0 });
+      const exitCode = await runPromise;
+      expect(exitCode).toBe(0);
+    } finally {
+      process.chdir(oldCwd);
       onSpy.mockRestore();
     }
   });

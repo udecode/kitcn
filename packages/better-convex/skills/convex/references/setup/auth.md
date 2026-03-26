@@ -2,11 +2,28 @@
 
 Feature gate: only apply this section if auth is enabled.
 
-### 6.1 Install auth dependencies
+### 6.1 Install auth with CLI
+
+If Better Convex is not bootstrapped yet, start there first:
 
 ```bash
-bun add better-auth@1.5.3 better-convex hono
+bunx better-convex init -t next --yes
 ```
+
+Use `bunx better-convex init --yes` instead for in-place adoption of the
+current supported app.
+
+Then install auth:
+
+```bash
+bunx better-convex add auth --yes
+```
+
+Local Convex rule:
+
+1. `add auth --yes` installs the auth scaffold and finishes the first local auth bootstrap in one pass.
+2. `better-convex dev` is the long-running local runtime; later edits to `convex/.env` auto-sync while it is running.
+3. `better-convex env push` stays for `--prod`, `--rotate`, or explicit repair against an already active deployment.
 
 ### 6.2 Auth config provider
 
@@ -15,100 +32,59 @@ bun add better-auth@1.5.3 better-convex hono
 ```ts
 import { getAuthConfigProvider } from "better-convex/auth/config";
 import type { AuthConfig } from "convex/server";
+import { getEnv } from "../lib/get-env";
 
 export default {
   providers: [
-    process.env.JWKS
-      ? getAuthConfigProvider({ jwks: process.env.JWKS })
+    getEnv().JWKS
+      ? getAuthConfigProvider({ jwks: getEnv().JWKS })
       : getAuthConfigProvider(),
   ],
 } satisfies AuthConfig;
 ```
 
-Use static `JWKS` via Better Convex env push:
-
-```bash
-bunx convex init
-bunx better-convex dev --once --typecheck disable
-bunx better-convex env push --auth
-```
-
-What this does:
-
-1. Pushes keys from `convex/.env` into the active Convex deployment in one batch update.
-2. With `--auth`, auto-generates and sets `BETTER_AUTH_SECRET` and `JWKS` if missing.
-3. With `--rotate`, rotates keys first, then pushes the fresh `JWKS`.
-4. Treat generated auth secrets as owned by this flow; do not manually set `BETTER_AUTH_SECRET` in setup/simulation unless explicitly requested by the user.
-
-Hard prerequisite:
-
-1. Run `bunx convex init` before env push.
-2. Use `bunx better-convex dev --once --typecheck disable` when the auth runtime still needs its first generated pass.
-
-Quick check:
-
-```bash
-bunx convex env list
-```
-
-If the command reports deployment/bootstrap issues, run `bunx convex init` and retry.
-
-This initializes `JWKS` (and `BETTER_AUTH_SECRET`) if missing when deployment access is healthy.
+Treat generated auth secrets as owned by the CLI flow. Do not manually set
+`BETTER_AUTH_SECRET` in setup/simulation unless explicitly requested.
 Malformed `JWKS` values can fail Convex module analysis during push/codegen.
 
 ### 6.3 Define auth contract
 
-**Create:** `convex/functions/auth.ts`
+**Create:** `<functionsDir>/auth.ts`
+
+`functionsDir` comes from `convex.json.functions` (default: `convex`).
+Scaffolded Better Convex apps use `convex/functions/auth.ts`.
 
 ```ts
 import { convex } from "better-convex/auth";
+import { getEnv } from "../lib/get-env";
 import authConfig from "./auth.config";
 import { defineAuth } from "./generated/auth";
 
-export default defineAuth((ctx) => {
-  return {
-    baseURL:
-      process.env.SITE_URL ??
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      "http://localhost:3000",
-    plugins: [
-      convex({
-        authConfig,
-        jwks: process.env.JWKS,
-      }),
-    ],
-    session: {
-      expiresIn: 60 * 60 * 24 * 30,
-      updateAge: 60 * 60 * 24 * 15,
-    },
-    trustedOrigins: [
-      process.env.SITE_URL ??
-        process.env.NEXT_PUBLIC_SITE_URL ??
-        "http://localhost:3000",
-    ],
-    triggers: {
-      user: {
-        create: {
-          before: async (data, triggerCtx) => {
-            const adminEmails = (process.env.ADMIN ?? "").split(",");
-            const role =
-              data.role !== "admin" && adminEmails.includes(data.email)
-                ? "admin"
-                : data.role;
-            return { data: { ...data, role } };
-          },
-        },
-      },
-    },
-  };
-});
+export default defineAuth(() => ({
+  emailAndPassword: {
+    enabled: true,
+  },
+  baseURL: getEnv().SITE_URL,
+  plugins: [
+    convex({
+      authConfig,
+      jwks: getEnv().JWKS,
+    }),
+  ],
+  session: {
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24 * 15,
+  },
+  telemetry: { enabled: false },
+  trustedOrigins: [getEnv().SITE_URL],
+}));
 ```
 
 Canonical rule:
 
-1. Run `bunx convex init`, then `bunx better-convex dev --once --typecheck disable` to generate `convex/functions/generated/`.
-2. `auth.ts` default-exports `defineAuth((ctx) => ({ ...options, triggers }))` imported from `./generated/auth`.
-3. Import runtime auth contract (`getAuth`, `authClient`, CRUD/triggers, `auth`) from `convex/functions/generated/auth`.
+1. `bunx better-convex init --yes`, `bunx better-convex dev`, and `bunx better-convex add auth --yes` all drive generation of `convex/functions/generated/` when they own the local Convex flow.
+2. `auth.ts` default-exports `defineAuth(() => ({ ...options, triggers }))` imported from `./generated/auth`.
+3. Import runtime auth contract (`getAuth`, `authClient`, CRUD/triggers, `auth`) from `<functionsDir>/generated/auth`.
 4. If `auth.ts` is missing or incomplete, codegen still succeeds and generated runtime exports `authEnabled = false` with setup guidance at call time.
 
 Do not manually create `authClient`, `createApi` exports, or static `auth` in `auth.ts`.
@@ -185,8 +161,32 @@ export type SessionUser = Select<"user"> & {
 
 ### 6.4 Define auth tables in schema
 
-If you used section 5.1's schema template, these already exist.
-Otherwise add these tables:
+If you used the Better Convex scaffold, install auth once with:
+
+```bash
+bunx better-convex add auth --yes
+```
+
+After changing plugins or auth fields in `<functionsDir>/auth.ts`, refresh only
+the auth-owned schema blocks with:
+
+```bash
+bunx better-convex add auth --only schema --yes
+```
+
+Use the raw Convex preset only when the app stays on the plain Convex auth
+path:
+
+```bash
+bunx better-convex add auth --preset convex --yes
+```
+
+That raw Convex path refreshes `authSchema.ts` and `schema.ts` together. It
+assumes the raw Convex app is already initialized and does not support
+`--only schema`.
+
+If you used section 5.1's schema template, these tables already exist.
+Otherwise add:
 
 - `user`
 - `session`
@@ -216,6 +216,7 @@ import { authMiddleware } from "better-convex/auth/http";
 import { createHttpRouter } from "better-convex/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { getEnv } from "../lib/get-env";
 
 import { router } from "../lib/crpc";
 import { getAuth } from "./generated/auth";
@@ -225,7 +226,7 @@ const app = new Hono();
 app.use(
   "/api/*",
   cors({
-    origin: process.env.SITE_URL!,
+    origin: getEnv().SITE_URL,
     allowHeaders: ["Content-Type", "Authorization", "Better-Auth-Cookie"],
     exposeHeaders: ["Set-Better-Auth-Cookie"],
     credentials: true,
@@ -243,7 +244,11 @@ export default createHttpRouter(app, httpRouter);
 
 ### 6.6 Sync env and JWKS
 
-**Create:** `convex/.env`
+`convex/.env` comes from base setup. Keep `SITE_URL` and any provider
+credentials current there. For the normal local path, `SITE_URL` should stay on
+`http://localhost:3000`.
+
+Typical local values:
 
 ```bash
 SITE_URL=http://localhost:3000
@@ -251,18 +256,28 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ```
 
-Sync:
+Local Convex:
 
 ```bash
-bunx better-convex env push --auth
+bunx better-convex dev
 ```
 
-Requires a configured deployment from `bunx convex init`. Use `bunx better-convex dev --once --typecheck disable` when the auth runtime still needs its first generated pass.
+`better-convex init --yes`, `better-convex dev`, and `better-convex add auth --yes`
+already handle the first local auth bootstrap pass when they own the flow.
+While `better-convex dev` is running, later edits to `convex/.env` auto-sync.
+
+Repair / remote sync:
+
+```bash
+bunx better-convex env push
+```
+
+Use this for `--prod` or explicit repair against an already active deployment.
 
 Rotate later:
 
 ```bash
-bunx better-convex env push --auth --rotate
+bunx better-convex env push --rotate
 ```
 
 ### 6.7 Production bootstrap notes
@@ -271,7 +286,7 @@ First prod deploy requires JWKS initialization:
 
 ```bash
 bunx convex deploy --prod
-bunx better-convex env push --auth --prod
+bunx better-convex env push --prod
 ```
 
 ### 6.9 Upgrade `convex/lib/crpc.ts` to auth-aware builders (only after Section 11.2 passes)
@@ -432,7 +447,7 @@ export const router = c.router;
 
 Do not continue until all checks below pass:
 
-1. `bunx better-convex dev --once --typecheck disable` (preferred; includes codegen)
+1. Start local runtime with `bunx better-convex dev`
 2. `bun run typecheck || bunx tsc --noEmit`
 3. `bun test`
 4. `bun run build`

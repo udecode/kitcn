@@ -4,12 +4,12 @@
 
 import {
   type BetterAuthOptionsWithoutDatabase,
+  type AuthRuntime,
   defineAuth as baseDefineAuth,
-  createAuthRuntime,
   type GenericAuthDefinition,
   getGeneratedAuthDisabledReason,
   createDisabledAuthRuntime,
-} from 'better-convex/auth';
+} from 'better-convex/auth/generated';
 
 import type { DataModel } from '../_generated/dataModel';
 import type { GenericCtx, MutationCtx } from './server';
@@ -26,8 +26,16 @@ export function defineAuth<
 }
 
 
-const authRuntime = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({
-  reason: getGeneratedAuthDisabledReason("missing_auth_file"),
+const authRuntime: AuthRuntime<
+  DataModel,
+  typeof schema,
+  MutationCtx,
+  GenericCtx
+> = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({
+  reason: getGeneratedAuthDisabledReason(
+    "missing_auth_file",
+    "convex/auth.ts"
+  ),
 });
 
 export const {

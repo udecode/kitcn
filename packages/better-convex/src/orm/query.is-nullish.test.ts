@@ -1,5 +1,11 @@
+import {
+  compileAggregateQueryPlan,
+  compileCountQueryPlan,
+} from './aggregate-index/runtime';
+import { integer } from './builders/number';
 import { text } from './builders/text';
 import { fieldRef, isNotNull, isNull } from './filter-expression';
+import { aggregateIndex } from './indexes';
 import { GelRelationalQuery } from './query';
 import { OrmContext } from './symbols';
 import { convexTable } from './table';
@@ -12,6 +18,20 @@ describe('GelRelationalQuery nullish filter compilation', () => {
     name: text().notNull(),
     createdAt: text().notNull(),
   });
+  const todos = convexTable(
+    'todos_query_mode_created_at_test',
+    {
+      userId: text().notNull(),
+      deletionTime: integer(),
+      dueDate: integer(),
+    },
+    (t) => [
+      aggregateIndex('metrics_by_user_deletion_time')
+        .on(t.userId, t.deletionTime)
+        .count(t.dueDate)
+        .sum(t.dueDate),
+    ]
+  );
 
   const createQuery = (table: any = users) =>
     new (GelRelationalQuery as any)(
@@ -191,6 +211,69 @@ describe('GelRelationalQuery nullish filter compilation', () => {
       page: [],
       continueCursor: null,
       isDone: true,
+    });
+  });
+
+  it('keeps count cursor bounds on public createdAt alias', () => {
+    const query = createQuery();
+
+    const config = (query as any)._coerceCountWindowConfig({
+      cursor: { createdAt: 1_700_000_000_000 },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    expect(config.where).toEqual({
+      createdAt: { gt: 1_700_000_000_000 },
+    });
+  });
+
+  it('keeps aggregate cursor bounds on public createdAt alias', () => {
+    const query = createQuery();
+
+    const config = (query as any)._coerceAggregateWindowConfig({
+      cursor: { createdAt: 1_700_000_000_000 },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    expect(config.where).toEqual({
+      createdAt: { gt: 1_700_000_000_000 },
+    });
+  });
+
+  it('compiles count range plans with createdAt cursor alias', () => {
+    const plan = compileCountQueryPlan(
+      { table: todos, name: todos.tableName, relations: {} },
+      {
+        AND: [
+          { userId: 'u1', deletionTime: null },
+          { createdAt: { gt: 1_700_000_000_000 } },
+        ],
+      }
+    );
+
+    expect(plan.indexName).toBe('metrics_by_user_deletion_time');
+    expect(plan.rangeConstraint).toMatchObject({
+      fieldName: '_creationTime',
+      prefixFields: ['userId', 'deletionTime'],
+    });
+  });
+
+  it('compiles aggregate range plans with createdAt cursor alias', () => {
+    const plan = compileAggregateQueryPlan(
+      { table: todos, name: todos.tableName, relations: {} },
+      {
+        AND: [
+          { userId: 'u1', deletionTime: null },
+          { createdAt: { gt: 1_700_000_000_000 } },
+        ],
+      },
+      { kind: 'sum', field: 'dueDate' }
+    );
+
+    expect(plan.indexName).toBe('metrics_by_user_deletion_time');
+    expect(plan.rangeConstraint).toMatchObject({
+      fieldName: '_creationTime',
+      prefixFields: ['userId', 'deletionTime'],
     });
   });
 });

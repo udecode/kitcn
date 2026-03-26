@@ -4,6 +4,9 @@
 
 Use this skill for Concave-specific behavior and Concave-vs-Convex differences in this repo.
 
+Use `concave-parity` when the task is specifically about parity gaps, local
+workarounds, or removing Concave-specific bandaids after upstream catches up.
+
 Keep the boundary hard:
 
 - public Better Convex CLI supports `backend: "concave"` and `--backend concave`
@@ -41,6 +44,7 @@ These are the Concave-only facts worth keeping in your head.
 ### Local dev shape
 
 - `concave dev` auto-picks runtime; `--bun`, `--node`, and `--cf` force it.
+- alpha.14 defaults local dev to `3210`.
 - Bun/Node local data lives in `./.concave/local`.
 - Bun dev binds `0.0.0.0` by default. That is LAN-visible. `127.0.0.1` is the safer local-only bind.
 - Local dashboard lives at `/_dashboard`.
@@ -151,7 +155,7 @@ Concave-generated `_generated/*` output is not guaranteed to match Convex-genera
 
 Read the diff before calling it a bug.
 
-### `staticDataModel` mismatch is real
+### `staticDataModel` mismatch is still real
 
 Current repo finding:
 
@@ -159,6 +163,19 @@ Current repo finding:
 - Concave-generated `fixtures/next/convex/functions/_generated/dataModel.d.ts` is still dynamic
 
 So today, in this repo path, Concave is not honoring that flag.
+
+### `api.d.ts` override is gone
+
+Current repo truth:
+
+- alpha.14 emits the same `api.d.ts` shape our old source-backed override used
+  to force
+- Better Convex no longer post-writes `_generated/api.d.ts`
+
+Meaning:
+
+- if `api.d.ts` drifts again, treat it as a fresh upstream regression
+- do not quietly resurrect the old overwrite helper
 
 ### Use plain `bun`, not `bun test`, for the smoke lane
 

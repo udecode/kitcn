@@ -8,7 +8,7 @@ import {
   defineAuth as baseDefineAuth,
   createAuthRuntime,
   type GenericAuthDefinition,
-  getGeneratedAuthDisabledReason,
+  getInvalidAuthDefinitionExportReason,
   resolveGeneratedAuthDefinition,
 } from 'better-convex/auth';
 import { internal } from '../_generated/api.js';
@@ -30,7 +30,7 @@ type AuthDefinitionFromFile = typeof authDefinitionModule.default;
 
 const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>(
   authDefinitionModule,
-  getGeneratedAuthDisabledReason("default_export_unavailable")
+  getInvalidAuthDefinitionExportReason("convex/functions/auth.ts")
 );
 
 const authRuntime: AuthRuntime<

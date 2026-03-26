@@ -27,6 +27,56 @@ type AuthRouteContract = {
   };
 };
 
+const LOCAL_AUTH_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+const LOCAL_CONVEX_AUTH_IP_PATHS = new Set([
+  '/convex/.well-known/openid-configuration',
+  '/convex/jwks',
+  '/convex/token',
+]);
+
+const withLocalConvexAuthIp = (request: Request, basePath: string) => {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    return request;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return request;
+  }
+
+  if (!LOCAL_AUTH_HOSTS.has(url.hostname)) {
+    return request;
+  }
+
+  if (request.method !== 'GET') {
+    return request;
+  }
+
+  const normalizedBasePath =
+    basePath.length > 1 && basePath.endsWith('/')
+      ? basePath.slice(0, -1)
+      : basePath;
+  const normalizedPath =
+    normalizedBasePath === '/'
+      ? url.pathname
+      : url.pathname.startsWith(normalizedBasePath)
+        ? url.pathname.slice(normalizedBasePath.length) || '/'
+        : url.pathname;
+  if (!LOCAL_CONVEX_AUTH_IP_PATHS.has(normalizedPath)) {
+    return request;
+  }
+
+  const headers = new Headers(request.headers);
+  headers.set('x-forwarded-for', '127.0.0.1');
+  return new Request(url.toString(), {
+    headers,
+    method: request.method,
+  });
+};
+
 export const registerRoutes = <Ctx>(
   http: HttpRouter,
   getAuth: GetAuth<Ctx, AuthRouteContract>,
@@ -51,9 +101,10 @@ export const registerRoutes = <Ctx>(
     }
 
     const auth = getAuth(ctx as any);
+    const authRequest = withLocalConvexAuthIp(request, path);
     let response: Response;
     try {
-      response = await auth.handler(request);
+      response = await auth.handler(authRequest);
     } catch (error) {
       const errorResponse = toAuthErrorResponse(error);
       if (errorResponse) {

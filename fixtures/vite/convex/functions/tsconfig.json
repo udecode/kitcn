@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "strict": true,
+    "strictFunctionTypes": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": [
+      "esnext",
+      "dom"
+    ],
+    "types": [
+      "bun-types"
+    ],
+    "target": "esnext",
+    "moduleDetection": "force",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "paths": {
+      "better-convex/aggregate": [
+        "../../../../packages/better-convex/src/aggregate/index.ts"
+      ],
+      "better-convex/auth": [
+        "../../../../packages/better-convex/src/auth/index.ts"
+      ],
+      "better-convex/auth/client": [
+        "../../../../packages/better-convex/src/auth-client/index.ts"
+      ],
+      "better-convex/auth/config": [
+        "../../../../packages/better-convex/src/auth-config/index.ts"
+      ],
+      "better-convex/auth/generated": [
+        "../../../../packages/better-convex/src/auth/generated.ts"
+      ],
+      "better-convex/auth/http": [
+        "../../../../packages/better-convex/src/auth-http/index.ts"
+      ],
+      "better-convex/auth/nextjs": [
+        "../../../../packages/better-convex/src/auth-nextjs/index.ts"
+      ],
+      "better-convex/crpc": [
+        "../../../../packages/better-convex/src/crpc/index.ts"
+      ],
+      "better-convex/orm": [
+        "../../../../packages/better-convex/src/orm/index.ts"
+      ],
+      "better-convex/plugins": [
+        "../../../../packages/better-convex/src/plugins/index.ts"
+      ],
+      "better-convex/ratelimit": [
+        "../../../../packages/better-convex/src/ratelimit/index.ts"
+      ],
+      "better-convex/ratelimit/react": [
+        "../../../../packages/better-convex/src/ratelimit/react/index.ts"
+      ],
+      "better-convex/react": [
+        "../../../../packages/better-convex/src/react/index.ts"
+      ],
+      "better-convex/rsc": [
+        "../../../../packages/better-convex/src/rsc/index.ts"
+      ],
+      "better-convex/server": [
+        "../../../../packages/better-convex/src/server/index.ts"
+      ],
+      "better-convex/solid": [
+        "../../../../packages/better-convex/src/solid/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "./**/*",
+    "../lib/**/*",
+    "../shared/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "./_generated",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
+}

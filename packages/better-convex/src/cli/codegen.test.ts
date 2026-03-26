@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { getFunctionName } from 'convex/server';
 import { generateMeta, getConvexConfig } from './codegen';
-import { writeGeneratedConcaveApiTypes } from './concave-api-types';
 
 const RESERVED_HTTP_NAMESPACE_ERROR = /root "http" namespace is reserved/i;
 const RESERVED_RUNTIME_NAMESPACE_ERROR = /reserved runtime caller namespace/i;
@@ -61,6 +61,9 @@ function writeScopedFixture(dir: string) {
         : fnOrRoot;
       return Object.assign(fn, meta, { functionRef: fn });
     };
+    export const createGeneratedFunctionReference = (name) => ({
+      [Symbol.for("functionName")]: name,
+    });
     export { initCRPC };
     `.trim()
   );
@@ -124,53 +127,6 @@ function writeScopedFixture(dir: string) {
 }
 
 describe('cli/codegen', () => {
-  test('writeGeneratedConcaveApiTypes emits source-backed api types', () => {
-    const dir = mkTempDir();
-    const functionsDir = path.join(dir, 'convex');
-
-    writeFile(
-      path.join(functionsDir, 'messages.ts'),
-      `
-      import { query, mutation } from "./_generated/server";
-      import { v } from "convex/values";
-
-      export const list = query({
-        args: {},
-        handler: async () => [{ body: "hi" }],
-      });
-
-      export const send = mutation({
-        args: { body: v.string() },
-        handler: async () => null,
-      });
-      `.trim()
-    );
-    writeFile(
-      path.join(functionsDir, 'generated', 'auth.ts'),
-      `
-      export const create = {};
-      `.trim()
-    );
-
-    writeGeneratedConcaveApiTypes(functionsDir);
-
-    const output = fs.readFileSync(
-      path.join(functionsDir, '_generated', 'api.d.ts'),
-      'utf-8'
-    );
-
-    expect(output).toContain(
-      'import type * as messages from "../messages.js";'
-    );
-    expect(output).toContain(
-      'import type * as generated_auth from "../generated/auth.js";'
-    );
-    expect(output).toContain('declare const fullApi: ApiFromModules<{');
-    expect(output).toContain('"messages": typeof messages,');
-    expect(output).toContain('"generated/auth": typeof generated_auth,');
-    expect(output).toContain('export declare const components: AnyComponents;');
-  });
-
   test('getConvexConfig uses defaults when convex.json is missing', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
@@ -207,8 +163,13 @@ describe('cli/codegen', () => {
 
       expect(generatedApi).not.toContain('function getGeneratedValue(');
       expect(generatedApi).toContain(
-        'createApiLeaf<"query", typeof import("../todos").list>(convexApi, ["todos","list"], { type: "query" })'
+        'import { createApiLeaf, createGeneratedFunctionReference } from "better-convex/server";'
       );
+      expect(generatedApi).toContain(
+        'createApiLeaf<"query", typeof import("../todos").list>(createGeneratedFunctionReference<"query", "public", typeof import("../todos").list>("todos:list"), { type: "query" })'
+      );
+      expect(generatedApi).not.toContain('_generated/api.js');
+      expect(generatedApi).not.toContain('convexApi');
 
       expect(generatedRuntime).not.toContain('function getGeneratedValue(');
       expect(generatedRuntime).not.toContain('type ProcedureArgsFromExport<');
@@ -230,7 +191,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta emits runtime refs without _generated api namespace indexing', async () => {
+  test('generateMeta types regular runtime refs from source module exports', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -265,6 +226,9 @@ describe('cli/codegen', () => {
       expect(moduleRuntime).toContain('createGeneratedFunctionReference,');
       expect(moduleRuntime).not.toContain('getGeneratedFunctionReference(');
       expect(moduleRuntime).not.toContain('_generated/api.js');
+      expect(moduleRuntime).not.toContain(
+        "import type {\n  api as generatedApi,\n  internal as generatedInternal,\n} from '../_generated/api';"
+      );
       expect(moduleRuntime).toContain(
         'createGeneratedFunctionReference<"query", "public", typeof import("../../items/queries").list>("items/queries:list")'
       );
@@ -365,6 +329,9 @@ describe('cli/codegen', () => {
             : fnOrRoot;
           return Object.assign(fn, meta, { functionRef: fn });
         };
+        export const createGeneratedFunctionReference = (name) => ({
+          [Symbol.for("functionName")]: name,
+        });
         `.trim()
       );
 
@@ -586,7 +553,7 @@ describe('cli/codegen', () => {
         'utf-8'
       );
       expect(generated).toContain(
-        'import { createApiLeaf } from "better-convex/server";'
+        'import { createApiLeaf, createGeneratedFunctionReference } from "better-convex/server";'
       );
       expect(generated).toContain(
         'import type { inferApiInputs, inferApiOutputs } from "better-convex/server";'
@@ -629,19 +596,30 @@ describe('cli/codegen', () => {
       expect(generated).not.toContain('ApiFunctionRefFromExport');
       expect(generated).not.toContain('function getGeneratedValue(');
       expect(generated).toContain(
-        'createApiLeaf<"query", typeof import("../items/queries").list>(convexApi, ["items","queries","list"], { auth: "optional", dev: true, ratelimit: 10, role: "admin", type: "query" })'
+        'import { createApiLeaf, createGeneratedFunctionReference } from "better-convex/server";'
+      );
+      expect(generated).toContain(
+        'createApiLeaf<"query", typeof import("../items/queries").list>(createGeneratedFunctionReference<"query", "public", typeof import("../items/queries").list>("items/queries:list"), { auth: "optional", dev: true, ratelimit: 10, role: "admin", type: "query" })'
       );
       expect(generated).not.toContain('shouldBeIgnored');
       expect(generated).not.toContain('shouldBeIgnoredAuth');
+      expect(generated).not.toContain('_generated/api.js');
+      expect(generated).not.toContain('convexApi');
 
-      expect(serverGenerated).toContain(
-        "import { internal } from '../_generated/api.js';"
-      );
       expect(serverGenerated).toContain('import {\n  createOrm,');
       expect(serverGenerated).not.toContain('requireSchemaRelations');
       expect(serverGenerated).not.toContain('getSchemaTriggers');
       expect(serverGenerated).toContain('initCRPC as baseInitCRPC,');
+      expect(serverGenerated).toContain('createGeneratedFunctionReference,');
       expect(serverGenerated).toContain("import schema from '../schema';");
+      expect(serverGenerated).not.toContain(
+        "import { internal } from '../_generated/api.js';"
+      );
+      expect(serverGenerated).not.toContain('getGeneratedValue(');
+      expect(serverGenerated).toContain('const ormFunctions: OrmFunctions = {');
+      expect(serverGenerated).toContain(
+        'scheduledMutationBatch: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:scheduledMutationBatch"),'
+      );
       expect(serverGenerated).not.toContain('const relations =');
       expect(serverGenerated).toContain(
         'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
@@ -790,37 +768,37 @@ describe('cli/codegen', () => {
         'createGenericHandlerFactory'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").scheduledMutationBatch>("generated/server:scheduledMutationBatch")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["scheduledMutationBatch"]>("generated/server:scheduledMutationBatch")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").scheduledDelete>("generated/server:scheduledDelete")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["scheduledDelete"]>("generated/server:scheduledDelete")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").aggregateBackfill>("generated/server:aggregateBackfill")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["aggregateBackfill"]>("generated/server:aggregateBackfill")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").aggregateBackfillChunk>("generated/server:aggregateBackfillChunk")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["aggregateBackfillChunk"]>("generated/server:aggregateBackfillChunk")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").aggregateBackfillStatus>("generated/server:aggregateBackfillStatus")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["aggregateBackfillStatus"]>("generated/server:aggregateBackfillStatus")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").migrationRun>("generated/server:migrationRun")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationRun"]>("generated/server:migrationRun")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").migrationRunChunk>("generated/server:migrationRunChunk")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationRunChunk"]>("generated/server:migrationRunChunk")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").migrationStatus>("generated/server:migrationStatus")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationStatus"]>("generated/server:migrationStatus")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").migrationCancel>("generated/server:migrationCancel")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationCancel"]>("generated/server:migrationCancel")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./server").resetChunk>("generated/server:resetChunk")'
+        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["resetChunk"]>("generated/server:resetChunk")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"action", "internal", typeof import("./server").reset>("generated/server:reset")'
+        'createGeneratedFunctionReference<"action", "internal", typeof generatedInternal["generated"]["server"]["reset"]>("generated/server:reset")'
       );
       expect(nestedRuntimeGenerated).toContain(
         "import type { ActionCtx, MutationCtx, QueryCtx } from '../server';"
@@ -856,8 +834,10 @@ describe('cli/codegen', () => {
       const api = module.api as any;
       expect(api.http).toBeUndefined();
 
-      // Leaf uses merged metadata + functionRef while preserving runtime ref identity.
-      expect(api.items.queries.list.ref).toBe('items:queries:list');
+      // Leaf uses merged metadata on top of a cold generated function ref.
+      expect(getFunctionName(api.items.queries.list)).toBe(
+        'items/queries:list'
+      );
       expect(api.items.queries.list.type).toBe('query');
       expect(api.items.queries.list.auth).toBe('optional');
       expect(api.items.queries.list.role).toBe('admin');
@@ -867,7 +847,7 @@ describe('cli/codegen', () => {
       expect(api.items.queries).not.toHaveProperty('internalOnly');
       expect(api.items.queries).not.toHaveProperty('_private');
 
-      expect(api.posts.create.ref).toBe('posts:create');
+      expect(getFunctionName(api.posts.create)).toBe('posts:create');
       expect(api.posts.create.type).toBe('mutation');
       expect(api.posts.create.functionRef).toBe(api.posts.create);
 
@@ -1133,6 +1113,63 @@ describe('cli/codegen', () => {
       );
       expect(runtimeGenerated).not.toContain('export function createCaller(');
       expect(runtimeGenerated).not.toContain('export function createHandler(');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta avoids self-import type cycles in module runtime files', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'foo.ts'),
+        `
+        import { createFooHandler } from './generated/foo.runtime';
+
+        export const list = {
+          _handler: async (ctx) => {
+            const handler = createFooHandler(ctx);
+            return handler.detail({});
+          },
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+
+        export const detail = {
+          _handler: async () => ({ ok: true }),
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const runtimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'foo.runtime.ts'
+      );
+      const runtimeGenerated = fs.readFileSync(runtimeFile, 'utf-8');
+
+      expect(runtimeGenerated).toContain(
+        "import type {\n  api as generatedApi,\n  internal as generatedInternal,\n} from '../_generated/api';"
+      );
+      expect(runtimeGenerated).toContain(
+        'createGeneratedFunctionReference<"query", "public", typeof generatedApi["foo"]["detail"]>("foo:detail")'
+      );
+      expect(runtimeGenerated).toContain(
+        'createGeneratedFunctionReference<"query", "public", typeof generatedApi["foo"]["list"]>("foo:list")'
+      );
+      expect(runtimeGenerated).not.toContain('typeof import("../foo").detail');
+      expect(runtimeGenerated).not.toContain('typeof import("../foo").list');
     } finally {
       process.chdir(oldCwd);
     }
@@ -2119,7 +2156,7 @@ describe('cli/codegen', () => {
         "import * as authDefinitionModule from '../auth';"
       );
       expect(generatedAuth).toContain('type AuthRuntime,');
-      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason,');
+      expect(generatedAuth).toContain('getInvalidAuthDefinitionExportReason,');
       expect(generatedAuth).toContain(
         'type AuthDefinitionFromFile = typeof authDefinitionModule.default;'
       );
@@ -2130,7 +2167,7 @@ describe('cli/codegen', () => {
         'const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
       );
       expect(generatedAuth).toContain(
-        'getGeneratedAuthDisabledReason("default_export_unavailable")'
+        'getInvalidAuthDefinitionExportReason("convex/auth.ts")'
       );
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).toContain('auth: authDefinition,');
@@ -2247,14 +2284,14 @@ describe('cli/codegen', () => {
       expect(generatedAuth).toContain(
         "import * as authDefinitionModule from '../auth';"
       );
-      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason,');
+      expect(generatedAuth).toContain('getInvalidAuthDefinitionExportReason,');
       expect(generatedAuth).toContain(
         'type AuthDefinitionFromFile = typeof authDefinitionModule.default;'
       );
       expect(generatedAuth).toContain('createAuthRuntime<');
       expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
       expect(generatedAuth).toContain(
-        'getGeneratedAuthDisabledReason("default_export_unavailable")'
+        'getInvalidAuthDefinitionExportReason("convex/auth.ts")'
       );
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).not.toContain('import { withOrm } from');
@@ -2353,9 +2390,9 @@ describe('cli/codegen', () => {
       expect(generatedAuth).toContain(
         '> = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
       );
-      expect(generatedAuth).toContain(
-        'getGeneratedAuthDisabledReason("missing_auth_file")'
-      );
+      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason(');
+      expect(generatedAuth).toContain('"missing_auth_file"');
+      expect(generatedAuth).toContain('"convex/auth.ts"');
       expect(generatedAuth).toContain("} from 'better-convex/auth/generated';");
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).toContain('authEnabled,');
@@ -2365,6 +2402,57 @@ describe('cli/codegen', () => {
       expect(generatedAuth).not.toContain("} from 'better-convex/auth';");
       expect(generatedAuth).not.toContain('createAuthRuntime,');
       expect(generatedAuth).not.toContain('createAuthRuntime<DataModel');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta uses convex.json functions dir in disabled auth guidance', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'convex.json'),
+        JSON.stringify({ functions: 'custom/convex' }, null, 2)
+      );
+      writeFile(
+        path.join(dir, 'custom', 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'custom', 'convex', 'schema.ts'),
+        `
+        export const tables = {
+          todos: { table: 'todos' },
+        };
+        export const relations = {
+          todos: {},
+        };
+        export default {};
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedAuthFile = path.join(
+        dir,
+        'custom',
+        'convex',
+        'generated',
+        'auth.ts'
+      );
+      const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
+      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason(');
+      expect(generatedAuth).toContain('"missing_auth_file"');
+      expect(generatedAuth).toContain('"custom/convex/auth.ts"');
     } finally {
       process.chdir(oldCwd);
     }
@@ -2443,9 +2531,9 @@ describe('cli/codegen', () => {
       );
       const generatedAuth = fs.readFileSync(generatedAuthFile, 'utf-8');
       expect(generatedAuth).toContain('createDisabledAuthRuntime');
-      expect(generatedAuth).toContain(
-        'getGeneratedAuthDisabledReason("missing_default_export")'
-      );
+      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason(');
+      expect(generatedAuth).toContain('"missing_default_export"');
+      expect(generatedAuth).toContain('"convex/auth.ts"');
       expect(generatedAuth).toContain("} from 'better-convex/auth/generated';");
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).not.toContain(

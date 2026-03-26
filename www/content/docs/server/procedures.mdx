@@ -176,7 +176,8 @@ export const sendWelcomeEmail = publicAction
 When one procedure needs to call another, use the module runtime factory from `convex/functions/generated/<module>.runtime.ts` (for example `createTeamsCaller(ctx)`). This gives you a type-safe proxy with full autocomplete — no more manually choosing between `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction`, and `ctx.scheduler`.
 
 <Callout icon={<InfoIcon />}>
-  **Breaking change:** runtime modules now export module-named factories (`create<Module>Caller` / `create<Module>Handler`), and `convex/functions/generated.ts` no longer exists.
+  Runtime modules export module-named factories:
+  `create<Module>Caller` and `create<Module>Handler`.
 </Callout>
 
 ```ts title="convex/functions/teams.ts" showLineNumbers {3,7-9}

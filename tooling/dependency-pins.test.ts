@@ -10,12 +10,21 @@ describe('tooling/dependency-pins', () => {
     expect(parseDependencyPinsArgs(['sync'])).toEqual({
       command: 'sync',
       dependency: undefined,
+      skipValidate: false,
+      version: undefined,
+    });
+
+    expect(parseDependencyPinsArgs(['sync', '--skip-validate'])).toEqual({
+      command: 'sync',
+      dependency: undefined,
+      skipValidate: true,
       version: undefined,
     });
 
     expect(parseDependencyPinsArgs(['upgrade', 'convex', '1.33.0'])).toEqual({
       command: 'upgrade',
       dependency: 'convex',
+      skipValidate: false,
       version: '1.33.0',
     });
   });
@@ -30,7 +39,9 @@ describe('tooling/dependency-pins', () => {
       applyPinnedVersionsToPackageJson(
         {
           dependencies: {
+            '@tanstack/react-query': '^5.90.21',
             convex: '^1.32.0',
+            hono: '^4.12.8',
           },
           devDependencies: {
             'better-auth': '1.5.5',
@@ -42,7 +53,9 @@ describe('tooling/dependency-pins', () => {
         },
         {
           dependencies: {
+            '@tanstack/react-query': '5.95.2',
             convex: '^1.33.0',
+            hono: '4.12.9',
           },
           devDependencies: {
             'better-auth': '1.4.9',
@@ -55,7 +68,9 @@ describe('tooling/dependency-pins', () => {
       )
     ).toEqual({
       dependencies: {
+        '@tanstack/react-query': '5.95.2',
         convex: '^1.33.0',
+        hono: '4.12.9',
       },
       devDependencies: {
         'better-auth': '1.4.9',

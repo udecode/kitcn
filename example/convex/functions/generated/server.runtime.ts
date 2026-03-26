@@ -4,28 +4,30 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
 } from 'better-convex/server';
+import type {
+  api as generatedApi,
+  internal as generatedInternal,
+} from '../_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "aggregateBackfill": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["aggregateBackfill"]), () => (require("./server") as Record<string, unknown>)["aggregateBackfill"])],
-  "aggregateBackfillChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["aggregateBackfillChunk"]), () => (require("./server") as Record<string, unknown>)["aggregateBackfillChunk"])],
-  "aggregateBackfillStatus": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["aggregateBackfillStatus"]), () => (require("./server") as Record<string, unknown>)["aggregateBackfillStatus"])],
-  "migrationCancel": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["migrationCancel"]), () => (require("./server") as Record<string, unknown>)["migrationCancel"])],
-  "migrationRun": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["migrationRun"]), () => (require("./server") as Record<string, unknown>)["migrationRun"])],
-  "migrationRunChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["migrationRunChunk"]), () => (require("./server") as Record<string, unknown>)["migrationRunChunk"])],
-  "migrationStatus": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["migrationStatus"]), () => (require("./server") as Record<string, unknown>)["migrationStatus"])],
-  "reset": ["action", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["reset"]), () => (require("./server") as Record<string, unknown>)["reset"])],
-  "resetChunk": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["resetChunk"]), () => (require("./server") as Record<string, unknown>)["resetChunk"])],
-  "scheduledDelete": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["scheduledDelete"]), () => (require("./server") as Record<string, unknown>)["scheduledDelete"])],
-  "scheduledMutationBatch": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["server"]["scheduledMutationBatch"]), () => (require("./server") as Record<string, unknown>)["scheduledMutationBatch"])],
+  "aggregateBackfill": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["aggregateBackfill"]>("generated/server:aggregateBackfill"), () => (require("./server") as Record<string, unknown>)["aggregateBackfill"])],
+  "aggregateBackfillChunk": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["aggregateBackfillChunk"]>("generated/server:aggregateBackfillChunk"), () => (require("./server") as Record<string, unknown>)["aggregateBackfillChunk"])],
+  "aggregateBackfillStatus": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["aggregateBackfillStatus"]>("generated/server:aggregateBackfillStatus"), () => (require("./server") as Record<string, unknown>)["aggregateBackfillStatus"])],
+  "migrationCancel": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationCancel"]>("generated/server:migrationCancel"), () => (require("./server") as Record<string, unknown>)["migrationCancel"])],
+  "migrationRun": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationRun"]>("generated/server:migrationRun"), () => (require("./server") as Record<string, unknown>)["migrationRun"])],
+  "migrationRunChunk": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationRunChunk"]>("generated/server:migrationRunChunk"), () => (require("./server") as Record<string, unknown>)["migrationRunChunk"])],
+  "migrationStatus": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationStatus"]>("generated/server:migrationStatus"), () => (require("./server") as Record<string, unknown>)["migrationStatus"])],
+  "reset": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "internal", typeof generatedInternal["generated"]["server"]["reset"]>("generated/server:reset"), () => (require("./server") as Record<string, unknown>)["reset"])],
+  "resetChunk": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["resetChunk"]>("generated/server:resetChunk"), () => (require("./server") as Record<string, unknown>)["resetChunk"])],
+  "scheduledDelete": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["scheduledDelete"]>("generated/server:scheduledDelete"), () => (require("./server") as Record<string, unknown>)["scheduledDelete"])],
+  "scheduledMutationBatch": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["scheduledMutationBatch"]>("generated/server:scheduledMutationBatch"), () => (require("./server") as Record<string, unknown>)["scheduledMutationBatch"])],
 } as const;
 
 type ProcedureCallerRegistry = typeof procedureRegistry;

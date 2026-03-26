@@ -17,6 +17,7 @@ import {
   confirm,
   isCancel,
 } from '@clack/prompts';
+import { parse as parseDotEnv } from 'dotenv';
 import { execa } from 'execa';
 import { createJiti } from 'jiti';
 import ts from 'typescript';
@@ -24,7 +25,6 @@ import { getTableConfig } from '../orm/introspection.js';
 import { getSchemaRelations } from '../orm/schema.js';
 import { runAnalyze } from './analyze.js';
 import { generateMeta, getConvexConfig } from './codegen.js';
-import { writeGeneratedConcaveApiTypes } from './concave-api-types.js';
 import {
   type AggregateBackfillConfig,
   type BackfillEnabled,
@@ -37,7 +37,7 @@ import {
   normalizeConvexCommandResult,
   writeConvexCommandOutput,
 } from './convex-command.js';
-import { pullEnv, syncEnv } from './env.js';
+import { pullEnv, resolveAuthEnvState, syncEnv } from './env.js';
 import {
   type NextAppScaffoldContext,
   type ProjectScaffoldContext,
@@ -58,7 +58,7 @@ import {
   type SupportedPluginKey,
 } from './registry/index.js';
 import { INIT_CONVEX_CONFIG_TEMPLATE } from './registry/init/init-convex-config.template.js';
-import { INIT_CONVEX_TSCONFIG_TEMPLATE } from './registry/init/init-convex-tsconfig.template.js';
+import { renderInitConvexTsconfigTemplate } from './registry/init/init-convex-tsconfig.template.js';
 import { INIT_CRPC_TEMPLATE } from './registry/init/init-crpc.template.js';
 import { INIT_HTTP_TEMPLATE } from './registry/init/init-http.template.js';
 import { INIT_SCHEMA_TEMPLATE } from './registry/init/init-schema.template.js';
@@ -78,6 +78,10 @@ import { INIT_REACT_CONVEX_PROVIDER_TEMPLATE } from './registry/init/react/init-
 import { renderInitReactEnvLocalTemplate } from './registry/init/react/init-react-env-local.template.js';
 import { renderInitReactPackageJsonTemplate } from './registry/init/react/init-react-package-json.template.js';
 import { INIT_REACT_PROVIDERS_TEMPLATE } from './registry/init/react/init-react-providers.template.js';
+import { AUTH_CONVEX_PROVIDER_TEMPLATE } from './registry/items/auth/auth-convex-provider.template.js';
+import { renderAuthCrpcTemplate } from './registry/items/auth/auth-crpc.template.js';
+import { AUTH_NEXT_SERVER_TEMPLATE } from './registry/items/auth/auth-next-server.template.js';
+import { AUTH_REACT_CONVEX_PROVIDER_TEMPLATE } from './registry/items/auth/auth-react-convex-provider.template.js';
 import {
   createPlanFile,
   getCrpcFilePath,
@@ -85,6 +89,7 @@ import {
   renderInitTemplateContent,
 } from './registry/plan-helpers.js';
 import {
+  BETTER_CONVEX_CONFIG_TEMPLATE_ID,
   BETTER_CONVEX_ENV_HELPER_TEMPLATE_ID,
   buildEnvBootstrapFiles,
   buildPluginInstallPlan,
@@ -222,6 +227,7 @@ export type InitCommandArgs = {
   yes: boolean;
   json: boolean;
   defaults: boolean;
+  overwrite: boolean;
   template?: string;
   cwd?: string;
   name?: string;
@@ -239,6 +245,7 @@ export type InitRunResult = {
   template: string | null;
   codegen: InitCodegenStatus;
   convexBootstrap: InitConvexBootstrapStatus;
+  localBootstrapUsed: boolean;
 };
 
 type PluginEnvReminder = {
@@ -265,7 +272,21 @@ type PluginInstallPlanFile = {
   reason: string;
   content: string;
   existingContent?: string;
-  managedBaselineContent?: string;
+  managedBaselineContent?: string | readonly string[];
+  requiresExplicitOverwrite?: boolean;
+  schemaOwnershipLock?: {
+    path: string;
+    tables: Record<
+      string,
+      | {
+          owner: 'local';
+        }
+      | {
+          checksum: string;
+          owner: 'managed';
+        }
+    >;
+  } | null;
 };
 
 type PluginInstallPlanOperation = {
@@ -300,6 +321,9 @@ type InitOwnedTemplateScaffoldFile = {
   kind: PlanFileKind;
   relativePath: string;
   content: string | ((params: { existingContent?: string }) => string);
+  preserveManagedContent?: string[];
+  managedBaselineContent?: string | readonly string[];
+  requiresExplicitOverwrite?: boolean;
   createReason: string;
   updateReason: string;
   skipReason: string;
@@ -337,7 +361,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 
 type PromptAdapter = {
   isInteractive: () => boolean;
-  confirm: (message: string) => Promise<boolean>;
+  confirm: (message: string, defaultValue?: boolean) => Promise<boolean>;
   select: <TValue extends string>(params: {
     message: string;
     options: readonly CliSelectOption<TValue>[];
@@ -659,8 +683,11 @@ function createPromptAdapter(): PromptAdapter {
       Boolean(
         process.stdin.isTTY && process.stdout.isTTY && !isCiEnvironment()
       ),
-    confirm: async (message: string) => {
-      const response = await confirm({ message });
+    confirm: async (message: string, defaultValue?: boolean) => {
+      const response = await confirm({
+        message,
+        ...(defaultValue === undefined ? {} : { initialValue: defaultValue }),
+      });
       if (isCancel(response)) {
         return false;
       }
@@ -816,6 +843,41 @@ export function createBackendCommandEnv(
   };
 }
 
+async function withLocalConvexEnv<T>(
+  sharedDir: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const { functionsDir } = getConvexConfig(sharedDir);
+  const envPath = join(functionsDir, '..', '.env');
+  if (!fs.existsSync(envPath)) {
+    return fn();
+  }
+
+  const envVars = parseDotEnv(fs.readFileSync(envPath, 'utf8'));
+  const previousValues = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(envVars)) {
+    previousValues.set(key, process.env[key]);
+    process.env[key] = value;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of previousValues.entries()) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function getLocalConvexEnvVars(sharedDir: string): Record<string, string> {
+  const { functionsDir } = getConvexConfig(sharedDir);
+  const envPath = join(functionsDir, '..', '.env');
+  if (!fs.existsSync(envPath)) {
+    return {};
+  }
+  return parseDotEnv(fs.readFileSync(envPath, 'utf8'));
+}
+
 function parseAddCommandArgs(args: string[]): AddCommandArgs {
   const { plugin, startIndex } = parsePluginPosition(args);
 
@@ -917,6 +979,7 @@ export function parseInitCommandArgs(args: string[]): InitCommandArgs {
   let yes = false;
   let json = false;
   let defaults = false;
+  let overwrite = false;
   let template: string | undefined;
   let cwd: string | undefined;
   let name: string | undefined;
@@ -934,6 +997,10 @@ export function parseInitCommandArgs(args: string[]): InitCommandArgs {
     }
     if (arg === '--defaults') {
       defaults = true;
+      continue;
+    }
+    if (arg === '--overwrite') {
+      overwrite = true;
       continue;
     }
     if (arg === '--template' || arg === '-t') {
@@ -1030,6 +1097,7 @@ export function parseInitCommandArgs(args: string[]): InitCommandArgs {
     yes,
     json,
     defaults,
+    overwrite,
     template,
     cwd,
     name,
@@ -1135,7 +1203,13 @@ export async function createProjectWithShadcn(params: {
   defaults: boolean;
   execaFn: typeof execa;
 }): Promise<void> {
-  const shadcnCwd = dirname(params.projectDir);
+  const shouldStageIntoExistingDir =
+    fs.existsSync(params.projectDir) &&
+    fs.readdirSync(params.projectDir).length === 0;
+  const stagingRoot = shouldStageIntoExistingDir
+    ? fs.mkdtempSync(join(dirname(params.projectDir), '.better-convex-shadcn-'))
+    : null;
+  const shadcnCwd = stagingRoot ?? dirname(params.projectDir);
   const projectName = basename(params.projectDir);
   const useDefaults = params.defaults || params.yes;
   const command = detectPackageManager(shadcnCwd) === 'bun' ? 'bunx' : 'npx';
@@ -1152,14 +1226,53 @@ export async function createProjectWithShadcn(params: {
     ...(params.yes || params.defaults ? ['--yes'] : []),
   ];
 
-  const result = await params.execaFn(command, args, {
-    cwd: process.cwd(),
-    env: createCommandEnv(),
-    reject: false,
-    stdio: 'inherit',
-  });
-  if ((result.exitCode ?? 0) !== 0) {
-    throw new Error(`shadcn init failed: ${command} ${args.join(' ')}`);
+  try {
+    const result = await params.execaFn(command, args, {
+      cwd: process.cwd(),
+      env: createCommandEnv(),
+      reject: false,
+      stdio: 'inherit',
+    });
+    if ((result.exitCode ?? 0) !== 0) {
+      throw new Error(`shadcn init failed: ${command} ${args.join(' ')}`);
+    }
+
+    if (stagingRoot) {
+      moveStagedProjectIntoExistingDir({
+        stagedProjectDir: join(stagingRoot, projectName),
+        targetDir: params.projectDir,
+      });
+    }
+  } finally {
+    if (stagingRoot) {
+      fs.rmSync(stagingRoot, { recursive: true, force: true });
+    }
+  }
+}
+
+function moveStagedProjectIntoExistingDir(params: {
+  stagedProjectDir: string;
+  targetDir: string;
+}) {
+  if (!fs.existsSync(params.stagedProjectDir)) {
+    throw new Error(
+      `shadcn init did not create the staged project at ${params.stagedProjectDir}.`
+    );
+  }
+  if (
+    !fs.existsSync(params.targetDir) ||
+    fs.readdirSync(params.targetDir).length > 0
+  ) {
+    throw new Error(
+      `Cannot move staged project into non-empty target ${params.targetDir}.`
+    );
+  }
+
+  for (const entry of fs.readdirSync(params.stagedProjectDir)) {
+    fs.renameSync(
+      join(params.stagedProjectDir, entry),
+      join(params.targetDir, entry)
+    );
   }
 }
 
@@ -1208,6 +1321,11 @@ function overrideConfigBackend(
 }
 
 type PackageManager = 'bun' | 'pnpm' | 'yarn' | 'npm';
+
+type DependencyInstallItem = {
+  installSpec: string;
+  packageName: string;
+};
 
 type DependencyInstallPlan = {
   packageManager: PackageManager;
@@ -1259,18 +1377,15 @@ function buildInitNextOwnedScaffoldFiles(
   backend: BetterConvexBackend,
   includeDemoFiles: boolean
 ): readonly InitOwnedTemplateScaffoldFile[] {
-  const convexDirRelative =
-    basename(functionsDirRelative) === 'functions'
-      ? dirname(functionsDirRelative)
-      : functionsDirRelative;
-
   const files: InitOwnedTemplateScaffoldFile[] = [
     {
       kind: 'config',
       relativePath: 'package.json',
+      requiresExplicitOverwrite: false,
       content: ({ existingContent }) =>
         renderInitNextPackageJsonTemplate(existingContent, {
           backend,
+          functionsDirRelative,
         }),
       createReason:
         'Create baseline package.json scripts for the Next scaffold.',
@@ -1280,6 +1395,7 @@ function buildInitNextOwnedScaffoldFiles(
     {
       kind: 'env',
       relativePath: '.env.local',
+      requiresExplicitOverwrite: false,
       content: ({ existingContent }) =>
         renderInitNextEnvLocalTemplate(existingContent),
       createReason: 'Create baseline .env.local for the Next scaffold.',
@@ -1289,6 +1405,7 @@ function buildInitNextOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.componentsDir}/providers.tsx`,
+      requiresExplicitOverwrite: true,
       content: INIT_NEXT_PROVIDERS_TEMPLATE,
       createReason: `Create baseline ${context.componentsDir}/providers.tsx for the Next scaffold.`,
       updateReason: `Update ${context.componentsDir}/providers.tsx for the Next scaffold.`,
@@ -1297,6 +1414,7 @@ function buildInitNextOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.convexClientDir}/query-client.ts`,
+      requiresExplicitOverwrite: true,
       content: INIT_NEXT_QUERY_CLIENT_TEMPLATE,
       createReason: `Create baseline ${context.convexClientDir}/query-client.ts for the Next scaffold.`,
       updateReason: `Update ${context.convexClientDir}/query-client.ts for the Next scaffold.`,
@@ -1305,6 +1423,7 @@ function buildInitNextOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.convexClientDir}/crpc.tsx`,
+      requiresExplicitOverwrite: true,
       content: INIT_NEXT_CLIENT_CRPC_TEMPLATE,
       createReason: `Create baseline ${context.convexClientDir}/crpc.tsx for the Next scaffold.`,
       updateReason: `Update ${context.convexClientDir}/crpc.tsx for the Next scaffold.`,
@@ -1313,7 +1432,9 @@ function buildInitNextOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.convexClientDir}/convex-provider.tsx`,
+      requiresExplicitOverwrite: true,
       content: INIT_NEXT_CONVEX_PROVIDER_TEMPLATE,
+      preserveManagedContent: [AUTH_CONVEX_PROVIDER_TEMPLATE],
       createReason: `Create baseline ${context.convexClientDir}/convex-provider.tsx for the Next scaffold.`,
       updateReason: `Update ${context.convexClientDir}/convex-provider.tsx for the Next scaffold.`,
       skipReason: `${context.convexClientDir}/convex-provider.tsx already matches the Next scaffold.`,
@@ -1321,7 +1442,9 @@ function buildInitNextOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.convexClientDir}/server.ts`,
+      requiresExplicitOverwrite: true,
       content: INIT_NEXT_SERVER_TEMPLATE,
+      preserveManagedContent: [AUTH_NEXT_SERVER_TEMPLATE],
       createReason: `Create baseline ${context.convexClientDir}/server.ts for the Next scaffold.`,
       updateReason: `Update ${context.convexClientDir}/server.ts for the Next scaffold.`,
       skipReason: `${context.convexClientDir}/server.ts already matches the Next scaffold.`,
@@ -1329,6 +1452,7 @@ function buildInitNextOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.convexClientDir}/rsc.tsx`,
+      requiresExplicitOverwrite: true,
       content: INIT_NEXT_RSC_TEMPLATE,
       createReason: `Create baseline ${context.convexClientDir}/rsc.tsx for the Next scaffold.`,
       updateReason: `Update ${context.convexClientDir}/rsc.tsx for the Next scaffold.`,
@@ -1336,12 +1460,20 @@ function buildInitNextOwnedScaffoldFiles(
     },
     {
       kind: 'config',
-      relativePath: join(convexDirRelative, 'tsconfig.json'),
+      relativePath: join(functionsDirRelative, 'tsconfig.json'),
+      managedBaselineContent:
+        getManagedConvexTsconfigBaselines(functionsDirRelative),
+      requiresExplicitOverwrite: true,
       content: ({ existingContent }) =>
-        existingContent ?? INIT_CONVEX_TSCONFIG_TEMPLATE,
-      createReason: `Create ${join(convexDirRelative, 'tsconfig.json')} for Better Convex functions.`,
-      updateReason: `Preserve ${join(convexDirRelative, 'tsconfig.json')} when the project already owns it.`,
-      skipReason: `${join(convexDirRelative, 'tsconfig.json')} is already owned by the project.`,
+        typeof existingContent === 'string'
+          ? patchInitConvexTsconfigContent(
+              existingContent,
+              functionsDirRelative
+            )
+          : renderInitConvexTsconfigTemplate(functionsDirRelative),
+      createReason: `Create ${join(functionsDirRelative, 'tsconfig.json')} for Better Convex functions.`,
+      updateReason: `Patch ${join(functionsDirRelative, 'tsconfig.json')} for Better Convex functions.`,
+      skipReason: `${join(functionsDirRelative, 'tsconfig.json')} already matches the Better Convex functions project.`,
     },
   ];
 
@@ -1350,6 +1482,7 @@ function buildInitNextOwnedScaffoldFiles(
       {
         kind: 'scaffold',
         relativePath: `${context.appDir}/convex/page.tsx`,
+        requiresExplicitOverwrite: true,
         content: INIT_NEXT_MESSAGES_PAGE_TEMPLATE,
         createReason: `Create ${context.appDir}/convex/page.tsx as the minimal Better Convex demo route.`,
         updateReason: `Update ${context.appDir}/convex/page.tsx for the Better Convex demo route.`,
@@ -1358,6 +1491,7 @@ function buildInitNextOwnedScaffoldFiles(
       {
         kind: 'schema',
         relativePath: `${functionsDirRelative}/schema.ts`,
+        requiresExplicitOverwrite: true,
         content: INIT_NEXT_SCHEMA_TEMPLATE,
         createReason: `Create ${functionsDirRelative}/schema.ts with the minimal Better Convex demo schema.`,
         updateReason: `Update ${functionsDirRelative}/schema.ts with the minimal Better Convex demo schema.`,
@@ -1366,6 +1500,7 @@ function buildInitNextOwnedScaffoldFiles(
       {
         kind: 'scaffold',
         relativePath: `${functionsDirRelative}/messages.ts`,
+        requiresExplicitOverwrite: true,
         content: renderInitNextMessagesTemplate(functionsDirRelative),
         createReason: `Create ${functionsDirRelative}/messages.ts for the Better Convex demo route.`,
         updateReason: `Update ${functionsDirRelative}/messages.ts for the Better Convex demo route.`,
@@ -1382,18 +1517,15 @@ function buildInitReactOwnedScaffoldFiles(
   functionsDirRelative: string,
   backend: BetterConvexBackend
 ): readonly InitOwnedTemplateScaffoldFile[] {
-  const convexDirRelative =
-    basename(functionsDirRelative) === 'functions'
-      ? dirname(functionsDirRelative)
-      : functionsDirRelative;
-
   return [
     {
       kind: 'config',
       relativePath: 'package.json',
+      requiresExplicitOverwrite: false,
       content: ({ existingContent }) =>
         renderInitReactPackageJsonTemplate(existingContent, {
           backend,
+          functionsDirRelative,
         }),
       createReason:
         'Create baseline package.json scripts for the React scaffold.',
@@ -1403,6 +1535,7 @@ function buildInitReactOwnedScaffoldFiles(
     {
       kind: 'env',
       relativePath: '.env.local',
+      requiresExplicitOverwrite: false,
       content: ({ existingContent }) =>
         renderInitReactEnvLocalTemplate(existingContent),
       createReason: 'Create baseline .env.local for the React scaffold.',
@@ -1412,6 +1545,7 @@ function buildInitReactOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.componentsDir}/providers.tsx`,
+      requiresExplicitOverwrite: true,
       content: INIT_REACT_PROVIDERS_TEMPLATE,
       createReason: `Create baseline ${context.componentsDir}/providers.tsx for the React scaffold.`,
       updateReason: `Update ${context.componentsDir}/providers.tsx for the React scaffold.`,
@@ -1420,6 +1554,7 @@ function buildInitReactOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.convexClientDir}/query-client.ts`,
+      requiresExplicitOverwrite: true,
       content: INIT_NEXT_QUERY_CLIENT_TEMPLATE,
       createReason: `Create baseline ${context.convexClientDir}/query-client.ts for the React scaffold.`,
       updateReason: `Update ${context.convexClientDir}/query-client.ts for the React scaffold.`,
@@ -1428,6 +1563,7 @@ function buildInitReactOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.convexClientDir}/crpc.tsx`,
+      requiresExplicitOverwrite: true,
       content: INIT_REACT_CLIENT_CRPC_TEMPLATE,
       createReason: `Create baseline ${context.convexClientDir}/crpc.tsx for the React scaffold.`,
       updateReason: `Update ${context.convexClientDir}/crpc.tsx for the React scaffold.`,
@@ -1436,19 +1572,29 @@ function buildInitReactOwnedScaffoldFiles(
     {
       kind: 'scaffold',
       relativePath: `${context.convexClientDir}/convex-provider.tsx`,
+      requiresExplicitOverwrite: true,
       content: INIT_REACT_CONVEX_PROVIDER_TEMPLATE,
+      preserveManagedContent: [AUTH_REACT_CONVEX_PROVIDER_TEMPLATE],
       createReason: `Create baseline ${context.convexClientDir}/convex-provider.tsx for the React scaffold.`,
       updateReason: `Update ${context.convexClientDir}/convex-provider.tsx for the React scaffold.`,
       skipReason: `${context.convexClientDir}/convex-provider.tsx already matches the React scaffold.`,
     },
     {
       kind: 'config',
-      relativePath: join(convexDirRelative, 'tsconfig.json'),
+      relativePath: join(functionsDirRelative, 'tsconfig.json'),
+      managedBaselineContent:
+        getManagedConvexTsconfigBaselines(functionsDirRelative),
+      requiresExplicitOverwrite: true,
       content: ({ existingContent }) =>
-        existingContent ?? INIT_CONVEX_TSCONFIG_TEMPLATE,
-      createReason: `Create ${join(convexDirRelative, 'tsconfig.json')} for Better Convex functions.`,
-      updateReason: `Preserve ${join(convexDirRelative, 'tsconfig.json')} when the project already owns it.`,
-      skipReason: `${join(convexDirRelative, 'tsconfig.json')} is already owned by the project.`,
+        typeof existingContent === 'string'
+          ? patchInitConvexTsconfigContent(
+              existingContent,
+              functionsDirRelative
+            )
+          : renderInitConvexTsconfigTemplate(functionsDirRelative),
+      createReason: `Create ${join(functionsDirRelative, 'tsconfig.json')} for Better Convex functions.`,
+      updateReason: `Patch ${join(functionsDirRelative, 'tsconfig.json')} for Better Convex functions.`,
+      skipReason: `${join(functionsDirRelative, 'tsconfig.json')} already matches the Better Convex functions project.`,
     },
   ] as const;
 }
@@ -1570,6 +1716,191 @@ function patchInitTsconfigContent(
   )}\n`;
 }
 
+function patchInitConvexTsconfigContent(
+  source: string,
+  functionsDirRelative: string
+): string {
+  const parsedResult = ts.parseConfigFileTextToJson('tsconfig.json', source);
+  if (parsedResult.error || parsedResult.config === undefined) {
+    throw new Error(
+      'Could not patch Convex tsconfig.json: expected valid JSON or JSONC scaffold output.'
+    );
+  }
+  const parsed: unknown = parsedResult.config;
+
+  if (!isPlainObject(parsed)) {
+    throw new Error(
+      'Could not patch Convex tsconfig.json: expected a top-level JSON object.'
+    );
+  }
+
+  const templateParsed = JSON.parse(
+    renderInitConvexTsconfigTemplate(functionsDirRelative)
+  ) as {
+    compilerOptions?: Record<string, unknown>;
+    include?: string[];
+    exclude?: string[];
+    [key: string]: unknown;
+  };
+
+  const compilerOptions = isPlainObject(parsed.compilerOptions)
+    ? { ...parsed.compilerOptions }
+    : {};
+  const templateCompilerOptions = isPlainObject(templateParsed.compilerOptions)
+    ? templateParsed.compilerOptions
+    : {};
+  const existingInclude = Array.isArray(parsed.include)
+    ? parsed.include.filter(
+        (value): value is string => typeof value === 'string'
+      )
+    : [];
+  const templateInclude = Array.isArray(templateParsed.include)
+    ? templateParsed.include
+    : [];
+  const existingExclude = Array.isArray(parsed.exclude)
+    ? parsed.exclude.filter(
+        (value): value is string => typeof value === 'string'
+      )
+    : [];
+  const templateExclude = Array.isArray(templateParsed.exclude)
+    ? templateParsed.exclude
+    : [];
+
+  return `${JSON.stringify(
+    {
+      ...parsed,
+      compilerOptions: {
+        ...compilerOptions,
+        ...templateCompilerOptions,
+      },
+      include: [...new Set([...existingInclude, ...templateInclude])],
+      exclude: [...new Set([...existingExclude, ...templateExclude])],
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function renderLegacyGeneratedConvexTsconfigTemplate(): string {
+  return `${JSON.stringify(
+    {
+      compilerOptions: {
+        allowJs: true,
+        strict: true,
+        moduleResolution: 'Bundler',
+        jsx: 'react-jsx',
+        skipLibCheck: true,
+        allowSyntheticDefaultImports: true,
+        target: 'ESNext',
+        lib: ['ES2023', 'dom'],
+        forceConsistentCasingInFileNames: true,
+        module: 'ESNext',
+        isolatedModules: true,
+        noEmit: true,
+      },
+      include: ['./**/*'],
+      exclude: ['./_generated'],
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function getManagedConvexTsconfigBaselines(
+  functionsDirRelative: string
+): readonly string[] {
+  return [
+    renderLegacyGeneratedConvexTsconfigTemplate(),
+    ...(functionsDirRelative === 'convex'
+      ? [renderLegacyManagedConvexRootTsconfigTemplate()]
+      : []),
+  ];
+}
+
+function renderLegacyManagedConvexRootTsconfigTemplate(): string {
+  return `${JSON.stringify(
+    {
+      $schema: 'https://json.schemastore.org/tsconfig',
+      compilerOptions: {
+        strict: true,
+        strictFunctionTypes: false,
+        esModuleInterop: true,
+        forceConsistentCasingInFileNames: true,
+        isolatedModules: true,
+        skipLibCheck: true,
+        noEmit: true,
+        jsx: 'react-jsx',
+        lib: ['esnext', 'dom'],
+        types: ['bun-types'],
+        target: 'esnext',
+        moduleDetection: 'force',
+        module: 'esnext',
+        moduleResolution: 'bundler',
+        resolveJsonModule: true,
+        allowJs: true,
+      },
+      include: ['**/*.ts', '**/*.tsx'],
+      exclude: ['node_modules', '**/*.spec.ts', '**/*.test.ts'],
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function isManagedLegacyConvexRootTsconfig(params: {
+  filePath: string;
+  functionsDir: string;
+  existingContent: string;
+}): boolean {
+  const functionsRootDir = dirname(params.functionsDir);
+  const functionsRootDirRelative = relative(process.cwd(), functionsRootDir);
+  if (
+    basename(params.functionsDir) !== 'functions' ||
+    functionsRootDirRelative.length === 0 ||
+    functionsRootDirRelative === '.'
+  ) {
+    return false;
+  }
+
+  const normalizedFunctionsRootDirRelative = normalizePath(
+    functionsRootDirRelative
+  );
+  const candidates = [
+    renderLegacyManagedConvexRootTsconfigTemplate(),
+    renderInitConvexTsconfigTemplate(normalizedFunctionsRootDirRelative),
+  ];
+
+  return candidates.some((candidate) =>
+    isContentEquivalent({
+      filePath: params.filePath,
+      existingContent: params.existingContent,
+      nextContent: candidate,
+    })
+  );
+}
+
+function removeLegacyManagedConvexRootTsconfigIfNeeded(
+  functionsDir: string
+): void {
+  const legacyRootTsconfigPath = join(dirname(functionsDir), 'tsconfig.json');
+  if (!fs.existsSync(legacyRootTsconfigPath)) {
+    return;
+  }
+
+  const existingContent = fs.readFileSync(legacyRootTsconfigPath, 'utf8');
+  if (
+    !isManagedLegacyConvexRootTsconfig({
+      filePath: legacyRootTsconfigPath,
+      functionsDir,
+      existingContent,
+    })
+  ) {
+    return;
+  }
+
+  fs.rmSync(legacyRootTsconfigPath, { force: true });
+}
+
 function patchInitReactMainContent(source: string): string {
   const wrappedApp = `<Providers>
         <App />
@@ -1684,6 +2015,7 @@ function buildInitNextLayoutPlanFile(
   return createPlanFile({
     kind: 'scaffold',
     filePath,
+    requiresExplicitOverwrite: false,
     content: patchInitNextLayoutContent(fs.readFileSync(filePath, 'utf8')),
     updateReason: `Patch ${context.appDir}/layout.tsx to mount Providers without replacing the shadcn shell.`,
     createReason: `Patch ${context.appDir}/layout.tsx to mount Providers without replacing the shadcn shell.`,
@@ -1704,6 +2036,7 @@ function buildInitNextTsconfigPlanFile(
   return createPlanFile({
     kind: 'config',
     filePath,
+    requiresExplicitOverwrite: false,
     content: patchInitTsconfigContent(
       fs.readFileSync(filePath, 'utf8'),
       context
@@ -1729,6 +2062,7 @@ function buildInitReactRootTsconfigPlanFile(
   return createPlanFile({
     kind: 'config',
     filePath,
+    requiresExplicitOverwrite: false,
     content: patchInitTsconfigContent(
       fs.readFileSync(filePath, 'utf8'),
       context
@@ -1753,6 +2087,7 @@ function buildInitReactAppTsconfigPlanFile(
     createPlanFile({
       kind: 'config',
       filePath,
+      requiresExplicitOverwrite: false,
       content: patchInitTsconfigContent(
         fs.readFileSync(filePath, 'utf8'),
         context
@@ -1776,6 +2111,7 @@ function buildInitReactViteConfigPlanFile(
     createPlanFile({
       kind: 'config',
       filePath,
+      requiresExplicitOverwrite: false,
       content: patchInitReactViteConfigContent(
         fs.readFileSync(filePath, 'utf8')
       ),
@@ -1799,6 +2135,7 @@ function buildInitReactMainPlanFile(
   return createPlanFile({
     kind: 'scaffold',
     filePath,
+    requiresExplicitOverwrite: false,
     content: patchInitReactMainContent(fs.readFileSync(filePath, 'utf8')),
     updateReason: `Patch ${context.clientEntryFile} to mount Providers.`,
     createReason: `Patch ${context.clientEntryFile} to mount Providers.`,
@@ -1819,6 +2156,7 @@ function buildInitNextComponentsJsonPlanFile(
   return createPlanFile({
     kind: 'config',
     filePath,
+    requiresExplicitOverwrite: false,
     content: patchInitNextComponentsJsonContent(
       fs.readFileSync(filePath, 'utf8'),
       context
@@ -1832,17 +2170,16 @@ function buildInitNextComponentsJsonPlanFile(
   });
 }
 
-function buildInitNextEslintConfigPlanFile(): PluginInstallPlanFile {
+function buildInitNextEslintConfigPlanFile(): PluginInstallPlanFile | null {
   const filePath = resolve(process.cwd(), 'eslint.config.mjs');
   if (!fs.existsSync(filePath)) {
-    throw new Error(
-      'Could not patch eslint.config.mjs: shadcn did not create an ESLint config.'
-    );
+    return null;
   }
 
   return createPlanFile({
     kind: 'config',
     filePath,
+    requiresExplicitOverwrite: false,
     content: patchInitNextEslintConfigContent(
       fs.readFileSync(filePath, 'utf8')
     ),
@@ -1917,15 +2254,28 @@ function buildTemplateInitializationPlanFiles(params: {
     const existingContent = fs.existsSync(filePath)
       ? fs.readFileSync(filePath, 'utf8')
       : undefined;
-    const content =
+    const nextContent =
       typeof file.content === 'function'
         ? file.content({ existingContent })
         : file.content;
+    const content =
+      typeof existingContent === 'string' &&
+      file.preserveManagedContent?.some((managedContent) =>
+        isContentEquivalent({
+          filePath: file.relativePath,
+          existingContent,
+          nextContent: managedContent,
+        })
+      )
+        ? existingContent
+        : nextContent;
 
     return createPlanFile({
       kind: file.kind,
       filePath,
       content,
+      managedBaselineContent: file.managedBaselineContent,
+      requiresExplicitOverwrite: file.requiresExplicitOverwrite,
       createReason: file.createReason,
       updateReason: file.updateReason,
       skipReason: file.skipReason,
@@ -1933,11 +2283,12 @@ function buildTemplateInitializationPlanFiles(params: {
   });
 
   if (projectContext.mode === 'next-app') {
+    const eslintConfigPlanFile = buildInitNextEslintConfigPlanFile();
     return [
       ...plannedOwnedFiles,
       buildInitNextTsconfigPlanFile(projectContext),
       buildInitNextComponentsJsonPlanFile(projectContext),
-      buildInitNextEslintConfigPlanFile(),
+      ...(eslintConfigPlanFile ? [eslintConfigPlanFile] : []),
       buildInitNextLayoutPlanFile(projectContext),
     ];
   }
@@ -1989,7 +2340,7 @@ function detectPackageManager(projectDir: string): PackageManager {
 
 function buildDependencyInstallPlan(
   projectDir: string,
-  packageSpecs: readonly string[]
+  dependencies: readonly DependencyInstallItem[]
 ): DependencyInstallPlan | null {
   const packageJsonPath = join(projectDir, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -2004,22 +2355,25 @@ function buildDependencyInstallPlan(
     ...(pkg.dependencies ?? {}),
     ...(pkg.devDependencies ?? {}),
   };
-  const missing = packageSpecs.filter(
-    (packageSpec) => !(getPackageNameFromInstallSpec(packageSpec) in existing)
+  const missing = dependencies.filter(
+    (dependency) => !(dependency.packageName in existing)
   );
   if (missing.length === 0) {
     return null;
   }
 
   const packageManager = detectPackageManager(projectDir);
+  const missingSpecs = missing.map((dependency) => dependency.installSpec);
   const args =
-    packageManager === 'npm' ? ['install', ...missing] : ['add', ...missing];
+    packageManager === 'npm'
+      ? ['install', ...missingSpecs]
+      : ['add', ...missingSpecs];
 
   return {
     packageManager,
     command: packageManager,
     args,
-    packages: missing,
+    packages: missingSpecs,
     cwd: projectDir,
   };
 }
@@ -2077,6 +2431,8 @@ export function buildInitializationPlan(params: {
         kind: 'config',
         filePath: convexConfigPath,
         content: INIT_CONVEX_CONFIG_TEMPLATE,
+        managedBaselineContent: INIT_CONVEX_CONFIG_TEMPLATE,
+        requiresExplicitOverwrite: true,
         createReason: 'Create Convex config for functions bootstrap.',
         updateReason: 'Update Convex config for Better Convex bootstrap.',
         skipReason: 'Convex config is already bootstrapped.',
@@ -2092,12 +2448,16 @@ export function buildInitializationPlan(params: {
         templateId: file.templateId,
         filePath: file.filePath,
         content: file.content,
+        requiresExplicitOverwrite:
+          file.templateId !== LOCAL_CONVEX_ENV_TEMPLATE_ID,
         managedBaselineContent:
-          file.templateId === BETTER_CONVEX_ENV_HELPER_TEMPLATE_ID
-            ? renderEnvHelperContent([], undefined)
-            : file.templateId === LOCAL_CONVEX_ENV_TEMPLATE_ID
-              ? renderLocalConvexEnvContent([], undefined)
-              : undefined,
+          file.templateId === BETTER_CONVEX_CONFIG_TEMPLATE_ID
+            ? file.content
+            : file.templateId === BETTER_CONVEX_ENV_HELPER_TEMPLATE_ID
+              ? renderEnvHelperContent([], undefined)
+              : file.templateId === LOCAL_CONVEX_ENV_TEMPLATE_ID
+                ? renderLocalConvexEnvContent([], undefined)
+                : undefined,
         createReason: details.createReason,
         updateReason: details.updateReason,
         skipReason: details.skipReason,
@@ -2118,16 +2478,37 @@ export function buildInitializationPlan(params: {
     );
   }
 
+  const baselineCrpcContent = renderInitTemplateContent({
+    template: INIT_CRPC_TEMPLATE,
+    filePath: crpcFilePath,
+    functionsDir,
+    crpcFilePath,
+  });
+  const existingCrpcContent = fs.existsSync(crpcFilePath)
+    ? fs.readFileSync(crpcFilePath, 'utf8')
+    : undefined;
+  const crpcContent =
+    typeof existingCrpcContent === 'string' &&
+    [
+      renderAuthCrpcTemplate({ withRatelimit: false }),
+      renderAuthCrpcTemplate({ withRatelimit: true }),
+    ].some((managedContent) =>
+      isContentEquivalent({
+        filePath: crpcFilePath,
+        existingContent: existingCrpcContent,
+        nextContent: managedContent,
+      })
+    )
+      ? existingCrpcContent
+      : baselineCrpcContent;
+
   files.push(
     createPlanFile({
       kind: 'scaffold',
       filePath: crpcFilePath,
-      content: renderInitTemplateContent({
-        template: INIT_CRPC_TEMPLATE,
-        filePath: crpcFilePath,
-        functionsDir,
-        crpcFilePath,
-      }),
+      content: crpcContent,
+      managedBaselineContent: baselineCrpcContent,
+      requiresExplicitOverwrite: true,
       createReason: 'Create baseline crpc.ts.',
       updateReason: 'Update baseline crpc.ts.',
       skipReason: 'Baseline crpc.ts is already bootstrapped.',
@@ -2141,6 +2522,13 @@ export function buildInitializationPlan(params: {
         functionsDir,
         crpcFilePath,
       }),
+      managedBaselineContent: renderInitTemplateContent({
+        template: INIT_HTTP_TEMPLATE,
+        filePath: httpFilePath,
+        functionsDir,
+        crpcFilePath,
+      }),
+      requiresExplicitOverwrite: true,
       createReason: 'Create baseline http.ts.',
       updateReason: 'Update baseline http.ts.',
       skipReason: 'Baseline http.ts is already bootstrapped.',
@@ -2151,15 +2539,32 @@ export function buildInitializationPlan(params: {
 
   const dependencyPackages = projectContext
     ? [
-        ...BASELINE_DEPENDENCY_INSTALL_SPECS,
-        params.betterConvexInstallSpec ??
-          resolveBetterConvexScaffoldInstallSpec(),
-        ...INIT_TEMPLATE_DEPENDENCY_INSTALL_SPECS,
+        ...BASELINE_DEPENDENCY_INSTALL_SPECS.map((installSpec) => ({
+          installSpec,
+          packageName: getPackageNameFromInstallSpec(installSpec),
+        })),
+        {
+          installSpec:
+            params.betterConvexInstallSpec ??
+            resolveBetterConvexScaffoldInstallSpec(),
+          packageName: 'better-convex',
+        },
+        ...INIT_TEMPLATE_DEPENDENCY_INSTALL_SPECS.map((installSpec) => ({
+          installSpec,
+          packageName: getPackageNameFromInstallSpec(installSpec),
+        })),
       ]
     : [
-        ...BASELINE_DEPENDENCY_INSTALL_SPECS,
-        params.betterConvexInstallSpec ??
-          resolveBetterConvexScaffoldInstallSpec(),
+        ...BASELINE_DEPENDENCY_INSTALL_SPECS.map((installSpec) => ({
+          installSpec,
+          packageName: getPackageNameFromInstallSpec(installSpec),
+        })),
+        {
+          installSpec:
+            params.betterConvexInstallSpec ??
+            resolveBetterConvexScaffoldInstallSpec(),
+          packageName: 'better-convex',
+        },
       ];
   const dependencyInstall = buildDependencyInstallPlan(
     process.cwd(),
@@ -2228,11 +2633,14 @@ async function runScaffoldCommandFlow(params: {
   template?: string;
   yes: boolean;
   defaults?: boolean;
+  allowCodegenBootstrapFallback?: boolean;
+  overwrite?: boolean;
   targetArgs?: string[];
   backendArg?: BetterConvexBackend;
   configPath?: string;
   execaFn: typeof execa;
   generateMetaFn: typeof generateMeta;
+  syncEnvFn: typeof syncEnv;
   loadBetterConvexConfigFn: typeof loadBetterConvexConfig;
   ensureConvexGitignoreEntryFn: typeof ensureConvexGitignoreEntry;
   promptAdapter: PromptAdapter;
@@ -2268,10 +2676,11 @@ async function runScaffoldCommandFlow(params: {
       template: params.template,
     });
     const applyResult = await applyPluginInstallPlanFiles(initPlan.files, {
-      overwrite: params.yes || Boolean(params.defaults),
+      overwrite: Boolean(params.overwrite),
       yes: params.yes || Boolean(params.defaults),
       promptAdapter: params.promptAdapter,
     });
+    removeLegacyManagedConvexRootTsconfigIfNeeded(initPlan.functionsDir);
     await applyDependencyInstallPlan(
       initPlan.dependencyInstall,
       params.execaFn
@@ -2286,11 +2695,14 @@ async function runScaffoldCommandFlow(params: {
     }
 
     const codegenResult = await runInitializationCodegen({
+      allowCodegenBootstrapFallback:
+        params.allowCodegenBootstrapFallback ?? true,
       config: initPlan.config,
       backend,
       sharedDir: initPlan.config.paths.shared,
       debug: initPlan.config.codegen.debug,
       generateMetaFn: params.generateMetaFn,
+      syncEnvFn: params.syncEnvFn,
       execaFn: params.execaFn,
       realConvexPath: params.realConvexPath,
       realConcavePath: params.realConcavePath,
@@ -2309,6 +2721,7 @@ async function runScaffoldCommandFlow(params: {
       template: params.template ?? null,
       codegen: codegenResult.codegen,
       convexBootstrap: codegenResult.convexBootstrap,
+      localBootstrapUsed: codegenResult.localBootstrapUsed,
     };
   });
 }
@@ -2319,6 +2732,7 @@ export async function runInitCommandFlow(params: {
   configPath?: string;
   execaFn: typeof execa;
   generateMetaFn: typeof generateMeta;
+  syncEnvFn: typeof syncEnv;
   loadBetterConvexConfigFn: typeof loadBetterConvexConfig;
   ensureConvexGitignoreEntryFn: typeof ensureConvexGitignoreEntry;
   promptAdapter: PromptAdapter;
@@ -2352,15 +2766,18 @@ export async function runInitCommandFlow(params: {
     }
 
     return runScaffoldCommandFlow({
+      allowCodegenBootstrapFallback: !params.initArgs.json,
       projectDir,
       template,
       yes: params.initArgs.yes,
       defaults: params.initArgs.defaults,
+      overwrite: params.initArgs.overwrite,
       targetArgs: params.initArgs.targetArgs,
       backendArg: params.backendArg,
       configPath: params.configPath,
       execaFn: params.execaFn,
       generateMetaFn: params.generateMetaFn,
+      syncEnvFn: params.syncEnvFn,
       loadBetterConvexConfigFn: params.loadBetterConvexConfigFn,
       ensureConvexGitignoreEntryFn: params.ensureConvexGitignoreEntryFn,
       promptAdapter: params.promptAdapter,
@@ -2376,13 +2793,16 @@ export async function runInitCommandFlow(params: {
   }
 
   return runScaffoldCommandFlow({
+    allowCodegenBootstrapFallback: !params.initArgs.json,
     projectDir,
     yes: params.initArgs.yes,
+    overwrite: params.initArgs.overwrite,
     targetArgs: params.initArgs.targetArgs,
     backendArg: params.backendArg,
     configPath: params.configPath,
     execaFn: params.execaFn,
     generateMetaFn: params.generateMetaFn,
+    syncEnvFn: params.syncEnvFn,
     loadBetterConvexConfigFn: params.loadBetterConvexConfigFn,
     ensureConvexGitignoreEntryFn: params.ensureConvexGitignoreEntryFn,
     promptAdapter: params.promptAdapter,
@@ -2595,22 +3015,30 @@ export async function applyPluginInstallPlanFiles(
       continue;
     }
 
-    const requiresConfirmation =
-      file.kind === 'config' ||
-      (file.kind === 'scaffold' && file.templateId !== undefined) ||
-      (file.kind === 'env' &&
-        file.templateId !== LOCAL_CONVEX_ENV_TEMPLATE_ID &&
-        file.templateId !== BETTER_CONVEX_ENV_HELPER_TEMPLATE_ID);
+    const managedBaselines = Array.isArray(file.managedBaselineContent)
+      ? file.managedBaselineContent
+      : typeof file.managedBaselineContent === 'string'
+        ? [file.managedBaselineContent]
+        : [];
+    const requiresExplicitOverwrite =
+      file.requiresExplicitOverwrite ??
+      (file.kind === 'config' ||
+        (file.kind === 'scaffold' && file.templateId !== undefined) ||
+        (file.kind === 'env' &&
+          file.templateId !== LOCAL_CONVEX_ENV_TEMPLATE_ID &&
+          file.templateId !== BETTER_CONVEX_ENV_HELPER_TEMPLATE_ID));
+    const existingContent = file.existingContent;
     const matchesManagedBaseline =
-      typeof file.existingContent === 'string' &&
-      typeof file.managedBaselineContent === 'string' &&
-      isContentEquivalent({
-        filePath: file.path,
-        existingContent: file.existingContent,
-        nextContent: file.managedBaselineContent,
-      });
+      typeof existingContent === 'string' &&
+      managedBaselines.some((managedBaselineContent) =>
+        isContentEquivalent({
+          filePath: file.path,
+          existingContent,
+          nextContent: managedBaselineContent,
+        })
+      );
     let shouldOverwrite =
-      options.overwrite || !requiresConfirmation || matchesManagedBaseline;
+      options.overwrite || !requiresExplicitOverwrite || matchesManagedBaseline;
     if (
       !shouldOverwrite &&
       !options.yes &&
@@ -3033,6 +3461,8 @@ export async function runConfiguredCodegen(params: {
   debug: boolean;
   generateMetaFn: typeof generateMeta;
   execaFn: typeof execa;
+  syncEnvFn?: typeof syncEnv;
+  autoSyncLocalAuthEnv?: boolean;
   realConvexPath: string;
   realConcavePath?: string;
   additionalConvexArgs?: string[];
@@ -3061,6 +3491,8 @@ export async function runConfiguredCodegenDetailed(params: {
   debug: boolean;
   generateMetaFn: typeof generateMeta;
   execaFn: typeof execa;
+  syncEnvFn?: typeof syncEnv;
+  autoSyncLocalAuthEnv?: boolean;
   realConvexPath: string;
   realConcavePath?: string;
   additionalConvexArgs?: string[];
@@ -3076,6 +3508,8 @@ export async function runConfiguredCodegenDetailed(params: {
     debug,
     generateMetaFn,
     execaFn,
+    syncEnvFn = syncEnv,
+    autoSyncLocalAuthEnv = true,
     realConvexPath,
     additionalConvexArgs,
     env,
@@ -3097,10 +3531,42 @@ export async function runConfiguredCodegenDetailed(params: {
       realConvexPath,
       realConcavePath: params.realConcavePath,
     });
-  await generateMetaFn(sharedDir, {
-    debug,
-    scope: scope ?? 'all',
-    trimSegments,
+  const targetArgs = extractBackendRunTargetArgs(
+    resolvedRuntimeAdapter.publicName,
+    convexCodegenArgs
+  );
+  const localConvexEnv = getLocalConvexEnvVars(sharedDir);
+  const shouldAutoSyncLocalAuthEnv =
+    autoSyncLocalAuthEnv &&
+    resolvedRuntimeAdapter.publicName === 'convex' &&
+    getAggregateBackfillDeploymentKey(targetArgs) === 'local';
+  const authEnvState = shouldAutoSyncLocalAuthEnv
+    ? resolveAuthEnvState({
+        cwd: process.cwd(),
+        sharedDir,
+      })
+    : null;
+
+  if (authEnvState?.installed) {
+    try {
+      await syncEnvFn({
+        authSyncMode: 'prepare',
+        force: true,
+        sharedDir,
+        silent: true,
+        targetArgs,
+      });
+    } catch {
+      // Cold local apps can still recover through the normal bootstrap retry.
+    }
+  }
+
+  await withLocalConvexEnv(sharedDir, async () => {
+    await generateMetaFn(sharedDir, {
+      debug,
+      scope: scope ?? 'all',
+      trimSegments,
+    });
   });
 
   const result = await execaFn(
@@ -3109,7 +3575,10 @@ export async function runConfiguredCodegenDetailed(params: {
     {
       stdio,
       cwd: process.cwd(),
-      env: createBackendCommandEnv(env),
+      env: createBackendCommandEnv({
+        ...localConvexEnv,
+        ...env,
+      }),
       reject: false,
     }
   );
@@ -3134,15 +3603,20 @@ export async function runConfiguredCodegenDetailed(params: {
       execaFn,
       runtimeAdapter: resolvedRuntimeAdapter,
       args: buildCodegenBootstrapArgs(targetArgs),
+      sharedDir,
       env,
     });
 
     if (bootstrap.exitCode !== 0) {
-      return {
-        exitCode: bootstrap.exitCode,
-        stdout: bootstrap.stdout,
-        stderr: bootstrap.stderr,
-      };
+      try {
+        return {
+          exitCode: bootstrap.exitCode,
+          stdout: bootstrap.stdout,
+          stderr: bootstrap.stderr,
+        };
+      } finally {
+        await bootstrap.stop();
+      }
     }
 
     try {
@@ -3155,15 +3629,24 @@ export async function runConfiguredCodegenDetailed(params: {
       await bootstrap.stop();
     }
   }
-  if (
-    resolvedRuntimeAdapter.publicName === 'concave' &&
-    result.exitCode === 0
-  ) {
-    // Concave's codegen can finish emitting _generated/api.d.ts a beat after
-    // the process exits; wait briefly so our source-backed override wins.
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const { functionsDir } = getConvexConfig(sharedDir);
-    writeGeneratedConcaveApiTypes(functionsDir);
+  if (result.exitCode === 0 && authEnvState?.installed) {
+    const refreshedAuthEnvState = resolveAuthEnvState({
+      cwd: process.cwd(),
+      sharedDir,
+    });
+    if (refreshedAuthEnvState.runtimeReady) {
+      try {
+        await syncEnvFn({
+          authSyncMode: 'complete',
+          force: true,
+          sharedDir,
+          silent: true,
+          targetArgs,
+        });
+      } catch {
+        // Let callers that own live bootstrap recover separately.
+      }
+    }
   }
   return {
     exitCode: result.exitCode ?? 0,
@@ -3238,7 +3721,7 @@ export async function runConvexInitIfNeeded(params: {
       }
     )
   );
-  if (params.echoOutput !== false) {
+  if (params.echoOutput !== false || result.exitCode !== 0) {
     writeConvexCommandOutput(result);
   }
   return {
@@ -3275,14 +3758,19 @@ async function runLocalConvexBootstrapForInit(params: {
   execaFn: typeof execa;
   runtimeAdapter: BackendAdapter;
   args: string[];
+  sharedDir: string;
   env?: Record<string, string | undefined>;
 }): Promise<InitBootstrapResult> {
+  const localConvexEnv = getLocalConvexEnvVars(params.sharedDir);
   const bootstrapProcess = params.execaFn(
     params.runtimeAdapter.command,
     [...params.runtimeAdapter.argsPrefix, ...params.args],
     {
       cwd: process.cwd(),
-      env: createBackendCommandEnv(params.env),
+      env: createBackendCommandEnv({
+        ...localConvexEnv,
+        ...params.env,
+      }),
       reject: false,
       stdio: 'pipe',
     }
@@ -3376,11 +3864,13 @@ async function runLocalConvexBootstrapForInit(params: {
 }
 
 async function runInitializationCodegen(params: {
+  allowCodegenBootstrapFallback: boolean;
   config: ReturnType<typeof loadBetterConvexConfig>;
   backend: BetterConvexBackend;
   sharedDir: string;
   debug: boolean;
   generateMetaFn: typeof generateMeta;
+  syncEnvFn: typeof syncEnv;
   execaFn: typeof execa;
   realConvexPath: string;
   realConcavePath?: string;
@@ -3390,6 +3880,7 @@ async function runInitializationCodegen(params: {
 }): Promise<{
   codegen: InitCodegenStatus;
   convexBootstrap: InitConvexBootstrapStatus;
+  localBootstrapUsed: boolean;
 }> {
   const runtimeAdapter = createBackendAdapter({
     backend: params.backend,
@@ -3418,11 +3909,14 @@ async function runInitializationCodegen(params: {
       debug: params.debug,
       generateMetaFn: params.generateMetaFn,
       execaFn: params.execaFn,
+      syncEnvFn: params.syncEnvFn,
+      autoSyncLocalAuthEnv: false,
       realConvexPath: params.realConvexPath,
       realConcavePath: params.realConcavePath,
       additionalConvexArgs: additionalCodegenArgs,
       backend: params.backend,
       backendAdapter: runtimeAdapter,
+      allowLocalBootstrapFallback: false,
     });
     if (codegen.exitCode !== 0) {
       const generatedServerPath = getGeneratedServerStubPath(
@@ -3431,10 +3925,24 @@ async function runInitializationCodegen(params: {
       if (!fs.existsSync(generatedServerPath)) {
         writeGeneratedServerStub(params.functionsDir);
       }
+      if (!params.allowCodegenBootstrapFallback) {
+        return {
+          codegen: 'stubbed',
+          convexBootstrap: initResult.created ? 'created' : 'existing',
+          localBootstrapUsed: false,
+        };
+      }
+      await params.syncEnvFn({
+        authSyncMode: 'prepare',
+        force: true,
+        sharedDir: params.sharedDir,
+        targetArgs: params.targetArgs,
+      });
       const bootstrap = await runLocalConvexBootstrapForInit({
         execaFn: params.execaFn,
         runtimeAdapter,
         args: buildInitCodegenBootstrapArgs(params.targetArgs),
+        sharedDir: params.sharedDir,
       });
       try {
         if (bootstrap.exitCode !== 0) {
@@ -3444,18 +3952,32 @@ async function runInitializationCodegen(params: {
             )
           );
         }
-        await params.generateMetaFn(params.sharedDir, {
-          debug: params.debug,
-          scope: params.config.codegen.scope ?? 'all',
-          trimSegments: resolveCodegenTrimSegments(params.config),
+        await withLocalConvexEnv(params.sharedDir, async () => {
+          await params.generateMetaFn(params.sharedDir, {
+            debug: params.debug,
+            scope: params.config.codegen.scope ?? 'all',
+            trimSegments: resolveCodegenTrimSegments(params.config),
+          });
+        });
+        await params.syncEnvFn({
+          authSyncMode: 'complete',
+          force: true,
+          sharedDir: params.sharedDir,
+          targetArgs: params.targetArgs,
         });
       } finally {
         await bootstrap.stop();
       }
+      return {
+        codegen: 'generated',
+        convexBootstrap: initResult.created ? 'created' : 'existing',
+        localBootstrapUsed: true,
+      };
     }
     return {
       codegen: 'generated',
       convexBootstrap: initResult.created ? 'created' : 'existing',
+      localBootstrapUsed: false,
     };
   }
 
@@ -3465,6 +3987,8 @@ async function runInitializationCodegen(params: {
     debug: params.debug,
     generateMetaFn: params.generateMetaFn,
     execaFn: params.execaFn,
+    syncEnvFn: params.syncEnvFn,
+    autoSyncLocalAuthEnv: false,
     realConvexPath: params.realConvexPath,
     realConcavePath: params.realConcavePath,
     additionalConvexArgs: additionalCodegenArgs,
@@ -3475,6 +3999,7 @@ async function runInitializationCodegen(params: {
     return {
       codegen: 'generated',
       convexBootstrap: 'existing',
+      localBootstrapUsed: false,
     };
   }
 
@@ -3482,6 +4007,7 @@ async function runInitializationCodegen(params: {
     execaFn: params.execaFn,
     runtimeAdapter,
     args: ['dev', '--bun'],
+    sharedDir: params.sharedDir,
   });
   if (anonymousBootstrap.exitCode !== 0) {
     await anonymousBootstrap.stop();
@@ -3496,6 +4022,7 @@ async function runInitializationCodegen(params: {
     return {
       codegen: 'stubbed',
       convexBootstrap: 'missing',
+      localBootstrapUsed: true,
     };
   }
 
@@ -3506,6 +4033,8 @@ async function runInitializationCodegen(params: {
       debug: params.debug,
       generateMetaFn: params.generateMetaFn,
       execaFn: params.execaFn,
+      syncEnvFn: params.syncEnvFn,
+      autoSyncLocalAuthEnv: false,
       realConvexPath: params.realConvexPath,
       realConcavePath: params.realConcavePath,
       additionalConvexArgs: additionalCodegenArgs,
@@ -3516,6 +4045,7 @@ async function runInitializationCodegen(params: {
       return {
         codegen: 'generated',
         convexBootstrap: 'created',
+        localBootstrapUsed: true,
       };
     }
 
@@ -3617,26 +4147,15 @@ export function isConvexDevPreRunConflictFlag(arg: string): boolean {
   );
 }
 
-function stripConvexDevPreRunArgs(args: string[]): string[] {
-  const remainingArgs: string[] = [];
-
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i];
-    if (arg === '--once' || arg === '--until-success') {
-      continue;
-    }
-    if (arg === '--run' || arg === '--run-sh' || arg === '--run-component') {
-      const { nextIndex } = readFlagValue(args, i, arg);
-      i = nextIndex;
-      continue;
-    }
-    if (isConvexDevPreRunConflictFlag(arg)) {
-      continue;
-    }
-    remainingArgs.push(arg);
+function applyConvexDevPreRunArgs(
+  args: string[],
+  preRunFunction?: string
+): string[] {
+  if (!preRunFunction) {
+    return args;
   }
 
-  return remainingArgs;
+  return ['--run', preRunFunction, ...args];
 }
 
 export function extractBackfillCliOptions(args: string[]): {
@@ -4075,6 +4594,15 @@ function parseBackendRunJson<T>(stdout: string): T {
   try {
     return JSON.parse(trimmed) as T;
   } catch {
+    const trailingBlockStart = Math.max(
+      trimmed.lastIndexOf('\n{'),
+      trimmed.lastIndexOf('\n[')
+    );
+    if (trailingBlockStart >= 0) {
+      try {
+        return JSON.parse(trimmed.slice(trailingBlockStart + 1)) as T;
+      } catch {}
+    }
     const lines = trimmed
       .split('\n')
       .map((line) => line.trim())
@@ -4119,75 +4647,6 @@ export async function runBackendFunction(
     echoOutput?: boolean;
   }
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  if (
-    backendAdapter.publicName === 'concave' &&
-    functionName.startsWith('generated/server:')
-  ) {
-    const baseUrl = resolveConcaveRunBaseUrl(targetArgs);
-    const executeUrl = new URL('/api/execute', baseUrl).toString();
-    const authToken =
-      process.env.SYSTEM_TOKEN ??
-      process.env.CONCAVE_SYSTEM_TOKEN ??
-      process.env.CONCAVE_SYSTEM_KEY;
-    const auth = authToken
-      ? { tokenType: 'System' as const, token: authToken }
-      : { tokenType: 'System' as const };
-
-    let stdout = '';
-    let stderr = '';
-    let exitCode = 1;
-
-    try {
-      const response = await fetch(executeUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          path: '_system:systemExecuteFunction',
-          type: 'mutation',
-          format: 'json',
-          args: {
-            functionPath: functionName,
-            args,
-            functionType: 'mutation',
-          },
-          auth,
-        }),
-      });
-
-      if (response.ok) {
-        const payload = (await response.json()) as {
-          result?: unknown;
-          value?: unknown;
-        };
-        const result =
-          payload.result !== undefined ? payload.result : payload.value;
-        stdout = `${JSON.stringify(result ?? null)}\n`;
-        exitCode = 0;
-      } else {
-        stderr = await response.text();
-      }
-    } catch (error) {
-      stderr = error instanceof Error ? error.message : String(error);
-    }
-
-    if (options?.echoOutput !== false) {
-      if (stdout) {
-        process.stdout.write(stdout);
-      }
-      if (stderr) {
-        process.stderr.write(stderr.endsWith('\n') ? stderr : `${stderr}\n`);
-      }
-    }
-
-    return {
-      exitCode,
-      stdout,
-      stderr,
-    };
-  }
-
   const result = await execaFn(
     backendAdapter.command,
     [
@@ -4221,70 +4680,6 @@ export async function runBackendFunction(
     stdout,
     stderr,
   };
-}
-
-function resolveConcaveRunBaseUrl(targetArgs: string[]): string {
-  for (let index = 0; index < targetArgs.length; index += 1) {
-    const arg = targetArgs[index];
-    if (arg === '--url') {
-      const value = targetArgs[index + 1];
-      if (value) {
-        return value;
-      }
-      continue;
-    }
-    if (arg.startsWith('--url=')) {
-      return arg.slice('--url='.length);
-    }
-    if (arg === '--port') {
-      const value = targetArgs[index + 1];
-      if (value) {
-        return `http://127.0.0.1:${value}`;
-      }
-      continue;
-    }
-    if (arg.startsWith('--port=')) {
-      return `http://127.0.0.1:${arg.slice('--port='.length)}`;
-    }
-  }
-
-  return 'http://127.0.0.1:3000';
-}
-
-export async function runConvexDevPreRun(params: {
-  execaFn: typeof execa;
-  backendAdapter: BackendAdapter;
-  functionName: string;
-  args: string[];
-}): Promise<number> {
-  if (params.backendAdapter.publicName !== 'convex') {
-    throw new Error(
-      '`dev.preRun` is only supported for backend convex. Concave dev has no equivalent `--run` flow.'
-    );
-  }
-
-  const result = normalizeConvexCommandResult(
-    await params.execaFn(
-      params.backendAdapter.command,
-      [
-        ...params.backendAdapter.argsPrefix,
-        'run',
-        ...extractBackendRunTargetArgs(
-          params.backendAdapter.publicName,
-          stripConvexDevPreRunArgs(params.args)
-        ),
-        params.functionName,
-      ],
-      {
-        stdio: 'inherit',
-        cwd: process.cwd(),
-        env: createBackendCommandEnv(),
-        reject: false,
-      }
-    )
-  );
-
-  return result.exitCode;
 }
 
 export async function runAggregateBackfillFlow(params: {
@@ -4392,7 +4787,7 @@ export async function runAggregateBackfillFlow(params: {
       return 1;
     }
     logger.warn(message);
-  } else if (scheduled > 0) {
+  } else if (scheduled > 0 && context !== 'dev') {
     logger.info(
       `ℹ️  aggregateBackfill scheduled ${scheduled}/${targets} target indexes`
     );
@@ -4439,7 +4834,7 @@ export async function runAggregateBackfillFlow(params: {
     const total = statuses.length;
     const ready = statuses.filter((entry) => entry.status === 'READY').length;
     const progress = `${ready}/${total}`;
-    if (progress !== lastProgress) {
+    if (context !== 'dev' && progress !== lastProgress) {
       lastProgress = progress;
       if (total > 0) {
         logger.info(`aggregateBackfill progress ${ready}/${total} READY`);
@@ -4756,7 +5151,9 @@ export async function runMigrationFlow(params: {
       direction === 'down'
         ? 'No applied migrations to roll back.'
         : 'No pending migrations to apply.';
-    logger.info(noopMessage);
+    if (context !== 'dev') {
+      logger.info(noopMessage);
+    }
     return 0;
   }
   if (kickoffStatus === 'dry_run') {
@@ -5032,6 +5429,7 @@ export async function run(
       configPath,
       execaFn,
       generateMetaFn,
+      syncEnvFn,
       loadBetterConvexConfigFn,
       ensureConvexGitignoreEntryFn,
       promptAdapter,
@@ -5081,6 +5479,10 @@ export async function run(
     const debug = cliDebug || config.dev.debug;
     assertNoRemovedDevPreRunFlag(config.dev.args);
     const convexDevArgs = [...config.dev.args, ...devCommandArgs];
+    const backendDevArgs = applyConvexDevPreRunArgs(
+      convexDevArgs,
+      config.dev.preRun
+    );
     const preRunFunction = config.dev.preRun;
     if (preRunFunction && backend === 'concave') {
       throw new Error(
@@ -5119,18 +5521,6 @@ export async function run(
       }
     }
 
-    if (preRunFunction) {
-      const exitCode = await runConvexDevPreRun({
-        execaFn,
-        backendAdapter,
-        functionName: preRunFunction,
-        args: convexDevArgs,
-      });
-      if (exitCode !== 0) {
-        return exitCode;
-      }
-    }
-
     // Initial codegen
     await generateMetaFn(sharedDir, {
       debug,
@@ -5143,7 +5533,7 @@ export async function run(
     const watcherPath = isTs
       ? join(__dirname, 'watcher.ts')
       : join(__dirname, 'watcher.mjs');
-    const runtime = isTs ? 'bun' : process.execPath;
+    const runtime = isTs ? 'bun' : 'node';
 
     const watcherProcess = execaFn(runtime, [watcherPath], {
       stdio: 'inherit',
@@ -5161,7 +5551,7 @@ export async function run(
     // Spawn real convex dev
     const convexProcess = execaFn(
       backendAdapter.command,
-      [...backendAdapter.argsPrefix, 'dev', ...convexDevArgs],
+      [...backendAdapter.argsPrefix, 'dev', ...backendDevArgs],
       {
         stdio: 'inherit',
         cwd: process.cwd(),
@@ -5450,6 +5840,10 @@ export async function run(
       lockfile,
       existingTemplatePathMap,
       noCodegen: addArgs.noCodegen,
+      overwrite: addArgs.overwrite,
+      preview: addArgs.dryRun,
+      promptAdapter,
+      yes: addArgs.yes,
       includeEnvBootstrap: initializationPlan ? false : undefined,
       bootstrapFiles: initializationPlan?.files,
       bootstrapOperations: initializationPlan?.operations,
@@ -5682,6 +6076,10 @@ export async function run(
       lockfile,
       existingTemplatePathMap,
       noCodegen: false,
+      overwrite: false,
+      preview: true,
+      promptAdapter,
+      yes: false,
     });
     viewSpinner.stop();
     if (viewArgs.json) {
@@ -5764,6 +6162,10 @@ export async function run(
             lockfile,
             existingTemplatePathMap,
             noCodegen: false,
+            overwrite: false,
+            preview: true,
+            promptAdapter,
+            yes: false,
           })
         : null;
       const driftedFiles = plan
@@ -5867,6 +6269,7 @@ export async function run(
         debug,
         generateMetaFn,
         execaFn,
+        syncEnvFn,
         realConvexPath,
         realConcavePath,
         additionalConvexArgs: convexArgs,
@@ -5879,6 +6282,7 @@ export async function run(
       debug,
       generateMetaFn,
       execaFn,
+      syncEnvFn,
       realConvexPath,
       realConcavePath,
       additionalConvexArgs: convexArgs,
@@ -5887,20 +6291,22 @@ export async function run(
   }
   if (command === 'env') {
     const subcommand = convexArgs[0];
+    const config = getConfig();
+    const sharedDir = cliSharedDir ?? config.paths.shared;
 
     if (subcommand === 'push') {
-      const auth = restArgs.includes('--auth');
       const force = restArgs.includes('--force');
       const rotate = restArgs.includes('--rotate');
       const targetArgs = convexArgs.slice(1).filter((arg) => {
-        return (
-          arg !== '--auth' &&
-          arg !== '--force' &&
-          arg !== '--rotate' &&
-          arg !== '--from-file'
-        );
+        return arg !== '--force' && arg !== '--rotate' && arg !== '--from-file';
       });
-      await syncEnvFn({ auth, force, rotate, targetArgs });
+      await syncEnvFn({
+        authSyncMode: 'auto',
+        force,
+        rotate,
+        sharedDir,
+        targetArgs,
+      });
       return 0;
     }
     if (subcommand === 'pull') {

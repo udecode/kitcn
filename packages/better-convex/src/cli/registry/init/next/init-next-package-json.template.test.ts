@@ -17,7 +17,8 @@ describe('init-next-package-json.template', () => {
         dev: 'next dev --turbopack',
         'convex:dev': 'better-convex dev',
         codegen: 'better-convex codegen',
-        'typecheck:convex': 'tsc --noEmit --project convex/tsconfig.json',
+        'typecheck:convex':
+          'tsc --noEmit --project convex/functions/tsconfig.json',
         typecheck: 'tsc --noEmit && bun run typecheck:convex',
       },
       devDependencies: {
@@ -42,11 +43,30 @@ describe('init-next-package-json.template', () => {
         codegen: 'some-other-generator',
         'convex:codegen': 'better-convex codegen',
         'convex:dev': 'better-convex dev',
-        'typecheck:convex': 'tsc --noEmit --project convex/tsconfig.json',
+        'typecheck:convex':
+          'tsc --noEmit --project convex/functions/tsconfig.json',
         typecheck: 'tsc --noEmit && bun run typecheck:convex',
       },
       devDependencies: {
         '@types/bun': 'latest',
+      },
+    });
+  });
+
+  test('uses the resolved functions dir for Convex typecheck scripts', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+      }),
+      {
+        functionsDirRelative: 'convex',
+      }
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      scripts: {
+        'typecheck:convex': 'tsc --noEmit --project convex/tsconfig.json',
       },
     });
   });

@@ -161,6 +161,10 @@ function normalizeImportPath(value: string): string {
   return value.replace(/\\/g, '/');
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function formatKey(key: string): string {
   return VALID_IDENTIFIER_RE.test(key) ? key : `'${key}'`;
 }
@@ -334,6 +338,56 @@ function getRuntimeApiImportPath(
   const runtimeApiFile = path.join(functionsDir, '_generated', 'api.js');
   const relativePath = path.relative(path.dirname(outputFile), runtimeApiFile);
   return ensureRelativeImportPath(normalizeImportPath(relativePath));
+}
+
+function getRuntimeApiTypesImportPath(
+  outputFile: string,
+  functionsDir: string
+): string {
+  const runtimeApiFile = path.join(functionsDir, '_generated', 'api');
+  const relativePath = path.relative(path.dirname(outputFile), runtimeApiFile);
+  return ensureRelativeImportPath(normalizeImportPath(relativePath));
+}
+
+function moduleUsesOwnGeneratedRuntime(
+  functionsDir: string,
+  moduleName: string
+): boolean {
+  if (moduleName === 'generated/server') {
+    return true;
+  }
+
+  const moduleFilePath = path.join(functionsDir, `${moduleName}.ts`);
+  if (!fs.existsSync(moduleFilePath)) {
+    return false;
+  }
+
+  const source = fs.readFileSync(moduleFilePath, 'utf8');
+  const runtimeImportPath = ensureRelativeImportPath(
+    normalizeImportPath(
+      path.relative(
+        path.dirname(moduleFilePath),
+        path.join(functionsDir, 'generated', `${moduleName}.runtime`)
+      )
+    )
+  );
+  const escapedRuntimeImportPath = escapeRegex(runtimeImportPath);
+  return [
+    new RegExp(`from\\s+['"]${escapedRuntimeImportPath}(?:\\.[jt]s)?['"]`),
+    new RegExp(
+      `require\\(\\s*['"]${escapedRuntimeImportPath}(?:\\.[jt]s)?['"]\\s*\\)`
+    ),
+  ].some((pattern) => pattern.test(source));
+}
+
+function getBracketAccessPath(
+  rootIdentifier: string,
+  pathSegments: readonly string[]
+): string {
+  return pathSegments.reduce(
+    (accessPath, segment) => `${accessPath}[${JSON.stringify(segment)}]`,
+    rootIdentifier
+  );
 }
 
 function getSchemaImportPath(outputFile: string, functionsDir: string): string {
@@ -673,10 +727,6 @@ function emitGeneratedServerFile(
     functionsDir
   );
   const dataModelImportPath = getDataModelImportPath(outputFile, functionsDir);
-  const runtimeApiImportPath = getRuntimeApiImportPath(
-    outputFile,
-    functionsDir
-  );
   const schemaImportPath = getSchemaImportPath(outputFile, functionsDir);
   const triggersImportPath = getTriggersImportPath(outputFile, functionsDir);
   const migrationsManifestImportPath = getModuleImportPath(
@@ -686,7 +736,6 @@ function emitGeneratedServerFile(
   );
   const serverTypesImportLiteral = asSingleQuotedImport(serverTypesImportPath);
   const dataModelImportLiteral = asSingleQuotedImport(dataModelImportPath);
-  const runtimeApiImportLiteral = asSingleQuotedImport(runtimeApiImportPath);
   const schemaImportLiteral = asSingleQuotedImport(schemaImportPath);
   const triggersImportLiteral = asSingleQuotedImport(triggersImportPath);
   const migrationsManifestImportLiteral = asSingleQuotedImport(
@@ -732,9 +781,23 @@ export { httpAction, internalMutation };
   }
 
   const moduleNamespace = getModuleNameFromOutputFile(outputFile, functionsDir);
-  const ormFunctionsAccessor = `getGeneratedValue(internal, ${JSON.stringify(
-    moduleNamespace.split('/').filter(Boolean)
-  )})`;
+  const ormFunctionsDeclaration = `const ormFunctions: OrmFunctions = {
+  scheduledMutationBatch: createGeneratedFunctionReference<"mutation", "internal", unknown>(${JSON.stringify(
+    `${moduleNamespace}:scheduledMutationBatch`
+  )}),
+  scheduledDelete: createGeneratedFunctionReference<"mutation", "internal", unknown>(${JSON.stringify(
+    `${moduleNamespace}:scheduledDelete`
+  )}),
+  aggregateBackfillChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>(${JSON.stringify(
+    `${moduleNamespace}:aggregateBackfillChunk`
+  )}),
+  migrationRunChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>(${JSON.stringify(
+    `${moduleNamespace}:migrationRunChunk`
+  )}),
+  resetChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>(${JSON.stringify(
+    `${moduleNamespace}:resetChunk`
+  )}),
+};`;
   const useRelationsExport = hasRelationsExport && !hasRelationsMetadata;
   const defaultSchemaImport = useRelationsExport ? '' : 'schema';
   const namedSchemaImports = [
@@ -782,10 +845,9 @@ import {
   ${hasManualTriggersExport ? 'OrmSchemaTriggers,' : ''}
 } from 'better-convex/orm';
 import {
-  getGeneratedValue,
+  createGeneratedFunctionReference,
   initCRPC as baseInitCRPC,
 } from 'better-convex/server';
-import { internal } from ${runtimeApiImportLiteral};
 import type { DataModel } from ${dataModelImportLiteral};
 import type {
   ActionCtx as ServerActionCtx,
@@ -798,7 +860,7 @@ ${triggersImportLine}
 ${migrationsImportLine}
 ${attachTriggersHelper}
 
-const ormFunctions = ${ormFunctionsAccessor} as OrmFunctions;
+${ormFunctionsDeclaration}
 ${ormSchemaDeclaration}
 
 export const orm = createOrm({
@@ -871,6 +933,9 @@ function emitGeneratedAuthFile(
   const authDefinitionImportLiteral = asSingleQuotedImport(
     authDefinitionImportPath
   );
+  const authDefinitionFilePath = normalizeImportPath(
+    path.relative(process.cwd(), path.join(functionsDir, 'auth.ts'))
+  );
   const hasAuthFile = authContract.hasAuthFile;
   const hasAuthDefaultExport = authContract.hasAuthDefaultExport;
   const authRuntimeModule = hasAuthDefaultExport
@@ -888,7 +953,7 @@ function emitGeneratedAuthFile(
         'defineAuth as baseDefineAuth',
         'createAuthRuntime',
         'type GenericAuthDefinition',
-        'getGeneratedAuthDisabledReason',
+        'getInvalidAuthDefinitionExportReason',
         'resolveGeneratedAuthDefinition',
       ]
     : [
@@ -939,7 +1004,7 @@ ${
 
 const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>(
   authDefinitionModule,
-  getGeneratedAuthDisabledReason(${JSON.stringify(disabledAuthReasonKind)})
+  getInvalidAuthDefinitionExportReason(${JSON.stringify(authDefinitionFilePath)})
 );
 `
     : ''
@@ -970,7 +1035,10 @@ const authRuntime: ${
   MutationCtx,
   GenericCtx
 > = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({
-  reason: getGeneratedAuthDisabledReason(${JSON.stringify(disabledAuthReasonKind)}),
+  reason: getGeneratedAuthDisabledReason(
+    ${JSON.stringify(disabledAuthReasonKind)},
+    ${JSON.stringify(authDefinitionFilePath)}
+  ),
 })`
   };
 
@@ -1043,6 +1111,13 @@ function emitGeneratedModuleRuntimeFile(
   const { callerExportName, handlerExportName } =
     runtimeExportNames?.get(moduleName) ??
     getModuleRuntimeExportNames(moduleName);
+  const useGeneratedApiTypes = moduleUsesOwnGeneratedRuntime(
+    functionsDir,
+    moduleName
+  );
+  const runtimeApiTypesImportPath = useGeneratedApiTypes
+    ? getRuntimeApiTypesImportPath(outputFile, functionsDir)
+    : null;
   const generatedServerImportPath = getGeneratedServerImportPath(
     outputFile,
     functionsDir
@@ -1053,7 +1128,8 @@ function emitGeneratedModuleRuntimeFile(
     callerEntries,
     outputFile,
     functionsDir,
-    moduleName
+    moduleName,
+    useGeneratedApiTypes
   );
   const callerRegistryBody =
     callerRegistryLines.length > 0
@@ -1065,7 +1141,8 @@ function emitGeneratedModuleRuntimeFile(
         handlerEntries,
         outputFile,
         functionsDir,
-        moduleName
+        moduleName,
+        useGeneratedApiTypes
       )
     : [];
   const handlerRegistryBody =
@@ -1129,7 +1206,15 @@ import {
     hasHandlerRegistry ? '\n  type GeneratedRegistryHandlerForContext,' : ''
   }
 } from 'better-convex/server';
-import type { ActionCtx, MutationCtx, QueryCtx } from '${generatedServerImportPath}';
+${
+  runtimeApiTypesImportPath
+    ? `import type {
+  api as generatedApi,
+  internal as generatedInternal,
+} from '${runtimeApiTypesImportPath}';
+`
+    : ''
+}import type { ActionCtx, MutationCtx, QueryCtx } from '${generatedServerImportPath}';
 import type { OrmTriggerContext } from 'better-convex/orm';
 
 const procedureRegistry = {${callerRegistryBody}} as const;
@@ -1339,11 +1424,14 @@ function emitApiObject(
       fnEntry.moduleName
     );
     const fnMetaLiteral = emitFnMetaLiteral(fnEntry.fnMeta);
+    const functionRef = `createGeneratedFunctionReference<${JSON.stringify(
+      fnEntry.fnType
+    )}, "public", typeof import(${JSON.stringify(moduleImportPath)}).${key}>(${JSON.stringify(
+      getGeneratedFunctionName(fnEntry.moduleName, key)
+    )})`;
 
     lines.push(
-      `${indent}${formatKey(key)}: createApiLeaf<${JSON.stringify(fnEntry.fnType)}, typeof import(${JSON.stringify(moduleImportPath)}).${key}>(convexApi, ${JSON.stringify(
-        [...pathSegments, key]
-      )}, ${fnMetaLiteral}),`
+      `${indent}${formatKey(key)}: createApiLeaf<${JSON.stringify(fnEntry.fnType)}, typeof import(${JSON.stringify(moduleImportPath)}).${key}>(${functionRef}, ${fnMetaLiteral}),`
     );
   }
 
@@ -1363,7 +1451,8 @@ function emitProcedureRegistryEntries(
   entries: ProcedureRegistryEntry[],
   outputFile: string,
   functionsDir: string,
-  moduleName: string
+  moduleName: string,
+  useGeneratedApiTypes: boolean
 ): string[] {
   return entries
     .map((entry) => {
@@ -1376,11 +1465,17 @@ function emitProcedureRegistryEntries(
         functionsDir,
         entry.moduleName
       );
+      const functionRefTypeAccess = useGeneratedApiTypes
+        ? getBracketAccessPath(
+            entry.internal ? 'generatedInternal' : 'generatedApi',
+            entry.exportName === 'default'
+              ? entry.moduleName.split('/')
+              : [...entry.moduleName.split('/'), entry.exportName]
+          )
+        : `import(${JSON.stringify(moduleImportPath)}).${entry.exportName}`;
       const functionRefAccess = `createGeneratedFunctionReference<${JSON.stringify(
         entry.type
-      )}, ${JSON.stringify(entry.internal ? 'internal' : 'public')}, typeof import(${JSON.stringify(
-        moduleImportPath
-      )}).${entry.exportName}>(${JSON.stringify(
+      )}, ${JSON.stringify(entry.internal ? 'internal' : 'public')}, typeof ${functionRefTypeAccess}>(${JSON.stringify(
         getGeneratedFunctionName(entry.moduleName, entry.exportName)
       )})`;
       const resolver = `(require(${JSON.stringify(moduleImportPath)}) as Record<string, unknown>)[${JSON.stringify(entry.exportName)}]`;
@@ -1810,10 +1905,6 @@ export async function generateMeta(
       dedupedRoutes[best.key] = best.route;
     }
 
-    const runtimeApiImportPath = getRuntimeApiImportPath(
-      outputFile,
-      functionsDir
-    );
     const schemaImportPath = getSchemaImportPath(outputFile, functionsDir);
     const httpImportPath = getHttpImportPath(outputFile, functionsDir);
     const schemaFilePath = path.join(functionsDir, 'schema.ts');
@@ -1885,9 +1976,8 @@ export type Insert<T extends TableName> = InferInsertModel<(typeof tables)[T]>;`
 // This file is auto-generated by better-convex
 // Do not edit manually. Run \`better-convex codegen\` to regenerate.
 
-import { createApiLeaf } from "better-convex/server";
+import { createApiLeaf, createGeneratedFunctionReference } from "better-convex/server";
 ${serverTypeImports}
-import { api as convexApi } from ${JSON.stringify(runtimeApiImportPath)};
 ${optionalImports ? `\n${optionalImports}` : ''}
 
 export const api = {${apiObjectBody}} as const;

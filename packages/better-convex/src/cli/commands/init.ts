@@ -1,11 +1,17 @@
-import { relative } from 'node:path';
+import fs from 'node:fs';
+import { relative, resolve } from 'node:path';
 import {
   parseArgs,
   parseInitCommandArgs,
   type RunDeps,
+  resolveConfiguredBackend,
+  resolveInitProjectDir,
   resolveRunDeps,
   runInitCommandFlow,
+  withWorkingDirectory,
 } from '../backend-core.js';
+import type { BetterConvexBackend } from '../config.js';
+import { runLocalConvexBootstrap } from './dev.js';
 
 export {
   detectProjectFramework,
@@ -15,6 +21,12 @@ export {
 import { logger } from '../utils/logger.js';
 
 const HELP_FLAGS = new Set(['--help', '-h']);
+const INIT_LOCAL_BOOTSTRAP_PROMPT =
+  'Run one-shot local Convex bootstrap after init completes?';
+
+type InitDeps = Partial<RunDeps> & {
+  runLocalBootstrap?: typeof runLocalConvexBootstrap;
+};
 
 export const INIT_HELP_TEXT = `Usage: better-convex init [options]
 
@@ -28,6 +40,7 @@ Options:
   --env-file        Forward to \`convex init\`
   --yes, -y         Deterministic non-interactive mode
   --defaults        Use default shadcn init answers
+  --overwrite       Overwrite existing changed files without prompt
   --json            Machine-readable command output`;
 
 export {
@@ -42,7 +55,7 @@ export { BETTER_CONVEX_INSTALL_SPEC_ENV } from '../supported-dependencies.js';
 
 export const handleInitCommand = async (
   argv: string[],
-  deps: Partial<RunDeps> = {}
+  deps: InitDeps = {}
 ) => {
   const parsed = parseArgs(argv);
   if (
@@ -54,27 +67,67 @@ export const handleInitCommand = async (
   }
 
   const initArgs = parseInitCommandArgs(parsed.restArgs);
+  const bootstrapConfigPath = parsed.configPath
+    ? resolve(parsed.configPath)
+    : undefined;
   const {
     execa: execaFn,
     generateMeta: generateMetaFn,
     ensureConvexGitignoreEntry: ensureConvexGitignoreEntryFn,
     loadBetterConvexConfig: loadBetterConvexConfigFn,
     promptAdapter,
+    syncEnv: syncEnvFn,
     realConvex: realConvexPath,
     realConcave: realConcavePath,
   } = resolveRunDeps(deps);
+  const runLocalBootstrapFn = deps.runLocalBootstrap ?? runLocalConvexBootstrap;
+  const shouldRunLocalBootstrap = await resolveInitLocalBootstrap({
+    initArgs,
+    backendArg: parsed.backend,
+    configPath: bootstrapConfigPath,
+    loadBetterConvexConfigFn,
+    promptAdapter,
+  });
+
   const result = await runInitCommandFlow({
     initArgs,
     backendArg: parsed.backend,
     configPath: parsed.configPath,
     execaFn,
     generateMetaFn,
+    syncEnvFn,
     loadBetterConvexConfigFn,
     ensureConvexGitignoreEntryFn,
     promptAdapter,
     realConvexPath,
     realConcavePath,
   });
+
+  if (
+    shouldRunLocalBootstrap &&
+    !result.usedShadcn &&
+    !result.localBootstrapUsed
+  ) {
+    await withWorkingDirectory(result.cwd, async () => {
+      const config = loadBetterConvexConfigFn(bootstrapConfigPath);
+      const exitCode = await runLocalBootstrapFn({
+        config,
+        debug: config.dev.debug,
+        execaFn,
+        generateMetaFn,
+        realConvexPath,
+        realConcavePath,
+        sharedDir: config.paths.shared,
+        syncEnvFn,
+        targetArgs: [],
+      });
+      if (exitCode !== 0) {
+        throw new Error(
+          'Failed to run local Convex bootstrap during `better-convex init`.'
+        );
+      }
+    });
+  }
 
   const cwdRelative =
     relative(process.cwd(), result.cwd).replaceAll('\\', '/') || '.';
@@ -92,6 +145,7 @@ export const handleInitCommand = async (
         template: result.template,
         codegen: result.codegen,
         convexBootstrap: result.convexBootstrap,
+        localBootstrap: shouldRunLocalBootstrap ? 'completed' : 'skipped',
       })
     );
   } else {
@@ -102,3 +156,64 @@ export const handleInitCommand = async (
 
   return 0;
 };
+
+async function resolveInitLocalBootstrap(params: {
+  initArgs: ReturnType<typeof parseInitCommandArgs>;
+  backendArg?: BetterConvexBackend;
+  configPath?: string;
+  loadBetterConvexConfigFn: RunDeps['loadBetterConvexConfig'];
+  promptAdapter: RunDeps['promptAdapter'];
+}): Promise<boolean> {
+  if ((params.initArgs.targetArgs?.length ?? 0) > 0) {
+    return false;
+  }
+
+  const bootstrapBackend = await resolveInitBootstrapBackend({
+    initArgs: params.initArgs,
+    backendArg: params.backendArg,
+    configPath: params.configPath,
+    loadBetterConvexConfigFn: params.loadBetterConvexConfigFn,
+  });
+  if (bootstrapBackend !== 'convex') {
+    return false;
+  }
+
+  if (params.initArgs.json) {
+    return false;
+  }
+
+  if (params.initArgs.yes) {
+    return true;
+  }
+
+  if (!params.promptAdapter.isInteractive()) {
+    return false;
+  }
+
+  return params.promptAdapter.confirm(INIT_LOCAL_BOOTSTRAP_PROMPT, true);
+}
+
+async function resolveInitBootstrapBackend(params: {
+  initArgs: ReturnType<typeof parseInitCommandArgs>;
+  backendArg?: BetterConvexBackend;
+  configPath?: string;
+  loadBetterConvexConfigFn: RunDeps['loadBetterConvexConfig'];
+}): Promise<BetterConvexBackend> {
+  if (params.backendArg) {
+    return params.backendArg;
+  }
+
+  if (params.initArgs.template) {
+    return 'convex';
+  }
+
+  const projectDir = resolveInitProjectDir(params.initArgs);
+  if (!fs.existsSync(projectDir)) {
+    return 'convex';
+  }
+
+  return withWorkingDirectory(projectDir, async () => {
+    const config = params.loadBetterConvexConfigFn(params.configPath);
+    return resolveConfiguredBackend({ config });
+  });
+}

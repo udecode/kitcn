@@ -4,29 +4,27 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "addMember": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["addMember"]), () => (require("../projects") as Record<string, unknown>)["addMember"])],
-  "archive": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["archive"]), () => (require("../projects") as Record<string, unknown>)["archive"])],
-  "create": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["create"]), () => (require("../projects") as Record<string, unknown>)["create"])],
-  "get": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["get"]), () => (require("../projects") as Record<string, unknown>)["get"])],
-  "leave": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["leave"]), () => (require("../projects") as Record<string, unknown>)["leave"])],
-  "list": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["list"]), () => (require("../projects") as Record<string, unknown>)["list"])],
-  "listForDropdown": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["listForDropdown"]), () => (require("../projects") as Record<string, unknown>)["listForDropdown"])],
-  "removeMember": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["removeMember"]), () => (require("../projects") as Record<string, unknown>)["removeMember"])],
-  "restore": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["restore"]), () => (require("../projects") as Record<string, unknown>)["restore"])],
-  "transfer": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["transfer"]), () => (require("../projects") as Record<string, unknown>)["transfer"])],
-  "update": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["projects"]["update"]), () => (require("../projects") as Record<string, unknown>)["update"])],
+  "addMember": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../projects").addMember>("projects:addMember"), () => (require("../projects") as Record<string, unknown>)["addMember"])],
+  "archive": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../projects").archive>("projects:archive"), () => (require("../projects") as Record<string, unknown>)["archive"])],
+  "create": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../projects").create>("projects:create"), () => (require("../projects") as Record<string, unknown>)["create"])],
+  "get": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../projects").get>("projects:get"), () => (require("../projects") as Record<string, unknown>)["get"])],
+  "leave": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../projects").leave>("projects:leave"), () => (require("../projects") as Record<string, unknown>)["leave"])],
+  "list": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../projects").list>("projects:list"), () => (require("../projects") as Record<string, unknown>)["list"])],
+  "listForDropdown": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../projects").listForDropdown>("projects:listForDropdown"), () => (require("../projects") as Record<string, unknown>)["listForDropdown"])],
+  "removeMember": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../projects").removeMember>("projects:removeMember"), () => (require("../projects") as Record<string, unknown>)["removeMember"])],
+  "restore": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../projects").restore>("projects:restore"), () => (require("../projects") as Record<string, unknown>)["restore"])],
+  "transfer": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../projects").transfer>("projects:transfer"), () => (require("../projects") as Record<string, unknown>)["transfer"])],
+  "update": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../projects").update>("projects:update"), () => (require("../projects") as Record<string, unknown>)["update"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

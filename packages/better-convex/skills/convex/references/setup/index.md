@@ -28,11 +28,11 @@ Ask these questions before editing files.
 
 #### Required choices
 
-| Feature         | Options                                                              | Default            |
-| --------------- | -------------------------------------------------------------------- | ------------------ |
-| Bootstrap       | CLI (`better-convex init` / `add`), Docs by section                 | CLI                |
-| React Framework | Next.js App Router, TanStack Start, Other                            | Next.js App Router |
-| Database        | ORM (`ctx.orm`)                                                      | ORM                |
+| Feature         | Options                                             | Default            |
+| --------------- | --------------------------------------------------- | ------------------ |
+| Bootstrap       | CLI (`better-convex init` / `add`), Docs by section | CLI                |
+| React Framework | Next.js App Router, TanStack Start, Other           | Next.js App Router |
+| Database        | ORM (`ctx.orm`)                                     | ORM                |
 
 #### Optional features
 
@@ -81,6 +81,18 @@ Map answers to setup execution in this order:
 
 ### 3.1 Preferred bootstrap path
 
+Quickstart path:
+
+```bash
+mkdir my-app
+cd my-app
+bunx better-convex init -t next --yes
+```
+
+Then start the long-running backend with `bunx better-convex dev`, run the
+framework dev server (`bun dev` for the Next starter), and open `/convex` for
+the scaffolded messages demo.
+
 Use the CLI first:
 
 ```bash
@@ -90,10 +102,10 @@ bunx better-convex init --yes
 # Adopt the current supported app on Concave
 bunx better-convex --backend concave init --yes
 
-# New Next.js app with deterministic shadcn bootstrap + curated minimal scaffold
+# New Next.js app with deterministic shadcn bootstrap + first local Convex bootstrap
 bunx better-convex init -t next --yes
 
-# New Vite app with the React baseline
+# New Vite app with the React baseline + first local Convex bootstrap
 bunx better-convex init -t vite --yes
 
 # Nested app target
@@ -426,7 +438,7 @@ import { createSeedHandler } from "./generated/seed.runtime";
 
 export default privateMutation
   .meta({ dev: true })
-  
+
   .mutation(async ({ ctx }) => {
     const env = getEnv();
     const adminEmails = env.ADMIN;
@@ -512,9 +524,9 @@ export const deletePage = privateMutation
     z.object({
       cursor: z.union([z.string(), z.null()]),
       tableName: z.string(),
-    })
+    }),
   )
-  
+
   .mutation(async ({ ctx, input }) => {
     assertDevOnly();
     const caller = createResetCaller(ctx);
@@ -566,13 +578,12 @@ Recommended scripts:
 ```json
 {
   "scripts": {
-    "preconvex:dev": "convex init",
     "convex:dev": "better-convex dev",
-    "convex:once": "better-convex dev --once --typecheck disable",
+    "verify": "better-convex verify",
     "reset": "better-convex reset --yes --after init",
     "seed": "convex run seed:seed",
-    "env:push": "better-convex env push --auth",
-    "env:push:rotate": "better-convex env push --auth --rotate"
+    "env:push": "better-convex env push",
+    "env:push:rotate": "better-convex env push --rotate"
   }
 }
 ```
@@ -584,13 +595,13 @@ CLI commands:
 
 ```bash
 bunx better-convex dev
-# deterministic one-shot setup/codegen pass for agent simulations:
-bunx better-convex dev --once --typecheck disable
+# deterministic one-shot local runtime proof:
+bunx better-convex verify
 # optional fallback only if dev cannot run and backend is already active:
 bunx better-convex codegen
 bunx better-convex env push
-bunx better-convex env push --auth
-bunx better-convex env push --auth --prod
+bunx better-convex env push --prod
+bunx better-convex env push --rotate
 # deploy with automatic aggregate backfill:
 bunx better-convex deploy --prod
 # aggregate index management:
@@ -600,12 +611,16 @@ bunx better-convex aggregate backfill --prod
 bunx better-convex analyze
 ```
 
+On backend `convex`, `better-convex dev` watches `convex/.env` during a local
+dev session and auto-pushes later edits. Keep `env push` for `--prod`,
+`--rotate`, or explicit repair against an already active deployment.
+
 ### 11.2 Phase A gate: non-auth baseline (required before auth work)
 
 Run these after base setup (Sections 3-5) and before starting Section 6:
 
 ```bash
-bunx better-convex dev --once --typecheck disable
+bunx better-convex verify
 bunx convex run internal.seed.seed
 bunx convex run internal.init.default
 # run project checks after bootstrap smoke:
@@ -626,7 +641,7 @@ Then sanity-check runtime paths (non-auth only):
 Run this after Section 6 and before Sections 7-10:
 
 ```bash
-bunx better-convex dev --once --typecheck disable
+bunx better-convex verify
 bun run typecheck || bunx tsc --noEmit
 bun test
 bun run build
@@ -647,7 +662,8 @@ Then sanity-check auth runtime paths:
 4. `schema.ts` + `relations` + generated `initCRPC` wiring are in place.
 5. `crpc.ts` builders exported and app procedures use `ctx.orm`.
 6. `better-convex dev` runs and generates `_generated` + `api.ts`.
-7. If auth enabled: `auth.config.ts`, `auth.ts`, `http.ts`, env push complete.
+7. If auth enabled: `auth.config.ts`, `auth.ts`, `http.ts`, and env bootstrap
+   are complete.
 8. Client `CRPCProvider` + QueryClient + Convex provider are mounted.
 9. Framework branch is complete (Next.js or TanStack Start).
 10. If using typed envs: `convex/lib/get-env.ts` exists and Convex code reads through `getEnv()`.
@@ -669,30 +685,30 @@ See the [Troubleshooting Reference](#troubleshooting-reference) at the bottom of
 
 Source coverage mapping used to build this runbook:
 
-| Source                                               | Mapped In Setup                  |
-| ---------------------------------------------------- | -------------------------------- |
-| `www/content/docs/cli/registry.mdx`                  | Sections 3, 11                   |
-| `www/content/docs/quickstart.mdx`                    | Sections 3, 4, 5, 12             |
-| `www/content/docs/server/setup.mdx`                  | Section 5.3                      |
-| `www/content/docs/auth/server.mdx`                   | Sections 6.1 - 6.10              |
-| `www/content/docs/auth/client.mdx`                   | Section 7.1                      |
-| `www/content/docs/auth/server.mdx#triggers`          | Section 6.3, 9.2                 |
-| `www/content/docs/react/index.mdx`                   | Sections 7.2 - 7.4               |
-| `www/content/docs/nextjs/index.mdx`                  | Section 8.A                      |
-| `www/content/docs/tanstack-start.mdx`                | Section 8.B                      |
-| `www/content/docs/server/http.mdx`                   | Sections 6.6, 9.6                |
-| `www/content/docs/server/server-side-calls.mdx`      | Section 8.A.1, 8.B.3             |
-| `www/content/docs/plugins/ratelimit.mdx`             | Section 9.4                      |
-| `www/content/docs/orm/queries/aggregates.mdx`        | Section 9.3                      |
-| `www/content/docs/server/scheduling.mdx`             | Section 9.5                      |
-| `www/content/docs/orm/queries/index.mdx`             | Sections 5, 12                   |
-| `www/content/docs/orm/mutations/index.mdx`           | Sections 5, 12                   |
-| `www/content/docs/orm/triggers.mdx`                  | Sections 9.2, 9.3                |
-| `www/content/docs/orm/rls.mdx`                       | Section 9.1                      |
-| `www/content/docs/auth/plugins/admin.mdx`            | Section 10.1                     |
-| `www/content/docs/auth/plugins/organizations.mdx`    | Section 10.2                     |
-| `www/content/docs/auth/plugins/polar.mdx`            | Section 10.3                     |
-| `www/content/docs/cli/backend.mdx`                   | Section 11                       |
+| Source                                            | Mapped In Setup      |
+| ------------------------------------------------- | -------------------- |
+| `www/content/docs/cli/registry.mdx`               | Sections 3, 11       |
+| `www/content/docs/quickstart.mdx`                 | Sections 3, 4, 11, 12 |
+| `www/content/docs/server/setup.mdx`               | Section 5.3          |
+| `www/content/docs/auth/server.mdx`                | Sections 6.1 - 6.10  |
+| `www/content/docs/auth/client.mdx`                | Section 7.1          |
+| `www/content/docs/auth/server.mdx#triggers`       | Section 6.3, 9.2     |
+| `www/content/docs/react/index.mdx`                | Sections 7.2 - 7.4   |
+| `www/content/docs/nextjs/index.mdx`               | Section 8.A          |
+| `www/content/docs/tanstack-start.mdx`             | Section 8.B          |
+| `www/content/docs/server/http.mdx`                | Sections 6.6, 9.6    |
+| `www/content/docs/server/server-side-calls.mdx`   | Section 8.A.1, 8.B.3 |
+| `www/content/docs/plugins/ratelimit.mdx`          | Section 9.4          |
+| `www/content/docs/orm/queries/aggregates.mdx`     | Section 9.3          |
+| `www/content/docs/server/scheduling.mdx`          | Section 9.5          |
+| `www/content/docs/orm/queries/index.mdx`          | Sections 5, 12       |
+| `www/content/docs/orm/mutations/index.mdx`        | Sections 5, 12       |
+| `www/content/docs/orm/triggers.mdx`               | Sections 9.2, 9.3    |
+| `www/content/docs/orm/rls.mdx`                    | Section 9.1          |
+| `www/content/docs/auth/plugins/admin.mdx`         | Section 10.1         |
+| `www/content/docs/auth/plugins/organizations.mdx` | Section 10.2         |
+| `www/content/docs/auth/plugins/polar.mdx`         | Section 10.3         |
+| `www/content/docs/cli/backend.mdx`                | Section 11           |
 
 ### Template Coverage (Recreation Target)
 
@@ -701,14 +717,14 @@ This runbook + references map to the canonical template shape as follows:
 | Example Group                                                                                             | Primary Setup Section           | Additional Reference                     |
 | --------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------- |
 | Core infra (`schema.ts`, `functions/generated/`, `crpc.ts`, `http.ts`)                                    | Sections 5, 6.6, 9.6            | `orm.md`, `http.md`                      |
-| Shared contracts (`shared/api.ts`, `shared/auth-shared.ts`, `shared/polar-shared.ts`)                   | Sections 5.4, 6.3.2, 10.2, 10.3 | `auth-organizations.md`                  |
+| Shared contracts (`shared/api.ts`, `shared/auth-shared.ts`, `shared/polar-shared.ts`)                     | Sections 5.4, 6.3.2, 10.2, 10.3 | `auth-organizations.md`                  |
 | Auth core (`auth.config.ts`, `auth.ts`)                                                                   | Section 6                       | `auth.md`                                |
 | Auth plugins (`admin.ts`, `organization.ts`, `polar*`)                                                    | Section 10                      | `auth-admin.md`, `auth-organizations.md` |
 | Feature modules (`user.ts`, `projects.ts`, `tags.ts`, `todoComments.ts`, `public.ts`, `items/queries.ts`) | Sections 5, 6.3.1, 9            | core `SKILL.md`, `orm.md`                |
 | HTTP routers (`routers/health.ts`, `routers/todos.ts`, `routers/examples.ts`)                             | Section 9.6                     | `http.md`                                |
 | Aggregates + rate limits (`aggregates.ts`, `lib/plugins/ratelimit/plugin.ts`)                             | Sections 9.3, 9.4               | `aggregates.md`, `orm.md`                |
 | Scheduling + internals (`todoInternal.ts`, delayed jobs)                                                  | Sections 9.5, 11.1              | `scheduling.md`                          |
-| Email + Resend (`functions/plugins/email.tsx`, `lib/plugins/resend/*`)                                   | Section 9.7                     | `auth-organizations.md`                  |
+| Email + Resend (`functions/plugins/email.tsx`, `lib/plugins/resend/*`)                                    | Section 9.7                     | `auth-organizations.md`                  |
 | Dev bootstrap (`init.ts`, `seed.ts`, `reset.ts`)                                                          | Section 11.1                    | `testing.md` (for verification)          |
 | Generated outputs (`functions/_generated/*`, `functions/generated/`, `shared/api.ts`)                     | Section 5.5                     | n/a (generated by CLI)                   |
 
@@ -716,28 +732,28 @@ This runbook + references map to the canonical template shape as follows:
 
 | Symptom                                                                               | Likely Cause                                                                                    | Fix                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@convex/api` not found                                                               | `better-convex dev` not run                                                                     | Run `bunx better-convex dev` and regenerate API metadata                                                                                                                                     |
-| `Cannot prompt for input in non-interactive terminals` during bootstrap               | Convex deployment selection still needs a local choice                                          | Export `CONVEX_AGENT_MODE=anonymous`, run `bunx convex init`, or pass `--env-file` / deployment-target args so Convex can resolve the deployment without prompting |
+| `@convex/api` not found                                                               | `better-convex dev` not run                                                                     | Run `bunx better-convex dev` and regenerate API metadata                                                                                                                                    |
+| `Cannot prompt for input in non-interactive terminals` during bootstrap               | Convex deployment selection still needs a local choice                                          | Use `bunx better-convex verify` for local proof, or pass `--env-file` / deployment-target args so Convex can resolve the deployment without prompting                                      |
 | Can't find new local backend files under `~/.convex`                                  | Convex now stores new local deployment state per project                                        | Check `.convex/local/default/` in the current project root; treat `~/.convex/**` as legacy storage                                                                                          |
-| `better-convex env push --auth` fails to set vars                                     | Convex deployment is not initialized                                                            | Run `bunx convex init`, then rerun `bunx better-convex env push --auth`                                                                                                                     |
-| `Failed to analyze auth.js` with `Unexpected token` / `map is not a function` on JWKS | Static `JWKS` value is malformed JSON                                                           | Unset/fix `JWKS`; use `getAuthConfigProvider()` fallback or repush with `bunx better-convex env push --auth`                                                                                |
+| `better-convex env push` fails to set auth vars                                       | Target deployment is not active or not initialized                                              | For local proof, run `bunx better-convex verify`. For remote targets, resolve deployment targeting, then rerun `bunx better-convex env push`                                             |
+| `Failed to analyze auth.js` with `Unexpected token` / `map is not a function` on JWKS | Static `JWKS` value is malformed JSON                                                           | Unset/fix `JWKS`; use `getAuthConfigProvider()` fallback or repush with `bunx better-convex env push`                                                                                       |
 | `Local backend isn't running` during manual `better-convex codegen`                   | Convex local deployment not active                                                              | Prefer `bunx better-convex dev` (it already codegens); use manual `codegen` only as fallback with active backend                                                                            |
 | HTTP calls fail but queries work                                                      | `.site` URL missing or wrong                                                                    | Set `NEXT_PUBLIC_CONVEX_SITE_URL` correctly                                                                                                                                                 |
-| Auth works locally but fails in prod                                                  | JWKS not pushed                                                                                 | Run `bunx better-convex env push --auth --prod`                                                                                                                                             |
+| Auth works locally but fails in prod                                                  | JWKS not pushed                                                                                 | Run `bunx better-convex env push --prod`                                                                                                                                                    |
 | Sign-in fails on `/auth` (loop, no session, or immediate sign-out)                    | Auth route/env/provider wiring mismatch                                                         | Recheck Sections 6.5-6.7 (`authMiddleware`, route registration, env push), verify provider credentials/URLs, then rerun Section 11.3                                                        |
 | `UNAUTHORIZED` on protected procedures                                                | auth middleware not attaching `userId`                                                          | Ensure `getAuth(ctx)` + `getHeaders(ctx)` session lookup is in middleware                                                                                                                   |
-| `ctx.orm` missing in handlers                                                         | Generated `initCRPC` not used                                                                  | Use `initCRPC` from `../functions/generated/server` — ORM context is pre-wired                                                                                                              |
-| `Property 'insert'/'update' does not exist on type 'OrmReader'`                       | Using query context for mutations                                                               | Ensure mutation handlers use `publicMutation` / `protectedMutation` builders                                                                                                                 |
+| `ctx.orm` missing in handlers                                                         | Generated `initCRPC` not used                                                                   | Use `initCRPC` from `../functions/generated/server` — ORM context is pre-wired                                                                                                              |
+| `Property 'insert'/'update' does not exist on type 'OrmReader'`                       | Using query context for mutations                                                               | Ensure mutation handlers use `publicMutation` / `protectedMutation` builders                                                                                                                |
 | `useCRPC must be used within CRPCProvider`                                            | Provider chain not mounted around route tree                                                    | Wrap app with `BetterConvexProvider` and verify `CRPCProvider` is inside QueryClientProvider (Section 7.4 / 8.A.4)                                                                          |
 | Route auth cookies not set                                                            | Missing CORS auth headers                                                                       | Add `Better-Auth-Cookie` allow/expose headers + credentials                                                                                                                                 |
 | TanStack Start auth helper import errors                                              | Using `better-convex/auth/nextjs` in Start app                                                  | Use TanStack Start exception with `@convex-dev/better-auth/*` helpers                                                                                                                       |
-| `Returned promise will never resolve` from internal function                          | Trigger path is recursively querying/updating related rows or stale component wiring still runs | Isolate failing write with logs, disable/move trigger-side sync into explicit mutation helper, rerun `bunx better-convex dev --once --typecheck disable`, then retry bootstrap smoke checks |
-| Better Auth secret mismatch/warnings in setup flows                                   | `BETTER_AUTH_SECRET` manually set inconsistently or low entropy                                 | Generate and push via `bunx better-convex env push --auth`; avoid manual secret setting unless explicitly needed                                                                            |
+| `Returned promise will never resolve` from internal function                          | Trigger path is recursively querying/updating related rows or stale component wiring still runs | Isolate failing write with logs, disable/move trigger-side sync into explicit mutation helper, rerun `bunx better-convex verify`, then retry the runtime proof                            |
+| Better Auth secret mismatch/warnings in setup flows                                   | `BETTER_AUTH_SECRET` manually set inconsistently or low entropy                                 | Let `bunx better-convex dev` manage local bootstrap, or regenerate/push via `bunx better-convex env push` for active non-local targets                                                   |
 | `Invalid orderBy value. Use a column or asc()/desc()`                                 | Wrong `orderBy` shape (`[{ field, direction }]`)                                                | Use object form only, e.g. `orderBy: { updatedAt: "desc" }`                                                                                                                                 |
 | `Invalid argument id for db.get` while testing `NOT_FOUND`                            | Fabricated Convex document ID                                                                   | Use real inserted IDs or non-ID lookup keys (slug/name/email) for not-found tests                                                                                                           |
 | Trigger side effects too slow                                                         | Heavy sync work inside trigger                                                                  | Move heavy work to scheduled actions via `ctx.scheduler`                                                                                                                                    |
-| Rate limiter throws missing-table/setup guidance                                      | local ratelimit scaffold missing or not registered                                              | Run `bunx better-convex add ratelimit`, then ensure `convex/functions/schema.ts` imports `../lib/plugins/ratelimit/schema`                                                                |
-| fallback `better-convex codegen` fails after disabling aggregates                     | Aggregate helper/import references still exist                                                  | Remove `app.use(aggregate...)`, `defineTriggers` aggregate handlers, and aggregate helper modules in the same change; prefer rerunning `better-convex dev --once`                           |
+| Rate limiter throws missing-table/setup guidance                                      | local ratelimit scaffold missing or not registered                                              | Run `bunx better-convex add ratelimit`, then ensure `convex/functions/schema.ts` imports `../lib/plugins/ratelimit/schema`                                                                  |
+| fallback `better-convex codegen` fails after disabling aggregates                     | Aggregate helper/import references still exist                                                  | Remove `app.use(aggregate...)`, `defineTriggers` aggregate handlers, and aggregate helper modules in the same change; prefer rerunning `better-convex verify`                              |
 | Aggregate counts drift                                                                | trigger not registered in `defineTriggers`                                                      | Register `aggregate.trigger` in `defineTriggers` `change:` handler                                                                                                                          |
-| Invite emails never send                                                              | Resend schema scaffold missing or not registered                                                | Run `bunx better-convex add resend`, ensure `convex/functions/schema.ts` imports `../lib/plugins/resend/schema`, and wire `internal.plugins.email.sendTemplatedEmail`                    |
+| Invite emails never send                                                              | Resend schema scaffold missing or not registered                                                | Run `bunx better-convex add resend`, ensure `convex/functions/schema.ts` imports `../lib/plugins/resend/schema`, and wire `internal.plugins.email.sendTemplatedEmail`                       |
 | Dev reset/seed commands do nothing                                                    | `init.ts`/`seed.ts`/`reset.ts` missing or not wired                                             | Add dev bootstrap functions and scripts from Section 11.1                                                                                                                                   |

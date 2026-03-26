@@ -4,22 +4,20 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "cancel": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["migrationDemo"]["cancel"]), () => (require("../migrationDemo") as Record<string, unknown>)["cancel"])],
-  "getStatus": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["migrationDemo"]["getStatus"]), () => (require("../migrationDemo") as Record<string, unknown>)["getStatus"])],
-  "runDown": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["migrationDemo"]["runDown"]), () => (require("../migrationDemo") as Record<string, unknown>)["runDown"])],
-  "runUp": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["migrationDemo"]["runUp"]), () => (require("../migrationDemo") as Record<string, unknown>)["runUp"])],
+  "cancel": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../migrationDemo").cancel>("migrationDemo:cancel"), () => (require("../migrationDemo") as Record<string, unknown>)["cancel"])],
+  "getStatus": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../migrationDemo").getStatus>("migrationDemo:getStatus"), () => (require("../migrationDemo") as Record<string, unknown>)["getStatus"])],
+  "runDown": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../migrationDemo").runDown>("migrationDemo:runDown"), () => (require("../migrationDemo") as Record<string, unknown>)["runDown"])],
+  "runUp": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../migrationDemo").runUp>("migrationDemo:runUp"), () => (require("../migrationDemo") as Record<string, unknown>)["runUp"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

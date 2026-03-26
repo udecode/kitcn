@@ -19,6 +19,7 @@ Use this table when you want the blunt version:
 | Start a new Vite app | `better-convex init -t vite --yes` |
 | Adopt the current supported app | `better-convex init --yes` |
 | Add a capability | `better-convex add <plugin>` |
+| Verify local runtime | `better-convex verify` |
 | Preview a plugin plan | `better-convex view <plugin>` |
 | Inspect installed state | `better-convex info` |
 | Open docs from the CLI | `better-convex docs <topic...>` |
@@ -64,6 +65,10 @@ For a fresh Vite app, `init -t vite` keeps the flow smaller. It writes the
 React client core, the backend baseline, and the shared env/codegen wiring.
 That means provider and cRPC setup are ready without pretending Vite is a Next
 app.
+
+On backend `convex`, `init --yes` finishes the first local Convex bootstrap in
+the same command. Remote deployment-targeting flags stay `convex init` flags;
+they do not trigger the local bootstrap wrapper.
 
 ### Adopt the current app in place
 
@@ -127,6 +132,7 @@ Once the baseline is in place, use `add` for feature layers.
 
 ```bash showLineNumbers
 npx better-convex add auth --yes
+npx better-convex add auth --only schema --yes
 npx better-convex add ratelimit --yes
 npx better-convex add resend --yes
 ```
@@ -165,16 +171,20 @@ The default path is Better Convex-first:
 ```bash showLineNumbers
 npx better-convex init -t next --yes
 npx better-convex add auth --yes
+npx better-convex add auth --only schema --yes
 ```
 
 This keeps the Better Convex auth stack, including the richer Next.js auth
 surface.
 
+Use the full `add auth` command for the first install. After changing plugins
+or auth fields in `<functionsDir>/auth.ts`, use `add auth --only schema --yes`
+when you only want the managed auth schema blocks and `plugins.lock.json`
+refreshed.
+
 The raw Convex path stays minimal:
 
 ```bash showLineNumbers
-npx better-convex init --yes
-npx convex init
 npx better-convex add auth --preset convex --yes
 ```
 
@@ -185,6 +195,9 @@ patches the supported frontend shell in place, but it stays conservative:
   stack
 - React/Vite gets provider and auth client wiring, not invented routes
 - no fake page generation outside the supported shell boundary
+- this path assumes the raw Convex app is already initialized
+- `--only schema` does not apply; re-run the full preset command when that auth
+  schema changes
 
 ### Options
 
@@ -195,6 +208,7 @@ patches the supported frontend shell in place, but it stays conservative:
 | `--dry-run` | Show the full install plan without writing files |
 | `--diff [path]` | Show unified diffs for planned file changes |
 | `--view [path]` | Show planned file contents |
+| `--only schema` | Refresh only the managed auth schema scope |
 | `--overwrite` | Overwrite existing changed files without prompt |
 | `--no-codegen` | Skip automatic codegen after add |
 | `--preset <name>` | Plugin preset override |

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 import {
   applyDependencyInstallPlan,
@@ -42,6 +42,13 @@ import {
   getPluginLockfilePath,
   readPluginLockfile,
 } from '../registry/state.js';
+import type {
+  PluginApplyScope,
+  PluginInstallPlan,
+  PluginInstallPlanOperation,
+  ResolvedScaffoldRoots,
+  ScaffoldTemplate,
+} from '../types.js';
 import { serializeDryRunPlan } from '../utils/dry-run.js';
 import {
   formatPlanDiff,
@@ -50,11 +57,21 @@ import {
 } from '../utils/dry-run-formatter.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/spinner.js';
+import { runLocalConvexBootstrap } from './dev.js';
 
 const HELP_FLAGS = new Set(['--help', '-h']);
 const RAW_CONVEX_AUTH_PRESET = 'convex';
+const AUTH_SCHEMA_ONLY_SCOPE = 'schema' as const satisfies PluginApplyScope;
 const RAW_CONVEX_AUTH_DEPLOYMENT_ERROR =
   'Raw Convex auth adoption requires an initialized Convex deployment. Run `convex init` first, then re-run `better-convex add auth --preset convex`.';
+const AUTH_SCHEMA_ONLY_MISSING_ERROR =
+  'Schema-only auth reconcile requires the default Better Convex auth scaffold to already exist. If auth is not scaffolded yet, run `better-convex add auth --yes` once.';
+const AUTH_SCHEMA_ONLY_RAW_CONVEX_ERROR =
+  'Schema-only auth reconcile is only supported for the default Better Convex auth scaffold. Re-run `better-convex add auth --preset convex --yes` for raw Convex auth.';
+
+type AddDeps = Partial<RunDeps> & {
+  runLocalBootstrap?: typeof runLocalConvexBootstrap;
+};
 
 export const ADD_HELP_TEXT = `Usage: better-convex add [plugin] [options]
 
@@ -64,6 +81,7 @@ Options:
   --dry-run         Show planned operations without writing files
   --diff [path]     Show unified diffs for planned file changes
   --view [path]     Show planned file contents
+  --only schema     Apply only the plugin's managed schema scope
   --overwrite       Overwrite existing changed files without prompt
   --no-codegen      Skip automatic codegen after add
   --preset, -p      Plugin preset override`;
@@ -86,6 +104,7 @@ export const parseAddCommandArgs = (args: string[]) => {
   let dryRun = false;
   let overwrite = false;
   let noCodegen = false;
+  let only: PluginApplyScope | undefined;
   let preset: string | undefined;
   let diff: string | true | undefined;
   let view: string | true | undefined;
@@ -142,6 +161,27 @@ export const parseAddCommandArgs = (args: string[]) => {
       noCodegen = true;
       continue;
     }
+    if (arg === '--only') {
+      const value = args[index + 1];
+      if (value !== AUTH_SCHEMA_ONLY_SCOPE) {
+        throw new Error(
+          'Missing or invalid value for --only. Expected: schema.'
+        );
+      }
+      only = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--only=')) {
+      const value = arg.slice('--only='.length);
+      if (value !== AUTH_SCHEMA_ONLY_SCOPE) {
+        throw new Error(
+          'Missing or invalid value for --only. Expected: schema.'
+        );
+      }
+      only = value;
+      continue;
+    }
     if (arg === '--preset' || arg === '-p') {
       const value = args[index + 1];
       if (!value) {
@@ -169,6 +209,7 @@ export const parseAddCommandArgs = (args: string[]) => {
     dryRun: dryRun || Boolean(diff) || Boolean(view),
     overwrite,
     noCodegen,
+    only,
     preset,
     diff,
     view,
@@ -177,6 +218,104 @@ export const parseAddCommandArgs = (args: string[]) => {
 
 const isRawConvexAuthPreset = (plugin: string, preset: string) =>
   plugin === 'auth' && preset === RAW_CONVEX_AUTH_PRESET;
+
+const hasRawConvexAuthLockfileFiles = (
+  files: Record<string, string> | undefined
+) =>
+  Boolean(
+    files &&
+      (files['auth-config-convex'] ||
+        files['auth-runtime-convex'] ||
+        files['auth-schema-convex'])
+  );
+
+const hasRawConvexAuthProjectFiles = () => {
+  const rawConvexDir = resolve(process.cwd(), 'convex');
+  const rawConvexLockfile = readPluginLockfile(
+    resolve(rawConvexDir, 'plugins.lock.json')
+  );
+
+  return (
+    existsSync(resolve(rawConvexDir, 'authSchema.ts')) ||
+    existsSync(resolve(rawConvexDir, 'auth.ts')) ||
+    hasRawConvexAuthLockfileFiles(rawConvexLockfile.plugins.auth?.files)
+  );
+};
+
+const resolveScaffoldTemplateFilePath = (
+  template: ScaffoldTemplate,
+  roots: ResolvedScaffoldRoots
+) => {
+  let rootDir: string | null;
+  if (template.target === 'functions') {
+    rootDir = roots.functionsRootDir;
+  } else if (template.target === 'lib') {
+    rootDir = roots.libRootDir;
+  } else if (template.target === 'app') {
+    rootDir = roots.appRootDir;
+  } else {
+    rootDir = roots.clientLibRootDir;
+  }
+
+  if (!rootDir) {
+    return null;
+  }
+
+  return resolve(process.cwd(), join(rootDir, template.path));
+};
+
+const hasExistingManagedAuthScaffoldFiles = ({
+  roots,
+  templates,
+}: {
+  roots: ResolvedScaffoldRoots;
+  templates: readonly ScaffoldTemplate[];
+}) =>
+  templates.every((template) => {
+    const filePath = resolveScaffoldTemplateFilePath(template, roots);
+    return Boolean(filePath && existsSync(filePath));
+  });
+
+const filterPluginInstallPlanForAddScope = ({
+  plan,
+  selectedPlugin,
+  only,
+  lockfilePath,
+}: {
+  plan: PluginInstallPlan;
+  selectedPlugin: string;
+  only: PluginApplyScope | undefined;
+  lockfilePath: string;
+}): PluginInstallPlan => {
+  if (!(selectedPlugin === 'auth' && only === AUTH_SCHEMA_ONLY_SCOPE)) {
+    return plan;
+  }
+
+  const operations: PluginInstallPlanOperation[] = plan.operations.filter(
+    (operation) =>
+      operation.kind === 'codegen' || operation.kind === 'post_add_hook'
+  );
+
+  return {
+    ...plan,
+    applyScope: only,
+    files: plan.files.filter(
+      (file) =>
+        file.kind === 'schema' ||
+        (file.kind === 'lockfile' && file.path === lockfilePath)
+    ),
+    operations,
+    dependency: {
+      ...plan.dependency,
+      installed: false,
+      skipped: true,
+      reason: 'scoped_apply',
+    },
+    dependencyHints: [],
+    envReminders: [],
+    nextSteps: [],
+  };
+};
 
 const readProjectLocalEnv = () => {
   const envLocalPath = resolve(process.cwd(), '.env.local');
@@ -201,10 +340,7 @@ const assertRawConvexAuthDeploymentReady = () => {
   }
 };
 
-export const handleAddCommand = async (
-  argv: string[],
-  deps: Partial<RunDeps> = {}
-) => {
+export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
   const parsed = parseArgs(argv);
   if (
     HELP_FLAGS.has(argv[0] ?? '') ||
@@ -225,6 +361,7 @@ export const handleAddCommand = async (
     realConvex: realConvexPath,
     realConcave: realConcavePath,
   } = resolveRunDeps(deps);
+  const runLocalBootstrapFn = deps.runLocalBootstrap ?? runLocalConvexBootstrap;
   const dryRunSpinner = createSpinner('Resolving plugin install plan...', {
     silent: addArgs.json || !addArgs.dryRun,
   });
@@ -243,6 +380,16 @@ export const handleAddCommand = async (
 
   if (!selectedPlugin) {
     throw new Error('Missing plugin name. Usage: better-convex add [plugin].');
+  }
+  if (addArgs.only === AUTH_SCHEMA_ONLY_SCOPE && selectedPlugin !== 'auth') {
+    throw new Error('`--only schema` is only supported for plugin "auth".');
+  }
+  if (
+    selectedPlugin === 'auth' &&
+    addArgs.only === AUTH_SCHEMA_ONLY_SCOPE &&
+    hasRawConvexAuthProjectFiles()
+  ) {
+    throw new Error(AUTH_SCHEMA_ONLY_RAW_CONVEX_ERROR);
   }
 
   dryRunSpinner.start();
@@ -274,6 +421,10 @@ export const handleAddCommand = async (
   const effectiveFunctionsDir =
     initializationPlan?.functionsDir ??
     getConvexConfigFn(effectiveSharedDir).functionsDir;
+  const effectiveBackend = resolveConfiguredBackend({
+    backendArg: parsed.backend,
+    config: effectiveConfig,
+  });
   const allTemplates = collectPluginScaffoldTemplates(pluginDescriptor);
   const presetTemplates = resolvePresetScaffoldTemplates(
     pluginDescriptor,
@@ -320,26 +471,60 @@ export const handleAddCommand = async (
     selectedTemplateIds,
     'add'
   );
-  const plan = await buildPluginInstallPlan({
-    descriptor: pluginDescriptor,
+  if (selectedPlugin === 'auth' && addArgs.only === AUTH_SCHEMA_ONLY_SCOPE) {
+    const authLockEntry = lockfile.plugins.auth;
+    if (
+      rawConvexAuthPreset ||
+      hasRawConvexAuthLockfileFiles(authLockEntry?.files) ||
+      existsSync(resolve(effectiveFunctionsDir, 'authSchema.ts'))
+    ) {
+      throw new Error(AUTH_SCHEMA_ONLY_RAW_CONVEX_ERROR);
+    }
+
+    if (
+      !authLockEntry?.schema &&
+      !hasExistingManagedAuthScaffoldFiles({
+        roots: scaffoldRoots,
+        templates: selectedTemplates,
+      })
+    ) {
+      throw new Error(AUTH_SCHEMA_ONLY_MISSING_ERROR);
+    }
+  }
+  const plan = filterPluginInstallPlanForAddScope({
+    plan: await buildPluginInstallPlan({
+      applyScope: addArgs.only,
+      descriptor: pluginDescriptor,
+      selectedPlugin,
+      preset: resolvedPreset,
+      selectionSource,
+      presetTemplateIds,
+      selectedTemplateIds,
+      selectedTemplates,
+      config: effectiveConfig,
+      configPathArg: parsed.configPath,
+      functionsDir: effectiveFunctionsDir,
+      lockfile,
+      existingTemplatePathMap,
+      noCodegen: addArgs.noCodegen,
+      overwrite: addArgs.overwrite,
+      preview: addArgs.dryRun,
+      promptAdapter,
+      yes: addArgs.yes,
+      includeEnvBootstrap:
+        initializationPlan || shouldSkipInitializationBootstrap
+          ? false
+          : undefined,
+      bootstrapFiles: initializationPlan?.files,
+      bootstrapOperations: initializationPlan?.operations,
+      liveBootstrapTarget: effectiveBackend === 'convex' ? 'local' : undefined,
+    }),
     selectedPlugin,
-    preset: resolvedPreset,
-    selectionSource,
-    presetTemplateIds,
-    selectedTemplateIds,
-    selectedTemplates,
-    config: effectiveConfig,
-    configPathArg: parsed.configPath,
-    functionsDir: effectiveFunctionsDir,
-    lockfile,
-    existingTemplatePathMap,
-    noCodegen: addArgs.noCodegen,
-    includeEnvBootstrap:
-      initializationPlan || shouldSkipInitializationBootstrap
-        ? false
-        : undefined,
-    bootstrapFiles: initializationPlan?.files,
-    bootstrapOperations: initializationPlan?.operations,
+    only: addArgs.only,
+    lockfilePath: relative(
+      process.cwd(),
+      getPluginLockfilePath(effectiveFunctionsDir)
+    ).replaceAll('\\', '/'),
   });
   dryRunSpinner.stop();
 
@@ -476,6 +661,7 @@ export const handleAddCommand = async (
       debug: parsed.debug || effectiveConfig.codegen.debug,
       generateMetaFn,
       execaFn,
+      syncEnvFn,
       realConvexPath,
       realConcavePath,
       backend: resolveConfiguredBackend({
@@ -487,10 +673,36 @@ export const handleAddCommand = async (
       return codegenExitCode;
     }
 
-    if (rawConvexAuthPreset) {
-      await syncEnvFn({
-        auth: true,
-      });
+    const liveBootstrapOperation = plan.operations.find(
+      (operation) =>
+        operation.kind === 'live_bootstrap' && operation.status === 'pending'
+    );
+    if (liveBootstrapOperation) {
+      try {
+        await syncEnvFn({
+          authSyncMode: 'auto',
+          force: true,
+          sharedDir: effectiveSharedDir,
+          targetArgs: [],
+        });
+      } catch {
+        const bootstrapExitCode = await runLocalBootstrapFn({
+          authSyncMode: 'auto',
+          config: effectiveConfig,
+          debug: parsed.debug || effectiveConfig.dev.debug,
+          execaFn,
+          generateMetaFn,
+          realConvexPath,
+          realConcavePath,
+          sharedDir: effectiveSharedDir,
+          skipGenerateMeta: true,
+          syncEnvFn,
+          targetArgs: [],
+        });
+        if (bootstrapExitCode !== 0) {
+          return bootstrapExitCode;
+        }
+      }
     }
   }
 

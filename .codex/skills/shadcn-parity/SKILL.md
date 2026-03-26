@@ -50,6 +50,7 @@ Better Convex-owned files stay Better Convex-owned:
 - `convex/*`
 - `concave.json`
 - package.json baseline patches
+- `<functionsDir>/tsconfig.json`
 - `tsconfig.json` alias patch for `@convex/*`
 
 The rule is simple:
@@ -63,6 +64,13 @@ For the current Next scaffold, the acceptable shell patches are narrow:
 - patch `layout.tsx` to mount `Providers`
 - patch `tsconfig.json` to add `@convex/*`
 - patch `components.json` only when `tailwind.css` must follow `src/` vs root
+
+For `better-convex init`, overwrite behavior must match that ownership split:
+
+- shell seam patches apply directly
+- Better Convex-owned replacement files prompt per file in interactive mode
+- `--yes` skips conflicting owned replacements
+- `--overwrite` is the only bulk replacement hammer
 
 If you find yourself authoring a full replacement for a shadcn-owned file,
 you are probably doing it wrong.
@@ -96,7 +104,7 @@ abstraction:
 - `convex/functions/http.ts`
 - `convex/lib/crpc.ts`
 - `convex/lib/get-env.ts`
-- `convex/tsconfig.json`
+- `<functionsDir>/tsconfig.json`
 - root `tsconfig.json` patch
 - `.gitignore` entries for `.convex/` and `.concave/`
 - `components/providers.tsx`

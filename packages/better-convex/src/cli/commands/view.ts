@@ -177,6 +177,10 @@ export const handleViewCommand = async (
     lockfile,
     existingTemplatePathMap,
     noCodegen: false,
+    overwrite: false,
+    preview: true,
+    promptAdapter,
+    yes: false,
   });
   viewSpinner.stop();
 

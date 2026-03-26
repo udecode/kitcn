@@ -4,22 +4,20 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "clearPolymorphic": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["ormDemo"]["clearPolymorphic"]), () => (require("../ormDemo") as Record<string, unknown>)["clearPolymorphic"])],
-  "getSnapshot": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["ormDemo"]["getSnapshot"]), () => (require("../ormDemo") as Record<string, unknown>)["getSnapshot"])],
-  "runCoverage": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["ormDemo"]["runCoverage"]), () => (require("../ormDemo") as Record<string, unknown>)["runCoverage"])],
-  "seedPolymorphic": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["ormDemo"]["seedPolymorphic"]), () => (require("../ormDemo") as Record<string, unknown>)["seedPolymorphic"])],
+  "clearPolymorphic": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../ormDemo").clearPolymorphic>("ormDemo:clearPolymorphic"), () => (require("../ormDemo") as Record<string, unknown>)["clearPolymorphic"])],
+  "getSnapshot": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../ormDemo").getSnapshot>("ormDemo:getSnapshot"), () => (require("../ormDemo") as Record<string, unknown>)["getSnapshot"])],
+  "runCoverage": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../ormDemo").runCoverage>("ormDemo:runCoverage"), () => (require("../ormDemo") as Record<string, unknown>)["runCoverage"])],
+  "seedPolymorphic": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../ormDemo").seedPolymorphic>("ormDemo:seedPolymorphic"), () => (require("../ormDemo") as Record<string, unknown>)["seedPolymorphic"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

@@ -4,40 +4,42 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
+import type {
+  api as generatedApi,
+  internal as generatedInternal,
+} from '../_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "acceptInvitation": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["acceptInvitation"]), () => (require("../organization") as Record<string, unknown>)["acceptInvitation"])],
-  "addMember": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["addMember"]), () => (require("../organization") as Record<string, unknown>)["addMember"])],
-  "cancelInvitation": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["cancelInvitation"]), () => (require("../organization") as Record<string, unknown>)["cancelInvitation"])],
-  "checkSlug": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["checkSlug"]), () => (require("../organization") as Record<string, unknown>)["checkSlug"])],
-  "createOrganization": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["createOrganization"]), () => (require("../organization") as Record<string, unknown>)["createOrganization"])],
-  "createPersonalOrganization": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["organization"]["createPersonalOrganization"]), () => (require("../organization") as Record<string, unknown>)["createPersonalOrganization"])],
-  "deleteOrganization": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["deleteOrganization"]), () => (require("../organization") as Record<string, unknown>)["deleteOrganization"])],
-  "getActiveMember": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["getActiveMember"]), () => (require("../organization") as Record<string, unknown>)["getActiveMember"])],
-  "getOrganization": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["getOrganization"]), () => (require("../organization") as Record<string, unknown>)["getOrganization"])],
-  "getOrganizationOverview": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["getOrganizationOverview"]), () => (require("../organization") as Record<string, unknown>)["getOrganizationOverview"])],
-  "inviteMember": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["inviteMember"]), () => (require("../organization") as Record<string, unknown>)["inviteMember"])],
-  "leaveOrganization": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["leaveOrganization"]), () => (require("../organization") as Record<string, unknown>)["leaveOrganization"])],
-  "listMembers": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["listMembers"]), () => (require("../organization") as Record<string, unknown>)["listMembers"])],
-  "listOrganizations": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["listOrganizations"]), () => (require("../organization") as Record<string, unknown>)["listOrganizations"])],
-  "listPendingInvitations": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["listPendingInvitations"]), () => (require("../organization") as Record<string, unknown>)["listPendingInvitations"])],
-  "listUserInvitations": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["listUserInvitations"]), () => (require("../organization") as Record<string, unknown>)["listUserInvitations"])],
-  "listUserOrganizations": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["listUserOrganizations"]), () => (require("../organization") as Record<string, unknown>)["listUserOrganizations"])],
-  "rejectInvitation": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["rejectInvitation"]), () => (require("../organization") as Record<string, unknown>)["rejectInvitation"])],
-  "removeMember": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["removeMember"]), () => (require("../organization") as Record<string, unknown>)["removeMember"])],
-  "setActiveOrganization": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["setActiveOrganization"]), () => (require("../organization") as Record<string, unknown>)["setActiveOrganization"])],
-  "updateMemberRole": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["updateMemberRole"]), () => (require("../organization") as Record<string, unknown>)["updateMemberRole"])],
-  "updateOrganization": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["organization"]["updateOrganization"]), () => (require("../organization") as Record<string, unknown>)["updateOrganization"])],
+  "acceptInvitation": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["acceptInvitation"]>("organization:acceptInvitation"), () => (require("../organization") as Record<string, unknown>)["acceptInvitation"])],
+  "addMember": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["addMember"]>("organization:addMember"), () => (require("../organization") as Record<string, unknown>)["addMember"])],
+  "cancelInvitation": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["cancelInvitation"]>("organization:cancelInvitation"), () => (require("../organization") as Record<string, unknown>)["cancelInvitation"])],
+  "checkSlug": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["checkSlug"]>("organization:checkSlug"), () => (require("../organization") as Record<string, unknown>)["checkSlug"])],
+  "createOrganization": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["createOrganization"]>("organization:createOrganization"), () => (require("../organization") as Record<string, unknown>)["createOrganization"])],
+  "createPersonalOrganization": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["organization"]["createPersonalOrganization"]>("organization:createPersonalOrganization"), () => (require("../organization") as Record<string, unknown>)["createPersonalOrganization"])],
+  "deleteOrganization": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["deleteOrganization"]>("organization:deleteOrganization"), () => (require("../organization") as Record<string, unknown>)["deleteOrganization"])],
+  "getActiveMember": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["getActiveMember"]>("organization:getActiveMember"), () => (require("../organization") as Record<string, unknown>)["getActiveMember"])],
+  "getOrganization": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["getOrganization"]>("organization:getOrganization"), () => (require("../organization") as Record<string, unknown>)["getOrganization"])],
+  "getOrganizationOverview": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["getOrganizationOverview"]>("organization:getOrganizationOverview"), () => (require("../organization") as Record<string, unknown>)["getOrganizationOverview"])],
+  "inviteMember": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["inviteMember"]>("organization:inviteMember"), () => (require("../organization") as Record<string, unknown>)["inviteMember"])],
+  "leaveOrganization": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["leaveOrganization"]>("organization:leaveOrganization"), () => (require("../organization") as Record<string, unknown>)["leaveOrganization"])],
+  "listMembers": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["listMembers"]>("organization:listMembers"), () => (require("../organization") as Record<string, unknown>)["listMembers"])],
+  "listOrganizations": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["listOrganizations"]>("organization:listOrganizations"), () => (require("../organization") as Record<string, unknown>)["listOrganizations"])],
+  "listPendingInvitations": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["listPendingInvitations"]>("organization:listPendingInvitations"), () => (require("../organization") as Record<string, unknown>)["listPendingInvitations"])],
+  "listUserInvitations": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["listUserInvitations"]>("organization:listUserInvitations"), () => (require("../organization") as Record<string, unknown>)["listUserInvitations"])],
+  "listUserOrganizations": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof generatedApi["organization"]["listUserOrganizations"]>("organization:listUserOrganizations"), () => (require("../organization") as Record<string, unknown>)["listUserOrganizations"])],
+  "rejectInvitation": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["rejectInvitation"]>("organization:rejectInvitation"), () => (require("../organization") as Record<string, unknown>)["rejectInvitation"])],
+  "removeMember": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["removeMember"]>("organization:removeMember"), () => (require("../organization") as Record<string, unknown>)["removeMember"])],
+  "setActiveOrganization": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["setActiveOrganization"]>("organization:setActiveOrganization"), () => (require("../organization") as Record<string, unknown>)["setActiveOrganization"])],
+  "updateMemberRole": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["updateMemberRole"]>("organization:updateMemberRole"), () => (require("../organization") as Record<string, unknown>)["updateMemberRole"])],
+  "updateOrganization": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof generatedApi["organization"]["updateOrganization"]>("organization:updateOrganization"), () => (require("../organization") as Record<string, unknown>)["updateOrganization"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

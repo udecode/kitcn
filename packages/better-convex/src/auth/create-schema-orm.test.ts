@@ -1,4 +1,6 @@
-import { createSchemaOrm } from './create-schema-orm';
+import { getAuthTables } from 'better-auth/db';
+import { organization } from 'better-auth/plugins';
+import { createSchemaExtensionOrm, createSchemaOrm } from './create-schema-orm';
 
 const tables = {
   account: {
@@ -67,9 +69,9 @@ describe('createSchemaOrm', () => {
     expect(result.code).toContain('defineSchema');
     expect(result.code).not.toContain('import { v } from "convex/values";');
 
-    expect(result.code).toContain('export const session = convexTable(');
-    expect(result.code).toContain('export const user = convexTable(');
-    expect(result.code).toContain('export const account = convexTable(');
+    expect(result.code).toContain('export const sessionTable = convexTable(');
+    expect(result.code).toContain('export const userTable = convexTable(');
+    expect(result.code).toContain('export const accountTable = convexTable(');
 
     // `id` field is removed from table declarations.
     expect(result.code).not.toMatch(/\n\s+id:/);
@@ -89,16 +91,85 @@ describe('createSchemaOrm', () => {
 
     // Relations are generated without onDelete action config.
     expect(result.code).toContain(
-      'userId: text().notNull().references(() => user.id),'
+      'userId: text().notNull().references(() => userTable.id),'
     );
     expect(result.code).not.toContain('onDelete');
     expect(result.code).not.toContain('cascade');
 
     // Manual + special index generation.
     expect(result.code).toContain(
-      'index("expiresAt_userId").on(session.expiresAt, session.userId)'
+      'index("expiresAt_userId").on(sessionTable.expiresAt, sessionTable.userId)'
     );
-    expect(result.code).toContain('index("userId").on(session.userId)');
-    expect(result.code).toContain('index("token").on(session.token)');
+    expect(result.code).toContain('index("userId").on(sessionTable.userId)');
+    expect(result.code).not.toContain('index("token").on(sessionTable.token)');
+    expect(result.code).not.toContain('index("userId").on(userTable.userId)');
+
+    expect(result.code).toContain('.relations((r) => ({');
+    expect(result.code).toContain('session: {');
+    expect(result.code).toContain('user: r.one.user({');
+    expect(result.code).toContain('from: r.session.userId,');
+    expect(result.code).toContain('to: r.user.id,');
+    expect(result.code).toContain('account: {');
+    expect(result.code).toContain('user: r.one.user({');
+    expect(result.code).toContain('from: r.account.userId,');
+    expect(result.code).toContain('user: {');
+    expect(result.code).toContain('sessions: r.many.session({');
+    expect(result.code).toContain('accounts: r.many.account({');
+  });
+
+  test('generates ORM extension code for scaffold-owned plugin schema files', async () => {
+    const result = await createSchemaExtensionOrm({
+      extensionKey: 'auth',
+      exportName: 'authExtension',
+      file: 'convex/lib/plugins/auth/schema.ts',
+      tables,
+    });
+
+    expect(result.overwrite).toBe(true);
+    expect(result.path).toBe('convex/lib/plugins/auth/schema.ts');
+    expect(result.code).toContain('defineSchemaExtension');
+    expect(result.code).not.toContain('defineSchema(tables)');
+    expect(result.code).toContain('export function authExtension()');
+    expect(result.code).toContain('return defineSchemaExtension("auth", {');
+    expect(result.code).toContain('account: accountTable,');
+    expect(result.code).toContain('session: sessionTable,');
+    expect(result.code).toContain('user: userTable,');
+    expect(result.code).toContain(
+      'status: textEnum(["active", "inactive"]).notNull(),'
+    );
+    expect(result.code).toContain('}).relations((r) => ({');
+    expect(result.code).toContain('sessions: r.many.session({');
+    expect(result.code).toContain('accounts: r.many.account({');
+    expect(result.code).not.toContain('index("userId").on(userTable.userId)');
+  });
+
+  test('adds organization helper fields and references for Better Convex auth schema', async () => {
+    const result = await createSchemaExtensionOrm({
+      extensionKey: 'auth',
+      exportName: 'authExtension',
+      file: 'convex/lib/plugins/auth/schema.ts',
+      tables: getAuthTables({
+        emailAndPassword: { enabled: true },
+        plugins: [organization()],
+      }),
+    });
+
+    expect(result.code).toContain(
+      'lastActiveOrganizationId: text().references(() => organizationTable.id),'
+    );
+    expect(result.code).toContain(
+      'personalOrganizationId: text().references(() => organizationTable.id),'
+    );
+    expect(result.code).toContain(
+      'activeOrganizationId: text().references(() => organizationTable.id),'
+    );
+    expect(result.code).toContain(
+      'lastActiveOrganization: r.one.organization({'
+    );
+    expect(result.code).toContain('from: r.user.lastActiveOrganizationId,');
+    expect(result.code).toContain('personalOrganization: r.one.organization({');
+    expect(result.code).toContain('from: r.user.personalOrganizationId,');
+    expect(result.code).toContain('activeOrganization: r.one.organization({');
+    expect(result.code).toContain('from: r.session.activeOrganizationId,');
   });
 });

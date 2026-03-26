@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { execa } from 'execa';
-import { resolveSupportedDependencyInstallSpec } from '../supported-dependencies.js';
+import {
+  getPackageNameFromInstallSpec,
+  resolveSupportedDependencyInstallSpec,
+} from '../supported-dependencies.js';
 import type {
   PluginDependencyInstallResult,
   PluginDescriptor,
@@ -101,7 +104,8 @@ export const resolveMissingDependencyHints = (
   }
 
   return dependencyHints.filter(
-    (dependencyHint) => !hasDependency(packageJson, dependencyHint)
+    (dependencyHint) =>
+      !hasDependency(packageJson, getPackageNameFromInstallSpec(dependencyHint))
   );
 };
 

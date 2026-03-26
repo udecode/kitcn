@@ -7,6 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer } from 'node:net';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import {
@@ -17,6 +18,7 @@ import { runAuthE2E } from './auth-e2e';
 import { runAuthSmoke } from './auth-smoke';
 import {
   buildLocalCliCommand,
+  DEFAULT_LOCAL_DEV_PORT,
   generateFreshApp,
   getLocalBetterConvexInstallSpec,
   getLocalResendInstallSpec,
@@ -33,6 +35,7 @@ import {
   runAppValidation,
   runPackageScriptIfPresent,
   stripVolatileArtifacts,
+  type WorkspacePackageJson,
 } from './scaffold-utils';
 import {
   DEFAULT_CHECK_SCENARIO_KEYS,
@@ -88,6 +91,7 @@ const VITE_CONFIG_FILES = [
 const DEFAULT_SCENARIO_READY_URL = 'http://127.0.0.1:3210/_dashboard';
 const READY_POLL_INTERVAL_MS = 250;
 const READY_TIMEOUT_MS = 30_000;
+const SCENARIO_STOP_SIGNAL = 'SIGINT';
 const TRAILING_SLASH_RE = /\/+$/;
 const BOOTSTRAP_CHECK_SCENARIOS = new Set<ScenarioKey>([
   'convex-next-auth-bootstrap',
@@ -95,6 +99,41 @@ const BOOTSTRAP_CHECK_SCENARIOS = new Set<ScenarioKey>([
   'convex-next-all',
   'create-convex-nextjs-shadcn-auth',
 ]);
+
+const isPortAvailable = (port: number) =>
+  new Promise<boolean>((resolve) => {
+    const server = createServer();
+    server.unref();
+    server.once('error', () => {
+      resolve(false);
+    });
+    server.listen(port, () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+  });
+
+export const findAvailableScenarioDevPort = async ({
+  isPortAvailableFn = isPortAvailable,
+  maxAttempts = 25,
+  preferredPort = DEFAULT_LOCAL_DEV_PORT,
+}: {
+  isPortAvailableFn?: (port: number) => Promise<boolean>;
+  maxAttempts?: number;
+  preferredPort?: number;
+} = {}) => {
+  for (let offset = 0; offset < maxAttempts; offset += 1) {
+    const port = preferredPort + offset;
+    if (await isPortAvailableFn(port)) {
+      return port;
+    }
+  }
+
+  throw new Error(
+    `Could not find an open local scenario dev port after ${maxAttempts} attempts starting at ${preferredPort}.`
+  );
+};
 
 const getScenarioDir = (
   scenarioKey: ScenarioKey,
@@ -501,7 +540,7 @@ const stopRunningScenarioProcesses = async (
 ) => {
   for (const process of processes) {
     if (!process.killed && process.exitCode === undefined) {
-      process.kill('SIGTERM');
+      process.kill(SCENARIO_STOP_SIGNAL);
     }
   }
 
@@ -581,7 +620,7 @@ const runSpawnedScenarioProcesses = async (
 
   for (const [index, process] of processes.entries()) {
     if (index !== firstExit.index && !process.killed) {
-      process.kill('SIGTERM');
+      process.kill(SCENARIO_STOP_SIGNAL);
     }
   }
 
@@ -652,6 +691,23 @@ export const resolveScenarioStepEnv = (
   };
 };
 
+export const resolveScenarioInstallSpecs = (projectDir: string) => {
+  const packageJson = readJson<WorkspacePackageJson>(
+    path.join(projectDir, 'package.json')
+  );
+  const dependencies = {
+    ...packageJson.devDependencies,
+    ...packageJson.dependencies,
+  };
+
+  return {
+    betterConvexInstallSpec:
+      dependencies['better-convex'] ?? getLocalBetterConvexInstallSpec(),
+    resendInstallSpec:
+      dependencies['@better-convex/resend'] ?? getLocalResendInstallSpec(),
+  };
+};
+
 const runScenarioCommands = async (
   steps: ReadonlyArray<readonly string[]>,
   params: {
@@ -660,10 +716,7 @@ const runScenarioCommands = async (
     runCommand: typeof run;
   }
 ) => {
-  const localCliEnv = {
-    betterConvexInstallSpec: getLocalBetterConvexInstallSpec(),
-    resendInstallSpec: getLocalResendInstallSpec(),
-  };
+  const localCliEnv = resolveScenarioInstallSpecs(params.projectDir);
 
   for (const step of steps) {
     const env = resolveScenarioStepEnv(step, localCliEnv);
@@ -745,7 +798,11 @@ const prepareScenarioSource = async (
   scenarioKey: ScenarioKey,
   params: {
     backend?: TemplateBackend;
+    findAvailableScenarioDevPortFn?: typeof findAvailableScenarioDevPort;
+    installLocalBetterConvexFn?: typeof installLocalBetterConvex;
     outputRoot?: string;
+    patchPreparedLocalDevPortFn?: typeof patchPreparedLocalDevPort;
+    packLocalBetterConvexPackageFn?: typeof packLocalBetterConvexPackage;
     runCommand?: typeof run;
   } = {}
 ) => {
@@ -756,6 +813,10 @@ const prepareScenarioSource = async (
   const metadataDir = getScenarioMetadataDir(scenarioKey, outputRoot);
   const runCommand = params.runCommand ?? run;
   const backend = getScenarioBackend(scenarioKey, params.backend);
+  const packLocalBetterConvexPackageFn =
+    params.packLocalBetterConvexPackageFn ?? packLocalBetterConvexPackage;
+  const installLocalBetterConvexFn =
+    params.installLocalBetterConvexFn ?? installLocalBetterConvex;
   stopLocalConvexBackendForProject(projectDir);
 
   rmSync(scenarioDir, { force: true, recursive: true });
@@ -791,14 +852,23 @@ const prepareScenarioSource = async (
   stripVolatileArtifacts(projectDir);
   normalizeEnvLocal(projectDir);
 
-  await runScenarioCommands(
-    resolvePrepareBootstrapSteps(scenarioKey, projectDir),
-    {
-      backend,
-      projectDir,
+  const bootstrapSteps = resolvePrepareBootstrapSteps(scenarioKey, projectDir);
+  const betterConvexPackageSpec = packLocalBetterConvexPackageFn(metadataDir);
+  let installedLocalBetterConvex = false;
+
+  if (bootstrapSteps.length > 0) {
+    await installLocalBetterConvexFn(projectDir, {
+      betterConvexPackageSpec,
       runCommand,
-    }
-  );
+    });
+    installedLocalBetterConvex = true;
+  }
+
+  await runScenarioCommands(bootstrapSteps, {
+    backend,
+    projectDir,
+    runCommand,
+  });
 
   await runScenarioCommands(scenario.setup, {
     backend,
@@ -806,13 +876,20 @@ const prepareScenarioSource = async (
     runCommand,
   });
 
-  patchPreparedLocalDevPort(projectDir);
+  const localDevPort = await (
+    params.findAvailableScenarioDevPortFn ?? findAvailableScenarioDevPort
+  )();
+  (params.patchPreparedLocalDevPortFn ?? patchPreparedLocalDevPort)(
+    projectDir,
+    localDevPort
+  );
 
-  const betterConvexPackageSpec = packLocalBetterConvexPackage(metadataDir);
-  await installLocalBetterConvex(projectDir, {
-    betterConvexPackageSpec,
-    runCommand,
-  });
+  if (!installedLocalBetterConvex) {
+    await installLocalBetterConvexFn(projectDir, {
+      betterConvexPackageSpec,
+      runCommand,
+    });
+  }
   writeScenarioMetadata(scenarioKey, outputRoot, {
     betterConvexPackageSpec,
     backend,
@@ -827,8 +904,12 @@ export const prepareScenario = async (
   scenarioKey: ScenarioKey,
   params: {
     backend?: TemplateBackend;
+    findAvailableScenarioDevPortFn?: typeof findAvailableScenarioDevPort;
+    installLocalBetterConvexFn?: typeof installLocalBetterConvex;
     logFn?: typeof log;
     outputRoot?: string;
+    patchPreparedLocalDevPortFn?: typeof patchPreparedLocalDevPort;
+    packLocalBetterConvexPackageFn?: typeof packLocalBetterConvexPackage;
     runCommand?: typeof run;
   } = {}
 ) => {

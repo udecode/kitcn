@@ -30,7 +30,9 @@ npx better-convex dev
 
 ## Initialize cRPC
 
-`convex/functions/generated.ts` is the canonical server contract — it exports `initCRPC` (with ORM pre-wired when `relations` exists) and `defineAuth` for auth.
+`<functionsDir>/generated/server.ts` is the canonical server contract. It
+exports `initCRPC` with ORM pre-wired when `relations` exists.
+`<functionsDir>/generated/auth.ts` is the auth contract.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
 import { initCRPC } from '../functions/generated/server';
@@ -269,7 +271,9 @@ convex/
 │   ├── user.ts       # → crpc.user.list, crpc.user.create
 │   ├── session.ts    # → crpc.session.getByToken
 │   ├── account.ts    # → crpc.account.list, crpc.account.delete
-│   └── generated.ts  # Generated server contract (ORM + initCRPC + auth runtime)
+│   └── generated/
+│       ├── server.ts # Generated server contract (ORM + initCRPC)
+│       └── auth.ts   # Generated auth contract
 ├── lib/
 │   └── crpc.ts       # Setup + procedure variants
 └── shared/           # Client-importable

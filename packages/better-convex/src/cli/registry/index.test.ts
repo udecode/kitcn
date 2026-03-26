@@ -12,6 +12,7 @@ describe('cli/registry', () => {
         resolveScaffoldRoots: expect.any(Function),
         resolveTemplates: expect.any(Function),
         buildPlanFiles: expect.any(Function),
+        reconcileScaffoldFiles: expect.any(Function),
       })
     );
     expect(resend.integration).toEqual(
@@ -38,7 +39,6 @@ describe('cli/registry', () => {
       'https://better-convex.vercel.app/docs/auth/server'
     );
     expect(templateIds).toEqual([
-      'auth-schema',
       'auth-config',
       'auth-runtime',
       'auth-client',
@@ -62,7 +62,6 @@ describe('cli/registry', () => {
         description:
           'Scaffold minimal Better Auth server + client wiring on top of init.',
         templateIds: [
-          'auth-schema',
           'auth-config',
           'auth-runtime',
           'auth-client',

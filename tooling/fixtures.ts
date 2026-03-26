@@ -41,6 +41,7 @@ const FIXTURE_TSCONFIG_FILES = [
   'tsconfig.json',
   'tsconfig.app.json',
   'tsconfig.node.json',
+  path.join('convex', 'functions', 'tsconfig.json'),
   path.join('convex', 'tsconfig.json'),
 ] as const;
 
@@ -94,7 +95,7 @@ export const normalizeTemplateSnapshot = (
   );
   normalizeEnvLocal(directory);
   patchPreparedLocalDevPort(directory);
-  patchFixtureTsconfigPaths(directory);
+  patchFixtureTsconfigPaths(directory, getTemplateFixtureDir(templateKey));
 };
 
 type TsconfigJson = {
@@ -105,7 +106,10 @@ type TsconfigJson = {
   [key: string]: unknown;
 };
 
-const patchFixtureTsconfigPaths = (directory: string) => {
+const patchFixtureTsconfigPaths = (
+  directory: string,
+  snapshotDirectory: string
+) => {
   for (const relativeTsconfigPath of FIXTURE_TSCONFIG_FILES) {
     const tsconfigPath = path.join(directory, relativeTsconfigPath);
     if (!existsSync(tsconfigPath)) {
@@ -124,14 +128,16 @@ const patchFixtureTsconfigPaths = (directory: string) => {
     const tsconfig = (parsedTsconfig.config ?? {}) as TsconfigJson;
     const compilerOptions = tsconfig.compilerOptions ?? {};
     const paths = compilerOptions.paths ?? {};
-    const tsconfigDir = path.dirname(tsconfigPath);
+    const snapshotTsconfigDir = path.dirname(
+      path.join(snapshotDirectory, relativeTsconfigPath)
+    );
 
     for (const [specifier, sourcePath] of Object.entries(
       FIXTURE_PACKAGE_PATHS
     )) {
       const relativeSourcePath = path
         .relative(
-          tsconfigDir,
+          snapshotTsconfigDir,
           path.join(PROJECT_ROOT, 'packages', 'better-convex', sourcePath)
         )
         .replaceAll(path.sep, '/');
@@ -233,19 +239,38 @@ export const syncTemplate = async (
   params: {
     backend?: TemplateBackend;
     generateTemplateFn?: typeof generateTemplate;
+    installLocalBetterConvexFn?: typeof installLocalBetterConvex;
     logFn?: typeof log;
     normalizeTemplateFn?: typeof normalizeTemplateSnapshot;
+    runCommand?: typeof run;
+    validateAppFn?: typeof runAppValidation;
   } = {}
 ) => {
   const generateTemplateFn = params.generateTemplateFn ?? generateTemplate;
   const normalizeTemplateFn =
     params.normalizeTemplateFn ?? normalizeTemplateSnapshot;
+  const runCommand = params.runCommand ?? run;
   const fixtureDir = getTemplateFixtureDir(templateKey);
   const { generatedAppDir, tempRoot } = await generateTemplateFn(templateKey, {
     backend: params.backend,
   });
 
   try {
+    const betterConvexPackageSpec = packLocalBetterConvexPackage(tempRoot);
+    await (params.installLocalBetterConvexFn ?? installLocalBetterConvex)(
+      generatedAppDir,
+      {
+        betterConvexPackageSpec,
+        runCommand,
+      }
+    );
+    await (params.validateAppFn ?? runAppValidation)(
+      generatedAppDir,
+      runCommand,
+      {
+        lint: TEMPLATE_DEFINITIONS[templateKey].validation.lint,
+      }
+    );
     normalizeTemplateFn(generatedAppDir, templateKey);
     mkdirSync(path.dirname(fixtureDir), { recursive: true });
     rmSync(fixtureDir, { recursive: true, force: true });

@@ -53,8 +53,7 @@ export const VOLATILE_ENTRY_NAMES = new Set([
 ]);
 export const VOLATILE_ENTRY_PATTERNS = [/^better-convex-.*\.tgz$/];
 const LINE_SPLIT_RE = /\r?\n/;
-const LOCAL_DEV_PORT = '3005';
-const LOCAL_DEV_SITE_URL = `http://localhost:${LOCAL_DEV_PORT}`;
+export const DEFAULT_LOCAL_DEV_PORT = 3005;
 const TRAILING_NEWLINES_RE = /\n*$/;
 const SCRIPT_PORT_FLAG_RE = /(?:^|\s)--port(?:=|\s)\d+\b/;
 const NEXT_DEV_SCRIPT_RE = /\bnext\s+dev\b/;
@@ -68,6 +67,8 @@ const VITE_SITE_URL_ENV_RE = /VITE_(?:CONVEX_URL|CONVEX_SITE_URL|SITE_URL)=/;
 const BUILT_LOCAL_PACKAGE_DIRS = new Set<string>();
 let localBetterConvexInstallSpec: string | undefined;
 let localResendInstallSpec: string | undefined;
+
+const resolveLocalDevSiteUrl = (port: number) => `http://localhost:${port}`;
 
 export type WorkspacePackageJson = {
   dependencies?: Record<string, string>;
@@ -402,7 +403,7 @@ export const normalizeEnvLocal = (directory: string) => {
   writeFileSync(envLocalPath, `${normalizedEnvLocal}\n`);
 };
 
-const normalizeLocalDevScript = (script: string | undefined) => {
+const normalizeLocalDevScript = (script: string | undefined, port: number) => {
   if (!script) {
     return script;
   }
@@ -412,10 +413,10 @@ const normalizeLocalDevScript = (script: string | undefined) => {
   }
 
   if (SCRIPT_PORT_FLAG_RE.test(script)) {
-    return script.replace(SCRIPT_PORT_FLAG_RE, ` --port ${LOCAL_DEV_PORT}`);
+    return script.replace(SCRIPT_PORT_FLAG_RE, ` --port ${port}`);
   }
 
-  return `${script} --port ${LOCAL_DEV_PORT}`;
+  return `${script} --port ${port}`;
 };
 
 const upsertEnvEntries = (
@@ -467,7 +468,11 @@ const upsertEnvEntries = (
   return true;
 };
 
-export const patchPreparedLocalDevPort = (directory: string) => {
+export const patchPreparedLocalDevPort = (
+  directory: string,
+  port = DEFAULT_LOCAL_DEV_PORT
+) => {
+  const localDevSiteUrl = resolveLocalDevSiteUrl(port);
   const packageJsonPath = path.join(directory, 'package.json');
   if (existsSync(packageJsonPath)) {
     const packageJson = readJson<WorkspacePackageJson>(packageJsonPath);
@@ -475,7 +480,7 @@ export const patchPreparedLocalDevPort = (directory: string) => {
     let packageJsonChanged = false;
 
     for (const scriptName of ['dev', 'dev:frontend'] as const) {
-      const normalized = normalizeLocalDevScript(nextScripts[scriptName]);
+      const normalized = normalizeLocalDevScript(nextScripts[scriptName], port);
       if (normalized && normalized !== nextScripts[scriptName]) {
         nextScripts[scriptName] = normalized;
         packageJsonChanged = true;
@@ -496,10 +501,10 @@ export const patchPreparedLocalDevPort = (directory: string) => {
     const envEntries: Record<string, string> = {};
 
     if (NEXT_PUBLIC_SITE_URL_ENV_RE.test(envLocalSource)) {
-      envEntries.NEXT_PUBLIC_SITE_URL = LOCAL_DEV_SITE_URL;
+      envEntries.NEXT_PUBLIC_SITE_URL = localDevSiteUrl;
     }
     if (VITE_SITE_URL_ENV_RE.test(envLocalSource)) {
-      envEntries.VITE_SITE_URL = LOCAL_DEV_SITE_URL;
+      envEntries.VITE_SITE_URL = localDevSiteUrl;
     }
 
     if (Object.keys(envEntries).length > 0) {
@@ -508,7 +513,7 @@ export const patchPreparedLocalDevPort = (directory: string) => {
   }
 
   upsertEnvEntries(path.join(directory, 'convex', '.env'), {
-    SITE_URL: LOCAL_DEV_SITE_URL,
+    SITE_URL: localDevSiteUrl,
   });
 
   const getEnvPath = path.join(directory, 'convex', 'lib', 'get-env.ts');
@@ -516,7 +521,7 @@ export const patchPreparedLocalDevPort = (directory: string) => {
     const source = readFileSync(getEnvPath, 'utf8');
     const nextSource = source.replace(
       GET_ENV_SITE_URL_DEFAULT_RE,
-      `SITE_URL: z.string().default('${LOCAL_DEV_SITE_URL}')`
+      `SITE_URL: z.string().default('${localDevSiteUrl}')`
     );
 
     if (nextSource !== source) {

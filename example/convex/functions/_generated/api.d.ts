@@ -101,9 +101,9 @@ export declare const api: {
   authDemo: {
     getAuthState: FunctionReference<"query", "public", {}, any>;
     getSnapshot: FunctionReference<"query", "public", {}, any>;
-    runCoverage: FunctionReference<"mutation", "public", {}, any>;
+    runCoverage: FunctionReference<"action", "public", {}, any>;
     runScenario: FunctionReference<
-      "mutation",
+      "action",
       "public",
       {
         id:
@@ -114,7 +114,6 @@ export declare const api: {
           | "link-account-non-anonymous"
           | "on-link-account-bio-migration"
           | "linked-source-anonymous-deleted"
-          | "delete-anonymous-endpoint"
           | "disable-delete-anonymous-user-option"
           | "generate-random-email-precedence";
       },
@@ -874,6 +873,21 @@ export declare const api: {
  * ```
  */
 export declare const internal: {
+  authDemoData: {
+    getSessionByToken: FunctionReference<
+      "query",
+      "internal",
+      { token: string },
+      any
+    >;
+    getUserById: FunctionReference<"query", "internal", { id: string }, any>;
+    setUserBio: FunctionReference<
+      "mutation",
+      "internal",
+      { bio: string; id: string },
+      any
+    >;
+  };
   generated: {
     auth: {
       create: FunctionReference<

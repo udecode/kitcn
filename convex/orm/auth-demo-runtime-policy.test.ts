@@ -22,25 +22,24 @@ describe('auth demo runtime probe policy', () => {
     const staticSupportedDefinition = AUTH_COVERAGE_DEFINITIONS.find(
       (entry) => entry.id === 'disable-delete-anonymous-user-option'
     );
-    const staticFailureDefinition = AUTH_COVERAGE_DEFINITIONS.find(
-      (entry) => entry.id === 'delete-anonymous-endpoint'
+    const staticPrecedenceDefinition = AUTH_COVERAGE_DEFINITIONS.find(
+      (entry) => entry.id === 'generate-random-email-precedence'
     );
 
     expect(staticSupportedDefinition).toBeDefined();
-    expect(staticFailureDefinition).toBeDefined();
+    expect(staticPrecedenceDefinition).toBeDefined();
 
     const staticSupportedProbe = createStaticProbeResult(
       staticSupportedDefinition!
     );
-    const staticFailureProbe = createStaticProbeResult(
-      staticFailureDefinition!
+    const staticPrecedenceProbe = createStaticProbeResult(
+      staticPrecedenceDefinition!
     );
 
     expect(staticSupportedProbe.ok).toBe(true);
     expect(staticSupportedProbe.error).toBeNull();
 
-    expect(staticFailureProbe.ok).toBe(false);
-    expect(staticFailureProbe.error).toBeTruthy();
-    expect(staticFailureProbe.errorCode).toBe('NOT_AVAILABLE');
+    expect(staticPrecedenceProbe.ok).toBe(true);
+    expect(staticPrecedenceProbe.error).toBeNull();
   });
 });

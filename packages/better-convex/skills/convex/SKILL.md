@@ -51,14 +51,14 @@ Only remember these non-parity deltas:
 16. cRPC React queries are real-time by default (`subscribe: true`); never use `queryClient.invalidateQueries` for these subscribed paths.
 17. In RSC, `prefetch` hydrates client, `caller` is server-only and not hydrated, `preloadQuery` hydrates but can cause stale split ownership if also rendered client-side.
 18. Better Auth Next.js shortcut is `convexBetterAuth(...)`; generic server-only shortcut is `createCallerFactory(...)`.
-19. Use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out.
+19. On the Better Convex auth client path, use `createAuthMutations(authClient)` wrappers so logout unsubscribes auth queries before sign out. Raw Convex preset keeps a smaller plain `authClient`.
 20. **NEVER** use `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` directly for module-to-module calls. Use `create<Module>Handler(ctx)` or `create<Module>Caller(ctx)` from `convex/functions/generated/<module>.runtime` instead.
 21. **`create<Module>Handler(ctx)`** — default choice for queries/mutations. Bypasses input validation, middleware, output validation → zero overhead. Query/mutation ctx only. Import from `./generated/<module>.runtime`.
 22. **`create<Module>Caller(ctx)`** — use in actions and HTTP routes (where handler is unavailable). Goes through validation + middleware. Root caller exposes query+mutation procedures. In `ActionCtx`, action procedures are under `caller.actions.*`; scheduling is under `caller.schedule.now|after|at` with `caller.schedule.cancel(id)`. Import from `./generated/<module>.runtime`. Each caller/handler eagerly loads every procedure in its module (no lazy loading) — split large modules to keep bundles lean.
 23. API types (`Api`, `ApiInputs`, `ApiOutputs`, `Select`, `Insert`, `TableName`) import from `@convex/api` — no manual `inferApiInputs<typeof api>`.
 24. HTTP router must export as `httpRouter` (not `appRouter`) for codegen.
 25. Server wiring imports come from `convex/functions/generated/` directory: `getAuth`, `defineAuth` from `generated/auth`; `initCRPC`, `QueryCtx`, `MutationCtx`, `OrmCtx` from `generated/server`; `create<Module>Caller`, `create<Module>Handler` from `generated/<module>.runtime`. No manual `convex/lib/orm.ts`.
-26. `defineAuth((ctx) => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
+26. `defineAuth(() => ({ ...options, triggers }))` replaces split `getAuthOptions` + `authTriggers`. Trigger callbacks are doc-first: `beforeCreate(data)`, `onCreate(doc)`, `onUpdate(newDoc, oldDoc)` — no `ctx` first param.
 27. Internal auth functions at `internal.generated.*` (not `internal.auth.*`).
 28. Async mutation batching is the default (codegen wires it). Customize per call: `execute({ batchSize, delayMs })`. Opt into sync: `execute({ mode: 'sync' })` or `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`. Relevant defaults: `mutationBatchSize`, `mutationLeafBatchSize`, `mutationMaxRows`, `mutationScheduleCallCap`.
 29. Polymorphic unions are schema-first: use `actionType: discriminator({ variants, as? })` in `convexTable(...)`. Query config does not include a `polymorphic` option. Writes stay flat; reads synthesize nested `details` (or custom alias). Use `withVariants: true` to auto-load all `one()` relations on discriminator tables.
@@ -344,7 +344,7 @@ Key client defaults/deltas:
 4. Use `skipUnauth: true` to avoid unauthorized fetch churn.
 5. For pagination, use `useInfiniteQuery` from `better-convex/react`.
 6. Prefer typed `queryKey(...)` helpers for cache read/write/fetch ops instead of manual keys.
-7. For auth flows, prefer `createAuthMutations(...)` wrappers (not raw auth client calls) to avoid logout race errors.
+7. For Better Convex auth flows, prefer `createAuthMutations(...)` wrappers (not raw auth client calls) to avoid logout race errors. Raw Convex preset keeps the plain auth client path.
 8. Full client/RSC depth lives in `references/features/react.md`.
 
 ### 8) RSC Patterns (Next.js)

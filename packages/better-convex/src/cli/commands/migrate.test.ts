@@ -96,29 +96,23 @@ describe('cli/commands/migrate', () => {
     );
     fs.writeFileSync(concaveCliPath, 'export {};\n');
     const calls: { cmd: string; args: string[] }[] = [];
+    let callIndex = 0;
     const execaStub = mock(async (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
-      return { exitCode: 0 } as any;
-    });
-    const fetchCalls: Array<{ url: string; body: unknown }> = [];
-    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (
-      input: URL | RequestInfo,
-      init?: RequestInit
-    ) => {
-      fetchCalls.push({
-        url: String(input),
-        body: JSON.parse(String(init?.body ?? '{}')),
-      });
-      if (fetchCalls.length === 1) {
-        return Response.json({
-          result: {
+      callIndex += 1;
+      if (callIndex === 1) {
+        return {
+          exitCode: 0,
+          stdout: `${JSON.stringify({
             status: 'running',
             runId: 'mr_concave',
-          },
-        });
+          })}\n`,
+          stderr: '',
+        } as any;
       }
-      return Response.json({
-        result: {
+      return {
+        exitCode: 0,
+        stdout: `${JSON.stringify({
           status: 'idle',
           runs: [
             {
@@ -127,9 +121,10 @@ describe('cli/commands/migrate', () => {
               migrationIds: ['m1'],
             },
           ],
-        },
-      });
-    }) as any);
+        })}\n`,
+        stderr: '',
+      } as any;
+    });
     const generateMetaStub = mock(async () => {});
     const syncEnvStub = mock(async () => {});
     const loadConfigStub = mock(() => ({
@@ -157,47 +152,106 @@ describe('cli/commands/migrate', () => {
     );
 
     expect(exitCode).toBe(0);
-    expect(calls).toEqual([]);
-    expect(fetchCalls).toEqual([
+    expect(calls).toEqual([
       {
-        url: 'http://localhost:3210/api/execute',
-        body: {
-          path: '_system:systemExecuteFunction',
-          type: 'mutation',
-          format: 'json',
-          args: {
-            functionPath: 'generated/server:migrationRun',
-            args: {
-              direction: 'up',
-              batchSize: 256,
-              allowDrift: false,
-            },
-            functionType: 'mutation',
-          },
-          auth: {
-            tokenType: 'System',
-          },
-        },
+        cmd: 'bun',
+        args: [
+          concaveCliPath,
+          'run',
+          '--url',
+          'http://localhost:3210',
+          'generated/server:migrationRun',
+          '{"direction":"up","batchSize":256,"allowDrift":false}',
+        ],
       },
       {
-        url: 'http://localhost:3210/api/execute',
-        body: {
-          path: '_system:systemExecuteFunction',
-          type: 'mutation',
-          format: 'json',
-          args: {
-            functionPath: 'generated/server:migrationStatus',
-            args: {
-              runId: 'mr_concave',
-            },
-            functionType: 'mutation',
-          },
-          auth: {
-            tokenType: 'System',
-          },
-        },
+        cmd: 'bun',
+        args: [
+          concaveCliPath,
+          'run',
+          '--url',
+          'http://localhost:3210',
+          'generated/server:migrationStatus',
+          '{"runId":"mr_concave"}',
+        ],
       },
     ]);
-    fetchSpy.mockRestore();
+  });
+
+  test('handleMigrateCommand(up) parses concave run output with a preamble and pretty JSON body', async () => {
+    const concaveCliPath = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-concave-cli-')),
+      'main.mjs'
+    );
+    fs.writeFileSync(concaveCliPath, 'export {};\n');
+    const calls: { cmd: string; args: string[] }[] = [];
+    let callIndex = 0;
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      callIndex += 1;
+      if (callIndex === 1) {
+        return {
+          exitCode: 0,
+          stdout:
+            '🚀 Running generated/server:migrationRun\n' +
+            '   Args: {"direction":"up","batchSize":256,"allowDrift":false}\n' +
+            '   URL: http://127.0.0.1:3210/api/execute\n\n' +
+            '✓ Success\n\n' +
+            '{\n' +
+            '  "status": "running",\n' +
+            '  "runId": "mr_concave"\n' +
+            '}\n',
+          stderr: '',
+        } as any;
+      }
+      return {
+        exitCode: 0,
+        stdout:
+          '🚀 Running generated/server:migrationStatus\n' +
+          '   Args: {"runId":"mr_concave"}\n' +
+          '   URL: http://127.0.0.1:3210/api/execute\n\n' +
+          '✓ Success\n\n' +
+          '{\n' +
+          '  "status": "idle",\n' +
+          '  "runs": [\n' +
+          '    {\n' +
+          '      "status": "completed",\n' +
+          '      "currentIndex": 1,\n' +
+          '      "migrationIds": ["m1"]\n' +
+          '    }\n' +
+          '  ]\n' +
+          '}\n',
+        stderr: '',
+      } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      backend: 'concave' as const,
+    }));
+
+    const exitCode = await handleMigrateCommand(
+      [
+        '--backend',
+        'concave',
+        'migrate',
+        'up',
+        '--url',
+        'http://localhost:3210',
+      ],
+      {
+        realConvex: '/fake/convex/main.js',
+        realConcave: concaveCliPath,
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.args).toContain('generated/server:migrationStatus');
   });
 });

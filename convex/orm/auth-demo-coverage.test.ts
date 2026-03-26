@@ -13,7 +13,6 @@ const REQUIRED_IDS = [
   'link-account-non-anonymous',
   'on-link-account-bio-migration',
   'linked-source-anonymous-deleted',
-  'delete-anonymous-endpoint',
   'disable-delete-anonymous-user-option',
   'generate-random-email-precedence',
 ] as const;

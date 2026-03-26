@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { resolveGeneratedAuthDefinition } from './generated-contract';
+import {
+  createAuthRuntime,
+  resolveGeneratedAuthDefinition,
+} from './generated-contract';
 
 describe('auth/generated-contract', () => {
   test('resolveGeneratedAuthDefinition defers a default getter that is still in TDZ', () => {
@@ -56,6 +59,93 @@ describe('auth/generated-contract', () => {
 
     expect(resolved({ userId: 'user_456' })).toEqual({
       userId: 'user_456',
+    });
+  });
+
+  test('createAuthRuntime synthesizes auth function refs when generated internal api is empty', () => {
+    const authRuntime = createAuthRuntime<any, any, any, any, any>({
+      internal: {},
+      moduleName: 'generated/auth',
+      schema: { tables: {} } as any,
+      auth: (() => ({
+        emailAndPassword: { enabled: true },
+      })) as any,
+    });
+
+    expect(
+      (authRuntime.authClient.authFunctions.findOne as Record<symbol, unknown>)[
+        Symbol.for('functionName')
+      ]
+    ).toBe('generated/auth:findOne');
+    expect(
+      (
+        authRuntime.authClient.authFunctions.updateOne as Record<
+          symbol,
+          unknown
+        >
+      )[Symbol.for('functionName')]
+    ).toBe('generated/auth:updateOne');
+  });
+
+  test('createAuthRuntime disables rate limiting for Convex jwks routes', async () => {
+    const runtime = createAuthRuntime<any, any, any, any, any>({
+      internal: {},
+      moduleName: 'generated/auth',
+      schema: { tables: {} } as any,
+      auth: (() => ({
+        baseURL: 'http://localhost:3000',
+        emailAndPassword: { enabled: true },
+      })) as any,
+    });
+
+    const auth = runtime.getAuth({} as any) as {
+      $context: Promise<{
+        rateLimit?: { customRules?: Record<string, unknown> };
+      }>;
+    };
+    const context = await auth.$context;
+
+    expect(context.rateLimit?.customRules).toMatchObject({
+      '/convex/.well-known/openid-configuration': false,
+      '/convex/jwks': false,
+      '/convex/latest-jwks': false,
+      '/convex/rotate-keys': false,
+    });
+  });
+
+  test('createAuthRuntime preserves user rate limit overrides', async () => {
+    const runtime = createAuthRuntime<any, any, any, any, any>({
+      internal: {},
+      moduleName: 'generated/auth',
+      schema: { tables: {} } as any,
+      auth: (() => ({
+        baseURL: 'http://localhost:3000',
+        emailAndPassword: { enabled: true },
+        rateLimit: {
+          customRules: {
+            '/convex/jwks': { max: 9, window: 30 },
+            '/sign-in/email': { max: 3, window: 10 },
+          },
+          enabled: true,
+          max: 100,
+          window: 60,
+        },
+      })) as any,
+    });
+
+    const auth = runtime.getAuth({} as any) as {
+      $context: Promise<{
+        rateLimit?: { customRules?: Record<string, unknown> };
+      }>;
+    };
+    const context = await auth.$context;
+
+    expect(context.rateLimit?.customRules).toMatchObject({
+      '/convex/.well-known/openid-configuration': false,
+      '/convex/jwks': { max: 9, window: 30 },
+      '/convex/latest-jwks': false,
+      '/convex/rotate-keys': false,
+      '/sign-in/email': { max: 3, window: 10 },
     });
   });
 });

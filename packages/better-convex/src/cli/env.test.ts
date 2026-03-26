@@ -143,8 +143,26 @@ describe('cli/env', () => {
     }
   });
 
-  test('pushEnv --auth creates convex/.env secret, fetches jwks, and batches both values', async () => {
+  test('pushEnv auto-detects auth and creates convex/.env secret, fetches jwks, and batches both values', async () => {
     const dir = mkTempDir();
+    fs.mkdirSync(path.join(dir, 'convex', 'functions', 'generated'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`,
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'auth.ts'),
+      'export default {};\n',
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'generated', 'auth.ts'),
+      'export {};\n',
+      'utf8'
+    );
     const oldCwd = process.cwd();
     process.chdir(dir);
 
@@ -153,7 +171,7 @@ describe('cli/env', () => {
 
     try {
       await pushEnv(
-        { auth: true },
+        {},
         {
           secretGenerator: () => 'secret-123',
           runCommand: async (args) => {
@@ -195,10 +213,49 @@ describe('cli/env', () => {
     }
   });
 
-  test('pushEnv --auth --rotate runs rotate first and forwards target args', async () => {
+  test('pushEnv throws clearly when auth scaffold exists but generated auth runtime is missing', async () => {
+    const dir = mkTempDir();
+    fs.mkdirSync(path.join(dir, 'convex', 'functions'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`,
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'auth.ts'),
+      'export default {};\n',
+      'utf8'
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      await expect(
+        pushEnv(
+          {},
+          { runCommand: async () => ({ exitCode: 0, stdout: '', stderr: '' }) }
+        )
+      ).rejects.toThrow('Auth env sync requires generated auth runtime');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('pushEnv --rotate auto-detects auth, runs rotate first and forwards target args', async () => {
     const dir = mkTempDir();
     fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'convex', 'generated'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'convex', '.env'), 'FOO=bar\n', 'utf8');
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'auth.ts'),
+      'export default {};\n',
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'generated', 'auth.ts'),
+      'export {};\n',
+      'utf8'
+    );
     const oldCwd = process.cwd();
     process.chdir(dir);
 
@@ -208,7 +265,6 @@ describe('cli/env', () => {
     try {
       await pushEnv(
         {
-          auth: true,
           force: true,
           rotate: true,
           targetArgs: ['--prod', '--env-file', '.env.agent'],

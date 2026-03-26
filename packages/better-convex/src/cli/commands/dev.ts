@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { createServer } from 'node:http';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 import {
@@ -22,12 +22,13 @@ import {
   resolveMigrationConfig,
   resolveRunDeps,
   runAggregateBackfillFlow,
-  runConvexDevPreRun,
   runConvexInitIfNeeded,
   runDevSchemaBackfillIfNeeded,
   runMigrationFlow,
   trackProcess,
 } from '../backend-core.js';
+import { stripConvexCommandNoise } from '../convex-command.js';
+import { resolveAuthEnvState } from '../env.js';
 import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -40,10 +41,25 @@ const LOCAL_CONCAVE_DEV_URL = `http://${LOCAL_CONCAVE_HOST}:${LOCAL_CONCAVE_DEV_
 const LOCAL_CONCAVE_SITE_URL = `http://${LOCAL_CONCAVE_HOST}:${LOCAL_CONCAVE_SITE_PORT}`;
 const CONCAVE_DEV_STARTUP_MAX_ATTEMPTS = 4;
 const DEV_STARTUP_RETRY_DELAY_CAP_MS = 30_000;
+const DEV_FILE_WATCH_DEBOUNCE_MS = 200;
+const DEV_BOOTSTRAP_FLAG = '--bootstrap';
+const DEV_BOOTSTRAP_TYPECHECK_FLAG = '--typecheck';
+const DEV_BOOTSTRAP_TYPECHECK_MODE = 'disable';
+const DEV_READY_LINE_RE = /(Convex|Concave) functions ready!/i;
+const DEV_SUPPRESSED_LINE_PATTERNS = [
+  /WARN \[Better Auth\]: Rate limiting skipped: could not determine client IP address\./,
+];
+const SUPPORTED_LOCAL_CONVEX_NODE_MAJORS = new Set([18, 20, 22, 24]);
+const LINE_SPLIT_RE = /\r?\n/;
 
 type LocalSiteProxyHandle = {
   killed: boolean;
   kill: (signal?: string) => void;
+};
+
+type FileWatcherHandle = {
+  close: () => Promise<void> | void;
+  on: (...args: any[]) => any;
 };
 
 type LocalSiteProxyOptions = {
@@ -61,12 +77,33 @@ type ConcaveLocalDevContract = {
 
 type DevDeps = Partial<RunDeps> & {
   resolveConcaveLocalSiteUrl?: (cwd?: string) => string;
+  resolveSupportedLocalNodeEnvOverrides?: (params: {
+    cwd?: string;
+    currentNodeVersion?: string;
+    env?: Record<string, string | undefined>;
+    execaFn: RunDeps['execa'];
+    runtimeName?: string;
+  }) => Promise<Record<string, string | undefined>>;
   startLocalSiteProxy?: (
     options: LocalSiteProxyOptions
   ) => Promise<LocalSiteProxyHandle>;
 };
 
 type DevStartupRetryLogger = Pick<typeof logger, 'info'>;
+
+type DevOutputStreamLike = {
+  on: (
+    event: 'data' | 'end' | 'close',
+    cb: ((chunk: unknown) => void) | (() => void)
+  ) => unknown;
+};
+
+type DevOutputProcessLike = {
+  stderr?: DevOutputStreamLike;
+  stdout?: DevOutputStreamLike;
+};
+
+type DevOutputMode = 'filtered' | 'raw';
 
 type RunDevStartupRetryLoopParams = {
   backend: 'convex' | 'concave';
@@ -75,6 +112,27 @@ type RunDevStartupRetryLoopParams = {
   signal?: AbortSignal;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   logger?: DevStartupRetryLogger;
+};
+
+type RunDevAuthEnvSyncLoopParams = {
+  runTask: () => Promise<void>;
+  signal?: AbortSignal;
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+};
+
+type RunLocalConvexBootstrapParams = {
+  authSyncMode?: 'auto' | 'complete';
+  config: ReturnType<RunDeps['loadBetterConvexConfig']>;
+  debug: boolean;
+  devArgs?: string[];
+  execaFn: RunDeps['execa'];
+  generateMetaFn: RunDeps['generateMeta'];
+  realConcavePath?: string;
+  realConvexPath: string;
+  sharedDir: string;
+  skipGenerateMeta?: boolean;
+  syncEnvFn: RunDeps['syncEnv'];
+  targetArgs: string[];
 };
 
 function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
@@ -96,11 +154,466 @@ function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+function readWatchedFileSnapshot(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  return fs.readFileSync(filePath, 'utf8');
+}
+
 export function resolveDevStartupRetryDelayMs(retryAttempt: number): number {
   return Math.min(
     1000 * 2 ** Math.max(0, retryAttempt - 1),
     DEV_STARTUP_RETRY_DELAY_CAP_MS
   );
+}
+
+async function runDevAuthEnvSyncLoop({
+  runTask,
+  signal,
+  sleep = sleepWithAbort,
+}: RunDevAuthEnvSyncLoopParams): Promise<void> {
+  for (
+    let retryAttempt = 1;
+    retryAttempt <= CONCAVE_DEV_STARTUP_MAX_ATTEMPTS;
+    retryAttempt += 1
+  ) {
+    if (signal?.aborted) {
+      return;
+    }
+
+    try {
+      await runTask();
+      return;
+    } catch (error) {
+      if (retryAttempt >= CONCAVE_DEV_STARTUP_MAX_ATTEMPTS) {
+        throw error;
+      }
+      await sleep(resolveDevStartupRetryDelayMs(retryAttempt), signal);
+    }
+  }
+}
+
+export function filterDevStartupLine(
+  rawLine: string
+):
+  | { kind: 'skip' }
+  | { kind: 'ready'; message: string }
+  | { kind: 'pass'; line: string } {
+  const line = stripConvexCommandNoise(rawLine).trim();
+  if (!line) {
+    return { kind: 'skip' };
+  }
+  if (DEV_SUPPRESSED_LINE_PATTERNS.some((pattern) => pattern.test(line))) {
+    return { kind: 'skip' };
+  }
+  if (
+    line.includes('Finished running function "init"') ||
+    line.includes('CONVEX_AGENT_MODE=anonymous mode is in beta') ||
+    line.includes('Convex AI files are not installed.') ||
+    line.includes('Preparing Convex functions...') ||
+    line.includes('Bundling component schemas and implementations') ||
+    line.includes('Uploading functions to Convex')
+  ) {
+    return { kind: 'skip' };
+  }
+  if (DEV_READY_LINE_RE.test(line)) {
+    return {
+      kind: 'ready',
+      message: line.toLowerCase().includes('concave')
+        ? 'Concave ready'
+        : 'Convex ready',
+    };
+  }
+  return { kind: 'pass', line };
+}
+
+function isDevOutputProcessLike(value: unknown): value is DevOutputProcessLike {
+  return typeof value === 'object' && value !== null;
+}
+
+function observeDevProcessOutput(
+  child: unknown,
+  mode: DevOutputMode
+): Promise<boolean> {
+  if (!isDevOutputProcessLike(child)) {
+    return Promise.resolve(true);
+  }
+  if (!child.stdout && !child.stderr) {
+    return Promise.resolve(true);
+  }
+
+  let settled = false;
+  let readyLogged = false;
+  let processExited = false;
+  let openStreamCount = 0;
+  return new Promise<boolean>((resolve) => {
+    const settle = (ready: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(ready);
+    };
+
+    const maybeSettleAfterExit = () => {
+      if (processExited && openStreamCount === 0) {
+        settle(false);
+      }
+    };
+
+    const attach = (
+      stream: DevOutputStreamLike | undefined,
+      sink: NodeJS.WriteStream
+    ) => {
+      if (!stream) {
+        return;
+      }
+
+      openStreamCount += 1;
+
+      let pending = '';
+      let closed = false;
+      const flushLine = (line: string) => {
+        if (mode === 'raw') {
+          const normalizedLine = line.replaceAll('\r', '');
+          if (
+            DEV_SUPPRESSED_LINE_PATTERNS.some((pattern) =>
+              pattern.test(normalizedLine)
+            )
+          ) {
+            return;
+          }
+          if (DEV_READY_LINE_RE.test(normalizedLine)) {
+            settle(true);
+          }
+          sink.write(
+            normalizedLine.endsWith('\n')
+              ? normalizedLine
+              : `${normalizedLine}\n`
+          );
+          return;
+        }
+
+        const filtered = filterDevStartupLine(line);
+        if (filtered.kind === 'skip') {
+          return;
+        }
+        if (filtered.kind === 'ready') {
+          if (!readyLogged) {
+            readyLogged = true;
+            logger.success(filtered.message);
+          }
+          settle(true);
+          return;
+        }
+        sink.write(
+          filtered.line.endsWith('\n') ? filtered.line : `${filtered.line}\n`
+        );
+      };
+      const flushPendingAndClose = () => {
+        if (closed) {
+          return;
+        }
+        closed = true;
+        if (pending.length > 0) {
+          flushLine(pending);
+          pending = '';
+        }
+        openStreamCount -= 1;
+        maybeSettleAfterExit();
+      };
+
+      stream.on('data', (chunk) => {
+        pending += String(chunk).replaceAll('\r', '');
+        const lines = pending.split('\n');
+        pending = lines.pop() ?? '';
+        for (const line of lines) {
+          flushLine(line);
+        }
+      });
+      stream.on('end', flushPendingAndClose);
+      stream.on('close', flushPendingAndClose);
+    };
+
+    attach(child.stdout, process.stdout);
+    attach(child.stderr, process.stderr);
+
+    if (typeof (child as PromiseLike<unknown>).then === 'function') {
+      (child as PromiseLike<unknown>).then(
+        () => {
+          processExited = true;
+          maybeSettleAfterExit();
+        },
+        () => {
+          processExited = true;
+          maybeSettleAfterExit();
+        }
+      );
+      return;
+    }
+
+    processExited = true;
+    maybeSettleAfterExit();
+  });
+}
+
+function extractDevBootstrapCliFlag(args: string[]): {
+  bootstrap: boolean;
+  remainingArgs: string[];
+} {
+  let bootstrap = false;
+  const remainingArgs: string[] = [];
+
+  for (const arg of args) {
+    if (arg === DEV_BOOTSTRAP_FLAG) {
+      bootstrap = true;
+      continue;
+    }
+    remainingArgs.push(arg);
+  }
+
+  return {
+    bootstrap,
+    remainingArgs,
+  };
+}
+
+function hasDevArg(args: string[], flag: string): boolean {
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
+}
+
+function applyConvexBootstrapDevArgs(args: string[]): string[] {
+  const nextArgs = [...args];
+  if (!hasDevArg(nextArgs, '--once')) {
+    nextArgs.push('--once');
+  }
+  if (!hasDevArg(nextArgs, DEV_BOOTSTRAP_TYPECHECK_FLAG)) {
+    nextArgs.push(DEV_BOOTSTRAP_TYPECHECK_FLAG, DEV_BOOTSTRAP_TYPECHECK_MODE);
+  }
+  return nextArgs;
+}
+
+function killProcessIfRunning(process: unknown, signal = 'SIGTERM') {
+  if (
+    typeof process === 'object' &&
+    process !== null &&
+    'killed' in process &&
+    !(process as { killed: boolean }).killed &&
+    'kill' in process &&
+    typeof (process as { kill: (signal?: string) => void }).kill === 'function'
+  ) {
+    (process as { kill: (signal?: string) => void }).kill(signal);
+  }
+}
+
+export async function runLocalConvexBootstrap({
+  authSyncMode = 'complete',
+  config,
+  debug,
+  devArgs = [],
+  execaFn,
+  generateMetaFn,
+  realConcavePath,
+  realConvexPath,
+  sharedDir,
+  skipGenerateMeta = false,
+  syncEnvFn,
+  targetArgs,
+}: RunLocalConvexBootstrapParams): Promise<number> {
+  if (!debug) {
+    logger.info('Bootstrapping local Convex...');
+  }
+  const backendAdapter = createBackendAdapter({
+    backend: 'convex',
+    realConvexPath,
+    realConcavePath,
+  });
+  const trimSegments = resolveCodegenTrimSegments(config);
+  const localConvexEnvPath = join(
+    process.cwd(),
+    config.paths.lib,
+    '..',
+    '.env'
+  );
+  const authEnvState = resolveAuthEnvState({
+    cwd: process.cwd(),
+    sharedDir,
+  });
+  const localNodeEnvOverrides = await resolveSupportedLocalNodeEnvOverrides({
+    execaFn,
+  });
+
+  const convexInitResult = await runConvexInitIfNeeded({
+    execaFn,
+    backendAdapter,
+    echoOutput: false,
+    env: localNodeEnvOverrides,
+    targetArgs,
+  });
+  if (convexInitResult.exitCode !== 0) {
+    return convexInitResult.exitCode;
+  }
+
+  if (fs.existsSync(localConvexEnvPath) || authEnvState.installed) {
+    await syncEnvFn({
+      authSyncMode: authEnvState.installed ? 'prepare' : 'skip',
+      force: true,
+      sharedDir,
+      silent: true,
+      targetArgs,
+    });
+  }
+
+  if (!skipGenerateMeta) {
+    await generateMetaFn(sharedDir, {
+      debug,
+      silent: true,
+      scope: 'all',
+      trimSegments,
+    });
+  }
+
+  const bootstrapProcess = execaFn(
+    backendAdapter.command,
+    [
+      ...backendAdapter.argsPrefix,
+      'dev',
+      ...applyConvexBootstrapDevArgs(devArgs),
+    ],
+    {
+      stdio: 'pipe',
+      cwd: process.cwd(),
+      env: createBackendCommandEnv(localNodeEnvOverrides),
+      reject: false,
+    }
+  );
+  const backendReadyPromise = observeDevProcessOutput(
+    bootstrapProcess,
+    debug ? 'raw' : 'filtered'
+  );
+  const abortController = new AbortController();
+
+  const authEnvSyncPromise = authEnvState.installed
+    ? (async () => {
+        const ready = await backendReadyPromise;
+        if (!ready || abortController.signal.aborted) {
+          return;
+        }
+        await runDevAuthEnvSyncLoop({
+          signal: abortController.signal,
+          runTask: () =>
+            syncEnvFn({
+              authSyncMode,
+              force: true,
+              sharedDir,
+              silent: true,
+              targetArgs,
+            }),
+        });
+      })()
+    : null;
+
+  const migrationPromise =
+    config.dev.migrations.enabled !== 'off'
+      ? (async () => {
+          try {
+            const ready = await backendReadyPromise;
+            if (!ready || abortController.signal.aborted) {
+              return;
+            }
+            const exitCode = await runDevStartupRetryLoop({
+              backend: 'convex',
+              label: 'migration up',
+              signal: abortController.signal,
+              runTask: () =>
+                runMigrationFlow({
+                  execaFn,
+                  backendAdapter,
+                  migrationConfig: config.dev.migrations,
+                  targetArgs,
+                  signal: abortController.signal,
+                  context: 'dev',
+                  direction: 'up',
+                }),
+            });
+            if (exitCode !== 0 && !abortController.signal.aborted) {
+              logger.warn(
+                '⚠️  migration up failed in bootstrap (continuing without blocking).'
+              );
+            }
+          } catch (error) {
+            if (!abortController.signal.aborted) {
+              logger.warn(
+                `⚠️  migration up errored in bootstrap: ${(error as Error).message}`
+              );
+            }
+          }
+        })()
+      : null;
+
+  const backfillPromise =
+    config.dev.aggregateBackfill.enabled !== 'off'
+      ? (async () => {
+          try {
+            const ready = await backendReadyPromise;
+            if (!ready || abortController.signal.aborted) {
+              return;
+            }
+            const exitCode = await runDevStartupRetryLoop({
+              backend: 'convex',
+              label: 'aggregateBackfill kickoff',
+              signal: abortController.signal,
+              runTask: () =>
+                runAggregateBackfillFlow({
+                  execaFn,
+                  backendAdapter,
+                  backfillConfig: config.dev.aggregateBackfill,
+                  mode: 'resume',
+                  targetArgs,
+                  signal: abortController.signal,
+                  context: 'dev',
+                }),
+            });
+            if (exitCode !== 0 && !abortController.signal.aborted) {
+              logger.warn(
+                '⚠️  aggregateBackfill kickoff failed in bootstrap (continuing without blocking).'
+              );
+            }
+          } catch (error) {
+            if (!abortController.signal.aborted) {
+              logger.warn(
+                `⚠️  aggregateBackfill kickoff errored in bootstrap: ${(error as Error).message}`
+              );
+            }
+          }
+        })()
+      : null;
+
+  try {
+    const result = await bootstrapProcess;
+    await backendReadyPromise;
+    if (authEnvSyncPromise) {
+      await authEnvSyncPromise;
+    }
+    await migrationPromise;
+    await backfillPromise;
+    return result.exitCode ?? 0;
+  } finally {
+    abortController.abort();
+    killProcessIfRunning(bootstrapProcess);
+  }
+}
+
+function applyConvexDevPreRunArgs(
+  args: string[],
+  preRunFunction?: string
+): string[] {
+  if (!preRunFunction) {
+    return args;
+  }
+
+  return ['--run', preRunFunction, ...args];
 }
 
 export async function runDevStartupRetryLoop({
@@ -154,12 +667,114 @@ export const resolveWatcherCommand = (
   const isTs = currentFilename.endsWith('.ts');
 
   return {
-    runtime: isTs ? 'bun' : process.execPath,
+    runtime: isTs ? 'bun' : 'node',
     watcherPath: isTs
       ? join(currentDir, '..', 'watcher.ts')
       : join(currentDir, 'watcher.mjs'),
   };
 };
+
+const LEADING_NODE_VERSION_PREFIX_RE = /^v/;
+
+function parseNodeMajor(version: string | undefined): number | null {
+  if (!version) {
+    return null;
+  }
+
+  const majorText = version
+    .trim()
+    .replace(LEADING_NODE_VERSION_PREFIX_RE, '')
+    .split('.')[0];
+  const major = Number.parseInt(majorText, 10);
+  return Number.isFinite(major) ? major : null;
+}
+
+function prependPathEntry(
+  currentPath: string | undefined,
+  entry: string
+): string {
+  const normalizedEntry = resolve(entry);
+  const entries = (currentPath ?? '')
+    .split(delimiter)
+    .filter((segment) => segment.length > 0)
+    .filter((segment) => resolve(segment) !== normalizedEntry);
+
+  return [entry, ...entries].join(delimiter);
+}
+
+export async function resolveSupportedLocalNodeEnvOverrides({
+  cwd = process.cwd(),
+  currentNodeVersion = process.version,
+  env,
+  execaFn,
+  runtimeName = process.release?.name ?? 'node',
+}: {
+  cwd?: string;
+  currentNodeVersion?: string;
+  env?: Record<string, string | undefined>;
+  execaFn: RunDeps['execa'];
+  runtimeName?: string;
+}): Promise<Record<string, string | undefined>> {
+  if (runtimeName !== 'node') {
+    return {};
+  }
+
+  const currentMajor = parseNodeMajor(currentNodeVersion);
+  if (
+    currentMajor !== null &&
+    SUPPORTED_LOCAL_CONVEX_NODE_MAJORS.has(currentMajor)
+  ) {
+    return {};
+  }
+
+  const baseEnv = createCommandEnv(env);
+  const whichResult = await execaFn('which', ['-a', 'node'], {
+    cwd,
+    env: baseEnv,
+    reject: false,
+    stdio: 'pipe',
+  });
+  if ((whichResult.exitCode ?? 0) !== 0) {
+    return {};
+  }
+
+  const candidates = [
+    ...new Set(
+      (whichResult.stdout ?? '')
+        .split(LINE_SPLIT_RE)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+    ),
+  ];
+
+  for (const candidate of candidates) {
+    const versionResult = await execaFn(
+      candidate,
+      ['-p', 'process.versions.node'],
+      {
+        cwd,
+        env: baseEnv,
+        reject: false,
+        stdio: 'pipe',
+      }
+    );
+    if ((versionResult.exitCode ?? 0) !== 0) {
+      continue;
+    }
+
+    const candidateMajor = parseNodeMajor(versionResult.stdout ?? '');
+    if (
+      candidateMajor !== null &&
+      SUPPORTED_LOCAL_CONVEX_NODE_MAJORS.has(candidateMajor)
+    ) {
+      return {
+        PATH: prependPathEntry(baseEnv.PATH, dirname(candidate)),
+      };
+    }
+  }
+
+  return {};
+}
 
 function readRequestBody(
   request: AsyncIterable<Uint8Array>
@@ -221,7 +836,7 @@ export function resolveConcaveLocalDevContract(
   }
 
   return {
-    backendArgs: [...args, '--port', String(LOCAL_CONCAVE_DEV_PORT)],
+    backendArgs: args,
     targetArgs: ['--url', LOCAL_CONCAVE_DEV_URL],
     backendEnv: {
       CONVEX_SITE_URL: LOCAL_CONCAVE_SITE_URL,
@@ -316,6 +931,7 @@ Options:
   --api <dir>             Output directory (default from config)
   --backend <convex|concave>
                           Backend CLI to drive
+  --bootstrap             Run one-shot local Convex bootstrap and exit
   --config <path>         Config path override
   --backfill=auto|on|off  Dev aggregate backfill mode toggle
   --backfill-wait         Wait for aggregate backfill completion
@@ -354,6 +970,9 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
   } = resolveRunDeps(deps);
   const startLocalSiteProxyFn =
     deps?.startLocalSiteProxy ?? startLocalSiteProxy;
+  const resolveSupportedLocalNodeEnvOverridesFn =
+    deps?.resolveSupportedLocalNodeEnvOverrides ??
+    resolveSupportedLocalNodeEnvOverrides;
 
   assertNoRemovedDevPreRunFlag(argv);
 
@@ -371,8 +990,14 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
   const sharedDir = parsed.sharedDir ?? config.paths.shared;
   const debug = parsed.debug || config.dev.debug;
   assertNoRemovedDevPreRunFlag(config.dev.args);
-  const convexDevArgs = [...config.dev.args, ...devCommandArgs];
+  const { bootstrap, remainingArgs: convexDevArgs } =
+    extractDevBootstrapCliFlag([...config.dev.args, ...devCommandArgs]);
   const preRunFunction = config.dev.preRun;
+  if (bootstrap && backend !== 'convex') {
+    throw new Error(
+      '`better-convex dev --bootstrap` is only supported for backend convex.'
+    );
+  }
   if (preRunFunction && backend === 'concave') {
     throw new Error(
       '`dev.preRun` is only supported for backend convex. Concave dev has no equivalent `--run` flow.'
@@ -411,11 +1036,43 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
           )
         )
       : null;
-  const backendDevArgs = concaveLocalDevContract?.backendArgs ?? convexDevArgs;
+  const backendDevArgs =
+    concaveLocalDevContract?.backendArgs ??
+    applyConvexDevPreRunArgs(convexDevArgs, preRunFunction);
+  const backendOutputMode: DevOutputMode =
+    debug || (backend === 'convex' && !hasDevArg(backendDevArgs, '--once'))
+      ? 'raw'
+      : 'filtered';
   const targetArgs =
     concaveLocalDevContract?.targetArgs ??
     extractBackendRunTargetArgs(backend, convexDevArgs);
   const trimSegments = resolveCodegenTrimSegments(config);
+  const localNodeEnvOverrides =
+    backend === 'convex'
+      ? await resolveSupportedLocalNodeEnvOverridesFn({
+          execaFn,
+        })
+      : {};
+
+  if (!bootstrap && backend === 'convex' && !debug) {
+    logger.info('Bootstrapping local Convex...');
+  }
+
+  if (bootstrap) {
+    return runLocalConvexBootstrap({
+      authSyncMode: 'complete',
+      config,
+      debug,
+      devArgs: backendDevArgs,
+      execaFn,
+      generateMetaFn,
+      realConvexPath,
+      realConcavePath,
+      sharedDir,
+      syncEnvFn,
+      targetArgs,
+    });
+  }
 
   if (!deps) {
     try {
@@ -430,6 +1087,8 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
   const convexInitResult = await runConvexInitIfNeeded({
     execaFn,
     backendAdapter,
+    echoOutput: false,
+    env: localNodeEnvOverrides,
     targetArgs,
   });
   if (convexInitResult.exitCode !== 0) {
@@ -442,27 +1101,26 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     '..',
     '.env'
   );
-  if (backend === 'convex' && fs.existsSync(localConvexEnvPath)) {
+  const authEnvState = resolveAuthEnvState({
+    cwd: process.cwd(),
+    sharedDir,
+  });
+  if (
+    backend === 'convex' &&
+    (fs.existsSync(localConvexEnvPath) || authEnvState.installed)
+  ) {
     await syncEnvFn({
+      authSyncMode: authEnvState.installed ? 'prepare' : 'skip',
       force: true,
+      sharedDir,
+      silent: true,
       targetArgs,
     });
   }
 
-  if (preRunFunction) {
-    const exitCode = await runConvexDevPreRun({
-      execaFn,
-      backendAdapter,
-      functionName: preRunFunction,
-      args: convexDevArgs,
-    });
-    if (exitCode !== 0) {
-      return exitCode;
-    }
-  }
-
   await generateMetaFn(sharedDir, {
     debug,
+    silent: true,
     scope: 'all',
     trimSegments,
   });
@@ -473,7 +1131,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     stdio: 'inherit',
     cwd: process.cwd(),
     env: {
-      ...createCommandEnv(),
+      ...createCommandEnv(localNodeEnvOverrides),
       BETTER_CONVEX_API_OUTPUT_DIR: sharedDir || '',
       BETTER_CONVEX_DEBUG: debug ? '1' : '',
       BETTER_CONVEX_CODEGEN_SCOPE: 'all',
@@ -493,22 +1151,53 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     backendAdapter.command,
     [...backendAdapter.argsPrefix, 'dev', ...backendDevArgs],
     {
-      stdio: 'inherit',
+      stdio: 'pipe',
       cwd: process.cwd(),
-      env: createBackendCommandEnv(concaveLocalDevContract?.backendEnv),
+      env: createBackendCommandEnv({
+        ...localNodeEnvOverrides,
+        ...concaveLocalDevContract?.backendEnv,
+      }),
       reject: false,
     }
+  );
+  const backendReadyPromise = observeDevProcessOutput(
+    backendProcess,
+    backendOutputMode
   );
   trackProcess(backendProcess);
 
   const backfillAbortController = new AbortController();
-  let schemaWatcher: {
-    close: () => Promise<void> | void;
-    on: (...args: any[]) => any;
-  } | null = null;
+
+  const authEnvSyncPromise =
+    backend === 'convex' && authEnvState.installed
+      ? (async () => {
+          const ready = await backendReadyPromise;
+          if (!ready || backfillAbortController.signal.aborted) {
+            return;
+          }
+          await runDevAuthEnvSyncLoop({
+            signal: backfillAbortController.signal,
+            runTask: () =>
+              syncEnvFn({
+                authSyncMode: 'complete',
+                force: true,
+                sharedDir,
+                silent: true,
+                targetArgs,
+              }),
+          });
+        })()
+      : null;
+  const authEnvSyncFailurePromise: Promise<never> = authEnvSyncPromise
+    ? authEnvSyncPromise.then(() => new Promise<never>(() => {}))
+    : new Promise<never>(() => {});
+  let envWatcher: FileWatcherHandle | null = null;
+  let schemaWatcher: FileWatcherHandle | null = null;
+  let envDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let schemaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let schemaBackfillInFlight: Promise<void> | null = null;
   let schemaBackfillQueued = false;
+  let lastSyncedLocalEnvSnapshot = readWatchedFileSnapshot(localConvexEnvPath);
 
   const maybeRunSchemaBackfill = async () => {
     try {
@@ -552,9 +1241,53 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     });
   };
 
+  const syncWatchedLocalEnv = async () => {
+    const currentSnapshot = readWatchedFileSnapshot(localConvexEnvPath);
+    if (
+      backfillAbortController.signal.aborted ||
+      currentSnapshot === lastSyncedLocalEnvSnapshot
+    ) {
+      return;
+    }
+
+    try {
+      await authEnvSyncPromise;
+      await syncEnvFn({
+        authSyncMode: 'auto',
+        force: true,
+        sharedDir,
+        silent: true,
+        targetArgs,
+      });
+      lastSyncedLocalEnvSnapshot = readWatchedFileSnapshot(localConvexEnvPath);
+    } catch (error) {
+      if (!backfillAbortController.signal.aborted) {
+        logger.warn(
+          `⚠️  env push on convex/.env update failed in dev: ${(error as Error).message}`
+        );
+      }
+    }
+  };
+
+  const queueLocalEnvSync = () => {
+    if (backfillAbortController.signal.aborted) {
+      return;
+    }
+    if (envDebounceTimer) {
+      clearTimeout(envDebounceTimer);
+    }
+    envDebounceTimer = setTimeout(() => {
+      void syncWatchedLocalEnv();
+    }, DEV_FILE_WATCH_DEBOUNCE_MS);
+  };
+
   if (devMigrationConfig.enabled !== 'off') {
     void (async () => {
       try {
+        const ready = await backendReadyPromise;
+        if (!ready || backfillAbortController.signal.aborted) {
+          return;
+        }
         const exitCode = await runDevStartupRetryLoop({
           backend,
           label: 'migration up',
@@ -588,6 +1321,10 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
   if (devBackfillConfig.enabled !== 'off') {
     void (async () => {
       try {
+        const ready = await backendReadyPromise;
+        if (!ready || backfillAbortController.signal.aborted) {
+          return;
+        }
         const exitCode = await runDevStartupRetryLoop({
           backend,
           label: 'aggregateBackfill kickoff',
@@ -618,6 +1355,24 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     })();
   }
 
+  if (backend === 'convex' && !convexDevArgs.includes('--once')) {
+    const { watch } = await import('chokidar');
+    const watchedEnv = watch(localConvexEnvPath, {
+      ignoreInitial: true,
+    }) as any;
+    envWatcher = watchedEnv;
+    watchedEnv
+      .on('add', queueLocalEnvSync)
+      .on('change', queueLocalEnvSync)
+      .on('error', (error: unknown) => {
+        if (!backfillAbortController.signal.aborted) {
+          logger.warn(
+            `⚠️  convex/.env watch error: ${(error as Error).message}`
+          );
+        }
+      });
+  }
+
   if (
     enableDevSchemaWatch &&
     devBackfillConfig.enabled !== 'off' &&
@@ -635,7 +1390,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
         }
         schemaDebounceTimer = setTimeout(() => {
           queueSchemaBackfill();
-        }, 200);
+        }, DEV_FILE_WATCH_DEBOUNCE_MS);
       })
       .on('error', (error: unknown) => {
         if (!backfillAbortController.signal.aborted) {
@@ -649,32 +1404,69 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
   process.on('exit', cleanup);
   process.on('SIGINT', () => {
     backfillAbortController.abort();
+    if (envDebounceTimer) {
+      clearTimeout(envDebounceTimer);
+    }
     if (schemaDebounceTimer) {
       clearTimeout(schemaDebounceTimer);
     }
+    void envWatcher?.close();
     void schemaWatcher?.close();
     cleanup();
     process.exit(0);
   });
   process.on('SIGTERM', () => {
     backfillAbortController.abort();
+    if (envDebounceTimer) {
+      clearTimeout(envDebounceTimer);
+    }
     if (schemaDebounceTimer) {
       clearTimeout(schemaDebounceTimer);
     }
+    void envWatcher?.close();
     void schemaWatcher?.close();
     cleanup();
     process.exit(0);
   });
 
-  const result = await Promise.race([
-    watcherProcess.catch(() => ({ exitCode: 1 })),
-    backendProcess,
-  ]);
-  backfillAbortController.abort();
-  if (schemaDebounceTimer) {
-    clearTimeout(schemaDebounceTimer);
+  try {
+    const result = await Promise.race([
+      watcherProcess.then(
+        (value) => ({
+          source: 'watcher' as const,
+          exitCode: value.exitCode ?? 0,
+        }),
+        () => ({ source: 'watcher' as const, exitCode: 1 })
+      ),
+      backendProcess.then(
+        (value) => ({
+          source: 'backend' as const,
+          exitCode: value.exitCode ?? 0,
+        }),
+        () => ({ source: 'backend' as const, exitCode: 1 })
+      ),
+      authEnvSyncFailurePromise,
+    ]);
+
+    if (authEnvSyncPromise && convexDevArgs.includes('--once')) {
+      await authEnvSyncPromise;
+    }
+
+    if (result.source === 'backend') {
+      await backendReadyPromise;
+    }
+
+    return result.exitCode ?? 0;
+  } finally {
+    backfillAbortController.abort();
+    if (envDebounceTimer) {
+      clearTimeout(envDebounceTimer);
+    }
+    if (schemaDebounceTimer) {
+      clearTimeout(schemaDebounceTimer);
+    }
+    await envWatcher?.close();
+    await schemaWatcher?.close();
+    cleanup();
   }
-  await schemaWatcher?.close();
-  cleanup();
-  return result.exitCode ?? 0;
 };

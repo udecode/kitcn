@@ -34,6 +34,7 @@ type PackageJsonUpdates = {
 type DependencyPinsArgs = {
   command: 'sync' | 'upgrade';
   dependency?: SupportedDependency;
+  skipValidate: boolean;
   version?: string;
 };
 
@@ -47,7 +48,10 @@ const PACKAGE_JSON_TARGETS: PackageJsonTarget[] = [
     path: 'package.json',
     updates: {
       dependencies: {
+        '@tanstack/react-query':
+          SUPPORTED_DEPENDENCY_VERSIONS.tanstackReactQuery.exact,
         convex: SUPPORTED_DEPENDENCY_VERSIONS.convex.exact,
+        hono: SUPPORTED_DEPENDENCY_VERSIONS.hono.exact,
       },
       devDependencies: {
         'better-auth': SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact,
@@ -60,6 +64,7 @@ const PACKAGE_JSON_TARGETS: PackageJsonTarget[] = [
       peerDependencies: {
         'better-auth': SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact,
         convex: SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum,
+        hono: SUPPORTED_DEPENDENCY_VERSIONS.hono.exact,
       },
     },
   },
@@ -75,7 +80,10 @@ const PACKAGE_JSON_TARGETS: PackageJsonTarget[] = [
     path: 'example/package.json',
     updates: {
       dependencies: {
+        '@tanstack/react-query':
+          SUPPORTED_DEPENDENCY_VERSIONS.tanstackReactQuery.exact,
         convex: SUPPORTED_DEPENDENCY_VERSIONS.convex.exact,
+        hono: SUPPORTED_DEPENDENCY_VERSIONS.hono.exact,
       },
     },
   },
@@ -118,8 +126,9 @@ const TEXT_TARGETS = [
     path: 'packages/better-convex/skills/convex/references/setup/auth.md',
     replacements: [
       {
-        pattern: /bun add better-auth@\d+\.\d+\.\d+ better-convex hono/g,
-        value: `bun add ${BETTER_AUTH_INSTALL_SPEC} better-convex hono`,
+        pattern:
+          /bun add better-auth@\d+\.\d+\.\d+ better-convex hono(@\d+\.\d+\.\d+)?/g,
+        value: `bun add ${BETTER_AUTH_INSTALL_SPEC} better-convex hono@${SUPPORTED_DEPENDENCY_VERSIONS.hono.exact}`,
       },
     ],
   },
@@ -148,12 +157,20 @@ export function parseDependencyPinsArgs(argv: string[]): DependencyPinsArgs {
   const [command, dependency, version] = argv;
 
   if (command === 'sync') {
-    if (dependency || version) {
-      throw new Error('Usage: bun tooling/dependency-pins.ts sync');
+    const skipValidate = dependency === '--skip-validate';
+    if (
+      (dependency && !skipValidate) ||
+      version ||
+      (skipValidate && argv.length !== 2)
+    ) {
+      throw new Error(
+        'Usage: bun tooling/dependency-pins.ts sync [--skip-validate]'
+      );
     }
     return {
       command,
       dependency: undefined,
+      skipValidate,
       version: undefined,
     };
   }
@@ -178,6 +195,7 @@ export function parseDependencyPinsArgs(argv: string[]): DependencyPinsArgs {
     return {
       command,
       dependency: dependency as SupportedDependency,
+      skipValidate: false,
       version,
     };
   }
@@ -291,7 +309,9 @@ async function main() {
 
   syncPackageJsonTargets();
   syncTextTargets();
-  await validatePinnedDependencies();
+  if (!args.skipValidate) {
+    await validatePinnedDependencies();
+  }
 }
 
 if (import.meta.main) {

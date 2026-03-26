@@ -4,29 +4,31 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
+import type {
+  api as generatedApi,
+  internal as generatedInternal,
+} from '../_generated/api';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "archiveOldCompletedTodos": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["archiveOldCompletedTodos"]), () => (require("../todoInternal") as Record<string, unknown>)["archiveOldCompletedTodos"])],
-  "create": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["create"]), () => (require("../todoInternal") as Record<string, unknown>)["create"])],
-  "deleteTodo": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["deleteTodo"]), () => (require("../todoInternal") as Record<string, unknown>)["deleteTodo"])],
-  "generateWeeklyReport": ["action", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["generateWeeklyReport"]), () => (require("../todoInternal") as Record<string, unknown>)["generateWeeklyReport"])],
-  "getSystemStats": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["getSystemStats"]), () => (require("../todoInternal") as Record<string, unknown>)["getSystemStats"])],
-  "getUsersWithOverdueTodos": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["getUsersWithOverdueTodos"]), () => (require("../todoInternal") as Record<string, unknown>)["getUsersWithOverdueTodos"])],
-  "getUserWeeklyActivity": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["getUserWeeklyActivity"]), () => (require("../todoInternal") as Record<string, unknown>)["getUserWeeklyActivity"])],
-  "processDailySummaries": ["action", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["processDailySummaries"]), () => (require("../todoInternal") as Record<string, unknown>)["processDailySummaries"])],
-  "recalculateUserStats": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["recalculateUserStats"]), () => (require("../todoInternal") as Record<string, unknown>)["recalculateUserStats"])],
-  "update": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["update"]), () => (require("../todoInternal") as Record<string, unknown>)["update"])],
-  "updateOverduePriorities": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["todoInternal"]["updateOverduePriorities"]), () => (require("../todoInternal") as Record<string, unknown>)["updateOverduePriorities"])],
+  "archiveOldCompletedTodos": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["todoInternal"]["archiveOldCompletedTodos"]>("todoInternal:archiveOldCompletedTodos"), () => (require("../todoInternal") as Record<string, unknown>)["archiveOldCompletedTodos"])],
+  "create": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["todoInternal"]["create"]>("todoInternal:create"), () => (require("../todoInternal") as Record<string, unknown>)["create"])],
+  "deleteTodo": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["todoInternal"]["deleteTodo"]>("todoInternal:deleteTodo"), () => (require("../todoInternal") as Record<string, unknown>)["deleteTodo"])],
+  "generateWeeklyReport": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "internal", typeof generatedInternal["todoInternal"]["generateWeeklyReport"]>("todoInternal:generateWeeklyReport"), () => (require("../todoInternal") as Record<string, unknown>)["generateWeeklyReport"])],
+  "getSystemStats": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["todoInternal"]["getSystemStats"]>("todoInternal:getSystemStats"), () => (require("../todoInternal") as Record<string, unknown>)["getSystemStats"])],
+  "getUsersWithOverdueTodos": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["todoInternal"]["getUsersWithOverdueTodos"]>("todoInternal:getUsersWithOverdueTodos"), () => (require("../todoInternal") as Record<string, unknown>)["getUsersWithOverdueTodos"])],
+  "getUserWeeklyActivity": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["todoInternal"]["getUserWeeklyActivity"]>("todoInternal:getUserWeeklyActivity"), () => (require("../todoInternal") as Record<string, unknown>)["getUserWeeklyActivity"])],
+  "processDailySummaries": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "internal", typeof generatedInternal["todoInternal"]["processDailySummaries"]>("todoInternal:processDailySummaries"), () => (require("../todoInternal") as Record<string, unknown>)["processDailySummaries"])],
+  "recalculateUserStats": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["todoInternal"]["recalculateUserStats"]>("todoInternal:recalculateUserStats"), () => (require("../todoInternal") as Record<string, unknown>)["recalculateUserStats"])],
+  "update": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["todoInternal"]["update"]>("todoInternal:update"), () => (require("../todoInternal") as Record<string, unknown>)["update"])],
+  "updateOverduePriorities": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["todoInternal"]["updateOverduePriorities"]>("todoInternal:updateOverduePriorities"), () => (require("../todoInternal") as Record<string, unknown>)["updateOverduePriorities"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

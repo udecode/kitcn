@@ -118,11 +118,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
     label: 'convex next auth bootstrap',
     setup: [['add', 'auth', '--yes', '--no-codegen']],
     validation: {
-      beforeCheck: [
-        ['convex', 'init'],
-        ['better-convex', 'dev', '--once', '--typecheck', 'disable'],
-        ['better-convex', 'env', 'push', '--auth'],
-      ],
+      beforeCheck: [['init', '--yes', '--json']],
       lint: true,
     },
     source: {
@@ -139,11 +135,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
     label: 'convex vite auth bootstrap',
     setup: [['add', 'auth', '--yes', '--no-codegen']],
     validation: {
-      beforeCheck: [
-        ['convex', 'init'],
-        ['better-convex', 'dev', '--once', '--typecheck', 'disable'],
-        ['better-convex', 'env', 'push', '--auth'],
-      ],
+      beforeCheck: [['init', '--yes', '--json']],
       lint: false,
     },
     source: {
@@ -164,11 +156,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
       ['add', 'resend', '--yes', '--no-codegen'],
     ],
     validation: {
-      beforeCheck: [
-        ['convex', 'init'],
-        ['better-convex', 'dev', '--once', '--typecheck', 'disable'],
-        ['better-convex', 'env', 'push', '--auth'],
-      ],
+      beforeCheck: [['init', '--yes', '--json']],
       lint: true,
     },
     source: {
@@ -217,7 +205,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
       CONVEX_AGENT_MODE: 'anonymous',
     },
     label: 'create-convex nextjs-shadcn adoption',
-    setup: [['init', '--yes']],
+    setup: [['init', '--yes', '--json']],
     validation: {
       lint: false,
     },
@@ -232,7 +220,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
       CONVEX_AGENT_MODE: 'anonymous',
     },
     label: 'create-convex react-vite-shadcn adoption',
-    setup: [['init', '--yes']],
+    setup: [['init', '--yes', '--json']],
     validation: {
       lint: false,
     },

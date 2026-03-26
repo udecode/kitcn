@@ -89,10 +89,15 @@ describe('integration/generated-api', () => {
       );
       expect(generatedServer).toContain('createOrm');
       expect(generatedServer).toContain('initCRPC as baseInitCRPC,');
-      expect(generatedServer).toContain('getGeneratedValue,');
+      expect(generatedServer).toContain('createGeneratedFunctionReference,');
+      expect(generatedServer).toContain('const ormFunctions: OrmFunctions = {');
       expect(generatedServer).toContain(
-        'const ormFunctions = getGeneratedValue(internal, ["generated","server"]) as OrmFunctions;'
+        'scheduledMutationBatch: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:scheduledMutationBatch"),'
       );
+      expect(generatedServer).not.toContain(
+        "import { internal } from '../_generated/api.js';"
+      );
+      expect(generatedServer).not.toContain('getGeneratedValue(');
       expect(generatedServer).toContain(
         'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
       );
@@ -155,7 +160,7 @@ describe('integration/generated-api', () => {
       );
       writeFile(
         path.join(dir, 'node_modules', 'better-convex', 'server.js'),
-        `export { createApiLeaf } from ${JSON.stringify(path.join(packageRoot, 'src', 'server', 'api-entry.ts'))};`
+        `export { createApiLeaf, createGeneratedFunctionReference } from ${JSON.stringify(path.join(packageRoot, 'src', 'server', 'api-entry.ts'))};`
       );
 
       writeFile(
@@ -404,7 +409,7 @@ describe('integration/generated-api', () => {
       const generatedAuth = fs.readFileSync(generatedServerFile, 'utf-8');
 
       expect(generatedAuth).toContain('createAuthRuntime');
-      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason,');
+      expect(generatedAuth).toContain('getInvalidAuthDefinitionExportReason,');
       expect(generatedAuth).toContain(
         "import * as authDefinitionModule from '../auth';"
       );
@@ -417,7 +422,7 @@ describe('integration/generated-api', () => {
         'const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
       );
       expect(generatedAuth).toContain(
-        'getGeneratedAuthDisabledReason("default_export_unavailable")'
+        'getInvalidAuthDefinitionExportReason("convex/auth.ts")'
       );
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).toContain('auth: authDefinition,');
@@ -507,9 +512,9 @@ describe('integration/generated-api', () => {
       expect(generatedAuth).toContain(
         '> = createDisabledAuthRuntime<DataModel, typeof schema, MutationCtx, GenericCtx>({'
       );
-      expect(generatedAuth).toContain(
-        'getGeneratedAuthDisabledReason("missing_auth_file")'
-      );
+      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason(');
+      expect(generatedAuth).toContain('"missing_auth_file"');
+      expect(generatedAuth).toContain('"convex/auth.ts"');
       expect(generatedAuth).toContain("} from 'better-convex/auth/generated';");
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).toContain('authEnabled,');
@@ -605,9 +610,9 @@ describe('integration/generated-api', () => {
       );
       const generatedAuth = fs.readFileSync(generatedServerFile, 'utf-8');
       expect(generatedAuth).toContain('createDisabledAuthRuntime');
-      expect(generatedAuth).toContain(
-        'getGeneratedAuthDisabledReason("missing_default_export")'
-      );
+      expect(generatedAuth).toContain('getGeneratedAuthDisabledReason(');
+      expect(generatedAuth).toContain('"missing_default_export"');
+      expect(generatedAuth).toContain('"convex/auth.ts"');
       expect(generatedAuth).toContain("} from 'better-convex/auth/generated';");
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedAuth).not.toContain(

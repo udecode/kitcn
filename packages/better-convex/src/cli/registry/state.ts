@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import { join } from 'node:path';
 import { createJiti } from 'jiti';
 import { OrmSchemaExtensions } from '../../orm/symbols.js';
-import type { PluginLockfile, SupportedPlugin } from '../types.js';
+import type {
+  PluginLockfile,
+  PluginLockfileEntry,
+  PluginRootSchemaOwnership,
+  SupportedPlugin,
+} from '../types.js';
 import { isSupportedPluginKey } from './index.js';
 import { normalizeLockfileScaffoldPath } from './path-utils.js';
 
@@ -76,10 +81,19 @@ export const readPluginLockfile = (lockfilePath: string): PluginLockfile => {
           }
         }
       }
-      plugins[pluginKey] =
-        Object.keys(normalizedFiles).length > 0
-          ? { package: packageName, files: normalizedFiles }
-          : { package: packageName };
+      const schemaOwnership = readPluginRootSchemaOwnership(
+        (pluginEntry as { schema?: unknown }).schema
+      );
+      const nextEntry: PluginLockfileEntry = {
+        package: packageName,
+      };
+      if (Object.keys(normalizedFiles).length > 0) {
+        nextEntry.files = normalizedFiles;
+      }
+      if (schemaOwnership) {
+        nextEntry.schema = schemaOwnership;
+      }
+      plugins[pluginKey] = nextEntry;
     }
     return {
       plugins,
@@ -118,10 +132,16 @@ export const renderPluginLockfileContent = (
         }
       }
     }
-    normalizedPlugins[plugin] =
-      Object.keys(normalizedFiles).length > 0
-        ? { package: pluginEntry.package, files: normalizedFiles }
-        : { package: pluginEntry.package };
+    const nextEntry: PluginLockfileEntry = {
+      package: pluginEntry.package,
+    };
+    if (Object.keys(normalizedFiles).length > 0) {
+      nextEntry.files = normalizedFiles;
+    }
+    if (pluginEntry.schema) {
+      nextEntry.schema = normalizePluginRootSchemaOwnership(pluginEntry.schema);
+    }
+    normalizedPlugins[plugin] = nextEntry;
   }
   return `${JSON.stringify(
     {
@@ -130,6 +150,97 @@ export const renderPluginLockfileContent = (
     null,
     2
   )}\n`;
+};
+
+const normalizePluginRootSchemaOwnership = (
+  schema: PluginRootSchemaOwnership
+): PluginRootSchemaOwnership => {
+  const tables = Object.fromEntries(
+    Object.entries(schema.tables)
+      .filter(([, entry]) => entry && typeof entry === 'object')
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([tableName, entry]) => {
+        if (entry.owner === 'managed') {
+          return [
+            tableName,
+            {
+              checksum: entry.checksum,
+              owner: 'managed' as const,
+            },
+          ];
+        }
+
+        return [
+          tableName,
+          {
+            owner: 'local' as const,
+          },
+        ];
+      })
+  );
+
+  return {
+    path: normalizeLockfileScaffoldPath(schema.path) ?? schema.path,
+    tables,
+  };
+};
+
+const readPluginRootSchemaOwnership = (
+  value: unknown
+): PluginRootSchemaOwnership | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const pathValue = normalizeLockfileScaffoldPath(
+    (value as { path?: unknown }).path
+  );
+  const rawTables = (value as { tables?: unknown }).tables;
+  if (
+    !pathValue ||
+    !rawTables ||
+    typeof rawTables !== 'object' ||
+    Array.isArray(rawTables)
+  ) {
+    return undefined;
+  }
+
+  const tables: PluginRootSchemaOwnership['tables'] = {};
+  for (const [tableName, tableEntry] of Object.entries(
+    rawTables as Record<string, unknown>
+  ).sort(([a], [b]) => a.localeCompare(b))) {
+    if (
+      !tableEntry ||
+      typeof tableEntry !== 'object' ||
+      Array.isArray(tableEntry)
+    ) {
+      continue;
+    }
+
+    const owner = (tableEntry as { owner?: unknown }).owner;
+    if (owner === 'local') {
+      tables[tableName] = { owner: 'local' };
+      continue;
+    }
+    if (owner !== 'managed') {
+      continue;
+    }
+
+    const checksum = (tableEntry as { checksum?: unknown }).checksum;
+    if (typeof checksum !== 'string' || checksum.length === 0) {
+      continue;
+    }
+    tables[tableName] = { checksum, owner: 'managed' };
+  }
+
+  if (Object.keys(tables).length === 0) {
+    return undefined;
+  }
+
+  return {
+    path: pathValue,
+    tables,
+  };
 };
 
 export const resolveSchemaInstalledPlugins = async (

@@ -1,5 +1,5 @@
 import type { BetterAuthDBSchema, DBFieldAttribute } from 'better-auth/db';
-import { indexFields } from './create-schema';
+import { augmentBetterAuthTables, indexFields } from './create-schema';
 
 type FieldType =
   | 'boolean'
@@ -16,6 +16,16 @@ type TableEntry = {
   modelName: string;
   table: BetterAuthDBSchema[string];
   varName: string;
+};
+
+type RelationEntry = {
+  alias?: string;
+  manyName: string;
+  oneName: string;
+  source: TableEntry;
+  sourceFieldName: string;
+  target: TableEntry;
+  targetFieldName: string;
 };
 
 // Return map of unique, sortable, and reference fields
@@ -48,21 +58,44 @@ const specialFields = (tables: BetterAuthDBSchema) =>
 const mergedIndexFields = (tables: BetterAuthDBSchema) =>
   Object.fromEntries(
     Object.entries(tables).map(([key, table]) => {
-      const manualIndexes =
-        indexFields[key as keyof typeof indexFields]?.map((index) =>
-          typeof index === 'string'
-            ? (table.fields[index]?.fieldName ?? index)
-            : index.map((i) => table.fields[i]?.fieldName ?? i)
-        ) || [];
-      const specialFieldIndexes = Object.keys(
+      const tableSpecialFields =
         specialFields(tables)[key as keyof ReturnType<typeof specialFields>] ||
-          {}
-      ).filter(
-        (index) =>
-          !manualIndexes.some((m) =>
-            Array.isArray(m) ? m[0] === index : m === index
-          )
-      );
+        {};
+      const resolveIndexField = (fieldKey: string) => {
+        const field = table.fields[fieldKey];
+        return field ? (field.fieldName ?? fieldKey) : null;
+      };
+      const manualIndexes =
+        indexFields[key as keyof typeof indexFields]?.reduce<
+          Array<string | string[]>
+        >((indexes, index) => {
+          if (typeof index === 'string') {
+            const resolved = resolveIndexField(index);
+            if (resolved) {
+              indexes.push(resolved);
+            }
+            return indexes;
+          }
+
+          const resolved = index
+            .map((fieldKey) => resolveIndexField(fieldKey))
+            .filter((fieldName): fieldName is string => fieldName !== null);
+          if (resolved.length === index.length) {
+            indexes.push(resolved);
+          }
+          return indexes;
+        }, []) || [];
+      const specialFieldIndexes = Object.entries(
+        tableSpecialFields as Record<string, { unique?: boolean }>
+      )
+        .filter(([, fieldMeta]) => fieldMeta.unique !== true)
+        .map(([fieldName]) => fieldName)
+        .filter(
+          (index) =>
+            !manualIndexes.some((m) =>
+              Array.isArray(m) ? m[0] === index : m === index
+            )
+        );
 
       return [key, manualIndexes.concat(specialFieldIndexes)];
     })
@@ -70,6 +103,9 @@ const mergedIndexFields = (tables: BetterAuthDBSchema) =>
 
 const VALID_IDENTIFIER_REGEX = /^[$A-Z_][0-9A-Z_$]*$/i;
 const LEADING_DIGIT_REGEX = /^[0-9]/;
+const PLURALIZE_ES_SUFFIX_REGEX = /(?:s|x|z|ch|sh)$/i;
+const PLURALIZE_IES_SUFFIX_REGEX = /[^aeiou]y$/i;
+const TABLE_IDENTIFIER_SUFFIX_REGEX = /(?:Table|_table)$/i;
 
 const renderObjectKey = (value: string) =>
   VALID_IDENTIFIER_REGEX.test(value) ? value : JSON.stringify(value);
@@ -90,12 +126,19 @@ const toIdentifier = (value: string) => {
   return normalized;
 };
 
+const toTableIdentifier = (value: string) => {
+  const identifier = toIdentifier(value);
+  return TABLE_IDENTIFIER_SUFFIX_REGEX.test(identifier)
+    ? identifier
+    : `${identifier}Table`;
+};
+
 const getTableEntries = (tables: BetterAuthDBSchema): TableEntry[] => {
   const usedNames = new Map<string, number>();
 
   return Object.entries(tables).map(([key, table]) => {
     const modelName = table.modelName;
-    const baseName = toIdentifier(modelName);
+    const baseName = toTableIdentifier(modelName);
     const count = usedNames.get(baseName) ?? 0;
     usedNames.set(baseName, count + 1);
     const varName = count === 0 ? baseName : `${baseName}_${count + 1}`;
@@ -126,6 +169,87 @@ const getReferencedFieldName = (
     return field;
   }
   return entry.table.fields[field]?.fieldName ?? field;
+};
+
+const stripIdSuffix = (value: string) =>
+  value.endsWith('Id') && value.length > 2 ? value.slice(0, -2) : value;
+
+const capitalize = (value: string) =>
+  value ? `${value.slice(0, 1).toUpperCase()}${value.slice(1)}` : value;
+
+const pluralize = (value: string) => {
+  if (PLURALIZE_ES_SUFFIX_REGEX.test(value)) {
+    return `${value}es`;
+  }
+  if (PLURALIZE_IES_SUFFIX_REGEX.test(value)) {
+    return `${value.slice(0, -1)}ies`;
+  }
+  return `${value}s`;
+};
+
+const buildRelationEntries = (
+  tables: BetterAuthDBSchema,
+  entries: TableEntry[]
+): RelationEntry[] => {
+  const rawRelations = entries.flatMap((source) =>
+    Object.entries(source.table.fields)
+      .map(([fieldKey, field]) => {
+        const attr = field as DBFieldAttribute;
+        if (!attr.references) {
+          return null;
+        }
+
+        const target =
+          findTableEntryByModel(entries, tables, attr.references.model) ?? null;
+        if (!target) {
+          return null;
+        }
+
+        return {
+          source,
+          fieldKey,
+          sourceFieldName: attr.fieldName ?? fieldKey,
+          target,
+          targetFieldName: getReferencedFieldName(
+            tables,
+            entries,
+            attr.references.model,
+            attr.references.field
+          ),
+        };
+      })
+      .filter((value) => value !== null)
+  );
+
+  const pairCounts = new Map<string, number>();
+  for (const relation of rawRelations) {
+    const key = `${relation.source.modelName}->${relation.target.modelName}`;
+    pairCounts.set(key, (pairCounts.get(key) ?? 0) + 1);
+  }
+
+  return rawRelations.map((relation) => {
+    const pairKey = `${relation.source.modelName}->${relation.target.modelName}`;
+    const needsAlias = (pairCounts.get(pairKey) ?? 0) > 1;
+    const oneName = toIdentifier(
+      stripIdSuffix(relation.fieldKey) || relation.target.modelName
+    );
+    const alias = needsAlias ? oneName : undefined;
+    const manyName = toIdentifier(
+      needsAlias
+        ? `${pluralize(relation.source.modelName)}As${capitalize(oneName)}`
+        : pluralize(relation.source.modelName)
+    );
+
+    return {
+      alias,
+      manyName,
+      oneName,
+      source: relation.source,
+      sourceFieldName: relation.sourceFieldName,
+      target: relation.target,
+      targetFieldName: relation.targetFieldName,
+    };
+  });
 };
 
 const getTypeExpression = (
@@ -177,10 +301,58 @@ const getTypeExpression = (
 
 export const createSchemaOrm = async ({
   file,
+  regenerateCommand,
   tables,
 }: {
+  regenerateCommand?: string;
   tables: BetterAuthDBSchema;
   file?: string;
+}) => {
+  return renderSchemaOrmFile({
+    file,
+    mode: 'schema',
+    regenerateCommand,
+    tables,
+  });
+};
+
+export const createSchemaExtensionOrm = async ({
+  extensionKey,
+  exportName,
+  file,
+  regenerateCommand,
+  tables,
+}: {
+  extensionKey: string;
+  exportName: string;
+  regenerateCommand?: string;
+  tables: BetterAuthDBSchema;
+  file?: string;
+}) => {
+  return renderSchemaOrmFile({
+    extensionKey,
+    exportName,
+    file,
+    mode: 'extension',
+    regenerateCommand,
+    tables,
+  });
+};
+
+const renderSchemaOrmFile = async ({
+  extensionKey,
+  exportName,
+  file,
+  mode,
+  regenerateCommand,
+  tables,
+}: {
+  extensionKey?: string;
+  exportName?: string;
+  regenerateCommand?: string;
+  tables: BetterAuthDBSchema;
+  file?: string;
+  mode: 'schema' | 'extension';
 }) => {
   // stop convex esbuild from throwing over this import, only runs
   // in the better auth cli - decode at runtime to hide from static analysis
@@ -196,9 +368,15 @@ export const createSchemaOrm = async ({
     );
   }
 
+  tables = augmentBetterAuthTables(tables);
+
   const entries = getTableEntries(tables);
+  const relationEntries = buildRelationEntries(tables, entries);
   const state = {
-    ormImports: new Set<string>(['convexTable', 'defineSchema']),
+    ormImports: new Set<string>([
+      'convexTable',
+      mode === 'extension' ? 'defineSchemaExtension' : 'defineSchema',
+    ]),
   };
 
   const tableBlocks: string[] = [];
@@ -277,21 +455,101 @@ export const createSchemaOrm = async ({
     return `  ${renderObjectKey(entry.modelName)}: ${entry.varName},`;
   });
 
+  const tableObject = `{
+${tableObjectEntries.join('\n')}
+}`;
+
+  const relationBlocksByTable = new Map<string, string[]>();
+
+  for (const relation of relationEntries) {
+    const sourceLines = [
+      `    ${renderObjectKey(relation.oneName)}: ${renderPropertyAccess(
+        'r.one',
+        relation.target.modelName
+      )}({`,
+      `      from: ${renderPropertyAccess(
+        renderPropertyAccess('r', relation.source.modelName),
+        relation.sourceFieldName
+      )},`,
+      `      to: ${renderPropertyAccess(
+        renderPropertyAccess('r', relation.target.modelName),
+        relation.targetFieldName
+      )},`,
+      ...(relation.alias
+        ? [`      alias: ${JSON.stringify(relation.alias)},`]
+        : []),
+      '    }),',
+    ];
+    relationBlocksByTable.set(relation.source.modelName, [
+      ...(relationBlocksByTable.get(relation.source.modelName) ?? []),
+      sourceLines.join('\n'),
+    ]);
+
+    const targetLines = [
+      `    ${renderObjectKey(relation.manyName)}: ${renderPropertyAccess(
+        'r.many',
+        relation.source.modelName
+      )}({`,
+      `      from: ${renderPropertyAccess(
+        renderPropertyAccess('r', relation.target.modelName),
+        relation.targetFieldName
+      )},`,
+      `      to: ${renderPropertyAccess(
+        renderPropertyAccess('r', relation.source.modelName),
+        relation.sourceFieldName
+      )},`,
+      ...(relation.alias
+        ? [`      alias: ${JSON.stringify(relation.alias)},`]
+        : []),
+      '    }),',
+    ];
+    relationBlocksByTable.set(relation.target.modelName, [
+      ...(relationBlocksByTable.get(relation.target.modelName) ?? []),
+      targetLines.join('\n'),
+    ]);
+  }
+
+  const relationObjectEntries = entries
+    .map((entry) => {
+      const relationBlocks = relationBlocksByTable.get(entry.modelName);
+      if (!relationBlocks || relationBlocks.length === 0) {
+        return null;
+      }
+
+      return `  ${renderObjectKey(entry.modelName)}: {\n${relationBlocks.join(
+        '\n'
+      )}\n  },`;
+    })
+    .filter((value) => value !== null);
+
+  const relationChain =
+    relationObjectEntries.length > 0
+      ? `.relations((r) => ({\n${relationObjectEntries.join('\n')}\n}))`
+      : '';
+
+  const output =
+    mode === 'extension'
+      ? `
+export function ${exportName ?? 'authExtension'}() {
+  return defineSchemaExtension(${JSON.stringify(extensionKey ?? 'auth')}, ${tableObject})${relationChain};
+}
+`
+      : `
+export const tables = ${tableObject};
+
+const schema = defineSchema(tables)${relationChain};
+
+export default schema;
+`;
+
   const code = `// This file is auto-generated. Do not edit this file manually.
 // To regenerate the schema, run:
-// \`npx @better-auth/cli generate --output ${file} -y\`
+// \`${regenerateCommand ?? `npx @better-auth/cli generate --output ${file} -y`}\`
 
 ${imports}
 
 ${tableBlocks.join('\n\n')}
-
-export const tables = {
-${tableObjectEntries.join('\n')}
-};
-
-const schema = defineSchema(tables);
-
-export default schema;
+${output}
 `;
 
   return {

@@ -4,22 +4,20 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "getCurrentUser": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["user"]["getCurrentUser"]), () => (require("../user") as Record<string, unknown>)["getCurrentUser"])],
-  "getIsAuthenticated": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["user"]["getIsAuthenticated"]), () => (require("../user") as Record<string, unknown>)["getIsAuthenticated"])],
-  "getSessionUser": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["user"]["getSessionUser"]), () => (require("../user") as Record<string, unknown>)["getSessionUser"])],
-  "updateSettings": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["user"]["updateSettings"]), () => (require("../user") as Record<string, unknown>)["updateSettings"])],
+  "getCurrentUser": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../user").getCurrentUser>("user:getCurrentUser"), () => (require("../user") as Record<string, unknown>)["getCurrentUser"])],
+  "getIsAuthenticated": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../user").getIsAuthenticated>("user:getIsAuthenticated"), () => (require("../user") as Record<string, unknown>)["getIsAuthenticated"])],
+  "getSessionUser": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../user").getSessionUser>("user:getSessionUser"), () => (require("../user") as Record<string, unknown>)["getSessionUser"])],
+  "updateSettings": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../user").updateSettings>("user:updateSettings"), () => (require("../user") as Record<string, unknown>)["updateSettings"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

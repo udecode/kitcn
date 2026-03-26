@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import { resolve } from 'node:path';
-import { BETTER_AUTH_INSTALL_SPEC } from '../../../supported-dependencies.js';
+import {
+  BETTER_AUTH_INSTALL_SPEC,
+  OPENTELEMETRY_API_INSTALL_SPEC,
+} from '../../../supported-dependencies.js';
 import { defineInternalRegistryItem } from '../../define-item.js';
 import { createRegistryFile } from '../../files.js';
 import { INIT_CRPC_TEMPLATE } from '../../init/init-crpc.template.js';
@@ -16,6 +19,7 @@ import {
   resolveRelativeImportPath,
 } from '../../plan-helpers.js';
 import { renderLocalConvexEnvContent } from '../../planner.js';
+import { reconcileRootSchemaOwnership } from '../../schema-ownership.js';
 import { getSchemaFilePath } from '../../state.js';
 import type { PluginRegistryBuildPlanFilesParams } from '../../types.js';
 import { AUTH_CONVEX_TEMPLATE, AUTH_TEMPLATE } from './auth.template.js';
@@ -35,10 +39,14 @@ import { AUTH_NEXT_ROUTE_TEMPLATE } from './auth-next-route.template.js';
 import { AUTH_NEXT_SERVER_TEMPLATE } from './auth-next-server.template.js';
 import { AUTH_PAGE_TEMPLATE } from './auth-page.template.js';
 import { AUTH_REACT_CONVEX_PROVIDER_TEMPLATE } from './auth-react-convex-provider.template.js';
+import { AUTH_CONVEX_SCHEMA_TEMPLATE } from './auth-schema.template.js';
 import {
-  AUTH_CONVEX_SCHEMA_TEMPLATE,
-  AUTH_SCHEMA_TEMPLATE,
-} from './auth-schema.template.js';
+  loadAuthOptionsFromDefinition,
+  loadDefaultManagedAuthOptions,
+  preserveUserOwnedAuthScaffoldFiles,
+  reconcileAuthScaffoldFiles,
+  renderManagedAuthSchemaUnits,
+} from './reconcile-auth-schema.js';
 
 const INIT_HTTP_API_USE_BLOCK_RE =
   /app\.use\(\s*['"]\/api\/\*['"][\s\S]*?\);\n?/;
@@ -52,7 +60,6 @@ const AUTH_CONVEX_NEXT_PROVIDER_RETURN_RE =
   /<ConvexProvider client=\{convex\}>[\s\S]*?<\/ConvexProvider>/;
 const AUTH_CONVEX_REACT_PROVIDER_OPEN_RE = /<ConvexProvider client=\{convex\}>/;
 const AUTH_CONVEX_REACT_PROVIDER_CLOSE_RE = /<\/ConvexProvider>/;
-
 const AUTH_ENV_FIELDS = [
   {
     bootstrap: {
@@ -69,17 +76,10 @@ const AUTH_ENV_FIELDS = [
 
 const AUTH_FILES = [
   createRegistryFile({
-    id: 'auth-schema',
-    path: 'schema.ts',
-    target: 'lib',
-    content: AUTH_SCHEMA_TEMPLATE,
-  }),
-  createRegistryFile({
     id: 'auth-config',
     path: 'auth.config.ts',
     target: 'functions',
     content: AUTH_CONFIG_TEMPLATE,
-    requires: ['auth-schema'],
   }),
   createRegistryFile({
     id: 'auth-runtime',
@@ -87,6 +87,8 @@ const AUTH_FILES = [
     target: 'functions',
     content: AUTH_TEMPLATE,
     requires: ['auth-config'],
+    dependencyHintMessage: 'Auth runtime depends on OpenTelemetry API.',
+    dependencyHints: [OPENTELEMETRY_API_INSTALL_SPEC],
   }),
   createRegistryFile({
     id: 'auth-client',
@@ -124,6 +126,8 @@ const AUTH_CONVEX_FILES = [
     target: 'functions',
     content: AUTH_CONVEX_TEMPLATE,
     requires: ['auth-config-convex'],
+    dependencyHintMessage: 'Auth runtime depends on OpenTelemetry API.',
+    dependencyHints: [OPENTELEMETRY_API_INSTALL_SPEC],
   }),
   createRegistryFile({
     id: 'auth-client-convex',
@@ -133,6 +137,49 @@ const AUTH_CONVEX_FILES = [
     requires: ['auth-runtime-convex'],
   }),
 ] as const;
+
+async function buildAuthSchemaRegistrationPlanFile(
+  params: PluginRegistryBuildPlanFilesParams
+) {
+  if (params.preset === 'convex') {
+    return buildAuthConvexSchemaPlanFile(params);
+  }
+
+  const schemaPath = getSchemaFilePath(params.functionsDir);
+  const source = fs.readFileSync(schemaPath, 'utf8');
+  const authDefinitionPath = resolve(params.functionsDir, 'auth.ts');
+  const authOptions =
+    (await loadAuthOptionsFromDefinition(authDefinitionPath)) ??
+    (await loadDefaultManagedAuthOptions());
+  const authSchemaLock = params.lockfile.plugins.auth?.schema ?? null;
+  const result = await reconcileRootSchemaOwnership({
+    lock: authSchemaLock,
+    overwrite:
+      params.overwrite ||
+      (params.applyScope === 'schema' && authSchemaLock === null),
+    overwriteManaged: params.applyScope === 'schema',
+    pluginKey: 'auth',
+    preview: params.preview,
+    promptAdapter: params.promptAdapter,
+    schemaPath,
+    source,
+    tables: await renderManagedAuthSchemaUnits({
+      authOptions,
+    }),
+    yes: params.yes,
+  });
+  return {
+    ...createPlanFile({
+      kind: 'schema',
+      filePath: schemaPath,
+      content: result.content,
+      createReason: 'Create schema.ts with auth tables.',
+      updateReason: 'Register auth tables in schema.ts.',
+      skipReason: 'Auth tables are already registered in schema.ts.',
+    }),
+    schemaOwnershipLock: result.lock,
+  };
+}
 
 function buildAuthCrpcRegistrationPlanFile(
   params: PluginRegistryBuildPlanFilesParams
@@ -532,6 +579,9 @@ export const authRegistryItem = defineInternalRegistryItem({
   internal: {
     localDocsPath: 'www/content/docs/auth/server.mdx',
     envFields: AUTH_ENV_FIELDS,
+    liveBootstrap: {
+      mode: 'local',
+    },
     schemaRegistration: {
       importName: 'authExtension',
       path: 'schema.ts',
@@ -556,6 +606,13 @@ export const authRegistryItem = defineInternalRegistryItem({
       resolveScaffoldRoots: ({ functionsDir }) => ({
         functionsRootDir: functionsDir,
       }),
+      reconcileScaffoldFiles: async ({ functionsDir, scaffoldFiles }) =>
+        preserveUserOwnedAuthScaffoldFiles(
+          await reconcileAuthScaffoldFiles({
+            functionsDir,
+            scaffoldFiles,
+          })
+        ),
       resolveTemplates: ({ roots, templates }) => {
         if (!roots.projectContext || roots.projectContext.mode === 'next-app') {
           return templates;
@@ -583,84 +640,55 @@ export const authRegistryItem = defineInternalRegistryItem({
             return template;
           });
       },
-      buildPlanFiles: ({ config, functionsDir, preset, roots }) => {
+      buildPlanFiles: (params) => {
+        const { preset, roots } = params;
         if (preset === 'convex') {
           return [
-            buildAuthConvexLocalEnvPlanFile({
-              config,
-              functionsDir,
-              preset,
-              roots,
-            }),
-            buildAuthConvexHttpPlanFile({
-              config,
-              functionsDir,
-              preset,
-              roots,
-            }),
-            buildAuthConvexProviderPlanFile({
-              config,
-              functionsDir,
-              preset,
-              roots,
-            }),
+            buildAuthConvexLocalEnvPlanFile(params),
+            buildAuthConvexHttpPlanFile(params),
+            buildAuthConvexProviderPlanFile(params),
           ];
         }
 
         const files = [
-          buildAuthHttpRegistrationPlanFile({
-            config,
-            functionsDir,
-            preset,
-            roots,
-          }),
-          buildAuthCrpcRegistrationPlanFile({
-            config,
-            functionsDir,
-            preset,
-            roots,
-          }),
-          buildAuthProviderPlanFile({
-            config,
-            functionsDir,
-            preset,
-            roots,
-          }),
+          buildAuthHttpRegistrationPlanFile(params),
+          buildAuthCrpcRegistrationPlanFile(params),
+          buildAuthProviderPlanFile(params),
         ];
 
         if (roots.projectContext?.mode === 'next-app') {
           files.push(
-            buildAuthNextServerPlanFile({
-              config,
-              functionsDir,
-              preset,
-              roots,
-            }),
-            buildAuthNextRoutePlanFile({
-              config,
-              functionsDir,
-              preset,
-              roots,
-            })
+            buildAuthNextServerPlanFile(params),
+            buildAuthNextRoutePlanFile(params)
           );
         }
 
         return files;
       },
       buildSchemaRegistrationPlanFile: ({
+        applyScope,
         config,
         functionsDir,
+        lockfile,
+        overwrite,
         preset,
+        preview,
+        promptAdapter,
         roots,
+        yes,
       }) =>
-        preset === 'convex'
-          ? buildAuthConvexSchemaPlanFile({
-              config,
-              functionsDir,
-              preset,
-              roots,
-            })
-          : undefined,
+        buildAuthSchemaRegistrationPlanFile({
+          applyScope,
+          config,
+          functionsDir,
+          lockfile,
+          overwrite,
+          preset,
+          preview,
+          promptAdapter,
+          roots,
+          yes,
+        }),
     },
   },
 });

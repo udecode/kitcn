@@ -1,29 +1,53 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import {
-  getIgnoredWatchPatterns,
-  getWatchPatterns,
-  startWatcher,
-} from './watcher';
+import { getWatchRoots, shouldIgnoreWatchPath, startWatcher } from './watcher';
 
 describe('cli/watcher', () => {
-  test('getWatchPatterns includes function, convex-generated-js, and router sources', () => {
+  test('getWatchRoots includes the functions dir and sibling routers dir', () => {
     const functionsDir = '/repo/convex';
-    expect(getWatchPatterns(functionsDir)).toEqual([
-      path.join(functionsDir, '**', '*.ts'),
-      path.join(functionsDir, '_generated', '**', '*.js'),
-      path.join('/repo', 'routers', '**', '*.ts'),
+    expect(getWatchRoots(functionsDir)).toEqual([
+      functionsDir,
+      path.join('/repo', 'routers'),
     ]);
   });
 
-  test('getIgnoredWatchPatterns excludes better-convex outputs', () => {
+  test('shouldIgnoreWatchPath excludes better-convex outputs', () => {
     const functionsDir = '/repo/convex';
-    expect(getIgnoredWatchPatterns(functionsDir, '/repo/out/api.ts')).toEqual([
-      path.join(functionsDir, 'generated', '**', '*.ts'),
-      path.join(functionsDir, '**', '*.runtime.ts'),
-      path.join(functionsDir, 'generated.ts'),
-      '/repo/out/api.ts',
-    ]);
+    const outputFile = '/repo/out/api.ts';
+
+    expect(
+      shouldIgnoreWatchPath(
+        '/repo/convex/generated/auth.ts',
+        functionsDir,
+        outputFile
+      )
+    ).toBe(true);
+    expect(
+      shouldIgnoreWatchPath(
+        '/repo/convex/foo.runtime.ts',
+        functionsDir,
+        outputFile
+      )
+    ).toBe(true);
+    expect(
+      shouldIgnoreWatchPath(
+        '/repo/convex/generated.ts',
+        functionsDir,
+        outputFile
+      )
+    ).toBe(true);
+    expect(shouldIgnoreWatchPath(outputFile, functionsDir, outputFile)).toBe(
+      true
+    );
+    expect(
+      shouldIgnoreWatchPath(
+        '/repo/convex/myFunctions.ts',
+        functionsDir,
+        outputFile
+      )
+    ).toBe(false);
   });
 
   test('startWatcher debounces add/change/unlink events and calls generateMeta', async () => {
@@ -33,8 +57,10 @@ describe('cli/watcher', () => {
     };
 
     let watchedPatterns: string[] | null = null;
-    let watchedOptions: { ignoreInitial: boolean; ignored: string[] } | null =
-      null;
+    let watchedOptions: {
+      ignoreInitial: boolean;
+      ignored: (watchedPath: string) => boolean;
+    } | null = null;
     const handlers: Record<string, (...args: unknown[]) => void> = {};
 
     const watcher = {
@@ -73,11 +99,10 @@ describe('cli/watcher', () => {
       throw new Error('Expected watcher to be configured');
     }
 
-    expect(watchedOptions).toEqual({
-      ignoreInitial: true,
-      ignored: getIgnoredWatchPatterns('/repo/convex', '/repo/out/api.ts'),
-    });
-    expect(watchedPatterns).toEqual(getWatchPatterns('/repo/convex'));
+    expect(watchedOptions.ignoreInitial).toBe(true);
+    expect(watchedPatterns).toEqual(getWatchRoots('/repo/convex'));
+    expect(watchedOptions.ignored('/repo/convex/generated/auth.ts')).toBe(true);
+    expect(watchedOptions.ignored('/repo/convex/myFunctions.ts')).toBe(false);
     expect(typeof handlers.add).toBe('function');
     expect(typeof handlers.change).toBe('function');
     expect(typeof handlers.unlink).toBe('function');
@@ -150,6 +175,45 @@ describe('cli/watcher', () => {
     ]);
   });
 
+  test('startWatcher logs a concise success line after change-triggered codegen', async () => {
+    const infoMessages: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoMessages.push(args.join(' '));
+    };
+
+    const generateMetaStub = async () => {};
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const watcher = {
+      on(event: string, cb: (...args: unknown[]) => void) {
+        handlers[event] = cb;
+        return watcher;
+      },
+    };
+
+    try {
+      await startWatcher({
+        sharedDir: 'out',
+        debounceMs: 10,
+        watch: () => watcher,
+        generateMeta: generateMetaStub as typeof generateMetaStub,
+        getConvexConfig: (() => ({
+          functionsDir: '/repo/convex',
+          outputFile: '/repo/out/api.ts',
+        })) as () => { functionsDir: string; outputFile: string },
+      });
+
+      handlers.change?.();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(
+        infoMessages.some((line) => line.includes('Convex api updated'))
+      ).toBe(true);
+    } finally {
+      console.info = originalInfo;
+    }
+  });
+
   test('startWatcher uses BETTER_CONVEX_CODEGEN_* fallbacks when options are missing', async () => {
     const prevOutputDir = process.env.BETTER_CONVEX_API_OUTPUT_DIR;
     const prevDebug = process.env.BETTER_CONVEX_DEBUG;
@@ -204,6 +268,57 @@ describe('cli/watcher', () => {
       process.env.BETTER_CONVEX_DEBUG = prevDebug;
       process.env.BETTER_CONVEX_CODEGEN_SCOPE = prevCodegenScope;
       process.env.BETTER_CONVEX_CODEGEN_TRIM_SEGMENTS = prevTrimSegments;
+    }
+  });
+
+  test('startWatcher reacts to a real file change with chokidar v5', async () => {
+    const tempDir = await mkdtemp(
+      path.join(tmpdir(), 'better-convex-watcher-')
+    );
+    const functionsDir = path.join(tempDir, 'convex');
+    const sharedDir = path.join(functionsDir, 'shared');
+    const outputFile = path.join(sharedDir, 'api.ts');
+    const sourceFile = path.join(functionsDir, 'myFunctions.ts');
+
+    await mkdir(sharedDir, { recursive: true });
+    await writeFile(outputFile, '// generated\n');
+    await writeFile(sourceFile, 'export const value = 1;\n');
+
+    const calls: unknown[][] = [];
+    let resolveCall: (() => void) | null = null;
+    const called = new Promise<void>((resolve) => {
+      resolveCall = resolve;
+    });
+
+    const watcher = await startWatcher({
+      debounceMs: 20,
+      generateMeta: (async (...args: unknown[]) => {
+        calls.push(args);
+        resolveCall?.();
+      }) as typeof import('./codegen').generateMeta,
+      getConvexConfig: (() => ({
+        functionsDir,
+        outputFile,
+      })) as () => { functionsDir: string; outputFile: string },
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await writeFile(sourceFile, 'export const value = 2;\n');
+
+      await Promise.race([
+        called,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('watcher did not react')), 2000)
+        ),
+      ]);
+
+      expect(calls).toEqual([
+        [undefined, { debug: false, silent: true, scope: 'all' }],
+      ]);
+    } finally {
+      await watcher.close?.();
+      await rm(tempDir, { recursive: true, force: true });
     }
   });
 });

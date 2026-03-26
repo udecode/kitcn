@@ -4,23 +4,21 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "checkUserAdminStatus": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["admin"]["checkUserAdminStatus"]), () => (require("../admin") as Record<string, unknown>)["checkUserAdminStatus"])],
-  "getAllUsers": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["admin"]["getAllUsers"]), () => (require("../admin") as Record<string, unknown>)["getAllUsers"])],
-  "getDashboardStats": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["admin"]["getDashboardStats"]), () => (require("../admin") as Record<string, unknown>)["getDashboardStats"])],
-  "grantAdminByEmail": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["admin"]["grantAdminByEmail"]), () => (require("../admin") as Record<string, unknown>)["grantAdminByEmail"])],
-  "updateUserRole": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["admin"]["updateUserRole"]), () => (require("../admin") as Record<string, unknown>)["updateUserRole"])],
+  "checkUserAdminStatus": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../admin").checkUserAdminStatus>("admin:checkUserAdminStatus"), () => (require("../admin") as Record<string, unknown>)["checkUserAdminStatus"])],
+  "getAllUsers": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../admin").getAllUsers>("admin:getAllUsers"), () => (require("../admin") as Record<string, unknown>)["getAllUsers"])],
+  "getDashboardStats": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../admin").getDashboardStats>("admin:getDashboardStats"), () => (require("../admin") as Record<string, unknown>)["getDashboardStats"])],
+  "grantAdminByEmail": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../admin").grantAdminByEmail>("admin:grantAdminByEmail"), () => (require("../admin") as Record<string, unknown>)["grantAdminByEmail"])],
+  "updateUserRole": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../admin").updateUserRole>("admin:updateUserRole"), () => (require("../admin") as Record<string, unknown>)["updateUserRole"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

@@ -8,7 +8,7 @@ export const RATELIMIT_SCHEMA_TEMPLATE = `import {
 } from "better-convex/orm";
 
 export const ratelimitStateTable = convexTable(
-  "ratelimit_state",
+  "ratelimitState",
   {
     name: text().notNull(),
     key: text(),
@@ -25,7 +25,7 @@ export const ratelimitStateTable = convexTable(
 );
 
 export const ratelimitDynamicTable = convexTable(
-  "ratelimit_dynamic_limit",
+  "ratelimitDynamicLimit",
   {
     prefix: text().notNull(),
     limit: integer().notNull(),
@@ -35,7 +35,7 @@ export const ratelimitDynamicTable = convexTable(
 );
 
 export const ratelimitProtectionTable = convexTable(
-  "ratelimit_protection_hit",
+  "ratelimitProtectionHit",
   {
     prefix: text().notNull(),
     value: text().notNull(),

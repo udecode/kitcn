@@ -1,3 +1,5 @@
+import { getAuthTables } from 'better-auth/db';
+import { organization } from 'better-auth/plugins';
 import { createSchema } from './create-schema';
 
 const tables = {
@@ -63,5 +65,35 @@ describe('createSchema', () => {
     // Unique/sortable/manual indexes are included.
     expect(result.code).toContain('.index("email_name", ["email","name"])');
     expect(result.code).toContain('.index("expiresAt", ["expiresAt"])');
+    expect(result.code).not.toMatch(
+      /user: defineTable\([\s\S]*?\.index\("userId", \["userId"\]\)/
+    );
+  });
+
+  test('adds organization helper fields for Better Convex auth schema', async () => {
+    const result = await createSchema({
+      file: 'auth/schema.ts',
+      exportName: 'authSchema',
+      tables: getAuthTables({
+        emailAndPassword: { enabled: true },
+        plugins: [organization()],
+      }),
+    });
+
+    expect(result.code).toContain(
+      'activeOrganizationId: v.optional(v.union(v.null(), v.string()))'
+    );
+    expect(result.code).toContain(
+      'lastActiveOrganizationId: v.optional(v.union(v.null(), v.string()))'
+    );
+    expect(result.code).toContain(
+      'personalOrganizationId: v.optional(v.union(v.null(), v.string()))'
+    );
+    expect(result.code).toContain(
+      '.index("lastActiveOrganizationId", ["lastActiveOrganizationId"])'
+    );
+    expect(result.code).toContain(
+      '.index("personalOrganizationId", ["personalOrganizationId"])'
+    );
   });
 });

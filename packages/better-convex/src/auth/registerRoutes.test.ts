@@ -265,4 +265,55 @@ describe('registerRoutes', () => {
       'https://trusted.example'
     );
   });
+
+  test('injects a localhost forwarded IP for Convex auth metadata routes when missing', async () => {
+    const http = httpRouter();
+    const authHandler = mock(async (request: Request) => {
+      return new Response(request.headers.get('x-forwarded-for') ?? 'missing');
+    });
+
+    const getAuth = () => ({
+      handler: authHandler,
+      options: { basePath: '/api/auth' },
+      $context: Promise.resolve({ options: { trustedOrigins: [] } }),
+    });
+
+    registerRoutes(http as any, getAuth as any, { cors: false });
+
+    const authGet = http.lookup('/api/auth/convex/jwks', 'GET')!;
+    const authRes = await unwrapInvoke(
+      authGet[0],
+      new UndiciRequest('http://127.0.0.1:3211/api/auth/convex/jwks', {
+        method: 'GET',
+      }) as any
+    );
+
+    expect(await authRes.text()).toBe('127.0.0.1');
+  });
+
+  test('preserves provided forwarded IP on Convex auth metadata routes', async () => {
+    const http = httpRouter();
+    const authHandler = mock(async (request: Request) => {
+      return new Response(request.headers.get('x-forwarded-for') ?? 'missing');
+    });
+
+    const getAuth = () => ({
+      handler: authHandler,
+      options: { basePath: '/api/auth' },
+      $context: Promise.resolve({ options: { trustedOrigins: [] } }),
+    });
+
+    registerRoutes(http as any, getAuth as any, { cors: false });
+
+    const authGet = http.lookup('/api/auth/convex/jwks', 'GET')!;
+    const authRes = await unwrapInvoke(
+      authGet[0],
+      new UndiciRequest('http://127.0.0.1:3211/api/auth/convex/jwks', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '203.0.113.7' },
+      }) as any
+    );
+
+    expect(await authRes.text()).toBe('203.0.113.7');
+  });
 });

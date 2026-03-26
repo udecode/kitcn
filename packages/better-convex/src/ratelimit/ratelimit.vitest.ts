@@ -305,23 +305,23 @@ describe('Ratelimit', () => {
           withIndex() {
             return {
               async unique() {
-                throw new Error('Table ratelimit_state does not exist');
+                throw new Error('Table ratelimitState does not exist');
               },
               async collect() {
-                throw new Error('Table ratelimit_state does not exist');
+                throw new Error('Table ratelimitState does not exist');
               },
             };
           },
         };
       },
       async insert() {
-        throw new Error('Table ratelimit_state does not exist');
+        throw new Error('Table ratelimitState does not exist');
       },
       async patch() {
-        throw new Error('Table ratelimit_state does not exist');
+        throw new Error('Table ratelimitState does not exist');
       },
       async delete() {
-        throw new Error('Table ratelimit_state does not exist');
+        throw new Error('Table ratelimitState does not exist');
       },
     };
 
@@ -333,5 +333,48 @@ describe('Ratelimit', () => {
     await expect(limiter.limit('missing-table-user')).rejects.toThrow(
       RATELIMIT_PLUGIN_REGEX
     );
+  });
+
+  test('uses schema table keys for Convex storage tables', async () => {
+    const queriedTables: string[] = [];
+    const insertedTables: string[] = [];
+    const db: ConvexRatelimitDbWriter = {
+      query(tableName: string) {
+        queriedTables.push(tableName);
+        return {
+          withIndex() {
+            return {
+              async unique() {
+                return null;
+              },
+              async collect() {
+                return [];
+              },
+            };
+          },
+        };
+      },
+      async insert(tableName) {
+        insertedTables.push(tableName);
+        return `${tableName}_1`;
+      },
+      async patch() {},
+      async delete() {},
+    };
+
+    const limiter = new Ratelimit({
+      db,
+      limiter: Ratelimit.fixedWindow(1, '10 s'),
+      dynamicLimits: true,
+      prefix: 'schema-keys',
+    });
+
+    await limiter.limit('schema-key-user');
+    await limiter.setDynamicLimit({ limit: 5 });
+
+    expect(queriedTables).toContain('ratelimitState');
+    expect(insertedTables).toContain('ratelimitState');
+    expect(queriedTables).toContain('ratelimitDynamicLimit');
+    expect(insertedTables).toContain('ratelimitDynamicLimit');
   });
 });

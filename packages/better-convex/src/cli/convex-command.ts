@@ -6,6 +6,13 @@ export type ConvexCommandResult = {
   stdout: string;
 };
 
+const CONVEX_OUTPUT_NOISE_LINES = [
+  /^Run `npx convex login` at any time to create an account and link this deployment\.$/,
+  /^A minor update is available for Convex /,
+  /^Changelog: https:\/\/github\.com\/get-convex\/convex-js\/blob\/main\/CHANGELOG\.md#changelog$/,
+] as const;
+const CONVEX_OUTPUT_LINE_SPLIT_RE = /\r?\n/;
+
 export const CLEARED_CONVEX_ENV = {
   CONVEX_DEPLOYMENT: undefined,
   CONVEX_DEPLOY_KEY: undefined,
@@ -21,9 +28,25 @@ export const normalizeConvexCommandResult = (
   }>
 ): ConvexCommandResult => ({
   exitCode: result.exitCode ?? 0,
-  stderr: typeof result.stderr === 'string' ? result.stderr : '',
-  stdout: typeof result.stdout === 'string' ? result.stdout : '',
+  stderr:
+    typeof result.stderr === 'string'
+      ? stripConvexCommandNoise(result.stderr)
+      : '',
+  stdout:
+    typeof result.stdout === 'string'
+      ? stripConvexCommandNoise(result.stdout)
+      : '',
 });
+
+export const stripConvexCommandNoise = (value: string): string =>
+  value
+    .split(CONVEX_OUTPUT_LINE_SPLIT_RE)
+    .filter(
+      (line) =>
+        line.trim().length > 0 &&
+        !CONVEX_OUTPUT_NOISE_LINES.some((pattern) => pattern.test(line.trim()))
+    )
+    .join('\n');
 
 export const writeConvexCommandOutput = (result: ConvexCommandResult) => {
   if (result.stdout) {

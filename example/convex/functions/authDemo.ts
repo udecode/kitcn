@@ -1,8 +1,6 @@
-import { eq } from 'better-convex/orm';
 import { z } from 'zod';
-import type { MutationCtx } from '../functions/generated/server';
-import type { AuthCtx } from '../lib/crpc';
-import { authMutation, authQuery } from '../lib/crpc';
+import { authAction, authQuery } from '../lib/crpc';
+import { getEnv } from '../lib/get-env';
 import {
   AUTH_DEMO_ANON_EMAIL_DOMAIN,
   AUTH_DEMO_ANON_NAME_PREFIX,
@@ -17,7 +15,7 @@ import {
   type AuthCoverageStatus,
   createStaticProbeResult,
 } from './authDemo.coverage';
-import { userTable } from './schema';
+import { createAuthDemoDataCaller } from './generated/authDemoData.runtime';
 
 type ProbeResult = AuthCoverageProbeResult;
 
@@ -38,38 +36,54 @@ type DemoSignals = {
   userAgent: string;
 };
 
-type DemoMutationCtx = AuthCtx<MutationCtx>;
+type StoredSession = {
+  id: string;
+  userId: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+};
+
+type StoredUser = {
+  id: string;
+  email: string;
+  name: string;
+  isAnonymous: boolean;
+  bio: string | null;
+};
 
 type AnonymousSignInFlow = {
   token: string;
-  session: {
-    id: string;
-    userId: string;
-    ipAddress: string | null;
-    userAgent: string | null;
-  };
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    isAnonymous: boolean;
-    bio: string | null;
-  };
+  sessionCookie: string;
+  session: StoredSession;
+  user: StoredUser;
   signals: DemoSignals;
 };
 
 type LinkFlow = {
   sourceAnonymousUserId: string;
   sourceAnonymousBio: string;
-  linkedUser: {
-    id: string;
-    email: string;
-    name: string;
-    isAnonymous: boolean;
-    bio: string | null;
-  };
+  linkedUser: StoredUser;
   sourceDeleted: boolean;
   linkedToken: string | null;
+};
+
+type DemoActionCtx = Parameters<typeof createAuthDemoDataCaller>[0];
+
+type DemoDataCaller = {
+  getSessionByToken(input: { token: string }): Promise<StoredSession | null>;
+  getUserById(input: { id: string }): Promise<StoredUser | null>;
+  setUserBio(input: { id: string; bio: string }): Promise<null>;
+};
+
+type HttpAuthResponse = {
+  sessionCookie: string | null;
+  token: string | null;
+  user: {
+    id: string | null;
+    email: string | null;
+    name: string | null;
+    isAnonymous: boolean | null;
+  };
 };
 
 const COVERAGE_IDS = AUTH_COVERAGE_DEFINITIONS.map((entry) => entry.id) as [
@@ -84,6 +98,32 @@ function asErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function asRecord(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${label} returned an invalid JSON payload.`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function readString(
+  record: Record<string, unknown>,
+  key: string
+): string | null {
+  const value = record[key];
+  if (typeof value !== 'string' || value.length === 0) {
+    return null;
+  }
+  return value;
+}
+
+function readBoolean(
+  record: Record<string, unknown>,
+  key: string
+): boolean | null {
+  const value = record[key];
+  return typeof value === 'boolean' ? value : null;
+}
+
 function randomSuffix(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -96,22 +136,145 @@ function createDemoSignals(): DemoSignals {
   };
 }
 
-function createHeaders(signals: DemoSignals, token?: string): Headers {
+function createAuthRequestHeaders({
+  signals,
+  siteUrl,
+  sessionCookie,
+}: {
+  signals: DemoSignals;
+  siteUrl: string;
+  sessionCookie?: string;
+}): Headers {
   const headers = new Headers({
+    accept: 'application/json',
+    'content-type': 'application/json',
+    origin: siteUrl,
+    referer: siteUrl,
     'user-agent': signals.userAgent,
     'x-forwarded-for': signals.ip,
   });
 
-  if (token) {
-    const encodedToken = encodeURIComponent(token);
-    headers.set('authorization', `Bearer ${token}`);
-    headers.set(
-      'cookie',
-      `better-auth.session_token=${encodedToken}; __Secure-better-auth.session_token=${encodedToken}`
-    );
+  if (sessionCookie) {
+    headers.set('cookie', sessionCookie);
   }
 
   return headers;
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  const text = await response.text();
+
+  if (text.length === 0) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `Auth route returned invalid JSON (${response.status} ${response.statusText}).`
+    );
+  }
+}
+
+function getResponseMessage(payload: unknown): string | null {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const directMessage = readString(record, 'message');
+  if (directMessage) {
+    return directMessage;
+  }
+
+  const nestedError = record.error;
+  if (
+    typeof nestedError === 'object' &&
+    nestedError !== null &&
+    !Array.isArray(nestedError)
+  ) {
+    return readString(nestedError as Record<string, unknown>, 'message');
+  }
+
+  return null;
+}
+
+function extractSessionCookie(setCookieHeader: string | null): string | null {
+  if (!setCookieHeader) {
+    return null;
+  }
+
+  const marker = 'better-auth.session_token=';
+  const start = setCookieHeader.indexOf(marker);
+  if (start === -1) {
+    return null;
+  }
+
+  const rest = setCookieHeader.slice(start);
+  const end = rest.indexOf(';');
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+function parseAuthResponse(payload: unknown): HttpAuthResponse {
+  const record = asRecord(payload, 'Auth route');
+  const rawUser = record.user;
+  const userRecord =
+    typeof rawUser === 'object' && rawUser !== null && !Array.isArray(rawUser)
+      ? (rawUser as Record<string, unknown>)
+      : {};
+
+  return {
+    sessionCookie: null,
+    token: readString(record, 'token'),
+    user: {
+      id: readString(userRecord, 'id'),
+      email: readString(userRecord, 'email'),
+      name: readString(userRecord, 'name'),
+      isAnonymous: readBoolean(userRecord, 'isAnonymous'),
+    },
+  };
+}
+
+async function callAuthRoute({
+  path,
+  body,
+  signals,
+  siteUrl,
+  sessionCookie,
+}: {
+  path: string;
+  body: Record<string, unknown>;
+  signals: DemoSignals;
+  siteUrl: string;
+  sessionCookie?: string;
+}): Promise<HttpAuthResponse> {
+  const response = await fetch(new URL(path, siteUrl), {
+    method: 'POST',
+    headers: createAuthRequestHeaders({
+      signals,
+      siteUrl,
+      sessionCookie,
+    }),
+    body: JSON.stringify(body),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const message =
+      getResponseMessage(payload) ??
+      `${response.status} ${response.statusText}`;
+    throw new Error(`Auth route ${path} failed: ${message}`);
+  }
+
+  return {
+    ...parseAuthResponse(payload),
+    sessionCookie: extractSessionCookie(response.headers.get('set-cookie')),
+  };
 }
 
 function buildSummary(
@@ -163,111 +326,115 @@ async function runProbe(probe: () => Promise<unknown>): Promise<ProbeResult> {
   }
 }
 
-async function createAnonymousSignInFlow(
-  ctx: DemoMutationCtx
-): Promise<AnonymousSignInFlow> {
+async function createAnonymousSignInFlow({
+  caller,
+  siteUrl,
+}: {
+  caller: DemoDataCaller;
+  siteUrl: string;
+}): Promise<AnonymousSignInFlow> {
   const signals = createDemoSignals();
-  const signInResult = await ctx.auth.api.signInAnonymous({
-    headers: createHeaders(signals),
+  const signInResult = await callAuthRoute({
+    path: '/api/auth/sign-in/anonymous',
+    body: {},
+    signals,
+    siteUrl,
   });
 
-  const token = signInResult?.token;
+  const token = signInResult.token;
   if (!token) {
     throw new Error('Anonymous sign-in did not return a session token.');
   }
+  const sessionCookie = signInResult.sessionCookie;
+  if (!sessionCookie) {
+    throw new Error('Anonymous sign-in did not return a session cookie.');
+  }
 
-  const session = await ctx.orm.query.session.findFirst({
-    where: { token },
-  });
-
+  const session = await caller.getSessionByToken({ token });
   if (!session) {
     throw new Error('Anonymous sign-in did not persist a session row.');
   }
 
-  const user = await ctx.orm.query.user.findFirst({
-    where: { id: session.userId },
-  });
-
+  const user = await caller.getUserById({ id: session.userId });
   if (!user) {
     throw new Error('Anonymous sign-in did not persist a user row.');
   }
 
   return {
     token,
-    session: {
-      id: session.id,
-      userId: session.userId,
-      ipAddress: session.ipAddress ?? null,
-      userAgent: session.userAgent ?? null,
-    },
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      isAnonymous: user.isAnonymous === true,
-      bio: user.bio ?? null,
-    },
+    sessionCookie,
+    session,
+    user,
     signals,
   };
 }
 
-async function createAnonymousLinkFlow(
-  ctx: DemoMutationCtx
-): Promise<LinkFlow> {
-  const anonymous = await createAnonymousSignInFlow(ctx);
+async function createAnonymousLinkFlow({
+  caller,
+  siteUrl,
+}: {
+  caller: DemoDataCaller;
+  siteUrl: string;
+}): Promise<LinkFlow> {
+  const anonymous = await createAnonymousSignInFlow({
+    caller,
+    siteUrl,
+  });
   const sourceAnonymousBio = `anon-bio-${randomSuffix()}`;
 
-  await ctx.orm
-    .update(userTable)
-    .set({ bio: sourceAnonymousBio })
-    .where(eq(userTable.id, anonymous.user.id));
-
-  const linkEmail = `anon-link-${randomSuffix()}@example.com`;
-  const signUpResult = await ctx.auth.api.signUpEmail({
-    body: {
-      name: `Linked User ${randomSuffix()}`,
-      email: linkEmail,
-      password: `DemoPassword!${Math.floor(Math.random() * 99_999)}Aa`,
-    },
-    headers: createHeaders(anonymous.signals, anonymous.token),
+  await caller.setUserBio({
+    id: anonymous.user.id,
+    bio: sourceAnonymousBio,
   });
 
-  const linkedUserId = signUpResult?.user?.id;
+  const signUpResult = await callAuthRoute({
+    path: '/api/auth/sign-up/email',
+    body: {
+      name: `Linked User ${randomSuffix()}`,
+      email: `anon-link-${randomSuffix()}@example.com`,
+      password: `DemoPassword!${Math.floor(Math.random() * 99_999)}Aa`,
+    },
+    signals: anonymous.signals,
+    siteUrl,
+    sessionCookie: anonymous.sessionCookie,
+  });
+
+  const linkedUserId = signUpResult.user.id;
   if (!linkedUserId) {
     throw new Error('Email sign-up did not return a linked user.');
   }
 
-  const linkedUser = await ctx.orm.query.user.findFirst({
-    where: { id: linkedUserId },
-  });
-
+  const linkedUser = await caller.getUserById({ id: linkedUserId });
   if (!linkedUser) {
     throw new Error('Linked user was not found in storage.');
   }
 
-  const sourceAfter = await ctx.orm.query.user.findFirst({
-    where: { id: anonymous.user.id },
+  const sourceAfter = await caller.getUserById({
+    id: anonymous.user.id,
   });
 
   return {
     sourceAnonymousUserId: anonymous.user.id,
     sourceAnonymousBio,
-    linkedToken: signUpResult?.token ?? null,
-    linkedUser: {
-      id: linkedUser.id,
-      email: linkedUser.email,
-      name: linkedUser.name,
-      isAnonymous: linkedUser.isAnonymous === true,
-      bio: linkedUser.bio ?? null,
-    },
+    linkedToken: signUpResult.token,
+    linkedUser,
     sourceDeleted: sourceAfter === null,
   };
 }
 
-function buildLiveProbes(ctx: DemoMutationCtx) {
+function buildLiveProbes({
+  caller,
+  siteUrl,
+}: {
+  caller: DemoDataCaller;
+  siteUrl: string;
+}) {
   return {
     'anonymous-sign-in': async () => {
-      const flow = await createAnonymousSignInFlow(ctx);
+      const flow = await createAnonymousSignInFlow({
+        caller,
+        siteUrl,
+      });
       return {
         tokenPresent: flow.token.length > 0,
         sessionId: flow.session.id,
@@ -277,7 +444,10 @@ function buildLiveProbes(ctx: DemoMutationCtx) {
       };
     },
     'anonymous-flag': async () => {
-      const flow = await createAnonymousSignInFlow(ctx);
+      const flow = await createAnonymousSignInFlow({
+        caller,
+        siteUrl,
+      });
       if (!flow.user.isAnonymous) {
         throw new Error(
           'Expected anonymous user to be marked isAnonymous=true.'
@@ -289,7 +459,10 @@ function buildLiveProbes(ctx: DemoMutationCtx) {
       };
     },
     'anonymous-email-domain': async () => {
-      const flow = await createAnonymousSignInFlow(ctx);
+      const flow = await createAnonymousSignInFlow({
+        caller,
+        siteUrl,
+      });
       if (!flow.user.email.endsWith(`@${AUTH_DEMO_ANON_EMAIL_DOMAIN}`)) {
         throw new Error(
           `Expected anonymous email domain @${AUTH_DEMO_ANON_EMAIL_DOMAIN}, got ${flow.user.email}`
@@ -301,7 +474,10 @@ function buildLiveProbes(ctx: DemoMutationCtx) {
       };
     },
     'anonymous-generate-name': async () => {
-      const flow = await createAnonymousSignInFlow(ctx);
+      const flow = await createAnonymousSignInFlow({
+        caller,
+        siteUrl,
+      });
       if (!flow.user.name.startsWith(AUTH_DEMO_ANON_NAME_PREFIX)) {
         throw new Error(
           `Expected generated name to start with ${AUTH_DEMO_ANON_NAME_PREFIX}`
@@ -313,7 +489,10 @@ function buildLiveProbes(ctx: DemoMutationCtx) {
       };
     },
     'link-account-non-anonymous': async () => {
-      const flow = await createAnonymousLinkFlow(ctx);
+      const flow = await createAnonymousLinkFlow({
+        caller,
+        siteUrl,
+      });
       if (flow.linkedUser.isAnonymous) {
         throw new Error('Expected linked user to be non-anonymous.');
       }
@@ -324,7 +503,10 @@ function buildLiveProbes(ctx: DemoMutationCtx) {
       };
     },
     'on-link-account-bio-migration': async () => {
-      const flow = await createAnonymousLinkFlow(ctx);
+      const flow = await createAnonymousLinkFlow({
+        caller,
+        siteUrl,
+      });
       if (flow.linkedUser.bio !== flow.sourceAnonymousBio) {
         throw new Error('Expected onLinkAccount to migrate anonymous bio.');
       }
@@ -334,13 +516,17 @@ function buildLiveProbes(ctx: DemoMutationCtx) {
       };
     },
     'linked-source-anonymous-deleted': async () => {
-      const flow = await createAnonymousLinkFlow(ctx);
+      const flow = await createAnonymousLinkFlow({
+        caller,
+        siteUrl,
+      });
       if (!flow.sourceDeleted) {
         throw new Error(
           'Expected source anonymous user to be deleted after linking.'
         );
       }
       return {
+        linkedToken: flow.linkedToken,
         sourceAnonymousUserId: flow.sourceAnonymousUserId,
         sourceDeleted: flow.sourceDeleted,
       };
@@ -348,7 +534,6 @@ function buildLiveProbes(ctx: DemoMutationCtx) {
   } satisfies Record<
     Exclude<
       AuthCoverageId,
-      | 'delete-anonymous-endpoint'
       | 'disable-delete-anonymous-user-option'
       | 'generate-random-email-precedence'
     >,
@@ -356,8 +541,13 @@ function buildLiveProbes(ctx: DemoMutationCtx) {
   >;
 }
 
-function runScenarioImpl(ctx: DemoMutationCtx) {
-  const liveProbes = buildLiveProbes(ctx);
+function runScenarioImpl(ctx: DemoActionCtx) {
+  const caller = createAuthDemoDataCaller(ctx) as DemoDataCaller;
+  const siteUrl = getEnv().SITE_URL;
+  const liveProbes = buildLiveProbes({
+    caller,
+    siteUrl,
+  });
 
   return async (id: AuthCoverageId): Promise<AuthCoverageEntry> => {
     const definition = AUTH_COVERAGE_DEFINITIONS.find(
@@ -431,13 +621,13 @@ export const getAuthState = authQuery.query(async ({ ctx }) => {
   };
 });
 
-export const runScenario = authMutation
+export const runScenario = authAction
   .input(
     z.object({
       id: z.enum(COVERAGE_IDS),
     })
   )
-  .mutation(async ({ ctx, input }) => {
+  .action(async ({ ctx, input }) => {
     const execute = runScenarioImpl(ctx);
     const entry = await execute(input.id);
 
@@ -448,7 +638,7 @@ export const runScenario = authMutation
     };
   });
 
-export const runCoverage = authMutation.mutation(async ({ ctx }) => {
+export const runCoverage = authAction.action(async ({ ctx }) => {
   const execute = runScenarioImpl(ctx);
 
   const entries = await Promise.all(

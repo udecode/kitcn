@@ -136,8 +136,12 @@ Or:
 
 Why:
 
-- These lanes own bootstrap steps like `convex init`,
-  `better-convex dev --once`, and auth env setup.
+- Fresh Better Convex lanes already bootstrap during `scenario:prepare`
+  through `better-convex init -t <next|vite> --yes`, then finish the
+  bootstrap-heavy proof with in-place `better-convex init --yes` after plugin
+  setup.
+- The raw Convex auth adoption lane still owns `convex init` plus
+  `better-convex add auth --preset convex --yes`.
 - Raw Convex auth adoption is not a `next-auth` browser demo. Do not invent
   `/auth`.
 

@@ -4,22 +4,20 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "getAuthState": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["authDemo"]["getAuthState"]), () => (require("../authDemo") as Record<string, unknown>)["getAuthState"])],
-  "getSnapshot": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["authDemo"]["getSnapshot"]), () => (require("../authDemo") as Record<string, unknown>)["getSnapshot"])],
-  "runCoverage": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["authDemo"]["runCoverage"]), () => (require("../authDemo") as Record<string, unknown>)["runCoverage"])],
-  "runScenario": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["authDemo"]["runScenario"]), () => (require("../authDemo") as Record<string, unknown>)["runScenario"])],
+  "getAuthState": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../authDemo").getAuthState>("authDemo:getAuthState"), () => (require("../authDemo") as Record<string, unknown>)["getAuthState"])],
+  "getSnapshot": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../authDemo").getSnapshot>("authDemo:getSnapshot"), () => (require("../authDemo") as Record<string, unknown>)["getSnapshot"])],
+  "runCoverage": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "public", typeof import("../authDemo").runCoverage>("authDemo:runCoverage"), () => (require("../authDemo") as Record<string, unknown>)["runCoverage"])],
+  "runScenario": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "public", typeof import("../authDemo").runScenario>("authDemo:runScenario"), () => (require("../authDemo") as Record<string, unknown>)["runScenario"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

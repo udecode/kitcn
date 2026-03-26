@@ -106,8 +106,11 @@ describe('tooling/fixtures', () => {
         "export const envSchema = { SITE_URL: z.string().default('http://localhost:3000') };\n"
       );
       mkdirSync(path.join(templateDir, 'convex'), { recursive: true });
+      mkdirSync(path.join(templateDir, 'convex', 'functions'), {
+        recursive: true,
+      });
       writeFileSync(
-        path.join(templateDir, 'convex', 'tsconfig.json'),
+        path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
         `${JSON.stringify(
           {
             compilerOptions: {},
@@ -136,8 +139,17 @@ describe('tooling/fixtures', () => {
         readFileSync(path.join(templateDir, 'tsconfig.json'), 'utf8')
       ).toContain('"better-convex/server": [');
       expect(
-        readFileSync(path.join(templateDir, 'convex', 'tsconfig.json'), 'utf8')
+        readFileSync(
+          path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
+          'utf8'
+        )
       ).toContain('packages/better-convex/src/server/index.ts');
+      expect(
+        readFileSync(
+          path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
+          'utf8'
+        )
+      ).toContain('../../../../packages/better-convex/src/server/index.ts');
     } finally {
       rmSync(templateDir, { force: true, recursive: true });
     }

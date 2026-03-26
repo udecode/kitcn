@@ -1,6 +1,6 @@
 import { anyApi, getFunctionName } from 'convex/server';
 import { getFuncRef } from '../shared/meta-utils';
-import { createApiLeaf } from './api-entry';
+import { createApiLeaf, getGeneratedValue } from './api-entry';
 
 describe('createApiLeaf', () => {
   it('preserves function name for proxied Convex refs', () => {
@@ -49,5 +49,38 @@ describe('createApiLeaf', () => {
       'projects:listForDropdown'
     );
     expect((leaf as any).auth).toBe('required');
+  });
+
+  it('resolves collapsed generated path keys', () => {
+    const generatedServer = {
+      aggregateBackfill: (anyApi as any)['generated/server'].aggregateBackfill,
+    };
+
+    expect(
+      getGeneratedValue(
+        {
+          'generated/server': generatedServer,
+        },
+        ['generated', 'server']
+      )
+    ).toBe(generatedServer);
+  });
+
+  it('resolves collapsed generated path keys through proxy access', () => {
+    const generatedServer = {
+      aggregateBackfill: (anyApi as any)['generated/server'].aggregateBackfill,
+    };
+    const root = new Proxy(
+      {},
+      {
+        get(_target, property) {
+          return property === 'generated/server' ? generatedServer : undefined;
+        },
+      }
+    );
+
+    expect(getGeneratedValue(root, ['generated', 'server'])).toBe(
+      generatedServer
+    );
   });
 });

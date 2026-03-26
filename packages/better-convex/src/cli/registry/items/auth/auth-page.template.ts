@@ -15,6 +15,7 @@ export default function AuthPage() {
   const authSession = authClient.useSession();
   const session = authSession.data;
   const user = session?.user ?? null;
+  const hasSignedInUser = hasSession || Boolean(user);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -33,7 +34,7 @@ export default function AuthPage() {
     signIn.isPending || signUp.isPending || signOut.isPending;
 
   function getCallbackURL() {
-    return '/';
+    return '/auth';
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -56,7 +57,7 @@ export default function AuthPage() {
     });
   }
 
-  if (isLoading && !hasSession) {
+  if (isLoading && !hasSignedInUser) {
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-md items-center px-6 py-16">
         <p className="text-sm text-muted-foreground">Loading auth…</p>
@@ -64,7 +65,7 @@ export default function AuthPage() {
     );
   }
 
-  if (hasSession) {
+  if (hasSignedInUser) {
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center gap-6 px-6 py-16">
         <div className="space-y-2">

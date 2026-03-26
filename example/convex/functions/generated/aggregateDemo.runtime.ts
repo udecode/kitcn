@@ -4,22 +4,20 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "exerciseIdempotentTrigger": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["aggregateDemo"]["exerciseIdempotentTrigger"]), () => (require("../aggregateDemo") as Record<string, unknown>)["exerciseIdempotentTrigger"])],
-  "getSnapshot": ["query", typedProcedureResolver(getGeneratedFunctionReference(api["aggregateDemo"]["getSnapshot"]), () => (require("../aggregateDemo") as Record<string, unknown>)["getSnapshot"])],
-  "runDirectOp": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["aggregateDemo"]["runDirectOp"]), () => (require("../aggregateDemo") as Record<string, unknown>)["runDirectOp"])],
-  "toggleRandomFillReset": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(api["aggregateDemo"]["toggleRandomFillReset"]), () => (require("../aggregateDemo") as Record<string, unknown>)["toggleRandomFillReset"])],
+  "exerciseIdempotentTrigger": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../aggregateDemo").exerciseIdempotentTrigger>("aggregateDemo:exerciseIdempotentTrigger"), () => (require("../aggregateDemo") as Record<string, unknown>)["exerciseIdempotentTrigger"])],
+  "getSnapshot": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../aggregateDemo").getSnapshot>("aggregateDemo:getSnapshot"), () => (require("../aggregateDemo") as Record<string, unknown>)["getSnapshot"])],
+  "runDirectOp": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../aggregateDemo").runDirectOp>("aggregateDemo:runDirectOp"), () => (require("../aggregateDemo") as Record<string, unknown>)["runDirectOp"])],
+  "toggleRandomFillReset": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../aggregateDemo").toggleRandomFillReset>("aggregateDemo:toggleRandomFillReset"), () => (require("../aggregateDemo") as Record<string, unknown>)["toggleRandomFillReset"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

@@ -1,6 +1,6 @@
 ---
 title: Backend
-description: Drive Convex or Concave, generate runtime files, deploy, migrate, reset, and analyze.
+description: Drive Convex or Concave, verify local runtime, generate files, deploy, migrate, reset, and analyze.
 links:
   doc: https://docs.convex.dev/cli
 ---
@@ -17,6 +17,7 @@ Options:
 |------|-------------|
 | `--api <dir>` | Output directory for api.ts (default: `convex/shared`) |
 | `--backend <convex\|concave>` | Backend CLI to drive |
+| `--bootstrap` | Run one-shot local Convex bootstrap and exit |
 | `--config <path>` | Path to better-convex config file (default: `./concave.json`) |
 | `--backfill=auto\|on\|off` | Dev aggregate backfill mode toggle (default: `auto`) |
 | `--backfill-wait` / `--no-backfill-wait` | Wait for all target indexes to become `READY` |
@@ -27,11 +28,15 @@ Options:
 
 Wraps the selected backend `dev` command, generates runtime files on startup, watches for changes, and passes all other flags through.
 
-On backend `convex`, `better-convex dev` runs `convex init` before pre-run hooks, codegen, watchers, and the main `convex dev` process.
+On backend `convex`, `better-convex dev` runs `convex init` before codegen,
+watchers, and the main `convex dev` process.
 
-Set `meta["better-convex"].dev.preRun` in `concave.json` to run one Convex setup function before the main dev loop starts. It is Convex-only; backend `concave` has no equivalent `--run` flow.
+Set `meta["better-convex"].dev.preRun` in `concave.json` to run one Convex
+setup function inside the main dev loop. It is Convex-only; backend `concave`
+has no equivalent `--run` flow.
 
-`dev.preRun` runs through `convex run <function>` with the same deployment-target args as the main dev command.
+`dev.preRun` maps to Convex's native `convex dev --run <function>` flow with
+the same deployment-target args as the main dev command.
 
 Local backend state depends on the selected backend:
 
@@ -44,9 +49,26 @@ When aggregate backfill is enabled, `better-convex dev` kicks off `aggregateBack
 When `convex/functions/schema.ts` changes, `better-convex dev` re-runs resume backfill automatically only if aggregate index signatures changed.
 
 ```bash showLineNumbers
-# With Convex flags
-npx better-convex dev --once
+# One-shot local Convex bootstrap
+npx better-convex dev --bootstrap
 ```
+
+## verify
+
+```bash showLineNumbers
+npx better-convex verify
+```
+
+Runs a one-shot local Convex runtime proof through the Better Convex dev path.
+
+Use it when you want a CI-safe answer to one question: does local Better Convex
+dev boot cleanly right now?
+
+`better-convex verify`:
+
+- runs the runtime path through `dev --once`
+- reuses the current local Convex deployment when one is already configured
+- falls back to local anonymous setup for fresh non-interactive Convex verify
 
 ## codegen
 
@@ -83,9 +105,6 @@ Manage environment variables:
 # Push all vars from convex/.env
 npx better-convex env push
 
-# With Better Auth: generate BETTER_AUTH_SECRET and JWKS
-npx better-convex env push --auth
-
 # Force overwrite existing values
 npx better-convex env push --force
 
@@ -93,7 +112,7 @@ npx better-convex env push --force
 npx better-convex env push --prod
 
 # Rotate auth keys, then push fresh JWKS
-npx better-convex env push --auth --rotate
+npx better-convex env push --rotate
 
 # Pull remote values to stdout
 npx better-convex env pull
@@ -106,7 +125,6 @@ Push options:
 
 | Flag | Description |
 |------|-------------|
-| `--auth` | Generate `BETTER_AUTH_SECRET` and `JWKS` (for Better Auth users) |
 | `--rotate` | Rotate auth keys before fetching fresh JWKS |
 | `--force` | Overwrite existing values (default: skip if up to date) |
 | `--from-file <path>` | Push values from a file instead of `convex/.env` |
@@ -126,7 +144,9 @@ Target options:
 | `--preview-name <name>` | Target a named preview deployment |
 | `--env-file <path>` | Use an env file to resolve the target deployment |
 
-`better-convex env push` reads `convex/.env` by default, filters Convex-managed variables, then pushes one batch update through `convex env set --from-file`. With `--auth`: it ensures `BETTER_AUTH_SECRET` exists locally, fetches `JWKS` with `convex run generated/auth:getLatestJwks`, and includes both in the push payload. With `--rotate`: it runs `convex run generated/auth:rotateKeys` first, then pushes the fresh `JWKS`. A long-running `better-convex dev` session is not required.
+`better-convex env push` reads `convex/.env` by default, filters Convex-managed variables, then pushes one batch update through `convex env set --from-file`. If auth scaffold is installed, it also ensures `BETTER_AUTH_SECRET` exists locally, fetches `JWKS` with `convex run generated/auth:getLatestJwks`, and includes both in the push payload. With `--rotate`, it runs `convex run generated/auth:rotateKeys` first, then pushes the fresh `JWKS`.
+
+On backend `convex`, `better-convex dev` handles the local auth bootstrap flow and watches `convex/.env` for later local edits. `better-convex dev --bootstrap` is the one-shot local setup version of that flow. `better-convex verify` is the one-shot local runtime proof. `better-convex add auth --yes` reuses the same local bootstrap path when it needs generated auth runtime and JWKS. Use `better-convex env push` for `--prod`, `--rotate`, or explicit repair against an already active deployment.
 
 If `--from-file` is omitted and stdin is piped, `better-convex env push` reads the piped payload instead of `convex/.env`.
 
@@ -371,9 +391,9 @@ Scope modes apply to `better-convex codegen`.
 
 | Scope | Generated outputs |
 |------|--------------------|
-| `all` (default) | `convex/shared/api.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, runtime files |
-| `auth` | `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/auth.ts`, `convex/functions/generated/auth.runtime.ts` (when `auth.ts` has a default export) |
-| `orm` | `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, `convex/functions/generated/server.ts`, runtime files for ORM internals |
+| `all` (default) | `convex/shared/api.ts`, `<functionsDir>/generated/server.ts`, `<functionsDir>/generated/auth.ts`, runtime files |
+| `auth` | `<functionsDir>/generated/server.ts`, `<functionsDir>/generated/auth.ts`, `<functionsDir>/generated/auth.runtime.ts` (when `<functionsDir>/auth.ts` has a default export) |
+| `orm` | `<functionsDir>/generated/server.ts`, runtime files for ORM internals |
 
 In scoped modes, stale artifacts outside the current scope are removed automatically (for example `convex/shared/api.ts` and cRPC runtime modules in `auth`/`orm` mode).
 

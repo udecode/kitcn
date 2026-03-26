@@ -8,6 +8,7 @@ import {
   getAggregateBackfillDeploymentKey,
   getDevAggregateBackfillStatePath,
   isEntryPoint,
+  maybeReexecUnderSupportedNode,
   parseArgs,
   run,
 } from './cli';
@@ -551,6 +552,7 @@ describe('cli/cli', () => {
       });
       expect(exitCode).toBe(0);
       const output = infoLines.join('\n');
+      expect(output).toContain('verify');
       expect(output).toContain('function-spec');
       expect(output).toContain('components');
       expect(output).toContain('data');
@@ -617,6 +619,7 @@ describe('cli/cli', () => {
       expect(infoLines.join('\n')).toContain('--template');
       expect(infoLines.join('\n')).toContain('--name');
       expect(infoLines.join('\n')).toContain('--defaults');
+      expect(infoLines.join('\n')).toContain('--overwrite');
     } finally {
       console.info = originalInfo;
     }
@@ -670,6 +673,113 @@ describe('cli/cli', () => {
     }
   });
 
+  test('run(verify --help) prints verify help and exits without starting dev', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+    try {
+      const exitCode = await run(['verify', '--help'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(execaStub).not.toHaveBeenCalled();
+      expect(infoLines.join('\n')).toContain('Usage: better-convex verify');
+      expect(infoLines.join('\n')).toContain('local runtime proof');
+    } finally {
+      console.info = originalInfo;
+    }
+  });
+
+  test('maybeReexecUnderSupportedNode re-execs local runtime commands under a supported node', async () => {
+    const calls: Array<{
+      args: string[];
+      cmd: string;
+      opts?: Record<string, unknown>;
+    }> = [];
+    const originalReexec = process.env.BETTER_CONVEX_NODE_REEXEC;
+
+    process.env.BETTER_CONVEX_NODE_REEXEC = undefined;
+
+    try {
+      const exitCode = await maybeReexecUnderSupportedNode({
+        argv: ['dev', '--once'],
+        command: 'dev',
+        currentArgv: ['/repo/node_modules/.bin/better-convex', 'dev', '--once'],
+        currentNodeVersion: 'v25.8.1',
+        deps: {
+          execa: (async (cmd: string, args: string[], opts?: any) => {
+            calls.push({ cmd, args, opts });
+            if (cmd === 'which') {
+              return {
+                exitCode: 0,
+                stdout: [
+                  '/opt/homebrew/bin/node',
+                  '/Users/test/.local/state/fnm_multishells/1/bin/node',
+                ].join('\n'),
+                stderr: '',
+              };
+            }
+            if (cmd === '/opt/homebrew/bin/node') {
+              return {
+                exitCode: 0,
+                stdout: '25.8.1',
+                stderr: '',
+              };
+            }
+            if (cmd === '/Users/test/.local/state/fnm_multishells/1/bin/node') {
+              return {
+                exitCode: 0,
+                stdout: '22.22.1',
+                stderr: '',
+              };
+            }
+            if (cmd === 'node') {
+              return {
+                exitCode: 0,
+                stdout: '',
+                stderr: '',
+              };
+            }
+            throw new Error(`Unexpected command: ${cmd}`);
+          }) as any,
+          loadBetterConvexConfig: (() => createDefaultConfig()) as any,
+        },
+        runtimeName: 'node',
+      });
+
+      expect(exitCode).toBe(0);
+      expect(calls.at(-1)?.cmd).toBe('node');
+      expect(calls.at(-1)?.args).toEqual([
+        '/repo/node_modules/.bin/better-convex',
+        'dev',
+        '--once',
+      ]);
+      expect(
+        (calls.at(-1)?.opts?.env as Record<string, string | undefined>)
+          .BETTER_CONVEX_NODE_REEXEC
+      ).toBe('1');
+      expect(
+        (calls.at(-1)?.opts?.env as Record<string, string | undefined>).PATH
+      ).toStartWith('/Users/test/.local/state/fnm_multishells/1/bin:');
+    } finally {
+      if (originalReexec === undefined) {
+        process.env.BETTER_CONVEX_NODE_REEXEC = undefined;
+      } else {
+        process.env.BETTER_CONVEX_NODE_REEXEC = originalReexec;
+      }
+    }
+  });
+
   test('run(init -t next --yes) shells out to shadcn for fresh dirs, then applies better-convex overlay', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-create-next-')
@@ -715,13 +825,20 @@ describe('cli/cli', () => {
         call[1]?.includes(INIT_SHADCN_PACKAGE_SPEC)
       ) as unknown as [string, string[], Record<string, unknown>] | undefined;
       expect(firstCall?.[0]).toBe('bunx');
-      expect(firstCall?.[1].slice(0, 8)).toEqual([
+      expect(firstCall?.[1].slice(0, 5)).toEqual([
         INIT_SHADCN_PACKAGE_SPEC,
         'init',
         '--template',
         'next',
         '--cwd',
-        path.dirname(fs.realpathSync(dir)),
+      ]);
+      expect(path.dirname(firstCall?.[1][5] ?? '')).toBe(
+        path.dirname(fs.realpathSync(dir))
+      );
+      expect(path.basename(firstCall?.[1][5] ?? '')).toContain(
+        '.better-convex-shadcn-'
+      );
+      expect(firstCall?.[1].slice(6, 8)).toEqual([
         '--name',
         path.basename(dir),
       ]);
@@ -1402,7 +1519,7 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(init -t next --yes) falls back to convex dev --once when cold codegen needs a local bootstrap', async () => {
+  test('run(init -t next --yes) falls back to one-shot local bootstrap when cold codegen needs it', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-create-next-bootstrap-')
     );
@@ -1532,11 +1649,6 @@ describe('cli/cli', () => {
         fs.existsSync(path.join(dir, 'convex', 'functions', 'auth.config.ts'))
       ).toBe(true);
       expect(
-        fs.existsSync(
-          path.join(dir, 'convex', 'lib', 'plugins', 'auth', 'schema.ts')
-        )
-      ).toBe(true);
-      expect(
         fs.existsSync(path.join(dir, 'lib', 'convex', 'auth-client.ts'))
       ).toBe(true);
       expect(fs.existsSync(path.join(dir, 'app', 'auth', 'page.tsx'))).toBe(
@@ -1629,17 +1741,66 @@ describe('cli/cli', () => {
         path.join(dir, 'app', 'auth', 'page.tsx'),
         'utf8'
       );
-      expect(authPageSource).toContain("return '/';");
+      expect(authPageSource).toContain("return '/auth';");
       expect(authPageSource).not.toContain('NEXT_PUBLIC_SITE_URL');
 
       const schemaSource = fs.readFileSync(
         path.join(dir, 'convex', 'functions', 'schema.ts'),
         'utf8'
       );
-      expect(schemaSource).toContain('authExtension()');
+      expect(schemaSource).toContain('export const userTable = convexTable(');
+      expect(schemaSource).toContain(
+        'export const sessionTable = convexTable('
+      );
+      expect(schemaSource).toContain(
+        'better-convex-managed auth:user:registration:start'
+      );
+      expect(schemaSource).toContain(
+        'better-convex-managed auth:session:registration:start'
+      );
+      expect(schemaSource).not.toContain('authExtension()');
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'lib', 'plugins', 'auth', 'schema.ts')
+        )
+      ).toBe(false);
+      const lockfile = JSON.parse(
+        fs.readFileSync(
+          path.join(dir, 'convex', 'functions', 'plugins.lock.json'),
+          'utf8'
+        )
+      ) as {
+        plugins: Record<
+          string,
+          {
+            package: string;
+            schema?: {
+              path: string;
+              tables: Record<string, string>;
+            };
+          }
+        >;
+      };
+      expect(lockfile.plugins.auth.schema?.path).toBe(
+        'convex/functions/schema.ts'
+      );
+      expect(lockfile.plugins.auth.schema?.tables.user).toEqual(
+        expect.objectContaining({
+          owner: 'managed',
+        })
+      );
+      expect(lockfile.plugins.auth.schema?.tables.session).toEqual(
+        expect.objectContaining({
+          owner: 'managed',
+        })
+      );
       expectDependencyInstallCall(
         execaStub.mock.calls as unknown as unknown[],
         BETTER_AUTH_INSTALL_SPEC
+      );
+      expectDependencyInstallCall(
+        execaStub.mock.calls as unknown as unknown[],
+        '@opentelemetry/api@1.9.0'
       );
     } finally {
       process.chdir(oldCwd);
@@ -1736,6 +1897,15 @@ describe('cli/cli', () => {
       expect(authClientSource).toContain(
         'import.meta.env.VITE_CONVEX_SITE_URL!'
       );
+      const schemaSource = fs.readFileSync(
+        path.join(dir, 'convex', 'functions', 'schema.ts'),
+        'utf8'
+      );
+      expect(schemaSource).toContain('export const userTable = convexTable(');
+      expect(schemaSource).toContain(
+        'better-convex-managed auth:user:registration:start'
+      );
+      expect(schemaSource).not.toContain('authExtension()');
     } finally {
       process.chdir(oldCwd);
     }
@@ -1898,11 +2068,20 @@ describe('cli/cli', () => {
           return args[0] === '/fake/convex/main.js' && args[1] === 'codegen';
         })
       ).toBe(true);
-      expect(syncEnvStub).toHaveBeenCalledWith({ auth: true });
+      expect(syncEnvStub).toHaveBeenCalledWith({
+        authSyncMode: 'auto',
+        force: true,
+        sharedDir: 'convex/shared',
+        targetArgs: [],
+      });
 
       expectDependencyInstallCall(
         execaStub.mock.calls as unknown as unknown[],
         BETTER_AUTH_INSTALL_SPEC
+      );
+      expectDependencyInstallCall(
+        execaStub.mock.calls as unknown as unknown[],
+        '@opentelemetry/api@1.9.0'
       );
     } finally {
       process.chdir(oldCwd);
@@ -1978,13 +2157,18 @@ describe('cli/cli', () => {
           return args[0] === '/fake/convex/main.js' && args[1] === 'codegen';
         })
       ).toBe(true);
-      expect(syncEnvStub).toHaveBeenCalledWith({ auth: true });
+      expect(syncEnvStub).toHaveBeenCalledWith({
+        authSyncMode: 'auto',
+        force: true,
+        sharedDir: 'convex/shared',
+        targetArgs: [],
+      });
     } finally {
       process.chdir(oldCwd);
     }
   });
 
-  test('run(add ratelimit/auth/resend --yes --no-codegen) keeps schema extensions in one ordered extend call', async () => {
+  test('run(add ratelimit/auth/resend --yes --no-codegen) keeps auth in root schema and other plugins in one ordered extend call', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-add-plugin-stack-')
     );
@@ -2039,11 +2223,55 @@ describe('cli/cli', () => {
         'utf8'
       );
       expect(schemaSource).toContain(
-        '.extend(ratelimitExtension(), authExtension(), resendExtension())'
+        '.extend(ratelimitExtension(), resendExtension())'
       );
-      expect(schemaSource).not.toContain('.extend(ratelimitExtension()).');
-      expect(schemaSource).not.toContain('.extend(authExtension()).');
-      expect(schemaSource).not.toContain('.extend(resendExtension()).');
+      expect(schemaSource).toContain('export const userTable = convexTable(');
+      expect(schemaSource).not.toContain('authExtension()');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add auth --yes --no-codegen) fails clearly when root schema ownership is unresolved', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-auth-root-ownership-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      writeShadcnNextApp(dir);
+      writeMinimalSchema(
+        dir,
+        `
+        import { convexTable, defineSchema, text } from "better-convex/orm";
+
+        export const localUserTable = convexTable("user", {
+          email: text().notNull(),
+        });
+
+        export default defineSchema({
+          user: localUserTable,
+        });
+        `.trim()
+      );
+
+      const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      await expect(
+        run(['add', 'auth', '--yes', '--no-codegen'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow(
+        'Table "user" already exists in convex/schema.ts. Re-run `better-convex add auth` interactively or pass --overwrite to let better-convex manage it.'
+      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -2074,6 +2302,298 @@ describe('cli/cli', () => {
         })
       ).rejects.toThrow(
         'Auth scaffolding requires a supported app baseline. Run `better-convex init --yes` in a supported app, or bootstrap one with `better-convex init -t <next|vite>` first.'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add auth --only schema --yes --no-codegen) fails clearly before auth scaffold exists', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-auth-schema-only-missing-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
+          const cwdFlagIndex = args.indexOf('--cwd');
+          const nameFlagIndex = args.indexOf('--name');
+          const baseDir =
+            cwdFlagIndex >= 0 && args[cwdFlagIndex + 1]
+              ? args[cwdFlagIndex + 1]!
+              : dir;
+          const projectName =
+            nameFlagIndex >= 0 ? args[nameFlagIndex + 1]! : path.basename(dir);
+          writeShadcnNextApp(path.join(baseDir, projectName));
+          return { exitCode: 0 } as any;
+        }
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const initExitCode = await run(['init', '-t', 'next', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(initExitCode).toBe(0);
+
+      await expect(
+        run(['add', 'auth', '--only', 'schema', '--yes', '--no-codegen'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow(
+        'Schema-only auth reconcile requires the default Better Convex auth scaffold to already exist. If auth is not scaffolded yet, run `better-convex add auth --yes` once.'
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add auth --only schema --yes --no-codegen) works without an existing auth lock entry', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-auth-schema-only-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
+          const cwdFlagIndex = args.indexOf('--cwd');
+          const nameFlagIndex = args.indexOf('--name');
+          const baseDir =
+            cwdFlagIndex >= 0 && args[cwdFlagIndex + 1]
+              ? args[cwdFlagIndex + 1]!
+              : dir;
+          const projectName =
+            nameFlagIndex >= 0 ? args[nameFlagIndex + 1]! : path.basename(dir);
+          writeShadcnNextApp(path.join(baseDir, projectName));
+          return { exitCode: 0 } as any;
+        }
+        if (args[0] === '/fake/convex/main.js' && args[1] === 'codegen') {
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const initExitCode = await run(['init', '-t', 'next', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(initExitCode).toBe(0);
+
+      const addExitCode = await run(['add', 'auth', '--yes', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+      expect(addExitCode).toBe(0);
+      const nodeModulesDir = path.join(dir, 'node_modules');
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.symlinkSync(
+        path.join(oldCwd, 'packages', 'better-convex'),
+        path.join(nodeModulesDir, 'better-convex')
+      );
+      fs.symlinkSync(
+        path.join(oldCwd, 'node_modules', 'better-auth'),
+        path.join(nodeModulesDir, 'better-auth')
+      );
+      fs.symlinkSync(
+        path.join(oldCwd, 'node_modules', 'zod'),
+        path.join(nodeModulesDir, 'zod')
+      );
+      fs.mkdirSync(path.join(dir, 'convex', 'functions', 'generated'), {
+        recursive: true,
+      });
+      fs.writeFileSync(
+        path.join(dir, 'convex', 'functions', 'generated', 'auth.ts'),
+        'export const defineAuth = (factory: any) => factory;\n',
+        'utf8'
+      );
+
+      const authPath = path.join(dir, 'convex', 'functions', 'auth.ts');
+      const authPagePath = path.join(dir, 'app', 'auth', 'page.tsx');
+      const authClientPath = path.join(dir, 'lib', 'convex', 'auth-client.ts');
+      const schemaPath = path.join(dir, 'convex', 'functions', 'schema.ts');
+      const lockfilePath = path.join(
+        dir,
+        'convex',
+        'functions',
+        'plugins.lock.json'
+      );
+      const lockfileBeforeSchemaOnly = JSON.parse(
+        fs.readFileSync(lockfilePath, 'utf8')
+      ) as {
+        plugins: Record<string, unknown>;
+      };
+      const { auth: _auth, ...remainingPlugins } =
+        lockfileBeforeSchemaOnly.plugins;
+      fs.writeFileSync(
+        lockfilePath,
+        `${JSON.stringify({ plugins: remainingPlugins }, null, 2)}\n`,
+        'utf8'
+      );
+      const originalAuthClientSource = fs.readFileSync(authClientPath, 'utf8');
+      const localAuthPageSource = `${fs.readFileSync(authPagePath, 'utf8')}\n// keep local auth page\n`;
+      fs.writeFileSync(authPagePath, localAuthPageSource, 'utf8');
+
+      const authSource = fs
+        .readFileSync(authPath, 'utf8')
+        .replace(
+          "import { convex } from 'better-convex/auth';",
+          "import { convex } from 'better-convex/auth';\nimport { organization } from 'better-auth/plugins';"
+        )
+        .replace(
+          `  plugins: [
+    convex({
+      authConfig,
+      jwks: getEnv().JWKS,
+    }),
+  ],`,
+          `  plugins: [
+    convex({
+      authConfig,
+      jwks: getEnv().JWKS,
+    }),
+    organization(),
+  ],`
+        );
+      fs.writeFileSync(authPath, authSource, 'utf8');
+
+      const callsBeforeSchemaOnly = execaStub.mock.calls.length;
+      const schemaOnlyExitCode = await run(
+        ['add', 'auth', '--only', 'schema', '--yes', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(schemaOnlyExitCode).toBe(0);
+      expect(fs.readFileSync(authPagePath, 'utf8')).toBe(localAuthPageSource);
+      expect(fs.readFileSync(authClientPath, 'utf8')).toBe(
+        originalAuthClientSource
+      );
+
+      const schemaSource = fs.readFileSync(schemaPath, 'utf8');
+      expect(schemaSource).toContain(
+        'better-convex-managed auth:organization:declaration:start'
+      );
+      expect(schemaSource).toContain(
+        'better-convex-managed auth:member:declaration:start'
+      );
+      expect(schemaSource).toContain(
+        'better-convex-managed auth:invitation:declaration:start'
+      );
+
+      const lockfile = JSON.parse(fs.readFileSync(lockfilePath, 'utf8')) as {
+        plugins: Record<
+          string,
+          {
+            schema?: {
+              tables: Record<string, { owner: string }>;
+            };
+          }
+        >;
+      };
+      expect(lockfile.plugins.auth.schema?.tables.organization).toEqual(
+        expect.objectContaining({
+          owner: 'managed',
+        })
+      );
+      expect(lockfile.plugins.auth.schema?.tables.member).toEqual(
+        expect.objectContaining({
+          owner: 'managed',
+        })
+      );
+      expect(lockfile.plugins.auth.schema?.tables.invitation).toEqual(
+        expect.objectContaining({
+          owner: 'managed',
+        })
+      );
+
+      const schemaOnlyCalls = execaStub.mock.calls.slice(callsBeforeSchemaOnly);
+      expect(
+        schemaOnlyCalls.some((call) => {
+          const [, args] = call as unknown as [string, string[]];
+          return args[0] === 'add' && args.includes(BETTER_AUTH_INSTALL_SPEC);
+        })
+      ).toBe(false);
+      expect(
+        schemaOnlyCalls.some((call) => {
+          const [, args] = call as unknown as [string, string[]];
+          return args[0] === 'add' && args.includes('@opentelemetry/api@1.9.0');
+        })
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add auth --only schema --yes) fails clearly for raw convex auth', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-add-auth-schema-only-convex-')
+    );
+    const oldCwd = process.cwd();
+    writeRawConvexNextApp(dir);
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'CONVEX_DEPLOYMENT=local:demo\nNEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (args[0] === '/fake/convex/main.js' && args[1] === 'codegen') {
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      await run(['add', 'auth', '--preset', 'convex', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      await expect(
+        run(['add', 'auth', '--only', 'schema', '--yes'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadBetterConvexConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow(
+        'Schema-only auth reconcile is only supported for the default Better Convex auth scaffold. Re-run `better-convex add auth --preset convex --yes` for raw Convex auth.'
       );
     } finally {
       process.chdir(oldCwd);
@@ -2236,6 +2756,7 @@ describe('cli/cli', () => {
         args: ['/fake/convex/main.js', 'codegen', '--team', 'acme', '--prod'],
       },
     ]);
+    expect(syncEnvStub).not.toHaveBeenCalled();
   });
 
   test('run(codegen) defaults to scope=all when scope is missing', async () => {
@@ -2333,6 +2854,60 @@ describe('cli/cli', () => {
       scope: 'orm',
       trimSegments: ['plugins'],
     });
+  });
+
+  test('run(codegen) prepares and completes auth env for local auth-enabled convex apps', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-cli-codegen-auth-env-')
+    );
+    const oldCwd = process.cwd();
+    fs.mkdirSync(path.join(dir, 'convex', 'functions', 'generated'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      JSON.stringify({ functions: 'convex/functions' })
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'auth.ts'),
+      'export const auth = true;\n'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'DEPLOY_ENV=development\nSITE_URL=http://localhost:3000\n'
+    );
+
+    const syncEnvCalls: string[] = [];
+    const execaStub = mock(async (_cmd: string, args: string[]) => {
+      if (args[1] === 'codegen') {
+        fs.writeFileSync(
+          path.join(dir, 'convex', 'functions', 'generated', 'auth.ts'),
+          'export const generated = true;\n'
+        );
+      }
+      return { exitCode: 0, stdout: '', stderr: '' } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async (params: { authSyncMode?: string }) => {
+      syncEnvCalls.push(params.authSyncMode ?? 'auto');
+    });
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    process.chdir(dir);
+    try {
+      const exitCode = await run(['codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadBetterConvexConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(syncEnvCalls).toEqual(['prepare', 'complete']);
+    } finally {
+      process.chdir(oldCwd);
+    }
   });
 
   test('run(add resend) scaffolds resend integration files without invoking convex CLI', async () => {
@@ -3846,7 +4421,7 @@ describe('cli/cli', () => {
       expect(ratelimitSchemaSource).toContain(
         'ratelimitState: ratelimitStateTable'
       );
-      expect(ratelimitSchemaSource).toContain('"ratelimit_state"');
+      expect(ratelimitSchemaSource).toContain('"ratelimitState"');
       expect(ratelimitSchemaSource).not.toContain(
         'export const ratelimitStorageTables'
       );
@@ -4723,7 +5298,7 @@ describe('cli/cli', () => {
     const syncEnvStub = mock(async () => {});
     const loadConfigStub = mock(() => createDefaultConfig());
 
-    const exitCode = await run(['env', 'push', '--auth', '--force', '--prod'], {
+    const exitCode = await run(['env', 'push', '--force', '--prod'], {
       realConvex: '/fake/convex/main.js',
       execa: execaStub as any,
       generateMeta: generateMetaStub as any,
@@ -4733,10 +5308,11 @@ describe('cli/cli', () => {
 
     expect(exitCode).toBe(0);
     expect(syncEnvStub).toHaveBeenCalledWith({
-      auth: true,
+      authSyncMode: 'auto',
       force: true,
       fromFilePath: undefined,
       rotate: false,
+      sharedDir: 'convex/shared',
       sourceContent: undefined,
       targetArgs: ['--prod'],
     });
@@ -4989,52 +5565,33 @@ describe('cli/cli', () => {
 
     const execaStub = mock(async (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
+      if (args.includes('generated/server:migrationRun')) {
+        return {
+          exitCode: 0,
+          stdout: '{"status":"running","runId":"mr_concave"}\n',
+          stderr: '',
+        } as any;
+      }
+      if (args.includes('generated/server:migrationStatus')) {
+        return {
+          exitCode: 0,
+          stdout:
+            '{"status":"idle","runs":[{"status":"completed","currentIndex":1,"migrationIds":["m1"]}]}\n',
+          stderr: '',
+        } as any;
+      }
+      if (args.includes('generated/server:aggregateBackfill')) {
+        return {
+          exitCode: 0,
+          stdout: '{"status":"ok"}\n',
+          stderr: '',
+        } as any;
+      }
+      if (args.includes('generated/server:aggregateBackfillStatus')) {
+        return { exitCode: 0, stdout: '[]\n', stderr: '' } as any;
+      }
       return { exitCode: 0 } as any;
     });
-    const fetchCalls: Array<{ url: string; body: unknown }> = [];
-    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (
-      input: URL | RequestInfo,
-      init?: RequestInit
-    ) => {
-      fetchCalls.push({
-        url: String(input),
-        body: JSON.parse(String(init?.body ?? '{}')),
-      });
-      const functionPath =
-        (fetchCalls.at(-1)?.body as any)?.args?.functionPath ?? '';
-      if (functionPath === 'generated/server:migrationRun') {
-        return Response.json({
-          result: {
-            status: 'running',
-            runId: 'mr_concave',
-          },
-        });
-      }
-      if (functionPath === 'generated/server:migrationStatus') {
-        return Response.json({
-          result: {
-            status: 'idle',
-            runs: [
-              {
-                status: 'completed',
-                currentIndex: 1,
-                migrationIds: ['m1'],
-              },
-            ],
-          },
-        });
-      }
-      if (functionPath === 'generated/server:aggregateBackfill') {
-        return Response.json({
-          result: {
-            status: 'ok',
-          },
-        });
-      }
-      return Response.json({
-        result: [],
-      });
-    }) as any);
     const generateMetaStub = mock(async () => {});
     const syncEnvStub = mock(async () => {});
     const loadConfigStub = mock(() => ({
@@ -5059,17 +5616,12 @@ describe('cli/cli', () => {
       cmd: 'bun',
       args: [concaveCliPath, 'deploy', '--target', 'cf'],
     });
-    expect(calls).toHaveLength(1);
-    expect(
-      fetchCalls.map((call) => (call.body as any).args.functionPath)
-    ).toEqual([
-      'generated/server:migrationRun',
-      'generated/server:migrationStatus',
-      'generated/server:aggregateBackfill',
-      'generated/server:aggregateBackfillStatus',
-    ]);
-    expect(fetchCalls[0]?.url).toBe('http://127.0.0.1:3000/api/execute');
-    fetchSpy.mockRestore();
+    expect(calls[1]?.args).toContain('generated/server:migrationRun');
+    expect(calls[2]?.args).toContain('generated/server:migrationStatus');
+    expect(calls[3]?.args).toContain('generated/server:aggregateBackfill');
+    expect(calls[4]?.args).toContain(
+      'generated/server:aggregateBackfillStatus'
+    );
   });
 
   test('run(migrate up) executes migration runtime with polling', async () => {
@@ -5670,6 +6222,7 @@ describe('cli/cli', () => {
       expect(generateMetaStub).toHaveBeenCalledWith('out', {
         debug: true,
         scope: 'all',
+        silent: true,
         trimSegments: ['plugins'],
       });
 
@@ -5687,7 +6240,10 @@ describe('cli/cli', () => {
         },
       });
       expect(syncEnvStub).toHaveBeenCalledWith({
+        authSyncMode: 'skip',
         force: true,
+        sharedDir: 'out',
+        silent: true,
         targetArgs: ['--env-file', '.env.agent'],
       });
 
@@ -5701,7 +6257,7 @@ describe('cli/cli', () => {
         '["plugins"]'
       );
 
-      expect(calls[2]).toEqual({
+      expect(calls[2]).toMatchObject({
         cmd: 'node',
         args: [
           '/fake/convex/main.js',
@@ -5711,7 +6267,7 @@ describe('cli/cli', () => {
           '--once',
         ],
         opts: {
-          stdio: 'inherit',
+          stdio: 'pipe',
           cwd: process.cwd(),
           env: expect.objectContaining({
             CONVEX_AGENT_MODE: 'anonymous',
@@ -5733,7 +6289,7 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(dev) runs config dev.preRun before watcher and main dev', async () => {
+  test('run(dev) passes config dev.preRun through convex dev native run flow', async () => {
     const calls: { cmd: string; args: string[]; opts?: any }[] = [];
     const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
     const originalAgentMode = process.env.CONVEX_AGENT_MODE;
@@ -5769,9 +6325,6 @@ describe('cli/cli', () => {
         if (cmd === 'bun') return watcherProcess;
         if (args[1] === 'init') {
           return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
-        }
-        if (args[1] === 'run' && args.includes('init')) {
-          return Promise.resolve({ exitCode: 0 });
         }
         return convexProcess;
       });
@@ -5815,28 +6368,19 @@ describe('cli/cli', () => {
         },
       });
       expect(syncEnvStub).toHaveBeenCalledWith({
+        authSyncMode: 'skip',
         force: true,
+        sharedDir: 'convex/shared',
+        silent: true,
         targetArgs: [],
       });
-      expect(calls[1]).toEqual({
+      expect(calls[1]?.cmd).toBe('bun');
+      expect(calls[1]?.args).toEqual([expect.stringMatching(WATCHER_TS_RE)]);
+      expect(calls[2]).toMatchObject({
         cmd: 'node',
-        args: ['/fake/convex/main.js', 'run', 'init'],
+        args: ['/fake/convex/main.js', 'dev', '--run', 'init', '--once'],
         opts: {
-          stdio: 'inherit',
-          cwd: process.cwd(),
-          env: expect.objectContaining({
-            CONVEX_AGENT_MODE: 'anonymous',
-          }),
-          reject: false,
-        },
-      });
-      expect(calls[2]?.cmd).toBe('bun');
-      expect(calls[2]?.args).toEqual([expect.stringMatching(WATCHER_TS_RE)]);
-      expect(calls[3]).toEqual({
-        cmd: 'node',
-        args: ['/fake/convex/main.js', 'dev', '--once'],
-        opts: {
-          stdio: 'inherit',
+          stdio: 'pipe',
           cwd: process.cwd(),
           env: expect.objectContaining({
             CONVEX_AGENT_MODE: 'anonymous',

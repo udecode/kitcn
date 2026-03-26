@@ -4,27 +4,25 @@
 // Do not edit manually. Run `better-convex codegen` to regenerate.
 
 import {
+  createGeneratedFunctionReference,
   createGeneratedRegistryRuntime,
-  getGeneratedFunctionReference,
   typedProcedureResolver,
   type GeneratedRegistryCallerForContext,
   type GeneratedRegistryHandlerForContext,
 } from 'better-convex/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'better-convex/orm';
-const { api, internal } =
-  (require("../_generated/api.js") as typeof import('../_generated/api.js'));
 
 const procedureRegistry = {
-  "create": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["create"]), () => (require("./auth") as Record<string, unknown>)["create"])],
-  "deleteMany": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["deleteMany"]), () => (require("./auth") as Record<string, unknown>)["deleteMany"])],
-  "deleteOne": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["deleteOne"]), () => (require("./auth") as Record<string, unknown>)["deleteOne"])],
-  "findMany": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["findMany"]), () => (require("./auth") as Record<string, unknown>)["findMany"])],
-  "findOne": ["query", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["findOne"]), () => (require("./auth") as Record<string, unknown>)["findOne"])],
-  "getLatestJwks": ["action", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["getLatestJwks"]), () => (require("./auth") as Record<string, unknown>)["getLatestJwks"])],
-  "rotateKeys": ["action", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["rotateKeys"]), () => (require("./auth") as Record<string, unknown>)["rotateKeys"])],
-  "updateMany": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["updateMany"]), () => (require("./auth") as Record<string, unknown>)["updateMany"])],
-  "updateOne": ["mutation", typedProcedureResolver(getGeneratedFunctionReference(internal["generated"]["auth"]["updateOne"]), () => (require("./auth") as Record<string, unknown>)["updateOne"])],
+  "create": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").create>("generated/auth:create"), () => (require("./auth") as Record<string, unknown>)["create"])],
+  "deleteMany": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").deleteMany>("generated/auth:deleteMany"), () => (require("./auth") as Record<string, unknown>)["deleteMany"])],
+  "deleteOne": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").deleteOne>("generated/auth:deleteOne"), () => (require("./auth") as Record<string, unknown>)["deleteOne"])],
+  "findMany": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof import("./auth").findMany>("generated/auth:findMany"), () => (require("./auth") as Record<string, unknown>)["findMany"])],
+  "findOne": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof import("./auth").findOne>("generated/auth:findOne"), () => (require("./auth") as Record<string, unknown>)["findOne"])],
+  "getLatestJwks": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "internal", typeof import("./auth").getLatestJwks>("generated/auth:getLatestJwks"), () => (require("./auth") as Record<string, unknown>)["getLatestJwks"])],
+  "rotateKeys": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "internal", typeof import("./auth").rotateKeys>("generated/auth:rotateKeys"), () => (require("./auth") as Record<string, unknown>)["rotateKeys"])],
+  "updateMany": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").updateMany>("generated/auth:updateMany"), () => (require("./auth") as Record<string, unknown>)["updateMany"])],
+  "updateOne": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").updateOne>("generated/auth:updateOne"), () => (require("./auth") as Record<string, unknown>)["updateOne"])],
 } as const;
 
   const handlerRegistry = procedureRegistry;

@@ -3,13 +3,13 @@
     "@base-ui/react": "^1.3.0",
     "@fontsource-variable/geist": "^5.2.8",
     "@tailwindcss/vite": "^4.1.17",
-    "@tanstack/react-query": "^5.95.0",
+    "@tanstack/react-query": "5.95.2",
     "better-convex": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "1.33.0",
-    "hono": "^4.12.9",
-    "lucide-react": "^0.577.0",
+    "hono": "4.12.9",
+    "lucide-react": "^1.7.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "shadcn": "^4.1.0",
@@ -48,7 +48,7 @@
     "preview": "vite preview",
     "codegen": "better-convex codegen",
     "convex:dev": "better-convex dev",
-    "typecheck:convex": "tsc --noEmit --project convex/tsconfig.json"
+    "typecheck:convex": "tsc --noEmit --project convex/functions/tsconfig.json"
   },
   "type": "module",
   "version": "0.0.1"
