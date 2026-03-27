@@ -18,7 +18,7 @@ Important framing:
 6. In `findings.md`, log blockers/friction with: severity, phase, source file/section, issue, proposed fix.
 7. Do not use `@ts-nocheck`.
 8. No subscriptions in this simulation (no subscriptions table, feature paths, or billing flow).
-9. Headed `agent-browser` is required at each phase gate.
+9. `dev-browser --connect http://127.0.0.1:9222` is required at each phase gate.
 10. Fail-fast sequencing: never start phase N+1 before phase N gate fully passes.
 11. Use the actual running dev server URL/port for browser smoke (port may not be 3000).
 
@@ -58,7 +58,7 @@ Scope:
 2. Run `bun run typecheck` (fallback `bunx tsc --noEmit`).
 3. Run `bun test`.
 4. Run `bun run build`.
-5. Run headed `agent-browser` smoke for the phase route set.
+5. Run `dev-browser --connect http://127.0.0.1:9222` smoke for the phase route set.
 6. Save evidence under `/tmp/simulation-1/evidence/phase-N/`.
 7. If any check fails, fix in-phase and rerun gate. Do not continue.
 

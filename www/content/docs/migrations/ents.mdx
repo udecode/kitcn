@@ -12,7 +12,7 @@ In ORM APIs, system fields are public as `id` and `createdAt`. Internal Convex f
 ## Migration Checklist
 
 - Replace `defineEntSchema` / `defineEnt` with `convexTable()` + `defineSchema()`
-- Convert edges to `defineRelations()`
+- Convert edges to schema `.relations(...)`
 - Attach ORM to `ctx.orm` in your context (create once)
 - Replace edge traversal (`edge()`) with `with:` or explicit join-table queries
 - Replace ent mutations with `insert` / `update` / `delete`
@@ -47,7 +47,6 @@ In ORM APIs, system fields are public as `id` and `createdAt`. Internal Convex f
     import {
       convexTable,
       defineSchema,
-      defineRelations,
       text,
       id,
       uniqueIndex,
@@ -66,11 +65,10 @@ In ORM APIs, system fields are public as `id` and `createdAt`. Internal Convex f
       (t) => [index('by_user').on(t.userId)]
     );
 
-    const relations = defineRelations({ users, posts }, (r) => ({
+    export default defineSchema({ users, posts }).relations((r) => ({
       users: { posts: r.many.posts() },
       posts: { user: r.one.users({ from: r.posts.userId, to: r.users.id }) },
     }));
-    export default defineSchema({ users, posts });
     ```
   </CompareItem>
 </Compare>
@@ -172,7 +170,7 @@ const memberships = convexTable('memberships', {
   role: text().notNull(),
 });
 
-const relations = defineRelations({ users, groups, memberships }, (r) => ({
+export default defineSchema({ users, groups, memberships }).relations((r) => ({
   users: { memberships: r.many.memberships() },
   groups: { memberships: r.many.memberships() },
   memberships: {

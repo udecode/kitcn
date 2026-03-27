@@ -12,7 +12,7 @@
         "path": "convex/functions/schema.ts",
         "tables": {
           "account": {
-            "checksum": "5a9e3baeae57",
+            "checksum": "0d378994c19c",
             "owner": "managed"
           },
           "jwks": {
@@ -20,11 +20,11 @@
             "owner": "managed"
           },
           "session": {
-            "checksum": "40cd0c065848",
+            "checksum": "6fb042402973",
             "owner": "managed"
           },
           "user": {
-            "checksum": "c64d9849ba88",
+            "checksum": "8a96073bc92f",
             "owner": "managed"
           },
           "verification": {

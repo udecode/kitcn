@@ -1,4 +1,3 @@
-import { requireSchemaRelations } from 'better-convex/orm';
 import { expect, test } from 'vitest';
 import schema, {
   tagsTable,
@@ -8,10 +7,8 @@ import schema, {
 } from '../../example/convex/functions/schema';
 import { withOrmCtx } from '../setup.testing';
 
-const relations = requireSchemaRelations(schema);
-
 test('example schema applies defaultLimit to unsized findMany', async () => {
-  await withOrmCtx(schema, relations, async (ctx) => {
+  await withOrmCtx(schema, schema, async (ctx) => {
     await expect(
       ctx.orm.query.tags.findMany({
         where: { createdBy: 'missing-user' },
@@ -22,13 +19,14 @@ test('example schema applies defaultLimit to unsized findMany', async () => {
 });
 
 test('example schema applies defaultLimit to relation loading', async () => {
-  await withOrmCtx(schema, relations, async (ctx) => {
+  await withOrmCtx(schema, schema, async (ctx) => {
     const [{ id: userId }] = await ctx.orm
       .insert(userTable)
       .values({
         name: 'Example User',
         email: 'example-default-limit@test.dev',
         emailVerified: true,
+        createdAt: new Date(),
         updatedAt: new Date(),
       })
       .returning({ id: userTable.id });

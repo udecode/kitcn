@@ -19,14 +19,9 @@ export type RootSchemaOwnershipLock = PluginRootSchemaOwnership;
 
 const OBJECT_ENTRY_INDENT = '  ';
 const LEADING_INDENT_RE = /^[ \t]*/;
+const LEGACY_MANAGED_COMMENT_RE =
+  /^[ \t]*\/\* better-convex-managed [^*]+ \*\/\n?/gm;
 const WHITESPACE_RE = /\s/;
-
-const blockMarker = (
-  pluginKey: string,
-  tableKey: string,
-  section: 'declaration' | 'registration' | 'relations',
-  edge: 'end' | 'start'
-) => `/* better-convex-managed ${pluginKey}:${tableKey}:${section}:${edge} */`;
 
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -38,23 +33,43 @@ const normalizePathForMessage = (path: string) => {
     : relativePath;
 };
 
-const renderManagedBlock = (
-  pluginKey: string,
-  tableKey: string,
-  section: 'declaration' | 'registration' | 'relations',
-  content: string
-) =>
-  `${blockMarker(pluginKey, tableKey, section, 'start')}\n${content.trim()}\n${blockMarker(pluginKey, tableKey, section, 'end')}`;
+const printCanonicalObjectEntry = (content: string) => {
+  const source = `const object = {\n${content.trim()}\n};`;
+  const sourceFile = parseSource(source);
+  const statement = sourceFile.statements[0];
+  if (!statement || !ts.isVariableStatement(statement)) {
+    return content.trim();
+  }
+  const declaration = statement.declarationList.declarations[0];
+  if (
+    !declaration?.initializer ||
+    !ts.isObjectLiteralExpression(declaration.initializer)
+  ) {
+    return content.trim();
+  }
+  const property = declaration.initializer.properties[0];
+  if (!property) {
+    return content.trim();
+  }
+  return ts
+    .createPrinter({ removeComments: true })
+    .printNode(ts.EmitHint.Unspecified, property, sourceFile)
+    .trim();
+};
 
 const renderManagedObjectEntryFingerprint = (content: string) =>
-  indentBlock(ensureTrailingComma(content), OBJECT_ENTRY_INDENT).trim();
+  ensureTrailingComma(printCanonicalObjectEntry(content));
 
-const renderManagedFingerprintSource = (unit: RootSchemaTableUnit) =>
+const renderManagedFingerprintSource = (params: {
+  declaration: string;
+  registration: string;
+  relations?: string;
+}) =>
   [
-    unit.declaration.trim(),
-    renderManagedObjectEntryFingerprint(unit.registration),
-    unit.relations
-      ? renderManagedObjectEntryFingerprint(unit.relations)
+    params.declaration.trim(),
+    renderManagedObjectEntryFingerprint(params.registration),
+    params.relations
+      ? renderManagedObjectEntryFingerprint(params.relations)
       : undefined,
   ]
     .filter(Boolean)
@@ -62,72 +77,18 @@ const renderManagedFingerprintSource = (unit: RootSchemaTableUnit) =>
 
 const renderManagedChecksum = (unit: RootSchemaTableUnit) =>
   createHash('sha1')
-    .update(renderManagedFingerprintSource(unit))
-    .digest('hex')
-    .slice(0, 12);
-
-const stripManagedBlocks = (source: string, pluginKey: string) =>
-  source
-    .replace(
-      new RegExp(
-        `${escapeRegex(
-          `/* better-convex-managed ${pluginKey}:`
-        )}[\\s\\S]*?${escapeRegex(':end */')}\\n?`,
-        'g'
-      ),
-      ''
-    )
-    .replace(/\n{3,}/g, '\n\n');
-
-const extractManagedBlockBody = (
-  source: string,
-  pluginKey: string,
-  tableKey: string,
-  section: 'declaration' | 'registration' | 'relations'
-) => {
-  const start = blockMarker(pluginKey, tableKey, section, 'start');
-  const end = blockMarker(pluginKey, tableKey, section, 'end');
-  const match = source.match(
-    new RegExp(
-      `${escapeRegex(start)}\\n([\\s\\S]*?)\\n[ \\t]*${escapeRegex(end)}`,
-      'm'
-    )
-  );
-  return match?.[1]?.trim();
-};
-
-const readManagedChecksumFromSource = (
-  source: string,
-  pluginKey: string,
-  unit: RootSchemaTableUnit
-) => {
-  const declaration = extractManagedBlockBody(
-    source,
-    pluginKey,
-    unit.key,
-    'declaration'
-  );
-  const registration = extractManagedBlockBody(
-    source,
-    pluginKey,
-    unit.key,
-    'registration'
-  );
-  const relations = unit.relations
-    ? extractManagedBlockBody(source, pluginKey, unit.key, 'relations')
-    : undefined;
-
-  if (!declaration || !registration || (unit.relations && !relations)) {
-    return null;
-  }
-
-  return createHash('sha1')
     .update(
-      [declaration, registration, relations].filter(Boolean).join('\n---\n')
+      renderManagedFingerprintSource({
+        declaration: unit.declaration,
+        registration: unit.registration,
+        relations: unit.relations,
+      })
     )
     .digest('hex')
     .slice(0, 12);
-};
+
+const stripLegacyManagedComments = (source: string) =>
+  source.replace(LEGACY_MANAGED_COMMENT_RE, '').replace(/\n{3,}/g, '\n\n');
 
 const parseSource = (source: string) =>
   ts.createSourceFile(
@@ -191,7 +152,7 @@ type TablesObjectInfo = {
   statementStart: number;
 };
 
-type RelationsCallInfo = {
+type RelationsChainInfo = {
   call: ts.CallExpression;
   object: ts.ObjectLiteralExpression;
   sourceFile: ts.SourceFile;
@@ -251,9 +212,9 @@ const findTablesObject = (source: string): TablesObjectInfo | null => {
   return defineSchemaObject;
 };
 
-const findRelationsCall = (source: string): RelationsCallInfo | null => {
+const findRelationsCall = (source: string): RelationsChainInfo | null => {
   const sourceFile = parseSource(source);
-  let result: RelationsCallInfo | null = null;
+  let result: RelationsChainInfo | null = null;
 
   const visit = (node: ts.Node) => {
     if (
@@ -280,6 +241,120 @@ const findRelationsCall = (source: string): RelationsCallInfo | null => {
 
   visit(sourceFile);
   return result;
+};
+
+const hasStandaloneDefineRelations = (source: string) => {
+  const sourceFile = parseSource(source);
+  let found = false;
+
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'defineRelations'
+    ) {
+      found = true;
+      return;
+    }
+    if (!found) {
+      ts.forEachChild(node, visit);
+    }
+  };
+
+  visit(sourceFile);
+  return found;
+};
+
+const findTableDeclaration = (source: string, tableKey: string) => {
+  const sourceFile = parseSource(source);
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        declaration.initializer &&
+        ts.isCallExpression(declaration.initializer) &&
+        ts.isIdentifier(declaration.initializer.expression) &&
+        declaration.initializer.expression.text === 'convexTable'
+      ) {
+        const firstArg = declaration.initializer.arguments[0];
+        if (
+          firstArg &&
+          isStringLiteralLike(firstArg) &&
+          firstArg.text === tableKey
+        ) {
+          return statement.getText(sourceFile).trim();
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
+const findObjectProperty = (
+  object: ts.ObjectLiteralExpression,
+  sourceFile: ts.SourceFile,
+  tableKey: string
+) => {
+  for (const property of object.properties) {
+    if (getPropertyName(property) === tableKey) {
+      return property.getText(sourceFile).trim();
+    }
+  }
+
+  return null;
+};
+
+const extractManagedFragments = (source: string, tableKey: string) => {
+  const declaration = findTableDeclaration(source, tableKey);
+  const tablesObject = findTablesObject(source);
+  const registration = tablesObject
+    ? findObjectProperty(tablesObject.object, tablesObject.sourceFile, tableKey)
+    : null;
+  const relationsObject = findRelationsCall(source);
+  const relations = relationsObject
+    ? findObjectProperty(
+        relationsObject.object,
+        relationsObject.sourceFile,
+        tableKey
+      )
+    : null;
+
+  return {
+    declaration,
+    registration,
+    relations,
+  };
+};
+
+const readManagedChecksumFromSource = (
+  source: string,
+  unit: RootSchemaTableUnit
+) => {
+  const fragments = extractManagedFragments(source, unit.key);
+  if (!fragments.declaration || !fragments.registration) {
+    return null;
+  }
+  if (unit.relations && !fragments.relations) {
+    return null;
+  }
+  if (!unit.relations && fragments.relations) {
+    return null;
+  }
+
+  return createHash('sha1')
+    .update(
+      renderManagedFingerprintSource({
+        declaration: fragments.declaration,
+        registration: fragments.registration,
+        relations: fragments.relations ?? undefined,
+      })
+    )
+    .digest('hex')
+    .slice(0, 12);
 };
 
 const mergeOrmImports = (source: string, importNames: readonly string[]) => {
@@ -378,7 +453,6 @@ const renderObjectLiteral = (
 
 const updateTablesObject = (
   source: string,
-  pluginKey: string,
   managedUnits: readonly RootSchemaTableUnit[]
 ) => {
   const info = findTablesObject(source);
@@ -399,12 +473,7 @@ const updateTablesObject = (
       ensureTrailingComma(property.getText(tablesInfo.sourceFile))
     );
   const managedEntries = managedUnits.map((unit) =>
-    renderManagedBlock(
-      pluginKey,
-      unit.key,
-      'registration',
-      ensureTrailingComma(unit.registration)
-    )
+    ensureTrailingComma(unit.registration)
   );
 
   return replaceRange(
@@ -494,14 +563,32 @@ const findRelationsInsertIndex = (source: string) => {
   return cursor;
 };
 
+function removeRelationsCall(
+  source: string,
+  relationsInfo: RelationsChainInfo
+) {
+  const propertyAccess = relationsInfo.call.expression;
+  if (!ts.isPropertyAccessExpression(propertyAccess)) {
+    return source;
+  }
+
+  return replaceRange(
+    source,
+    propertyAccess.expression.end,
+    relationsInfo.call.end,
+    ''
+  ).replace(/\n{3,}/g, '\n\n');
+}
+
 const updateRelationsObject = (
   source: string,
-  pluginKey: string,
   managedUnits: readonly RootSchemaTableUnit[]
 ) => {
   const relationUnits = managedUnits.filter((unit) => unit.relations);
-  const managedKeys = new Set(relationUnits.map((unit) => unit.key));
-  const existingRelations = findRelationsCall(source);
+  const managedKeys = new Set(managedUnits.map((unit) => unit.key));
+  const existingRelationsCall = findRelationsCall(source);
+
+  const existingRelations = existingRelationsCall;
 
   if (!existingRelations) {
     if (relationUnits.length === 0) {
@@ -515,12 +602,7 @@ const updateRelationsObject = (
       );
     }
     const relationEntries = relationUnits.map((unit) =>
-      renderManagedBlock(
-        pluginKey,
-        unit.key,
-        'relations',
-        ensureTrailingComma(unit.relations!)
-      )
+      ensureTrailingComma(unit.relations!)
     );
     return `${source.slice(0, insertIndex)}.relations((r) => (${renderObjectLiteral('', relationEntries)}))${source.slice(insertIndex)}`;
   }
@@ -535,26 +617,12 @@ const updateRelationsObject = (
       ensureTrailingComma(property.getText(relationsInfo.sourceFile))
     );
   const managedEntries = relationUnits.map((unit) =>
-    renderManagedBlock(
-      pluginKey,
-      unit.key,
-      'relations',
-      ensureTrailingComma(unit.relations!)
-    )
+    ensureTrailingComma(unit.relations!)
   );
   const nextEntries = [...existingEntries, ...managedEntries];
 
   if (nextEntries.length === 0) {
-    const propertyAccess = relationsInfo.call.expression;
-    if (!ts.isPropertyAccessExpression(propertyAccess)) {
-      return source;
-    }
-    return replaceRange(
-      source,
-      propertyAccess.expression.end,
-      relationsInfo.call.end,
-      ''
-    ).replace(/\n{3,}/g, '\n\n');
+    return removeRelationsCall(source, relationsInfo);
   }
 
   return replaceRange(
@@ -573,7 +641,6 @@ const updateRelationsObject = (
 
 const insertManagedDeclarations = (
   source: string,
-  pluginKey: string,
   managedUnits: readonly RootSchemaTableUnit[]
 ) => {
   if (managedUnits.length === 0) {
@@ -587,9 +654,7 @@ const insertManagedDeclarations = (
     );
   }
 
-  const declarationBlocks = managedUnits.map((unit) =>
-    renderManagedBlock(pluginKey, unit.key, 'declaration', unit.declaration)
-  );
+  const declarationBlocks = managedUnits.map((unit) => unit.declaration.trim());
   return `${source.slice(0, tablesObject.statementStart)}${declarationBlocks.join('\n\n')}\n\n${source.slice(tablesObject.statementStart)}`;
 };
 
@@ -624,10 +689,12 @@ const hasLocalConflict = (source: string, tableKey: string) => {
 };
 
 const decideOwnership = async (params: {
+  claimMatchingManaged?: boolean;
   conflict: boolean;
   displayPath: string;
   drifted: boolean;
   lockEntry?: PluginRootSchemaTableOwnership;
+  matchesManaged: boolean;
   overwrite: boolean;
   overwriteManaged?: boolean;
   pluginKey: string;
@@ -672,6 +739,9 @@ const decideOwnership = async (params: {
   if (params.overwrite) {
     return 'managed';
   }
+  if (params.claimMatchingManaged) {
+    return params.matchesManaged ? 'managed' : 'local';
+  }
   if (params.preview) {
     return 'local';
   }
@@ -689,6 +759,7 @@ const decideOwnership = async (params: {
 };
 
 export const reconcileRootSchemaOwnership = async (params: {
+  claimMatchingManaged?: boolean;
   lock: RootSchemaOwnershipLock | null;
   overwrite: boolean;
   overwriteManaged?: boolean;
@@ -701,25 +772,33 @@ export const reconcileRootSchemaOwnership = async (params: {
   yes: boolean;
 }) => {
   const displayPath = normalizePathForMessage(params.schemaPath);
-  const strippedSource = stripManagedBlocks(params.source, params.pluginKey);
+  const normalizedSource = stripLegacyManagedComments(params.source);
+  if (hasStandaloneDefineRelations(normalizedSource)) {
+    throw new Error(
+      'Schema patch error: use `defineSchema(...).relations(...)` in schema.ts. Root schema patching no longer supports standalone `defineRelations(...)` exports.'
+    );
+  }
   const nextOwnershipEntries: RootSchemaOwnershipLock['tables'] = {};
   const decisions = new Map<string, 'local' | 'managed'>();
 
   for (const unit of params.tables) {
     const existingLockEntry = params.lock?.tables[unit.key];
     const currentChecksum =
-      existingLockEntry?.owner === 'managed'
-        ? readManagedChecksumFromSource(params.source, params.pluginKey, unit)
+      existingLockEntry?.owner === 'managed' || params.claimMatchingManaged
+        ? readManagedChecksumFromSource(normalizedSource, unit)
         : null;
+    const matchesManaged = currentChecksum === renderManagedChecksum(unit);
     const drifted =
       existingLockEntry?.owner === 'managed' &&
       (!currentChecksum || currentChecksum !== existingLockEntry.checksum);
-    const conflict = hasLocalConflict(strippedSource, unit.key);
+    const conflict = hasLocalConflict(normalizedSource, unit.key);
     const owner = await decideOwnership({
+      claimMatchingManaged: params.claimMatchingManaged,
       conflict,
       displayPath,
       drifted: Boolean(drifted),
       lockEntry: existingLockEntry,
+      matchesManaged,
       overwrite: params.overwrite,
       overwriteManaged: params.overwriteManaged,
       pluginKey: params.pluginKey,
@@ -744,7 +823,7 @@ export const reconcileRootSchemaOwnership = async (params: {
     (unit) => decisions.get(unit.key) === 'managed'
   );
   let nextSource = mergeOrmImports(
-    strippedSource,
+    normalizedSource,
     [...new Set(managedUnits.flatMap((unit) => unit.importNames))].sort()
   );
 
@@ -752,17 +831,9 @@ export const reconcileRootSchemaOwnership = async (params: {
     nextSource = removeTableDeclaration(nextSource, unit.key);
   }
 
-  nextSource = insertManagedDeclarations(
-    nextSource,
-    params.pluginKey,
-    managedUnits
-  );
-  nextSource = updateTablesObject(nextSource, params.pluginKey, managedUnits);
-  nextSource = updateRelationsObject(
-    nextSource,
-    params.pluginKey,
-    managedUnits
-  );
+  nextSource = insertManagedDeclarations(nextSource, managedUnits);
+  nextSource = updateTablesObject(nextSource, managedUnits);
+  nextSource = updateRelationsObject(nextSource, managedUnits);
 
   return {
     content: nextSource.replace(/\n{3,}/g, '\n\n'),

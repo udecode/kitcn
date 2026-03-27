@@ -274,10 +274,10 @@ values. When omitted, `withCheck` falls back to `using`.
 rlsRole('admin', { createRole: true }).existing();
 ```
 
-### `defineRelations()`
+### `.relations()`
 
 ```ts showLineNumbers
-defineRelations(schema, (r) => ({
+export default defineSchema({ users, posts }).relations((r) => ({
   users: { posts: r.many.posts() },
   posts: {
     author: r.one.users({ from: r.posts.authorId, to: r.users.id }),

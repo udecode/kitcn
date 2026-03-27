@@ -108,10 +108,9 @@ import { index, searchIndex, vectorIndex } from 'better-convex/orm';
 ## Relations
 
 ```ts
-import { defineRelations } from "better-convex/orm";
+import { defineSchema } from "better-convex/orm";
 
-const relations = defineRelations(
-  { users, posts, tags, postsTags },
+export default defineSchema({ users, posts, tags, postsTags }).relations(
   (r) => ({
     users: {
       posts: r.many.posts(),
@@ -924,12 +923,19 @@ const ormDb = orm.db(ctx, {
 
 ## Triggers
 
-Schema-level hooks via `defineTriggers` from `better-convex/orm`. Trigger definitions are schema-level only; `convexTable(..., extraConfig)` no longer accepts trigger callbacks.
+Schema-level hooks live on the default schema export via `.triggers(...)`. Trigger definitions are schema-level only; `convexTable(..., extraConfig)` no longer accepts trigger callbacks.
 
 ```ts
-import { defineTriggers } from "better-convex/orm";
-
-const triggers = defineTriggers(relations, {
+export default defineSchema({ comments, posts })
+  .relations((r) => ({
+    comments: {
+      post: r.one.posts({ from: r.comments.postId, to: r.posts.id }),
+    },
+    posts: {
+      comments: r.many.comments(),
+    },
+  }))
+  .triggers({
   comments: {
     create: {
       after: async (doc, ctx) => {
@@ -954,7 +960,11 @@ const triggers = defineTriggers(relations, {
 ### change payload
 
 ```ts
-const triggers = defineTriggers(relations, {
+export default defineSchema({ comments })
+  .relations(() => ({
+    comments: {},
+  }))
+  .triggers({
   comments: {
     change: async (change, ctx) => {
       change.id; // always present
@@ -971,7 +981,11 @@ const triggers = defineTriggers(relations, {
 ```ts
 import { aggregatePostLikes } from "./aggregates";
 
-const triggers = defineTriggers(relations, {
+export default defineSchema({ postLikes })
+  .relations(() => ({
+    postLikes: {},
+  }))
+  .triggers({
   postLikes: {
     change: aggregatePostLikes.trigger,
   },

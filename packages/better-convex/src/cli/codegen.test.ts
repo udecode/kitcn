@@ -1793,7 +1793,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta prefers dedicated triggers file when triggers export exists there', async () => {
+  test('generateMeta rejects dedicated triggers file exports', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -1847,13 +1847,18 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: { strict: true },
+          enumerable: false,
+        });
+
         export const tables = {
           todos: { table: 'todos' },
         };
-        export const relations = {
-          todos: {},
-        };
-        export default {};
+        export default schema;
         `.trim()
       );
 
@@ -1866,27 +1871,8 @@ describe('cli/codegen', () => {
         `.trim()
       );
 
-      await generateMeta(undefined, { silent: true });
-
-      const generatedServerFile = path.join(
-        dir,
-        'convex',
-        'generated',
-        'server.ts'
-      );
-      const generatedServer = fs.readFileSync(generatedServerFile, 'utf-8');
-      expect(generatedServer).toContain(
-        "import { relations } from '../schema';"
-      );
-      expect(generatedServer).toContain(
-        "import { triggers } from '../triggers';"
-      );
-      expect(generatedServer).not.toContain(
-        "import schema, { relations } from '../schema';"
-      );
-      expect(generatedServer).toContain('OrmSchemaTriggers,');
-      expect(generatedServer).toContain(
-        'const ormSchema = attachGeneratedTriggers(relations, triggers);'
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        'Codegen error: do not export `triggers` from schema.ts or triggers.ts. Chain triggers on the default schema export with `defineSchema(...).relations(...).triggers(...)`.'
       );
     } finally {
       process.chdir(oldCwd);
@@ -1941,7 +1927,7 @@ describe('cli/codegen', () => {
     }
   });
 
-  test('generateMeta ignores named triggers export when schema metadata is missing', async () => {
+  test('generateMeta rejects named triggers export', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -1978,14 +1964,22 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: { strict: true },
+          enumerable: false,
+        });
+
         export const triggers = {
           todos: {},
         };
-        export default {};
+        export default schema;
         `.trim()
       );
       await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
-        "triggers require a 'relations' export from schema.ts"
+        'Codegen error: do not export `triggers` from schema.ts or triggers.ts. Chain triggers on the default schema export with `defineSchema(...).relations(...).triggers(...)`.'
       );
     } finally {
       process.chdir(oldCwd);
@@ -2366,13 +2360,18 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'convex', 'schema.ts'),
         `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: { strict: true },
+          enumerable: false,
+        });
+
         export const tables = {
           todos: { table: 'todos' },
         };
-        export const relations = {
-          todos: {},
-        };
-        export default {};
+        export default schema;
         `.trim()
       );
 
@@ -2430,13 +2429,18 @@ describe('cli/codegen', () => {
       writeFile(
         path.join(dir, 'custom', 'convex', 'schema.ts'),
         `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
+
+        const schema = {};
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: { strict: true },
+          enumerable: false,
+        });
+
         export const tables = {
           todos: { table: 'todos' },
         };
-        export const relations = {
-          todos: {},
-        };
-        export default {};
+        export default schema;
         `.trim()
       );
 
@@ -3130,7 +3134,6 @@ describe('cli/codegen', () => {
         });
 
         export const tables = {};
-        export const relations = {};
         export default schema;
         `.trim()
       );
@@ -3212,7 +3215,6 @@ describe('cli/codegen', () => {
         });
 
         export const tables = {};
-        export const relations = {};
         export default schema;
         `.trim()
       );
@@ -3264,7 +3266,6 @@ describe('cli/codegen', () => {
         });
 
         export const tables = {};
-        export const relations = {};
         export default schema;
         `.trim()
       );
@@ -3313,7 +3314,6 @@ describe('cli/codegen', () => {
         });
 
         export const tables = {};
-        export const relations = {};
         export default schema;
         `.trim()
       );
@@ -3379,6 +3379,62 @@ describe('cli/codegen', () => {
         'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
       );
       expect(serverSource).toContain('query: (ctx) => withOrm(ctx),');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta rejects explicit relations export even when schema metadata exists', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
+        const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
+
+        export const tables = {
+          todos: { table: 'todos' },
+          users: { table: 'users' },
+        };
+        export const relations = {
+          todos: {
+            table: tables.todos,
+            relations: {
+              owner: { table: tables.users },
+            },
+          },
+          users: {
+            table: tables.users,
+            relations: {
+              todos: { table: tables.todos },
+            },
+          },
+        };
+
+        const schema = { tables };
+        Object.defineProperty(schema, OrmSchemaOptions, {
+          value: { strict: true },
+          enumerable: false,
+        });
+        Object.defineProperty(schema, OrmSchemaRelations, {
+          value: {
+            todos: { table: tables.todos },
+          },
+          enumerable: false,
+        });
+
+        export default schema;
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        'Codegen error: do not export `relations` from schema.ts. Chain relations on the default schema export with `defineSchema(...).relations(...)`.'
+      );
     } finally {
       process.chdir(oldCwd);
     }

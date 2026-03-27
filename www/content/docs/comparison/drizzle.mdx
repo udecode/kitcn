@@ -12,7 +12,7 @@ This guide compares Drizzle and the ORM side-by-side. It focuses on API mapping 
 ## At A Glance
 
 **Same API surface:**
-- Table builders and relations (`convexTable`, `defineRelations`, `one`, `many`)
+- Table builders and relation primitives (`convexTable`, `.relations(...)`, `one`, `many`)
 - Relational query builder (`findMany`, `findFirst`, object/callback `where`, `orderBy`, `limit`, `offset`, `with`)
 - Type inference (`InferSelectModel`, `InferInsertModel`, `$inferSelect`, `$inferInsert`)
 - Mutation helpers (`insert`, `update`, `delete`, `returning`, `onConflictDoUpdate`)
@@ -57,7 +57,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
 - [ ] Install `better-convex`
 - [ ] Convert table definitions to `convexTable()` with column builders (`text`, `integer`, `boolean`, `id`)
 - [ ] Replace manual `id` fields with Convex `id`
-- [ ] Define relations using `defineRelations()` and `with`
+- [ ] Define relations on the default schema export with `.relations(...)` and load them with `with`
 - [ ] Attach ORM to `ctx.orm` in context (create once)
 - [ ] Keep `where`, `orderBy`, `limit`, `offset` shapes the same
 - [ ] Move joins to relation loading (`with`)
@@ -135,10 +135,10 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
     ```
   </CompareItem>
   <CompareItem title="ORM">
-    ```ts showLineNumbers {11}
-    import { defineRelations } from 'better-convex/orm';
+    ```ts showLineNumbers {1}
+    import { defineSchema } from 'better-convex/orm';
 
-    const relations = defineRelations({ users, posts }, (r) => ({
+    export default defineSchema({ users, posts }).relations((r) => ({
       users: {
         posts: r.many.posts(),
       },
@@ -202,7 +202,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
 | Drizzle | ORM | Notes |
 |---|---|---|
 | `pgTable()` / `mysqlTable()` / `sqliteTable()` | `convexTable()` | Same surface | 
-| `defineRelations()` | `defineRelations()` | Same surface |
+| `defineRelations()` | `defineSchema(...).relations(...)` | Same relation builder, attached to the default schema export |
 | `db.query.*.findMany()` | `db.query.*.findMany()` | Same surface via `ctx.orm` |
 | `db.query.*.findFirst()` | `db.query.*.findFirst()` | Same surface via `ctx.orm` |
 | n/a | `db.query.*.findFirstOrThrow()` | ORM sugar; throws if no row exists |

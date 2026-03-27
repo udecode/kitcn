@@ -55,6 +55,37 @@ export const tables = {
 export default defineSchema(tables);
 `;
 
+const helperRelationsSchema = `import { convexTable, defineRelations, defineSchema, text } from "better-convex/orm";
+
+export const messagesTable = convexTable("messages", {
+  body: text().notNull(),
+});
+
+export const tables = {
+  messages: messagesTable,
+};
+
+const schema = defineSchema(tables).relations((r) => ({
+  messages: {
+    self: r.one.messages({
+      from: r.messages.id,
+      to: r.messages.id,
+    }),
+  },
+}));
+
+export const relations = defineRelations(tables, (r) => ({
+  messages: {
+    self: r.one.messages({
+      from: r.messages.id,
+      to: r.messages.id,
+    }),
+  },
+}));
+
+export default schema;
+`;
+
 const localUserSchema = `import { convexTable, defineSchema, text } from "better-convex/orm";
 
 export const localUserTable = convexTable("user", {
@@ -100,12 +131,7 @@ describe('root schema ownership', () => {
     expect(result.content).toContain('sessions: r.many.session');
     expect(result.content).toContain('user: r.one.user');
     expect(result.content).not.toContain('authExtension()');
-    expect(result.content).toContain(
-      '    },\n  /* better-convex-managed auth:user:relations:end */'
-    );
-    expect(result.content).toContain(
-      '    },\n  /* better-convex-managed auth:session:relations:end */'
-    );
+    expect(result.content).not.toContain('better-convex-managed');
     expect(result.lock).toEqual({
       path: '/repo/convex/functions/schema.ts',
       tables: {
@@ -140,9 +166,7 @@ describe('root schema ownership', () => {
     expect(result.content).not.toContain(
       'export const userTable = convexTable("user"'
     );
-    expect(result.content).not.toContain(
-      'better-convex-managed auth:user:declaration'
-    );
+    expect(result.content).not.toContain('better-convex-managed');
     expect(result.lock).toEqual({
       path: '/repo/convex/functions/schema.ts',
       tables: {
@@ -193,9 +217,7 @@ describe('root schema ownership', () => {
     expect(result.content).toContain(
       'export const userTable = convexTable("user"'
     );
-    expect(result.content).toContain(
-      'better-convex-managed auth:user:declaration:start'
-    );
+    expect(result.content).not.toContain('better-convex-managed');
     expect(result.lock?.tables.user).toEqual({
       checksum: expect.any(String),
       owner: 'managed',
@@ -204,17 +226,12 @@ describe('root schema ownership', () => {
 
   test('throws on drifted managed schema blocks in yes mode', async () => {
     const driftedSource = `import { convexTable, defineSchema, text } from "better-convex/orm";
-
-/* better-convex-managed auth:user:declaration:start */
 export const userTable = convexTable("user", {
   email: text(),
 });
-/* better-convex-managed auth:user:declaration:end */
 
 export const tables = {
-/* better-convex-managed auth:user:registration:start */
   user: userTable,
-/* better-convex-managed auth:user:registration:end */
 };
 
 export default defineSchema(tables);
@@ -248,6 +265,59 @@ export default defineSchema(tables);
     ).rejects.toThrow(
       'Table "user" has drifted from the managed auth schema in /repo/convex/functions/schema.ts. Re-run `better-convex add auth` interactively or pass --overwrite to replace it.'
     );
+  });
+
+  test('cleans legacy managed comments while preserving managed ownership', async () => {
+    const firstPass = await reconcileRootSchemaOwnership({
+      lock: null,
+      overwrite: false,
+      pluginKey: 'auth',
+      preview: false,
+      promptAdapter: createPromptAdapter(true),
+      schemaPath: '/repo/convex/functions/schema.ts',
+      source: baseSchema,
+      tables: [userUnit],
+      yes: false,
+    });
+
+    const legacySource = firstPass.content
+      .replace(
+        'export const userTable = convexTable("user", {\n  email: text().notNull(),\n});',
+        `/* better-convex-managed auth:user:declaration:start */\nexport const userTable = convexTable("user", {\n  email: text().notNull(),\n});\n/* better-convex-managed auth:user:declaration:end */`
+      )
+      .replace(
+        '  user: userTable,',
+        '/* better-convex-managed auth:user:registration:start */\n  user: userTable,\n/* better-convex-managed auth:user:registration:end */'
+      )
+      .replace(
+        '  user: {\n    sessions: r.many.session({\n      from: r.user.id,\n      to: r.session.userId,\n    }),\n  },',
+        '/* better-convex-managed auth:user:relations:start */\n  user: {\n    sessions: r.many.session({\n      from: r.user.id,\n      to: r.session.userId,\n    }),\n  },\n/* better-convex-managed auth:user:relations:end */'
+      );
+
+    const result = await reconcileRootSchemaOwnership({
+      lock: firstPass.lock,
+      overwrite: false,
+      pluginKey: 'auth',
+      preview: false,
+      promptAdapter: {
+        confirm: async () => {
+          throw new Error('should not prompt');
+        },
+        isInteractive: () => false,
+        multiselect: async () => [],
+        select: async () => 'ignored',
+      },
+      schemaPath: '/repo/convex/functions/schema.ts',
+      source: legacySource,
+      tables: [userUnit],
+      yes: true,
+    });
+
+    expect(result.content).toContain(
+      'export const userTable = convexTable("user"'
+    );
+    expect(result.content).not.toContain('better-convex-managed');
+    expect(result.lock).toEqual(firstPass.lock);
   });
 
   test('reuses a fresh managed lock without false drift on rerun', async () => {
@@ -284,5 +354,23 @@ export default defineSchema(tables);
 
     expect(secondPass.content).toBe(firstPass.content);
     expect(secondPass.lock).toEqual(firstPass.lock);
+  });
+
+  test('rejects legacy defineRelations helper schemas', async () => {
+    await expect(
+      reconcileRootSchemaOwnership({
+        lock: null,
+        overwrite: false,
+        pluginKey: 'auth',
+        preview: false,
+        promptAdapter: createPromptAdapter(true),
+        schemaPath: '/repo/convex/functions/schema.ts',
+        source: helperRelationsSchema,
+        tables: [userUnit],
+        yes: false,
+      })
+    ).rejects.toThrow(
+      'Schema patch error: use `defineSchema(...).relations(...)` in schema.ts. Root schema patching no longer supports standalone `defineRelations(...)` exports.'
+    );
   });
 });

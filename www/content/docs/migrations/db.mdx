@@ -35,7 +35,7 @@ You are not giving up raw power. `ctx.db` still exists and stays useful as an es
 Use this rollout order so migration is predictable and low-risk:
 
 - Define tables and indexes with `convexTable()` for query paths you already use.
-- Define relations with `defineRelations()`.
+- Define relations on the default schema export with `.relations(...)`.
 - Attach ORM once in context as `ctx.orm`.
 - Migrate read endpoints (`db.get`, `db.query`) first.
 - Migrate relation-heavy endpoints (`manual joins` -> `with:`).
@@ -51,7 +51,7 @@ We'll start by setting up schema and context once. This keeps every later endpoi
 ### Define tables, indexes, and relations
 
 ```ts title="convex/schema.ts" showLineNumbers {3-7,10-14,16-22}
-import { convexTable, defineRelations, defineSchema, text, boolean, integer, id, index, uniqueIndex } from 'better-convex/orm';
+import { convexTable, defineSchema, text, boolean, integer, id, index, uniqueIndex } from 'better-convex/orm';
 
 export const users = convexTable('users', {
   name: text().notNull(),
@@ -67,14 +67,12 @@ export const posts = convexTable('posts', {
   userId: id('users'),
 }, (t) => [index('by_user').on(t.userId)]);
 
-const relations = defineRelations({ users, posts }, (r) => ({
+export default defineSchema({ users, posts }).relations((r) => ({
   users: { posts: r.many.posts() },
   posts: {
     author: r.one.users({ from: r.posts.userId, to: r.users.id }),
   },
 }));
-
-export default defineSchema({ users, posts });
 ```
 
 This mirrors native Convex indexing discipline: index the fields you filter and sort by.

@@ -7,7 +7,6 @@ import {
   timestamp,
 } from 'better-convex/orm';
 
-/* better-convex-managed auth:user:declaration:start */
 export const userTable = convexTable(
   "user",
   {
@@ -24,9 +23,7 @@ export const userTable = convexTable(
     index("name").on(userTable.name),
   ]
 );
-/* better-convex-managed auth:user:declaration:end */
 
-/* better-convex-managed auth:session:declaration:start */
 export const sessionTable = convexTable(
   "session",
   {
@@ -44,9 +41,7 @@ export const sessionTable = convexTable(
     index("userId").on(sessionTable.userId),
   ]
 );
-/* better-convex-managed auth:session:declaration:end */
 
-/* better-convex-managed auth:account:declaration:start */
 export const accountTable = convexTable(
   "account",
   {
@@ -70,9 +65,7 @@ export const accountTable = convexTable(
     index("userId").on(accountTable.userId),
   ]
 );
-/* better-convex-managed auth:account:declaration:end */
 
-/* better-convex-managed auth:verification:declaration:start */
 export const verificationTable = convexTable(
   "verification",
   {
@@ -87,9 +80,7 @@ export const verificationTable = convexTable(
     index("identifier").on(verificationTable.identifier),
   ]
 );
-/* better-convex-managed auth:verification:declaration:end */
 
-/* better-convex-managed auth:jwks:declaration:start */
 export const jwksTable = convexTable(
   "jwks",
   {
@@ -99,28 +90,16 @@ export const jwksTable = convexTable(
     expiresAt: timestamp(),
   }
 );
-/* better-convex-managed auth:jwks:declaration:end */
 
 export const tables = {
-  /* better-convex-managed auth:user:registration:start */
   user: userTable,
-  /* better-convex-managed auth:user:registration:end */
-  /* better-convex-managed auth:session:registration:start */
   session: sessionTable,
-  /* better-convex-managed auth:session:registration:end */
-  /* better-convex-managed auth:account:registration:start */
   account: accountTable,
-  /* better-convex-managed auth:account:registration:end */
-  /* better-convex-managed auth:verification:registration:start */
   verification: verificationTable,
-  /* better-convex-managed auth:verification:registration:end */
-  /* better-convex-managed auth:jwks:registration:start */
   jwks: jwksTable,
-  /* better-convex-managed auth:jwks:registration:end */
 };
 
 export default defineSchema(tables).relations((r) => ({
-  /* better-convex-managed auth:user:relations:start */
   user: {
       sessions: r.many.session({
         from: r.user.id,
@@ -131,21 +110,16 @@ export default defineSchema(tables).relations((r) => ({
         to: r.account.userId,
       }),
     },
-  /* better-convex-managed auth:user:relations:end */
-  /* better-convex-managed auth:session:relations:start */
   session: {
       user: r.one.user({
         from: r.session.userId,
         to: r.user.id,
       }),
     },
-  /* better-convex-managed auth:session:relations:end */
-  /* better-convex-managed auth:account:relations:start */
   account: {
       user: r.one.user({
         from: r.account.userId,
         to: r.user.id,
       }),
     },
-  /* better-convex-managed auth:account:relations:end */
 }));

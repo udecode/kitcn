@@ -1752,12 +1752,9 @@ describe('cli/cli', () => {
       expect(schemaSource).toContain(
         'export const sessionTable = convexTable('
       );
-      expect(schemaSource).toContain(
-        'better-convex-managed auth:user:registration:start'
-      );
-      expect(schemaSource).toContain(
-        'better-convex-managed auth:session:registration:start'
-      );
+      expect(schemaSource).toContain('user: userTable,');
+      expect(schemaSource).toContain('session: sessionTable,');
+      expect(schemaSource).not.toContain('better-convex-managed');
       expect(schemaSource).not.toContain('authExtension()');
       expect(
         fs.existsSync(
@@ -1902,9 +1899,8 @@ describe('cli/cli', () => {
         'utf8'
       );
       expect(schemaSource).toContain('export const userTable = convexTable(');
-      expect(schemaSource).toContain(
-        'better-convex-managed auth:user:registration:start'
-      );
+      expect(schemaSource).toContain('user: userTable,');
+      expect(schemaSource).not.toContain('better-convex-managed');
       expect(schemaSource).not.toContain('authExtension()');
     } finally {
       process.chdir(oldCwd);
@@ -2499,14 +2495,13 @@ describe('cli/cli', () => {
 
       const schemaSource = fs.readFileSync(schemaPath, 'utf8');
       expect(schemaSource).toContain(
-        'better-convex-managed auth:organization:declaration:start'
+        'export const organizationTable = convexTable('
       );
+      expect(schemaSource).toContain('export const memberTable = convexTable(');
       expect(schemaSource).toContain(
-        'better-convex-managed auth:member:declaration:start'
+        'export const invitationTable = convexTable('
       );
-      expect(schemaSource).toContain(
-        'better-convex-managed auth:invitation:declaration:start'
-      );
+      expect(schemaSource).not.toContain('better-convex-managed');
 
       const lockfile = JSON.parse(fs.readFileSync(lockfilePath, 'utf8')) as {
         plugins: Record<

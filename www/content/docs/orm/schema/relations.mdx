@@ -25,7 +25,7 @@ See Schema Options for strict policy details.
 
 ## Relation Config Options
 
-The ORM mirrors Drizzle's `defineRelations()` config shape. Let's look at the two building blocks.
+The callback shape mirrors Drizzle's relation builder, but in Better Convex you attach relations directly to the default schema export with `.relations(...)`.
 
 ### `one()`
 
@@ -70,7 +70,7 @@ If you have **multiple relations between the same two tables**, you must use `al
 Classic example: a post has both an `author` and a `reviewer`, pointing at the same `users` table.
 
 ```ts title="convex/schema.ts" showLineNumbers
-import { convexTable, defineRelations, id, text } from 'better-convex/orm';
+import { convexTable, defineSchema, id, text } from 'better-convex/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -82,7 +82,7 @@ const posts = convexTable('posts', {
   reviewerId: id('users'),
 });
 
-const relations = defineRelations({ users, posts }, (r) => ({
+export default defineSchema({ users, posts }).relations((r) => ({
   users: {
     // No need for from/to here: these infer from the reverse one() relations.
     authoredPosts: r.many.posts({ alias: 'author' }),
@@ -112,7 +112,7 @@ const relations = defineRelations({ users, posts }, (r) => ({
 A one-to-one relation connects exactly one record in each table. Here's a user with a single profile:
 
 ```ts title="convex/schema.ts" showLineNumbers {12-21}
-import { convexTable, defineRelations, text, id } from 'better-convex/orm';
+import { convexTable, defineSchema, text, id } from 'better-convex/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -123,7 +123,7 @@ const profiles = convexTable('profiles', {
   userId: id('users'),
 });
 
-const relations = defineRelations({ users, profiles }, (r) => ({
+export default defineSchema({ users, profiles }).relations((r) => ({
   profiles: {
     user: r.one.users({
       from: r.profiles.userId,
@@ -149,7 +149,7 @@ const relations = defineRelations({ users, profiles }, (r) => ({
 The most common relation type - one user has many posts. Let's define both sides:
 
 ```ts title="convex/schema.ts" showLineNumbers {12-20}
-import { convexTable, defineRelations, text, boolean, id } from 'better-convex/orm';
+import { convexTable, defineSchema, text, boolean, id } from 'better-convex/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -162,7 +162,7 @@ const posts = convexTable('posts', {
   userId: id('users'),
 });
 
-const relations = defineRelations({ users, posts }, (r) => ({
+export default defineSchema({ users, posts }).relations((r) => ({
   users: {
     posts: r.many.posts(),
   },
@@ -185,7 +185,7 @@ const relations = defineRelations({ users, posts }, (r) => ({
 The ORM does not auto-create join tables. You model many-to-many with an explicit join table:
 
 ```ts title="convex/schema.ts" showLineNumbers {15-24}
-import { convexTable, defineRelations, text, id } from 'better-convex/orm';
+import { convexTable, defineSchema, text, id } from 'better-convex/orm';
 
 const posts = convexTable('posts', {
   title: text().notNull(),
@@ -200,7 +200,7 @@ const postsTags = convexTable('postsTags', {
   tagId: id('tags'),
 });
 
-const relations = defineRelations({ posts, tags, postsTags }, (r) => ({
+export default defineSchema({ posts, tags, postsTags }).relations((r) => ({
   posts: {
     tags: r.many.postsTags(),
   },
@@ -219,7 +219,7 @@ const relations = defineRelations({ posts, tags, postsTags }, (r) => ({
 If you need extra data on the relationship (role, timestamps, etc.), put it on the join table. No special API required:
 
 ```ts title="convex/schema.ts" showLineNumbers {11-16,18-29}
-import { convexTable, defineRelations, id, integer, text } from 'better-convex/orm';
+import { convexTable, defineSchema, id, integer, text } from 'better-convex/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -236,7 +236,7 @@ const memberships = convexTable('memberships', {
   joinedAt: integer().notNull(),
 });
 
-const relations = defineRelations({ users, groups, memberships }, (r) => ({
+export default defineSchema({ users, groups, memberships }).relations((r) => ({
   users: {
     memberships: r.many.memberships(),
   },
@@ -268,7 +268,7 @@ const usersWithGroups = await db.query.users.findMany({
 You can also define direct many-to-many relations with `.through()` to point at junction table columns:
 
 ```ts title="convex/schema.ts" showLineNumbers {16-27}
-import { boolean, convexTable, defineRelations, id, text } from 'better-convex/orm';
+import { boolean, convexTable, defineSchema, id, text } from 'better-convex/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -283,7 +283,7 @@ const usersToGroups = convexTable('usersToGroups', {
   groupId: id('groups').notNull(),
 });
 
-const relations = defineRelations({ users, groups, usersToGroups }, (r) => ({
+export default defineSchema({ users, groups, usersToGroups }).relations((r) => ({
   users: {
     groups: r.many.groups({
       from: r.users.id.through(r.usersToGroups.userId),
@@ -306,7 +306,7 @@ const relations = defineRelations({ users, groups, usersToGroups }, (r) => ({
 You can define relations where a table references itself. Here's a manager/reports hierarchy:
 
 ```ts title="convex/schema.ts" showLineNumbers {7-17}
-import { convexTable, defineRelations, text, id } from 'better-convex/orm';
+import { convexTable, defineSchema, text, id } from 'better-convex/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -314,7 +314,7 @@ const users = convexTable('users', {
   managerId: id('users'),
 });
 
-const relations = defineRelations({ users }, (r) => ({
+export default defineSchema({ users }).relations((r) => ({
   users: {
     manager: r.one.users({
       from: r.users.managerId,
@@ -339,7 +339,7 @@ const relations = defineRelations({ users }, (r) => ({
 By default, `one()` relations are optional and return `null` when no match is found. Use `optional: false` when the relation is required:
 
 ```ts title="convex/schema.ts" showLineNumbers {10-16}
-import { convexTable, defineRelations, id, text } from 'better-convex/orm';
+import { convexTable, defineSchema, id, text } from 'better-convex/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -350,7 +350,7 @@ const posts = convexTable('posts', {
   authorId: id('users').notNull(),
 });
 
-const relations = defineRelations({ users, posts }, (r) => ({
+export default defineSchema({ users, posts }).relations((r) => ({
   posts: {
     author: r.one.users({
       from: r.posts.authorId,
@@ -368,7 +368,7 @@ const relations = defineRelations({ users, posts }, (r) => ({
 Define the `one()` side with `from` and `to`. The `many()` side can be inferred from the inverse relation:
 
 ```ts showLineNumbers {3-6}
-const relations = defineRelations({ users, posts }, (r) => ({
+export default defineSchema({ users, posts }).relations((r) => ({
   posts: {
     author: r.one.users({
       from: r.posts.userId,
@@ -386,7 +386,7 @@ const relations = defineRelations({ users, posts }, (r) => ({
 Make sure to export both tables and relations from your schema:
 
 ```ts showLineNumbers
-const relations = defineRelations({ users, posts }, (r) => ({
+export default defineSchema({ users, posts }).relations((r) => ({
   users: { posts: r.many.posts() },
   posts: { author: r.one.users({ from: r.posts.userId, to: r.users.id }) },
 }));
@@ -397,7 +397,7 @@ const relations = defineRelations({ users, posts }, (r) => ({
 Use `defineRelationsPart` to split large relation graphs across modules and merge them later:
 
 ```ts title="convex/relations.ts" showLineNumbers {4-12,14-21,23-30}
-import { defineRelations, defineRelationsPart } from 'better-convex/orm';
+import { defineSchema, defineRelationsPart } from 'better-convex/orm';
 import { users, posts, comments } from './schema';
 
 const userRelations = defineRelationsPart({ users, posts }, (r) => ({
@@ -418,7 +418,7 @@ const postRelations = defineRelationsPart({ posts, comments }, (r) => ({
   },
 }));
 
-const relations = defineRelations({ users, posts, comments }, (r) => ({
+export default defineSchema({ users, posts, comments }).relations((r) => ({
   users: userRelations.users.relations,
   posts: {
     ...userRelations.posts.relations,
@@ -445,7 +445,7 @@ You can define relations only on the side you need. When you do, provide explici
 You can attach a predefined `where` filter to a relation. It will always be applied when loading:
 
 ```ts title="convex/schema.ts" showLineNumbers {13-19}
-import { boolean, convexTable, defineRelations, id, text } from 'better-convex/orm';
+import { boolean, convexTable, defineSchema, id, text } from 'better-convex/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -457,7 +457,7 @@ const posts = convexTable('posts', {
   published: boolean().notNull(),
 });
 
-const relations = defineRelations({ users, posts }, (r) => ({
+export default defineSchema({ users, posts }).relations((r) => ({
   users: {
     publishedPosts: r.many.posts({
       from: r.users.id,
@@ -482,7 +482,7 @@ Polymorphism is schema-first via a discriminator column builder. Instead of manu
 Use one nullable FK per target plus a discriminator. This gives polymorphic-style relation loading and filtered aliases, without strict one-of enforcement.
 
 ```ts title="convex/schema.ts" showLineNumbers
-import { convexTable, defineRelations, id, text } from 'better-convex/orm';
+import { convexTable, defineSchema, id, text } from 'better-convex/orm';
 
 const posts = convexTable('posts', {
   title: text().notNull(),
@@ -499,7 +499,7 @@ const comments = convexTable('comments', {
   videoId: id('videos'),
 });
 
-const relations = defineRelations({ posts, videos, comments }, (r) => ({
+export default defineSchema({ posts, videos, comments }).relations((r) => ({
   posts: {
     comments: r.many.comments({
       from: r.posts.id,
@@ -567,7 +567,7 @@ const auditLogs = convexTable(
     index('by_doc').on(t.actionType, t.documentId),
   ]
 );
-const relations = defineRelations({ posts, videos, comments }, (r) => ({
+export default defineSchema({ posts, videos, comments }).relations((r) => ({
   posts: {
     comments: r.many.comments({
       from: r.posts.id,
@@ -742,7 +742,7 @@ Here's a quick reference for the most frequent issues:
 
 | Issue | Solution |
 |-------|----------|
-| **Relations not working** | Define relations in `defineRelations()` and verify both sides (or explicit `from`/`to`) |
+| **Relations not working** | Define relations in `defineSchema(...).relations(...)` and verify both sides (or explicit `from`/`to`) |
 | **Foreign key field missing** | Define the FK column yourself (e.g., `userId: id('users')`) |
 | **Type errors in `from`/`to`** | Ensure `from` columns belong to the source table and `to` columns belong to the target table |
 | **Self-referencing conflicts** | Use unique `alias` for each self-referencing relation |

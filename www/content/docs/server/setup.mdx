@@ -31,7 +31,8 @@ npx better-convex dev
 ## Initialize cRPC
 
 `<functionsDir>/generated/server.ts` is the canonical server contract. It
-exports `initCRPC` with ORM pre-wired when `relations` exists.
+exports `initCRPC` with ORM pre-wired when your default schema chains
+`.relations(...)`.
 `<functionsDir>/generated/auth.ts` is the auth contract.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers

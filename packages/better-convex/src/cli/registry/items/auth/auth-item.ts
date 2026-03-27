@@ -153,10 +153,10 @@ async function buildAuthSchemaRegistrationPlanFile(
     (await loadDefaultManagedAuthOptions());
   const authSchemaLock = params.lockfile.plugins.auth?.schema ?? null;
   const result = await reconcileRootSchemaOwnership({
+    claimMatchingManaged:
+      params.applyScope === 'schema' && authSchemaLock === null,
     lock: authSchemaLock,
-    overwrite:
-      params.overwrite ||
-      (params.applyScope === 'schema' && authSchemaLock === null),
+    overwrite: params.overwrite,
     overwriteManaged: params.applyScope === 'schema',
     pluginKey: 'auth',
     preview: params.preview,

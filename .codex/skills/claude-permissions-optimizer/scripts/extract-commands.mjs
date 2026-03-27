@@ -12,10 +12,10 @@
 //
 // Output: JSON with { green, yellowFootnote, stats }
 
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { normalize } from './normalize.mjs';
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import { isRiskFlag, normalize } from "./normalize.mjs";
 
 const args = process.argv.slice(2);
 
@@ -38,13 +38,13 @@ function flagAll(name) {
   return results;
 }
 
-const days = Number.parseInt(flag('days', '30'), 10);
-const maxSessions = Number.parseInt(flag('max-sessions', '500'), 10);
-const minCount = Number.parseInt(flag('min-count', '5'), 10);
-const projectSlugFilter = flag('project-slug', null);
-const settingsPaths = flagAll('settings');
-const claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
-const projectsDir = join(claudeDir, 'projects');
+const days = parseInt(flag("days", "30"), 10);
+const maxSessions = parseInt(flag("max-sessions", "500"), 10);
+const minCount = parseInt(flag("min-count", "5"), 10);
+const projectSlugFilter = flag("project-slug", null);
+const settingsPaths = flagAll("settings");
+const claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+const projectsDir = join(claudeDir, "projects");
 const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
 // ── Allowlist loading ──────────────────────────────────────────────────────
@@ -53,15 +53,15 @@ const allowPatterns = [];
 
 async function loadAllowlist(filePath) {
   try {
-    const content = await readFile(filePath, 'utf-8');
+    const content = await readFile(filePath, "utf-8");
     const settings = JSON.parse(content);
     const allow = settings?.permissions?.allow || [];
     for (const rule of allow) {
       const match = rule.match(/^Bash\((.+)\)$/);
       if (match) {
         allowPatterns.push(match[1]);
-      } else if (rule === 'Bash' || rule === 'Bash(*)') {
-        allowPatterns.push('*');
+      } else if (rule === "Bash" || rule === "Bash(*)") {
+        allowPatterns.push("*");
       }
     }
   } catch {
@@ -70,9 +70,9 @@ async function loadAllowlist(filePath) {
 }
 
 if (settingsPaths.length === 0) {
-  settingsPaths.push(join(claudeDir, 'settings.json'));
-  settingsPaths.push(join(process.cwd(), '.claude', 'settings.json'));
-  settingsPaths.push(join(process.cwd(), '.claude', 'settings.local.json'));
+  settingsPaths.push(join(claudeDir, "settings.json"));
+  settingsPaths.push(join(process.cwd(), ".claude", "settings.json"));
+  settingsPaths.push(join(process.cwd(), ".claude", "settings.local.json"));
 }
 
 for (const p of settingsPaths) {
@@ -81,24 +81,26 @@ for (const p of settingsPaths) {
 
 function isAllowed(command) {
   for (const pattern of allowPatterns) {
-    if (pattern === '*') return true;
+    if (pattern === "*") return true;
     if (matchGlob(pattern, command)) return true;
   }
   return false;
 }
 
 function matchGlob(pattern, command) {
-  const normalized = pattern.replace(/:(\*)$/, ' $1');
+  const normalized = pattern.replace(/:(\*)$/, " $1");
   let regexStr;
-  if (normalized.endsWith(' *')) {
+  if (normalized.endsWith(" *")) {
     const base = normalized.slice(0, -2);
-    const escaped = base.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-    regexStr = '^' + escaped + '($| .*)';
+    const escaped = base.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    regexStr = "^" + escaped + "($| .*)";
   } else {
     regexStr =
-      '^' +
-      normalized.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') +
-      '$';
+      "^" +
+      normalized
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*/g, ".*") +
+      "$";
   }
   try {
     return new RegExp(regexStr).test(command);
@@ -113,187 +115,90 @@ function matchGlob(pattern, command) {
 // Checked first -- highest priority.
 const RED_PATTERNS = [
   // Destructive file ops -- all rm variants
-  { test: /^rm\s/, reason: 'Irreversible file deletion' },
-  { test: /^sudo\s/, reason: 'Privilege escalation' },
-  { test: /^su\s/, reason: 'Privilege escalation' },
+  { test: /^rm\s/, reason: "Irreversible file deletion" },
+  { test: /^sudo\s/, reason: "Privilege escalation" },
+  { test: /^su\s/, reason: "Privilege escalation" },
   // find with destructive actions (must be before GREEN_BASES check)
-  {
-    test: /\bfind\b.*\s-delete\b/,
-    reason: 'find -delete permanently removes files',
-  },
-  {
-    test: /\bfind\b.*\s-exec\s+rm\b/,
-    reason: 'find -exec rm permanently removes files',
-  },
+  { test: /\bfind\b.*\s-delete\b/, reason: "find -delete permanently removes files" },
+  { test: /\bfind\b.*\s-exec\s+rm\b/, reason: "find -exec rm permanently removes files" },
   // ast-grep rewrite modifies files in place
-  {
-    test: /\b(ast-grep|sg)\b.*--rewrite\b/,
-    reason: 'ast-grep --rewrite modifies files in place',
-  },
+  { test: /\b(ast-grep|sg)\b.*--rewrite\b/, reason: "ast-grep --rewrite modifies files in place" },
   // sed -i edits files in place
-  { test: /\bsed\s+.*-i\b/, reason: 'sed -i modifies files in place' },
+  { test: /\bsed\s+.*-i\b/, reason: "sed -i modifies files in place" },
   // Git irreversible
-  {
-    test: /git\s+(?:\S+\s+)*push\s+.*--force(?!-with-lease)/,
-    reason: 'Force push overwrites remote history',
-  },
-  {
-    test: /git\s+(?:\S+\s+)*push\s+.*\s-f\b/,
-    reason: 'Force push overwrites remote history',
-  },
-  {
-    test: /git\s+(?:\S+\s+)*push\s+-f\b/,
-    reason: 'Force push overwrites remote history',
-  },
-  { test: /git\s+reset\s+--(hard|merge)/, reason: 'Destroys uncommitted work' },
-  {
-    test: /git\s+clean\s+.*(-[a-z]*f[a-z]*\b|--force\b)/,
-    reason: 'Permanently deletes untracked files',
-  },
-  { test: /git\s+commit\s+.*--no-verify/, reason: 'Skips safety hooks' },
-  { test: /git\s+config\s+--system/, reason: 'System-wide config change' },
-  { test: /git\s+filter-branch/, reason: 'Rewrites entire repo history' },
-  { test: /git\s+filter-repo/, reason: 'Rewrites repo history' },
-  {
-    test: /git\s+gc\s+.*--aggressive/,
-    reason: 'Can remove recoverable objects',
-  },
-  { test: /git\s+reflog\s+expire/, reason: 'Removes recovery safety net' },
-  {
-    test: /git\s+stash\s+clear\b/,
-    reason: 'Removes ALL stash entries permanently',
-  },
-  {
-    test: /git\s+branch\s+.*(-D\b|--force\b)/,
-    reason: 'Force-deletes without merge check',
-  },
-  { test: /git\s+checkout\s+.*\s--\s/, reason: 'Discards uncommitted changes' },
-  { test: /git\s+checkout\s+--\s/, reason: 'Discards uncommitted changes' },
-  {
-    test: /git\s+restore\s+(?!.*(-S\b|--staged\b))/,
-    reason: 'Discards working tree changes',
-  },
+  { test: /git\s+(?:\S+\s+)*push\s+.*--force(?!-with-lease)/, reason: "Force push overwrites remote history" },
+  { test: /git\s+(?:\S+\s+)*push\s+.*\s-f\b/, reason: "Force push overwrites remote history" },
+  { test: /git\s+(?:\S+\s+)*push\s+-f\b/, reason: "Force push overwrites remote history" },
+  { test: /git\s+reset\s+--(hard|merge)/, reason: "Destroys uncommitted work" },
+  { test: /git\s+clean\s+.*(-[a-z]*f[a-z]*\b|--force\b)/, reason: "Permanently deletes untracked files" },
+  { test: /git\s+commit\s+.*--no-verify/, reason: "Skips safety hooks" },
+  { test: /git\s+config\s+--system/, reason: "System-wide config change" },
+  { test: /git\s+filter-branch/, reason: "Rewrites entire repo history" },
+  { test: /git\s+filter-repo/, reason: "Rewrites repo history" },
+  { test: /git\s+gc\s+.*--aggressive/, reason: "Can remove recoverable objects" },
+  { test: /git\s+reflog\s+expire/, reason: "Removes recovery safety net" },
+  { test: /git\s+stash\s+clear\b/, reason: "Removes ALL stash entries permanently" },
+  { test: /git\s+branch\s+.*(-D\b|--force\b)/, reason: "Force-deletes without merge check" },
+  { test: /git\s+checkout\s+.*\s--\s/, reason: "Discards uncommitted changes" },
+  { test: /git\s+checkout\s+--\s/, reason: "Discards uncommitted changes" },
+  { test: /git\s+restore\s+(?!.*(-S\b|--staged\b))/, reason: "Discards working tree changes" },
   // Publishing -- permanent across all ecosystems
-  {
-    test: /\b(npm|yarn|pnpm)\s+publish\b/,
-    reason: 'Permanent package publishing',
-  },
-  { test: /\bnpm\s+unpublish\b/, reason: 'Permanent package removal' },
-  { test: /\bcargo\s+publish\b/, reason: 'Permanent crate publishing' },
-  { test: /\bcargo\s+yank\b/, reason: 'Unavails crate version' },
-  { test: /\bgem\s+push\b/, reason: 'Permanent gem publishing' },
-  { test: /\bpoetry\s+publish\b/, reason: 'Permanent package publishing' },
-  { test: /\btwine\s+upload\b/, reason: 'Permanent package publishing' },
-  { test: /\bgh\s+release\s+create\b/, reason: 'Permanent release creation' },
+  { test: /\b(npm|yarn|pnpm)\s+publish\b/, reason: "Permanent package publishing" },
+  { test: /\bnpm\s+unpublish\b/, reason: "Permanent package removal" },
+  { test: /\bcargo\s+publish\b/, reason: "Permanent crate publishing" },
+  { test: /\bcargo\s+yank\b/, reason: "Unavails crate version" },
+  { test: /\bgem\s+push\b/, reason: "Permanent gem publishing" },
+  { test: /\bpoetry\s+publish\b/, reason: "Permanent package publishing" },
+  { test: /\btwine\s+upload\b/, reason: "Permanent package publishing" },
+  { test: /\bgh\s+release\s+create\b/, reason: "Permanent release creation" },
   // Shell injection
-  { test: /\|\s*(sh|bash|zsh)\b/, reason: 'Pipe to shell execution' },
-  { test: /\beval\s/, reason: 'Arbitrary code execution' },
+  { test: /\|\s*(sh|bash|zsh)\b/, reason: "Pipe to shell execution" },
+  { test: /\beval\s/, reason: "Arbitrary code execution" },
   // Docker destructive
-  { test: /docker\s+run\s+.*--privileged/, reason: 'Full host access' },
-  {
-    test: /docker\s+system\s+prune\b(?!.*--dry-run)/,
-    reason: 'Removes all unused data',
-  },
-  { test: /docker\s+volume\s+(rm|prune)\b/, reason: 'Permanent data deletion' },
-  {
-    test: /docker[- ]compose\s+down\s+.*(-v\b|--volumes\b)/,
-    reason: 'Removes volumes and data',
-  },
-  {
-    test: /docker[- ]compose\s+down\s+.*--rmi\b/,
-    reason: 'Removes all images',
-  },
-  {
-    test: /docker\s+(rm|rmi)\s+.*-[a-z]*f/,
-    reason: 'Force removes without confirmation',
-  },
+  { test: /docker\s+run\s+.*--privileged/, reason: "Full host access" },
+  { test: /docker\s+system\s+prune\b(?!.*--dry-run)/, reason: "Removes all unused data" },
+  { test: /docker\s+volume\s+(rm|prune)\b/, reason: "Permanent data deletion" },
+  { test: /docker[- ]compose\s+down\s+.*(-v\b|--volumes\b)/, reason: "Removes volumes and data" },
+  { test: /docker[- ]compose\s+down\s+.*--rmi\b/, reason: "Removes all images" },
+  { test: /docker\s+(rm|rmi)\s+.*-[a-z]*f/, reason: "Force removes without confirmation" },
   // System
-  { test: /^reboot\b/, reason: 'System restart' },
-  { test: /^shutdown\b/, reason: 'System halt' },
-  { test: /^halt\b/, reason: 'System halt' },
-  {
-    test: /\bsystemctl\s+(stop|disable|mask)\b/,
-    reason: 'Stops system services',
-  },
-  { test: /\bkill\s+-9\b/, reason: 'Force kill without cleanup' },
-  { test: /\bpkill\s+-9\b/, reason: 'Force kill by name' },
+  { test: /^reboot\b/, reason: "System restart" },
+  { test: /^shutdown\b/, reason: "System halt" },
+  { test: /^halt\b/, reason: "System halt" },
+  { test: /\bsystemctl\s+(stop|disable|mask)\b/, reason: "Stops system services" },
+  { test: /\bkill\s+-9\b/, reason: "Force kill without cleanup" },
+  { test: /\bpkill\s+-9\b/, reason: "Force kill by name" },
   // Disk destructive
-  { test: /\bdd\s+.*\bof=/, reason: 'Raw disk write' },
-  { test: /\bmkfs\b/, reason: 'Formats disk partition' },
+  { test: /\bdd\s+.*\bof=/, reason: "Raw disk write" },
+  { test: /\bmkfs\b/, reason: "Formats disk partition" },
   // Permissions
-  { test: /\bchmod\s+777\b/, reason: 'World-writable permissions' },
-  { test: /\bchmod\s+-R\b/, reason: 'Recursive permission change' },
-  { test: /\bchown\s+-R\b/, reason: 'Recursive ownership change' },
+  { test: /\bchmod\s+777\b/, reason: "World-writable permissions" },
+  { test: /\bchmod\s+-R\b/, reason: "Recursive permission change" },
+  { test: /\bchown\s+-R\b/, reason: "Recursive ownership change" },
   // Database destructive
-  {
-    test: /\bDROP\s+(DATABASE|TABLE|SCHEMA)\b/i,
-    reason: 'Permanent data deletion',
-  },
-  { test: /\bTRUNCATE\b/i, reason: 'Permanent row deletion' },
+  { test: /\bDROP\s+(DATABASE|TABLE|SCHEMA)\b/i, reason: "Permanent data deletion" },
+  { test: /\bTRUNCATE\b/i, reason: "Permanent row deletion" },
   // Network
-  { test: /^(nc|ncat)\s/, reason: 'Raw socket access' },
+  { test: /^(nc|ncat)\s/, reason: "Raw socket access" },
   // Credential exposure
-  { test: /\bcat\s+\.env.*\|/, reason: 'Credential exposure via pipe' },
-  { test: /\bprintenv\b.*\|/, reason: 'Credential exposure via pipe' },
+  { test: /\bcat\s+\.env.*\|/, reason: "Credential exposure via pipe" },
+  { test: /\bprintenv\b.*\|/, reason: "Credential exposure via pipe" },
   // Package removal (from DCG)
-  { test: /\bpip3?\s+uninstall\b/, reason: 'Package removal' },
-  {
-    test: /\bapt(?:-get)?\s+(remove|purge|autoremove)\b/,
-    reason: 'Package removal',
-  },
-  { test: /\bbrew\s+uninstall\b/, reason: 'Package removal' },
+  { test: /\bpip3?\s+uninstall\b/, reason: "Package removal" },
+  { test: /\bapt(?:-get)?\s+(remove|purge|autoremove)\b/, reason: "Package removal" },
+  { test: /\bbrew\s+uninstall\b/, reason: "Package removal" },
 ];
 
 // GREEN: base commands that are always read-only / safe.
 // NOTE: `find` is intentionally excluded -- `find -delete` and `find -exec rm`
 // are destructive. Safe find usage is handled via GREEN_COMPOUND instead.
 const GREEN_BASES = new Set([
-  'ls',
-  'cat',
-  'head',
-  'tail',
-  'wc',
-  'file',
-  'tree',
-  'stat',
-  'du',
-  'diff',
-  'grep',
-  'rg',
-  'ag',
-  'ack',
-  'which',
-  'whoami',
-  'pwd',
-  'echo',
-  'printf',
-  'env',
-  'printenv',
-  'uname',
-  'hostname',
-  'jq',
-  'sort',
-  'uniq',
-  'tr',
-  'cut',
-  'less',
-  'more',
-  'man',
-  'type',
-  'realpath',
-  'dirname',
-  'basename',
-  'date',
-  'ps',
-  'top',
-  'htop',
-  'free',
-  'uptime',
-  'id',
-  'groups',
-  'lsof',
-  'open',
-  'xdg-open',
+  "ls", "cat", "head", "tail", "wc", "file", "tree", "stat", "du",
+  "diff", "grep", "rg", "ag", "ack", "which", "whoami", "pwd", "echo",
+  "printf", "env", "printenv", "uname", "hostname", "jq", "sort", "uniq",
+  "tr", "cut", "less", "more", "man", "type", "realpath", "dirname",
+  "basename", "date", "ps", "top", "htop", "free", "uptime",
+  "id", "groups", "lsof", "open", "xdg-open",
 ]);
 
 // GREEN: compound patterns
@@ -301,8 +206,8 @@ const GREEN_COMPOUND = [
   /--version\s*$/,
   /--help(\s|$)/,
   /^git\s+(status|log|diff|show|blame|shortlog|branch\s+-[alv]|remote\s+-v|rev-parse|describe|reflog\b(?!\s+expire))\b/,
-  /^git\s+tag\s+(-l\b|--list\b)/, // tag listing (not creation)
-  /^git\s+stash\s+(list|show)\b/, // stash read-only operations
+  /^git\s+tag\s+(-l\b|--list\b)/,  // tag listing (not creation)
+  /^git\s+stash\s+(list|show)\b/,  // stash read-only operations
   /^(npm|bun|pnpm|yarn)\s+run\s+(test|lint|build|check|typecheck)\b/,
   /^(npm|bun|pnpm|yarn)\s+(test|lint|audit|outdated|list)\b/,
   /^(npx|bunx)\s+(vitest|jest|eslint|prettier|tsc)\b/,
@@ -310,23 +215,23 @@ const GREEN_COMPOUND = [
   /^(eslint|prettier|rubocop|black|flake8|cargo\s+(clippy|fmt)|gofmt|golangci-lint|tsc(\s+--noEmit)?|mypy|pyright)\b/,
   /^(cargo\s+(build|check|doc|bench)|go\s+(build|vet))\b/,
   /^pnpm\s+--filter\s/,
-  /^(npm|bun|pnpm|yarn)\s+(typecheck|format|verify|validate|check|analyze)\b/, // common safe script names
-  /^git\s+-C\s+\S+\s+(status|log|diff|show|branch|remote|rev-parse|describe)\b/, // git -C <dir> <read-only>
+  /^(npm|bun|pnpm|yarn)\s+(typecheck|format|verify|validate|check|analyze)\b/,  // common safe script names
+  /^git\s+-C\s+\S+\s+(status|log|diff|show|branch|remote|rev-parse|describe)\b/,  // git -C <dir> <read-only>
   /^docker\s+(ps|images|logs|inspect|stats|system\s+df)\b/,
   /^docker[- ]compose\s+(ps|logs|config)\b/,
   /^systemctl\s+(status|list-|show|is-|cat)\b/,
   /^journalctl\b/,
   /^(pg_dump|mysqldump)\b(?!.*--clean)/,
   /\b--dry-run\b/,
-  /^git\s+clean\s+.*(-[a-z]*n|--dry-run)\b/, // git clean dry run
+  /^git\s+clean\s+.*(-[a-z]*n|--dry-run)\b/,  // git clean dry run
   // NOTE: find is intentionally NOT green. Bash(find *) would also match
   // find -delete and find -exec rm in Claude Code's allowlist glob matching.
   // Commands with mode-switching flags: only green when the normalized pattern
   // is narrow enough that the allowlist glob can't match the destructive form.
   // Bash(sed -n *) is safe; Bash(sed *) would also match sed -i.
-  /^sed\s+-(?!i\b)[a-zA-Z]\s/, // sed with a non-destructive flag (matches normalized sed -n *, sed -e *, etc.)
-  /^(ast-grep|sg)\b(?!.*--rewrite)/, // ast-grep without --rewrite
-  /^find\s+-(?:name|type|path|iname)\s/, // find with safe predicate flag (matches normalized form)
+  /^sed\s+-(?!i\b)[a-zA-Z]\s/,  // sed with a non-destructive flag (matches normalized sed -n *, sed -e *, etc.)
+  /^(ast-grep|sg)\b(?!.*--rewrite)/,  // ast-grep without --rewrite
+  /^find\s+-(?:name|type|path|iname)\s/,  // find with safe predicate flag (matches normalized form)
   // gh CLI read-only operations
   /^gh\s+(pr|issue|run)\s+(view|list|status|diff|checks)\b/,
   /^gh\s+repo\s+(view|list|clone)\b/,
@@ -335,31 +240,16 @@ const GREEN_COMPOUND = [
 
 // YELLOW: base commands that modify local state but are recoverable
 const YELLOW_BASES = new Set([
-  'mkdir',
-  'touch',
-  'cp',
-  'mv',
-  'tee',
-  'curl',
-  'wget',
-  'ssh',
-  'scp',
-  'rsync',
-  'python',
-  'python3',
-  'node',
-  'ruby',
-  'perl',
-  'make',
-  'just',
-  'awk', // awk can write files; safe forms handled case-by-case if needed
+  "mkdir", "touch", "cp", "mv", "tee", "curl", "wget", "ssh", "scp", "rsync",
+  "python", "python3", "node", "ruby", "perl", "make", "just",
+  "awk",  // awk can write files; safe forms handled case-by-case if needed
 ]);
 
 // YELLOW: compound patterns
 const YELLOW_COMPOUND = [
   /^git\s+(add|commit(?!\s+.*--no-verify)|checkout(?!\s+--\s)|switch|pull|push(?!\s+.*--force)(?!\s+.*-f\b)|fetch|merge|rebase|stash(?!\s+clear\b)|branch\b(?!\s+.*(-D\b|--force\b))|cherry-pick|tag|clone)\b/,
   /^git\s+push\s+--force-with-lease\b/,
-  /^git\s+restore\s+.*(-S\b|--staged\b)/, // restore --staged is safe (just unstages)
+  /^git\s+restore\s+.*(-S\b|--staged\b)/,  // restore --staged is safe (just unstages)
   /^git\s+gc\b(?!\s+.*--aggressive)/,
   /^(npm|bun|pnpm|yarn)\s+install\b/,
   /^(npm|bun|pnpm|yarn)\s+(add|remove|uninstall|update)\b/,
@@ -390,24 +280,24 @@ function classify(command) {
 
   // RED check first (highest priority)
   for (const { test, reason } of RED_PATTERNS) {
-    if (test.test(command)) return { tier: 'red', reason };
+    if (test.test(command)) return { tier: "red", reason };
   }
 
   // GREEN checks
   const baseCmd = command.split(/\s+/)[0];
-  if (GREEN_BASES.has(baseCmd)) return { tier: 'green' };
+  if (GREEN_BASES.has(baseCmd)) return { tier: "green" };
   for (const re of GREEN_COMPOUND) {
-    if (re.test(command)) return { tier: 'green' };
+    if (re.test(command)) return { tier: "green" };
   }
 
   // YELLOW checks
-  if (YELLOW_BASES.has(baseCmd)) return { tier: 'yellow' };
+  if (YELLOW_BASES.has(baseCmd)) return { tier: "yellow" };
   for (const re of YELLOW_COMPOUND) {
-    if (re.test(command)) return { tier: 'yellow' };
+    if (re.test(command)) return { tier: "yellow" };
   }
 
   // Unclassified -- silently dropped from output
-  return { tier: 'unknown' };
+  return { tier: "unknown" };
 }
 
 // ── Normalization (see ./normalize.mjs) ────────────────────────────────────
@@ -431,7 +321,7 @@ async function listJsonlFiles(dir) {
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     return entries
-      .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+      .filter((e) => e.isFile() && e.name.endsWith(".jsonl"))
       .map((e) => e.name);
   } catch {
     return [];
@@ -443,16 +333,16 @@ async function processFile(filePath, sessionId) {
     filesScanned++;
     sessionsScanned.add(sessionId);
 
-    const content = await readFile(filePath, 'utf-8');
-    for (const line of content.split('\n')) {
+    const content = await readFile(filePath, "utf-8");
+    for (const line of content.split("\n")) {
       if (!line.includes('"Bash"')) continue;
       try {
         const record = JSON.parse(line);
-        if (record.type !== 'assistant') continue;
+        if (record.type !== "assistant") continue;
         const blocks = record.message?.content;
         if (!Array.isArray(blocks)) continue;
         for (const block of blocks) {
-          if (block.type !== 'tool_use' || block.name !== 'Bash') continue;
+          if (block.type !== "tool_use" || block.name !== "Bash") continue;
           const cmd = block.input?.command;
           if (!cmd) continue;
           const ts = record.timestamp
@@ -494,11 +384,7 @@ for (const slug of projectSlugs) {
     try {
       const info = await stat(filePath);
       if (info.mtimeMs >= cutoff) {
-        candidates.push({
-          filePath,
-          sessionId: f.replace('.jsonl', ''),
-          mtime: info.mtimeMs,
-        });
+        candidates.push({ filePath, sessionId: f.replace(".jsonl", ""), mtime: info.mtimeMs });
       }
     } catch {
       // skip unreadable files
@@ -510,7 +396,9 @@ for (const slug of projectSlugs) {
 candidates.sort((a, b) => b.mtime - a.mtime);
 const toProcess = candidates.slice(0, maxSessions);
 
-await Promise.all(toProcess.map((c) => processFile(c.filePath, c.sessionId)));
+await Promise.all(
+  toProcess.map((c) => processFile(c.filePath, c.sessionId))
+);
 
 // ── Filter, normalize, group, classify ─────────────────────────────────────
 
@@ -530,7 +418,7 @@ for (const [command, data] of commands) {
     continue;
   }
 
-  const pattern = 'Bash(' + normalize(command) + ')';
+  const pattern = "Bash(" + normalize(command) + ")";
   const { tier, reason } = classify(command);
 
   const existing = patternGroups.get(pattern);
@@ -540,13 +428,13 @@ for (const [command, data] of commands) {
     // Merge session sets to avoid overcounting
     for (const s of data.sessions) existing.sessionSet.add(s);
     // Escalation: highest tier wins
-    if (tier === 'red' && existing.tier !== 'red') {
-      existing.tier = 'red';
+    if (tier === "red" && existing.tier !== "red") {
+      existing.tier = "red";
       existing.reason = reason;
-    } else if (tier === 'yellow' && existing.tier === 'green') {
-      existing.tier = 'yellow';
-    } else if (tier === 'unknown' && existing.tier === 'green') {
-      existing.tier = 'unknown';
+    } else if (tier === "yellow" && existing.tier === "green") {
+      existing.tier = "yellow";
+    } else if (tier === "unknown" && existing.tier === "green") {
+      existing.tier = "unknown";
     }
   } else {
     patternGroups.set(pattern, {
@@ -572,17 +460,17 @@ for (const [pattern, data] of patternGroups) {
 // which would also match arbitrary code execution). Re-classify the normalized
 // pattern itself and escalate if the broader form is riskier.
 for (const [pattern, data] of patternGroups) {
-  if (data.tier !== 'green') continue;
-  if (!pattern.includes('*')) continue;
-  const cmd = pattern.replace(/^Bash\(|\)$/g, '');
+  if (data.tier !== "green") continue;
+  if (!pattern.includes("*")) continue;
+  const cmd = pattern.replace(/^Bash\(|\)$/g, "");
   const { tier, reason } = classify(cmd);
-  if (tier === 'red') {
-    data.tier = 'red';
+  if (tier === "red") {
+    data.tier = "red";
     data.reason = reason;
-  } else if (tier === 'yellow') {
-    data.tier = 'yellow';
-  } else if (tier === 'unknown') {
-    data.tier = 'unknown';
+  } else if (tier === "yellow") {
+    data.tier = "yellow";
+  } else if (tier === "unknown") {
+    data.tier = "unknown";
   }
 }
 
@@ -597,7 +485,7 @@ const yellowNames = []; // brief list for the footnote
 
 for (const [pattern, data] of patternGroups) {
   switch (data.tier) {
-    case 'green':
+    case "green":
       green.push({
         pattern,
         count: data.totalCount,
@@ -609,13 +497,13 @@ for (const [pattern, data] of patternGroups) {
       });
       greenRawCount += data.rawCommands.length;
       break;
-    case 'yellow':
+    case "yellow":
       yellowCount++;
-      yellowNames.push(pattern.replace(/^Bash\(|\)$/g, '').replace(/ \*$/, ''));
+      yellowNames.push(pattern.replace(/^Bash\(|\)$/g, "").replace(/ \*$/, ""));
       break;
-    case 'red':
+    case "red":
       redBlocked.push({
-        pattern: pattern.replace(/^Bash\(|\)$/g, ''),
+        pattern: pattern.replace(/^Bash\(|\)$/g, ""),
         reason: data.reason,
         count: data.totalCount,
       });
@@ -631,10 +519,9 @@ redBlocked.sort((a, b) => b.count - a.count);
 const output = {
   green,
   redExamples: redBlocked.slice(0, 5),
-  yellowFootnote:
-    yellowNames.length > 0
-      ? `Also frequently used: ${yellowNames.join(', ')} (not classified as safe to auto-allow but may be worth reviewing)`
-      : null,
+  yellowFootnote: yellowNames.length > 0
+    ? `Also frequently used: ${yellowNames.join(", ")} (not classified as safe to auto-allow but may be worth reviewing)`
+    : null,
   stats: {
     totalExtracted,
     alreadyCovered,
