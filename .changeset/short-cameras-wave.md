@@ -146,6 +146,9 @@ import { useRatelimit } from "better-convex/ratelimit/react";
 - Improve auth runtime behavior so local auth metadata routes stay quiet,
   sign-in and sign-out update state immediately, and optional env values do not
   break codegen or auth-config analysis.
+- Improve schema-only auth refresh so `add auth --only schema --overwrite`
+  respects auth tables already marked local instead of rewriting app-owned auth
+  schemas.
 - Fix ratelimit storage and scaffolding so generated apps use the real
   `ratelimitState`, `ratelimitDynamicLimit`, and `ratelimitProtectionHit`
   tables instead of failing with bogus missing-table guidance.

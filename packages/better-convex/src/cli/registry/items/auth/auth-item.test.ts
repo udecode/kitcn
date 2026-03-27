@@ -284,6 +284,132 @@ describe('auth registry item', () => {
     });
   });
 
+  test('schema-only auth overwrite keeps explicitly local auth tables', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'better-convex-auth-item-')
+    );
+    const functionsDir = path.join(dir, 'convex', 'functions');
+    const schemaPath = path.join(functionsDir, 'schema.ts');
+    const schemaSource = `
+      import { convexTable, defineSchema, text } from 'better-convex/orm';
+
+      export const accountTable = convexTable('account', {
+        userId: text(),
+      });
+      export const jwksTable = convexTable('jwks', {
+        publicKey: text(),
+      });
+      export const sessionTable = convexTable('session', {
+        userId: text(),
+      });
+      export const userTable = convexTable('user', {
+        email: text(),
+        bio: text(),
+      });
+      export const verificationTable = convexTable('verification', {
+        identifier: text(),
+      });
+
+      const schema = defineSchema({
+        account: accountTable,
+        jwks: jwksTable,
+        session: sessionTable,
+        user: userTable,
+        verification: verificationTable,
+      });
+
+      export default schema;
+    `.trim();
+
+    fs.mkdirSync(functionsDir, { recursive: true });
+    fs.writeFileSync(schemaPath, schemaSource, 'utf8');
+
+    const descriptor = getPluginCatalogEntry('auth');
+    const plan =
+      await descriptor.integration?.buildSchemaRegistrationPlanFile?.({
+        applyScope: 'schema',
+        config: createDefaultConfig(),
+        functionsDir,
+        lockfile: {
+          plugins: {
+            auth: {
+              package: 'better-auth',
+              schema: {
+                path: schemaPath,
+                tables: {
+                  account: {
+                    owner: 'local',
+                  },
+                  jwks: {
+                    owner: 'local',
+                  },
+                  session: {
+                    owner: 'local',
+                  },
+                  user: {
+                    owner: 'local',
+                  },
+                  verification: {
+                    owner: 'local',
+                  },
+                },
+              },
+            },
+          },
+        },
+        overwrite: true,
+        preset: 'default',
+        preview: false,
+        promptAdapter: {
+          confirm: async () => {
+            throw new Error('should not prompt');
+          },
+          isInteractive: () => false,
+          multiselect: async () => [],
+          select: async () => 'ignored',
+        },
+        roots: {
+          appRootDir: null,
+          clientLibRootDir: null,
+          crpcFilePath: path.join(dir, 'convex', 'lib', 'crpc.ts'),
+          envFilePath: path.join(dir, 'convex', 'lib', 'get-env.ts'),
+          functionsRootDir: functionsDir,
+          libRootDir: path.join(dir, 'convex', 'lib'),
+          projectContext: null,
+          sharedApiFilePath: path.join(dir, 'convex', 'shared', 'api.ts'),
+        },
+        yes: true,
+      });
+
+    expect(plan).toBeDefined();
+    expect(plan?.action).toBe('skip');
+    expect(plan?.content).toContain('bio: text(),');
+    expect(plan?.content).toContain(
+      "export const jwksTable = convexTable('jwks'"
+    );
+    expect(plan?.content).not.toContain('better-convex-managed');
+    expect(plan?.schemaOwnershipLock).toEqual({
+      path: schemaPath,
+      tables: {
+        account: {
+          owner: 'local',
+        },
+        jwks: {
+          owner: 'local',
+        },
+        session: {
+          owner: 'local',
+        },
+        user: {
+          owner: 'local',
+        },
+        verification: {
+          owner: 'local',
+        },
+      },
+    });
+  });
+
   test('schema-only auth reconcile forwards applyScope and replaces managed drift', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-auth-item-')

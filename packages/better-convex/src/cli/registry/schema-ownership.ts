@@ -704,6 +704,9 @@ const decideOwnership = async (params: {
   yes: boolean;
 }) => {
   if (params.lockEntry?.owner === 'local') {
+    if (params.overwriteManaged) {
+      return 'local';
+    }
     return params.overwrite ? 'managed' : 'local';
   }
 

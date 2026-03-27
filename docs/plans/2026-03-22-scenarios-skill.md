@@ -38,4 +38,4 @@ templates and scenario fixtures.
 - 2026-03-22: ran `bun install` to sync generated skills.
 - 2026-03-22: ran `bun lint:fix`.
 - 2026-03-22: spot-checked generated output at
-  `.codex/skills/scenarios/SKILL.md` and synced root `AGENTS.md`.
+  `.agents/skills/scenarios/SKILL.md` and synced root `AGENTS.md`.

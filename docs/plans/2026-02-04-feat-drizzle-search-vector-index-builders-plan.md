@@ -8,7 +8,7 @@ date: 2026-02-04
 
 Dig into https://github.com/zbeyens/drizzle-v1 for Drizzle v1 - it's the latest version of Drizzle. Only when needed, you can dig into https://github.com/drizzle-team/drizzle-orm which was the original reference so far.
 Make sure we maximize mirroring drizzle-v1 - dont forget all ts answers are in drizzle repo, dig into it when needed. they master more typescript than you. drizzle has many db integrations so just pick the most relevant one - making sure we mirror all typing magic - dig into https://github.com/get-convex/convex-backend if you need to dig into convex typing, testing or src code.
-SAME for testing / type testing - but when you need to test convex part, see .claude/skills/convex-test/convex-test.mdc or convex-backend/npm-packages tests. see @.claude/skills/convex-test-orm/convex-test-orm.mdc for more details. We don't want to reinvent the wheel, but we want the closest API to Drizzle. At the end of each package change, make sure you didn't break the types: `bun typecheck` at root and `bun run test` at root.codex/skills/dig/SKILL.md has more details on how to dig into code.
+SAME for testing / type testing - but when you need to test convex part, see .claude/skills/convex-test/convex-test.mdc or convex-backend/npm-packages tests. see @.claude/skills/convex-test-orm/convex-test-orm.mdc for more details. We don't want to reinvent the wheel, but we want the closest API to Drizzle. At the end of each package change, make sure you didn't break the types: `bun typecheck` at root and `bun run test` at root.agents/skills/dig/SKILL.md has more details on how to dig into code.
 
 ## Overview
 
