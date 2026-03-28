@@ -1,22 +1,18 @@
-name: CI
+name: Convex Matrix
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
+  workflow_dispatch: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  default:
-    name: CI
+  convex-matrix:
+    name: Convex Matrix
     runs-on: ubuntu-latest
 
     steps:
@@ -41,22 +37,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-
 
-      - uses: actions/cache@v4
-        name: ♻️ Setup Next.js cache
-        with:
-          path: ${{ github.workspace }}/www/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-
-
       - name: 📥 Install
         run: bun install --frozen-lockfile && bun gen
-
-      - name: 🧠 Validate Skills
-        run: bun run intent:validate
 
       - name: 📦 Build Packages
         run: bun build:pkg
 
-      - name: 🔬 Run Biome & ESLint & Typecheck & Test
-        run: bun check
+      - name: 🧪 Run full Convex matrix
+        run: bun run scenario:check:convex
