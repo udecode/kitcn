@@ -133,11 +133,8 @@ function detectInverseRelations(edges: EdgeMetadata[]): void {
 
     const targetTableEdges = edgesByTable.get(edge.targetTable) ?? [];
 
-    const reverseRelations = targetTableEdges.filter(
-      (candidate) =>
-        candidate !== edge &&
-        ((edge.alias && candidate.alias === edge.alias) ||
-          (!edge.alias && candidate.targetTable === edge.sourceTable))
+    const reverseRelations = targetTableEdges.filter((candidate) =>
+      isInverseRelationCandidate(edge, candidate)
     );
 
     if (reverseRelations.length > 1) {
@@ -174,6 +171,33 @@ function detectInverseRelations(edges: EdgeMetadata[]): void {
       inverse.inverseEdge = edge;
     }
   }
+}
+
+function isInverseRelationCandidate(
+  edge: EdgeMetadata,
+  candidate: EdgeMetadata
+): boolean {
+  if (candidate === edge) {
+    return false;
+  }
+
+  if (candidate.targetTable !== edge.sourceTable) {
+    return false;
+  }
+
+  if (edge.alias && candidate.alias) {
+    return candidate.alias === edge.alias;
+  }
+
+  if (edge.alias && !candidate.alias) {
+    return candidate.edgeName === edge.alias;
+  }
+
+  if (!edge.alias && candidate.alias) {
+    return candidate.alias === edge.edgeName;
+  }
+
+  return true;
 }
 
 /**

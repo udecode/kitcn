@@ -274,6 +274,7 @@ type PluginInstallPlanFile = {
   existingContent?: string;
   managedBaselineContent?: string | readonly string[];
   requiresExplicitOverwrite?: boolean;
+  manualActions?: string[];
   schemaOwnershipLock?: {
     path: string;
     tables: Record<
@@ -2992,16 +2993,21 @@ export async function applyPluginInstallPlanFiles(
   }
 ): Promise<{
   created: string[];
+  manualActions: string[];
   updated: string[];
   skipped: string[];
 }> {
   const result = {
     created: [] as string[],
+    manualActions: [] as string[],
     updated: [] as string[],
     skipped: [] as string[],
   };
 
   for (const file of files) {
+    if (file.manualActions?.length) {
+      result.manualActions.push(...file.manualActions);
+    }
     const absolutePath = resolve(process.cwd(), file.path);
     if (file.action === 'skip') {
       result.skipped.push(file.path);
@@ -5899,6 +5905,7 @@ export async function run(
         reason: dependencyInstall.reason,
       },
       created: applyResult.created,
+      manualActions: applyResult.manualActions,
       updated: applyResult.updated,
       skipped: applyResult.skipped,
     };
@@ -5931,6 +5938,12 @@ export async function run(
         if (!addArgs.overwrite) {
           logger.info('Re-run with --overwrite to replace changed files.');
         }
+      }
+      if (applyResult.manualActions.length > 0) {
+        logger.info('Manual actions:');
+        logger.write(
+          applyResult.manualActions.map((action) => `  - ${action}`).join('\n')
+        );
       }
       if (dependencyInstall.installed) {
         logger.success(

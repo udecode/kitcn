@@ -139,7 +139,7 @@ Default Better Convex path:
 
 ```bash
 npx better-convex add auth --yes
-npx better-convex add auth --only schema --yes
+npx better-convex add auth --schema --yes
 ```
 
 That path patches auth-owned table blocks directly into `<functionsDir>/schema.ts`
@@ -153,7 +153,7 @@ npx better-convex add auth --preset convex --yes
 
 That path refreshes `<functionsDir>/authSchema.ts` and patches
 `<functionsDir>/schema.ts`. It assumes the raw Convex app is already
-initialized and does not support `--only schema`.
+initialized and does not support `--schema`.
 
 If you want to own the auth tables by hand, use `setup/server.md`.
 

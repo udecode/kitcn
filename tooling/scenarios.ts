@@ -15,6 +15,7 @@ import {
   BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV,
 } from '../packages/better-convex/src/cli/supported-dependencies';
 import { runAuthE2E } from './auth-e2e';
+import { runAuthSchemaStress } from './auth-schema-stress';
 import { runAuthSmoke } from './auth-smoke';
 import {
   buildLocalCliCommand,
@@ -951,7 +952,9 @@ export const checkScenario = async (
     backend?: TemplateBackend;
     logFn?: typeof log;
     outputRoot?: string;
+    prepareScenarioSourceFn?: typeof prepareScenarioSource;
     runCommand?: typeof run;
+    runAuthSchemaStressFn?: typeof runAuthSchemaStress;
     validateAppFn?: typeof runAppValidation;
   } = {}
 ) => {
@@ -961,7 +964,9 @@ export const checkScenario = async (
   );
   const backend = getScenarioBackend(scenarioKey, params.backend);
   stopScenarioBackends(params.outputRoot);
-  const { projectDir } = await prepareScenarioSource(scenarioKey, {
+  const { projectDir } = await (
+    params.prepareScenarioSourceFn ?? prepareScenarioSource
+  )(scenarioKey, {
     ...params,
     backend,
     runCommand,
@@ -978,6 +983,12 @@ export const checkScenario = async (
     await (params.validateAppFn ?? runAppValidation)(projectDir, runCommand, {
       lint: SCENARIO_DEFINITIONS[scenarioKey].validation.lint,
     });
+    if (SCENARIO_DEFINITIONS[scenarioKey].validation.authSchemaStress) {
+      await (params.runAuthSchemaStressFn ?? runAuthSchemaStress)({
+        projectDir,
+        runCommand,
+      });
+    }
     (params.logFn ?? log)(
       `${SCENARIO_DEFINITIONS[scenarioKey].label} scenario validated.`
     );

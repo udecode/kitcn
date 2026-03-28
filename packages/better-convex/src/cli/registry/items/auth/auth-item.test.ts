@@ -382,11 +382,11 @@ describe('auth registry item', () => {
       });
 
     expect(plan).toBeDefined();
-    expect(plan?.action).toBe('skip');
+    expect(plan?.action).toBe('update');
     expect(plan?.content).toContain('bio: text(),');
-    expect(plan?.content).toContain(
-      "export const jwksTable = convexTable('jwks'"
-    );
+    expect(plan?.content).toContain('name: text().notNull(),');
+    expect(plan?.content).toContain('export const jwksTable = convexTable(');
+    expect(plan?.content).toContain('privateKey: text().notNull(),');
     expect(plan?.content).not.toContain('better-convex-managed');
     expect(plan?.schemaOwnershipLock).toEqual({
       path: schemaPath,

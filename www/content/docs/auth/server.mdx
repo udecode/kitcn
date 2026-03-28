@@ -106,7 +106,7 @@ When plugin changes in `auth.ts` affect auth tables, refresh only the auth-owned
 schema blocks:
 
 ```bash
-npx better-convex add auth --only schema --yes
+npx better-convex add auth --schema --yes
 ```
 
 The default Better Convex path patches auth-owned table blocks directly into
@@ -128,8 +128,7 @@ npx better-convex add auth --preset convex --yes
 
 That path writes `authSchema.ts`, `auth.config.ts`, `auth.ts`, and raw Convex
 HTTP wiring. It assumes the raw Convex app is already initialized. When auth
-tables change, rerun the same preset command. It does not support
-`--only schema`.
+tables change, rerun the same preset command. It does not support `--schema`.
 
 ## HTTP Routes
 

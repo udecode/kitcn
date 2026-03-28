@@ -62,12 +62,15 @@ import { runLocalConvexBootstrap } from './dev.js';
 const HELP_FLAGS = new Set(['--help', '-h']);
 const RAW_CONVEX_AUTH_PRESET = 'convex';
 const AUTH_SCHEMA_ONLY_SCOPE = 'schema' as const satisfies PluginApplyScope;
+const AUTH_SCHEMA_FLAG = '--schema';
 const RAW_CONVEX_AUTH_DEPLOYMENT_ERROR =
   'Raw Convex auth adoption requires an initialized Convex deployment. Run `convex init` first, then re-run `better-convex add auth --preset convex`.';
 const AUTH_SCHEMA_ONLY_MISSING_ERROR =
-  'Schema-only auth reconcile requires the default Better Convex auth scaffold to already exist. If auth is not scaffolded yet, run `better-convex add auth --yes` once.';
+  'Auth schema sync requires the default Better Convex auth scaffold to already exist. If auth is not scaffolded yet, run `better-convex add auth --yes` once.';
 const AUTH_SCHEMA_ONLY_RAW_CONVEX_ERROR =
-  'Schema-only auth reconcile is only supported for the default Better Convex auth scaffold. Re-run `better-convex add auth --preset convex --yes` for raw Convex auth.';
+  'Auth schema sync is only supported for the default Better Convex auth scaffold. Re-run `better-convex add auth --preset convex --yes` for raw Convex auth.';
+const AUTH_SCHEMA_OVERWRITE_ERROR =
+  'Auth schema sync is additive. Do not pass `--overwrite`; use `better-convex add auth --schema --yes`.';
 
 type AddDeps = Partial<RunDeps> & {
   runLocalBootstrap?: typeof runLocalConvexBootstrap;
@@ -81,7 +84,7 @@ Options:
   --dry-run         Show planned operations without writing files
   --diff [path]     Show unified diffs for planned file changes
   --view [path]     Show planned file contents
-  --only schema     Apply only the plugin's managed schema scope
+  --schema          Apply only auth schema sync
   --overwrite       Overwrite existing changed files without prompt
   --no-codegen      Skip automatic codegen after add
   --preset, -p      Plugin preset override`;
@@ -104,7 +107,7 @@ export const parseAddCommandArgs = (args: string[]) => {
   let dryRun = false;
   let overwrite = false;
   let noCodegen = false;
-  let only: PluginApplyScope | undefined;
+  let schema = false;
   let preset: string | undefined;
   let diff: string | true | undefined;
   let view: string | true | undefined;
@@ -157,30 +160,19 @@ export const parseAddCommandArgs = (args: string[]) => {
       overwrite = true;
       continue;
     }
+    if (arg === AUTH_SCHEMA_FLAG) {
+      schema = true;
+      continue;
+    }
     if (arg === '--no-codegen') {
       noCodegen = true;
       continue;
     }
     if (arg === '--only') {
-      const value = args[index + 1];
-      if (value !== AUTH_SCHEMA_ONLY_SCOPE) {
-        throw new Error(
-          'Missing or invalid value for --only. Expected: schema.'
-        );
-      }
-      only = value;
-      index += 1;
-      continue;
+      throw new Error('Use `--schema` instead of `--only schema`.');
     }
     if (arg.startsWith('--only=')) {
-      const value = arg.slice('--only='.length);
-      if (value !== AUTH_SCHEMA_ONLY_SCOPE) {
-        throw new Error(
-          'Missing or invalid value for --only. Expected: schema.'
-        );
-      }
-      only = value;
-      continue;
+      throw new Error('Use `--schema` instead of `--only schema`.');
     }
     if (arg === '--preset' || arg === '-p') {
       const value = args[index + 1];
@@ -202,6 +194,10 @@ export const parseAddCommandArgs = (args: string[]) => {
     throw new Error(`Unknown add flag "${arg}".`);
   }
 
+  if (schema && overwrite) {
+    throw new Error(AUTH_SCHEMA_OVERWRITE_ERROR);
+  }
+
   return {
     plugin,
     yes,
@@ -209,7 +205,7 @@ export const parseAddCommandArgs = (args: string[]) => {
     dryRun: dryRun || Boolean(diff) || Boolean(view),
     overwrite,
     noCodegen,
-    only,
+    schema,
     preset,
     diff,
     view,
@@ -279,15 +275,15 @@ const hasExistingManagedAuthScaffoldFiles = ({
 const filterPluginInstallPlanForAddScope = ({
   plan,
   selectedPlugin,
-  only,
+  applyScope,
   lockfilePath,
 }: {
   plan: PluginInstallPlan;
   selectedPlugin: string;
-  only: PluginApplyScope | undefined;
+  applyScope: PluginApplyScope | undefined;
   lockfilePath: string;
 }): PluginInstallPlan => {
-  if (!(selectedPlugin === 'auth' && only === AUTH_SCHEMA_ONLY_SCOPE)) {
+  if (!(selectedPlugin === 'auth' && applyScope === AUTH_SCHEMA_ONLY_SCOPE)) {
     return plan;
   }
 
@@ -298,7 +294,7 @@ const filterPluginInstallPlanForAddScope = ({
 
   return {
     ...plan,
-    applyScope: only,
+    applyScope,
     files: plan.files.filter(
       (file) =>
         file.kind === 'schema' ||
@@ -381,12 +377,13 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
   if (!selectedPlugin) {
     throw new Error('Missing plugin name. Usage: better-convex add [plugin].');
   }
-  if (addArgs.only === AUTH_SCHEMA_ONLY_SCOPE && selectedPlugin !== 'auth') {
-    throw new Error('`--only schema` is only supported for plugin "auth".');
+  const applyScope = addArgs.schema ? AUTH_SCHEMA_ONLY_SCOPE : undefined;
+  if (addArgs.schema && selectedPlugin !== 'auth') {
+    throw new Error('`--schema` is only supported for plugin "auth".');
   }
   if (
     selectedPlugin === 'auth' &&
-    addArgs.only === AUTH_SCHEMA_ONLY_SCOPE &&
+    addArgs.schema &&
     hasRawConvexAuthProjectFiles()
   ) {
     throw new Error(AUTH_SCHEMA_ONLY_RAW_CONVEX_ERROR);
@@ -471,7 +468,7 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
     selectedTemplateIds,
     'add'
   );
-  if (selectedPlugin === 'auth' && addArgs.only === AUTH_SCHEMA_ONLY_SCOPE) {
+  if (selectedPlugin === 'auth' && addArgs.schema) {
     const authLockEntry = lockfile.plugins.auth;
     if (
       rawConvexAuthPreset ||
@@ -493,7 +490,7 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
   }
   const plan = filterPluginInstallPlanForAddScope({
     plan: await buildPluginInstallPlan({
-      applyScope: addArgs.only,
+      applyScope,
       descriptor: pluginDescriptor,
       selectedPlugin,
       preset: resolvedPreset,
@@ -520,7 +517,7 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
       liveBootstrapTarget: effectiveBackend === 'convex' ? 'local' : undefined,
     }),
     selectedPlugin,
-    only: addArgs.only,
+    applyScope,
     lockfilePath: relative(
       process.cwd(),
       getPluginLockfilePath(effectiveFunctionsDir)
@@ -581,6 +578,7 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
       reason: dependencyInstall.reason,
     },
     created: applyResult.created,
+    manualActions: applyResult.manualActions,
     updated: applyResult.updated,
     skipped: applyResult.skipped,
   };
@@ -605,9 +603,15 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
       logger.write(
         `Skipped files:\n${applyResult.skipped.map((file) => `  - ${file}`).join('\n')}`
       );
-      if (!addArgs.overwrite) {
+      if (!addArgs.schema && !addArgs.overwrite) {
         logger.info('Re-run with --overwrite to replace changed files.');
       }
+    }
+    if (applyResult.manualActions.length > 0) {
+      logger.info('Manual actions:');
+      logger.write(
+        applyResult.manualActions.map((action) => `  - ${action}`).join('\n')
+      );
     }
     if (dependencyInstall.installed) {
       logger.success(

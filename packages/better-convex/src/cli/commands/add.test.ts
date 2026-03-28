@@ -11,7 +11,7 @@ import {
 import { ADD_HELP_TEXT, handleAddCommand, parseAddCommandArgs } from './add';
 
 describe('cli/commands/add', () => {
-  test('parseAddCommandArgs supports dry-run, diff, view, overwrite, no-codegen, only, and preset', () => {
+  test('parseAddCommandArgs supports dry-run, diff, view, overwrite, no-codegen, and preset', () => {
     expect(
       parseAddCommandArgs([
         'resend',
@@ -22,8 +22,6 @@ describe('cli/commands/add', () => {
         '--view=convex/schema.ts',
         '--overwrite',
         '--no-codegen',
-        '--only',
-        'schema',
         '--preset',
         'default',
       ])
@@ -34,11 +32,40 @@ describe('cli/commands/add', () => {
       dryRun: true,
       overwrite: true,
       noCodegen: true,
-      only: 'schema',
+      schema: false,
       preset: 'default',
       diff: 'convex/plugins/resend.ts',
       view: 'convex/schema.ts',
     });
+  });
+
+  test('parseAddCommandArgs supports auth schema sync', () => {
+    expect(parseAddCommandArgs(['auth', '--schema', '--yes'])).toEqual({
+      plugin: 'auth',
+      yes: true,
+      json: false,
+      dryRun: false,
+      overwrite: false,
+      noCodegen: false,
+      schema: true,
+      preset: undefined,
+      diff: undefined,
+      view: undefined,
+    });
+  });
+
+  test('parseAddCommandArgs rejects legacy schema-only flags', () => {
+    expect(() =>
+      parseAddCommandArgs(['auth', '--only', 'schema', '--yes'])
+    ).toThrow('Use `--schema` instead of `--only schema`.');
+  });
+
+  test('parseAddCommandArgs rejects --overwrite on auth schema sync', () => {
+    expect(() =>
+      parseAddCommandArgs(['auth', '--schema', '--overwrite', '--yes'])
+    ).toThrow(
+      'Auth schema sync is additive. Do not pass `--overwrite`; use `better-convex add auth --schema --yes`.'
+    );
   });
 
   test('handleAddCommand(--help) prints add help and exits without writes', async () => {

@@ -564,7 +564,7 @@ If you were using the auto-generated component schema, you'll now define auth ta
     only the auth-owned schema blocks:
 
     ```bash
-    npx better-convex add auth --only schema --yes
+    npx better-convex add auth --schema --yes
     ```
   </Tab>
   <Tab value="DB">
@@ -697,7 +697,7 @@ The component pattern provided several helper methods on `authComponent`. These 
 ### Better Convex path
 
 - [ ] Run `npx better-convex add auth --yes`
-- [ ] Use `npx better-convex add auth --only schema --yes` after auth table changes
+- [ ] Use `npx better-convex add auth --schema --yes` after auth table changes
 - [ ] Use the `getEnv()`-based auth config shape
 - [ ] Add `createAuthMutations`, update auth client imports
 - [ ] Replace provider wiring with the Better Convex auth-aware provider surface
@@ -708,7 +708,7 @@ The component pattern provided several helper methods on `authComponent`. These 
 - [ ] Run `npx better-convex add auth --preset convex --yes`
 - [ ] Keep generated `auth.config.ts` scaffolded with `getAuthConfigProvider()`
 - [ ] Keep the generated plain auth client scaffold; do not add `createAuthMutations` unless you are choosing the richer Better Convex client surface yourself
-- [ ] Re-run the full preset command after auth schema changes; `--only schema` does not apply here
+- [ ] Re-run the full preset command after auth schema changes; `--schema` does not apply here
 - [ ] Keep the app on the plain Convex provider/router shape the preset patched in place
 - [ ] Use `npx better-convex env push --prod` for production JWKS sync
 
@@ -1053,7 +1053,7 @@ Use the Better Convex auth scaffold command for your mode:
 
 ```bash
 npx better-convex add auth --yes
-npx better-convex add auth --only schema --yes
+npx better-convex add auth --schema --yes
 ```
 
 For raw Convex adoption, use:

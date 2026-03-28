@@ -55,6 +55,7 @@ export type ScenarioDefinition = {
   setup: readonly ScenarioStep[];
   source: ScenarioSource;
   validation: {
+    authSchemaStress?: boolean;
     beforeCheck?: readonly ScenarioStep[];
     lint: boolean;
   };
@@ -118,6 +119,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
     label: 'convex next auth bootstrap',
     setup: [['add', 'auth', '--yes', '--no-codegen']],
     validation: {
+      authSchemaStress: true,
       beforeCheck: [['init', '--yes', '--json']],
       lint: true,
     },
@@ -156,6 +158,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
       ['add', 'resend', '--yes', '--no-codegen'],
     ],
     validation: {
+      authSchemaStress: true,
       beforeCheck: [['init', '--yes', '--json']],
       lint: true,
     },

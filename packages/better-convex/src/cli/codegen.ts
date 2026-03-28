@@ -542,7 +542,8 @@ export { defineMigration } from 'better-convex/orm';
 function ensureGeneratedSupportPlaceholders(
   functionsDir: string,
   options?: { includeAuth?: boolean }
-): void {
+): string[] {
+  const createdPlaceholderFiles: string[] = [];
   const serverOutputFile = getGeneratedServerOutputFile(functionsDir);
   const authOutputFile = getGeneratedAuthOutputFile(functionsDir);
   const migrationsHelperOutputFile =
@@ -553,10 +554,12 @@ function ensureGeneratedSupportPlaceholders(
 
   if (!fs.existsSync(serverOutputFile)) {
     fs.writeFileSync(serverOutputFile, emitGeneratedServerPlaceholderFile());
+    createdPlaceholderFiles.push(serverOutputFile);
   }
 
   if (includeAuth && !fs.existsSync(authOutputFile)) {
     fs.writeFileSync(authOutputFile, emitGeneratedAuthPlaceholderFile());
+    createdPlaceholderFiles.push(authOutputFile);
   }
 
   if (!fs.existsSync(migrationsHelperOutputFile)) {
@@ -564,7 +567,10 @@ function ensureGeneratedSupportPlaceholders(
       migrationsHelperOutputFile,
       emitGeneratedMigrationsPlaceholderFile()
     );
+    createdPlaceholderFiles.push(migrationsHelperOutputFile);
   }
+
+  return createdPlaceholderFiles;
 }
 
 function emitGeneratedRuntimePlaceholderFile(exportNames: {
@@ -1684,7 +1690,9 @@ export async function generateMeta(
   const meta: Meta = {};
   const allHttpRoutes: HttpRoutes = {};
   const procedureEntries: ProcedureRegistryEntry[] = [];
+  const fatalParseFailures: Array<{ file: string; error: unknown }> = [];
   let createdRuntimePlaceholders: string[] = [];
+  let createdSupportPlaceholders: string[] = [];
   const runtimeFilesPreservedFromParseFailures = new Set<string>();
   let totalFunctions = 0;
   const authFilePath = path.join(functionsDir, 'auth.ts');
@@ -1724,10 +1732,12 @@ export async function generateMeta(
   }
   const hasOrmSchema = hasOrmSchemaMetadata;
 
-  ensureGeneratedSupportPlaceholders(functionsDir, {
-    includeAuth: generateAuth,
-  });
-  cleanupGeneratedPluginArtifacts(functionsDir);
+  createdSupportPlaceholders = ensureGeneratedSupportPlaceholders(
+    functionsDir,
+    {
+      includeAuth: generateAuth,
+    }
+  );
 
   if (generateApi) {
     // Signal to createEnv that we are in the CLI's Node.js parse context.
@@ -1814,8 +1824,14 @@ export async function generateMeta(
           const shouldLogParseFailure =
             debug ||
             (file === 'http.ts' && !shouldSuppressHttpParseWarning(error));
+          const shouldTreatParseFailureAsFatal = !(
+            file === 'http.ts' && shouldSuppressHttpParseWarning(error)
+          );
           if (shouldLogParseFailure) {
             logger.error(`  ⚠ Failed to parse ${file}:`, error);
+          }
+          if (shouldTreatParseFailureAsFatal) {
+            fatalParseFailures.push({ file, error });
           }
         }
       }
@@ -1824,6 +1840,27 @@ export async function generateMeta(
       delete (globalThis as Record<string, unknown>).__BETTER_CONVEX_CODEGEN__;
     }
   }
+
+  if (fatalParseFailures.length > 0) {
+    for (const createdRuntimePlaceholder of createdRuntimePlaceholders) {
+      fs.rmSync(createdRuntimePlaceholder, { force: true });
+    }
+    for (const createdSupportPlaceholder of createdSupportPlaceholders) {
+      fs.rmSync(createdSupportPlaceholder, { force: true });
+    }
+
+    const failureSummary = fatalParseFailures
+      .map(
+        ({ file, error }) =>
+          `- ${file}: ${error instanceof Error ? error.message : String(error)}`
+      )
+      .join('\n');
+    throw new Error(
+      `Better Convex codegen aborted because module parsing failed:\n${failureSummary}`
+    );
+  }
+
+  cleanupGeneratedPluginArtifacts(functionsDir);
 
   if (generateApi) {
     // Dedupe HTTP routes: prefer nested paths (todos.get) over flat (get)

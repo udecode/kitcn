@@ -7,7 +7,7 @@ tags:
   - schema
   - scaffolding
 symptoms:
-  - `better-convex add auth --only schema --yes` fails in an already-auth-wired app
+  - `better-convex add auth --schema --yes` fails in an already-auth-wired app
   - `plugins.lock.json` has no `auth` entry, so schema-only refresh refuses to run
   - apps like `example` need auth schema refresh without rerunning full auth scaffold
 module: auth-cli
@@ -18,7 +18,7 @@ resolved: 2026-03-24
 
 ## Problem
 
-`better-convex add auth --only schema --yes` still failed in apps that already
+`better-convex add auth --schema --yes` still failed in apps that already
 had the default Better Convex auth scaffold on disk but no `auth.schema` entry
 in `plugins.lock.json`.
 
@@ -60,7 +60,7 @@ Schema-only refresh now:
 - `bun --cwd packages/better-convex build`
 - `bun --cwd packages/better-convex typecheck`
 - `bun lint:fix`
-- `cd example && bun run auth:schema`
+- `cd example && bun run schema:sync`
 
 ## Prevention
 

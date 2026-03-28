@@ -41,7 +41,6 @@ export const sessionTable = convexTable(
     ipAddress: text(),
     userAgent: text(),
     impersonatedBy: text(),
-    // Keep string for Better Auth compatibility (app code uses string IDs).
     activeOrganizationId: text(),
   },
   (t) => [
@@ -49,6 +48,7 @@ export const sessionTable = convexTable(
     index('expiresAt').on(t.expiresAt),
     index('expiresAt_userId').on(t.expiresAt, t.userId),
     index('userId').on(t.userId),
+    index('activeOrganizationId').on(t.activeOrganizationId),
   ]
 );
 
@@ -97,6 +97,7 @@ export const jwksTable = convexTable('jwks', {
   publicKey: text().notNull(),
   privateKey: text().notNull(),
   createdAt: timestamp().notNull().defaultNow(),
+  expiresAt: timestamp(),
 });
 
 // --------------------
@@ -134,6 +135,7 @@ export const memberTable = convexTable(
     index('organizationId_userId').on(t.organizationId, t.userId),
     index('organizationId_role').on(t.organizationId, t.role),
     index('userId').on(t.userId),
+    index('organizationId').on(t.organizationId),
   ]
 );
 
@@ -169,6 +171,8 @@ export const invitationTable = convexTable(
       t.status
     ),
     index('inviterId').on(t.inviterId),
+    index('organizationId').on(t.organizationId),
+    index('role').on(t.role),
   ]
 );
 
@@ -179,13 +183,10 @@ export const invitationTable = convexTable(
 export const userTable = convexTable(
   'user',
   {
-    // Better Auth required fields
     name: text().notNull(),
     emailVerified: boolean().notNull(),
     createdAt: timestamp().notNull().defaultNow(),
     updatedAt: timestamp().notNull(),
-
-    // Better Auth optional fields
     image: text(),
     role: text(),
     isAnonymous: boolean(),
@@ -201,11 +202,7 @@ export const userTable = convexTable(
     username: text(),
     website: text(),
     x: text(),
-
-    // App-specific fields
     deletedAt: timestamp(),
-
-    // Convex Ents compatibility fields
     email: text().notNull(),
     customerId: text(),
     lastActiveOrganizationId: text().references(() => organizationTable.id, {
@@ -214,6 +211,8 @@ export const userTable = convexTable(
     personalOrganizationId: text().references(() => organizationTable.id, {
       onDelete: 'set null',
     }),
+    displayUsername: text(),
+    userId: text(),
   },
   (t) => [
     uniqueIndex('email').on(t.email),
@@ -642,6 +641,10 @@ const schema = defineSchema(tables, {
         from: r.session.userId,
         to: r.user.id,
       }),
+      activeOrganization: r.one.organization({
+        from: r.session.activeOrganizationId,
+        to: r.organization.id,
+      }),
     },
     account: {
       user: r.one.user({
@@ -661,6 +664,20 @@ const schema = defineSchema(tables, {
       subscriptions: r.many.subscriptions({
         from: r.organization.id,
         to: r.subscriptions.organizationId,
+      }),
+      usersAsLastActiveOrganization: r.many.user({
+        from: r.organization.id,
+        to: r.user.lastActiveOrganizationId,
+        alias: 'lastActiveOrganization',
+      }),
+      usersAsPersonalOrganization: r.many.user({
+        from: r.organization.id,
+        to: r.user.personalOrganizationId,
+        alias: 'personalOrganization',
+      }),
+      sessions: r.many.session({
+        from: r.organization.id,
+        to: r.session.activeOrganizationId,
       }),
     },
     member: {
@@ -747,6 +764,10 @@ const schema = defineSchema(tables, {
       ormPolymorphicEvents: r.many.ormPolymorphicEvent({
         from: r.user.id,
         to: r.ormPolymorphicEvent.actorId,
+      }),
+      invitations: r.many.invitation({
+        from: r.user.id,
+        to: r.invitation.inviterId,
       }),
     },
     subscriptions: {

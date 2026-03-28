@@ -7,7 +7,7 @@ tags:
   - schema
   - scaffolding
 symptoms:
-  - `better-convex add auth --only schema --yes` still throws managed drift errors
+  - `better-convex add auth --schema --yes` still throws managed drift errors
   - the schema reconciler works when called directly, but the real command path fails
   - `example` cannot refresh only `schema.ts` and `plugins.lock.json`
 module: auth-cli
@@ -18,7 +18,7 @@ resolved: 2026-03-24
 
 ## Problem
 
-`better-convex add auth --only schema --yes` existed on paper, but the real
+`better-convex add auth --schema --yes` existed on paper, but the real
 auth install path still threw:
 
 `Table "user" has drifted from the managed auth schema ...`
@@ -34,7 +34,7 @@ The break was one layer higher: the auth registry item destructured its
 `buildSchemaRegistrationPlanFile` params and forgot to forward `applyScope`
 into `buildAuthSchemaRegistrationPlanFile`.
 
-So `--only schema` was parsed correctly, but the auth item silently downgraded
+So `--schema` was parsed correctly, but the auth item silently downgraded
 back to the full drift rules.
 
 ## Solution
@@ -52,7 +52,7 @@ managed auth blocks without forcing a full auth scaffold rewrite.
 - `bun --cwd packages/better-convex build`
 - `bun --cwd packages/better-convex typecheck`
 - `bun lint:fix`
-- `cd example && bun run auth:schema -- --no-codegen`
+- `bunx better-convex add auth --schema --yes --no-codegen`
 
 ## Prevention
 

@@ -392,6 +392,7 @@ export type DataModel = {
       ];
       email_status: ["email", "status", "_creationTime"];
       inviterId: ["inviterId", "_creationTime"];
+      organizationId: ["organizationId", "_creationTime"];
       organizationId_email: ["organizationId", "email", "_creationTime"];
       organizationId_email_status: [
         "organizationId",
@@ -400,6 +401,7 @@ export type DataModel = {
         "_creationTime",
       ];
       organizationId_status: ["organizationId", "status", "_creationTime"];
+      role: ["role", "_creationTime"];
       status: ["status", "_creationTime"];
     };
     searchIndexes: {};
@@ -408,6 +410,7 @@ export type DataModel = {
   jwks: {
     document: {
       createdAt?: number;
+      expiresAt?: null | number;
       privateKey: string;
       publicKey: string;
       _id: Id<"jwks">;
@@ -417,6 +420,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "expiresAt"
       | "privateKey"
       | "publicKey";
     indexes: {
@@ -445,6 +449,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      organizationId: ["organizationId", "_creationTime"];
       organizationId_role: ["organizationId", "role", "_creationTime"];
       organizationId_userId: ["organizationId", "userId", "_creationTime"];
       role: ["role", "_creationTime"];
@@ -909,6 +914,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      activeOrganizationId: ["activeOrganizationId", "_creationTime"];
       expiresAt: ["expiresAt", "_creationTime"];
       expiresAt_userId: ["expiresAt", "userId", "_creationTime"];
       token: ["token", "_creationTime"];
@@ -1230,6 +1236,7 @@ export type DataModel = {
       createdAt?: number;
       customerId?: null | string;
       deletedAt?: null | number;
+      displayUsername?: null | string;
       email: string;
       emailVerified: boolean;
       firstName?: null | string;
@@ -1244,6 +1251,7 @@ export type DataModel = {
       personalOrganizationId?: null | string;
       role?: null | string;
       updatedAt: number;
+      userId?: null | string;
       username?: null | string;
       website?: null | string;
       x?: null | string;
@@ -1260,6 +1268,7 @@ export type DataModel = {
       | "createdAt"
       | "customerId"
       | "deletedAt"
+      | "displayUsername"
       | "email"
       | "emailVerified"
       | "firstName"
@@ -1274,6 +1283,7 @@ export type DataModel = {
       | "personalOrganizationId"
       | "role"
       | "updatedAt"
+      | "userId"
       | "username"
       | "website"
       | "x";

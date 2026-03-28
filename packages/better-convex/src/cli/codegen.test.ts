@@ -2928,7 +2928,9 @@ describe('cli/codegen', () => {
       const runtimeSentinel = '// keep me';
       writeFile(todosRuntimeFile, runtimeSentinel);
 
-      await generateMeta(undefined, { silent: true });
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        'Better Convex codegen aborted because module parsing failed'
+      );
 
       expect(fs.existsSync(todosRuntimeFile)).toBe(true);
       expect(fs.readFileSync(todosRuntimeFile, 'utf-8')).toContain(
@@ -2964,9 +2966,59 @@ describe('cli/codegen', () => {
         'broken.runtime.ts'
       );
 
-      await generateMeta(undefined, { silent: true });
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        'Better Convex codegen aborted because module parsing failed'
+      );
 
       expect(fs.existsSync(brokenRuntimeFile)).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta preserves existing shared api and generated plugin runtimes on fatal parse failure', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        throw new Error('parse failure');
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      const sharedApiFile = path.join(dir, 'convex', 'shared', 'api.ts');
+      const sharedApiSentinel = '// keep shared api';
+      writeFile(sharedApiFile, sharedApiSentinel);
+
+      const pluginRuntimeFile = path.join(
+        dir,
+        'convex',
+        'generated',
+        'plugins',
+        'resend.runtime.ts'
+      );
+      const pluginRuntimeSentinel = '// keep resend runtime';
+      writeFile(pluginRuntimeFile, pluginRuntimeSentinel);
+
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        'Better Convex codegen aborted because module parsing failed'
+      );
+
+      expect(fs.readFileSync(sharedApiFile, 'utf-8')).toContain(
+        sharedApiSentinel
+      );
+      expect(fs.readFileSync(pluginRuntimeFile, 'utf-8')).toContain(
+        pluginRuntimeSentinel
+      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -3027,7 +3079,9 @@ describe('cli/codegen', () => {
         `.trim()
       );
 
-      await generateMeta(undefined, { silent: true });
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        'Better Convex codegen aborted because module parsing failed'
+      );
 
       expect(errorLines.join('\n')).toContain('Failed to parse http.ts');
     } finally {

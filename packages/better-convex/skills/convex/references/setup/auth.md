@@ -171,7 +171,7 @@ After changing plugins or auth fields in `<functionsDir>/auth.ts`, refresh only
 the auth-owned schema blocks with:
 
 ```bash
-bunx better-convex add auth --only schema --yes
+bunx better-convex add auth --schema --yes
 ```
 
 Use the raw Convex preset only when the app stays on the plain Convex auth
@@ -183,7 +183,7 @@ bunx better-convex add auth --preset convex --yes
 
 That raw Convex path refreshes `authSchema.ts` and `schema.ts` together. It
 assumes the raw Convex app is already initialized and does not support
-`--only schema`.
+`--schema`.
 
 If you used section 5.1's schema template, these tables already exist.
 Otherwise add:

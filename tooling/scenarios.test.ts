@@ -16,6 +16,7 @@ import {
   SCENARIO_DEFINITIONS,
 } from './scenario.config';
 import {
+  checkScenario,
   checkScenarios,
   findAvailableScenarioDevPort,
   parseScenarioArgs,
@@ -170,6 +171,51 @@ describe('tooling/scenarios', () => {
       'create-convex-nextjs-shadcn',
       'create-convex-react-vite-shadcn',
     ]);
+  });
+
+  test('checkScenario runs auth schema stress for convex-next-all', async () => {
+    const calls: string[] = [];
+    const rootDir = `/tmp/better-convex-scenario-check-stress-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const projectDir = `${rootDir}/project`;
+
+    await Bun.write(
+      `${projectDir}/package.json`,
+      JSON.stringify({
+        name: 'convex-next-all-stress',
+        private: true,
+        dependencies: {
+          'better-convex': 'file:/tmp/better-convex.tgz',
+          '@better-convex/resend': 'file:/tmp/better-convex-resend.tgz',
+        },
+      })
+    );
+
+    try {
+      await checkScenario('convex-next-all', {
+        logFn: mock(() => {}) as never,
+        prepareScenarioSourceFn: mock(async () => {
+          calls.push('prepare');
+          return {
+            metadataDir: `${rootDir}/meta`,
+            projectDir,
+            scenarioDir: `${rootDir}/scenario`,
+          };
+        }) as never,
+        runAuthSchemaStressFn: mock(async () => {
+          calls.push('stress');
+        }) as never,
+        runCommand: mock(async () => 0) as never,
+        validateAppFn: mock(async () => {
+          calls.push('validate');
+        }) as never,
+      });
+
+      expect(calls).toEqual(['prepare', 'validate', 'stress']);
+    } finally {
+      await Bun.$`rm -rf ${rootDir}`.quiet();
+    }
   });
 
   test('resolveScenarioStepEnv keeps local package overrides on better-convex steps only', () => {
@@ -396,6 +442,7 @@ describe('tooling/scenarios', () => {
         ['add', 'resend', '--yes', '--no-codegen'],
       ],
       validation: {
+        authSchemaStress: true,
         beforeCheck: [['init', '--yes', '--json']],
         lint: true,
       },

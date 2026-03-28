@@ -177,6 +177,7 @@ async function buildAuthSchemaRegistrationPlanFile(
       updateReason: 'Register auth tables in schema.ts.',
       skipReason: 'Auth tables are already registered in schema.ts.',
     }),
+    manualActions: result.manualActions,
     schemaOwnershipLock: result.lock,
   };
 }

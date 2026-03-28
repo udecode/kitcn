@@ -31,6 +31,7 @@
     "lint": "biome check && eslint",
     "lint:fix": "biome check --write",
     "release": "bun build:pkg && changeset publish",
+    "schema:stress": "bun tooling/auth-schema-stress.ts --project example",
     "scenario:check": "bun tooling/scenarios.ts check",
     "scenario:check:convex": "bun tooling/check-convex-scenarios.ts",
     "scenario:codegen": "bun tooling/scenarios.ts codegen",

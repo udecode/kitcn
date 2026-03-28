@@ -5,9 +5,9 @@ import {
   reconcileRootSchemaOwnership,
 } from './schema-ownership';
 
-const createPromptAdapter = (confirm: boolean) => ({
-  confirm: async () => confirm,
-  isInteractive: () => true,
+const createPromptAdapter = () => ({
+  confirm: async () => true,
+  isInteractive: () => false,
   multiselect: async () => [],
   select: async () => 'ignored',
 });
@@ -18,13 +18,13 @@ const userUnit: RootSchemaTableUnit = {
 });`,
   importNames: ['convexTable', 'text'],
   key: 'user',
-  registration: '  user: userTable,',
-  relations: `  user: {
-    sessions: r.many.session({
-      from: r.user.id,
-      to: r.session.userId,
-    }),
-  }`,
+  registration: 'user: userTable',
+  relations: `user: {
+  sessions: r.many.session({
+    from: r.user.id,
+    to: r.session.userId,
+  }),
+}`,
 };
 
 const sessionUnit: RootSchemaTableUnit = {
@@ -33,13 +33,43 @@ const sessionUnit: RootSchemaTableUnit = {
 });`,
   importNames: ['convexTable', 'text'],
   key: 'session',
-  registration: '  session: sessionTable,',
-  relations: `  session: {
-    user: r.one.user({
-      from: r.session.userId,
-      to: r.user.id,
-    }),
-  }`,
+  registration: 'session: sessionTable',
+  relations: `session: {
+  user: r.one.user({
+    from: r.session.userId,
+    to: r.user.id,
+  }),
+}`,
+};
+
+const usernameUserUnit: RootSchemaTableUnit = {
+  declaration: `export const userTable = convexTable(
+  "user",
+  {
+    email: text().notNull(),
+    username: text(),
+    displayUsername: text(),
+  },
+  (userTable) => [index("username").on(userTable.username)]
+);`,
+  importNames: ['convexTable', 'index', 'text'],
+  key: 'user',
+  registration: 'user: userTable',
+  relations: `user: {
+  sessions: r.many.session({
+    from: r.user.id,
+    to: r.session.userId,
+  }),
+}`,
+};
+
+const conflictingUserUnit: RootSchemaTableUnit = {
+  declaration: `export const userTable = convexTable("user", {
+  username: text(),
+});`,
+  importNames: ['convexTable', 'text'],
+  key: 'user',
+  registration: 'user: userTable',
 };
 
 const baseSchema = `import { convexTable, defineSchema, text } from "better-convex/orm";
@@ -88,10 +118,13 @@ export default schema;
 
 const localUserSchema = `import { convexTable, defineSchema, text } from "better-convex/orm";
 
-export const localUserTable = convexTable("user", {
-  email: text().notNull(),
-  name: text(),
-});
+export const localUserTable = convexTable(
+  "user",
+  {
+    email: text().notNull(),
+    name: text(),
+  }
+);
 
 export default defineSchema({
   user: localUserTable,
@@ -105,18 +138,42 @@ export default defineSchema({
 }));
 `;
 
+const conflictingLocalUserSchema = `import { convexTable, defineSchema, integer } from "better-convex/orm";
+
+export const localUserTable = convexTable("user", {
+  username: integer(),
+});
+
+export default defineSchema({
+  user: localUserTable,
+});
+`;
+
+const staleLockSchema = `import { convexTable, defineSchema, text } from "better-convex/orm";
+
+export const invitationTable = convexTable("invitation", {
+  email: text().notNull(),
+});
+
+export const tables = {
+  invitation: invitationTable,
+};
+
+export default defineSchema(tables);
+`;
+
 describe('root schema ownership', () => {
-  test('inserts managed table, registration, and relation blocks into root schema', async () => {
+  test('inserts missing table, registration, and relation blocks into root schema', async () => {
     const result = await reconcileRootSchemaOwnership({
       lock: null,
       overwrite: false,
       pluginKey: 'auth',
       preview: false,
-      promptAdapter: createPromptAdapter(true),
+      promptAdapter: createPromptAdapter(),
       schemaPath: '/repo/convex/functions/schema.ts',
       source: baseSchema,
       tables: [userUnit, sessionUnit],
-      yes: false,
+      yes: true,
     });
 
     expect(result.content).toContain(
@@ -130,7 +187,6 @@ describe('root schema ownership', () => {
     expect(result.content).toContain('.relations((r) => ({');
     expect(result.content).toContain('sessions: r.many.session');
     expect(result.content).toContain('user: r.one.user');
-    expect(result.content).not.toContain('authExtension()');
     expect(result.content).not.toContain('better-convex-managed');
     expect(result.lock).toEqual({
       path: '/repo/convex/functions/schema.ts',
@@ -147,26 +203,30 @@ describe('root schema ownership', () => {
     } satisfies RootSchemaOwnershipLock);
   });
 
-  test('keeps conflicting local tables when the interactive prompt declines overwrite', async () => {
+  test('merges missing fields, indexes, and relations into an existing local table', async () => {
     const result = await reconcileRootSchemaOwnership({
       lock: null,
       overwrite: false,
       pluginKey: 'auth',
       preview: false,
-      promptAdapter: createPromptAdapter(false),
+      promptAdapter: createPromptAdapter(),
       schemaPath: '/repo/convex/functions/schema.ts',
       source: localUserSchema,
-      tables: [userUnit],
-      yes: false,
+      tables: [usernameUserUnit],
+      yes: true,
     });
 
     expect(result.content).toContain(
-      'export const localUserTable = convexTable("user"'
+      'export const localUserTable = convexTable('
     );
-    expect(result.content).not.toContain(
-      'export const userTable = convexTable("user"'
+    expect(result.content).toContain('name: text(),');
+    expect(result.content).toContain('username: text(),');
+    expect(result.content).toContain('displayUsername: text(),');
+    expect(result.content).toContain(
+      'index("username").on(localUserTable.username)'
     );
-    expect(result.content).not.toContain('better-convex-managed');
+    expect(result.content).toContain('profile: r.one.profile');
+    expect(result.content).toContain('sessions: r.many.session');
     expect(result.lock).toEqual({
       path: '/repo/convex/functions/schema.ts',
       tables: {
@@ -177,107 +237,35 @@ describe('root schema ownership', () => {
     } satisfies RootSchemaOwnershipLock);
   });
 
-  test('throws on unresolved local ownership conflicts in non-interactive yes mode', async () => {
+  test('throws on incompatible overlapping field definitions', async () => {
     await expect(
       reconcileRootSchemaOwnership({
         lock: null,
         overwrite: false,
         pluginKey: 'auth',
         preview: false,
-        promptAdapter: {
-          confirm: async () => true,
-          isInteractive: () => false,
-          multiselect: async () => [],
-          select: async () => 'ignored',
-        },
+        promptAdapter: createPromptAdapter(),
         schemaPath: '/repo/convex/functions/schema.ts',
-        source: localUserSchema,
-        tables: [userUnit],
+        source: conflictingLocalUserSchema,
+        tables: [conflictingUserUnit],
         yes: true,
       })
     ).rejects.toThrow(
-      'Table "user" already exists in /repo/convex/functions/schema.ts. Re-run `better-convex add auth` interactively or pass --overwrite to let better-convex manage it.'
+      'Schema patch conflict in /repo/convex/functions/schema.ts: auth field "username" on table "user" is incompatible with the existing schema.'
     );
   });
 
-  test('overwrites conflicting local tables when overwrite is enabled', async () => {
-    const result = await reconcileRootSchemaOwnership({
-      lock: null,
-      overwrite: true,
-      pluginKey: 'auth',
-      preview: false,
-      promptAdapter: createPromptAdapter(false),
-      schemaPath: '/repo/convex/functions/schema.ts',
-      source: localUserSchema,
-      tables: [userUnit],
-      yes: false,
-    });
-
-    expect(result.content).not.toContain('localUserTable');
-    expect(result.content).toContain(
-      'export const userTable = convexTable("user"'
-    );
-    expect(result.content).not.toContain('better-convex-managed');
-    expect(result.lock?.tables.user).toEqual({
-      checksum: expect.any(String),
-      owner: 'managed',
-    });
-  });
-
-  test('throws on drifted managed schema blocks in yes mode', async () => {
-    const driftedSource = `import { convexTable, defineSchema, text } from "better-convex/orm";
-export const userTable = convexTable("user", {
-  email: text(),
-});
-
-export const tables = {
-  user: userTable,
-};
-
-export default defineSchema(tables);
-`;
-
-    await expect(
-      reconcileRootSchemaOwnership({
-        lock: {
-          path: 'convex/functions/schema.ts',
-          tables: {
-            user: {
-              checksum: 'badbadbadbad',
-              owner: 'managed',
-            },
-          },
-        },
-        overwrite: false,
-        pluginKey: 'auth',
-        preview: false,
-        promptAdapter: {
-          confirm: async () => true,
-          isInteractive: () => false,
-          multiselect: async () => [],
-          select: async () => 'ignored',
-        },
-        schemaPath: '/repo/convex/functions/schema.ts',
-        source: driftedSource,
-        tables: [userUnit],
-        yes: true,
-      })
-    ).rejects.toThrow(
-      'Table "user" has drifted from the managed auth schema in /repo/convex/functions/schema.ts. Re-run `better-convex add auth` interactively or pass --overwrite to replace it.'
-    );
-  });
-
-  test('cleans legacy managed comments while preserving managed ownership', async () => {
+  test('cleans legacy managed comments while preserving managed lock state', async () => {
     const firstPass = await reconcileRootSchemaOwnership({
       lock: null,
       overwrite: false,
       pluginKey: 'auth',
       preview: false,
-      promptAdapter: createPromptAdapter(true),
+      promptAdapter: createPromptAdapter(),
       schemaPath: '/repo/convex/functions/schema.ts',
       source: baseSchema,
       tables: [userUnit],
-      yes: false,
+      yes: true,
     });
 
     const legacySource = firstPass.content
@@ -299,61 +287,41 @@ export default defineSchema(tables);
       overwrite: false,
       pluginKey: 'auth',
       preview: false,
-      promptAdapter: {
-        confirm: async () => {
-          throw new Error('should not prompt');
-        },
-        isInteractive: () => false,
-        multiselect: async () => [],
-        select: async () => 'ignored',
-      },
+      promptAdapter: createPromptAdapter(),
       schemaPath: '/repo/convex/functions/schema.ts',
       source: legacySource,
       tables: [userUnit],
       yes: true,
     });
 
-    expect(result.content).toContain(
-      'export const userTable = convexTable("user"'
-    );
-    expect(result.content).not.toContain('better-convex-managed');
+    expect(result.content).toBe(firstPass.content);
     expect(result.lock).toEqual(firstPass.lock);
   });
 
-  test('reuses a fresh managed lock without false drift on rerun', async () => {
-    const firstPass = await reconcileRootSchemaOwnership({
-      lock: null,
-      overwrite: false,
-      pluginKey: 'auth',
-      preview: false,
-      promptAdapter: createPromptAdapter(true),
-      schemaPath: '/repo/convex/functions/schema.ts',
-      source: baseSchema,
-      tables: [userUnit, sessionUnit],
-      yes: false,
-    });
-
-    const secondPass = await reconcileRootSchemaOwnership({
-      lock: firstPass.lock,
-      overwrite: false,
-      pluginKey: 'auth',
-      preview: false,
-      promptAdapter: {
-        confirm: async () => {
-          throw new Error('should not prompt');
+  test('emits manual cleanup warnings for stale schema lock tables', async () => {
+    const result = await reconcileRootSchemaOwnership({
+      lock: {
+        path: 'convex/functions/schema.ts',
+        tables: {
+          invitation: {
+            checksum: 'deadbeef1234',
+            owner: 'managed',
+          },
         },
-        isInteractive: () => false,
-        multiselect: async () => [],
-        select: async () => 'ignored',
       },
+      overwrite: false,
+      pluginKey: 'auth',
+      preview: false,
+      promptAdapter: createPromptAdapter(),
       schemaPath: '/repo/convex/functions/schema.ts',
-      source: firstPass.content,
-      tables: [userUnit, sessionUnit],
+      source: staleLockSchema,
+      tables: [],
       yes: true,
     });
 
-    expect(secondPass.content).toBe(firstPass.content);
-    expect(secondPass.lock).toEqual(firstPass.lock);
+    expect(result.manualActions).toEqual([
+      'auth no longer defines schema table "invitation" in /repo/convex/functions/schema.ts. Review and remove stale schema fragments manually if they are no longer needed.',
+    ]);
   });
 
   test('rejects legacy defineRelations helper schemas', async () => {
@@ -363,11 +331,11 @@ export default defineSchema(tables);
         overwrite: false,
         pluginKey: 'auth',
         preview: false,
-        promptAdapter: createPromptAdapter(true),
+        promptAdapter: createPromptAdapter(),
         schemaPath: '/repo/convex/functions/schema.ts',
         source: helperRelationsSchema,
         tables: [userUnit],
-        yes: false,
+        yes: true,
       })
     ).rejects.toThrow(
       'Schema patch error: use `defineSchema(...).relations(...)` in schema.ts. Root schema patching no longer supports standalone `defineRelations(...)` exports.'

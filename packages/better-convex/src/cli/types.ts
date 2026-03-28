@@ -57,6 +57,7 @@ export type PluginInstallPlanFile = {
   existingContent?: string;
   managedBaselineContent?: string | readonly string[];
   requiresExplicitOverwrite?: boolean;
+  manualActions?: string[];
   schemaOwnershipLock?: PluginRootSchemaOwnership | null;
 };
 

@@ -7,7 +7,7 @@ tags:
   - schema
   - orm
 symptoms:
-  - `better-convex add auth --only schema --yes --no-codegen` rewrites auth schema, but generated auth tables are missing organization helper fields
+  - `better-convex add auth --schema --yes --no-codegen` rewrites auth schema, but generated auth tables are missing organization helper fields
   - example auth code references `userTable` / `sessionTable`, but root-first auth schema exports `user` / `session`
   - codegen fails after schema refresh because relations point at missing auth columns or app imports point at missing table exports
 module: auth-cli
@@ -79,7 +79,7 @@ That gives root-first auth schema refresh the best of both worlds:
 - `bun --cwd packages/better-convex typecheck`
 - `bun --cwd packages/better-convex build`
 - `bun lint:fix`
-- `cd example && bun run auth:schema -- --no-codegen`
+- `bunx better-convex add auth --schema --yes --no-codegen`
 
 ## Prevention
 

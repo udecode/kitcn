@@ -2228,7 +2228,7 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(add auth --yes --no-codegen) fails clearly when root schema ownership is unresolved', async () => {
+  test('run(add auth --yes --no-codegen) merges compatible local root auth tables', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-add-auth-root-ownership-')
     );
@@ -2265,9 +2265,26 @@ describe('cli/cli', () => {
           syncEnv: syncEnvStub as any,
           loadBetterConvexConfig: loadConfigStub as any,
         })
-      ).rejects.toThrow(
-        'Table "user" already exists in convex/schema.ts. Re-run `better-convex add auth` interactively or pass --overwrite to let better-convex manage it.'
-      );
+      ).resolves.toBe(0);
+
+      expect(
+        fs.readFileSync(path.join(dir, 'convex', 'schema.ts'), 'utf8')
+      ).toContain('name: text().notNull()');
+      expect(
+        fs.readFileSync(path.join(dir, 'convex', 'schema.ts'), 'utf8')
+      ).toContain('session: sessionTable');
+      const lockfile = JSON.parse(
+        fs.readFileSync(path.join(dir, 'convex', 'plugins.lock.json'), 'utf8')
+      ) as {
+        plugins: {
+          auth?: {
+            schema?: {
+              tables?: Record<string, { owner?: string }>;
+            };
+          };
+        };
+      };
+      expect(lockfile.plugins.auth?.schema?.tables?.user?.owner).toBe('local');
     } finally {
       process.chdir(oldCwd);
     }
@@ -2304,7 +2321,7 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(add auth --only schema --yes --no-codegen) fails clearly before auth scaffold exists', async () => {
+  test('run(add auth --schema --yes --no-codegen) fails clearly before auth scaffold exists', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-add-auth-schema-only-missing-')
     );
@@ -2341,7 +2358,7 @@ describe('cli/cli', () => {
       expect(initExitCode).toBe(0);
 
       await expect(
-        run(['add', 'auth', '--only', 'schema', '--yes', '--no-codegen'], {
+        run(['add', 'auth', '--schema', '--yes', '--no-codegen'], {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
           generateMeta: generateMetaStub as any,
@@ -2349,14 +2366,14 @@ describe('cli/cli', () => {
           loadBetterConvexConfig: loadConfigStub as any,
         })
       ).rejects.toThrow(
-        'Schema-only auth reconcile requires the default Better Convex auth scaffold to already exist. If auth is not scaffolded yet, run `better-convex add auth --yes` once.'
+        'Auth schema sync requires the default Better Convex auth scaffold to already exist. If auth is not scaffolded yet, run `better-convex add auth --yes` once.'
       );
     } finally {
       process.chdir(oldCwd);
     }
   });
 
-  test('run(add auth --only schema --yes --no-codegen) works without an existing auth lock entry', async () => {
+  test('run(add auth --schema --yes --no-codegen) works without an existing auth lock entry', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-add-auth-schema-only-')
     );
@@ -2477,7 +2494,7 @@ describe('cli/cli', () => {
 
       const callsBeforeSchemaOnly = execaStub.mock.calls.length;
       const schemaOnlyExitCode = await run(
-        ['add', 'auth', '--only', 'schema', '--yes', '--no-codegen'],
+        ['add', 'auth', '--schema', '--yes', '--no-codegen'],
         {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
@@ -2547,7 +2564,7 @@ describe('cli/cli', () => {
     }
   });
 
-  test('run(add auth --only schema --yes) fails clearly for raw convex auth', async () => {
+  test('run(add auth --schema --yes) fails clearly for raw convex auth', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'better-convex-cli-add-auth-schema-only-convex-')
     );
@@ -2580,7 +2597,7 @@ describe('cli/cli', () => {
       });
 
       await expect(
-        run(['add', 'auth', '--only', 'schema', '--yes'], {
+        run(['add', 'auth', '--schema', '--yes'], {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
           generateMeta: generateMetaStub as any,
@@ -2588,7 +2605,7 @@ describe('cli/cli', () => {
           loadBetterConvexConfig: loadConfigStub as any,
         })
       ).rejects.toThrow(
-        'Schema-only auth reconcile is only supported for the default Better Convex auth scaffold. Re-run `better-convex add auth --preset convex --yes` for raw Convex auth.'
+        'Auth schema sync is only supported for the default Better Convex auth scaffold. Re-run `better-convex add auth --preset convex --yes` for raw Convex auth.'
       );
     } finally {
       process.chdir(oldCwd);

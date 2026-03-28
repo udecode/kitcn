@@ -311,6 +311,72 @@ describe('M2 Relations Layer (v1)', () => {
       expect(authorEdge?.inverseEdge).toBe(authoredPostsEdge);
       expect(authoredPostsEdge?.inverseEdge).toBe(authorEdge);
     });
+
+    it('should pair organization helper relations when the many() side uses aliases and the one() side uses matching edge names', () => {
+      const organization = convexTable('organization', {
+        name: text().notNull(),
+      });
+
+      const user = convexTable('user', {
+        name: text().notNull(),
+        lastActiveOrganizationId: id('organization'),
+        personalOrganizationId: id('organization'),
+      });
+
+      const relations = defineRelations({ organization, user }, (r) => ({
+        organization: {
+          usersAsLastActiveOrganization: r.many.user({
+            from: r.organization.id,
+            to: r.user.lastActiveOrganizationId,
+            alias: 'lastActiveOrganization',
+          }),
+          usersAsPersonalOrganization: r.many.user({
+            from: r.organization.id,
+            to: r.user.personalOrganizationId,
+            alias: 'personalOrganization',
+          }),
+        },
+        user: {
+          lastActiveOrganization: r.one.organization({
+            from: r.user.lastActiveOrganizationId,
+            to: r.organization.id,
+          }),
+          personalOrganization: r.one.organization({
+            from: r.user.personalOrganizationId,
+            to: r.organization.id,
+          }),
+        },
+      }));
+
+      expect(() => extractRelationsConfig(relations)).not.toThrow();
+
+      const edges = extractRelationsConfig(relations);
+      const usersAsLastActiveOrganization = edges.find(
+        (edge) => edge.edgeName === 'usersAsLastActiveOrganization'
+      );
+      const lastActiveOrganization = edges.find(
+        (edge) => edge.edgeName === 'lastActiveOrganization'
+      );
+      const usersAsPersonalOrganization = edges.find(
+        (edge) => edge.edgeName === 'usersAsPersonalOrganization'
+      );
+      const personalOrganization = edges.find(
+        (edge) => edge.edgeName === 'personalOrganization'
+      );
+
+      expect(usersAsLastActiveOrganization?.inverseEdge).toBe(
+        lastActiveOrganization
+      );
+      expect(lastActiveOrganization?.inverseEdge).toBe(
+        usersAsLastActiveOrganization
+      );
+      expect(usersAsPersonalOrganization?.inverseEdge).toBe(
+        personalOrganization
+      );
+      expect(personalOrganization?.inverseEdge).toBe(
+        usersAsPersonalOrganization
+      );
+    });
   });
 
   describe('Many-to-Many Inverses', () => {
