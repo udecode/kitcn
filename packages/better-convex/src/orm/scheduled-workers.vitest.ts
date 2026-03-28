@@ -1,16 +1,18 @@
 /** biome-ignore-all lint/performance/useTopLevelRegex: inline regex assertions are intentional in tests. */
 import type { SchedulableFunctionReference } from 'convex/server';
 import { expect, test } from 'vitest';
-import schema, { relations } from '../../../../convex/schema';
+import schema from '../../../../convex/schema';
 import { convexTest } from '../../../../convex/setup.testing';
 import { scheduledDeleteFactory } from './scheduled-delete';
 import { scheduledMutationBatchFactory } from './scheduled-mutation-batch';
+import { requireSchemaRelations } from './schema';
 
 const scheduledRef = {} as SchedulableFunctionReference;
 
 const scheduler = {
   runAfter: async () => null,
 };
+const relations = requireSchemaRelations(schema);
 
 test('scheduledMutationBatch validates unknown table', async () => {
   const worker = scheduledMutationBatchFactory(

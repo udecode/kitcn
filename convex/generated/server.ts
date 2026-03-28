@@ -6,7 +6,6 @@ import {
   createOrm,
   type GenericOrmCtx,
   type OrmFunctions,
-  
 } from 'better-convex/orm';
 import {
   createGeneratedFunctionReference,
@@ -19,9 +18,7 @@ import type {
   QueryCtx as ServerQueryCtx,
 } from '../_generated/server';
 import { httpAction, internalMutation } from '../_generated/server';
-import { relations } from '../schema';
-
-
+import schema from '../schema';
 
 
 const ormFunctions: OrmFunctions = {
@@ -31,7 +28,7 @@ const ormFunctions: OrmFunctions = {
   migrationRunChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:migrationRunChunk"),
   resetChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:resetChunk"),
 };
-const ormSchema = relations;
+const ormSchema = schema;
 
 export const orm = createOrm({
   schema: ormSchema,

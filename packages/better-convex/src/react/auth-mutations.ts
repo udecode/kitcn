@@ -9,7 +9,11 @@
 import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { AuthStore } from './auth-store';
-import { decodeJwtExp, useAuthStore } from './auth-store';
+import {
+  AUTH_SESSION_SYNC_GRACE_MS,
+  decodeJwtExp,
+  useAuthStore,
+} from './auth-store';
 import { useConvexQueryClient } from './context';
 
 export { AuthMutationError, isAuthMutationError } from '../crpc/auth-error';
@@ -78,11 +82,40 @@ const seedReturnedToken = (store: AuthStore, value: unknown) => {
 
   store.set('token', token);
   store.set('expiresAt', decodeJwtExp(token));
+  store.set('sessionSyncGraceUntil', Date.now() + AUTH_SESSION_SYNC_GRACE_MS);
 };
 
 type AnyFn = (...args: any[]) => Promise<any>;
+type MutationArgsWithFetchOptions = {
+  fetchOptions?: Record<string, unknown>;
+};
 
 type AuthClient = {
+  $store?: {
+    atoms?: {
+      session?: {
+        get?: () => {
+          data?: unknown;
+          error?: unknown;
+          isPending?: boolean;
+          isRefetching?: boolean;
+          refetch?: (queryParams?: {
+            query?: Record<string, unknown>;
+          }) => Promise<void>;
+        };
+        set?: (value: {
+          data: unknown;
+          error: unknown;
+          isPending: boolean;
+          isRefetching: boolean;
+          refetch: (queryParams?: {
+            query?: Record<string, unknown>;
+          }) => Promise<void>;
+        }) => void;
+      };
+    };
+  };
+  getSession?: AnyFn;
   signOut: AnyFn;
   signIn: {
     social: AnyFn;
@@ -91,6 +124,65 @@ type AuthClient = {
   signUp: {
     email: AnyFn;
   };
+};
+
+const syncSessionAtom = (authClient: AuthClient, sessionData: unknown) => {
+  const sessionAtom = authClient.$store?.atoms?.session;
+  if (
+    typeof sessionAtom?.get !== 'function' ||
+    typeof sessionAtom.set !== 'function'
+  ) {
+    return;
+  }
+
+  const current = sessionAtom.get();
+  sessionAtom.set({
+    data: sessionData,
+    error: null,
+    isPending: false,
+    isRefetching: false,
+    refetch: current?.refetch ?? (async () => {}),
+  });
+};
+
+const hydrateReturnedSession = async (
+  authClient: AuthClient,
+  value: unknown
+) => {
+  const token = readReturnedToken(value);
+  if (!token || typeof authClient.getSession !== 'function') {
+    return;
+  }
+
+  const session = await authClient.getSession({
+    fetchOptions: {
+      credentials: 'omit',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  });
+
+  if (session?.data) {
+    syncSessionAtom(authClient, session.data);
+  }
+};
+
+const withDisabledSessionSignal = <T>(
+  args: T
+): T & MutationArgsWithFetchOptions => {
+  const record =
+    args && typeof args === 'object'
+      ? (args as MutationArgsWithFetchOptions)
+      : ({} as MutationArgsWithFetchOptions);
+
+  return {
+    ...(record as object),
+    fetchOptions: {
+      ...record.fetchOptions,
+      disableSignal: true,
+    },
+  } as T & MutationArgsWithFetchOptions;
 };
 
 type AuthMutationsResult<T extends AuthClient> = {
@@ -156,6 +248,7 @@ export function createAuthMutations<T extends AuthClient>(
         }
         authStoreApi.set('token', null);
         authStoreApi.set('expiresAt', null);
+        authStoreApi.set('sessionSyncGraceUntil', null);
         return res;
       },
     };
@@ -167,11 +260,14 @@ export function createAuthMutations<T extends AuthClient>(
     return {
       ...options,
       mutationFn: async (args: Parameters<T['signIn']['social']>[0]) => {
-        const res = await authClient.signIn.social(args);
+        const res = await authClient.signIn.social(
+          withDisabledSessionSignal(args)
+        );
         if (res?.error) {
           throw new AuthMutationError(res.error);
         }
         seedReturnedToken(authStoreApi, res);
+        await hydrateReturnedSession(authClient, res);
         await ensureAuth(authStoreApi);
         return res;
       },
@@ -184,11 +280,14 @@ export function createAuthMutations<T extends AuthClient>(
     return {
       ...options,
       mutationFn: async (args: Parameters<T['signIn']['email']>[0]) => {
-        const res = await authClient.signIn.email(args);
+        const res = await authClient.signIn.email(
+          withDisabledSessionSignal(args)
+        );
         if (res?.error) {
           throw new AuthMutationError(res.error);
         }
         seedReturnedToken(authStoreApi, res);
+        await hydrateReturnedSession(authClient, res);
         await ensureAuth(authStoreApi);
         return res;
       },
@@ -201,11 +300,14 @@ export function createAuthMutations<T extends AuthClient>(
     return {
       ...options,
       mutationFn: async (args: Parameters<T['signUp']['email']>[0]) => {
-        const res = await authClient.signUp.email(args);
+        const res = await authClient.signUp.email(
+          withDisabledSessionSignal(args)
+        );
         if (res?.error) {
           throw new AuthMutationError(res.error);
         }
         seedReturnedToken(authStoreApi, res);
+        await hydrateReturnedSession(authClient, res);
         await ensureAuth(authStoreApi);
         return res;
       },

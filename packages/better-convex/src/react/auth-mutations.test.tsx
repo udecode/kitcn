@@ -236,5 +236,94 @@ describe('createAuthMutations', () => {
 
     expect(result.current.store.get('token')).toBe('returned-sign-up-token');
     expect(authClient.signUp.email).toHaveBeenCalledTimes(1);
+    expect(authClient.signUp.email).toHaveBeenCalledWith({
+      email: 'a@b.com',
+      password: 'pw',
+      fetchOptions: {
+        disableSignal: true,
+      },
+    });
+  });
+
+  test('signUp(email): hydrates Better Auth session state from the returned bearer token', async () => {
+    useConvexQueryClientSpy = spyOn(
+      contextModule,
+      'useConvexQueryClient'
+    ).mockReturnValue(null as any);
+
+    const sessionAtom = {
+      get: () => ({
+        data: null,
+        error: null,
+        isPending: true,
+        isRefetching: false,
+        refetch: async () => {},
+      }),
+      set: mock((_value: unknown) => {}),
+    };
+
+    const authClient = {
+      $store: { atoms: { session: sessionAtom } },
+      getSession: mock(async (args: unknown) => ({
+        args,
+        data: {
+          session: { id: 'session-1' },
+          user: { email: 'a@b.com' },
+        },
+      })),
+      signOut: mock(async () => ({})),
+      signIn: { social: mock(async () => ({})), email: mock(async () => ({})) },
+      signUp: {
+        email: mock(async () => ({
+          data: {
+            token: 'returned-sign-up-token',
+            user: { email: 'a@b.com' },
+          },
+          error: null,
+        })),
+      },
+    };
+
+    const { useSignUpMutationOptions } = createAuthMutations(authClient as any);
+
+    const wrapper = makeWrapper({ token: null });
+
+    const { result } = renderHook(
+      () => ({ store: useAuthStore(), opts: useSignUpMutationOptions() }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await result.current.opts.mutationFn?.({
+        email: 'a@b.com',
+        password: 'pw',
+      });
+    });
+
+    expect(authClient.getSession).toHaveBeenCalledWith({
+      fetchOptions: {
+        credentials: 'omit',
+        headers: {
+          Authorization: 'Bearer returned-sign-up-token',
+        },
+      },
+    });
+    expect(authClient.signUp.email).toHaveBeenCalledWith({
+      email: 'a@b.com',
+      password: 'pw',
+      fetchOptions: {
+        disableSignal: true,
+      },
+    });
+    expect(sessionAtom.set).toHaveBeenCalledWith({
+      data: {
+        session: { id: 'session-1' },
+        user: { email: 'a@b.com' },
+      },
+      error: null,
+      isPending: false,
+      isRefetching: false,
+      refetch: expect.any(Function),
+    });
   });
 });

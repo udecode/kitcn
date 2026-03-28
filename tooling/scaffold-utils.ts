@@ -31,9 +31,8 @@ export const LOCAL_CLI_PATH = path.join(
   PROJECT_ROOT,
   'packages',
   'better-convex',
-  'src',
-  'cli',
-  'cli.ts'
+  'dist',
+  'cli.mjs'
 );
 export const VOLATILE_ENTRY_NAMES = new Set([
   '.better-convex-scenario',
@@ -147,16 +146,20 @@ export const buildLocalCliCommand = (
   args: readonly string[],
   params: {
     backend: TemplateBackend;
-    bunBinary?: string;
+    nodeBinary?: string;
     localCliPath?: string;
   }
-) => [
-  params.bunBinary ?? Bun.which('bun') ?? process.execPath,
-  params.localCliPath ?? LOCAL_CLI_PATH,
-  '--backend',
-  params.backend,
-  ...args,
-];
+) => {
+  ensureLocalBetterConvexBuild();
+
+  return [
+    params.nodeBinary ?? Bun.which('node') ?? process.execPath,
+    params.localCliPath ?? LOCAL_CLI_PATH,
+    '--backend',
+    params.backend,
+    ...args,
+  ];
+};
 
 export const getLocalBetterConvexInstallSpec = () => {
   if (localBetterConvexInstallSpec) {
@@ -214,7 +217,7 @@ export const runLocalCliSteps = async (
   cwd: string,
   params: {
     backend: TemplateBackend;
-    bunBinary?: string;
+    nodeBinary?: string;
     localCliPath?: string;
     runCommand?: typeof run;
   }

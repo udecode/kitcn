@@ -335,6 +335,7 @@ describe('ConvexAuthProvider', () => {
     expect(convexToken).toHaveBeenCalledTimes(1);
     expect(convexToken).toHaveBeenCalledWith({
       fetchOptions: {
+        credentials: 'omit',
         headers: {
           Authorization: 'Bearer session-token',
         },
@@ -496,6 +497,66 @@ describe('ConvexAuthProvider', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  test('exchanges a freshly seeded session token for a Convex JWT while session sync catches up', async () => {
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    const convexJwt = makeJwt(7200);
+    const convexToken = mock(async () => ({ data: { token: convexJwt } }));
+
+    const authClient = {
+      useSession: () => ({ data: null, isPending: false }),
+      convex: { token: convexToken },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+    };
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ConvexAuthProvider authClient={authClient as any} client={client as any}>
+        {children}
+      </ConvexAuthProvider>
+    );
+
+    const { result } = renderHook(
+      () => ({
+        auth: useAuth(),
+        fetchAccessToken: useFetchAccessToken(),
+        store: useAuthStore(),
+      }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      result.current.store.set('token', 'session-token');
+      result.current.store.set('expiresAt', null);
+      result.current.store.set('sessionSyncGraceUntil', Date.now() + 5_000);
+    });
+
+    let fetched: string | null = null;
+    await act(async () => {
+      fetched = await result.current.fetchAccessToken!({
+        forceRefreshToken: false,
+      });
+    });
+
+    expect(fetched).toBe(convexJwt);
+    expect(result.current.store.get('token')).toBe(convexJwt);
+    expect(result.current.auth.hasSession).toBe(true);
+    expect(convexToken).toHaveBeenCalledTimes(1);
+    expect(convexToken).toHaveBeenCalledWith({
+      fetchOptions: {
+        credentials: 'omit',
+        headers: {
+          Authorization: 'Bearer session-token',
+        },
+        throw: false,
+      },
+    });
+  });
+
   test('verifies OTT and refreshes session, then removes ott from the URL', async () => {
     const ott = 'OTT123';
 
@@ -550,7 +611,10 @@ describe('ConvexAuthProvider', () => {
     expect(verify).toHaveBeenCalledWith({ token: ott });
     expect(getSession.mock.calls.length).toBeGreaterThan(0);
     expect(getSession).toHaveBeenCalledWith({
-      fetchOptions: { headers: { Authorization: 'Bearer SESSION_TOKEN' } },
+      fetchOptions: {
+        credentials: 'omit',
+        headers: { Authorization: 'Bearer SESSION_TOKEN' },
+      },
     });
     expect(updateSession.mock.calls.length).toBeGreaterThan(0);
 

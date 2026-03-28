@@ -5,6 +5,7 @@ import {
   getFunctionMeta,
   getFunctionType,
   getHttpRoutes,
+  isValidConvexFile,
 } from './meta-utils';
 
 const asRef = (
@@ -122,5 +123,16 @@ describe('getHttpRoutes', () => {
     expect(getHttpRoutes(api)).toEqual({
       health: { path: '/api/health', method: 'GET' },
     });
+  });
+});
+
+describe('isValidConvexFile', () => {
+  it('rejects test and typecheck files from codegen scans', () => {
+    expect(isValidConvexFile('todos.ts')).toBe(true);
+    expect(isValidConvexFile('todos.test.ts')).toBe(false);
+    expect(isValidConvexFile('todos.spec.ts')).toBe(false);
+    expect(isValidConvexFile('todos.testing.ts')).toBe(false);
+    expect(isValidConvexFile('todos.typecheck.ts')).toBe(false);
+    expect(isValidConvexFile('nested/users.test.ts')).toBe(false);
   });
 });

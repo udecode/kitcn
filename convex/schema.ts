@@ -2,7 +2,6 @@ import {
   bigint,
   boolean,
   convexTable,
-  defineRelations,
   defineSchema,
   index,
   integer,
@@ -133,13 +132,7 @@ export default defineSchema(tables, {
     mutationScheduleCallCap: 800,
     mutationAsyncDelayMs: 0,
   },
-});
-
-// ============================================================================
-// ORM Relations Config
-// ============================================================================
-
-export const relations = defineRelations(tables, (r) => ({
+}).relations((r) => ({
   users: {
     city: r.one.cities({
       from: r.users.cityId,

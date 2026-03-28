@@ -142,6 +142,10 @@ const EXCLUDED_FILES = new Set([
  */
 export function isValidConvexFile(file: string): boolean {
   if (file.endsWith('.runtime.ts')) return false;
+  if (file.endsWith('.test.ts')) return false;
+  if (file.endsWith('.spec.ts')) return false;
+  if (file.endsWith('.testing.ts')) return false;
+  if (file.endsWith('.typecheck.ts')) return false;
   if (file.startsWith('generated/')) return false;
 
   // Skip private files/directories (prefixed with _)

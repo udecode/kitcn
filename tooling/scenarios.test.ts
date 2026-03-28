@@ -8,6 +8,8 @@ import {
 } from '../packages/better-convex/src/cli/supported-dependencies';
 import {
   buildLocalCliCommand,
+  LOCAL_CLI_PATH,
+  PROJECT_ROOT,
   patchPreparedLocalDevPort,
 } from './scaffold-utils';
 import {
@@ -49,6 +51,22 @@ describe('tooling/scenarios', () => {
 
     expect(() => parseScenarioArgs(['check', 'nope'])).toThrow(
       'Unknown scenario target "nope".'
+    );
+  });
+
+  test('buildLocalCliCommand uses the built node CLI surface', () => {
+    expect(
+      buildLocalCliCommand(['init', '--yes'], { backend: 'convex' })
+    ).toEqual([
+      Bun.which('node') ?? process.execPath,
+      LOCAL_CLI_PATH,
+      '--backend',
+      'convex',
+      'init',
+      '--yes',
+    ]);
+    expect(LOCAL_CLI_PATH).toBe(
+      path.join(PROJECT_ROOT, 'packages', 'better-convex', 'dist', 'cli.mjs')
     );
   });
 

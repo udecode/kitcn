@@ -2,6 +2,7 @@ import {
   type CreateOrmOptions,
   createOrm,
   type OrmWriter,
+  requireSchemaRelations,
 } from 'better-convex/orm';
 import type {
   GenericDatabaseWriter,
@@ -9,7 +10,7 @@ import type {
   StorageActionWriter,
 } from 'convex/server';
 import { convexTest as baseConvexTest } from 'convex-test';
-import { relations } from './schema';
+import schema from './schema';
 
 type ImportMetaWithGlob = ImportMeta & {
   glob: (
@@ -22,6 +23,7 @@ const convexModules = (import.meta as ImportMetaWithGlob).glob([
   '!./**/*.test.{ts,tsx,js,jsx,mts,mjs}',
   '!./**/*.typecheck.ts',
 ]);
+const relations = requireSchemaRelations(schema);
 
 export function convexTest<Schema extends SchemaDefinition<any, any>>(
   schema: Schema

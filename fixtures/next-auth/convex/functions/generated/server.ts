@@ -6,7 +6,6 @@ import {
   createOrm,
   type GenericOrmCtx,
   type OrmFunctions,
-  
 } from 'better-convex/orm';
 import {
   createGeneratedFunctionReference,
@@ -20,8 +19,6 @@ import type {
 } from '../_generated/server';
 import { httpAction, internalMutation } from '../_generated/server';
 import schema from '../schema';
-
-
 
 
 const ormFunctions: OrmFunctions = {

@@ -44,6 +44,11 @@ function writeFile(filePath: string, content: string) {
   fs.writeFileSync(filePath, content, 'utf-8');
 }
 
+function symlinkDir(targetPath: string, linkPath: string) {
+  fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+  fs.symlinkSync(targetPath, linkPath, 'dir');
+}
+
 describe('integration/generated-api', () => {
   test('codegen smoke test runs against real repo convex directory', async () => {
     const dir = mkTempDir();
@@ -59,6 +64,18 @@ describe('integration/generated-api', () => {
     try {
       fs.cpSync(sourceConvexDir, path.join(dir, 'convex'), { recursive: true });
       fs.copyFileSync(sourceConvexConfig, path.join(dir, 'convex.json'));
+      symlinkDir(
+        path.join(repoRoot, 'packages', 'better-convex'),
+        path.join(dir, 'node_modules', 'better-convex')
+      );
+      symlinkDir(
+        path.join(repoRoot, 'node_modules', 'convex'),
+        path.join(dir, 'node_modules', 'convex')
+      );
+      symlinkDir(
+        path.join(repoRoot, 'node_modules', 'convex-test'),
+        path.join(dir, 'node_modules', 'convex-test')
+      );
 
       await generateMeta(undefined, { silent: true });
 

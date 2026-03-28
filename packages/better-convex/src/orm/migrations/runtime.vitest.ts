@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'vitest';
-import schema, { relations } from '../../../../../convex/schema';
+import schema from '../../../../../convex/schema';
 import { convexTest } from '../../../../../convex/setup.testing';
 import { createOrm } from '../create-orm';
+import { requireSchemaRelations } from '../schema';
 import { defineMigration, defineMigrationSet } from './definitions';
 import { createMigrationHandlers } from './runtime';
 import { MIGRATION_RUN_TABLE, MIGRATION_STATE_TABLE } from './schema';
 
 const testSchema = schema as any;
-const testRelations = relations as any;
+const testRelations = requireSchemaRelations(schema) as any;
 
 describe('orm/migrations runtime', () => {
   test('run up applies pending migration once and then no-ops', async () => {

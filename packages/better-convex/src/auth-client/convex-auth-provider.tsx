@@ -15,6 +15,7 @@ import {
   AuthProvider,
   decodeJwtExp,
   FetchAccessTokenContext,
+  isSessionSyncGraceActive,
   useAuthStore,
   useAuthValue,
 } from '../react/auth-store';
@@ -130,10 +131,19 @@ function ConvexAuthProviderInner({
   // Clear token when session becomes null (logout)
   // This can't be inside fetchAccessToken because it's not called after logout
   useEffect(() => {
-    if (!hasActiveSessionData(session) && !isPending) {
+    if (hasActiveSessionData(session)) {
+      authStore.set('sessionSyncGraceUntil', null);
+      return;
+    }
+
+    if (
+      !isPending &&
+      !isSessionSyncGraceActive(authStore.get('sessionSyncGraceUntil'))
+    ) {
       authStore.set('token', null);
       authStore.set('expiresAt', null);
       authStore.set('isAuthenticated', false);
+      authStore.set('sessionSyncGraceUntil', null);
     }
   }, [session, isPending, authStore]);
 
@@ -152,6 +162,7 @@ function ConvexAuthProviderInner({
 
         const cachedToken = authStore.get('token');
         const fetchOptions: {
+          credentials?: 'omit';
           headers?: {
             Authorization: string;
           };
@@ -160,6 +171,7 @@ function ConvexAuthProviderInner({
           throw: false,
         };
         if (cachedToken && decodeJwtExp(cachedToken) === null) {
+          fetchOptions.credentials = 'omit';
           fetchOptions.headers = {
             Authorization: `Bearer ${cachedToken}`,
           };
@@ -175,16 +187,19 @@ function ConvexAuthProviderInner({
               const exp = decodeJwtExp(jwt);
               authStore.set('token', jwt);
               authStore.set('expiresAt', exp);
+              authStore.set('sessionSyncGraceUntil', null);
               return jwt;
             }
 
             authStore.set('token', null);
             authStore.set('expiresAt', null);
+            authStore.set('sessionSyncGraceUntil', null);
             return null;
           })
           .catch((error: unknown) => {
             authStore.set('token', null);
             authStore.set('expiresAt', null);
+            authStore.set('sessionSyncGraceUntil', null);
             console.error('[fetchAccessToken] error', error);
             return null;
           })
@@ -211,24 +226,38 @@ function ConvexAuthProviderInner({
       const currentSession = sessionRef.current;
       const currentIsPending = isPendingRef.current;
       const hasSession = hasActiveSessionData(currentSession);
+      const hasSessionSyncGrace = isSessionSyncGraceActive(
+        authStore.get('sessionSyncGraceUntil')
+      );
 
       // If no session:
       // - If still pending (hydration), return cached SSR token for non-forced reads
+      // - If the cached token is an opaque Better Auth session token, exchange it
+      //   before handing auth to Convex
       // - If still pending + forced refresh, fetch a fresh token for Convex scheduling
       // - If not pending (confirmed no session), clear cache
       if (!hasSession) {
-        if (currentIsPending) {
+        if (currentIsPending || hasSessionSyncGrace) {
+          const cachedToken = authStore.get('token');
+
           if (!forceRefreshToken) {
-            return authStore.get('token');
+            if (cachedToken && decodeJwtExp(cachedToken) !== null) {
+              return cachedToken;
+            }
+
+            return fetchFreshToken();
           }
 
-          const cachedToken = authStore.get('token');
           const freshToken = await fetchFreshTokenForced();
 
-          // During hydration, keep SSR token on transient forced-refresh failure.
+          // During hydration, keep a cached JWT on transient forced-refresh failure.
           // Convex asked for a fresh token, but dropping auth to null here can
           // briefly flip to unauthenticated before Better Auth session settles.
-          if (!freshToken && cachedToken) {
+          if (
+            !freshToken &&
+            cachedToken &&
+            decodeJwtExp(cachedToken) !== null
+          ) {
             authStore.set('token', cachedToken);
             authStore.set('expiresAt', decodeJwtExp(cachedToken));
             return cachedToken;
@@ -239,6 +268,7 @@ function ConvexAuthProviderInner({
 
         authStore.set('token', null);
         authStore.set('expiresAt', null);
+        authStore.set('sessionSyncGraceUntil', null);
         return null;
       }
 
@@ -358,6 +388,7 @@ function useOTTHandler(authClient: AuthClient) {
         if (session) {
           await authClient.getSession({
             fetchOptions: {
+              credentials: 'omit',
               headers: {
                 Authorization: `Bearer ${session.token}`,
               },

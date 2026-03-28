@@ -65,7 +65,17 @@ export type AuthStoreState = {
   isLoading: boolean;
   /** Auth state (synced from useConvexAuth for class methods) */
   isAuthenticated: boolean;
+  /** Grace window for freshly seeded auth tokens while session sync catches up */
+  sessionSyncGraceUntil: number | null;
 };
+
+export const AUTH_SESSION_SYNC_GRACE_MS = 10_000;
+
+export const isSessionSyncGraceActive = (
+  sessionSyncGraceUntil: number | null
+) =>
+  typeof sessionSyncGraceUntil === 'number' &&
+  sessionSyncGraceUntil > Date.now();
 
 /** Decode JWT expiration (ms timestamp) from token */
 export function decodeJwtExp(token: string): number | null {
@@ -92,6 +102,7 @@ export const { AuthProvider, useAuthStore, useAuthState, useAuthValue } =
       expiresAt: null,
       isLoading: true,
       isAuthenticated: false,
+      sessionSyncGraceUntil: null,
     } as AuthStoreState,
     { name: 'auth' as const, suppressWarnings: true }
   );

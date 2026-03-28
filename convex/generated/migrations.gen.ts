@@ -6,10 +6,10 @@ import {
   defineMigration as baseDefineMigration,
   type MigrationDefinition,
 } from 'better-convex/orm';
-import { relations } from '../schema';
+import schema from '../schema';
 
 export function defineMigration(
-  migration: MigrationDefinition<typeof relations>
-): MigrationDefinition<typeof relations> {
-  return baseDefineMigration<typeof relations>(migration);
+  migration: MigrationDefinition<typeof schema>
+): MigrationDefinition<typeof schema> {
+  return baseDefineMigration<typeof schema>(migration);
 }
