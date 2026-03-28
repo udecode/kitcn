@@ -88,6 +88,8 @@ import { useRatelimit } from "better-convex/ratelimit/react";
   plus `--json`, dry-run, and diff output for scaffold changes.
 - Add backend-aware CLI support for both Convex and Concave, including
   `concave.json`, local bootstrap wrappers, and `better-convex verify`.
+- Add project-owned ORM migrations with generated `defineMigration(...)`
+  helpers, migration manifests, docs, and `better-convex migrate`.
 - Add starter scaffolds for Next.js and Vite, plus adoption flows for raw
   Convex and create-convex-style apps.
 - Add packaged Convex skills and TanStack Intent metadata so installed apps

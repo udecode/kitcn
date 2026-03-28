@@ -10,6 +10,7 @@ describe('package intent metadata', () => {
       bin?: Record<string, string>;
       exports?: Record<string, string>;
       files?: string[];
+      keywords?: string[];
       intent?: {
         version?: number;
         repo?: string;
@@ -19,6 +20,7 @@ describe('package intent metadata', () => {
 
     expect(packageJson.files).toContain('skills');
     expect(packageJson.files).toContain('bin');
+    expect(packageJson.keywords).toContain('tanstack-intent');
     expect(packageJson.bin?.intent).toBe('./bin/intent.js');
     expect(packageJson.exports?.['./ratelimit']).toBe(
       './dist/ratelimit/index.js'

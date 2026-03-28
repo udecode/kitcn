@@ -14,7 +14,7 @@ on:
       - 'bun.lock'
       - 'tsconfig*.json'
       - 'biome.json'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
   pull_request:
     types:
       - opened
@@ -30,7 +30,7 @@ on:
       - 'bun.lock'
       - 'tsconfig*.json'
       - 'biome.json'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -116,4 +116,4 @@ jobs:
         run: bun build:pkg
 
       - name: 🧪 Run full Convex matrix
-        run: bun run check:scenarios:convex
+        run: bun run scenario:check:convex

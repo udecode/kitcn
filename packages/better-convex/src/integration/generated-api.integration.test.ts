@@ -8,6 +8,32 @@ import { generateMeta, getConvexConfig } from '../cli/codegen';
 import { createServerCRPCProxy } from '../rsc/proxy-server';
 
 const HTTP_ROUTE_NOT_FOUND_MISSING_RE = /HTTP route not found: missing/i;
+const ORM_SCHEMA_STUB = `
+const OrmSchemaOptions = Symbol.for('better-convex:OrmSchemaOptions');
+const OrmSchemaRelations = Symbol.for('better-convex:OrmSchemaRelations');
+const OrmSchemaTriggers = Symbol.for('better-convex:OrmSchemaTriggers');
+export const tables = {
+  todos: { table: 'todos' },
+};
+const schema = { tables };
+Object.defineProperty(schema, OrmSchemaOptions, {
+  value: {},
+  enumerable: false,
+});
+Object.defineProperty(schema, OrmSchemaRelations, {
+  value: {
+    todos: { table: tables.todos },
+  },
+  enumerable: false,
+});
+Object.defineProperty(schema, OrmSchemaTriggers, {
+  value: {
+    todos: {},
+  },
+  enumerable: false,
+});
+export default schema;
+`.trim();
 
 function mkTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'better-convex-integration-'));
@@ -84,9 +110,7 @@ describe('integration/generated-api', () => {
       expect(generated).toContain('export type Select<T extends TableName>');
       expect(generated).toContain('export type Insert<T extends TableName>');
       expect(generated).not.toContain('WithHttpRouter');
-      expect(generatedServer).toContain(
-        "import { relations } from '../schema';"
-      );
+      expect(generatedServer).toContain("import schema from '../schema';");
       expect(generatedServer).toContain('createOrm');
       expect(generatedServer).toContain('initCRPC as baseInitCRPC,');
       expect(generatedServer).toContain('createGeneratedFunctionReference,');
@@ -117,20 +141,18 @@ describe('integration/generated-api', () => {
       expect(generatedServer).toContain(
         'export const initCRPC = baseInitCRPC.dataModel<DataModel>().context({'
       );
-      expect(generatedServer).toContain('const ormSchema = relations;');
+      expect(generatedServer).toContain('const ormSchema = schema;');
       expect(generatedServer).toContain('query: (ctx) => withOrm(ctx),');
       expect(generatedServer).toContain('mutation: (ctx) => withOrm(ctx),');
       expect(generatedServer).toContain('action: (ctx) => ctx,');
       expect(generatedAuth).toContain('export function defineAuth<');
       expect(generatedMigrations).toContain('export function defineMigration(');
+      expect(generatedMigrations).toContain("import schema from '../schema';");
       expect(generatedMigrations).toContain(
-        "import { relations } from '../schema';"
+        'migration: MigrationDefinition<typeof schema>'
       );
       expect(generatedMigrations).toContain(
-        'migration: MigrationDefinition<typeof relations>'
-      );
-      expect(generatedMigrations).toContain(
-        'return baseDefineMigration<typeof relations>(migration);'
+        'return baseDefineMigration<typeof schema>(migration);'
       );
       expect(generatedMigrations).not.toContain('defineMigrationSet');
     } finally {
@@ -375,18 +397,7 @@ describe('integration/generated-api', () => {
         `.trim()
       );
 
-      writeFile(
-        path.join(dir, 'convex', 'schema.ts'),
-        `
-        export const tables = {
-          todos: { table: "todos" },
-        };
-        export const relations = {
-          todos: {},
-        };
-        export default {};
-        `.trim()
-      );
+      writeFile(path.join(dir, 'convex', 'schema.ts'), ORM_SCHEMA_STUB);
 
       writeFile(
         path.join(dir, 'convex', 'auth.ts'),
@@ -484,18 +495,7 @@ describe('integration/generated-api', () => {
         `.trim()
       );
 
-      writeFile(
-        path.join(dir, 'convex', 'schema.ts'),
-        `
-        export const tables = {
-          todos: { table: "todos" },
-        };
-        export const relations = {
-          todos: {},
-        };
-        export default {};
-        `.trim()
-      );
+      writeFile(path.join(dir, 'convex', 'schema.ts'), ORM_SCHEMA_STUB);
 
       await generateMeta(undefined, { silent: true });
 
@@ -578,18 +578,7 @@ describe('integration/generated-api', () => {
         `.trim()
       );
 
-      writeFile(
-        path.join(dir, 'convex', 'schema.ts'),
-        `
-        export const tables = {
-          todos: { table: "todos" },
-        };
-        export const relations = {
-          todos: {},
-        };
-        export default {};
-        `.trim()
-      );
+      writeFile(path.join(dir, 'convex', 'schema.ts'), ORM_SCHEMA_STUB);
 
       writeFile(
         path.join(dir, 'convex', 'auth.ts'),

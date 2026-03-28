@@ -6,6 +6,7 @@
     "convex",
     "react-query",
     "tanstack-query",
+    "tanstack-intent",
     "codegen",
     "cli",
     "agent-skills",
@@ -74,7 +75,7 @@
   },
   "devDependencies": {
     "@rollup/plugin-babel": "^6.1.0",
-    "@tanstack/intent": "0.0.13",
+    "@tanstack/intent": "0.0.23",
     "@tanstack/query-core": "5.90.20",
     "@types/common-tags": "^1.8.4",
     "babel-plugin-react-compiler": "^1.0.0",
