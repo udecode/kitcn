@@ -28,19 +28,20 @@ The real scaffold output was fine. The junk files only appeared in temp copies.
 ## Root Cause
 
 macOS can leave AppleDouble sidecar files named `._*` alongside normal files.
-Our fixture and scenario tooling already stripped volatile artifacts like packed
-tarballs, but it did not treat AppleDouble sidecars as volatile content.
+Our fixture and scenario tooling already had a volatile-artifact scrubber, but
+validation ran before the generated temp app was scrubbed.
 
-When those files leaked into temp apps, ESLint tried to parse them as source and
-blew up with `Invalid character`.
+That meant ESLint could still parse AppleDouble sidecars from the fresh temp app
+and blow up with `Invalid character` before snapshot normalization ever ran.
 
 ## Solution
 
-Strip `._*` entries in the shared volatile-artifact scrubber used by scaffold,
-fixture, and scenario copy flows.
+Strip `._*` entries with a dedicated AppleDouble scrubber and run that at the
+validation seam before `codegen`, `lint`, and `typecheck`.
 
-Keep the fix central. Do not special-case ESLint or patch generated fixtures by
-hand.
+Do not reuse the full volatile-artifact scrubber there, because that cleaner is
+supposed to delete install output like `node_modules` and lockfiles during
+snapshot normalization. Validation only wants to kill AppleDouble junk.
 
 ## Verification
 
@@ -49,7 +50,8 @@ hand.
 
 ## Prevention
 
-1. Treat `._*` like any other machine-local artifact.
-2. Clean temp scaffold copies at the copy layer, not in individual checks.
+1. Treat `._*` like machine junk, but do not lump it together with
+   install-output cleanup.
+2. Clean temp scaffold apps before validation and clean snapshots separately.
 3. When CI shows parse errors on impossible file names, inspect the temp app
    tree before blaming the scaffold output.

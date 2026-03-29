@@ -50,6 +50,7 @@ export const VOLATILE_ENTRY_PATTERNS = [/^kitcn-.*\.tgz$/, /^\._/];
 const LINE_SPLIT_RE = /\r?\n/;
 export const DEFAULT_LOCAL_DEV_PORT = 3005;
 const TRAILING_NEWLINES_RE = /\n*$/;
+const APPLEDOUBLE_ENTRY_RE = /^\._/;
 const SCRIPT_PORT_FLAG_RE = /(?:^|\s)--port(?:=|\s)\d+\b/;
 const NEXT_DEV_SCRIPT_RE = /\bnext\s+dev\b/;
 const VITE_DEV_SCRIPT_RE = /^vite(?:\s|$)/;
@@ -373,6 +374,25 @@ export const stripVolatileArtifacts = (directory: string) => {
   }
 };
 
+export const stripAppleDoubleSidecars = (directory: string) => {
+  if (!existsSync(directory) || !statSync(directory).isDirectory()) {
+    return;
+  }
+
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+
+    if (APPLEDOUBLE_ENTRY_RE.test(entry.name)) {
+      rmSync(entryPath, { recursive: true, force: true });
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      stripAppleDoubleSidecars(entryPath);
+    }
+  }
+};
+
 export const normalizeEnvLocal = (directory: string) => {
   const envLocalPath = path.join(directory, '.env.local');
   if (!existsSync(envLocalPath)) {
@@ -544,10 +564,12 @@ export const runAppValidation = async (
     lint?: boolean;
   } = {}
 ) => {
+  stripAppleDoubleSidecars(directory);
   const scripts = readPackageScripts(directory);
 
   if (scripts.codegen) {
     await runCommand(['bun', 'run', 'codegen'], directory);
+    stripAppleDoubleSidecars(directory);
   }
 
   if (options.lint !== false && scripts.lint) {

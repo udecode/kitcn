@@ -14,7 +14,11 @@ import {
   normalizeTemplateSnapshot,
   parseTemplateArgs,
 } from './fixtures';
-import { stripVolatileArtifacts } from './scaffold-utils';
+import {
+  runAppValidation,
+  stripAppleDoubleSidecars,
+  stripVolatileArtifacts,
+} from './scaffold-utils';
 import { TEMPLATE_DEFINITIONS, TEMPLATE_KEYS } from './template.config';
 
 describe('tooling/fixtures', () => {
@@ -172,6 +176,72 @@ describe('tooling/fixtures', () => {
 
       expect(readFileSync(keptPath, 'utf8')).toBe('export default {};\n');
       expect(existsSync(junkPath)).toBe(false);
+    } finally {
+      rmSync(templateDir, { force: true, recursive: true });
+    }
+  });
+
+  test('stripAppleDoubleSidecars keeps install artifacts intact', () => {
+    const templateDir = mkdtempSync(
+      path.join(tmpdir(), 'kitcn-template-sidecars-')
+    );
+    const nodeModulesDir = path.join(templateDir, 'node_modules');
+    const keptPath = path.join(nodeModulesDir, '.bin', 'kitcn');
+    const junkPath = path.join(templateDir, '._eslint.config.mjs');
+
+    try {
+      mkdirSync(path.dirname(keptPath), { recursive: true });
+      writeFileSync(keptPath, 'bin\n');
+      writeFileSync(junkPath, 'junk\n');
+
+      stripAppleDoubleSidecars(templateDir);
+
+      expect(readFileSync(keptPath, 'utf8')).toBe('bin\n');
+      expect(existsSync(junkPath)).toBe(false);
+    } finally {
+      rmSync(templateDir, { force: true, recursive: true });
+    }
+  });
+
+  test('runAppValidation strips AppleDouble sidecars before lint can see them', async () => {
+    const templateDir = mkdtempSync(
+      path.join(tmpdir(), 'kitcn-template-validate-')
+    );
+
+    try {
+      writeFileSync(
+        path.join(templateDir, 'package.json'),
+        `${JSON.stringify(
+          {
+            name: 'app',
+            private: true,
+            scripts: {
+              lint: 'eslint',
+            },
+          },
+          null,
+          2
+        )}\n`
+      );
+      writeFileSync(
+        path.join(templateDir, 'eslint.config.mjs'),
+        'export default [];'
+      );
+      writeFileSync(path.join(templateDir, '._eslint.config.mjs'), 'junk\n');
+
+      const calls: string[][] = [];
+
+      await runAppValidation(
+        templateDir,
+        mock(async (args) => {
+          calls.push(args);
+        }) as never
+      );
+
+      expect(calls).toEqual([['bun', 'run', 'lint']]);
+      expect(existsSync(path.join(templateDir, '._eslint.config.mjs'))).toBe(
+        false
+      );
     } finally {
       rmSync(templateDir, { force: true, recursive: true });
     }
