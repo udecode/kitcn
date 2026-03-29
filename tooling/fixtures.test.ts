@@ -64,7 +64,7 @@ describe('tooling/fixtures', () => {
     expect(TEMPLATE_DEFINITIONS['vite-auth'].validation.lint).toBe(false);
   });
 
-  test('normalizeTemplateSnapshot versions local dev port 3005 in committed templates', () => {
+  test('normalizeTemplateSnapshot strips .env.local from committed templates', () => {
     const templateDir = mkdtempSync(
       path.join(tmpdir(), 'kitcn-template-normalize-')
     );
@@ -135,9 +135,7 @@ describe('tooling/fixtures', () => {
       };
 
       expect(packageJson.scripts?.dev).toBe('next dev --turbopack --port 3005');
-      expect(
-        readFileSync(path.join(templateDir, '.env.local'), 'utf8')
-      ).toContain('NEXT_PUBLIC_SITE_URL=http://localhost:3005');
+      expect(existsSync(path.join(templateDir, '.env.local'))).toBe(false);
       expect(
         readFileSync(path.join(getEnvDir, 'get-env.ts'), 'utf8')
       ).toContain("SITE_URL: z.string().default('http://localhost:3005')");

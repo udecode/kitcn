@@ -81,6 +81,10 @@ const normalizeTemplatePackageJson = (
   version: packageJson.version,
 });
 
+const stripFixtureSnapshotArtifacts = (directory: string) => {
+  rmSync(path.join(directory, '.env.local'), { force: true });
+};
+
 export const normalizeTemplateSnapshot = (
   directory: string,
   templateKey: TemplateKey
@@ -96,6 +100,7 @@ export const normalizeTemplateSnapshot = (
   normalizeEnvLocal(directory);
   patchPreparedLocalDevPort(directory);
   patchFixtureTsconfigPaths(directory, getTemplateFixtureDir(templateKey));
+  stripFixtureSnapshotArtifacts(directory);
 };
 
 type TsconfigJson = {
@@ -342,6 +347,7 @@ export const checkTemplate = async (
     const fixtureDiffDir = path.join(tempRoot, '__fixture__');
     cpSync(fixtureDir, fixtureDiffDir, { recursive: true });
     stripVolatileArtifacts(fixtureDiffDir);
+    stripFixtureSnapshotArtifacts(fixtureDiffDir);
 
     const diffExitCode = await runCommand(
       [
