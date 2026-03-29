@@ -16,7 +16,11 @@
     "esModuleInterop": true,
     "types": ["bun-types"],
     "moduleDetection": "force",
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@kitcn/resend": ["../../../packages/resend/src/index.ts"],
+      "kitcn/*": ["../../../packages/kitcn/src/*/index.ts"]
+    }
   },
   "include": ["./**/*", "../lib/**/*", "../shared/**/*"],
   "exclude": ["./_generated", "node_modules", "**/*.spec.ts", "**/*.test.ts"]

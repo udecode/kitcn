@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { CRPCError } from './error';
 
+type RuntimeEnv = Record<string, string | undefined>;
+
 export type CreateEnvOptions<TSchema extends z.ZodObject<z.ZodRawShape>> = {
   cache?: boolean;
   codegenFallback?: boolean;
-  runtimeEnv?: NodeJS.ProcessEnv;
+  runtimeEnv?: RuntimeEnv;
   schema: TSchema;
 };
 
@@ -30,7 +32,7 @@ export function createEnv<TSchema extends z.ZodObject<z.ZodRawShape>>(
       (globalThis as Record<string, unknown>).__KITCN_CODEGEN__ === true ||
       codegenFallback;
     const runtimeEnvSource = runtimeEnv ?? process.env;
-    const runtimeEnvSnapshot: NodeJS.ProcessEnv = {};
+    const runtimeEnvSnapshot: RuntimeEnv = {};
     for (const [key, zodType] of Object.entries(schema.shape)) {
       const undefinedParse = (zodType as z.ZodType).safeParse(undefined);
       const acceptsUndefined = undefinedParse.success;

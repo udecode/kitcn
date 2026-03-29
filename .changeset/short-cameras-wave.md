@@ -137,6 +137,9 @@ import { useRatelimit } from "kitcn/ratelimit/react";
 - Improve schema-only auth refresh so app-owned `schema.ts` files merge missing
   compatible auth fields, indexes, and relations, then stop on real conflicts
   with manual-action guidance.
+- Keep internal example and scenario typechecks pointed at workspace source so
+  fresh CI runs do not depend on stale built package output after package
+  renames.
 - Fix ratelimit storage and generated scaffolds so apps use the real
   ratelimit tables instead of failing with bogus missing-table guidance.
 - Keep scaffolded apps on the tested Hono and TanStack Query baselines across

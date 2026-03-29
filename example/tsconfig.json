@@ -24,7 +24,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@convex/*": ["./convex/shared/*"],
-      "fumadocs-mdx:collections/*": ["./.source/*"]
+      "@kitcn/resend": ["../packages/resend/src/index.ts"],
+      "fumadocs-mdx:collections/*": ["./.source/*"],
+      "kitcn/*": ["../packages/kitcn/src/*/index.ts"]
     },
     "types": ["bun-types"],
     "allowJs": true,
