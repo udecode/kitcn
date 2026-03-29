@@ -44,3 +44,6 @@ jobs:
 
       - name: 🧪 Run full Convex matrix
         run: bun run scenario:check:convex
+
+      - name: 🧪 Run runtime scenarios
+        run: bun run test:runtime

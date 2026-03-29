@@ -46,19 +46,23 @@ Keep the expensive lanes out of required PR CI. Split them into separate,
 non-required workflows that run only on the release/versioning branch or on
 whatever other explicit release gate actually matters.
 
+In this repo, the concrete trap was `test:runtime`: it boots real scenario dev
+servers and auth smoke flows. That is useful release coverage, not a good
+required PR gate.
+
 ## Verification
 
 - `gh run list --workflow ci.yml --branch feat/plugins --limit 10` returned no
   CI runs before the fix
 - PR 139 showed `CI` as expected without a reported status
 - `bun lint:fix`
-- `bun check`
+- `bun run check:ci`
 
 ## Prevention
 
 1. Required checks must always emit a status.
-2. Keep required PR checks fast; put heavy scenario matrices in separate
-   workflows.
+2. Keep required PR checks fast; move runtime/scenario lanes like
+   `test:runtime` into separate workflows.
 3. Use top-level path filters only on non-required workflows.
 4. If a PR shows `Expected` with no run, inspect workflow triggers before
    blaming the code.

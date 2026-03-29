@@ -58,5 +58,5 @@ jobs:
       - name: 📦 Build Packages
         run: bun build:pkg
 
-      - name: 🔬 Run Biome & ESLint & Typecheck & Test
-        run: bun check
+      - name: 🔬 Run PR gate
+        run: bun run check:ci

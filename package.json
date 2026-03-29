@@ -14,6 +14,7 @@
     "build:pkg": "bun --cwd packages/kitcn build",
     "build:watch": "bun --cwd packages/kitcn build:watch",
     "check": "bun lint && bun typecheck && bun run test && bun run test:cli && bun run test:concave && bun run fixtures:check && bun run test:verify && bun run test:runtime",
+    "check:ci": "bun lint && bun typecheck && bun run test && bun run test:cli && bun run test:concave && bun run fixtures:check && bun run test:verify",
     "deps:sync": "bun tooling/dependency-pins.ts sync",
     "deps:upgrade": "bun tooling/dependency-pins.ts upgrade",
     "dev": "bun --cwd www dev",
