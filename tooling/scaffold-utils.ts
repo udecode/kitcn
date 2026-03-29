@@ -46,7 +46,7 @@ export const VOLATILE_ENTRY_NAMES = new Set([
   'tsconfig.tsbuildinfo',
   'yarn.lock',
 ]);
-export const VOLATILE_ENTRY_PATTERNS = [/^kitcn-.*\.tgz$/];
+export const VOLATILE_ENTRY_PATTERNS = [/^kitcn-.*\.tgz$/, /^\._/];
 const LINE_SPLIT_RE = /\r?\n/;
 export const DEFAULT_LOCAL_DEV_PORT = 3005;
 const TRAILING_NEWLINES_RE = /\n*$/;

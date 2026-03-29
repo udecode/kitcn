@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -13,6 +14,7 @@ import {
   normalizeTemplateSnapshot,
   parseTemplateArgs,
 } from './fixtures';
+import { stripVolatileArtifacts } from './scaffold-utils';
 import { TEMPLATE_DEFINITIONS, TEMPLATE_KEYS } from './template.config';
 
 describe('tooling/fixtures', () => {
@@ -150,6 +152,26 @@ describe('tooling/fixtures', () => {
           'utf8'
         )
       ).toContain('../../../../packages/kitcn/src/server/index.ts');
+    } finally {
+      rmSync(templateDir, { force: true, recursive: true });
+    }
+  });
+
+  test('stripVolatileArtifacts removes AppleDouble sidecars', () => {
+    const templateDir = mkdtempSync(
+      path.join(tmpdir(), 'kitcn-template-junk-')
+    );
+    const keptPath = path.join(templateDir, 'next.config.mjs');
+    const junkPath = path.join(templateDir, '._next.config.mjs');
+
+    try {
+      writeFileSync(keptPath, 'export default {};\n');
+      writeFileSync(junkPath, 'junk\n');
+
+      stripVolatileArtifacts(templateDir);
+
+      expect(readFileSync(keptPath, 'utf8')).toBe('export default {};\n');
+      expect(existsSync(junkPath)).toBe(false);
     } finally {
       rmSync(templateDir, { force: true, recursive: true });
     }
