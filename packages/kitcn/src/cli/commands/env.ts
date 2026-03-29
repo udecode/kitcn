@@ -102,18 +102,21 @@ const parseTargetArgs = (args: string[]) => {
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (!arg || !TARGET_FLAGS.has(arg)) {
+    const targetFlag =
+      arg && TARGET_FLAGS.has(arg)
+        ? arg
+        : [...TARGET_FLAGS_WITH_VALUE].find((flag) =>
+            arg?.startsWith(`${flag}=`)
+          );
+    if (!targetFlag) {
       throw new Error(`Unknown env option "${arg ?? ''}".`);
     }
 
-    targetArgs.push(arg);
-    if (TARGET_FLAGS_WITH_VALUE.has(arg)) {
-      const value = args[index + 1];
-      if (!value) {
-        throw new Error(`Missing value for ${arg}.`);
-      }
-      targetArgs.push(value);
-      index += 1;
+    targetArgs.push(targetFlag);
+    if (TARGET_FLAGS_WITH_VALUE.has(targetFlag)) {
+      const parsedValue = readFlagValue(args, index, targetFlag);
+      targetArgs.push(parsedValue.value);
+      index = parsedValue.nextIndex;
     }
   }
 

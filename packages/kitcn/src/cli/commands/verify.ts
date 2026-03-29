@@ -41,7 +41,8 @@ async function withAnonymousVerifyAgentMode<T>(run: () => Promise<T>) {
     return await run();
   } finally {
     if (previous === undefined) {
-      process.env.CONVEX_AGENT_MODE = undefined;
+      // biome-ignore lint/performance/noDelete: process.env must drop the key; assigning undefined writes the string "undefined"
+      delete process.env.CONVEX_AGENT_MODE;
     } else {
       process.env.CONVEX_AGENT_MODE = previous;
     }

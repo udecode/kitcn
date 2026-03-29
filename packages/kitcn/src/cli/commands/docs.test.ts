@@ -1,3 +1,4 @@
+import { resolveDocTopic } from '../backend-core';
 import { createDefaultConfig } from '../test-utils';
 import {
   DOCS_HELP_TEXT,
@@ -27,6 +28,15 @@ describe('cli/commands/docs', () => {
     expect(output).toContain('kitcn docs');
     expect(output).toContain('local');
     expect(output).toContain('public');
+  });
+
+  test('resolveDocTopic(cli) points to the CLI index doc', () => {
+    expect(resolveDocTopic('cli')).toEqual(
+      expect.objectContaining({
+        localPath: 'www/content/docs/cli/index.mdx',
+        publicUrl: 'https://kitcn.vercel.app/docs/cli',
+      })
+    );
   });
 
   test('handleDocsCommand(--help) prints docs help', async () => {

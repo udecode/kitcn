@@ -226,6 +226,7 @@ function parseSafeRelativePath(
   }
   const normalizedPosix = path.posix.normalize(value.replace(/\\/g, '/'));
   if (
+    normalizedPosix === '.' ||
     normalizedPosix === '..' ||
     normalizedPosix.startsWith('../') ||
     normalizedPosix.startsWith('/')

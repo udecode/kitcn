@@ -610,6 +610,25 @@ describe('cli/config', () => {
     }
   });
 
+  test('rejects dot-equivalent top-level paths config values', () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    writeCliConfig(dir, {
+      paths: {
+        lib: 'foo/..',
+      },
+    });
+
+    process.chdir(dir);
+    try {
+      expect(() => loadCliConfig()).toThrow('Invalid paths.lib in');
+      expect(() => loadCliConfig()).toThrow('path traversal is not allowed.');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('throws for invalid paths.lib path', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

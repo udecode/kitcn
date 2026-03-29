@@ -115,7 +115,8 @@ describe('cli/commands/verify', () => {
     const loadConfigStub = mock(() => createDefaultConfig());
 
     process.chdir(dir);
-    process.env.CONVEX_AGENT_MODE = undefined;
+    // biome-ignore lint/performance/noDelete: tests must model real process.env cleanup semantics
+    delete process.env.CONVEX_AGENT_MODE;
 
     try {
       const exitCode = await handleVerifyCommand(['verify'], {
@@ -141,10 +142,12 @@ describe('cli/commands/verify', () => {
             call.args.includes('--once')
         )
       ).toBe(true);
+      expect(process.env.CONVEX_AGENT_MODE).toBeUndefined();
     } finally {
       process.chdir(oldCwd);
       if (originalAgentMode === undefined) {
-        process.env.CONVEX_AGENT_MODE = undefined;
+        // biome-ignore lint/performance/noDelete: tests must model real process.env cleanup semantics
+        delete process.env.CONVEX_AGENT_MODE;
       } else {
         process.env.CONVEX_AGENT_MODE = originalAgentMode;
       }
@@ -186,7 +189,8 @@ describe('cli/commands/verify', () => {
     });
 
     process.chdir(dir);
-    process.env.CONVEX_AGENT_MODE = undefined;
+    // biome-ignore lint/performance/noDelete: tests must model real process.env cleanup semantics
+    delete process.env.CONVEX_AGENT_MODE;
 
     try {
       const exitCode = await handleVerifyCommand(['verify'], {
@@ -200,10 +204,12 @@ describe('cli/commands/verify', () => {
       expect(
         fs.readFileSync(path.join(dir, '.convex', 'original.txt'), 'utf8')
       ).toBe('keep-me\n');
+      expect(process.env.CONVEX_AGENT_MODE).toBeUndefined();
     } finally {
       process.chdir(oldCwd);
       if (originalAgentMode === undefined) {
-        process.env.CONVEX_AGENT_MODE = undefined;
+        // biome-ignore lint/performance/noDelete: tests must model real process.env cleanup semantics
+        delete process.env.CONVEX_AGENT_MODE;
       } else {
         process.env.CONVEX_AGENT_MODE = originalAgentMode;
       }
@@ -248,7 +254,8 @@ describe('cli/commands/verify', () => {
     } finally {
       process.chdir(oldCwd);
       if (originalAgentMode === undefined) {
-        process.env.CONVEX_AGENT_MODE = undefined;
+        // biome-ignore lint/performance/noDelete: tests must model real process.env cleanup semantics
+        delete process.env.CONVEX_AGENT_MODE;
       } else {
         process.env.CONVEX_AGENT_MODE = originalAgentMode;
       }

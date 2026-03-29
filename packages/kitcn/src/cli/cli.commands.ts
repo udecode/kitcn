@@ -5280,7 +5280,7 @@ describe('cli/cli', () => {
           }),
           expect.objectContaining({
             topic: 'cli',
-            localPath: 'www/content/docs/cli.mdx',
+            localPath: 'www/content/docs/cli/index.mdx',
           }),
         ])
       );

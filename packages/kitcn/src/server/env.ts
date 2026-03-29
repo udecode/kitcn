@@ -39,7 +39,12 @@ export function createEnv<TSchema extends z.ZodObject<z.ZodRawShape>>(
       if (acceptsUndefined) {
         // Avoid direct reads for missing optional keys so auth-config env
         // tracking does not treat absent optional vars as required.
-        if (Object.hasOwn(runtimeEnvSource, key) || key in runtimeEnvSource) {
+        if (
+          Object.hasOwn(runtimeEnvSource, key) ||
+          Object.getOwnPropertyDescriptor(runtimeEnvSource, key) !==
+            undefined ||
+          key in runtimeEnvSource
+        ) {
           runtimeEnvSnapshot[key] = runtimeEnvSource[key];
         } else if (
           !isCodegenParse &&

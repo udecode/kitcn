@@ -455,7 +455,7 @@ const DOCS_BASE_URL = 'https://kitcn.vercel.app/docs';
 const CORE_DOC_TOPICS: Record<string, CliDocEntry> = {
   cli: {
     title: 'CLI',
-    localPath: 'www/content/docs/cli.mdx',
+    localPath: 'www/content/docs/cli/index.mdx',
     publicUrl: `${DOCS_BASE_URL}/cli`,
     keywords: ['cli', 'commands', 'codegen'],
   },
@@ -861,7 +861,11 @@ async function withLocalConvexEnv<T>(
     return await fn();
   } finally {
     for (const [key, value] of previousValues.entries()) {
-      process.env[key] = value;
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
     }
   }
 }
