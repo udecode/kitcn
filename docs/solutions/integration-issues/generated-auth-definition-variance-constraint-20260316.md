@@ -25,7 +25,7 @@ type error in `convex/functions/generated/auth.ts`.
 
 The generated auth definition had a normal typed signature like
 `(ctx: GenericCtx) => ...`, but the contract in
-`packages/better-convex/src/auth/generated-contract.ts` rejected it.
+`packages/kitcn/src/auth/generated-contract.ts` rejected it.
 
 ## Root Cause
 
@@ -58,7 +58,7 @@ compatibility.
 
 After changing the constraint:
 
-- `bun --cwd packages/better-convex build` passed
+- `bun --cwd packages/kitcn build` passed
 - `bun typecheck` passed
 - `bun check` passed
 - auth bootstrap scenarios validated again
@@ -74,7 +74,7 @@ After changing the constraint:
 
 ## Files Changed
 
-- `packages/better-convex/src/auth/generated-contract.ts`
+- `packages/kitcn/src/auth/generated-contract.ts`
 
 ## Related
 

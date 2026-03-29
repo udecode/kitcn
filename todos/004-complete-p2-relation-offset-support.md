@@ -14,8 +14,8 @@ Drizzle v1 RQB allows `offset` in `DBQueryConfig`, including nested `with` confi
 
 ## Findings
 
-- `DBQueryConfig` in `packages/better-convex/src/orm/types.ts` includes `offset?: number` for all configs, so relation configs type-check with `offset`.
-- `_loadManyRelation` in `packages/better-convex/src/orm/query.ts` applies `limit` and `orderBy`, but never applies `offset` for per-parent results.
+- `DBQueryConfig` in `packages/kitcn/src/orm/types.ts` includes `offset?: number` for all configs, so relation configs type-check with `offset`.
+- `_loadManyRelation` in `packages/kitcn/src/orm/query.ts` applies `limit` and `orderBy`, but never applies `offset` for per-parent results.
 - Drizzle v1 relational query builder supports `offset` in query config; parity expectation is that nested configs behave the same as top-level config.
 
 ## Proposed Solutions
@@ -77,7 +77,7 @@ Implemented per-parent offset in `_loadManyRelation`, added runtime tests for di
 ## Technical Details
 
 **Affected files:**
-- `packages/better-convex/src/orm/query.ts` (_loadManyRelation)
+- `packages/kitcn/src/orm/query.ts` (_loadManyRelation)
 - `convex/orm/relation-loading.test.ts` (add per-parent offset tests)
 
 ## Resources

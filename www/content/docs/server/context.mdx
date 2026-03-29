@@ -77,7 +77,7 @@ Use middleware to add custom data to context - the authenticated user, feature f
 The pattern is simple: fetch what you need, then call `next()` with the extended context.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {3-18}
-import { getSession } from 'better-convex/auth';
+import { getSession } from 'kitcn/auth';
 
 export const authQuery = c.query.use(async ({ ctx, next }) => {
   const session = await getSession(ctx);

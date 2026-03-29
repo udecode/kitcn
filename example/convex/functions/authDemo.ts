@@ -132,7 +132,7 @@ function createDemoSignals(): DemoSignals {
   const suffix = Math.floor(Math.random() * 200) + 20;
   return {
     ip: `198.51.100.${suffix}`,
-    userAgent: `better-convex-auth-demo/${randomSuffix()}`,
+    userAgent: `kitcn-auth-demo/${randomSuffix()}`,
   };
 }
 

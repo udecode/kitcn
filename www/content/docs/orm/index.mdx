@@ -42,7 +42,7 @@ The ORM keeps Convex storage constraints and gives you a stronger public type AP
 For most tables, define an explicit timestamp column:
 
 ```ts title="convex/schema.ts" showLineNumbers
-import { convexTable, text, timestamp } from 'better-convex/orm';
+import { convexTable, text, timestamp } from 'kitcn/orm';
 
 export const posts = convexTable('posts', {
   title: text().notNull(),
@@ -65,7 +65,7 @@ import {
   index,
   integer,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const users = convexTable('users', {
   name: text().notNull(),

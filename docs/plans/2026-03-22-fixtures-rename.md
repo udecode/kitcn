@@ -22,7 +22,7 @@ Rename committed template snapshot commands to `fixtures:*`, remove fake runtime
   aliases.
 - 2026-03-22: updated source-of-truth AGENTS, scenarios skill, shadcn parity,
   template tooling messages, and dependency pin validation.
-- 2026-03-22: ran `bun install`, `bun --cwd packages/better-convex build`,
+- 2026-03-22: ran `bun install`, `bun --cwd packages/kitcn build`,
   `bun run fixtures:check -- next`, `bun lint:fix`, and `bun typecheck`.
 - 2026-03-22: `fixtures:check -- next` and root `typecheck` still hit the
   existing generated runtime type failure in `fixtures/vite`, unrelated to

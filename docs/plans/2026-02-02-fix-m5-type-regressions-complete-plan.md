@@ -16,7 +16,7 @@ After M5 implementation, `bun typecheck` reports 25 errors on feat/orm-5 branch:
 
 1. **6 property access errors** - Column properties (createdAt, _creationTime, name, age) don't exist on ConvexTable type
 2. **10 string operator errors** - like, ilike, startsWith, endsWith, contains missing from FilterOperators interface
-3. **2 export errors** - asc and desc not exported from 'better-convex/orm'
+3. **2 export errors** - asc and desc not exported from 'kitcn/orm'
 4. **7 additional errors** - Various type inference issues
 
 **Example Error:**
@@ -31,7 +31,7 @@ Property 'createdAt' does not exist on type 'ConvexTable<{
 
 ### Issue 1: convexTable() Returns Wrong Type
 
-**Location**: [packages/better-convex/src/orm/table.ts:246-262](packages/better-convex/src/orm/table.ts#L246-L262)
+**Location**: [packages/kitcn/src/orm/table.ts:246-262](packages/kitcn/src/orm/table.ts#L246-L262)
 
 **Current code:**
 ```typescript
@@ -71,7 +71,7 @@ const table = Object.assign(rawTable, builtColumns);
 
 ### Issue 2: String Operators Not in FilterOperators Interface
 
-**Location**: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts) - FilterOperators interface
+**Location**: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts) - FilterOperators interface
 
 **Current code:**
 ```typescript
@@ -95,7 +95,7 @@ export interface FilterOperators {
 
 ### Issue 3: asc/desc Not Exported from Main Index
 
-**Location**: [packages/better-convex/src/orm/index.ts](packages/better-convex/src/orm/index.ts)
+**Location**: [packages/kitcn/src/orm/index.ts](packages/kitcn/src/orm/index.ts)
 
 **Current exports:**
 ```typescript
@@ -117,7 +117,7 @@ export * from './types';
 
 ### Fix 1: Ensure convexTable() Returns Correctly Typed Object
 
-**File:** `packages/better-convex/src/orm/table.ts`
+**File:** `packages/kitcn/src/orm/table.ts`
 
 **Option A (Recommended): Change return type to ConvexTable and rely on runtime Object.assign**
 ```typescript
@@ -159,7 +159,7 @@ This is harder and not the Drizzle pattern, so **Option A is preferred**.
 
 ### Fix 2: Add String Operators to FilterOperators Interface
 
-**File:** `packages/better-convex/src/orm/types.ts`
+**File:** `packages/kitcn/src/orm/types.ts`
 
 **Add after isNotNull:**
 ```typescript
@@ -206,7 +206,7 @@ export interface FilterOperators {
 
 ### Fix 3: Export asc and desc from Main Index
 
-**File:** `packages/better-convex/src/orm/index.ts`
+**File:** `packages/kitcn/src/orm/index.ts`
 
 **Add export:**
 ```typescript
@@ -225,12 +225,12 @@ export { asc, desc } from './order-by';  // ← ADD THIS LINE
 
 **Why explicit export:**
 - order-by.ts only exports asc and desc functions
-- Need to make them available from main 'better-convex/orm' import
+- Need to make them available from main 'kitcn/orm' import
 - Matches Drizzle pattern (they export from sql/expressions)
 
 ### Fix 4: Add String Operators to Dynamic Operators in Query
 
-**File:** `packages/better-convex/src/orm/query.ts`
+**File:** `packages/kitcn/src/orm/query.ts`
 
 **Update _createOperators method:**
 ```typescript
@@ -287,7 +287,7 @@ All tests in convex/orm/ directory should pass after these fixes:
 - [ ] `bun typecheck` passes with 0 errors (currently 25)
 - [ ] All 6 property access errors resolved (createdAt, _creationTime, name, age accessible)
 - [ ] All 10 string operator errors resolved (operators available in FilterOperators)
-- [ ] All 2 export errors resolved (asc and desc importable from 'better-convex/orm')
+- [ ] All 2 export errors resolved (asc and desc importable from 'kitcn/orm')
 - [ ] All existing tests pass (`bun test`)
 - [ ] Column properties accessible: `posts.createdAt` works in asc/desc calls
 - [ ] String operators callable: `like(posts.title, '%keyword%')` works in where clauses
@@ -296,7 +296,7 @@ All tests in convex/orm/ directory should pass after these fixes:
 
 ### Step 1: Fix convexTable() Return Type
 
-**File:** `packages/better-convex/src/orm/table.ts`
+**File:** `packages/kitcn/src/orm/table.ts`
 
 1. Change line 252 return type annotation:
    ```typescript
@@ -316,7 +316,7 @@ All tests in convex/orm/ directory should pass after these fixes:
 
 ### Step 2: Add String Operators to FilterOperators Interface
 
-**File:** `packages/better-convex/src/orm/types.ts`
+**File:** `packages/kitcn/src/orm/types.ts`
 
 1. Find FilterOperators interface (around line 200+)
 2. After `isNotNull` method, add 5 string operator signatures:
@@ -349,7 +349,7 @@ All tests in convex/orm/ directory should pass after these fixes:
 
 ### Step 3: Export asc and desc from Main Index
 
-**File:** `packages/better-convex/src/orm/index.ts`
+**File:** `packages/kitcn/src/orm/index.ts`
 
 1. Add explicit export after existing wildcard exports:
    ```typescript
@@ -359,7 +359,7 @@ All tests in convex/orm/ directory should pass after these fixes:
 
 ### Step 4: Update Dynamic Operators in Query Builder
 
-**File:** `packages/better-convex/src/orm/query.ts`
+**File:** `packages/kitcn/src/orm/query.ts`
 
 1. Find `_createOperators()` method (around line 50)
 2. Update destructuring import:
@@ -384,7 +384,7 @@ All tests in convex/orm/ directory should pass after these fixes:
 ### Step 5: Rebuild Package
 
 ```bash
-bun --cwd packages/better-convex build
+bun --cwd packages/kitcn build
 ```
 
 Expected: Clean build with no compilation errors.

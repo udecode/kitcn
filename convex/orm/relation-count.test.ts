@@ -7,9 +7,9 @@ import {
   defineSchema,
   index,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import { describe, expect, it, vi } from 'vitest';
-import * as aggregateRuntime from '../../packages/better-convex/src/orm/aggregate-index/runtime';
+import * as aggregateRuntime from '../../packages/kitcn/src/orm/aggregate-index/runtime';
 import { convexTest } from '../setup.testing';
 
 const schedulerStub = {

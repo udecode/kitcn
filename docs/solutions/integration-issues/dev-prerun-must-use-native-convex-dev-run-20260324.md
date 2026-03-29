@@ -11,7 +11,7 @@ tags:
   - example
 severity: high
 symptoms:
-  - better-convex dev fails before local Convex functions are available
+  - kitcn dev fails before local Convex functions are available
   - convex run init reports Could not find function for init
 ---
 
@@ -19,7 +19,7 @@ symptoms:
 
 ## Problem
 
-`better-convex dev` supported `meta["better-convex"].dev.preRun`, but it
+`kitcn dev` supported `meta["kitcn"].dev.preRun`, but it
 implemented that hook as a separate `convex run <function>` call before the
 main `convex dev` process started.
 

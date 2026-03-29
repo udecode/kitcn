@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
-import { resolvePluginOptions } from '../../better-convex/src/plugins';
-import { initCRPC } from '../../better-convex/src/server';
+import { resolvePluginOptions } from '../../kitcn/src/plugins';
+import { initCRPC } from '../../kitcn/src/server';
 import * as resendPackage from './index';
 import { ResendPlugin } from './index';
 

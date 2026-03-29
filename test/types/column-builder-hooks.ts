@@ -2,8 +2,8 @@ import type {
   GetColumnData,
   InferInsertModel,
   InferSelectModel,
-} from 'better-convex/orm';
-import { convexTable, text } from 'better-convex/orm';
+} from 'kitcn/orm';
+import { convexTable, text } from 'kitcn/orm';
 import { type Equal, Expect, IsAny, Not } from './utils';
 
 // ============================================================================

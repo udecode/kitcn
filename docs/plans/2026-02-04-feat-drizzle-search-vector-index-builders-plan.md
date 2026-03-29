@@ -88,9 +88,9 @@ VectorIndexBuilderOn → .on(field) → VectorIndexBuilder → .dimensions(n) / 
 
 **Integration Points:**
 
-1. **New builder classes** in `packages/better-convex/src/orm/indexes.ts`
-2. **Update extraConfig processing** in `packages/better-convex/src/orm/table.ts`
-3. **Export new functions** from `packages/better-convex/src/orm/index.ts`
+1. **New builder classes** in `packages/kitcn/src/orm/indexes.ts`
+2. **Update extraConfig processing** in `packages/kitcn/src/orm/table.ts`
+3. **Export new functions** from `packages/kitcn/src/orm/index.ts`
 4. **Add vector column builder** (decision needed - see Open Questions)
 
 ### Implementation Phases
@@ -99,9 +99,9 @@ VectorIndexBuilderOn → .on(field) → VectorIndexBuilder → .dimensions(n) / 
 
 **Files to modify:**
 
-- `packages/better-convex/src/orm/indexes.ts`
-- `packages/better-convex/src/orm/table.ts`
-- `packages/better-convex/src/orm/index.ts`
+- `packages/kitcn/src/orm/indexes.ts`
+- `packages/kitcn/src/orm/table.ts`
+- `packages/kitcn/src/orm/index.ts`
 
 **New classes:**
 
@@ -329,7 +329,7 @@ if (isConvexVectorIndexBuilder(entry)) {
 
 #### Phase 2c: Update Type Exports
 
-**packages/better-convex/src/orm/index.ts:**
+**packages/kitcn/src/orm/index.ts:**
 
 ```ts
 export { searchIndex, vectorIndex } from "./indexes";
@@ -501,7 +501,7 @@ export const posts = convexTable(
 
 ### Q1: Vector Column Builder (CRITICAL)
 
-**Question**: Should Better Convex provide a `vector(dimensions)` column builder?
+**Question**: Should kitcn provide a `vector(dimensions)` column builder?
 
 **Options**:
 
@@ -641,9 +641,9 @@ export const posts = convexTable(
 ### Internal References
 
 - **Brainstorm**: [docs/brainstorms/2026-02-04-drizzle-index-api.md](docs/brainstorms/2026-02-04-drizzle-index-api.md)
-- **Current builders**: [packages/better-convex/src/orm/indexes.ts](packages/better-convex/src/orm/indexes.ts)
-- **Table integration**: [packages/better-convex/src/orm/table.ts:120-166](packages/better-convex/src/orm/table.ts#L120-L166)
-- **Type utilities**: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts)
+- **Current builders**: [packages/kitcn/src/orm/indexes.ts](packages/kitcn/src/orm/indexes.ts)
+- **Table integration**: [packages/kitcn/src/orm/table.ts:120-166](packages/kitcn/src/orm/table.ts#L120-L166)
+- **Type utilities**: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts)
 
 ### Institutional Learnings
 

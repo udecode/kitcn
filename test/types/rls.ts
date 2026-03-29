@@ -4,7 +4,7 @@
  * Verifies rlsPolicy/rlsRole types and convexTable.withRLS surface.
  */
 
-import { convexTable, eq, rlsPolicy, rlsRole, text } from 'better-convex/orm';
+import { convexTable, eq, rlsPolicy, rlsRole, text } from 'kitcn/orm';
 import { type Equal, Expect } from './utils';
 
 const users = convexTable.withRLS('users', {

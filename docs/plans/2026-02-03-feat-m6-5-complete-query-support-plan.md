@@ -22,7 +22,7 @@ Complete all query features that Convex can support before moving to mutations (
 
 ## Problem Statement
 
-**Current state:** M1-M6 complete, but relation loading runtime is stubbed. Type inference works (types infer relations correctly), but `_loadRelations()` returns rows unchanged at [packages/better-convex/src/orm/query.ts:633-641](../../packages/better-convex/src/orm/query.ts#L633-641).
+**Current state:** M1-M6 complete, but relation loading runtime is stubbed. Type inference works (types infer relations correctly), but `_loadRelations()` returns rows unchanged at [packages/kitcn/src/orm/query.ts:633-641](../../packages/kitcn/src/orm/query.ts#L633-641).
 
 **User pain:** Types pass but queries return empty relations. Confusing UX where `with: { posts: true }` compiles but doesn't actually load posts.
 
@@ -36,13 +36,13 @@ Complete all query features that Convex can support before moving to mutations (
 
 ### 1. Relation Loading Runtime
 
-**Integration point:** [packages/better-convex/src/orm/query.ts:335](../../packages/better-convex/src/orm/query.ts#L335)
+**Integration point:** [packages/kitcn/src/orm/query.ts:335](../../packages/kitcn/src/orm/query.ts#L335)
 ```typescript
 // Current call site (execute method)
 rowsWithRelations = await this._loadRelations(rows, this.config.with);
 ```
 
-**Implementation location:** [packages/better-convex/src/orm/query.ts:633-641](../../packages/better-convex/src/orm/query.ts#L633-641)
+**Implementation location:** [packages/kitcn/src/orm/query.ts:633-641](../../packages/kitcn/src/orm/query.ts#L633-641)
 
 **Algorithm:**
 1. Extract edge metadata from `this.edgeMetadata` (filtered by source table)
@@ -52,14 +52,14 @@ rowsWithRelations = await this._loadRelations(rows, this.config.with);
 5. Map relation results back to parent rows (group by parent ID)
 
 **Key data structures:**
-- `EdgeMetadata` interface: [packages/better-convex/src/orm/extractRelationsConfig.ts:17-40](../../packages/better-convex/src/orm/extractRelationsConfig.ts#L17-40)
+- `EdgeMetadata` interface: [packages/kitcn/src/orm/extractRelationsConfig.ts:17-40](../../packages/kitcn/src/orm/extractRelationsConfig.ts#L17-40)
   - `sourceTable`, `edgeName`, `targetTable`, `cardinality` ('one' | 'many')
   - `fieldName` (FK field like "userId"), `indexName`, `indexFields`
   - `inverseEdge`, `optional`, `onDelete`
 
 **Type safety:**
-- Use `BuildQueryResult` type: [packages/better-convex/src/orm/types.ts:392-442](../../packages/better-convex/src/orm/types.ts#L392-442)
-- Use `BuildRelationResult` to map `with` config to types: [types.ts:425-442](../../packages/better-convex/src/orm/types.ts#L425-442)
+- Use `BuildQueryResult` type: [packages/kitcn/src/orm/types.ts:392-442](../../packages/kitcn/src/orm/types.ts#L392-442)
+- Use `BuildRelationResult` to map `with` config to types: [types.ts:425-442](../../packages/kitcn/src/orm/types.ts#L425-442)
 - Apply `Merge<BaseModel, RelationTypes>` pattern (learning: phantom-type-brand-preservation)
 - Use `GetColumnData<TBuilder, 'query'>` mode for relation results (includes null for nullable)
 
@@ -156,7 +156,7 @@ Total: 3 queries for 3-level nesting (not N×M×P queries)
 
 ### 3. Relation Filters/Limits
 
-**Integration:** Reuse existing WHERE clause compilation from [packages/better-convex/src/orm/query.ts](../../packages/better-convex/src/orm/query.ts)
+**Integration:** Reuse existing WHERE clause compilation from [packages/kitcn/src/orm/query.ts](../../packages/kitcn/src/orm/query.ts)
 
 **Key methods to reuse:**
 - `_createColumnProxies()` - Wrap columns for WHERE clause
@@ -262,7 +262,7 @@ _groupByParent(records: any[], parentField: string): Record<string, any[]> {
 
 **New method:** Add `.paginate()` to RelationalQueryBuilder class
 
-**File:** [packages/better-convex/src/orm/query-builder.ts:52-64](../../packages/better-convex/src/orm/query-builder.ts#L52-64) (add after findMany)
+**File:** [packages/kitcn/src/orm/query-builder.ts:52-64](../../packages/kitcn/src/orm/query-builder.ts#L52-64) (add after findMany)
 
 **Implementation:**
 ```typescript
@@ -580,8 +580,8 @@ paginate(config: { cursor: string | null; numItems: number }) {
 **Goal:** Implement `_loadRelations()` for simple one-level relations
 
 **Files to modify:**
-- [packages/better-convex/src/orm/query.ts:633-641](../../packages/better-convex/src/orm/query.ts#L633-641) - Implement _loadRelations
-- [packages/better-convex/src/orm/query.ts:335](../../packages/better-convex/src/orm/query.ts#L335) - Verify integration point
+- [packages/kitcn/src/orm/query.ts:633-641](../../packages/kitcn/src/orm/query.ts#L633-641) - Implement _loadRelations
+- [packages/kitcn/src/orm/query.ts:335](../../packages/kitcn/src/orm/query.ts#L335) - Verify integration point
 
 **Implementation steps:**
 1. Extract relation name → EdgeMetadata mapping
@@ -609,7 +609,7 @@ paginate(config: { cursor: string | null; numItems: number }) {
 **Goal:** Support `with: { posts: { with: { comments: true } } }`
 
 **Files to modify:**
-- [packages/better-convex/src/orm/query.ts:633-641](../../packages/better-convex/src/orm/query.ts#L633-641) - Add recursive call
+- [packages/kitcn/src/orm/query.ts:633-641](../../packages/kitcn/src/orm/query.ts#L633-641) - Add recursive call
 - No new files (extend _loadRelations method)
 
 **Implementation steps:**
@@ -634,7 +634,7 @@ paginate(config: { cursor: string | null; numItems: number }) {
 **Goal:** Apply WHERE, ORDER BY, LIMIT to relations
 
 **Files to modify:**
-- [packages/better-convex/src/orm/query.ts:633-641](../../packages/better-convex/src/orm/query.ts#L633-641) - Add _loadRelationLevel helper
+- [packages/kitcn/src/orm/query.ts:633-641](../../packages/kitcn/src/orm/query.ts#L633-641) - Add _loadRelationLevel helper
 - Extract helper methods from existing WHERE clause compiler
 
 **Implementation steps:**
@@ -666,8 +666,8 @@ paginate(config: { cursor: string | null; numItems: number }) {
 **Goal:** Add `.paginate()` method with Convex-native O(1) performance
 
 **Files to modify:**
-- [packages/better-convex/src/orm/query-builder.ts](../../packages/better-convex/src/orm/query-builder.ts) - Add paginate method
-- [packages/better-convex/src/orm/types.ts](../../packages/better-convex/src/orm/types.ts) - Add PaginatedResult type if needed
+- [packages/kitcn/src/orm/query-builder.ts](../../packages/kitcn/src/orm/query-builder.ts) - Add paginate method
+- [packages/kitcn/src/orm/types.ts](../../packages/kitcn/src/orm/types.ts) - Add PaginatedResult type if needed
 
 **Implementation steps:**
 1. Add method to RelationalQueryBuilder after findMany (line ~65):
@@ -845,7 +845,7 @@ import { convexTest, runCtx } from './setup.testing';
 test('example', async () => {
   const t = convexTest(schema);
   await t.run(async (baseCtx) => {
-    const ctx = await runCtx(baseCtx);  // Wraps with better-convex helpers
+    const ctx = await runCtx(baseCtx);  // Wraps with kitcn helpers
 
     const userId = await ctx.table('users').insert({ name: 'Alice' });
     const user = await ctx.table('users').getX(userId);
@@ -1099,7 +1099,7 @@ Total: 50 posts (correct - 5 per user)
 - README.md in convex/test-types/ references M6.5 completion
 
 ✅ **Package validation:**
-- `bun --cwd packages/better-convex build` succeeds
+- `bun --cwd packages/kitcn build` succeeds
 - `touch example/convex/functions/schema.ts` triggers rebuild
 - No type regressions introduced
 
@@ -1112,17 +1112,17 @@ Total: 50 posts (correct - 5 per user)
 
 ### Core Implementation
 
-**packages/better-convex/src/orm/query.ts:**
+**packages/kitcn/src/orm/query.ts:**
 - Line 633-641: Implement `_loadRelations()` method (currently stubbed)
 - Line ~645-700: Add `_loadRelationLevel()` helper method (new)
 - Line 335: Verify integration point (already calls _loadRelations)
 - Reuse existing methods: `_applyFilterToQuery()`, `_createOperators()`, `_toConvexExpression()`
 
-**packages/better-convex/src/orm/query-builder.ts:**
+**packages/kitcn/src/orm/query-builder.ts:**
 - Line ~65: Add `.paginate(config)` method after findMany
 - Integrate with existing WHERE/ORDER BY compilation
 
-**packages/better-convex/src/orm/types.ts:**
+**packages/kitcn/src/orm/types.ts:**
 - No changes expected (type inference already complete)
 - Verify `BuildQueryResult` and `BuildRelationResult` handle all cases
 - May need PaginatedResult type if not already defined
@@ -1300,8 +1300,8 @@ Total: 50 posts (correct - 5 per user)
 - Convex Ents repo (reference): `/tmp/cc-repos/convex-ents`
 
 **Key Files:**
-- [packages/better-convex/src/orm/query.ts:633-641](../../packages/better-convex/src/orm/query.ts#L633-641) - _loadRelations stub
-- [packages/better-convex/src/orm/extractRelationsConfig.ts:17-40](../../packages/better-convex/src/orm/extractRelationsConfig.ts#L17-40) - EdgeMetadata
-- [packages/better-convex/src/orm/types.ts:392-442](../../packages/better-convex/src/orm/types.ts#L392-442) - BuildQueryResult
+- [packages/kitcn/src/orm/query.ts:633-641](../../packages/kitcn/src/orm/query.ts#L633-641) - _loadRelations stub
+- [packages/kitcn/src/orm/extractRelationsConfig.ts:17-40](../../packages/kitcn/src/orm/extractRelationsConfig.ts#L17-40) - EdgeMetadata
+- [packages/kitcn/src/orm/types.ts:392-442](../../packages/kitcn/src/orm/types.ts#L392-442) - BuildQueryResult
 - [convex/test-types/db-rel.ts](../../convex/test-types/db-rel.ts) - Deferred relation tests
 - [convex/orm/where-filtering.test.ts](../../convex/orm/where-filtering.test.ts) - Runtime test pattern

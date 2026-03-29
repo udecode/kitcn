@@ -1,3 +1,4 @@
+import { v } from 'convex/values';
 import {
   bytes,
   convexTable,
@@ -7,8 +8,7 @@ import {
   defineSchema,
   extractRelationsConfig,
   textEnum,
-} from 'better-convex/orm';
-import { v } from 'convex/values';
+} from 'kitcn/orm';
 import { describe, expect, it } from 'vitest';
 import { withOrmCtx } from '../setup.testing';
 

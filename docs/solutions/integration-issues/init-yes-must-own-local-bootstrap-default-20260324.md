@@ -11,7 +11,7 @@ tags:
   - prompts
 severity: high
 symptoms:
-  - docs keep teaching `better-convex init --bootstrap`
+  - docs keep teaching `kitcn init --bootstrap`
   - fresh local bootstrap requires remembering an extra init flag
   - interactive init has no built-in bootstrap choice
 ---
@@ -20,7 +20,7 @@ symptoms:
 
 ## Problem
 
-`better-convex init` had two overlapping bootstrap modes:
+`kitcn init` had two overlapping bootstrap modes:
 
 - plain `init`
 - `init --bootstrap`
@@ -44,13 +44,13 @@ run?"
 
 Make `init` own that decision:
 
-1. remove `better-convex init --bootstrap`
+1. remove `kitcn init --bootstrap`
 2. on local Convex, treat `init --yes` as "take the bootstrap default"
 3. in interactive mode, ask whether to run the one-shot local bootstrap after
    init
 4. skip the bootstrap path entirely for backend `concave`, `--json`, and
    Convex deployment-targeting flags
-5. keep `better-convex dev --bootstrap` as the explicit one-shot bootstrap
+5. keep `kitcn dev --bootstrap` as the explicit one-shot bootstrap
    command for an existing app
 
 ## Verification

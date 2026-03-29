@@ -104,13 +104,13 @@ id('users')       →  v.id('users')
 ### Phase 1: Builder Base Classes
 
 **Files to create**:
-- `packages/better-convex/src/orm/builders/column-builder.ts` - Base abstract class
-- `packages/better-convex/src/orm/builders/convex-column-builder.ts` - Convex-specific base
+- `packages/kitcn/src/orm/builders/column-builder.ts` - Base abstract class
+- `packages/kitcn/src/orm/builders/convex-column-builder.ts` - Convex-specific base
 
 **Base ColumnBuilder** (from Drizzle pattern):
 
 ```typescript
-// packages/better-convex/src/orm/builders/column-builder.ts
+// packages/kitcn/src/orm/builders/column-builder.ts
 
 export interface ColumnBuilderBaseConfig<
   TDataType extends ColumnDataType,
@@ -204,7 +204,7 @@ export type IsPrimaryKey<T extends ColumnBuilder<any>> = T & {
 **ConvexColumnBuilder** (Convex-specific extensions):
 
 ```typescript
-// packages/better-convex/src/orm/builders/convex-column-builder.ts
+// packages/kitcn/src/orm/builders/convex-column-builder.ts
 
 export abstract class ConvexColumnBuilder<
   T extends ColumnBuilderBaseConfig<ColumnDataType, string>,
@@ -228,17 +228,17 @@ export abstract class ConvexColumnBuilder<
 ### Phase 2: Specific Column Builders
 
 **Files to create**:
-- `packages/better-convex/src/orm/builders/text.ts`
-- `packages/better-convex/src/orm/builders/integer.ts`
-- `packages/better-convex/src/orm/builders/boolean.ts`
-- `packages/better-convex/src/orm/builders/bigint.ts`
-- `packages/better-convex/src/orm/builders/id.ts`
-- `packages/better-convex/src/orm/builders/number.ts`
+- `packages/kitcn/src/orm/builders/text.ts`
+- `packages/kitcn/src/orm/builders/integer.ts`
+- `packages/kitcn/src/orm/builders/boolean.ts`
+- `packages/kitcn/src/orm/builders/bigint.ts`
+- `packages/kitcn/src/orm/builders/id.ts`
+- `packages/kitcn/src/orm/builders/number.ts`
 
 **Text Builder**:
 
 ```typescript
-// packages/better-convex/src/orm/builders/text.ts
+// packages/kitcn/src/orm/builders/text.ts
 
 import { v } from 'convex/values';
 import type { Validator } from 'convex/values';
@@ -283,7 +283,7 @@ export function text(name?: string) {
 **Integer Builder**:
 
 ```typescript
-// packages/better-convex/src/orm/builders/integer.ts
+// packages/kitcn/src/orm/builders/integer.ts
 
 import { v } from 'convex/values';
 import type { Validator } from 'convex/values';
@@ -326,7 +326,7 @@ export function integer(name?: string) {
 **Boolean Builder**:
 
 ```typescript
-// packages/better-convex/src/orm/builders/boolean.ts
+// packages/kitcn/src/orm/builders/boolean.ts
 
 export class ConvexBooleanBuilder<
   T extends ColumnBuilderBaseConfig<'boolean', 'ConvexBoolean'>,
@@ -358,7 +358,7 @@ export function boolean(name?: string) {
 **ID Builder** (Convex-specific):
 
 ```typescript
-// packages/better-convex/src/orm/builders/id.ts
+// packages/kitcn/src/orm/builders/id.ts
 
 export class ConvexIdBuilder<
   T extends ColumnBuilderBaseConfig<'string', 'ConvexId'>,
@@ -401,7 +401,7 @@ export function id(a: string, b?: string) {
 ### Phase 3: Update Type Inference
 
 **Files to modify**:
-- `packages/better-convex/src/orm/types.ts` - Add `BuilderToType` utility
+- `packages/kitcn/src/orm/types.ts` - Add `BuilderToType` utility
 
 **Current ValidatorToType** (works with validators):
 
@@ -418,7 +418,7 @@ type ValidatorToType<V> =
 **New BuilderToType** (extracts from builder's `_` phantom property):
 
 ```typescript
-// packages/better-convex/src/orm/types.ts
+// packages/kitcn/src/orm/types.ts
 
 // Extract type from column builder
 export type BuilderToType<TBuilder extends ColumnBuilder<any>> =
@@ -461,7 +461,7 @@ export type InferInsertModel<TTable extends ConvexTable<any>> = Simplify<
 ### Phase 4: Update convexTable to Accept Builders
 
 **File to modify**:
-- `packages/better-convex/src/orm/table.ts`
+- `packages/kitcn/src/orm/table.ts`
 
 **Current** (only accepts validators):
 
@@ -552,7 +552,7 @@ const users = convexTable('users', {
 });
 
 // AFTER (M6)
-import { text, integer, id } from 'better-convex/orm/builders';
+import { text, integer, id } from 'kitcn/orm/builders';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -583,7 +583,7 @@ role: text({ enum: ['admin', 'user', 'guest'] as const }).notNull()
 ### Phase 6: Update Exports
 
 **File to modify**:
-- `packages/better-convex/src/orm/index.ts`
+- `packages/kitcn/src/orm/index.ts`
 
 **Add builder exports**:
 
@@ -659,8 +659,8 @@ export {
 - [ ] Remove all `import { v } from 'convex/values'` (except where truly needed)
 
 ### Phase 6: Exports & Documentation (1 hour)
-- [ ] Add builder exports to `packages/better-convex/src/orm/index.ts`
-- [ ] Update `package.json` exports for `better-convex/orm/builders`
+- [ ] Add builder exports to `packages/kitcn/src/orm/index.ts`
+- [ ] Update `package.json` exports for `kitcn/orm/builders`
 - [ ] Add JSDoc comments to all builder functions
 - [ ] Document breaking changes in CHANGELOG.md
 
@@ -700,7 +700,7 @@ export {
 
 - [ ] Zero TypeScript errors: `bun typecheck`
 - [ ] All tests pass: `vitest run` (126+ tests)
-- [ ] Build succeeds: `bun --cwd packages/better-convex build`
+- [ ] Build succeeds: `bun --cwd packages/kitcn build`
 - [ ] Linting passes: `bun lint`
 - [ ] No breaking changes to query builder API (M3-M4)
 
@@ -711,7 +711,7 @@ export {
 **This is a BREAKING refactor**. All schemas must migrate.
 
 **Migration Path**:
-1. Update `better-convex` to M6 version
+1. Update `kitcn` to M6 version
 2. Replace all `v.*` validators with builders
 3. Run type check and fix any errors
 4. Test thoroughly
@@ -721,7 +721,7 @@ export {
 Could create a codemod for automated migration:
 
 ```bash
-npx @better-convex/codemod migrate-to-builders convex/schema.ts
+npx @kitcn/codemod migrate-to-builders convex/schema.ts
 ```
 
 Pattern matching:

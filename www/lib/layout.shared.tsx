@@ -21,6 +21,6 @@ export function baseOptions(): BaseLayoutProps {
         active: 'nested-url',
       },
     ],
-    githubUrl: 'https://github.com/udecode/better-convex',
+    githubUrl: 'https://github.com/udecode/kitcn',
   };
 }

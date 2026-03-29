@@ -5,37 +5,37 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: {
-      'better-convex/aggregate': path.resolve(
+      'kitcn/aggregate': path.resolve(
         import.meta.dirname,
-        'packages/better-convex/src/aggregate/index.ts'
+        'packages/kitcn/src/aggregate/index.ts'
       ),
-      'better-convex/auth': path.resolve(
+      'kitcn/auth': path.resolve(
         import.meta.dirname,
-        'packages/better-convex/src/auth/index.ts'
+        'packages/kitcn/src/auth/index.ts'
       ),
-      'better-convex/auth/config': path.resolve(
+      'kitcn/auth/config': path.resolve(
         import.meta.dirname,
-        'packages/better-convex/src/auth-config/index.ts'
+        'packages/kitcn/src/auth-config/index.ts'
       ),
-      'better-convex/auth/http': path.resolve(
+      'kitcn/auth/http': path.resolve(
         import.meta.dirname,
-        'packages/better-convex/src/auth-http/index.ts'
+        'packages/kitcn/src/auth-http/index.ts'
       ),
-      'better-convex/crpc': path.resolve(
+      'kitcn/crpc': path.resolve(
         import.meta.dirname,
-        'packages/better-convex/src/crpc/index.ts'
+        'packages/kitcn/src/crpc/index.ts'
       ),
-      'better-convex/orm': path.resolve(
+      'kitcn/orm': path.resolve(
         import.meta.dirname,
-        'packages/better-convex/src/orm/index.ts'
+        'packages/kitcn/src/orm/index.ts'
       ),
-      'better-convex/ratelimit': path.resolve(
+      'kitcn/ratelimit': path.resolve(
         import.meta.dirname,
-        'packages/better-convex/src/ratelimit/index.ts'
+        'packages/kitcn/src/ratelimit/index.ts'
       ),
-      'better-convex/server': path.resolve(
+      'kitcn/server': path.resolve(
         import.meta.dirname,
-        'packages/better-convex/src/server/index.ts'
+        'packages/kitcn/src/server/index.ts'
       ),
     },
   },
@@ -44,13 +44,13 @@ export default defineConfig({
       {
         resolve: {
           alias: {
-            'better-convex/aggregate': path.resolve(
+            'kitcn/aggregate': path.resolve(
               import.meta.dirname,
-              'packages/better-convex/src/aggregate/index.ts'
+              'packages/kitcn/src/aggregate/index.ts'
             ),
-            'better-convex/orm': path.resolve(
+            'kitcn/orm': path.resolve(
               import.meta.dirname,
-              'packages/better-convex/src/orm/index.ts'
+              'packages/kitcn/src/orm/index.ts'
             ),
           },
         },
@@ -58,7 +58,7 @@ export default defineConfig({
           name: 'integration',
           environment: 'edge-runtime',
           server: {
-            deps: { inline: ['convex-test', 'better-convex'] },
+            deps: { inline: ['convex-test', 'kitcn'] },
           },
           include: [
             'convex/**/*.test.ts',
@@ -74,7 +74,7 @@ export default defineConfig({
         test: {
           name: 'solid',
           environment: 'happy-dom',
-          include: ['packages/better-convex/src/solid/**/*.vitest.{ts,tsx}'],
+          include: ['packages/kitcn/src/solid/**/*.vitest.{ts,tsx}'],
           exclude: ['**/node_modules/**'],
           setupFiles: ['./tooling/test-setup-solid.ts'],
           globals: true,

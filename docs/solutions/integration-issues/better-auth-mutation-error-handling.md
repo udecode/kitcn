@@ -13,8 +13,8 @@ symptoms:
   - Must check data.error inside onSuccess as workaround
 module: auth-mutations
 resolved: 2026-01-30
-issue: https://github.com/udecode/better-convex/issues/60
-pr: https://github.com/udecode/better-convex/pull/61
+issue: https://github.com/udecode/kitcn/issues/60
+pr: https://github.com/udecode/kitcn/pull/61
 ---
 
 # Auth Mutation Hooks Treating Better Auth Errors as Success
@@ -48,7 +48,7 @@ const { mutate } = useMutation(
 Better Auth returns errors as response values rather than throwing exceptions. The mutation hooks were returning these errors as success values:
 
 ```typescript
-// Before fix (packages/better-convex/src/react/auth-mutations.ts)
+// Before fix (packages/kitcn/src/react/auth-mutations.ts)
 mutationFn: async (args) => {
   const res = await authClient.signUp.email(args);
   if (!res?.error) {
@@ -65,7 +65,7 @@ TanStack Query interprets non-throwing as success, so `onSuccess` was called wit
 Convert error-as-value responses to thrown errors by creating `AuthMutationError` class and throwing when `res.error` exists:
 
 ```typescript
-// packages/better-convex/src/react/auth-mutations.ts
+// packages/kitcn/src/react/auth-mutations.ts
 
 export class AuthMutationError extends Error {
   code?: string;
@@ -127,11 +127,11 @@ const signUp = useMutation(useSignUpMutationOptions({
 
 ## Files Changed
 
-- `packages/better-convex/src/react/auth-mutations.ts` - Added AuthMutationError class, fixed all 4 hooks
+- `packages/kitcn/src/react/auth-mutations.ts` - Added AuthMutationError class, fixed all 4 hooks
 
 ## Related
 
-- Issue: https://github.com/udecode/better-convex/issues/60
-- PR: https://github.com/udecode/better-convex/pull/61
+- Issue: https://github.com/udecode/kitcn/issues/60
+- PR: https://github.com/udecode/kitcn/pull/61
 - Skill: `.claude/rules/better-auth-error-handling.mdc`
 - [TanStack Query Mutation Docs](https://tanstack.com/query/latest/docs/framework/react/guides/mutations)

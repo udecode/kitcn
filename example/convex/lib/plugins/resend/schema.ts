@@ -10,7 +10,7 @@ import {
   text,
   textEnum,
   unionOf,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const resendContentTable = convexTable('resend_content', {
   content: bytes().notNull(),

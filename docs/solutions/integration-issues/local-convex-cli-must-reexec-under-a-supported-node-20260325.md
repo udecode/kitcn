@@ -12,7 +12,7 @@ tags:
   - fnm
 severity: high
 symptoms:
-  - better-convex dev fails with `DeploymentNotConfiguredForNodeActions`
+  - kitcn dev fails with `DeploymentNotConfiguredForNodeActions`
   - bun run convex:dev uses Homebrew Node 25 even when fnm has Node 22 available
   - forcing a supported Node in PATH makes the same app boot cleanly
 ---
@@ -23,7 +23,7 @@ symptoms:
 
 Local Convex runtime proof could fail for a stupid reason.
 
-`bun run convex:dev` launched `better-convex` under whatever `node` Bun found
+`bun run convex:dev` launched `kitcn` under whatever `node` Bun found
 first. In the broken path that was Homebrew Node 25, even though fnm already
 had Node 22 installed and available later in PATH.
 
@@ -46,7 +46,7 @@ the whole flow died before app code even mattered.
 
 ## Fix
 
-Treat supported local Node selection as a Better Convex responsibility.
+Treat supported local Node selection as a kitcn responsibility.
 
 Implementation rules:
 
@@ -54,7 +54,7 @@ Implementation rules:
    blindly reusing `process.execPath`
 2. local Convex child commands prefer the first supported Node found in PATH
    (`18`, `20`, `22`, `24`)
-3. `better-convex` re-execs itself once under that supported Node for local
+3. `kitcn` re-execs itself once under that supported Node for local
    runtime commands (`dev`, `verify`, `init`, `add`, `codegen`) before touching
    local Convex
 4. the re-exec is single-shot and guarded by an env flag so it cannot loop

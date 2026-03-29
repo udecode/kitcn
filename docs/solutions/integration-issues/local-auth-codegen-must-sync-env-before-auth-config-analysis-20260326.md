@@ -10,7 +10,7 @@ tags:
   - bun-check
 symptoms:
   - `bun check` fails in `scenario:check -- convex-next-all`
-  - local `better-convex codegen` fails in auth-enabled Convex apps even though `convex/.env` already contains the needed values
+  - local `kitcn codegen` fails in auth-enabled Convex apps even though `convex/.env` already contains the needed values
   - auth config analysis reports missing env like `DEPLOY_ENV`
 module: cli-codegen-auth-env
 resolved: 2026-03-26
@@ -28,7 +28,7 @@ values in `convex/.env`.
 
 ## Root Cause
 
-Local `better-convex codegen` could bootstrap a local backend and then jump
+Local `kitcn codegen` could bootstrap a local backend and then jump
 straight into Convex codegen without first pushing `convex/.env` into that
 local deployment.
 
@@ -53,11 +53,11 @@ complete sequence.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/cli.commands.ts --test-name-pattern 'run\\(codegen\\) calls generateMeta first and then invokes convex codegen with merged args|run\\(codegen\\) bootstraps local convex once when the backend is not running|run\\(codegen\\) prepares and completes auth env for local auth-enabled convex apps'`
-- `bun test packages/better-convex/src/cli/commands/add.test.ts packages/better-convex/src/cli/commands/init.test.ts --test-name-pattern 'reuses a running local convex backend for auth live bootstrap|falls back to local bootstrap when auth live bootstrap probe fails|runs local bootstrap after in-place adoption when --yes defaults bootstrap|resolves explicit --config paths before default adoption bootstrap|syncs auth env around fallback init bootstrap before skipping duplicate local bootstrap'`
+- `bun test packages/kitcn/src/cli/cli.commands.ts --test-name-pattern 'run\\(codegen\\) calls generateMeta first and then invokes convex codegen with merged args|run\\(codegen\\) bootstraps local convex once when the backend is not running|run\\(codegen\\) prepares and completes auth env for local auth-enabled convex apps'`
+- `bun test packages/kitcn/src/cli/commands/add.test.ts packages/kitcn/src/cli/commands/init.test.ts --test-name-pattern 'reuses a running local convex backend for auth live bootstrap|falls back to local bootstrap when auth live bootstrap probe fails|runs local bootstrap after in-place adoption when --yes defaults bootstrap|resolves explicit --config paths before default adoption bootstrap|syncs auth env around fallback init bootstrap before skipping duplicate local bootstrap'`
 - `bun lint:fix`
 - `bun typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn build`
 - `bun run scenario:check -- convex-next-all`
 - `bun check`
 

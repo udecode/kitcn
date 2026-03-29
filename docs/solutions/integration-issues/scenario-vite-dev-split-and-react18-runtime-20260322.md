@@ -27,7 +27,7 @@ Three separate failures showed up in live runs:
 1. raw `create-convex` scenarios could still hit interactive Convex login
 2. Vite scenarios booted on `5173`, even though prepare patched them to `3005`
 3. the raw React Vite adoption fixture crashed before rendering because the
-   packaged Better Convex React entry imported `react/compiler-runtime`
+   packaged kitcn React entry imported `react/compiler-runtime`
 
 So the skill matrix was only half real. The login prompt was gone for some
 lanes, but Vite still ignored the prepared port contract and React 18 adoption
@@ -46,7 +46,7 @@ too literally instead of forcing the local agent-mode contract itself.
 
 ### Concave Vite dev owned the frontend, so the prepared `3005` patch never mattered
 
-`better-convex dev` on backend `concave` delegates to `concave dev`.
+`kitcn dev` on backend `concave` delegates to `concave dev`.
 For Vite apps, `concave dev` auto-detects the frontend and starts Vite itself.
 
 That meant the scenario runner was proving the backend contract, but not the
@@ -60,7 +60,7 @@ prepared port real.
 
 ### The package build still emitted React Compiler runtime imports
 
-`packages/better-convex/tsdown.config.ts` ran the React client bundle through
+`packages/kitcn/tsdown.config.ts` ran the React client bundle through
 `babel-plugin-react-compiler`. That rewrote the published client entries to
 import:
 
@@ -71,7 +71,7 @@ import { c } from "react/compiler-runtime";
 That is fine for React 19 consumers. It is not fine for raw adoption fixtures
 still on React 18, like `create-convex-react-vite-shadcn`.
 
-So the scenario failure was not a fixture bug. The published Better Convex
+So the scenario failure was not a fixture bug. The published kitcn
 client build was lying about React 18 compatibility.
 
 ## Solution
@@ -94,10 +94,10 @@ login prompts from hijacking `scenario:dev`.
 
 For Concave-backed Vite scenarios, `scenario:dev` now does two things:
 
-1. start Better Convex backend dev with:
+1. start kitcn backend dev with:
 
 ```bash
-better-convex dev --frontend no
+kitcn dev --frontend no
 ```
 
 2. start the prepared frontend script separately:
@@ -117,20 +117,20 @@ while the frontend finally uses the prepared temp app contract on `3005`.
 
 ### Stop compiling the published React client bundle against `react/compiler-runtime`
 
-The Better Convex package build no longer runs the client entries through the
+The kitcn package build no longer runs the client entries through the
 React Compiler Babel plugin.
 
 That keeps these published entrypoints React 18-safe again:
 
-- `better-convex/react`
-- `better-convex/auth/client`
-- `better-convex/ratelimit/react`
+- `kitcn/react`
+- `kitcn/auth/client`
+- `kitcn/ratelimit/react`
 
 ## Verification
 
-- `bun test ./tooling/scenarios.test.ts ./packages/better-convex/tsdown.config.test.ts`
-- `bun --cwd packages/better-convex build`
-- `rg -n "react/compiler-runtime" packages/better-convex/dist`
+- `bun test ./tooling/scenarios.test.ts ./packages/kitcn/tsdown.config.test.ts`
+- `bun --cwd packages/kitcn build`
+- `rg -n "react/compiler-runtime" packages/kitcn/dist`
 - `bun run scenario:dev -- create-convex-nextjs-shadcn`
 - `bun run scenario:dev -- create-convex-react-vite-shadcn`
 - `bun run scenario:dev -- vite`
@@ -162,8 +162,8 @@ Repo gates:
 - `tooling/scenario.config.ts`
 - `tooling/scenarios.ts`
 - `tooling/scenarios.test.ts`
-- `packages/better-convex/tsdown.config.ts`
-- `packages/better-convex/tsdown.config.test.ts`
+- `packages/kitcn/tsdown.config.ts`
+- `packages/kitcn/tsdown.config.test.ts`
 
 ## Related
 

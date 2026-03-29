@@ -8,7 +8,7 @@ tags:
   - codegen
   - example
 symptoms:
-  - `better-convex codegen` fails in `example` with `Multiple relations found from "organization" to "user". Add alias to disambiguate.`
+  - `kitcn codegen` fails in `example` with `Multiple relations found from "organization" to "user". Add alias to disambiguate.`
   - auth organization helper relations are already named and aliased sensibly, but the extractor still treats them as ambiguous
   - generated files such as `convex/shared/api.ts` and `generated/plugins/resend.runtime.ts` cannot be recovered until relation extraction succeeds
 module: orm-relations
@@ -70,9 +70,9 @@ original source table, even in aliased cases.
 
 ## Verification
 
-- `bun test packages/better-convex/src/orm/relations.test.ts`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/orm/relations.test.ts`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 - `bun lint:fix`
 - live recovery:
   - `cd example && bun run codegen`

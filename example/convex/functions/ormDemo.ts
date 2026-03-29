@@ -1,4 +1,4 @@
-import { eq, type InferInsertModel } from 'better-convex/orm';
+import { eq, type InferInsertModel } from 'kitcn/orm';
 import { authMutation, authQuery } from '../lib/crpc';
 import type { MutationCtx, QueryCtx } from './generated/server';
 import {

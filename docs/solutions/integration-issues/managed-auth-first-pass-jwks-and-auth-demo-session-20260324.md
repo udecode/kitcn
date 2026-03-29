@@ -8,7 +8,7 @@ tags:
   - scaffolding
   - scenarios
 symptoms:
-  - `better-convex add auth` omits the `jwks` table on the first scaffold pass
+  - `kitcn add auth` omits the `jwks` table on the first scaffold pass
   - `plugins.lock.json` records only `user`, `session`, `account`, and `verification` after fresh auth install
   - `fixtures/next-auth/convex/functions/_generated/dataModel.d.ts` drops `jwks`
   - `scenario:test -- next-auth` signs up successfully but times out waiting for the signed-in auth page
@@ -99,9 +99,9 @@ state.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts`
-- `bun test packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts`
+- `bun test packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
+- `bun --cwd packages/kitcn build`
 - `bun typecheck`
 - `bun lint:fix`
 - `bun run fixtures:sync -- next-auth`

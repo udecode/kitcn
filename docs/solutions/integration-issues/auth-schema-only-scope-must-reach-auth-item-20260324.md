@@ -7,7 +7,7 @@ tags:
   - schema
   - scaffolding
 symptoms:
-  - `better-convex add auth --schema --yes` still throws managed drift errors
+  - `kitcn add auth --schema --yes` still throws managed drift errors
   - the schema reconciler works when called directly, but the real command path fails
   - `example` cannot refresh only `schema.ts` and `plugins.lock.json`
 module: auth-cli
@@ -18,7 +18,7 @@ resolved: 2026-03-24
 
 ## Problem
 
-`better-convex add auth --schema --yes` existed on paper, but the real
+`kitcn add auth --schema --yes` existed on paper, but the real
 auth install path still threw:
 
 `Table "user" has drifted from the managed auth schema ...`
@@ -47,12 +47,12 @@ managed auth blocks without forcing a full auth scaffold rewrite.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts --test-name-pattern 'schema-only auth reconcile forwards applyScope'`
-- `bun test packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts packages/better-convex/src/cli/commands/add.test.ts packages/better-convex/src/cli/registry/schema-ownership.test.ts --test-name-pattern 'schema-only auth reconcile forwards applyScope|only schema|drifted managed|reuses a fresh managed lock'`
-- `bun --cwd packages/better-convex build`
-- `bun --cwd packages/better-convex typecheck`
+- `bun test packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts --test-name-pattern 'schema-only auth reconcile forwards applyScope'`
+- `bun test packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts packages/kitcn/src/cli/commands/add.test.ts packages/kitcn/src/cli/registry/schema-ownership.test.ts --test-name-pattern 'schema-only auth reconcile forwards applyScope|only schema|drifted managed|reuses a fresh managed lock'`
+- `bun --cwd packages/kitcn build`
+- `bun --cwd packages/kitcn typecheck`
 - `bun lint:fix`
-- `bunx better-convex add auth --schema --yes --no-codegen`
+- `bunx kitcn add auth --schema --yes --no-codegen`
 
 ## Prevention
 

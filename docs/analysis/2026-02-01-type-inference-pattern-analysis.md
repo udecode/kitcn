@@ -19,7 +19,7 @@ Analyzed the TypeScript type inference fix plan for design patterns, anti-patter
 
 ### 1.1 ✅ Visitor Pattern (Filter Expressions)
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/filter-expression.ts:132-143`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/filter-expression.ts:132-143`
 
 **Implementation**:
 ```typescript
@@ -36,13 +36,13 @@ export interface ExpressionVisitor<R = void> {
 - Type-safe traversal with generic return types
 - Follows Gang of Four pattern exactly
 
-**Evidence of Quality**: Used consistently in `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/query.ts:236-349` for Convex expression compilation.
+**Evidence of Quality**: Used consistently in `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/query.ts:236-349` for Convex expression compilation.
 
 ---
 
 ### 1.2 ✅ Branded Types (Nominal Typing)
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/filter-expression.ts:21-44`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/filter-expression.ts:21-44`
 
 **Implementation**:
 ```typescript
@@ -65,7 +65,7 @@ export interface FilterExpression<_TValue = boolean> {
 
 ### 1.3 ✅ Phantom Types (Type-Level Metadata)
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/filter-expression.ts:95-107`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/filter-expression.ts:95-107`
 
 **Implementation**:
 ```typescript
@@ -84,7 +84,7 @@ export interface FieldReference<TValue = unknown> {
 
 ### 1.4 ✅ Higher-Order Functions (Factory Pattern)
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/relations.ts:233-277`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/relations.ts:233-277`
 
 **Implementation**:
 ```typescript
@@ -110,7 +110,7 @@ export function createOne(sourceTable: ConvexTable<any>) {
 
 ### 2.1 🚨 CRITICAL: Impossible Intersection Type
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/types.ts:229`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/types.ts:229`
 
 **Current Code**:
 ```typescript
@@ -136,7 +136,7 @@ convex/test-types/db-rel.ts(61,10): error TS2344: Type 'false' does not satisfy 
 
 ### 2.2 🚨 CRITICAL: Phantom Property Misuse
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/relations.ts:48`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/relations.ts:48`
 
 **Current Code**:
 ```typescript
@@ -175,7 +175,7 @@ constructor(sourceTable, referencedTable, config) {
 
 ### 2.3 ⚠️ WARNING: Type Mapping in Function Signatures
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/types.ts:163-166`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/types.ts:163-166`
 
 **Current Code**:
 ```typescript
@@ -206,7 +206,7 @@ where?: (
 
 ### 2.4 ⚠️ MODERATE: Missing Abstraction Layer
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/types.ts:15-32`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/types.ts:15-32`
 
 **Current Code**:
 ```typescript
@@ -266,7 +266,7 @@ TRelations extends Record<string, Relation>,  // ✅ Without generic param
 
 **Pattern Found**: `extends infer TRel extends Relation`
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/types.ts:249-254`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/types.ts:249-254`
 
 ```typescript
 TRelations[K] extends infer TRel extends Relation<any>
@@ -317,10 +317,10 @@ Equal<TFullSelection, true> extends true
 ### 4.1 🔴 Type Assertion Usage (`as any`)
 
 **Files with `as any`**:
-- `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/query.ts`
-- `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/filter-expression.ts`
-- `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/query-compiler.ts`
-- `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/query-builder.ts`
+- `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/query.ts`
+- `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/filter-expression.ts`
+- `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/query-compiler.ts`
+- `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/query-builder.ts`
 
 **Critical Instances**:
 
@@ -356,7 +356,7 @@ const config = this.config as any;
 
 **Discovered Pattern**: Dynamic require to avoid circular dependency
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/query.ts:209`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/query.ts:209`
 
 ```typescript
 private _createOperators(): any {
@@ -501,25 +501,25 @@ If `@ts-expect-error` is unused, the type system isn't enforcing the constraint.
 
 **Found 4 TODO comments**:
 
-1. `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/query.ts:95`
+1. `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/query.ts:95`
    ```typescript
    // TODO M4.5: Implement offset pagination
    ```
    **Status**: Deferred to M4.5 - ACCEPTABLE
 
-2. `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/query.ts:361`
+2. `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/query.ts:361`
    ```typescript
    // TODO: Implement batch relation loading with Promise.all
    ```
    **Status**: Placeholder implementation - ACCEPTABLE for type-only phase
 
-3. `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/relations.ts:250`
+3. `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/relations.ts:250`
    ```typescript
    // TODO: Check each field's notNull property from validator
    ```
    **Status**: Affects nullability inference - **SHOULD ADDRESS** in Phase 3
 
-4. `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/extractRelationsConfig.ts:261`
+4. `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/extractRelationsConfig.ts:261`
    ```typescript
    // TODO: Validate field type is v.id(targetTable)
    ```
@@ -557,7 +557,7 @@ export type BuildRelationResult<...> = Simplify<{  // ← Add Simplify
 
 **Validation Found**: Excellent input validation
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/relations.ts:16-28`
+**Location**: `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/relations.ts:16-28`
 
 ```typescript
 const RELATION_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_]*$/;
@@ -669,11 +669,11 @@ After implementation, verify:
 
 ## References
 
-- Plan Document: `/Users/zbeyens/GitHub/better-convex/docs/plans/2026-02-01-fix-orm-type-inference-drizzle-patterns-plan.md`
+- Plan Document: `/Users/zbeyens/GitHub/kitcn/docs/plans/2026-02-01-fix-orm-type-inference-drizzle-patterns-plan.md`
 - Implementation Files:
-  - `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/types.ts`
-  - `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/relations.ts`
-  - `/Users/zbeyens/GitHub/better-convex/packages/better-convex/src/orm/query.ts`
+  - `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/types.ts`
+  - `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/relations.ts`
+  - `/Users/zbeyens/GitHub/kitcn/packages/kitcn/src/orm/query.ts`
 - Test Files:
-  - `/Users/zbeyens/GitHub/better-convex/convex/test-types/select.ts`
-  - `/Users/zbeyens/GitHub/better-convex/convex/test-types/db-rel.ts`
+  - `/Users/zbeyens/GitHub/kitcn/convex/test-types/select.ts`
+  - `/Users/zbeyens/GitHub/kitcn/convex/test-types/db-rel.ts`

@@ -1,11 +1,11 @@
 import { getEnv } from '../lib/get-env';
 import { getAuth } from './generated/auth';
 import { cors } from 'hono/cors';
-import { authMiddleware } from 'better-convex/auth/http';
-import { createHttpRouter } from 'better-convex/server';
+import { authMiddleware } from 'kitcn/auth/http';
+import { createHttpRouter } from 'kitcn/server';
 import { Hono } from 'hono';
 import { router } from '../lib/crpc';
-// __BETTER_CONVEX_HTTP_IMPORTS__
+// __KITCN_HTTP_IMPORTS__
 
 const app = new Hono();
 
@@ -22,7 +22,7 @@ app.use(
 app.use(authMiddleware(getAuth));
 
 export const httpRouter = router({
-  // __BETTER_CONVEX_HTTP_ROUTES__
+  // __KITCN_HTTP_ROUTES__
 });
 
 export default createHttpRouter(app, httpRouter);

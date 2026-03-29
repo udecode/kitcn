@@ -1,7 +1,7 @@
-import { authMiddleware } from 'better-convex/auth/http';
-import { createHttpRouter } from 'better-convex/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { authMiddleware } from 'kitcn/auth/http';
+import { createHttpRouter } from 'kitcn/server';
 import { router } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
 import { resendWebhook } from '../lib/plugins/resend/webhook';

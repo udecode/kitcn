@@ -1,7 +1,7 @@
 # Concave parity skill
 
 ## Goal
-Add a `concave-parity` skill that captures every known Concave vs Convex parity shift we had to patch or work around in Better Convex tooling, with file-backed locations so the bandaids can be removed later.
+Add a `concave-parity` skill that captures every known Concave vs Convex parity shift we had to patch or work around in kitcn tooling, with file-backed locations so the bandaids can be removed later.
 
 ## Steps
 - [completed] Load existing parity docs, skills, and related solution notes

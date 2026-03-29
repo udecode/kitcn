@@ -10,7 +10,7 @@ import {
 import {
   createServerCRPCProxy,
   getServerQueryClientOptions,
-} from 'better-convex/rsc';
+} from 'kitcn/rsc';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 

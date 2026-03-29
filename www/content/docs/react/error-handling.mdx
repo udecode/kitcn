@@ -86,7 +86,7 @@ try {
 `CRPCClientError` is thrown client-side when queries are skipped due to auth requirements:
 
 ```tsx showLineNumbers {1,3-5}
-import { CRPCClientError, isCRPCClientError } from 'better-convex/crpc';
+import { CRPCClientError, isCRPCClientError } from 'kitcn/crpc';
 
 if (isCRPCClientError(error)) {
   console.log(error.code);         // 'UNAUTHORIZED'
@@ -101,7 +101,7 @@ See [API Reference](#error-codes) for all available error codes.
 Check for specific error codes:
 
 ```tsx showLineNumbers {1,3-4}
-import { isCRPCErrorCode } from 'better-convex/crpc';
+import { isCRPCErrorCode } from 'kitcn/crpc';
 
 if (isCRPCErrorCode(error, 'UNAUTHORIZED')) {
   router.push('/login');
@@ -114,7 +114,7 @@ Handle errors globally in the QueryClient:
 
 ```tsx showLineNumbers {5-10}
 import { QueryCache, QueryClient } from '@tanstack/react-query';
-import { isCRPCClientError } from 'better-convex/crpc';
+import { isCRPCClientError } from 'kitcn/crpc';
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({

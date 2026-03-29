@@ -1,11 +1,11 @@
 ---
-description: Sync doc changes from www/content/docs/ into packages/better-convex/skills/convex/
+description: Sync doc changes from www/content/docs/ into packages/kitcn/skills/convex/
 name: sync-skill
 ---
 
 ## Task
 
-Sync recent doc changes into `packages/better-convex/skills/convex/` so the skill stays current.
+Sync recent doc changes into `packages/kitcn/skills/convex/` so the skill stays current.
 
 **Input**: $ARGUMENTS (doc file path, PR diff, or "all" to scan for drift)
 
@@ -43,7 +43,7 @@ Sync recent doc changes into `packages/better-convex/skills/convex/` so the skil
 - Keep: API signatures, code examples, option tables, gotchas/callouts, error patterns
 - Compress prose into terse bullets — grammar optional, clarity mandatory
 - Prefer code over prose when both convey the same information
-- **Parity baseline**: AI already knows tRPC + Drizzle + Better Auth semantics. Condense parity-only content; keep full detail only for better-convex/Convex-specific deltas
+- **Parity baseline**: AI already knows tRPC + Drizzle + Better Auth semantics. Condense parity-only content; keep full detail only for kitcn/Convex-specific deltas
 
 ### Structure
 

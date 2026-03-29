@@ -178,7 +178,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
     validation: {
       beforeCheck: [
         ['convex', 'init'],
-        ['better-convex', 'add', 'auth', '--preset', 'convex', '--yes'],
+        ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes'],
       ],
       lint: false,
     },

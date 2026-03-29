@@ -2,7 +2,7 @@
 
 ## Goal
 
-Fix the runtime regression where app hooks and Better Convex hooks resolve
+Fix the runtime regression where app hooks and kitcn hooks resolve
 different `@tanstack/react-query` installs and lose provider context identity.
 
 ## Phases

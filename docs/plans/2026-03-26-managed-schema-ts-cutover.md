@@ -1,7 +1,7 @@
 # Managed schema TS cutover
 
 ## Goal
-Remove visible `better-convex-managed` comment markers from root `schema.ts` ownership while preserving plugin schema reconciliation, drift detection, and schema-only claim flows.
+Remove visible `kitcn-managed` comment markers from root `schema.ts` ownership while preserving plugin schema reconciliation, drift detection, and schema-only claim flows.
 
 ## Plan
 1. Replace comment-marker ownership reads with structural TS extraction by table key.

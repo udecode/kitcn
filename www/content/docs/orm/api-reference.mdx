@@ -58,7 +58,7 @@ access is denied by default.
 ### `index()` / `uniqueIndex()`
 
 ```ts showLineNumbers
-import { index, uniqueIndex } from 'better-convex/orm';
+import { index, uniqueIndex } from 'kitcn/orm';
 
 const posts = convexTable(
   'posts',
@@ -76,7 +76,7 @@ const posts = convexTable(
 ### `unique()`
 
 ```ts showLineNumbers
-import { unique } from 'better-convex/orm';
+import { unique } from 'kitcn/orm';
 
 const users = convexTable(
   'users',
@@ -93,7 +93,7 @@ Use `.nullsNotDistinct()` to treat `null` as a value (PG parity).
 ### `foreignKey()`
 
 ```ts showLineNumbers
-import { foreignKey } from 'better-convex/orm';
+import { foreignKey } from 'kitcn/orm';
 
 const memberships = convexTable(
   'memberships',
@@ -113,7 +113,7 @@ Without an index, the ORM will throw when it detects referencing rows.
 ### `check()`
 
 ```ts showLineNumbers
-import { check, convexTable, gt, integer } from 'better-convex/orm';
+import { check, convexTable, gt, integer } from 'kitcn/orm';
 
 const users = convexTable(
   'users',
@@ -129,7 +129,7 @@ Checks are enforced at runtime by ORM mutations and follow SQL-like NULL semanti
 ### `searchIndex()`
 
 ```ts showLineNumbers
-import { searchIndex } from 'better-convex/orm';
+import { searchIndex } from 'kitcn/orm';
 
 const posts = convexTable(
   'posts',
@@ -146,7 +146,7 @@ Use `.staged()` to stage a search index for later activation.
 ### `vectorIndex()`
 
 ```ts showLineNumbers
-import { vector, vectorIndex } from 'better-convex/orm';
+import { vector, vectorIndex } from 'kitcn/orm';
 
 const posts = convexTable(
   'posts',
@@ -168,7 +168,7 @@ Vector indexes require `.dimensions(n)` and can be staged with `.staged()`.
 ### `deletion()`
 
 ```ts showLineNumbers
-import { deletion } from 'better-convex/orm';
+import { deletion } from 'kitcn/orm';
 
 const users = convexTable(
   'users',

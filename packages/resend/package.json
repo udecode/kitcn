@@ -1,7 +1,7 @@
 {
-  "name": "@better-convex/resend",
+  "name": "@kitcn/resend",
   "version": "0.1.0",
-  "description": "Better Convex Resend plugin",
+  "description": "kitcn Resend plugin",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "better-convex": "workspace:*",
+    "kitcn": "workspace:*",
     "svix": "^1.84.1"
   },
   "peerDependencies": {

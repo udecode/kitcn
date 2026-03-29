@@ -1,5 +1,5 @@
 import { api } from '@convex/api';
-import { convexBetterAuth } from 'better-convex/auth/nextjs';
+import { convexBetterAuth } from 'kitcn/auth/nextjs';
 import { env } from '@/env';
 
 export const { createContext, createCaller, handler } = convexBetterAuth({

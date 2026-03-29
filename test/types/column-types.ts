@@ -1,3 +1,4 @@
+import { v } from 'convex/values';
 import {
   bytes,
   convexTable,
@@ -5,8 +6,7 @@ import {
   type InferInsertModel,
   type InferSelectModel,
   textEnum,
-} from 'better-convex/orm';
-import { v } from 'convex/values';
+} from 'kitcn/orm';
 import { type Equal, Expect, IsAny, Not } from './utils';
 
 // ============================================================================

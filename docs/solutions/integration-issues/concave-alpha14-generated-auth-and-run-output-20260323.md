@@ -10,7 +10,7 @@ tags:
   - dev
 symptoms:
   - `scenario:test -- next-auth` fails with `undefined is not an object (evaluating 'authFunctions.findOne')`
-  - `better-convex dev --backend concave` warns that migration or aggregate kickoff failed because JSON parsing broke
+  - `kitcn dev --backend concave` warns that migration or aggregate kickoff failed because JSON parsing broke
   - Concave alpha.14 removes old parity gaps, but prepared auth scenarios still fail after the old shims are deleted
 module: concave-dev
 resolved: 2026-03-23
@@ -53,7 +53,7 @@ alpha.14 started printing a human preamble before the JSON result:
 - `Success`
 - pretty JSON body
 
-Better Convex was still parsing stdout as if it were raw JSON, so startup
+kitcn was still parsing stdout as if it were raw JSON, so startup
 migration and aggregate calls warned even when the backend result itself was
 fine.
 
@@ -90,11 +90,11 @@ Backend run parsing now accepts both:
 - a human preamble followed by a JSON block
 
 That keeps Convex output unchanged while letting Concave alpha.14 stay verbose
-without breaking Better Convex startup hooks.
+without breaking kitcn startup hooks.
 
 ## Verification
 
-- `bun test packages/better-convex/src/auth/generated-contract.test.ts packages/better-convex/src/cli/commands/migrate.test.ts`
+- `bun test packages/kitcn/src/auth/generated-contract.test.ts packages/kitcn/src/cli/commands/migrate.test.ts`
 - `bun run test:concave`
 - `bun run scenario:test -- next-auth`
 - `bun run scenario:test -- next`
@@ -119,10 +119,10 @@ Observed live behavior after the fix:
 
 ## Files Changed
 
-- `packages/better-convex/src/auth/generated-contract.ts`
-- `packages/better-convex/src/auth/generated-contract.test.ts`
-- `packages/better-convex/src/cli/backend-core.ts`
-- `packages/better-convex/src/cli/commands/migrate.test.ts`
+- `packages/kitcn/src/auth/generated-contract.ts`
+- `packages/kitcn/src/auth/generated-contract.test.ts`
+- `packages/kitcn/src/cli/backend-core.ts`
+- `packages/kitcn/src/cli/commands/migrate.test.ts`
 - `.claude/skills/concave-parity/concave-parity.mdc`
 
 ## Related

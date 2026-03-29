@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "better-convex",
+      "name": "kitcn",
       "dependencies": {
         "@convex-dev/better-auth": "0.11.1",
         "@tanstack/query-core": "5.90.20",
@@ -56,22 +56,21 @@
     "convex": {
       "name": "test-convex",
       "dependencies": {
-        "better-convex": "workspace:*",
+        "kitcn": "workspace:*",
       },
     },
     "example": {
       "name": "example",
       "version": "0.1.0",
       "dependencies": {
-        "@better-convex/resend": "workspace:*",
         "@convex-dev/react-query": "0.1.0",
         "@hookform/resolvers": "5.2.2",
+        "@kitcn/resend": "workspace:*",
         "@react-email/components": "1.0.8",
         "@react-email/render": "2.0.4",
         "@t3-oss/env-nextjs": "0.13.10",
         "@tanstack/react-query": "5.95.2",
         "better-auth": "1.5.3",
-        "better-convex": "workspace:*",
         "class-variance-authority": "0.7.1",
         "clsx": "2.1.1",
         "cmdk": "1.1.1",
@@ -82,6 +81,7 @@
         "hono": "4.12.9",
         "input-otp": "1.4.2",
         "jotai-x": "2.3.3",
+        "kitcn": "workspace:*",
         "lucide-react": "0.575.0",
         "next-themes": "0.4.6",
         "nuqs": "2.8.8",
@@ -115,11 +115,11 @@
         "typescript": "^5",
       },
     },
-    "packages/better-convex": {
-      "name": "better-convex",
+    "packages/kitcn": {
+      "name": "kitcn",
       "version": "0.11.0",
       "bin": {
-        "better-convex": "./dist/cli.mjs",
+        "kitcn": "./dist/cli.mjs",
         "intent": "./bin/intent.js",
       },
       "dependencies": {
@@ -172,10 +172,10 @@
       ],
     },
     "packages/resend": {
-      "name": "@better-convex/resend",
+      "name": "@kitcn/resend",
       "version": "0.1.0",
       "dependencies": {
-        "better-convex": "workspace:*",
+        "kitcn": "workspace:*",
         "svix": "^1.84.1",
       },
       "devDependencies": {
@@ -282,8 +282,6 @@
     "@better-auth/telemetry": ["@better-auth/telemetry@1.5.3", "", { "dependencies": { "@better-auth/utils": "0.3.1", "@better-fetch/fetch": "1.1.21" }, "peerDependencies": { "@better-auth/core": "1.5.3" } }, "sha512-ZX/r8AsWdB6BwH+Rb7H/SyJnGtPN6EDWrNxBQEDsqRrBJVcDLwAIz165P57RXci0WwtY872T0guKq+XVyy5rkA=="],
 
     "@better-auth/utils": ["@better-auth/utils@0.3.1", "", {}, "sha512-+CGp4UmZSUrHHnpHhLPYu6cV+wSUSvVbZbNykxhUDocpVNTo9uFFxw/NqJlh1iC4wQ9HKKWGCKuZ5wUgS0v6Kg=="],
-
-    "@better-convex/resend": ["@better-convex/resend@workspace:packages/resend"],
 
     "@better-fetch/fetch": ["@better-fetch/fetch@1.1.21", "", {}, "sha512-/ImESw0sskqlVR94jB+5+Pxjf+xBwDZF/N5+y2/q4EqD7IARUTSpPfIo8uf39SYpCxyOCtbyYpUrZ3F/k0zT4A=="],
 
@@ -562,6 +560,8 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@kitcn/resend": ["@kitcn/resend@workspace:packages/resend"],
 
     "@manypkg/find-root": ["@manypkg/find-root@1.1.0", "", { "dependencies": { "@babel/runtime": "^7.5.5", "@types/node": "^12.7.1", "find-up": "^4.1.0", "fs-extra": "^8.1.0" } }, "sha512-mki5uBvhHzO8kYYix/WRy2WX8S3B5wdVSc9D6KcU5lQNglP2yt58/VfLuAK49glRXChosY8ap2oJ1qgma3GUVA=="],
 
@@ -1139,8 +1139,6 @@
 
     "better-call": ["better-call@1.3.2", "", { "dependencies": { "@better-auth/utils": "^0.3.1", "@better-fetch/fetch": "^1.1.21", "rou3": "^0.7.12", "set-cookie-parser": "^3.0.1" }, "peerDependencies": { "zod": "^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-4cZIfrerDsNTn3cm+MhLbUePN0gdwkhSXEuG7r/zuQ8c/H7iU0/jSK5TD3FW7U0MgKHce/8jGpPYNO4Ve+4NBw=="],
 
-    "better-convex": ["better-convex@workspace:packages/better-convex"],
-
     "better-path-resolve": ["better-path-resolve@1.0.0", "", { "dependencies": { "is-windows": "^1.0.0" } }, "sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g=="],
 
     "birpc": ["birpc@4.0.0", "", {}, "sha512-LShSxJP0KTmd101b6DRyGBj57LZxSDYWKitQNW/mi8GRMvZb078Uf9+pveax1DrVL89vm7mWe+TovdI/UDOuPw=="],
@@ -1614,6 +1612,8 @@
     "jsonfile": ["jsonfile@4.0.0", "", { "optionalDependencies": { "graceful-fs": "^4.1.6" } }, "sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg=="],
 
     "keyv": ["keyv@4.5.4", "", { "dependencies": { "json-buffer": "3.0.1" } }, "sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw=="],
+
+    "kitcn": ["kitcn@workspace:packages/kitcn"],
 
     "kleur": ["kleur@3.0.3", "", {}, "sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w=="],
 

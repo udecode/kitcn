@@ -25,8 +25,8 @@ resolved: 2026-03-18
 
 ## Problem
 
-`better-convex add auth` had to support a real adoption path for apps that
-started from `create-convex`, not from Better Convex `create`.
+`kitcn add auth` had to support a real adoption path for apps that
+started from `create-convex`, not from kitcn `create`.
 
 That path needed to stay bare: plain `convex/`, plain `httpRouter()`,
 no `concave.json`, no `convex/lib/get-env.ts`, and no cRPC scaffolding.
@@ -35,9 +35,9 @@ The flow also needed to stop leaking bootstrap internals into docs and
 scenarios. The intended user path is:
 
 1. `convex init`
-2. `better-convex add auth --preset convex --yes`
+2. `kitcn add auth --preset convex --yes`
 
-The obvious shortcut, reusing the Better Convex-first auth path and tolerating
+The obvious shortcut, reusing the kitcn-first auth path and tolerating
 the old staged bootstrap dance, broke that contract and fell over during the
 new `create-convex-nextjs-shadcn-auth` scenario.
 
@@ -46,14 +46,14 @@ new `create-convex-nextjs-shadcn-auth` scenario.
 Four separate assumptions in the existing auth flow were wrong for raw
 Convex adoption:
 
-1. `add auth` assumed Better Convex initialization had already happened, so
+1. `add auth` assumed kitcn initialization had already happened, so
    it tried to route raw Convex apps through init/bootstrap behavior that
-   creates Better Convex structure.
+   creates kitcn structure.
 2. The raw preset tolerated running `add auth` before `convex init`, which
    forced users and scenarios into `--no-codegen` plus manual follow-up
    commands instead of one stable flow.
 3. Raw `auth.config.ts` cannot require `process.env.JWKS` on first bootstrap,
-   because `better-convex codegen --scope auth` runs before `env push --auth`
+   because `kitcn codegen --scope auth` runs before `env push --auth`
    has generated and pushed that value.
 4. `env push --auth` tried to fetch JWKS before the deployment had the new
    `BETTER_AUTH_SECRET`, so Better Auth booted with its default-secret guard
@@ -65,19 +65,19 @@ for generated `getAuth` functions.
 
 During validation, a second regression showed up in tooling: replacing
 `runLocalCliSteps(...)` with a generic scenario command runner silently dropped
-`BETTER_CONVEX_INSTALL_SPEC` and `BETTER_CONVEX_RESEND_INSTALL_SPEC`. That made
+`KITCN_INSTALL_SPEC` and `KITCN_RESEND_INSTALL_SPEC`. That made
 plugin scenarios install from npm instead of the packed local tarballs.
 
 ## Solution
 
-Add an explicit raw adoption mode: `better-convex add auth --preset convex`.
+Add an explicit raw adoption mode: `kitcn add auth --preset convex`.
 
 That preset uses a separate scaffold branch and a hard-cut execution flow:
 
 1. require `convex init` first
 2. scaffold raw Convex auth files
-3. auto-run `better-convex codegen --scope auth`
-4. auto-run `better-convex env push --auth`
+3. auto-run `kitcn codegen --scope auth`
+4. auto-run `kitcn env push --auth`
 
 `--no-codegen` stays available as a CI or batching escape hatch, but it is no
 longer part of the normal user path.
@@ -89,7 +89,7 @@ The raw preset writes:
 - patches plain `convex/schema.ts` with `...authSchema`
 - writes plain `convex/http.ts` with `httpRouter()` +
   `registerRoutes(...)`
-- skips `concave.json`, `get-env.ts`, cRPC files, and Better Convex demo
+- skips `concave.json`, `get-env.ts`, cRPC files, and kitcn demo
   surfaces
 
 Make the first bootstrap auth config secret-safe instead of JWKS-hardcoded:
@@ -108,28 +108,28 @@ Finally, widen `registerRoutes(...)` to accept the real generated auth
 context generically instead of pretending every auth factory is
 `GetAuth<unknown, ...>`.
 
-For scenario tooling, keep local Better Convex steps on the packed local
+For scenario tooling, keep local kitcn steps on the packed local
 tarballs by restoring the env overrides for every non-`convex` scenario step:
 
-- `BETTER_CONVEX_INSTALL_SPEC`
-- `BETTER_CONVEX_RESEND_INSTALL_SPEC`
+- `KITCN_INSTALL_SPEC`
+- `KITCN_RESEND_INSTALL_SPEC`
 
 ## Verification
 
-- `bun test ./packages/better-convex/src/cli/cli.commands.ts --test-name-pattern "run\\(add auth"`
-- `bun test ./packages/better-convex/src/cli/env.test.ts`
-- `bun test ./packages/better-convex/src/auth/registerRoutes.test.ts`
+- `bun test ./packages/kitcn/src/cli/cli.commands.ts --test-name-pattern "run\\(add auth"`
+- `bun test ./packages/kitcn/src/cli/env.test.ts`
+- `bun test ./packages/kitcn/src/auth/registerRoutes.test.ts`
 - `bun test ./tooling/scenarios.test.ts`
 - `bun tooling/scenarios.ts check create-convex-nextjs-shadcn-auth`
 - `bun run scenario:check:convex`
 - `bun typecheck`
 - `bun lint:fix`
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn build`
 
 ## Prevention
 
 1. Treat raw Convex adoption as a separate mode, not as a skinny version of
-   Better Convex init.
+   kitcn init.
 2. If a bootstrap step needs auth runtime code before env push, make the
    config bootstrap-safe first and harden it later.
 3. For auth env flows, deploy secrets before asking the backend to derive
@@ -142,11 +142,11 @@ tarballs by restoring the env overrides for every non-`convex` scenario step:
 
 ## Files Changed
 
-- `packages/better-convex/src/cli/commands/add.ts`
-- `packages/better-convex/src/cli/registry/planner.ts`
-- `packages/better-convex/src/cli/registry/items/auth/auth-item.ts`
-- `packages/better-convex/src/cli/env.ts`
-- `packages/better-convex/src/auth/registerRoutes.ts`
+- `packages/kitcn/src/cli/commands/add.ts`
+- `packages/kitcn/src/cli/registry/planner.ts`
+- `packages/kitcn/src/cli/registry/items/auth/auth-item.ts`
+- `packages/kitcn/src/cli/env.ts`
+- `packages/kitcn/src/auth/registerRoutes.ts`
 - `tooling/scenario.config.ts`
 
 ## Related

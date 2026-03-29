@@ -115,7 +115,7 @@ async function main() {
   const bunLcov = readFileSync(bunLcovPath, 'utf8');
   const bunRecords = parseBunLcov(bunLcov);
 
-  const includedPrefix = 'packages/better-convex/src/';
+  const includedPrefix = 'packages/kitcn/src/';
   const included = bunRecords.filter(
     (r) =>
       r.file.startsWith(includedPrefix) &&
@@ -145,19 +145,19 @@ async function main() {
   // Per-file floors for high-risk public surfaces (ship-readiness).
   const criticalFloors: Record<string, { minLines: number; minFuncs: number }> =
     {
-      'packages/better-convex/src/react/client.ts': {
+      'packages/kitcn/src/react/client.ts': {
         minLines: 25,
         minFuncs: 30,
       },
-      'packages/better-convex/src/server/builder.ts': {
+      'packages/kitcn/src/server/builder.ts': {
         minLines: 50,
         minFuncs: 45,
       },
-      'packages/better-convex/src/auth/create-api.ts': {
+      'packages/kitcn/src/auth/create-api.ts': {
         minLines: 40,
         minFuncs: 75,
       },
-      'packages/better-convex/src/cli/env.ts': { minLines: 50, minFuncs: 100 },
+      'packages/kitcn/src/cli/env.ts': { minLines: 50, minFuncs: 100 },
     };
 
   for (const [file, floors] of Object.entries(criticalFloors)) {
@@ -186,7 +186,7 @@ async function main() {
     'vitest',
     'run',
     '--coverage',
-    '--coverage.include=packages/better-convex/src/orm/**/*.ts',
+    '--coverage.include=packages/kitcn/src/orm/**/*.ts',
     '--coverage.reporter=text',
     '--coverage.thresholds.lines=75',
     '--coverage.thresholds.functions=80',

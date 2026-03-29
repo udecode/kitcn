@@ -38,7 +38,7 @@ Two assumptions were wrong:
    `@tanstack/intent`, then tried to execute
    `temp/node_modules/@tanstack/intent/dist/cli.mjs`
 
-But the packed `better-convex` tarball does not install TanStack Intent as a
+But the packed `kitcn` tarball does not install TanStack Intent as a
 runtime dependency. The temp app needs the matching CLI installed explicitly
 before `stale` can run there.
 
@@ -49,11 +49,11 @@ the package-pinned CLI into the temp app before executing it.
 
 The fixed contract is:
 
-1. keep `@tanstack/intent` pinned in `packages/better-convex/package.json`
+1. keep `@tanstack/intent` pinned in `packages/kitcn/package.json`
 2. add `tanstack-intent` to package keywords so the registry can discover the
    package cleanly
 3. in `tooling/intent-stale.mjs`, read the package-pinned Intent version from
-   `packages/better-convex/package.json`
+   `packages/kitcn/package.json`
 4. install both the packed tarball and that exact Intent version into the temp
    app
 5. run `stale` from the temp install, not from repo-root `node_modules`
@@ -61,10 +61,10 @@ The fixed contract is:
 ## Verification
 
 - `bun test ./tooling/intent-stale.test.ts`
-- `bun test ./packages/better-convex/src/package-intent.test.ts`
+- `bun test ./packages/kitcn/src/package-intent.test.ts`
 - `bun run intent:validate`
 - `bun run intent:stale`
-- `cd packages/better-convex && node ./bin/intent.js list`
+- `cd packages/kitcn && node ./bin/intent.js list`
 - `bun run intent:check`
 - `bun typecheck`
 

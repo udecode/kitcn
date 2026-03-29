@@ -12,7 +12,7 @@ tags:
   - env
 severity: medium
 symptoms:
-  - better-convex dev hides the normal Convex dev stream
+  - kitcn dev hides the normal Convex dev stream
   - editing a Convex file gives no obvious signal that Convex rebuilt again
   - verify output needs a quieter contract than long-running dev
 ---
@@ -21,7 +21,7 @@ symptoms:
 
 ## Problem
 
-`better-convex dev` got too clever.
+`kitcn dev` got too clever.
 
 Quieting startup was fine for one-shot bootstrap and `verify`, but applying the
 same filtered contract to normal long-running `dev` hid the real Convex rebuild
@@ -45,8 +45,8 @@ Implementation rules:
 1. keep automatic env sync and initial shared-API codegen quiet
 2. keep backend-readiness gating for auth sync, migrations, and backfill
 3. keep one-shot bootstrap and `verify` on the filtered owned output path
-4. restore raw Convex backend output for long-running local `better-convex dev`
-5. keep the Better Convex watcher signal on edit: `Convex api updated`
+4. restore raw Convex backend output for long-running local `kitcn dev`
+5. keep the kitcn watcher signal on edit: `Convex api updated`
 
 ## Verification
 
@@ -60,7 +60,7 @@ Implementation rules:
 - package build
 - repo `lint:fix`
 - live runtime proof in a prepared `create-convex-bare` app via
-  `better-convex dev` plus a real file edit
+  `kitcn dev` plus a real file edit
 
 ## Takeaways
 

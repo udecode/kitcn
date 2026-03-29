@@ -9,7 +9,7 @@ tags:
   - api
   - example
 symptoms:
-  - `better-convex codegen` fails while parsing one Convex module, but `convex/shared/api.ts` still gets rewritten to an empty surface
+  - `kitcn codegen` fails while parsing one Convex module, but `convex/shared/api.ts` still gets rewritten to an empty surface
   - `convex/functions/generated/plugins/*.runtime.ts` disappears after a failed codegen run
   - one bad parse leaves the app with less generated output than before the run
 module: codegen
@@ -20,7 +20,7 @@ resolved: 2026-03-28
 
 ## Problem
 
-`better-convex codegen` was mutating generated output before it knew whether
+`kitcn codegen` was mutating generated output before it knew whether
 the parse phase had actually succeeded.
 
 That made failures destructive. One broken module could leave the app in a
@@ -69,9 +69,9 @@ failures do not.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/codegen.test.ts`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/cli/codegen.test.ts`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 - `bun lint:fix`
 - live repo proof:
   - before: `example/convex/shared/api.ts` hash stayed stable across a failing

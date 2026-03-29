@@ -1,5 +1,5 @@
 import { initCRPC } from '../functions/generated/server';
-// __BETTER_CONVEX_CRPC_IMPORTS__
+// __KITCN_CRPC_IMPORTS__
 
 const c = initCRPC.create();
 

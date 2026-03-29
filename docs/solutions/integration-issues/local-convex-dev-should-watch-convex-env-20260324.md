@@ -21,13 +21,13 @@ symptoms:
 
 ## Problem
 
-`better-convex dev` already handled the internal two-phase auth bootstrap on
+`kitcn dev` already handled the internal two-phase auth bootstrap on
 backend `convex`, but it stopped there. After startup, local edits to
-`convex/.env` still required a manual `better-convex env push`, which is dumb
+`convex/.env` still required a manual `kitcn env push`, which is dumb
 for an active dev session.
 
 The same seam left stale tooling behind: Convex auth scenarios still called
-`better-convex env push --auth` even though that flag was hard-cut.
+`kitcn env push --auth` even though that flag was hard-cut.
 
 ## Root cause
 
@@ -45,7 +45,7 @@ That split leaked internal lifecycle details into normal local dev.
 ## Fix
 
 Keep the real two-phase auth bootstrap, then add a Convex-only watcher on
-`convex/.env` during `better-convex dev`.
+`convex/.env` during `kitcn dev`.
 
 Implementation rules:
 
@@ -55,7 +55,7 @@ Implementation rules:
 4. Snapshot `convex/.env` content before and after sync so generated writes
    like `BETTER_AUTH_SECRET` do not trigger infinite loops.
 
-Keep `better-convex env push` for:
+Keep `kitcn env push` for:
 
 - one-off syncs outside dev
 - `--prod`
@@ -71,7 +71,7 @@ Then hard-cut stale scenario/bootstrap refs to the removed `--auth` flag.
   - later local edits trigger auth-aware env sync
   - follow-up writes caused by the sync do not loop
 - targeted scenario registry test proving Convex bootstrap lanes use
-  `better-convex env push` without `--auth`
+  `kitcn env push` without `--auth`
 - targeted CLI tests proving the updated dev/env expectations still hold
 - package typecheck
 - package build

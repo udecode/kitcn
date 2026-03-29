@@ -2,7 +2,7 @@
 
 ## Goal
 
-Remove `better-convex init --bootstrap`. Make `better-convex init --yes`
+Remove `kitcn init --bootstrap`. Make `kitcn init --yes`
 finish the first local Convex bootstrap by default, and move the same decision
 into the interactive `init` flow.
 

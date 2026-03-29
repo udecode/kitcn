@@ -8,7 +8,7 @@ links:
 ## dev
 
 ```bash showLineNumbers
-npx better-convex dev
+npx kitcn dev
 ```
 
 Options:
@@ -18,7 +18,7 @@ Options:
 | `--api <dir>` | Output directory for api.ts (default: `convex/shared`) |
 | `--backend <convex\|concave>` | Backend CLI to drive |
 | `--bootstrap` | Run one-shot local Convex bootstrap and exit |
-| `--config <path>` | Path to better-convex config file (default: `./concave.json`) |
+| `--config <path>` | Path to kitcn config file (default: `./concave.json`) |
 | `--backfill=auto\|on\|off` | Dev aggregate backfill mode toggle (default: `auto`) |
 | `--backfill-wait` / `--no-backfill-wait` | Wait for all target indexes to become `READY` |
 | `--backfill-batch-size <n>` | Batch size for aggregate backfill kickoff |
@@ -28,10 +28,10 @@ Options:
 
 Wraps the selected backend `dev` command, generates runtime files on startup, watches for changes, and passes all other flags through.
 
-On backend `convex`, `better-convex dev` runs `convex init` before codegen,
+On backend `convex`, `kitcn dev` runs `convex init` before codegen,
 watchers, and the main `convex dev` process.
 
-Set `meta["better-convex"].dev.preRun` in `concave.json` to run one Convex
+Set `meta["kitcn"].dev.preRun` in `concave.json` to run one Convex
 setup function inside the main dev loop. It is Convex-only; backend `concave`
 has no equivalent `--run` flow.
 
@@ -43,28 +43,28 @@ Local backend state depends on the selected backend:
 - Convex: `.convex/` at project root
 - Concave Bun/Node: `.concave/local/`
 
-`better-convex dev` always runs full cRPC generation by default. Use `better-convex codegen --scope ...` for one-off scoped generation.
+`kitcn dev` always runs full cRPC generation by default. Use `kitcn codegen --scope ...` for one-off scoped generation.
 
-When aggregate backfill is enabled, `better-convex dev` kicks off `aggregateBackfill` and waits for `READY` by default (in background).
-When `convex/functions/schema.ts` changes, `better-convex dev` re-runs resume backfill automatically only if aggregate index signatures changed.
+When aggregate backfill is enabled, `kitcn dev` kicks off `aggregateBackfill` and waits for `READY` by default (in background).
+When `convex/functions/schema.ts` changes, `kitcn dev` re-runs resume backfill automatically only if aggregate index signatures changed.
 
 ```bash showLineNumbers
 # One-shot local Convex bootstrap
-npx better-convex dev --bootstrap
+npx kitcn dev --bootstrap
 ```
 
 ## verify
 
 ```bash showLineNumbers
-npx better-convex verify
+npx kitcn verify
 ```
 
-Runs a one-shot local Convex runtime proof through the Better Convex dev path.
+Runs a one-shot local Convex runtime proof through the kitcn dev path.
 
-Use it when you want a CI-safe answer to one question: does local Better Convex
+Use it when you want a CI-safe answer to one question: does local kitcn
 dev boot cleanly right now?
 
-`better-convex verify`:
+`kitcn verify`:
 
 - runs the runtime path through `dev --once`
 - reuses the current local Convex deployment when one is already configured
@@ -75,7 +75,7 @@ dev boot cleanly right now?
 Generate `api.ts` once against the selected backend connection:
 
 ```bash showLineNumbers
-npx better-convex codegen
+npx kitcn codegen
 ```
 
 Options:
@@ -85,7 +85,7 @@ Options:
 | `--api <dir>` | Output directory (default: `convex/shared`) |
 | `--backend <convex\|concave>` | Backend CLI to drive |
 | `--scope <all\|auth\|orm>` | Generation scope (default: `all`) |
-| `--config <path>` | Path to better-convex config file (default: `./concave.json`) |
+| `--config <path>` | Path to kitcn config file (default: `./concave.json`) |
 | `--debug` | Show detailed output |
 | `--silent` | Suppress all output |
 
@@ -93,7 +93,7 @@ See [Scope Modes](#scope-modes) for the full output manifest per scope.
 
 Plugin note:
 
-- `better-convex codegen` discovers plugins from schema extensions and local plugin scaffold registration.
+- `kitcn codegen` discovers plugins from schema extensions and local plugin scaffold registration.
 - Plugin discovery is used for typing/runtime context only.
 - `codegen` does not generate plugin runtime modules. Plugin runtime files are scaffold-owned.
 
@@ -103,22 +103,22 @@ Manage environment variables:
 
 ```bash showLineNumbers {2,5,8,11,14,17,20}
 # Push all vars from convex/.env
-npx better-convex env push
+npx kitcn env push
 
 # Force overwrite existing values
-npx better-convex env push --force
+npx kitcn env push --force
 
 # Production deployment
-npx better-convex env push --prod
+npx kitcn env push --prod
 
 # Rotate auth keys, then push fresh JWKS
-npx better-convex env push --rotate
+npx kitcn env push --rotate
 
 # Pull remote values to stdout
-npx better-convex env pull
+npx kitcn env pull
 
 # Write remote values to a file
-npx better-convex env pull --out convex/.env.remote
+npx kitcn env pull --out convex/.env.remote
 ```
 
 Push options:
@@ -144,41 +144,41 @@ Target options:
 | `--preview-name <name>` | Target a named preview deployment |
 | `--env-file <path>` | Use an env file to resolve the target deployment |
 
-`better-convex env push` reads `convex/.env` by default, filters Convex-managed variables, then pushes one batch update through `convex env set --from-file`. If auth scaffold is installed, it also ensures `BETTER_AUTH_SECRET` exists locally, fetches `JWKS` with `convex run generated/auth:getLatestJwks`, and includes both in the push payload. With `--rotate`, it runs `convex run generated/auth:rotateKeys` first, then pushes the fresh `JWKS`.
+`kitcn env push` reads `convex/.env` by default, filters Convex-managed variables, then pushes one batch update through `convex env set --from-file`. If auth scaffold is installed, it also ensures `BETTER_AUTH_SECRET` exists locally, fetches `JWKS` with `convex run generated/auth:getLatestJwks`, and includes both in the push payload. With `--rotate`, it runs `convex run generated/auth:rotateKeys` first, then pushes the fresh `JWKS`.
 
-On backend `convex`, `better-convex dev` handles the local auth bootstrap flow and watches `convex/.env` for later local edits. `better-convex dev --bootstrap` is the one-shot local setup version of that flow. `better-convex verify` is the one-shot local runtime proof. `better-convex add auth --yes` reuses the same local bootstrap path when it needs generated auth runtime and JWKS. Use `better-convex env push` for `--prod`, `--rotate`, or explicit repair against an already active deployment.
+On backend `convex`, `kitcn dev` handles the local auth bootstrap flow and watches `convex/.env` for later local edits. `kitcn dev --bootstrap` is the one-shot local setup version of that flow. `kitcn verify` is the one-shot local runtime proof. `kitcn add auth --yes` reuses the same local bootstrap path when it needs generated auth runtime and JWKS. Use `kitcn env push` for `--prod`, `--rotate`, or explicit repair against an already active deployment.
 
-If `--from-file` is omitted and stdin is piped, `better-convex env push` reads the piped payload instead of `convex/.env`.
+If `--from-file` is omitted and stdin is piped, `kitcn env push` reads the piped payload instead of `convex/.env`.
 
-`better-convex env pull` wraps `convex env list` and preserves the exact payload format, so you can print it or write it to disk unchanged.
+`kitcn env pull` wraps `convex env list` and preserves the exact payload format, so you can print it or write it to disk unchanged.
 
 All env commands forward Convex deployment-target args such as `--prod`, `--deployment-name`, `--preview-name`, and `--env-file`.
 
 Other env commands stay aligned with Convex:
 
 ```bash showLineNumbers
-npx better-convex env list
-npx better-convex env get <name>
-npx better-convex env set <name> <value>
-npx better-convex env remove <name>
+npx kitcn env list
+npx kitcn env get <name>
+npx kitcn env set <name> <value>
+npx kitcn env remove <name>
 ```
 
-`better-convex env set` keeps Convex 1.33 behavior for interactive values,
-`--from-file`, and stdin input. `better-convex env pull` gives you the same
+`kitcn env set` keeps Convex 1.33 behavior for interactive values,
+`--from-file`, and stdin input. `kitcn env pull` gives you the same
 robust export format, so `env pull --out <path>` and `env set --from-file <path>`
 round-trip cleanly.
 
-On backend `concave`, `better-convex env ...` fails clearly because Concave has no upstream env command.
+On backend `concave`, `kitcn env ...` fails clearly because Concave has no upstream env command.
 
-Unknown commands on backend `convex` pass straight through to the Convex CLI, so `better-convex insights` opens the same insights surface as `convex insights`.
+Unknown commands on backend `convex` pass straight through to the Convex CLI, so `kitcn insights` opens the same insights surface as `convex insights`.
 
 ## deploy
 
 ```bash showLineNumbers
-npx better-convex deploy --prod
+npx kitcn deploy --prod
 ```
 
-`better-convex deploy` runs:
+`kitcn deploy` runs:
 1. selected backend `deploy ...`
 2. post-deploy `generated/server:migrationRun` (`direction: "up"`)
 3. status polling (`generated/server:migrationStatus`) until completion (default behavior)
@@ -208,7 +208,7 @@ Already-`READY` indexes are skipped (noop). See [Resume Compatibility](#resume-c
 ## aggregate rebuild
 
 ```bash showLineNumbers
-npx better-convex aggregate rebuild --prod
+npx kitcn aggregate rebuild --prod
 ```
 
 Runs `generated/server:aggregateBackfill` in rebuild mode (clear + recompute) for the selected deployment, then waits for `READY` by default.
@@ -216,7 +216,7 @@ Runs `generated/server:aggregateBackfill` in rebuild mode (clear + recompute) fo
 ## aggregate backfill
 
 ```bash showLineNumbers
-npx better-convex aggregate backfill --prod
+npx kitcn aggregate backfill --prod
 ```
 
 Runs `generated/server:aggregateBackfill` in resume mode (no clear/rebuild) for the selected deployment, then waits for `READY` by default.
@@ -224,7 +224,7 @@ Runs `generated/server:aggregateBackfill` in resume mode (no clear/rebuild) for 
 ## aggregate prune
 
 ```bash showLineNumbers
-npx better-convex aggregate prune --prod
+npx kitcn aggregate prune --prod
 ```
 
 Runs `generated/server:aggregateBackfill` in prune mode to delete storage/state for aggregate indexes no longer declared in schema.
@@ -232,7 +232,7 @@ Runs `generated/server:aggregateBackfill` in prune mode to delete storage/state 
 ## migrate create
 
 ```bash showLineNumbers
-npx better-convex migrate create backfill_user_status
+npx kitcn migrate create backfill_user_status
 ```
 
 Creates a timestamped migration file under `convex/functions/migrations/` and regenerates `convex/functions/migrations/manifest.ts`.
@@ -240,7 +240,7 @@ Creates a timestamped migration file under `convex/functions/migrations/` and re
 ## migrate up
 
 ```bash showLineNumbers
-npx better-convex migrate up --prod
+npx kitcn migrate up --prod
 ```
 
 Runs `generated/server:migrationRun` with `direction: "up"` and waits by default.
@@ -249,10 +249,10 @@ Runs `generated/server:migrationRun` with `direction: "up"` and waits by default
 
 ```bash showLineNumbers
 # Roll back the latest migration
-npx better-convex migrate down --steps 1 --prod
+npx kitcn migrate down --steps 1 --prod
 
 # Roll back everything after a target migration id
-npx better-convex migrate down --to 20260227_000000_backfill_user_ban_reason --prod
+npx kitcn migrate down --to 20260227_000000_backfill_user_ban_reason --prod
 ```
 
 Runs `generated/server:migrationRun` with `direction: "down"` in reverse applied order.
@@ -260,7 +260,7 @@ Runs `generated/server:migrationRun` with `direction: "down"` in reverse applied
 ## migrate status
 
 ```bash showLineNumbers
-npx better-convex migrate status --prod
+npx kitcn migrate status --prod
 ```
 
 Reads migration run/state internals from `generated/server:migrationStatus`.
@@ -268,7 +268,7 @@ Reads migration run/state internals from `generated/server:migrationStatus`.
 ## migrate cancel
 
 ```bash showLineNumbers
-npx better-convex migrate cancel --prod
+npx kitcn migrate cancel --prod
 ```
 
 Cancels the active migration run (`generated/server:migrationCancel`).
@@ -278,7 +278,7 @@ Cancels the active migration run (`generated/server:migrationCancel`).
 Wipe all table data in one step. Useful for dev resets and seeding workflows.
 
 ```bash showLineNumbers
-npx better-convex reset --yes
+npx kitcn reset --yes
 ```
 
 The `--yes` flag is required — reset is destructive. Under the hood it calls `generated/server:reset` (which uses `ctx.orm.withoutTriggers` to clear every table, including internal aggregate and migration state tables).
@@ -287,10 +287,10 @@ You can run custom functions before and after the reset:
 
 ```bash showLineNumbers {2,5}
 # Seed data after reset
-npx better-convex reset --yes --after generated/seed:seedAll
+npx kitcn reset --yes --after generated/seed:seedAll
 
 # Snapshot before, seed after
-npx better-convex reset --yes --before generated/seed:snapshot --after generated/seed:seedAll
+npx kitcn reset --yes --before generated/seed:snapshot --after generated/seed:seedAll
 ```
 
 Options:
@@ -307,13 +307,13 @@ Analyze Convex runtime bundle size and dependency hotspots:
 
 ```bash showLineNumbers {2,5,8}
 # Function-oriented hotspot ranking (default)
-npx better-convex analyze
+npx kitcn analyze
 
 # Deploy-accurate bundle view
-npx better-convex analyze --deploy
+npx kitcn analyze --deploy
 
 # Deep drilldown for one entry
-npx better-convex analyze '^convex/functions/auth\\.ts$' --details
+npx kitcn analyze '^convex/functions/auth\\.ts$' --details
 ```
 
 Options:
@@ -335,14 +335,14 @@ See [Mode Behavior](#mode-behavior) for the full 12-item behavior reference.
 
 ## Output
 
-The CLI generates `convex/shared/api.ts`. Do not create this file manually — it is fully generated by `better-convex dev` / `better-convex codegen`.
+The CLI generates `convex/shared/api.ts`. Do not create this file manually — it is fully generated by `kitcn dev` / `kitcn codegen`.
 
 The CLI extracts metadata from procedure exports automatically. See [Metadata Extraction](#metadata-extraction) for supported patterns and base procedure mapping.
 
 ## Configuration
 
-`better-convex` supports a project config at `./concave.json` (or pass `--config <path>`).
-It reads settings from `meta["better-convex"]`.
+`kitcn` supports a project config at `./concave.json` (or pass `--config <path>`).
+It reads settings from `meta["kitcn"]`.
 
 The CLI reads from `convex.json`:
 
@@ -387,7 +387,7 @@ import { api } from '@convex/api';
 
 ### Scope Modes
 
-Scope modes apply to `better-convex codegen`.
+Scope modes apply to `kitcn codegen`.
 
 | Scope | Generated outputs |
 |------|--------------------|
@@ -399,18 +399,18 @@ In scoped modes, stale artifacts outside the current scope are removed automatic
 
 ### Resume Compatibility
 
-- key shape changes (`aggregateIndex(...).on(...)` fields / `.all()` key shape) require rebuild; deploy exits in strict mode and instructs `better-convex aggregate rebuild`
+- key shape changes (`aggregateIndex(...).on(...)` fields / `.all()` key shape) require rebuild; deploy exits in strict mode and instructs `kitcn aggregate rebuild`
 - metric additions (`.count/.sum/.avg/.min/.max`) are backfilled automatically
 - metric removals are metadata-only updates (no clear/rebuild)
 - removed aggregate indexes are pruned automatically (state + bucket/member/extrema rows)
 
 ### Mode Behavior
 
-1. Default mode (`better-convex analyze`) ranks least optimized Convex function modules by output size and dependency weight.
+1. Default mode (`kitcn analyze`) ranks least optimized Convex function modules by output size and dependency weight.
 2. `--deploy` mirrors deploy shape by bundling the same selected entry set together with shared chunks.
 3. Convex-ignored entries with detected handlers are included by default in both modes. Add `--all` to include every ignored entry (including ones without detected handlers).
 4. `--details` adds a package graph view (size + top cross-package imports). Add `--input` to include the top internal inputs table.
-5. Filter to specific entries by passing a positional regex: `better-convex analyze polar.*` or `better-convex analyze '^convex/functions/polar.*\\.ts$'`.
+5. Filter to specific entries by passing a positional regex: `kitcn analyze polar.*` or `kitcn analyze '^convex/functions/polar.*\\.ts$'`.
 6. Hotspot output is agent-first: it prints an **Agent queue** with ready-to-run optimization commands.
 7. Use `--interactive` to open the keyboard-driven hotspot UI (`--interactive` is hotspot-only and rejected with `--deploy`).
 8. Ranking includes only modules with detected handler exports (cRPC `_crpcMeta` scan, plus native Convex handler exports).
@@ -455,12 +455,12 @@ export const admin = authQuery
 
 ### Configuration Reference
 
-`better-convex` supports a project config at `./concave.json` (or `--config <path>`):
+`kitcn` supports a project config at `./concave.json` (or `--config <path>`):
 
 ```json title="concave.json" showLineNumbers
 {
   "meta": {
-    "better-convex": {
+    "kitcn": {
       "paths": {
         "lib": "convex/lib",
         "shared": "convex/shared"
@@ -524,4 +524,4 @@ Precedence:
 3. If `codegen.scope` is missing, it defaults to `all`.
 4. Plugin lockfile path is fixed at `<functionsDir>/plugins.lock.json`.
 
-If no config file is found, defaults are used silently. If only `better-convex.json` exists, the CLI exits with a legacy-config error. If `--config` points to a missing file, the CLI exits with an error.
+If no config file is found, defaults are used silently. If only `kitcn.json` exists, the CLI exits with a legacy-config error. If `--config` points to a missing file, the CLI exits with an error.

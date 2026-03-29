@@ -73,7 +73,7 @@ Next.js application with Convex backend, Better Auth authentication, and Tailwin
 ### Backend Framework
 
 - **Convex**
-- **better-convex**
+- **kitcn**
 
 ### Authentication
 

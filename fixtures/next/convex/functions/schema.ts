@@ -1,4 +1,4 @@
-import { convexTable, defineSchema, text } from 'better-convex/orm';
+import { convexTable, defineSchema, text } from 'kitcn/orm';
 
 export const messagesTable = convexTable('messages', {
   body: text().notNull(),

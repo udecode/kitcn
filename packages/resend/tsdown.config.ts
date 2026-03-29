@@ -8,6 +8,6 @@ export default defineConfig({
   target: 'esnext',
   exports: true,
   dts: true,
-  tsconfig: '../better-convex/tooling/tsconfig.build.json',
+  tsconfig: '../kitcn/tooling/tsconfig.build.json',
   checks: { pluginTimings: false },
 });

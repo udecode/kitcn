@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://better-convex.vercel.app/'),
+  metadataBase: new URL('https://kitcn.vercel.app/'),
 };
 
 export default function Layout({ children }: LayoutProps<'/'>) {

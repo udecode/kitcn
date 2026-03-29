@@ -39,14 +39,14 @@
       }
     },
     "ratelimit": {
-      "package": "better-convex",
+      "package": "kitcn",
       "files": {
         "ratelimit-plugin": "convex/lib/plugins/ratelimit/plugin.ts",
         "ratelimit-schema": "convex/lib/plugins/ratelimit/schema.ts"
       }
     },
     "resend": {
-      "package": "@better-convex/resend",
+      "package": "@kitcn/resend",
       "files": {
         "resend-crons": "convex/lib/plugins/resend/crons.ts",
         "resend-email": "convex/functions/plugins/email.tsx",

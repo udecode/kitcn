@@ -11,7 +11,7 @@ Get `bun check` green again after the auth peer + fixture sync fixes.
 - Add a failing scenario test for auth template prepare ordering.
 - Fix the lookup logic in `api-entry.ts`.
 - Fix scenario prepare so auth template bootstrap installs local
-  `better-convex` before rerunning `add auth`.
+  `kitcn` before rerunning `add auth`.
 - Rerun targeted tests, then rerun `scenario:prepare next-auth`,
   `scenario:test -- next`, `scenario:test -- next-auth`, and `bun check`.
 
@@ -19,5 +19,5 @@ Get `bun check` green again after the auth peer + fixture sync fixes.
 
 - `bun check` currently fails in `test:runtime`.
 - `next` fails on `Invalid generated path: generated.server`.
-- `next-auth` prepare fails earlier on `Cannot find module 'better-convex/auth'`
+- `next-auth` prepare fails earlier on `Cannot find module 'kitcn/auth'`
   because bootstrap runs before the local package is installed.

@@ -22,10 +22,10 @@ cRPC gives you a fluent, type-safe API for building Convex procedures. Instead o
 
 ## Generate Runtime
 
-Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
+Start `kitcn dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
 
 ```bash
-npx better-convex dev
+npx kitcn dev
 ```
 
 ## Initialize cRPC
@@ -51,7 +51,7 @@ cRPC serializes inputs/outputs through a transformer at the procedure boundary.
 - Custom transformer is additive to the built-in Date transformer
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
-import { createTaggedTransformer } from 'better-convex/crpc';
+import { createTaggedTransformer } from 'kitcn/crpc';
 import { initCRPC } from '../functions/generated/server';
 
 const transformer = createTaggedTransformer([
@@ -101,7 +101,7 @@ import {
   index,
   integer,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const user = convexTable(
   'user',
@@ -133,7 +133,7 @@ export default defineSchema(tables, {
 ```
 
 <Callout icon={<InfoIcon />}>
-Without codegen, use `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
+Without codegen, use `initCRPC` from `kitcn/server` with `.dataModel()` and optional `.context()`.
 </Callout>
 
 ## Your First Procedure

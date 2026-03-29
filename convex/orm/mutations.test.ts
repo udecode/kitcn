@@ -8,6 +8,7 @@
  * - onConflictDoNothing/onConflictDoUpdate
  */
 
+import { type SchedulableFunctionReference } from 'convex/server';
 import {
   aggregateIndex,
   convexTable,
@@ -27,9 +28,8 @@ import {
   scheduledMutationBatchFactory,
   text,
   timestamp,
-} from 'better-convex/orm';
-import { createGeneratedFunctionReference } from 'better-convex/server';
-import { type SchedulableFunctionReference } from 'convex/server';
+} from 'kitcn/orm';
+import { createGeneratedFunctionReference } from 'kitcn/server';
 import { it as baseIt, describe, expect, vi } from 'vitest';
 import schema, { users } from '../schema';
 import {

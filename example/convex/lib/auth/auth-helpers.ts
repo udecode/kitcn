@@ -1,6 +1,6 @@
-import { getSession } from 'better-convex/auth';
-import type { InferInsertModel } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
+import { getSession } from 'kitcn/auth';
+import type { InferInsertModel } from 'kitcn/orm';
+import { CRPCError } from 'kitcn/server';
 import type { MutationCtx, QueryCtx } from '../../functions/generated/server';
 import { accountTable, userTable } from '../../functions/schema';
 import type { SessionUser } from '../../shared/auth-shared';

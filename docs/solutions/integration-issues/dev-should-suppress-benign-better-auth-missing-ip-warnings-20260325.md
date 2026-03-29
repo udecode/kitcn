@@ -8,7 +8,7 @@ tags:
   - better-auth
   - convex
 symptoms:
-  - `better-convex dev` shows repeated Better Auth warnings about missing client IP
+  - `kitcn dev` shows repeated Better Auth warnings about missing client IP
   - the warning appears in otherwise healthy local auth flows
   - users cannot tell real backend issues from known benign noise
 module: dev-logs
@@ -20,21 +20,21 @@ resolved: 2026-03-25
 ## Problem
 
 Even after fixing the auth bridge and local Convex metadata routes, users could
-still see this exact warning in raw `better-convex dev` output:
+still see this exact warning in raw `kitcn dev` output:
 
 ```txt
 WARN [Better Auth]: Rate limiting skipped: could not determine client IP address.
 ```
 
-That line is just noise in local Better Convex dev. It reads like breakage and
+That line is just noise in local kitcn dev. It reads like breakage and
 buries real logs.
 
 ## Root Cause
 
-Long-running `better-convex dev` intentionally preserves raw Convex output.
+Long-running `kitcn dev` intentionally preserves raw Convex output.
 
 That means any known-benign backend warning still reaches the terminal unless
-Better Convex explicitly filters it. The previous fix handled the auth/runtime
+kitcn explicitly filters it. The previous fix handled the auth/runtime
 seam, but the dev log bridge still passed this specific Better Auth line
 through untouched.
 
@@ -52,9 +52,9 @@ Do not broaden it into generic Better Auth warning suppression.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/commands/dev.test.ts --test-name-pattern 'filterDevStartupLine suppresses Convex nags and rewrites ready lines|handleDevCommand\\(dev\\) preserves raw Convex dev output'`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/cli/commands/dev.test.ts --test-name-pattern 'filterDevStartupLine suppresses Convex nags and rewrites ready lines|handleDevCommand\\(dev\\) preserves raw Convex dev output'`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 
 ## Prevention
 
@@ -67,5 +67,5 @@ Do not broaden it into generic Better Auth warning suppression.
 
 ## Files Changed
 
-- `packages/better-convex/src/cli/commands/dev.ts`
-- `packages/better-convex/src/cli/commands/dev.test.ts`
+- `packages/kitcn/src/cli/commands/dev.ts`
+- `packages/kitcn/src/cli/commands/dev.test.ts`

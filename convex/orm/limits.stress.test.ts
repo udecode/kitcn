@@ -1,3 +1,7 @@
+import type {
+  GenericDatabaseWriter,
+  SchedulableFunctionReference,
+} from 'convex/server';
 import {
   convexTable,
   defineRelations,
@@ -10,11 +14,7 @@ import {
   index,
   scheduledMutationBatchFactory,
   text,
-} from 'better-convex/orm';
-import type {
-  GenericDatabaseWriter,
-  SchedulableFunctionReference,
-} from 'convex/server';
+} from 'kitcn/orm';
 import { describe, expect, test, vi } from 'vitest';
 import { convexTest, withOrm } from '../setup.testing';
 

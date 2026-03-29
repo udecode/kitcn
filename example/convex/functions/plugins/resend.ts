@@ -7,8 +7,8 @@ import {
   normalizeRecipientList,
   parseEmailEvent,
   shouldRetry,
-} from '@better-convex/resend';
-import { eq, inArray } from 'better-convex/orm';
+} from '@kitcn/resend';
+import { eq, inArray } from 'kitcn/orm';
 import { z } from 'zod';
 import { privateAction, privateMutation, privateQuery } from '../../lib/crpc';
 import { resend } from '../../lib/plugins/resend/plugin';

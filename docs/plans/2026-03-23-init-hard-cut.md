@@ -2,11 +2,11 @@
 
 ## Goal
 
-Remove `better-convex create`. Make `better-convex init` the only bootstrap
+Remove `kitcn create`. Make `kitcn init` the only bootstrap
 entrypoint for both:
 
 - fresh app scaffold with `-t <next|vite>`
-- in-place Better Convex adoption of an existing supported app
+- in-place kitcn adoption of an existing supported app
 
 Also remove `/docs/templates` and move the remaining scaffold docs into the CLI
 registry page.
@@ -25,7 +25,7 @@ registry page.
 
 - Hard cut. No `create` alias.
 - `convex init` remains the deployment/bootstrap command under the hood.
-- `better-convex init --yes` in an empty dir should not keep the old hidden
+- `kitcn init --yes` in an empty dir should not keep the old hidden
   overlay-only behavior.
 - `bun typecheck` and `bun run fixtures:check` are still blocked by the
   pre-existing generated runtime typing issue in `fixtures/vite` /

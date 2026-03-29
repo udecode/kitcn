@@ -22,13 +22,13 @@ resolved: 2026-03-19
 
 ## Problem
 
-Prepared Better Convex apps were carrying the Convex local dev contract:
+Prepared kitcn apps were carrying the Convex local dev contract:
 
 - frontend app on `3005`
 - backend client URL on `127.0.0.1:3210`
 - backend site URL on `127.0.0.1:3211`
 
-But `better-convex dev --backend concave` was still delegating to upstream
+But `kitcn dev --backend concave` was still delegating to upstream
 `concave dev` with its raw default port `3000`.
 
 At the same time, auth-enabled scenarios like `next-auth` crashed during
@@ -49,7 +49,7 @@ These were three separate bugs.
 
 ### 1. Concave local dev leaked the upstream single-port default
 
-Better Convex templates and React helpers assume the Convex-style split local
+kitcn templates and React helpers assume the Convex-style split local
 URLs:
 
 - `NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210`
@@ -59,7 +59,7 @@ That contract is already baked into scaffolded `.env.local` files and the
 generated client wiring.
 
 Upstream `concave dev`, however, defaults to one local server on `3000`.
-Better Convex was passing that through untouched, so the prepared app and the
+kitcn was passing that through untouched, so the prepared app and the
 backend process disagreed about where the backend lived.
 
 ### 2. Generated auth runtime read the default export too early
@@ -85,7 +85,7 @@ disabled itself.
 
 The auth scaffold trusts the frontend app origin through `getEnv().SITE_URL`.
 
-On Concave local dev, Better Convex already injected:
+On Concave local dev, kitcn already injected:
 
 - `CONVEX_SITE_URL=http://127.0.0.1:3211`
 
@@ -106,9 +106,9 @@ were compared against the wrong trusted origin and Better Auth rejected them as
 
 Fix both layers, not just the symptom.
 
-### Normalize Concave local dev back onto the Better Convex contract
+### Normalize Concave local dev back onto the kitcn contract
 
-When `better-convex dev` runs on backend `concave` without an explicit target:
+When `kitcn dev` runs on backend `concave` without an explicit target:
 
 1. start `concave dev` on `127.0.0.1:3210`
 2. expose a tiny local site proxy on `127.0.0.1:3211`
@@ -140,8 +140,8 @@ That kills both variants of the cycle:
 
 ## Verification
 
-- `bun test packages/better-convex/src/auth/generated-contract.test.ts packages/better-convex/src/cli/commands/dev.test.ts`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/auth/generated-contract.test.ts packages/kitcn/src/cli/commands/dev.test.ts`
+- `bun --cwd packages/kitcn build`
 - `bun run scenario:prepare -- next-auth`
 - `bun run scenario:dev -- next-auth`
 - `curl -i -X POST http://localhost:3005/api/auth/sign-up/email ...` returns `200`
@@ -158,7 +158,7 @@ Additional repo gates:
 
 ## Prevention
 
-1. Do not let Better Convex templates depend on backend-specific local URL
+1. Do not let kitcn templates depend on backend-specific local URL
    quirks. Normalize the backend to the template contract instead.
 2. If generated code imports a file that also imports the generated code back,
    never read that file's default export at module top-level.
@@ -172,10 +172,10 @@ Additional repo gates:
 
 ## Files Changed
 
-- `packages/better-convex/src/auth/generated-contract.ts`
-- `packages/better-convex/src/auth/generated-contract.test.ts`
-- `packages/better-convex/src/cli/commands/dev.ts`
-- `packages/better-convex/src/cli/commands/dev.test.ts`
+- `packages/kitcn/src/auth/generated-contract.ts`
+- `packages/kitcn/src/auth/generated-contract.test.ts`
+- `packages/kitcn/src/cli/commands/dev.ts`
+- `packages/kitcn/src/cli/commands/dev.test.ts`
 
 ## Related
 

@@ -3,7 +3,7 @@ import { patchAuthSource } from './auth-schema-stress';
 
 describe('tooling/auth-schema-stress', () => {
   test('patchAuthSource injects plugin imports and calls before convex with scaffold indentation', () => {
-    const source = `import { convex } from "better-convex/auth";
+    const source = `import { convex } from "kitcn/auth";
 import { getEnv } from "../lib/get-env";
 import authConfig from "./auth.config";
 import { defineAuth } from "./generated/auth";

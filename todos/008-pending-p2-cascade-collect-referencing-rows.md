@@ -14,7 +14,7 @@ Foreign key cascade handling loads all referencing rows via `.collect()`, which 
 
 ## Findings
 
-- `packages/better-convex/src/orm/mutation-utils.ts:521-533` uses `.collect()` in `collectReferencingRows()`.
+- `packages/kitcn/src/orm/mutation-utils.ts:521-533` uses `.collect()` in `collectReferencingRows()`.
 - `applyIncomingForeignKeyActionsOnDelete()` uses this to expand cascade deletes; for large referencing tables this becomes unbounded.
 
 ## Proposed Solutions
@@ -42,7 +42,7 @@ Foreign key cascade handling loads all referencing rows via `.collect()`, which 
 ### Option 2: Stream-Based Cascade
 
 **Approach:**
-- Use `better-convex/orm/stream` to iterate indexed queries and apply cascade actions incrementally.
+- Use `kitcn/orm/stream` to iterate indexed queries and apply cascade actions incrementally.
 
 **Pros:**
 - Fits Convex guidance for large data processing
@@ -83,7 +83,7 @@ Foreign key cascade handling loads all referencing rows via `.collect()`, which 
 ## Technical Details
 
 **Affected files:**
-- `packages/better-convex/src/orm/mutation-utils.ts:521`
+- `packages/kitcn/src/orm/mutation-utils.ts:521`
 
 **Related components:**
 - Cascade delete/update flows

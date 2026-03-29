@@ -1,11 +1,11 @@
 ---
 title: CLI Registry
-description: Bootstrap a new or existing app with `better-convex init`, add features with `add`, and inspect plans with `view`, `info`, and `docs`.
+description: Bootstrap a new or existing app with `kitcn init`, add features with `add`, and inspect plans with `view`, `info`, and `docs`.
 links:
   doc: https://docs.convex.dev/cli
 ---
 
-Run the CLI first. `better-convex init` is the bootstrap command. It can
+Run the CLI first. `kitcn init` is the bootstrap command. It can
 scaffold a fresh app when you pass `-t`, or adopt the current supported app in
 place when you do not.
 
@@ -15,14 +15,14 @@ Use this table when you want the blunt version:
 
 | Goal | Command |
 | ---- | ------- |
-| Start a new Next.js app | `better-convex init -t next --yes` |
-| Start a new Vite app | `better-convex init -t vite --yes` |
-| Adopt the current supported app | `better-convex init --yes` |
-| Add a capability | `better-convex add <plugin>` |
-| Verify local runtime | `better-convex verify` |
-| Preview a plugin plan | `better-convex view <plugin>` |
-| Inspect installed state | `better-convex info` |
-| Open docs from the CLI | `better-convex docs <topic...>` |
+| Start a new Next.js app | `kitcn init -t next --yes` |
+| Start a new Vite app | `kitcn init -t vite --yes` |
+| Adopt the current supported app | `kitcn init --yes` |
+| Add a capability | `kitcn add <plugin>` |
+| Verify local runtime | `kitcn verify` |
+| Preview a plugin plan | `kitcn view <plugin>` |
+| Inspect installed state | `kitcn info` |
+| Open docs from the CLI | `kitcn docs <topic...>` |
 
 ## init
 
@@ -30,18 +30,18 @@ We'll start with `init`, because it owns bootstrap in both directions.
 
 ### Scaffold a fresh app
 
-Pass `-t next` or `-t vite` when you want Better Convex to create the app shell
+Pass `-t next` or `-t vite` when you want kitcn to create the app shell
 and patch its integration layer in one pass.
 
 ```bash showLineNumbers
-npx better-convex init -t next --yes
-npx better-convex init -t vite --yes
-npx better-convex init -t next --yes --cwd apps --name web
-npx better-convex --backend concave init -t next --yes
+npx kitcn init -t next --yes
+npx kitcn init -t vite --yes
+npx kitcn init -t next --yes --cwd apps --name web
+npx kitcn --backend concave init -t next --yes
 ```
 
 For a fresh Next.js app, `init -t next` creates the shadcn shell, then layers
-in the Better Convex seam:
+in the kitcn seam:
 
 - `components/providers.tsx`
 - `lib/convex/*`
@@ -59,7 +59,7 @@ It also applies a few narrow shell patches where they belong:
 
 - `app/layout.tsx` mounts `Providers`
 - `tsconfig.json` gets the `@convex/*` alias
-- `package.json` gets the Better Convex scripts and baseline dependency patch
+- `package.json` gets the kitcn scripts and baseline dependency patch
 
 For a fresh Vite app, `init -t vite` keeps the flow smaller. It writes the
 React client core, the backend baseline, and the shared env/codegen wiring.
@@ -73,23 +73,23 @@ they do not trigger the local bootstrap wrapper.
 ### Adopt the current app in place
 
 Run `init --yes` inside a supported app when the app shell already exists and
-you only want Better Convex layered in place.
+you only want kitcn layered in place.
 
 ```bash showLineNumbers
-npx better-convex init --yes
-npx better-convex --backend concave init --yes
-npx better-convex init --env-file .env.agent --yes
+npx kitcn init --yes
+npx kitcn --backend concave init --yes
+npx kitcn init --env-file .env.agent --yes
 ```
 
 This path detects the current app, keeps the existing shell, and patches the
-Better Convex baseline into the right root. If the current directory is not a
+kitcn baseline into the right root. If the current directory is not a
 supported app, `init` fails fast instead of guessing.
 
 ### What `init` owns
 
 The rule is simple:
 
-- `init` owns the Better Convex integration layer
+- `init` owns the kitcn integration layer
 - the framework tool owns the framework shell
 - `add` owns optional capabilities
 
@@ -107,7 +107,7 @@ Convex codegen pass. Deployment-targeting flags such as `--prod`,
 Backend resolution order stays:
 
 1. `--backend`
-2. `meta["better-convex"].backend`
+2. `meta["kitcn"].backend`
 3. `convex`
 
 ### Options
@@ -131,22 +131,22 @@ Backend resolution order stays:
 Once the baseline is in place, use `add` for feature layers.
 
 ```bash showLineNumbers
-npx better-convex add auth --yes
-npx better-convex add auth --schema --yes
-npx better-convex add ratelimit --yes
-npx better-convex add resend --yes
+npx kitcn add auth --yes
+npx kitcn add auth --schema --yes
+npx kitcn add ratelimit --yes
+npx kitcn add resend --yes
 ```
 
 `add` is idempotent. It can preview the full repo delta, scaffold missing files,
-patch existing Better Convex seams, install package dependencies, run codegen,
+patch existing kitcn seams, install package dependencies, run codegen,
 and keep `plugins.lock.json` in sync.
 
 Preview the plan before writing files:
 
 ```bash showLineNumbers
-npx better-convex add resend --dry-run
-npx better-convex add resend --diff convex/plugins/resend.ts
-npx better-convex add resend --view convex/schema.ts
+npx kitcn add resend --dry-run
+npx kitcn add resend --diff convex/plugins/resend.ts
+npx kitcn add resend --view convex/schema.ts
 ```
 
 The preview surface covers:
@@ -166,15 +166,15 @@ The preview surface covers:
 
 `add auth` has two honest modes.
 
-The default path is Better Convex-first:
+The default path is kitcn-first:
 
 ```bash showLineNumbers
-npx better-convex init -t next --yes
-npx better-convex add auth --yes
-npx better-convex add auth --schema --yes
+npx kitcn init -t next --yes
+npx kitcn add auth --yes
+npx kitcn add auth --schema --yes
 ```
 
-This keeps the Better Convex auth stack, including the richer Next.js auth
+This keeps the kitcn auth stack, including the richer Next.js auth
 surface.
 
 Use the full `add auth` command for the first install. After changing plugins
@@ -185,13 +185,13 @@ refreshed.
 The raw Convex path stays minimal:
 
 ```bash showLineNumbers
-npx better-convex add auth --preset convex --yes
+npx kitcn add auth --preset convex --yes
 ```
 
 `--preset convex` keeps the app on the plain Convex backend path. It still
 patches the supported frontend shell in place, but it stays conservative:
 
-- Next.js gets provider and auth client wiring, not a larger Better Convex auth
+- Next.js gets provider and auth client wiring, not a larger kitcn auth
   stack
 - React/Vite gets provider and auth client wiring, not invented routes
 - no fake page generation outside the supported shell boundary
@@ -218,8 +218,8 @@ patches the supported frontend shell in place, but it stays conservative:
 Use `view` when you want the resolved plugin plan without writing files.
 
 ```bash showLineNumbers
-npx better-convex view auth
-npx better-convex view resend --json
+npx kitcn view auth
+npx kitcn view resend --json
 ```
 
 `view` shows the resolved preset, selection source, docs link, planned files,
@@ -230,8 +230,8 @@ and planned operations. It uses the same install-plan engine as `add`.
 Use `info` when you want to inspect the current project state.
 
 ```bash showLineNumbers
-npx better-convex info
-npx better-convex info --json
+npx kitcn info
+npx kitcn info --json
 ```
 
 It reports the resolved backend, config paths, installed versions, plugin state,
@@ -242,9 +242,9 @@ schema/lockfile mismatches, missing dependencies, and scaffold drift.
 Use `docs` when you want local and public doc links from the CLI.
 
 ```bash showLineNumbers
-npx better-convex docs cli
-npx better-convex docs auth
-npx better-convex docs resend --json
+npx kitcn docs cli
+npx kitcn docs auth
+npx kitcn docs resend --json
 ```
 
 Supported topics include `cli`, `plugins`, `auth`, `orm`, `migrations`,

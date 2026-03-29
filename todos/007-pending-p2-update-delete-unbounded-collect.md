@@ -14,8 +14,8 @@ dependencies: []
 
 ## Findings
 
-- `packages/better-convex/src/orm/update.ts:101-115` uses `query.collect()` and then `evaluateFilter` in memory.
-- `packages/better-convex/src/orm/delete.ts:94-108` repeats the same pattern.
+- `packages/kitcn/src/orm/update.ts:101-115` uses `query.collect()` and then `evaluateFilter` in memory.
+- `packages/kitcn/src/orm/delete.ts:94-108` repeats the same pattern.
 - Filtering is done via `.filter()` without index selection; no batching or explicit limit is enforced.
 
 ## Proposed Solutions
@@ -85,8 +85,8 @@ dependencies: []
 ## Technical Details
 
 **Affected files:**
-- `packages/better-convex/src/orm/update.ts:101`
-- `packages/better-convex/src/orm/delete.ts:94`
+- `packages/kitcn/src/orm/update.ts:101`
+- `packages/kitcn/src/orm/delete.ts:94`
 
 **Related components:**
 - Filter expressions (`toConvexFilter`, `evaluateFilter`)

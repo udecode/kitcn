@@ -12,7 +12,7 @@ tags:
 severity: high
 symptoms:
   - setup docs require a second manual env pass after dev
-  - better-convex env push needs a special auth flag for Better Auth apps
+  - kitcn env push needs a special auth flag for Better Auth apps
   - auth bootstrap feels two-pass even after scaffold and codegen are already in place
 ---
 
@@ -22,15 +22,15 @@ symptoms:
 
 The old CLI contract split auth env sync into a separate public mode:
 
-- `better-convex env push --auth`
-- `better-convex env push --auth --rotate`
+- `kitcn env push --auth`
+- `kitcn env push --auth --rotate`
 
 That leaked internal bootstrap sequencing into the user flow. Fresh Convex auth
 setup ended up reading like:
 
 1. scaffold auth
-2. run `better-convex dev --once`
-3. run `better-convex env push --auth`
+2. run `kitcn dev --once`
+3. run `kitcn env push --auth`
 
 That is dumb. Users should not have to remember a second auth-only env command
 just because JWKS needs a live backend.
@@ -48,7 +48,7 @@ handling it inside the CLI lifecycle.
 
 ## Fix
 
-Make `better-convex env push` auth-aware by default and remove the public
+Make `kitcn env push` auth-aware by default and remove the public
 `--auth` flag.
 
 Use scaffold state, not `concave.json`, to detect auth:
@@ -58,7 +58,7 @@ Use scaffold state, not `concave.json`, to detect auth:
   `JWKS`, and pushes both
 - `--rotate` still exists, but it rotates keys through the same auth-aware path
 
-Keep `better-convex dev` split internally:
+Keep `kitcn dev` split internally:
 
 - pre-start: `prepare` auth env sync for `BETTER_AUTH_SECRET`
 - post-start: `complete` auth env sync for `JWKS`
@@ -70,7 +70,7 @@ run two commands.
 
 - targeted env tests proving `env push` auto-detects auth, generates
   `BETTER_AUTH_SECRET`, fetches `JWKS`, and rejects the removed `--auth` flag
-- targeted dev test proving `better-convex dev --once` runs `prepare` before
+- targeted dev test proving `kitcn dev --once` runs `prepare` before
   startup and waits for `complete` before returning
 - targeted CLI tests proving raw Convex auth adoption now calls auth-aware
   `env push`

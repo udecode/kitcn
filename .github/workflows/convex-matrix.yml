@@ -3,8 +3,7 @@ name: Convex Matrix
 on:
   push:
     branches:
-      - main
-  workflow_dispatch: {}
+      - changeset-release/main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

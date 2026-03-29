@@ -27,7 +27,7 @@ Let's explore how to use them.
 The basic pattern is simple - import `CRPCError` and throw it with a code:
 
 ```ts showLineNumbers {1,3-6}
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 
 throw new CRPCError({
   code: 'NOT_FOUND',
@@ -82,7 +82,7 @@ cRPC provides several helper functions for working with errors.
 Wrap unknown errors in `CRPCError`. Useful in catch blocks:
 
 ```ts showLineNumbers {1,6}
-import { getCRPCErrorFromUnknown } from 'better-convex/crpc';
+import { getCRPCErrorFromUnknown } from 'kitcn/crpc';
 
 try {
   await riskyOperation();
@@ -96,7 +96,7 @@ try {
 Get the HTTP status code from an error. Useful for HTTP endpoints:
 
 ```ts showLineNumbers {1,3}
-import { getHTTPStatusCodeFromError } from 'better-convex/crpc';
+import { getHTTPStatusCodeFromError } from 'kitcn/crpc';
 
 const httpStatus = getHTTPStatusCodeFromError(error); // 404
 ```
@@ -106,7 +106,7 @@ const httpStatus = getHTTPStatusCodeFromError(error); // 404
 Type guard for checking if an error is a `CRPCError`:
 
 ```ts showLineNumbers {1,3-5}
-import { isCRPCError } from 'better-convex/crpc';
+import { isCRPCError } from 'kitcn/crpc';
 
 if (isCRPCError(error)) {
   console.log(error.code); // 'NOT_FOUND'
@@ -214,7 +214,7 @@ If you're coming from vanilla Convex, here's what changes.
   </CompareItem>
   <CompareItem title="After (cRPC)">
     ```ts showLineNumbers {1,3-6}
-    import { CRPCError } from 'better-convex/server';
+    import { CRPCError } from 'kitcn/server';
 
     throw new CRPCError({
       code: 'NOT_FOUND',

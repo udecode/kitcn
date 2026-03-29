@@ -3,10 +3,10 @@ date: 2026-02-03
 topic: drizzle-v1-upgrade
 ---
 
-# Better Convex ORM: Drizzle v1 Upgrade (Breaking)
+# kitcn ORM: Drizzle v1 Upgrade (Breaking)
 
 ## What We're Building
-We are upgrading Better Convex ORM from Drizzle stable (v0.45.x) to **Drizzle v1** with full API parity for the parts that are relevant to Convex. This is a **clean break**: no backward compatibility, no dual APIs. The end state is a single, v1-only surface that mirrors the `drizzle-v1` repository as the source of truth, including TypeScript typing behavior and test coverage.  
+We are upgrading kitcn ORM from Drizzle stable (v0.45.x) to **Drizzle v1** with full API parity for the parts that are relevant to Convex. This is a **clean break**: no backward compatibility, no dual APIs. The end state is a single, v1-only surface that mirrors the `drizzle-v1` repository as the source of truth, including TypeScript typing behavior and test coverage.  
 
 Scope includes schema definitions, relations, query syntax, and mutations, plus mirrored tests and updated docs. Out of scope: SQL-only features that cannot map to Convex semantics and any long-term support for v0.45 patterns.
 

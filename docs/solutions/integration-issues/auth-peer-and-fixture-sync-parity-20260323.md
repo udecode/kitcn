@@ -9,7 +9,7 @@ tags:
   - cli
   - codegen
 symptoms:
-  - `bun check` fails in `fixtures:check` during temp app `better-convex codegen`
+  - `bun check` fails in `fixtures:check` during temp app `kitcn codegen`
   - auth apps hit `Cannot find package '@opentelemetry/api'`
   - plain non-auth apps can still fail codegen because the packaged CLI bundle imports Better Auth too early
   - `fixtures:sync` can say snapshots are fresh while `fixtures:check` still reports drift
@@ -68,10 +68,10 @@ Finally, make fixture sync mirror fixture check:
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/registry/dependencies.test.ts packages/better-convex/src/cli/supported-dependencies.test.ts`
-- `bun test ./packages/better-convex/src/cli/cli.commands.ts --test-name-pattern 'run\\(add auth --yes --no-codegen\\) patches the next baseline with minimal auth scaffolding|run\\(add auth --preset convex --yes\\) adopts a raw next convex app without Better Convex baseline churn'`
-- `bun test packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/cli/registry/dependencies.test.ts packages/kitcn/src/cli/supported-dependencies.test.ts`
+- `bun test ./packages/kitcn/src/cli/cli.commands.ts --test-name-pattern 'run\\(add auth --yes --no-codegen\\) patches the next baseline with minimal auth scaffolding|run\\(add auth --preset convex --yes\\) adopts a raw next convex app without kitcn baseline churn'`
+- `bun test packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
+- `bun --cwd packages/kitcn build`
 - `bun run fixtures:sync`
 - `bun run fixtures:check`
 - `bun check`

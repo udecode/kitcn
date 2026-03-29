@@ -1,4 +1,4 @@
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 import type { SessionUser } from '../../shared/auth-shared';
 
 export function premiumGuard(user: { plan?: SessionUser['plan'] }) {

@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore payments and subscriptions with better-convex and Polar. You'll learn to configure the Polar plugin, handle checkout flows, manage subscriptions, and process webhooks for billing events.
+In this guide, we'll explore payments and subscriptions with kitcn and Polar. You'll learn to configure the Polar plugin, handle checkout flows, manage subscriptions, and process webhooks for billing events.
 
 ## Overview
 
@@ -170,7 +170,7 @@ export const authClient = createAuthClient({
 ## 4. Schema
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-37}
-import { boolean, convexTable, defineSchema, id, index, integer, json, text } from 'better-convex/orm';
+import { boolean, convexTable, defineSchema, id, index, integer, json, text } from 'kitcn/orm';
 
 // User table - add Polar customer ID
 export const user = convexTable(
@@ -447,7 +447,7 @@ Function examples use the ORM (`ctx.orm`).
 ```ts title="convex/functions/polarCustomer.ts" showLineNumbers {1,3-8,11-18,20-31,34-37,39-52}
 import '../lib/polar-polyfills';
 
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 import { z } from 'zod';
 import { privateAction, privateMutation } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';
@@ -518,7 +518,7 @@ export const updateUserPolarCustomerId = privateMutation
 ```ts title="convex/functions/polarSubscription.ts" showLineNumbers {1,3-8,11-22,25-35,38-48,51-70,73-92}
 import '../lib/polar-polyfills';
 
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 import { z } from 'zod';
 import { authAction, privateMutation, privateQuery } from '../lib/crpc';
 import { getPolarClient } from '../lib/polar-client';

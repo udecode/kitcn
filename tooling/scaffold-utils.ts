@@ -11,17 +11,13 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-  BETTER_CONVEX_INSTALL_SPEC_ENV,
-  BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV,
-} from '../packages/better-convex/src/cli/supported-dependencies';
+  KITCN_INSTALL_SPEC_ENV,
+  KITCN_RESEND_INSTALL_SPEC_ENV,
+} from '../packages/kitcn/src/cli/supported-dependencies';
 import type { TemplateBackend } from './template.config';
 
 export const PROJECT_ROOT = process.cwd();
-export const LOCAL_PACKAGE_DIR = path.join(
-  PROJECT_ROOT,
-  'packages',
-  'better-convex'
-);
+export const LOCAL_PACKAGE_DIR = path.join(PROJECT_ROOT, 'packages', 'kitcn');
 export const LOCAL_RESEND_PACKAGE_DIR = path.join(
   PROJECT_ROOT,
   'packages',
@@ -30,12 +26,12 @@ export const LOCAL_RESEND_PACKAGE_DIR = path.join(
 export const LOCAL_CLI_PATH = path.join(
   PROJECT_ROOT,
   'packages',
-  'better-convex',
+  'kitcn',
   'dist',
   'cli.mjs'
 );
 export const VOLATILE_ENTRY_NAMES = new Set([
-  '.better-convex-scenario',
+  '.kitcn-scenario',
   '.concave',
   '.env',
   '.git',
@@ -50,7 +46,7 @@ export const VOLATILE_ENTRY_NAMES = new Set([
   'tsconfig.tsbuildinfo',
   'yarn.lock',
 ]);
-export const VOLATILE_ENTRY_PATTERNS = [/^better-convex-.*\.tgz$/];
+export const VOLATILE_ENTRY_PATTERNS = [/^kitcn-.*\.tgz$/];
 const LINE_SPLIT_RE = /\r?\n/;
 export const DEFAULT_LOCAL_DEV_PORT = 3005;
 const TRAILING_NEWLINES_RE = /\n*$/;
@@ -64,7 +60,7 @@ const NEXT_PUBLIC_SITE_URL_ENV_RE =
   /NEXT_PUBLIC_(?:CONVEX_URL|CONVEX_SITE_URL|SITE_URL)=/;
 const VITE_SITE_URL_ENV_RE = /VITE_(?:CONVEX_URL|CONVEX_SITE_URL|SITE_URL)=/;
 const BUILT_LOCAL_PACKAGE_DIRS = new Set<string>();
-let localBetterConvexInstallSpec: string | undefined;
+let localInstallSpec: string | undefined;
 let localResendInstallSpec: string | undefined;
 
 const resolveLocalDevSiteUrl = (port: number) => `http://localhost:${port}`;
@@ -121,7 +117,7 @@ export const run = async (
   return exitCode;
 };
 
-const ensureLocalBetterConvexBuild = (packageDir = LOCAL_PACKAGE_DIR) => {
+const ensureLocalPackageBuild = (packageDir = LOCAL_PACKAGE_DIR) => {
   if (BUILT_LOCAL_PACKAGE_DIRS.has(packageDir)) {
     return;
   }
@@ -136,7 +132,7 @@ const ensureLocalBetterConvexBuild = (packageDir = LOCAL_PACKAGE_DIR) => {
   });
 
   if (result.exitCode !== 0) {
-    throw new Error('Failed to build local better-convex package.');
+    throw new Error('Failed to build local kitcn package.');
   }
 
   BUILT_LOCAL_PACKAGE_DIRS.add(packageDir);
@@ -150,7 +146,7 @@ export const buildLocalCliCommand = (
     localCliPath?: string;
   }
 ) => {
-  ensureLocalBetterConvexBuild();
+  ensureLocalPackageBuild();
 
   return [
     params.nodeBinary ?? Bun.which('node') ?? process.execPath,
@@ -161,22 +157,20 @@ export const buildLocalCliCommand = (
   ];
 };
 
-export const getLocalBetterConvexInstallSpec = () => {
-  if (localBetterConvexInstallSpec) {
-    return localBetterConvexInstallSpec;
+export const getLocalInstallSpec = () => {
+  if (localInstallSpec) {
+    return localInstallSpec;
   }
 
   const outputDir = mkdtempSync(
-    path.join(tmpdir(), 'better-convex-local-install-spec-')
+    path.join(tmpdir(), 'kitcn-local-install-spec-')
   );
-  localBetterConvexInstallSpec = packLocalBetterConvexPackage(outputDir);
-  return localBetterConvexInstallSpec;
+  localInstallSpec = packLocalPackage(outputDir);
+  return localInstallSpec;
 };
 
 const createPackableLocalResendPackageDir = () => {
-  const tempRoot = mkdtempSync(
-    path.join(tmpdir(), 'better-convex-resend-pack-')
-  );
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kitcn-resend-pack-'));
   const packageDir = path.join(tempRoot, 'package');
   cpSync(
     path.join(LOCAL_RESEND_PACKAGE_DIR, 'dist'),
@@ -188,9 +182,8 @@ const createPackableLocalResendPackageDir = () => {
   const packageJson = readJson<WorkspacePackageJson>(
     path.join(LOCAL_RESEND_PACKAGE_DIR, 'package.json')
   );
-  if (packageJson.dependencies?.['better-convex']) {
-    packageJson.dependencies['better-convex'] =
-      getLocalBetterConvexInstallSpec();
+  if (packageJson.dependencies?.kitcn) {
+    packageJson.dependencies.kitcn = getLocalInstallSpec();
     writeJson(packageJsonPath, packageJson);
   }
 
@@ -203,10 +196,10 @@ export const getLocalResendInstallSpec = () => {
   }
 
   const outputDir = mkdtempSync(
-    path.join(tmpdir(), 'better-convex-local-resend-install-spec-')
+    path.join(tmpdir(), 'kitcn-local-resend-install-spec-')
   );
   const packageDir = createPackableLocalResendPackageDir();
-  localResendInstallSpec = packLocalBetterConvexPackage(outputDir, packageDir, {
+  localResendInstallSpec = packLocalPackage(outputDir, packageDir, {
     skipBuild: true,
   });
   return localResendInstallSpec;
@@ -227,8 +220,8 @@ export const runLocalCliSteps = async (
   for (const step of steps) {
     await runCommand(buildLocalCliCommand(step, params), cwd, {
       env: {
-        [BETTER_CONVEX_INSTALL_SPEC_ENV]: getLocalBetterConvexInstallSpec(),
-        [BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV]: getLocalResendInstallSpec(),
+        [KITCN_INSTALL_SPEC_ENV]: getLocalInstallSpec(),
+        [KITCN_RESEND_INSTALL_SPEC_ENV]: getLocalResendInstallSpec(),
       },
     });
   }
@@ -245,7 +238,7 @@ export const generateFreshApp = async (params: {
   const tempRoot = mkdtempSync(
     path.join(
       tmpdir(),
-      `better-convex-${params.initTemplate}-${params.generatedAppName}-`
+      `kitcn-${params.initTemplate}-${params.generatedAppName}-`
     )
   );
   const runCommand = params.runCommand ?? run;
@@ -270,8 +263,8 @@ export const generateFreshApp = async (params: {
     params.projectRoot ?? PROJECT_ROOT,
     {
       env: {
-        [BETTER_CONVEX_INSTALL_SPEC_ENV]: getLocalBetterConvexInstallSpec(),
-        [BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV]: getLocalResendInstallSpec(),
+        [KITCN_INSTALL_SPEC_ENV]: getLocalInstallSpec(),
+        [KITCN_RESEND_INSTALL_SPEC_ENV]: getLocalResendInstallSpec(),
       },
     }
   );
@@ -282,7 +275,7 @@ export const generateFreshApp = async (params: {
   };
 };
 
-export const packLocalBetterConvexPackage = (
+export const packLocalPackage = (
   outputDir: string,
   packageDir = LOCAL_PACKAGE_DIR,
   options: {
@@ -290,7 +283,7 @@ export const packLocalBetterConvexPackage = (
   } = {}
 ) => {
   if (!options.skipBuild) {
-    ensureLocalBetterConvexBuild(packageDir);
+    ensureLocalPackageBuild(packageDir);
   }
 
   const result = Bun.spawnSync({
@@ -301,9 +294,7 @@ export const packLocalBetterConvexPackage = (
   });
 
   if (result.exitCode !== 0) {
-    throw new Error(
-      result.stderr.toString().trim() || 'Failed to pack better-convex.'
-    );
+    throw new Error(result.stderr.toString().trim() || 'Failed to pack kitcn.');
   }
 
   const packed = JSON.parse(result.stdout.toString()) as Array<{
@@ -311,14 +302,14 @@ export const packLocalBetterConvexPackage = (
   }>;
   const filename = packed[0]?.filename;
   if (!filename) {
-    throw new Error('Failed to resolve packed better-convex tarball.');
+    throw new Error('Failed to resolve packed kitcn tarball.');
   }
   return `file:${path.join(outputDir, filename)}`;
 };
 
-export const rewritePackageJsonForLocalBetterConvex = (
+export const rewritePackageJsonForLocalPackage = (
   packageJsonPath: string,
-  betterConvexPackageSpec: string,
+  kitcnPackageSpec: string,
   params: {
     packageName?: string;
   } = {}
@@ -329,40 +320,35 @@ export const rewritePackageJsonForLocalBetterConvex = (
     ...packageJson,
     dependencies: {
       ...packageJson.dependencies,
-      'better-convex': betterConvexPackageSpec,
+      kitcn: kitcnPackageSpec,
     },
     name: params.packageName ?? packageJson.name,
   });
 };
 
-export const installLocalBetterConvex = async (
+export const installLocalPackage = async (
   directory: string,
   params: {
-    betterConvexPackageSpec?: string;
+    kitcnPackageSpec?: string;
     outputDir?: string;
     packageName?: string;
     runCommand?: typeof run;
   } = {}
 ) => {
   const packageJsonPath = path.join(directory, 'package.json');
-  const betterConvexPackageSpec =
-    params.betterConvexPackageSpec ??
-    packLocalBetterConvexPackage(params.outputDir ?? directory);
+  const kitcnPackageSpec =
+    params.kitcnPackageSpec ?? packLocalPackage(params.outputDir ?? directory);
 
-  rewritePackageJsonForLocalBetterConvex(
-    packageJsonPath,
-    betterConvexPackageSpec,
-    {
-      packageName: params.packageName,
-    }
-  );
+  rewritePackageJsonForLocalPackage(packageJsonPath, kitcnPackageSpec, {
+    packageName: params.packageName,
+  });
 
   await (params.runCommand ?? run)(
     ['bun', 'install', '--linker', 'hoisted'],
     directory
   );
 
-  return betterConvexPackageSpec;
+  return kitcnPackageSpec;
 };
 
 export const stripVolatileArtifacts = (directory: string) => {

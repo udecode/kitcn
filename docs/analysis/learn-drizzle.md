@@ -2,7 +2,7 @@
 
 > Concise guide mapping Drizzle v1 patterns to Prisma equivalents. Assumes proficiency in Prisma and Convex.
 
-**Version Note:** Better Convex mirrors **Drizzle v1** (canonical PG integration). This doc is v1-only.
+**Version Note:** kitcn mirrors **Drizzle v1** (canonical PG integration). This doc is v1-only.
 
 ## Quick Mental Map
 
@@ -35,10 +35,10 @@ model User {
 }
 ```
 
-**Drizzle (Better Convex):**
+**Drizzle (kitcn):**
 
 ```ts
-import { convexTable, text, integer } from 'better-convex/orm';
+import { convexTable, text, integer } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -78,7 +78,7 @@ text('tags').array('[][]');  // 2D
 type User = typeof users.$inferSelect;
 type UserInsert = typeof users.$inferInsert;
 
-import { InferSelectModel, InferInsertModel } from 'better-convex/orm';
+import { InferSelectModel, InferInsertModel } from 'kitcn/orm';
 
 type User = InferSelectModel<typeof users>;
 type UserInsert = InferInsertModel<typeof users>;
@@ -95,7 +95,7 @@ type UserInsert = InferInsertModel<typeof users>;
 ### Basic One-to-Many
 
 ```ts
-import { convexTable, defineRelations, id, text } from 'better-convex/orm';
+import { convexTable, defineRelations, id, text } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -238,7 +238,7 @@ const users = await db.query.users.findMany({
 ## 4. Mutations
 
 ```ts
-import { eq } from 'better-convex/orm';
+import { eq } from 'kitcn/orm';
 ```
 
 ### Insert

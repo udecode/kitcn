@@ -29,7 +29,7 @@ Property 'createdAt' does not exist on type 'ConvexTableWithColumns<{
 
 ### Issue 1: Intersection Operator Violates Phantom Brand Preservation
 
-**Location**: [packages/better-convex/src/orm/table.ts:210-212](packages/better-convex/src/orm/table.ts#L210-L212)
+**Location**: [packages/kitcn/src/orm/table.ts:210-212](packages/kitcn/src/orm/table.ts#L210-L212)
 
 ```typescript
 // ❌ CURRENT (violates institutional learning)
@@ -40,7 +40,7 @@ export type ConvexTableWithColumns<T extends TableConfig> = ConvexTable<T> & {
 
 **Why it fails**:
 - TypeScript's `&` operator strips phantom properties during type flattening
-- Documented in `/Users/zbeyens/GitHub/better-convex/docs/solutions/typescript-patterns/phantom-type-brand-preservation-20260202.md`
+- Documented in `/Users/zbeyens/GitHub/kitcn/docs/solutions/typescript-patterns/phantom-type-brand-preservation-20260202.md`
 - Commit eeaf5e6 fixed this exact issue in `BuildQueryResult` using `Merge` utility
 - `ConvexTableWithColumns` was missed during the fix
 
@@ -135,7 +135,7 @@ orderBy: asc(users.name)
 
 ### Step 1: Update ConvexTableWithColumns Type
 
-**File**: `packages/better-convex/src/orm/table.ts`
+**File**: `packages/kitcn/src/orm/table.ts`
 
 1. Locate `ConvexTableWithColumns` type definition (line 210)
 2. Replace intersection operators with nested `Merge` pattern
@@ -162,12 +162,12 @@ export type ConvexTableWithColumns<T extends TableConfig> = Merge<
 1. Update line 123: Change `orderBy: (users, { asc }) => asc(users.name)` to `orderBy: asc(users.name)`
 2. Update line 142: Change `orderBy: (users, { desc }) => desc(users.name)` to `orderBy: desc(users.name)`
 3. Update line 204: Change `orderBy: (users, { desc }) => desc(users.age)` to `orderBy: desc(users.age)`
-4. Add imports if needed: `import { asc, desc } from 'better-convex/orm'`
+4. Add imports if needed: `import { asc, desc } from 'kitcn/orm'`
 
 ### Step 3: Rebuild Package
 
 ```bash
-bun --cwd packages/better-convex build
+bun --cwd packages/kitcn build
 ```
 
 ### Step 4: Verify Typecheck

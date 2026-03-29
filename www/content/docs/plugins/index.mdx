@@ -3,7 +3,7 @@ title: Plugins
 description: Runtime plugins with scaffold-owned schema extensions and user-owned runtime files.
 ---
 
-Plugins are first-class in Better Convex. Install the runtime package, scaffold local files with `better-convex add`, then keep customizing those local files.
+Plugins are first-class in kitcn. Install the runtime package, scaffold local files with `kitcn add`, then keep customizing those local files.
 
 ## Runtime vs schema
 
@@ -16,7 +16,7 @@ First-party plugins are split on purpose:
 Schema is app-owned and uses `defineSchemaExtension(...)`:
 
 ```ts showLineNumbers
-import { defineSchemaExtension } from 'better-convex/orm';
+import { defineSchemaExtension } from 'kitcn/orm';
 
 export function myExtension() {
   return defineSchemaExtension('my-plugin', {}).relations(() => ({}));
@@ -28,7 +28,7 @@ export function myExtension() {
 `defineSchema(...).extend(...)` is the source of truth for installed schema capabilities:
 
 ```ts showLineNumbers {2,5}
-import { defineSchema } from 'better-convex/orm';
+import { defineSchema } from 'kitcn/orm';
 import { resendExtension } from '../lib/plugins/resend/schema';
 
 export default defineSchema(tables).extend(resendExtension());
@@ -45,9 +45,9 @@ Extension composition rules:
 - Packages own stable runtime helpers.
 - The CLI owns scaffold templates.
 - Your app owns scaffolded schema and runtime files.
-- `better-convex add <plugin>` creates or refreshes local plugin files.
-- If `paths.env` is missing, `better-convex add <plugin>` also bootstraps `convex/lib/get-env.ts` and writes `paths.env` into `concave.json`.
-- `better-convex diff <plugin>` previews scaffold drift.
+- `kitcn add <plugin>` creates or refreshes local plugin files.
+- If `paths.env` is missing, `kitcn add <plugin>` also bootstraps `convex/lib/get-env.ts` and writes `paths.env` into `concave.json`.
+- `kitcn diff <plugin>` previews scaffold drift.
 - Installed plugin state is tracked in `<functionsDir>/plugins.lock.json`.
 
 Codegen behavior:

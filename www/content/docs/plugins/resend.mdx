@@ -1,11 +1,11 @@
 ---
 title: Resend
-description: Durable queued email delivery for Better Convex with batching, retries, webhook ingestion, and cleanup.
+description: Durable queued email delivery for kitcn with batching, retries, webhook ingestion, and cleanup.
 links:
   doc: https://resend.com/docs
 ---
 
-`@better-convex/resend` is the Resend plugin for Better Convex.
+`@kitcn/resend` is the Resend plugin for kitcn.
 
 ## What You Get
 
@@ -18,13 +18,13 @@ links:
 ## 1. Install
 
 ```bash showLineNumbers
-bun add @better-convex/resend
+bun add @kitcn/resend
 ```
 
 ## 2. Scaffold User-Owned Files
 
 ```bash showLineNumbers
-npx better-convex add resend
+npx kitcn add resend
 ```
 
 Default scaffold set:
@@ -39,15 +39,15 @@ Default scaffold set:
 ## 3. Register In Schema
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {2,6}
-import { defineSchema } from 'better-convex/orm';
+import { defineSchema } from 'kitcn/orm';
 import { resendExtension } from '../lib/plugins/resend/schema';
 
 export default defineSchema(tables).extend(resendExtension());
 ```
 
-`better-convex add resend` writes this for you. Customize resend tables and relations by editing `convex/lib/plugins/resend/schema.ts` directly.
+`kitcn add resend` writes this for you. Customize resend tables and relations by editing `convex/lib/plugins/resend/schema.ts` directly.
 
-If `paths.env` is missing, `better-convex add resend` also creates `convex/lib/get-env.ts`, writes `paths.env` into `concave.json`, and adds:
+If `paths.env` is missing, `kitcn add resend` also creates `convex/lib/get-env.ts`, writes `paths.env` into `concave.json`, and adds:
 
 - `RESEND_API_KEY: z.string().optional()`
 - `RESEND_WEBHOOK_SECRET: z.string().optional()`
@@ -58,7 +58,7 @@ The add command also reminds you to set `RESEND_API_KEY` in `convex/.env` before
 ## 4. Generate Framework Files
 
 ```bash showLineNumbers
-npx better-convex codegen
+npx kitcn codegen
 ```
 
 If you scaffold `email.tsx`, install React Email deps:
@@ -70,7 +70,7 @@ bun add @react-email/components @react-email/render react-email react react-dom
 ## 5. Configure Middleware Once
 
 ```ts title="convex/lib/plugins/resend/plugin.ts" showLineNumbers
-import { ResendPlugin } from '@better-convex/resend';
+import { ResendPlugin } from '@kitcn/resend';
 import { getEnv } from '../../get-env';
 
 export const resend = ResendPlugin.configure({

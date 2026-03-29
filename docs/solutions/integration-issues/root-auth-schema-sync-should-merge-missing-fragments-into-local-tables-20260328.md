@@ -9,7 +9,7 @@ tags:
   - ast
   - example
 symptoms:
-  - `better-convex add auth --schema --yes` leaves compatible local auth tables stale because the lock says they are local
+  - `kitcn add auth --schema --yes` leaves compatible local auth tables stale because the lock says they are local
   - auth plugin changes like `username()` or `displayUsername()` do not land in forked app schemas such as `example/`
   - schema-only auth refresh needs app-specific cleanup guidance without stealing or deleting local schema
 module: auth-cli
@@ -74,13 +74,13 @@ That gives the command the behavior it actually needs:
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/registry/schema-ownership.test.ts packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/cli/registry/schema-ownership.test.ts packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts`
+- `bun --cwd packages/kitcn build`
 - `bun lint:fix`
 - live proof against `example/`:
   - before: `example/convex/functions/schema.ts` did not contain
     `displayUsername`
-  - run: `bunx better-convex add auth --schema --yes`
+  - run: `bunx kitcn add auth --schema --yes`
   - result: `example/convex/functions/schema.ts` gained
     `displayUsername: text(),`
   - result: `example/convex/functions/plugins.lock.json` stayed unchanged and

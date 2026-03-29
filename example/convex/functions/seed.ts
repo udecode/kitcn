@@ -1,4 +1,4 @@
-import { eq } from 'better-convex/orm';
+import { eq } from 'kitcn/orm';
 import { z } from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { authAction, privateMutation } from '../lib/crpc';
@@ -14,7 +14,7 @@ import {
 
 // Admin configuration - moved inside functions to avoid module-level execution
 const getAdminConfig = () => {
-  const adminEmail = getEnv().ADMIN[0] || 'admin@better-convex.com';
+  const adminEmail = getEnv().ADMIN[0] || 'admin@kitcn.com';
 
   return { adminEmail };
 };
@@ -24,28 +24,28 @@ const getUsersData = () => [
   {
     id: 'alice',
     bio: 'Frontend Developer',
-    email: 'alice@better-convex.com',
+    email: 'alice@kitcn.com',
     image: 'https://avatars.githubusercontent.com/u/2',
     name: 'Alice Johnson',
   },
   {
     id: 'bob',
     bio: 'Backend Developer',
-    email: 'bob@better-convex.com',
+    email: 'bob@kitcn.com',
     image: 'https://avatars.githubusercontent.com/u/3',
     name: 'Bob Smith',
   },
   {
     id: 'carol',
     bio: 'UI/UX Designer',
-    email: 'carol@better-convex.com',
+    email: 'carol@kitcn.com',
     image: 'https://avatars.githubusercontent.com/u/4',
     name: 'Carol Williams',
   },
   {
     id: 'dave',
     bio: 'DevOps Engineer',
-    email: 'dave@better-convex.com',
+    email: 'dave@kitcn.com',
     image: undefined,
     name: 'Dave Brown',
   },

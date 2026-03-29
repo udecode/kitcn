@@ -1,10 +1,5 @@
-import { getSessionNetworkSignals } from 'better-convex/auth';
-import {
-  MINUTE,
-  Ratelimit,
-  RatelimitPlugin,
-  SECOND,
-} from 'better-convex/ratelimit';
+import { getSessionNetworkSignals } from 'kitcn/auth';
+import { MINUTE, Ratelimit, RatelimitPlugin, SECOND } from 'kitcn/ratelimit';
 import type { MutationCtx } from '../../../functions/generated/server';
 import type { Select } from '../../../shared/api';
 

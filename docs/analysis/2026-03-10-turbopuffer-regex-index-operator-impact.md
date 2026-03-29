@@ -1,7 +1,7 @@
-# Turbopuffer Regex Indexes: Operator Impact on better-convex ORM
+# Turbopuffer Regex Indexes: Operator Impact on kitcn ORM
 
 This note captures the current analysis for Turbopuffer-backed regex/glob
-indexing and what it would mean for better-convex's Drizzle-style ORM docs and
+indexing and what it would mean for kitcn's Drizzle-style ORM docs and
 API shape.
 
 ## Source Status as of March 10, 2026
@@ -30,7 +30,7 @@ Conclusion:
 
 ## What This Changes Conceptually
 
-Today the better-convex docs split text filtering into two buckets:
+Today the kitcn docs split text filtering into two buckets:
 
 1. Native indexable string filters:
    - `startsWith(...)`
@@ -96,9 +96,9 @@ Reason:
   positive predicate is indexable.
 - at best, the positive form can narrow candidates before a complement step.
 
-## Mapping to better-convex ORM Operators
+## Mapping to kitcn ORM Operators
 
-If better-convex gains Turbopuffer-backed text filtering, the practical mapping
+If kitcn gains Turbopuffer-backed text filtering, the practical mapping
 should be:
 
 | ORM operator | Status today | With Turbopuffer regex/glob index |
@@ -125,7 +125,7 @@ the current `findMany({ search })` lane.
 
 Why:
 
-- `search` in better-convex currently means relevance-ordered full-text search
+- `search` in kitcn currently means relevance-ordered full-text search
   with its own restrictions.
 - regex/glob are pattern predicates.
 - collapsing them into `search` would lie about semantics and confuse users.
@@ -138,7 +138,7 @@ Strong recommendation:
 
 ## Recommended Product Shape
 
-If better-convex experiments with Turbopuffer here, the clean shape is:
+If kitcn experiments with Turbopuffer here, the clean shape is:
 
 1. Keep the current Convex-native story unchanged.
 2. Add a generic external text-provider seam.
@@ -153,7 +153,7 @@ In plain English:
   non-prefix `ilike`, `glob`, and `regex` fast
 - users should not expect `search` semantics from those operators
 
-## Existing better-convex Docs That Would Need Updates
+## Existing kitcn Docs That Would Need Updates
 
 Primary files:
 
@@ -162,7 +162,7 @@ Primary files:
 - `www/content/docs/orm/queries/filters.mdx`
 - `www/content/docs/orm/queries/operators.mdx`
 - `www/content/docs/orm/schema/indexes-constraints.mdx`
-- `packages/better-convex/skills/convex/references/features/orm.md`
+- `packages/kitcn/skills/convex/references/features/orm.md`
 
 Most important doc changes:
 

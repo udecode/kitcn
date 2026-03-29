@@ -60,7 +60,7 @@ describe('tooling/fixtures', () => {
 
   test('normalizeTemplateSnapshot versions local dev port 3005 in committed templates', () => {
     const templateDir = mkdtempSync(
-      path.join(tmpdir(), 'better-convex-template-normalize-')
+      path.join(tmpdir(), 'kitcn-template-normalize-')
     );
 
     try {
@@ -75,7 +75,7 @@ describe('tooling/fixtures', () => {
               dev: 'next dev --turbopack',
             },
             dependencies: {
-              'better-convex': '^0.11.0',
+              kitcn: '^0.11.0',
             },
           },
           null,
@@ -137,19 +137,19 @@ describe('tooling/fixtures', () => {
       ).toContain("SITE_URL: z.string().default('http://localhost:3005')");
       expect(
         readFileSync(path.join(templateDir, 'tsconfig.json'), 'utf8')
-      ).toContain('"better-convex/server": [');
+      ).toContain('"kitcn/server": [');
       expect(
         readFileSync(
           path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
           'utf8'
         )
-      ).toContain('packages/better-convex/src/server/index.ts');
+      ).toContain('packages/kitcn/src/server/index.ts');
       expect(
         readFileSync(
           path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
           'utf8'
         )
-      ).toContain('../../../../packages/better-convex/src/server/index.ts');
+      ).toContain('../../../../packages/kitcn/src/server/index.ts');
     } finally {
       rmSync(templateDir, { force: true, recursive: true });
     }

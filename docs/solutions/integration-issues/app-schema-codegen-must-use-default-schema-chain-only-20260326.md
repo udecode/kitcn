@@ -9,7 +9,7 @@ tags:
   - example
 symptoms:
   - docs show both `defineSchema(...).relations(...)` and `export const relations = defineRelations(...)` as valid app patterns
-  - `better-convex codegen` accepts named `relations` or `triggers` exports from `schema.ts`
+  - `kitcn codegen` accepts named `relations` or `triggers` exports from `schema.ts`
   - CLI schema patching mutates standalone `defineRelations(...)` helpers instead of the default schema chain
 module: cli-codegen-orm
 resolved: 2026-03-26
@@ -59,12 +59,12 @@ codegen contract anymore.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/codegen.test.ts packages/better-convex/src/cli/registry/schema-ownership.test.ts`
+- `bun test packages/kitcn/src/cli/codegen.test.ts packages/kitcn/src/cli/registry/schema-ownership.test.ts`
 - `cd example && bun run codegen`
 - `cd example && bun run typecheck`
 - `bun typecheck`
 - `bun lint:fix`
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn build`
 
 ## Prevention
 

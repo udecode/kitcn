@@ -1,6 +1,6 @@
 ---
 title: Concepts
-description: Architecture and vocabulary for Better Convex.
+description: Architecture and vocabulary for kitcn.
 links:
   doc: https://docs.convex.dev
 ---
@@ -21,7 +21,7 @@ import { InfoIcon } from "lucide-react"
 
 Convex is reactive and everything syncs in real-time. But as your app grows, friction builds up — manually wiring TanStack Query hooks, copy-pasting auth checks into every function, adding rate limiting boilerplate.
 
-**Better Convex solves this.** Convex's reactive database + TanStack Query's DX:
+**kitcn solves this.** Convex's reactive database + TanStack Query's DX:
 
 - **tRPC-style API** — Fluent builder with full type inference
 - **TanStack Query Native** — `useQuery`, `useMutation`, DevTools
@@ -45,9 +45,9 @@ export const list = authQuery
 
 ## Real-time + TanStack Query
 
-Convex already has real-time subscriptions. Better Convex bridges them into TanStack Query so you get WebSocket updates **and** the full TanStack Query API — `isPending`, `isError`, DevTools, cache invalidation, optimistic updates — without manual wiring.
+Convex already has real-time subscriptions. kitcn bridges them into TanStack Query so you get WebSocket updates **and** the full TanStack Query API — `isPending`, `isError`, DevTools, cache invalidation, optimistic updates — without manual wiring.
 
-With vanilla Convex, you'd use `@convex-dev/react-query` and wire each query with `convexQuery(api.path, args)`. Better Convex includes the adapter out of the box and generates typed query options from your procedures:
+With vanilla Convex, you'd use `@convex-dev/react-query` and wire each query with `convexQuery(api.path, args)`. kitcn includes the adapter out of the box and generates typed query options from your procedures:
 
 ```tsx showLineNumbers {1}
 const { data, isPending } = useQuery(crpc.todos.list.queryOptions({}));
@@ -63,7 +63,7 @@ Every procedure receives `ctx`. Middleware transforms it before your handler run
 
 ```ts showLineNumbers title="convex/lib/crpc.ts" {4-7}
 import type { GenericId } from 'convex/values';
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 
 const authQuery = c.query.use(async ({ ctx, next }) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -110,7 +110,7 @@ const user = await ctx.orm.query.user.findFirst({
 Automatic side effects on data changes — denormalized counts, cascade deletes, audit logging:
 
 ```ts showLineNumbers title="convex/functions/triggers.ts" {4-15}
-import { defineTriggers, eq } from 'better-convex/orm';
+import { defineTriggers, eq } from 'kitcn/orm';
 import { post, relations } from './schema';
 
 const triggers = defineTriggers(relations, {
@@ -152,7 +152,7 @@ const top10 = await lb.paginate({ cursor: null, limit: 10 });
 Built-in ORM migrations for safe schema evolution:
 
 ```ts showLineNumbers title="convex/functions/migrations.ts" {3-9}
-import { defineMigration, defineMigrationSet } from 'better-convex/orm';
+import { defineMigration, defineMigrationSet } from 'kitcn/orm';
 
 const addStatus = defineMigration({
   id: '20260214_add_status',
@@ -172,7 +172,7 @@ See [ORM Migrations](/docs/orm/migrations) for the full workflow.
 Cross-cutting features that span schema, runtime, and client. Register once, everything wired:
 
 ```ts showLineNumbers title="convex/functions/schema.ts" {2,5}
-import { defineSchema } from 'better-convex/orm';
+import { defineSchema } from 'kitcn/orm';
 import { ratelimitExtension } from '../lib/plugins/ratelimit/schema';
 
 export default defineSchema(tables).extend(ratelimitExtension());
@@ -205,10 +205,10 @@ convex/
 | Path | Purpose |
 |---|---|
 | `convex/functions/_generated/*` | Convex API and data model types |
-| `convex/functions/generated/*` | Better Convex callers and runtime contracts |
+| `convex/functions/generated/*` | kitcn callers and runtime contracts |
 | `convex/shared/api.ts` | Typed API metadata for the client |
 
-Dev loop: change schema/procedures → `better-convex dev` → use generated artifacts.
+Dev loop: change schema/procedures → `kitcn dev` → use generated artifacts.
 
 ## Configuration
 

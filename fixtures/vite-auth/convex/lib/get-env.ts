@@ -1,4 +1,4 @@
-import { createEnv } from 'better-convex/server';
+import { createEnv } from 'kitcn/server';
 import { z } from 'zod';
 
 const envSchema = z.object({

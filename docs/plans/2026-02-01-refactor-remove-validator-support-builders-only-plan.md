@@ -9,7 +9,7 @@ milestone: M6+
 
 ## Overview
 
-**Goal**: Eliminate ALL validator support (`v.string()`, `v.optional()`, etc.) from Better Convex ORM. Only support Drizzle-style column builders (`text()`, `integer()`, `boolean()`, etc.).
+**Goal**: Eliminate ALL validator support (`v.string()`, `v.optional()`, etc.) from kitcn ORM. Only support Drizzle-style column builders (`text()`, `integer()`, `boolean()`, etc.).
 
 **Type**: Breaking change - NOT backward compatible
 **Scope**: Core type system, table definitions, all test schemas
@@ -28,7 +28,7 @@ Original M6 plan (docs/brainstorms/2026-01-31-drizzle-orm-brainstorm.md lines 57
 
 ## Problem Statement
 
-Currently Better Convex ORM supports BOTH:
+Currently kitcn ORM supports BOTH:
 ```typescript
 // Validators (v.* - REMOVE)
 const users = convexTable('users', {
@@ -102,7 +102,7 @@ export type RequiredKeyOnly<TKey extends string, T extends Column> =
 
 ### Phase 1: Core Type System Files
 
-#### packages/better-convex/src/orm/types.ts
+#### packages/kitcn/src/orm/types.ts
 - [ ] **Remove `ValidatorToType` utility** (lines 38-43)
   - Currently: `V extends Validator<infer T, any, infer TFieldness>`
   - Action: Delete entirely
@@ -167,7 +167,7 @@ export type RequiredKeyOnly<TKey extends string, T extends Column> =
   - `DBQueryConfig`
   - `FieldReference` types
 
-#### packages/better-convex/src/orm/table.ts
+#### packages/kitcn/src/orm/table.ts
 - [ ] **Update `TableConfig` interface** (lines 34-43)
   ```typescript
   // BEFORE
@@ -223,7 +223,7 @@ export type RequiredKeyOnly<TKey extends string, T extends Column> =
   - Remove `v.*` validator examples
   - Keep only builder examples
 
-#### packages/better-convex/src/orm/filter-expression.ts
+#### packages/kitcn/src/orm/filter-expression.ts
 - [ ] **Update `Column<TValidator>` interface** (line 154)
   ```typescript
   // BEFORE
@@ -246,14 +246,14 @@ export type RequiredKeyOnly<TKey extends string, T extends Column> =
 ### Phase 2: Builder Infrastructure (Already Complete)
 
 ✅ **No changes needed** - builders already work correctly:
-- [x] packages/better-convex/src/orm/builders/column-builder.ts
-- [x] packages/better-convex/src/orm/builders/convex-column-builder.ts
-- [x] packages/better-convex/src/orm/builders/text.ts
-- [x] packages/better-convex/src/orm/builders/number.ts
-- [x] packages/better-convex/src/orm/builders/boolean.ts
-- [x] packages/better-convex/src/orm/builders/bigint.ts
-- [x] packages/better-convex/src/orm/builders/id.ts
-- [x] packages/better-convex/src/orm/builders/index.ts
+- [x] packages/kitcn/src/orm/builders/column-builder.ts
+- [x] packages/kitcn/src/orm/builders/convex-column-builder.ts
+- [x] packages/kitcn/src/orm/builders/text.ts
+- [x] packages/kitcn/src/orm/builders/number.ts
+- [x] packages/kitcn/src/orm/builders/boolean.ts
+- [x] packages/kitcn/src/orm/builders/bigint.ts
+- [x] packages/kitcn/src/orm/builders/id.ts
+- [x] packages/kitcn/src/orm/builders/index.ts
 
 ---
 
@@ -262,9 +262,9 @@ export type RequiredKeyOnly<TKey extends string, T extends Column> =
 #### convex/schema.ts
 - [ ] **Lines 1-177: Convex Ents schema** (defineEnt - out of scope)
   - Uses convex-ents library directly
-  - Keep as-is (not part of Better Convex ORM)
+  - Keep as-is (not part of kitcn ORM)
 
-- [x] **Lines 190-253: Better Convex ORM schema**
+- [x] **Lines 190-253: kitcn ORM schema**
   - ALREADY migrated to builders (completed 2026-02-01)
   - Uses `text()`, `number()`, `id()` exclusively
   - No changes needed
@@ -302,7 +302,7 @@ export type RequiredKeyOnly<TKey extends string, T extends Column> =
 
 - [ ] **Lines 28-32: Second test case** (same migration)
 
-- [ ] **Update imports**: Remove `v` from `convex/values`, add `text` from `better-convex/orm`
+- [ ] **Update imports**: Remove `v` from `convex/values`, add `text` from `kitcn/orm`
 
 #### convex/orm/relations.test.ts
 - [ ] **Lines 24-49, 84-114: Table definitions**
@@ -338,26 +338,26 @@ export type RequiredKeyOnly<TKey extends string, T extends Column> =
 
 ### Phase 5: Query/Database Layer Files
 
-#### packages/better-convex/src/orm/database.ts
+#### packages/kitcn/src/orm/database.ts
 - [ ] **Check `TableRelationalConfig` types**
   - Should reference `ColumnBuilder` not `Validator`
 
-#### packages/better-convex/src/orm/query-builder.ts
+#### packages/kitcn/src/orm/query-builder.ts
 - [ ] **Check column proxy creation logic**
   - Ensure works with builders only
 
-#### packages/better-convex/src/orm/query-compiler.ts
+#### packages/kitcn/src/orm/query-compiler.ts
 - [ ] **Review type extraction logic**
   - Should use builder type utilities
 
-#### packages/better-convex/src/orm/where-clause-compiler.ts
+#### packages/kitcn/src/orm/where-clause-compiler.ts
 - [ ] **Check validator usage** in column type extraction
 
-#### packages/better-convex/src/orm/relations.ts
+#### packages/kitcn/src/orm/relations.ts
 - [ ] **Check field validation logic**
   - Should work with builder-based tables
 
-#### packages/better-convex/src/orm/extractRelationsConfig.ts
+#### packages/kitcn/src/orm/extractRelationsConfig.ts
 - [ ] **Line 257: Error message**
   ```typescript
   // BEFORE
@@ -371,7 +371,7 @@ export type RequiredKeyOnly<TKey extends string, T extends Column> =
 
 ### Phase 6: Auth Integration (Low Priority)
 
-#### packages/better-convex/src/auth/create-schema.ts
+#### packages/kitcn/src/auth/create-schema.ts
 - [ ] **Lines 90-91: Auth table generation**
   - Currently: Generates validators directly (`v.string()`, `v.number()`)
   - Options:
@@ -574,7 +574,7 @@ vitest run
 
 ### Build
 ```bash
-bun --cwd packages/better-convex build
+bun --cwd packages/kitcn build
 ```
 **Expected**: Clean build, no warnings
 
@@ -598,12 +598,12 @@ bun lint
 
 ## Breaking Change
 
-Better Convex ORM v2 removes ALL support for Convex validators (`v.*`).
+kitcn ORM v2 removes ALL support for Convex validators (`v.*`).
 You must use Drizzle-style column builders.
 
 ## Before (v1 - validators)
 \`\`\`typescript
-import { convexTable } from 'better-convex/orm';
+import { convexTable } from 'kitcn/orm';
 import { v } from 'convex/values';
 
 const users = convexTable('users', {
@@ -615,7 +615,7 @@ const users = convexTable('users', {
 
 ## After (v2 - builders)
 \`\`\`typescript
-import { convexTable, text, integer } from 'better-convex/orm';
+import { convexTable, text, integer } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),

@@ -27,14 +27,14 @@ over the underlying runtime or package bug.
   normalize `createdAt` back to `_creationTime` and treat system creation time
   as the implicit trailing range field on aggregate indexes.
 - Source tests were green before the page because `example` was still bundling
-  stale `packages/better-convex/dist`. Rebuilding the package was required for
+  stale `packages/kitcn/dist`. Rebuilding the package was required for
   live proof.
 
 ## Verification
 
-- `bun test packages/better-convex/src/orm/query.is-nullish.test.ts`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/orm/query.is-nullish.test.ts`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 - live snapshot proof from `example`:
   - anonymous sign-in
   - `bun convex run --push --identity ... aggregateDemo:getSnapshot '{}'`

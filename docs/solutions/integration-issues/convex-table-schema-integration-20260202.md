@@ -1,5 +1,5 @@
 ---
-module: Better Convex ORM
+module: kitcn ORM
 date: 2026-02-02
 problem_type: integration_issue
 component: typescript_types
@@ -71,7 +71,7 @@ Implemented the convex-ents pattern:
 Each builder exposes its Convex validator:
 
 ```typescript
-// packages/better-convex/src/orm/builders/text.ts
+// packages/kitcn/src/orm/builders/text.ts
 export class ConvexTextBuilder<T extends ColumnBuilderBaseConfig<'string', string>> {
   get convexValidator(): Validator<any, any, any> {
     if (this.config.notNull) {
@@ -93,7 +93,7 @@ export class ConvexTextBuilder<T extends ColumnBuilderBaseConfig<'string', strin
 Extracts validators from builders and creates v.object():
 
 ```typescript
-// packages/better-convex/src/orm/table.ts
+// packages/kitcn/src/orm/table.ts
 function createValidatorFromColumns(
   columns: Record<string, ColumnBuilder<any, any, any>>
 ): Validator<any, any, any> {
@@ -195,7 +195,7 @@ export function convexTable<
 Updated index.ts to use `export type` for interface:
 
 ```typescript
-// packages/better-convex/src/orm/index.ts
+// packages/kitcn/src/orm/index.ts
 export type { TableConfig, ConvexTable } from './table';
 export { convexTable } from './table';
 ```
@@ -260,13 +260,13 @@ class MyTable extends TableDefinition {
 ## Files Changed
 
 **Modified:**
-- [packages/better-convex/src/orm/builders/text.ts](../../packages/better-convex/src/orm/builders/text.ts)
-- [packages/better-convex/src/orm/builders/number.ts](../../packages/better-convex/src/orm/builders/number.ts)
-- [packages/better-convex/src/orm/builders/id.ts](../../packages/better-convex/src/orm/builders/id.ts)
-- [packages/better-convex/src/orm/builders/boolean.ts](../../packages/better-convex/src/orm/builders/boolean.ts)
-- [packages/better-convex/src/orm/builders/bigint.ts](../../packages/better-convex/src/orm/builders/bigint.ts)
-- [packages/better-convex/src/orm/table.ts](../../packages/better-convex/src/orm/table.ts)
-- [packages/better-convex/src/orm/index.ts](../../packages/better-convex/src/orm/index.ts)
+- [packages/kitcn/src/orm/builders/text.ts](../../packages/kitcn/src/orm/builders/text.ts)
+- [packages/kitcn/src/orm/builders/number.ts](../../packages/kitcn/src/orm/builders/number.ts)
+- [packages/kitcn/src/orm/builders/id.ts](../../packages/kitcn/src/orm/builders/id.ts)
+- [packages/kitcn/src/orm/builders/boolean.ts](../../packages/kitcn/src/orm/builders/boolean.ts)
+- [packages/kitcn/src/orm/builders/bigint.ts](../../packages/kitcn/src/orm/builders/bigint.ts)
+- [packages/kitcn/src/orm/table.ts](../../packages/kitcn/src/orm/table.ts)
+- [packages/kitcn/src/orm/index.ts](../../packages/kitcn/src/orm/index.ts)
 
 **Stats:** 22 files modified, +632/-276 lines
 

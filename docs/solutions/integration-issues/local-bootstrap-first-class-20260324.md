@@ -12,7 +12,7 @@ tags:
   - cli
 severity: high
 symptoms:
-  - docs tell users to run better-convex dev --once --typecheck disable
+  - docs tell users to run kitcn dev --once --typecheck disable
   - add auth needs a follow-up live step to finish local setup
   - fresh local auth setup feels like two commands glued together
 ---
@@ -25,7 +25,7 @@ The local bootstrap story leaked an internal backend command into the public
 API:
 
 ```bash
-npx better-convex dev --once --typecheck disable
+npx kitcn dev --once --typecheck disable
 ```
 
 That is ugly for humans and worse for agents. It exposes backend adapter flags
@@ -48,10 +48,10 @@ bootstrap after scaffold changes", `add` ended up with auth-specific glue.
 
 Make one-shot local bootstrap explicit:
 
-- `better-convex dev --bootstrap` is the public one-shot local Convex bootstrap
+- `kitcn dev --bootstrap` is the public one-shot local Convex bootstrap
   command
-- `better-convex dev` remains the long-running local runtime
-- `better-convex add <plugin>` can request a planner operation of kind
+- `kitcn dev` remains the long-running local runtime
+- `kitcn add <plugin>` can request a planner operation of kind
   `live_bootstrap`
 
 Use one shared bootstrap runner for all of them:
@@ -83,7 +83,7 @@ For `add`, keep it local-only and probe-first:
 - repo `lint:fix`
 - live `bun run scenario:test -- next-auth`
 - live `bun run scenario:test -- create-convex-nextjs-shadcn-auth`
-- live `bunx better-convex dev --bootstrap` in
+- live `bunx kitcn dev --bootstrap` in
   `tmp/scenarios/create-convex-nextjs-shadcn-auth/project`
 
 ## Takeaways

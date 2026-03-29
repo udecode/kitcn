@@ -8,11 +8,11 @@ description: 'Skill: concave-parity'
 ## Contract
 
 When the user asks for Concave parity, treat Convex behavior as the source of
-truth for Better Convex runtime contracts.
+truth for kitcn runtime contracts.
 
 Do not hand-wave with "compatible enough."
 
-Do not normalize a parity shift into "just how Concave works" if Better Convex
+Do not normalize a parity shift into "just how Concave works" if kitcn
 already has a shim for it. Name the shift, point at the shim, and state the
 delete condition.
 
@@ -42,7 +42,7 @@ Convex local dev shape in this repo:
 Concave alpha.14 fixed the backend default to `3210`, but it still does not
 expose the site side on `3211`.
 
-Better Convex workaround:
+kitcn workaround:
 
 - start a local site proxy on `3211`
 - inject `CONVEX_SITE_URL=http://127.0.0.1:3211`
@@ -50,11 +50,11 @@ Better Convex workaround:
 
 Code locations:
 
-- `packages/better-convex/src/cli/commands/dev.ts`
+- `packages/kitcn/src/cli/commands/dev.ts`
   - `resolveConcaveLocalDevContract(...)`
   - `resolveConcaveLocalSiteUrl(...)`
   - `startLocalSiteProxy(...)`
-- `packages/better-convex/src/cli/commands/dev.test.ts`
+- `packages/kitcn/src/cli/commands/dev.test.ts`
 - `tooling/scenarios.ts`
   - `DEFAULT_SCENARIO_READY_URL`
   - `readScenarioSiteUrl(...)`
@@ -69,17 +69,17 @@ Why it exists:
 Delete when:
 
 - Concave local dev natively supports the same backend/site split contract, or
-- Better Convex no longer needs to emulate Convex local URLs for prepared apps
+- kitcn no longer needs to emulate Convex local URLs for prepared apps
 
 ### 2. Startup retry loop for dev migration/backfill hooks
 
-Convex dev startup usually accepts Better Convex migration/backfill hooks
+Convex dev startup usually accepts kitcn migration/backfill hooks
 cleanly on first call.
 
 Concave alpha.14 fixed `concave run` for internal runtime functions, but
 startup can still race readiness.
 
-Better Convex workaround:
+kitcn workaround:
 
 - Concave-only retry loop
 - backoff: `1s`, `2s`, `4s`
@@ -87,10 +87,10 @@ Better Convex workaround:
 
 Code locations:
 
-- `packages/better-convex/src/cli/commands/dev.ts`
+- `packages/kitcn/src/cli/commands/dev.ts`
   - `runDevStartupRetryLoop(...)`
   - startup `migration up` and `aggregateBackfill kickoff` callers
-- `packages/better-convex/src/cli/commands/dev.test.ts`
+- `packages/kitcn/src/cli/commands/dev.test.ts`
 - related notes:
   - `docs/solutions/integration-issues/concave-internal-runtime-calls-20260322.md`
   - `docs/solutions/integration-issues/concave-local-dev-auth-cycle-20260319.md`
@@ -111,12 +111,12 @@ Delete when:
 Prepared Vite scenarios in this repo are supposed to prove:
 
 - frontend on `3005`
-- backend on the Better Convex local contract
+- backend on the kitcn local contract
 
 Concave alpha.14 still auto-detects and starts Vite itself, which steals
 frontend ownership and lands on `5173`.
 
-Better Convex workaround:
+kitcn workaround:
 
 - run backend dev with `--frontend no`
 - run the prepared Vite frontend separately
@@ -155,7 +155,7 @@ export const internal = {};
 That breaks generated auth runtime access like `authFunctions.findOne` even
 though the actual function paths are known.
 
-Better Convex workaround:
+kitcn workaround:
 
 - synthesize generated auth internal refs from their function path names
 - use `createGeneratedFunctionReference(...)` instead of trusting Concave's
@@ -163,8 +163,8 @@ Better Convex workaround:
 
 Code locations:
 
-- `packages/better-convex/src/auth/generated-contract.ts`
-- `packages/better-convex/src/auth/generated-contract.test.ts`
+- `packages/kitcn/src/auth/generated-contract.ts`
+- `packages/kitcn/src/auth/generated-contract.test.ts`
 - related note:
   - `docs/solutions/integration-issues/concave-alpha14-generated-auth-and-run-output-20260323.md`
 
@@ -181,7 +181,7 @@ Delete when:
 
 ### 5. Concave `run` output JSON fallback parsing
 
-Convex-style machine output is clean JSON when Better Convex shells out to a
+Convex-style machine output is clean JSON when kitcn shells out to a
 backend `run` command and expects structured results.
 
 Concave alpha.14 now prints a human preamble before the JSON body, for example:
@@ -192,23 +192,23 @@ Concave alpha.14 now prints a human preamble before the JSON body, for example:
 - `Success`
 - pretty JSON
 
-Better Convex workaround:
+kitcn workaround:
 
 - parse a trailing JSON block after the preamble
 - keep the existing one-line JSON path for Convex and any future clean output
 
 Code locations:
 
-- `packages/better-convex/src/cli/backend-core.ts`
+- `packages/kitcn/src/cli/backend-core.ts`
   - `parseBackendRunJson(...)`
-- `packages/better-convex/src/cli/commands/migrate.test.ts`
+- `packages/kitcn/src/cli/commands/migrate.test.ts`
 - related note:
   - `docs/solutions/integration-issues/concave-alpha14-generated-auth-and-run-output-20260323.md`
 
 Why it exists:
 
 - alpha.14 made `concave run` human-friendlier but less machine-clean for the
-  startup migration and aggregate flows Better Convex shells out to
+  startup migration and aggregate flows kitcn shells out to
 
 Delete when:
 
@@ -239,7 +239,7 @@ Removed in alpha.14 verification.
 
 Old workaround:
 
-- always append `--port 3210` to `concave dev` when Better Convex owned local
+- always append `--port 3210` to `concave dev` when kitcn owned local
   dev boot
 
 Why it died:
@@ -260,13 +260,13 @@ Why it died:
 - raw `concave codegen --static` now emits the same `api.d.ts` shape our
   override used to force
 
-## Watchlist: Known Gaps Without a Better Convex Bandaid
+## Watchlist: Known Gaps Without a kitcn Bandaid
 
 ### No env command parity
 
 Current repo truth:
 
-- Better Convex can wrap/pass through Convex env commands
+- kitcn can wrap/pass through Convex env commands
 - Concave has no equivalent upstream env command surface
 
 Current location:
@@ -298,7 +298,7 @@ Meaning:
 
 Start with the active bandaid seams:
 
-- `packages/better-convex/src/cli/commands/dev.ts`
+- `packages/kitcn/src/cli/commands/dev.ts`
 - `tooling/scenarios.ts`
 
 Then read the solution notes:
@@ -314,9 +314,9 @@ When touching any active Concave parity bandaid, run the smallest real gate
 that proves the seam:
 
 ```bash
-bun test packages/better-convex/src/cli/commands/dev.test.ts \
-  packages/better-convex/src/cli/commands/migrate.test.ts \
-  packages/better-convex/src/auth/generated-contract.test.ts \
+bun test packages/kitcn/src/cli/commands/dev.test.ts \
+  packages/kitcn/src/cli/commands/migrate.test.ts \
+  packages/kitcn/src/auth/generated-contract.test.ts \
   tooling/scenarios.test.ts
 
 bun run test:concave

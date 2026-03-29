@@ -2,7 +2,7 @@
   "name": "test-convex",
   "private": true,
   "dependencies": {
-    "better-convex": "workspace:*"
+    "kitcn": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

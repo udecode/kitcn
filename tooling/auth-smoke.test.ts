@@ -31,9 +31,7 @@ describe('tooling/auth-smoke', () => {
   });
 
   test('resolveAuthSmokeBaseUrl prefers explicit url then scenario env file', () => {
-    const rootDir = mkdtempSync(
-      path.join(tmpdir(), 'better-convex-auth-smoke-')
-    );
+    const rootDir = mkdtempSync(path.join(tmpdir(), 'kitcn-auth-smoke-'));
 
     try {
       const scenarioDir = path.join(

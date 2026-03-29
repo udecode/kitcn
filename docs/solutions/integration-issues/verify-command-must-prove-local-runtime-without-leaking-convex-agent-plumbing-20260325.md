@@ -21,13 +21,13 @@ symptoms:
 
 ## Problem
 
-`better-convex` had the pieces for local runtime proof, but no clean product
+`kitcn` had the pieces for local runtime proof, but no clean product
 surface for it.
 
 Agents and CI ended up reaching for raw commands like:
 
 ```bash
-CONVEX_AGENT_MODE=anonymous better-convex dev --once
+CONVEX_AGENT_MODE=anonymous kitcn dev --once
 ```
 
 That is bad API. It leaks upstream Convex non-interactive setup plumbing, makes
@@ -36,7 +36,7 @@ own fake `check` command that mixes runtime proof with unrelated static gates.
 
 ## Root cause
 
-The real proof path already existed inside `better-convex dev`, but it was
+The real proof path already existed inside `kitcn dev`, but it was
 buried under the wrong abstraction.
 
 - `dev --once` is the real runtime lane
@@ -48,11 +48,11 @@ the documented and scripted workaround.
 
 ## Fix
 
-Add `better-convex verify` as a dedicated local runtime proof command.
+Add `kitcn verify` as a dedicated local runtime proof command.
 
 The command should:
 
-1. run the real Better Convex dev path through `dev --once`
+1. run the real kitcn dev path through `dev --once`
 2. reject remote deployment flags
 3. reject non-Convex backends
 4. reuse an existing local Convex deployment when one is already configured
@@ -62,7 +62,7 @@ The command should:
 That gives agents a sharp split:
 
 - `typecheck` proves static correctness
-- `better-convex verify` proves local runtime boots
+- `kitcn verify` proves local runtime boots
 - one dedicated repo gate can run `verify` once without replacing scenario
   proof lanes
 
@@ -75,9 +75,9 @@ That gives agents a sharp split:
 - package typecheck
 - package build
 - repo `lint:fix`
-- live `bunx better-convex verify` in
+- live `bunx kitcn verify` in
   `tmp/scenarios/create-convex-bare/project`
-- live `bunx better-convex verify` in `example/`
+- live `bunx kitcn verify` in `example/`
 
 ## Takeaways
 

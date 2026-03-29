@@ -12,7 +12,7 @@ This guide migrates from `@convex-dev/aggregate` component instances to ORM APIs
 ## Prerequisite
 
 <Callout icon={<InfoIcon />}>
-Complete [DB migration](/docs/migrations/db) first. This guide assumes your app already runs on Better Convex ORM runtime.
+Complete [DB migration](/docs/migrations/db) first. This guide assumes your app already runs on kitcn ORM runtime.
 </Callout>
 
 ## Concept Mapping
@@ -107,7 +107,7 @@ import {
   defineSchema,
   integer,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const todos = convexTable(
   'todos',
@@ -148,7 +148,7 @@ import {
   id,
   integer,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const scores = convexTable(
   'scores',
@@ -181,22 +181,22 @@ export default defineSchema({ todos, scores });
 ## Step 3: Run Codegen
 
 ```bash
-npx better-convex dev
+npx kitcn dev
 ```
 
 Or scoped:
 
 ```bash
-npx better-convex codegen --scope orm
+npx kitcn codegen --scope orm
 ```
 
 ## Step 4: Deploy (Backfill Runs Automatically)
 
 ```bash
-npx better-convex deploy --prod
+npx kitcn deploy --prod
 ```
 
-`better-convex deploy` runs `aggregateBackfill` in `resume` mode for both metric and rank indexes, then waits for all to report `READY`.
+`kitcn deploy` runs `aggregateBackfill` in `resume` mode for both metric and rank indexes, then waits for all to report `READY`.
 
 `resume` is idempotent:
 - already-`READY` indexes are skipped
@@ -206,7 +206,7 @@ npx better-convex deploy --prod
 - key shape changes require rebuild:
 
 ```bash
-npx better-convex aggregate rebuild --prod
+npx kitcn aggregate rebuild --prod
 ```
 
 ## Step 5: Switch Scalar Reads
@@ -363,7 +363,7 @@ These `@convex-dev/aggregate` features have no direct ORM equivalent:
 | `paginateNamespaces` / `iterNamespaces` | Query partition values from your source table |
 | `iter` (async generator) | Loop `rank(...).paginate()` manually |
 | `countBatch` / `sumBatch` / `atBatch` | Call methods individually (batching not yet supported) |
-| `clear` / `clearAll` | `better-convex aggregate rebuild` |
+| `clear` / `clearAll` | `kitcn aggregate rebuild` |
 | `makeRootLazy` / `rootLazy` | Not applicable (ORM manages B-tree configuration) |
 | Negative `at(-1)` offsets | Not yet supported; use `max()` for last item |
 | `bounds` with `id` tie-breaker | Not supported; use cursor pagination |

@@ -1,5 +1,6 @@
-import { TableAggregate } from 'better-convex/aggregate';
-import * as ormModule from 'better-convex/orm';
+import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server';
+import { TableAggregate } from 'kitcn/aggregate';
+import * as ormModule from 'kitcn/orm';
 import {
   convexTable,
   createOrm,
@@ -12,9 +13,8 @@ import {
   type OrmTriggerChange,
   type OrmTriggerContext,
   text,
-} from 'better-convex/orm';
-import { createGenericCallerFactory } from 'better-convex/server';
-import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server';
+} from 'kitcn/orm';
+import { createGenericCallerFactory } from 'kitcn/server';
 import { type Equal, Expect } from './utils';
 
 type IsUnknown<T> = Equal<T, unknown>;

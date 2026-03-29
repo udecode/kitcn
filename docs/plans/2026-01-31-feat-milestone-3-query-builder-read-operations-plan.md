@@ -36,7 +36,7 @@ const usersWithPosts = await ctx.db.query.users.findMany({
 
 ## Problem Statement
 
-Developers familiar with Drizzle/Prisma face a steep learning curve when adopting Convex because they must learn convex-ents' different API for querying and loading relations. Better Convex has already implemented M1 (Schema Foundation) and M2 (Relations Layer), but lacks the familiar query builder interface for reading data with relations.
+Developers familiar with Drizzle/Prisma face a steep learning curve when adopting Convex because they must learn convex-ents' different API for querying and loading relations. kitcn has already implemented M1 (Schema Foundation) and M2 (Relations Layer), but lacks the familiar query builder interface for reading data with relations.
 
 **Pain points**:
 - No familiar `findMany({ with: { relation: true } })` pattern
@@ -105,7 +105,7 @@ Implement `RelationalQueryBuilder` and `GelRelationalQuery` classes that:
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   query-builder.ts          # RelationalQueryBuilder class
   query.ts                  # GelRelationalQuery class
   query-promise.ts          # QueryPromise abstract class
@@ -173,7 +173,7 @@ export class RelationalQueryBuilder<
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   types.ts                  # Add new query result types
   relations.ts              # Reference existing relation types
 ```
@@ -269,7 +269,7 @@ export type BuildRelationResult<
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   query.ts                  # Add _toConvexQuery() method
   query-compiler.ts         # Helper functions for filter/order compilation
 ```
@@ -340,7 +340,7 @@ function compileWhereClause<TColumns>(
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   query.ts                  # Add _loadRelations() method
   relation-loader.ts        # RelationLoader class for batching
 ```
@@ -425,7 +425,7 @@ export class RelationLoader {
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   query-promise.ts          # QueryPromise abstract class
   query.ts                  # Implement execute() method
 ```
@@ -504,7 +504,7 @@ async execute(): Promise<TResult> {
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   database.ts               # Extend database context
   index.ts                  # Export new APIs
 ```
@@ -837,7 +837,7 @@ describe('M3 Relation Loading', () => {
 **Dependencies**:
 - Convex SDK 1.31+
 - EdgeMetadata from M2 for relation configuration
-- Better Convex package exports from M1/M2
+- kitcn package exports from M1/M2
 
 **Blockers**:
 - None - M1 and M2 are complete
@@ -886,7 +886,7 @@ describe('M3 Relation Loading', () => {
 - [ ] Add M3 section to main README
 - [ ] Create query builder guide with examples
 - [ ] Document `DBQueryConfig` type structure
-- [ ] Add migration guide from convex-ents to Better Convex query API
+- [ ] Add migration guide from convex-ents to kitcn query API
 - [ ] Update type inference examples
 
 ## References & Research
@@ -894,15 +894,15 @@ describe('M3 Relation Loading', () => {
 ### Internal References
 
 **M2 Contract**:
-- EdgeMetadata interface: [packages/better-convex/src/orm/extractRelationsConfig.ts:17-40](packages/better-convex/src/orm/extractRelationsConfig.ts#L17-L40)
-- extractRelationsConfig: [packages/better-convex/src/orm/extractRelationsConfig.ts:49-119](packages/better-convex/src/orm/extractRelationsConfig.ts#L49-L119)
+- EdgeMetadata interface: [packages/kitcn/src/orm/extractRelationsConfig.ts:17-40](packages/kitcn/src/orm/extractRelationsConfig.ts#L17-L40)
+- extractRelationsConfig: [packages/kitcn/src/orm/extractRelationsConfig.ts:49-119](packages/kitcn/src/orm/extractRelationsConfig.ts#L49-L119)
 
 **M2 Relations**:
-- One and Many classes: [packages/better-convex/src/orm/relations.ts:88-165](packages/better-convex/src/orm/relations.ts#L88-L165)
-- InferRelations type: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts)
+- One and Many classes: [packages/kitcn/src/orm/relations.ts:88-165](packages/kitcn/src/orm/relations.ts#L88-L165)
+- InferRelations type: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts)
 
 **Existing Builder Pattern**:
-- cRPC ProcedureBuilder: [packages/better-convex/src/server/builder.ts](packages/better-convex/src/server/builder.ts)
+- cRPC ProcedureBuilder: [packages/kitcn/src/server/builder.ts](packages/kitcn/src/server/builder.ts)
 
 **Institutional Learnings**:
 - Use instanceof not duck typing: [docs/solutions/auto-coerce-searchparams-zod-schema.md](docs/solutions/auto-coerce-searchparams-zod-schema.md)

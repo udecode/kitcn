@@ -4,11 +4,11 @@
     "@fontsource-variable/geist": "^5.2.8",
     "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-query": "5.95.2",
-    "better-convex": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "1.33.0",
     "hono": "4.12.9",
+    "kitcn": "workspace:*",
     "lucide-react": "^1.7.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -37,7 +37,7 @@
     "@types/bun": "latest",
     "@concavejs/cli": "latest"
   },
-  "name": "better-convex-template-vite",
+  "name": "kitcn-template-vite",
   "private": true,
   "scripts": {
     "dev": "vite --port 3005",
@@ -46,8 +46,8 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit && bun run typecheck:convex",
     "preview": "vite preview",
-    "codegen": "better-convex codegen",
-    "convex:dev": "better-convex dev",
+    "codegen": "kitcn codegen",
+    "convex:dev": "kitcn dev",
     "typecheck:convex": "tsc --noEmit --project convex/functions/tsconfig.json"
   },
   "type": "module",

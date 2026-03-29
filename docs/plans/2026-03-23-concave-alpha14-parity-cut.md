@@ -2,7 +2,7 @@
 
 ## Goal
 
-Remove Concave-specific Better Convex bandaids that alpha.14 made obsolete,
+Remove Concave-specific kitcn bandaids that alpha.14 made obsolete,
 keep the ones still justified, and update the parity skill to match reality.
 
 ## Findings
@@ -29,7 +29,7 @@ keep the ones still justified, and update the parity skill to match reality.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/commands/dev.test.ts packages/better-convex/src/cli/commands/migrate.test.ts`
+- `bun test packages/kitcn/src/cli/commands/dev.test.ts packages/kitcn/src/cli/commands/migrate.test.ts`
 - `bun run test:concave`
 - `bun run fixtures:sync`
 - `bun run fixtures:check`

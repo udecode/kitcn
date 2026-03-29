@@ -85,7 +85,7 @@ There is no single, operation-by-operation performance checklist for the ORM. Th
 - Pagination behavior (cursor vs offset)
 - Post-fetch filters/ordering
 - Known non-scalable patterns (e.g., unbounded `collect()`, `take(10_000)`, deep offsets)
-- Preferred alternatives (e.g., `paginate`, `better-convex/orm/stream`)
+- Preferred alternatives (e.g., `paginate`, `kitcn/orm/stream`)
 
 **Candidate files:**
 - `www/content/docs/orm/limitations.mdx`
@@ -102,7 +102,7 @@ There is no single, operation-by-operation performance checklist for the ORM. Th
 - [ ] Checklist table documents every ORM operation and its performance behavior
 - [ ] Non-scalable patterns are explicitly called out with alternatives
 - [ ] Links added from relevant ORM docs
-- [ ] Examples include `better-convex/orm/stream` where appropriate
+- [ ] Examples include `kitcn/orm/stream` where appropriate
 
 ## Work Log
 

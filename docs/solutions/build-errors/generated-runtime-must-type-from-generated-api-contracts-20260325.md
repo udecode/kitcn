@@ -52,7 +52,7 @@ The regression moved generated runtime typing back onto the source module's own
 export types.
 
 That is fine for modules that never import their generated runtime. It fails for
-the exact pattern Better Convex recommends for same-module server-side calls.
+the exact pattern kitcn recommends for same-module server-side calls.
 
 The stable type source is not the source module. It is Convex's generated API
 contract under `_generated/api`.
@@ -83,9 +83,9 @@ That breaks the self-cycle cleanly while preserving typed callers and handlers.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/codegen.test.ts`
-- `bun --cwd packages/better-convex build`
-- `bun --cwd packages/better-convex typecheck`
+- `bun test packages/kitcn/src/cli/codegen.test.ts`
+- `bun --cwd packages/kitcn build`
+- `bun --cwd packages/kitcn typecheck`
 - `cd example && bun run codegen`
 - `cd example && bun run typecheck`
 - `cd example && bun run check`

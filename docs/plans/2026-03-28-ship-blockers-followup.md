@@ -16,7 +16,7 @@ which the user explicitly deferred.
 
 ## Findings
 
-- The current hard blocker is `bun check`: `packages/better-convex/src/integration/generated-api.integration.test.ts`
+- The current hard blocker is `bun check`: `packages/kitcn/src/integration/generated-api.integration.test.ts`
   still writes `export const relations` fixtures, which codegen now rejects by
   design.
 - The browser tooling drift is concrete, not philosophical:

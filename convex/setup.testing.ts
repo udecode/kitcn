@@ -1,15 +1,15 @@
-import {
-  type CreateOrmOptions,
-  createOrm,
-  type OrmWriter,
-  requireSchemaRelations,
-} from 'better-convex/orm';
 import type {
   GenericDatabaseWriter,
   SchemaDefinition,
   StorageActionWriter,
 } from 'convex/server';
 import { convexTest as baseConvexTest } from 'convex-test';
+import {
+  type CreateOrmOptions,
+  createOrm,
+  type OrmWriter,
+  requireSchemaRelations,
+} from 'kitcn/orm';
 import schema from './schema';
 
 type ImportMetaWithGlob = ImportMeta & {
@@ -52,7 +52,7 @@ export const withOrm = <
   return ctxWithOrm;
 };
 
-// Default context wrapper that attaches Better Convex ORM as ctx.orm
+// Default context wrapper that attaches kitcn ORM as ctx.orm
 export async function runCtx<T extends { db: GenericDatabaseWriter<any> }>(
   ctx: T
 ): Promise<ReturnType<typeof withOrm<T, typeof relations>>> {

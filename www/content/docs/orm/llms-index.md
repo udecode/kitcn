@@ -208,7 +208,7 @@ isNotNull(field);
 - `COUNT_NOT_INDEXED` → declare matching `aggregateIndex(...).on(...)` and run backfill until READY
 - `COUNT_FILTER_UNSUPPORTED` → count supports `eq`/`in`/`isNull`/range + `AND`, plus finite safe `OR` rewrite in v1
 - `COUNT_INDEX_BUILDING` → run `aggregateBackfill`, then check `aggregateBackfillStatus` until READY
-- `aggregateBackfill` says rebuild required (or CLI tells you to run rebuild) → key shape changed; run `better-convex aggregate rebuild`
+- `aggregateBackfill` says rebuild required (or CLI tells you to run rebuild) → key shape changed; run `kitcn aggregate rebuild`
 - `COUNT_RLS_UNSUPPORTED` → count is disabled in RLS-restricted contexts in v1
 - `AGGREGATE_NOT_INDEXED` → declare matching `aggregateIndex(...).on(...)` metric coverage and run backfill until READY
 - `AGGREGATE_FILTER_UNSUPPORTED` → `aggregate(...)` supports `eq`/`in`/`isNull`/range + `AND`, plus finite safe `OR` rewrite in v1

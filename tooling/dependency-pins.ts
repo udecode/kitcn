@@ -4,7 +4,7 @@ import {
   BETTER_AUTH_INSTALL_SPEC,
   getMinimumVersionRange as getSupportedMinimumVersionRange,
   SUPPORTED_DEPENDENCY_VERSIONS,
-} from '../packages/better-convex/src/cli/supported-dependencies';
+} from '../packages/kitcn/src/cli/supported-dependencies';
 
 const PROJECT_ROOT = path.resolve(import.meta.dir, '..');
 const SUPPORTED_DEPENDENCIES = ['convex', 'better-auth'] as const;
@@ -59,7 +59,7 @@ const PACKAGE_JSON_TARGETS: PackageJsonTarget[] = [
     },
   },
   {
-    path: 'packages/better-convex/package.json',
+    path: 'packages/kitcn/package.json',
     updates: {
       peerDependencies: {
         'better-auth': SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact,
@@ -123,12 +123,12 @@ const PACKAGE_JSON_TARGETS: PackageJsonTarget[] = [
 
 const TEXT_TARGETS = [
   {
-    path: 'packages/better-convex/skills/convex/references/setup/auth.md',
+    path: 'packages/kitcn/skills/convex/references/setup/auth.md',
     replacements: [
       {
         pattern:
-          /bun add better-auth@\d+\.\d+\.\d+ better-convex hono(@\d+\.\d+\.\d+)?/g,
-        value: `bun add ${BETTER_AUTH_INSTALL_SPEC} better-convex hono@${SUPPORTED_DEPENDENCY_VERSIONS.hono.exact}`,
+          /bun add better-auth@\d+\.\d+\.\d+ kitcn hono(@\d+\.\d+\.\d+)?/g,
+        value: `bun add ${BETTER_AUTH_INSTALL_SPEC} kitcn hono@${SUPPORTED_DEPENDENCY_VERSIONS.hono.exact}`,
       },
     ],
   },
@@ -265,7 +265,7 @@ function syncTextTargets() {
 
 async function validatePinnedDependencies() {
   await run(['bun', 'install']);
-  await run(['bun', '--cwd', 'packages/better-convex', 'build']);
+  await run(['bun', '--cwd', 'packages/kitcn', 'build']);
   await run(['bun', 'run', 'fixtures:sync']);
   await run(['bun', 'run', 'fixtures:check']);
   await run(['bun', 'run', 'scenario:check']);
@@ -281,7 +281,7 @@ function updateSupportedDependencyVersion(
 ) {
   const supportedDependenciesPath = path.join(
     PROJECT_ROOT,
-    'packages/better-convex/src/cli/supported-dependencies.ts'
+    'packages/kitcn/src/cli/supported-dependencies.ts'
   );
   const source = fs.readFileSync(supportedDependenciesPath, 'utf8');
   const nextSource =

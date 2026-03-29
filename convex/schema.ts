@@ -9,10 +9,10 @@ import {
   text,
   vector,
   vectorIndex,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 // ============================================================================
-// Better Convex ORM Schema (Drizzle-style)
+// kitcn ORM Schema (Drizzle-style)
 // ============================================================================
 
 export const users = convexTable(

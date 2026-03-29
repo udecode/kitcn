@@ -1,7 +1,7 @@
 # Add Auth Reconcile
 
 ## Goal
-Make `better-convex add auth` the canonical reconciliation path for auth-owned schema/runtime scaffolding instead of documenting a manual `@better-auth/cli generate` step.
+Make `kitcn add auth` the canonical reconciliation path for auth-owned schema/runtime scaffolding instead of documenting a manual `@better-auth/cli generate` step.
 
 ## Scope
 - Add/adjust tests first for rerunning `add auth` as reconcile behavior.

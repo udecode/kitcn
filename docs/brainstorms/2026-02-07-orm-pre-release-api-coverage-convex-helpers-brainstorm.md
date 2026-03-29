@@ -2,18 +2,18 @@
 date: 2026-02-07
 topic: orm-pre-release-api-coverage-convex-helpers
 status: in_progress
-scope: better-convex/orm only
+scope: kitcn/orm only
 ---
 
 # ORM Pre-release: API Coverage, Breaking Changes, Parity, and Convex-Helpers
 
 ## What We're Building
 
-A pre-release product decision for `better-convex/orm` that uses remaining breaking-change budget where it most improves long-term correctness and trust. The target is a stable v1 contract with explicit decisions on parity with Convex core APIs, performance priorities, and what to fork (or not) from `convex-helpers`.
+A pre-release product decision for `kitcn/orm` that uses remaining breaking-change budget where it most improves long-term correctness and trust. The target is a stable v1 contract with explicit decisions on parity with Convex core APIs, performance priorities, and what to fork (or not) from `convex-helpers`.
 
 Coverage baseline for this brainstorm:
 
-- ORM source and public exports: `packages/better-convex/src/orm/index.ts`, `query.ts`, `where-clause-compiler.ts`, `database.ts`, `insert.ts`, `update.ts`, `delete.ts`, `stream.ts`, `pagination.ts`.
+- ORM source and public exports: `packages/kitcn/src/orm/index.ts`, `query.ts`, `where-clause-compiler.ts`, `database.ts`, `insert.ts`, `update.ts`, `delete.ts`, `stream.ts`, `pagination.ts`.
 - Convex core API parity references: `convex-backend/npm-packages/convex/src/server/database.ts`, `query.ts`, `registration.ts`.
 - convex-helpers module surface and docs: `/tmp/cc-repos/convex-helpers/packages/convex-helpers/README.md`, `package.json`, and server modules.
 - Existing test coverage for ORM behavior and type contracts in `convex/orm/*` and `test/orm/*`.
@@ -104,7 +104,7 @@ Best when:
 1. **[P0] Compound-index planner correctness**: implemented.
    - Non-leading-only compound predicates are no longer pushed into index filters.
    - Equality filters are normalized to compound index field order before execution.
-   - Main change: `packages/better-convex/src/orm/where-clause-compiler.ts`.
+   - Main change: `packages/kitcn/src/orm/where-clause-compiler.ts`.
 
 2. **[P0] Index prefix/order regression tests**: implemented.
    - Compiler regressions: `test/orm/where-clause-compiler.test.ts`.
@@ -114,7 +114,7 @@ Best when:
    - Contract: root mutation row is RLS-checked; cascade fan-out writes run as system actions and bypass child-table RLS.
    - Coverage and documentation added:
      - `convex/orm/foreign-key-actions.test.ts`
-     - `packages/better-convex/src/orm/mutation-utils.ts`
+     - `packages/kitcn/src/orm/mutation-utils.ts`
      - `www/content/docs/orm/rls.mdx`
      - `www/content/docs/orm/limitations.mdx`
 

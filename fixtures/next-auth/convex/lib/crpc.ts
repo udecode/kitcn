@@ -1,4 +1,4 @@
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 import type { ActionCtx, MutationCtx, QueryCtx } from '../functions/generated/server';
 import { initCRPC } from '../functions/generated/server';
 

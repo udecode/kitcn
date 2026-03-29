@@ -14,7 +14,7 @@ Policies live alongside your table definition. Use `convexTable.withRLS` and pas
 Here's a `secrets` table where each user can only access their own rows:
 
 ```ts title="convex/schema.ts" showLineNumbers {3-4,6-24}
-import { convexTable, rlsPolicy, text, id, eq } from 'better-convex/orm';
+import { convexTable, rlsPolicy, text, id, eq } from 'kitcn/orm';
 
 export const secrets = convexTable.withRLS(
   'secrets',
@@ -119,7 +119,7 @@ For more granular control, you can scope policies to specific roles using `to` c
 First, define a role and reference it in your policy:
 
 ```ts showLineNumbers {3,7}
-import { rlsRole, rlsPolicy } from 'better-convex/orm';
+import { rlsRole, rlsPolicy } from 'kitcn/orm';
 
 const admin = rlsRole('admin');
 

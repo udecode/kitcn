@@ -101,10 +101,10 @@ That keeps the UI honest in both directions:
 
 ## Verification
 
-- `bun test packages/better-convex/src/react/auth-mutations.test.tsx`
-- `bun x vitest run packages/better-convex/src/solid/auth-mutations.vitest.tsx`
+- `bun test packages/kitcn/src/react/auth-mutations.test.tsx`
+- `bun x vitest run packages/kitcn/src/solid/auth-mutations.vitest.tsx`
 - `bun test tooling/auth-e2e.test.ts`
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn build`
 - `bun run scenario:prepare -- next-auth`
 - `bun run scenario:dev -- next-auth`
 - `bun run test:e2e -- next-auth`
@@ -128,10 +128,10 @@ Additional repo gates:
 
 ## Files Changed
 
-- `packages/better-convex/src/react/auth-mutations.ts`
-- `packages/better-convex/src/react/auth-mutations.test.tsx`
-- `packages/better-convex/src/solid/auth-mutations.ts`
-- `packages/better-convex/src/solid/auth-mutations.vitest.tsx`
+- `packages/kitcn/src/react/auth-mutations.ts`
+- `packages/kitcn/src/react/auth-mutations.test.tsx`
+- `packages/kitcn/src/solid/auth-mutations.ts`
+- `packages/kitcn/src/solid/auth-mutations.vitest.tsx`
 - `tooling/auth-e2e.ts`
 - `tooling/auth-e2e.test.ts`
 

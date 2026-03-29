@@ -8,7 +8,7 @@ Status: in_progress
 Replace the staged raw Convex auth bootstrap flow with the real user flow:
 
 1. `convex init`
-2. `better-convex add auth --preset convex --yes`
+2. `kitcn add auth --preset convex --yes`
 
 `add auth --preset convex` should require a local Convex deployment first, then
 run auth-scoped codegen plus `env push --auth` automatically unless the caller
@@ -38,30 +38,30 @@ explicitly passes `--no-codegen`.
   `next-auth` and `vite-auth` use `add auth --yes` without `--no-codegen`.
 - Scenario bootstrap lanes started setup-heavy:
   - `convex-next-auth-bootstrap`: `add auth --no-codegen`, then `convex init`,
-    then `better-convex dev --once`, then `env push --auth`
+    then `kitcn dev --once`, then `env push --auth`
   - `create-convex-nextjs-shadcn-auth`: `add auth --preset convex --no-codegen`,
     then `convex init`, then `codegen --scope auth`, then `env push --auth`
 - `handleAddCommand(...)` already owns post-scaffold codegen, so raw Convex
   auth can chain scoped codegen there without new command plumbing.
 - `resolveRunDeps(...)` already exposes `syncEnv`, so raw Convex auth can call
   the existing env push implementation directly.
-- Dry-run planner currently only knows about generic `better-convex codegen`
+- Dry-run planner currently only knows about generic `kitcn codegen`
   plus env reminders, so raw Convex auth would lie unless operation output is
   adjusted.
 - Fixture scenarios cannot run `convex init` inside `setup`, because `setup`
-  happens before local Better Convex install and before the fixture gets its
+  happens before local kitcn install and before the fixture gets its
   project-local `node_modules/.bin/convex`.
 - Replacing `runLocalCliSteps(...)` with a generic scenario runner dropped the
   local tarball env overrides. That made `add resend` fall back to npm instead
-  of the packed local `@better-convex/resend` tarball.
+  of the packed local `@kitcn/resend` tarball.
 - The `3005` preference belongs in prepared temp apps, not package defaults.
   The runnable local contract still needs three files patched together:
   package scripts, `.env.local`, and `convex/.env` for auth apps.
 - Concave local dev has a second contract bug beyond frontend port drift:
-  Better Convex templates assume Convex-style local URLs
+  kitcn templates assume Convex-style local URLs
   (`NEXT_PUBLIC_CONVEX_URL=127.0.0.1:3210`,
   `NEXT_PUBLIC_CONVEX_SITE_URL=127.0.0.1:3211`), but upstream `concave dev`
-  still defaults to a single server on `3000`. Better Convex needs to normalize
+  still defaults to a single server on `3000`. kitcn needs to normalize
   Concave local dev back onto the Convex two-port contract instead of teaching
   templates a backend-specific exception.
 - The generated auth runtime failure on Concave dev was a real module cycle:
@@ -88,7 +88,7 @@ explicitly passes `--no-codegen`.
   and `env push --auth`
 - 13:xx: updated dry-run planner, docs, skill refs, and active changeset to the
   hard-cut `convex init` then `add auth --preset convex` flow
-- 13:21: fixed scenario runner regression by restoring local Better Convex and
+- 13:21: fixed scenario runner regression by restoring local kitcn and
   local Resend tarball env overrides for non-`convex` steps
 - 13:21: verified targeted raw-auth tests, default scenario lane, and full
   Convex scenario lane

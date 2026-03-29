@@ -1,3 +1,4 @@
+import { v } from 'convex/values';
 import {
   type AnyColumn,
   aggregateIndex,
@@ -14,8 +15,7 @@ import {
   textEnum,
   timestamp,
   uniqueIndex,
-} from 'better-convex/orm';
-import { v } from 'convex/values';
+} from 'kitcn/orm';
 import { getEnv } from '../lib/get-env';
 import { ratelimitExtension } from '../lib/plugins/ratelimit/schema';
 import { resendExtension } from '../lib/plugins/resend/schema';

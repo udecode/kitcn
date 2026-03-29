@@ -2,16 +2,16 @@
 
 ## Objective
 
-Test the better-convex documentation by building a working Next.js 15 app from scratch. Simulate a new developer with no prior better-convex knowledge.
+Test the kitcn documentation by building a working Next.js 15 app from scratch. Simulate a new developer with no prior kitcn knowledge.
 
 ## Rules
 
 ### Knowledge Boundaries
 
-1. **Only use `better-convex/content/docs/`** as reference
+1. **Only use `kitcn/content/docs/`** as reference
 2. **Convex native knowledge allowed** (official Convex patterns)
 3. **When stuck, document the gap** - don't guess
-4. Do not read anything outside `better-convex` folder.
+4. Do not read anything outside `kitcn` folder.
 
 ### Error Tracking
 

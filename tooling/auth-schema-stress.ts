@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadAuthOptionsFromDefinition } from '../packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema';
+import { loadAuthOptionsFromDefinition } from '../packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema';
 
 type ExtraPlugin = 'jwt' | 'phoneNumber' | 'twoFactor';
 
@@ -157,7 +157,7 @@ const resolveSharedDir = (projectDir: string) => {
 
   const concaveConfig = readJson<{
     meta?: {
-      'better-convex'?: {
+      kitcn?: {
         paths?: {
           shared?: string;
         };
@@ -167,7 +167,7 @@ const resolveSharedDir = (projectDir: string) => {
 
   return path.join(
     projectDir,
-    concaveConfig.meta?.['better-convex']?.paths?.shared ?? 'convex/shared'
+    concaveConfig.meta?.kitcn?.paths?.shared ?? 'convex/shared'
   );
 };
 
@@ -240,7 +240,7 @@ const createSnapshot = (
   sharedDir: string
 ): SnapshotState => {
   const backupDir = mkdtempSync(
-    path.join(os.tmpdir(), 'better-convex-auth-schema-stress-')
+    path.join(os.tmpdir(), 'kitcn-auth-schema-stress-')
   );
   const relativePaths = [
     path.relative(projectDir, path.join(functionsDir, 'auth.ts')),
@@ -358,13 +358,10 @@ const runCase = async (
 
   params.logFn(`\n[auth-schema-stress] ${testCase.name}`);
   await params.runCommand(
-    ['bunx', 'better-convex', 'add', 'auth', '--schema', '--yes'],
+    ['bunx', 'kitcn', 'add', 'auth', '--schema', '--yes'],
     params.projectDir
   );
-  await params.runCommand(
-    ['bunx', 'better-convex', 'codegen'],
-    params.projectDir
-  );
+  await params.runCommand(['bunx', 'kitcn', 'codegen'], params.projectDir);
   await params.runCommand(
     [
       'bunx',

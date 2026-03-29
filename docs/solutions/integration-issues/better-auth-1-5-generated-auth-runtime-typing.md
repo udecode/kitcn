@@ -8,7 +8,7 @@ tags:
   - generated-contract
   - typescript
 symptoms:
-  - tsc fails in packages/better-convex/src/auth/generated-contract.ts after upgrading to Better Auth 1.5
+  - tsc fails in packages/kitcn/src/auth/generated-contract.ts after upgrading to Better Auth 1.5
   - ReturnType<typeof betterAuth> stops being a reliable generated runtime type
   - invalid generic ReturnType attempts fail to parse or typecheck
 module: auth-runtime
@@ -19,7 +19,7 @@ resolved: 2026-03-15
 
 ## Problem
 
-Upgrading `better-auth` from `1.4.x` to `1.5.x` broke the generated auth runtime typing in `packages/better-convex/src/auth/generated-contract.ts`.
+Upgrading `better-auth` from `1.4.x` to `1.5.x` broke the generated auth runtime typing in `packages/kitcn/src/auth/generated-contract.ts`.
 
 The old pattern was too tied to `ReturnType<typeof betterAuth>` and fell apart once the `better-auth/minimal` type surface shifted.
 
@@ -60,7 +60,7 @@ This keeps the generated contract aligned with Better Auth's public type surface
 
 After switching to `Auth<Options>`:
 
-- `bun --cwd packages/better-convex build` passed
+- `bun --cwd packages/kitcn build` passed
 - `bun typecheck` passed
 - focused auth tests still passed
 
@@ -72,7 +72,7 @@ After switching to `Auth<Options>`:
 
 ## Files Changed
 
-- `packages/better-convex/src/auth/generated-contract.ts`
+- `packages/kitcn/src/auth/generated-contract.ts`
 
 ## Related
 

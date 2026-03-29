@@ -6,11 +6,11 @@ description: 'Command: simulate'
 Use this as your battle-test prompt:
 
 ```md
-I want you to simulate onboarding for a brand-new better-convex app and ship a full-stack demo app in 4 hard-gated phases.
+I want you to simulate onboarding for a brand-new kitcn app and ship a full-stack demo app in 4 hard-gated phases.
 
 Important framing:
-- Simulate a real new user who does not know better-convex internals.
-- Use `packages/better-convex/skills/convex/SKILL.md` for all better-convex-specific setup/implementation details.
+- Simulate a real new user who does not know kitcn internals.
+- Use `packages/kitcn/skills/convex/SKILL.md` for all kitcn-specific setup/implementation details.
 - Keep this runbook outcome-focused; avoid hardcoding low-level framework internals here.
 
 ## Global Rules
@@ -59,7 +59,7 @@ Scope:
 
 ## Per-Phase Gate (required after every phase)
 
-1. Run `bunx better-convex dev --once --typecheck disable` (preferred; includes codegen).
+1. Run `bunx kitcn dev --once --typecheck disable` (preferred; includes codegen).
 2. Run `bun run typecheck` (fallback `bunx tsc --noEmit`).
 3. Run `bun test`.
 4. Run `bun run build`.

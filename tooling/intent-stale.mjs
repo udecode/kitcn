@@ -13,16 +13,13 @@ export const resolveInstalledIntentCliPath = (dir) =>
 
 export const getRepoIntentInstallSpec = () => {
   const packageJson = JSON.parse(
-    readFileSync(
-      resolve(repoRoot, 'packages/better-convex/package.json'),
-      'utf8'
-    )
+    readFileSync(resolve(repoRoot, 'packages/kitcn/package.json'), 'utf8')
   );
   const version = packageJson.devDependencies?.['@tanstack/intent'];
 
   if (typeof version !== 'string' || version.length === 0) {
     throw new Error(
-      'packages/better-convex/package.json is missing devDependencies["@tanstack/intent"].'
+      'packages/kitcn/package.json is missing devDependencies["@tanstack/intent"].'
     );
   }
 
@@ -35,13 +32,7 @@ export const runIntentStale = (argv = process.argv.slice(2)) => {
   try {
     const tarballOutput = execFileSync(
       'npm',
-      [
-        'pack',
-        '--silent',
-        '--pack-destination',
-        tempDir,
-        './packages/better-convex',
-      ],
+      ['pack', '--silent', '--pack-destination', tempDir, './packages/kitcn'],
       {
         cwd: repoRoot,
         encoding: 'utf8',

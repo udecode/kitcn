@@ -8,11 +8,11 @@ status: proposed
 
 ## What We're Building
 
-A pre-release product decision for **`better-convex/orm` only** that spends breaking-change budget where it most improves trust and long-term maintainability.
+A pre-release product decision for **`kitcn/orm` only** that spends breaking-change budget where it most improves trust and long-term maintainability.
 
 Scope reviewed in this brainstorm:
 
-- ORM source surface: `packages/better-convex/src/orm` (43 files, ~16k LOC)
+- ORM source surface: `packages/kitcn/src/orm` (43 files, ~16k LOC)
 - ORM tests: `convex/orm` + `test/orm` (20 files, 212 runtime tests)
 - ORM docs: `www/content/docs/orm` (18 docs pages)
 - Related upstream helpers: `/tmp/cc-repos/convex-helpers/packages/convex-helpers` (especially `stream`, `pagination`, `filter`, `relationships`, `rowLevelSecurity`, `customFunctions`, `zod4`, `cors`)

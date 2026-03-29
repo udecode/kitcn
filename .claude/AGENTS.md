@@ -1,7 +1,7 @@
 - `.claude/AGENTS.md` and `.claude/skills/*/*.mdc` are source of truth. After editing them, run `bun install` to sync. Never edit `SKILL.md` directly.
 - In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
 
-- If you get `failed to load config from /Users/zbeyens/GitHub/better-convex/vitest.config.mts`, rimraf `**/node_modules` and install again.
+- If you get `failed to load config from /Users/zbeyens/GitHub/kitcn/vitest.config.mts`, rimraf `**/node_modules` and install again.
 - Run `convex:logs` to watch the Convex logs
 
 ## Git
@@ -25,16 +25,16 @@
 - Parity: Don't reinvent the wheel. Before designing APIs or architecture, study how proven OSS projects solve the same problem — Drizzle (schema/ORM), tRPC (procedures/middleware), shadcn (CLI/codegen), better-auth (plugin system/auth). Adopt their patterns when applicable. Do `ls` in `..` directory to find the respective repositories, then inspect their source code when needed.
 - DX: Optimize for the absolute best developer experience. CLI must be first-class for agents — deterministic, machine-readable output (--json), non-interactive defaults (--yes), composable commands. Every API surface should be intuitive for both humans and AI agents.
 - Docs (www/): NEVER write changelog-style language ("has been removed", "new feature", "previously", "now supports"). Docs are user-facing reference for the LATEST state only. Write as if no prior version exists. No migration notes, no "what changed" — just document what IS. Follow docs/solutions/style.md for writing tone/structure.
-- Docs sync: When updating www/ docs, also update the corresponding content in packages/better-convex/skills/convex/SKILL.md or packages/better-convex/skills/convex/references/ to stay synced. Follow packages/better-convex/skills/convex/references/setup/doc-guidelines.md for compression/placement rules.
-- Plugins: ALWAYS read packages/better-convex/skills/convex/references/features/create-plugins.md before creating or modifying plugins. Keep it synced when any plugin API changes in the package.
-- Intent maintainer loop: use `bunx intent scaffold` when you need new skills or a major skill reshuffle; for normal work, update docs and `packages/better-convex/skills/convex/**` in the same diff; run `bunx intent validate skills` and `bunx intent stale`; keep `@tanstack/intent`, `bin/intent.js`, `bin.intent`, and package `files` wired; verify with `npm pack --json --dry-run ./packages/better-convex`; after release, treat `intent feedback` as product input — tighten the skill if wording is wrong, fix the API if the same workaround keeps repeating.
+- Docs sync: When updating www/ docs, also update the corresponding content in packages/kitcn/skills/convex/SKILL.md or packages/kitcn/skills/convex/references/ to stay synced. Follow packages/kitcn/skills/convex/references/setup/doc-guidelines.md for compression/placement rules.
+- Plugins: ALWAYS read packages/kitcn/skills/convex/references/features/create-plugins.md before creating or modifying plugins. Keep it synced when any plugin API changes in the package.
+- Intent maintainer loop: use `bunx intent scaffold` when you need new skills or a major skill reshuffle; for normal work, update docs and `packages/kitcn/skills/convex/**` in the same diff; run `bunx intent validate skills` and `bunx intent stale`; keep `@tanstack/intent`, `bin/intent.js`, `bin.intent`, and package `files` wired; verify with `npm pack --json --dry-run ./packages/kitcn`; after release, treat `intent feedback` as product input — tighten the skill if wording is wrong, fix the API if the same workaround keeps repeating.
 - Always use @.claude/skills/changeset/changeset.mdc when updating packages to write a changeset before completing
-- After any package modification, run `bun --cwd packages/better-convex build`
+- After any package modification, run `bun --cwd packages/kitcn build`
 - Use tdd skill for package updates that add or change live behavior.
 - Do not write TDD cases for dead code/legacy removal assertions (for example: "should not contain old API X anymore"). Remove the dead path directly and keep tests focused on current behavior.
 - Never edit scaffolded example output first. Change package scaffold source, then regenerate scaffold files via CLI.
-- Never update example plugin files directly. Update the package plugin template first, then regenerate with `better-convex add ... --overwrite`.
-- When changing `better-convex init -t` scaffold output, treat `fixtures/**` as generated fixture output from `bun run fixtures:sync` — including committed fixture `package.json` files. Do not patch fixture files by hand.
+- Never update example plugin files directly. Update the package plugin template first, then regenerate with `kitcn add ... --overwrite`.
+- When changing `kitcn init -t` scaffold output, treat `fixtures/**` as generated fixture output from `bun run fixtures:sync` — including committed fixture `package.json` files. Do not patch fixture files by hand.
 - After any `init -t` template or scaffold change, you must rerun `bun run fixtures:sync` and `bun run fixtures:check`. No exceptions.
 - For manual runtime, never run committed `fixtures/**` in place. Materialize a tmp app with `bun run scenario:prepare <name>` and run it from `tmp/scenarios/<name>/project`, or use `bun run scenario:dev <name>`.
 - Use @.claude/skills/scenarios/scenarios.mdc for fixture and scenario runtime proof. It owns when to stop at `scenario:dev`, when to add `test:auth` or `test:e2e`, and when `scenario:check` is the only honest lane.

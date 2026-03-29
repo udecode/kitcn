@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore anonymous authentication with better-convex. You'll learn to configure guest sessions, let users browse without signing up, and seamlessly link anonymous accounts to real ones — migrating their data along the way.
+In this guide, we'll explore anonymous authentication with kitcn. You'll learn to configure guest sessions, let users browse without signing up, and seamlessly link anonymous accounts to real ones — migrating their data along the way.
 
 ## Overview
 
@@ -100,7 +100,7 @@ That's it for client setup — `anonymousClient()` doesn't require any configura
 Add the `isAnonymous` field to your user table so you can distinguish guest users from real accounts:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,6}
-import { boolean, convexTable, defineSchema, text } from 'better-convex/orm';
+import { boolean, convexTable, defineSchema, text } from 'kitcn/orm';
 
 export const user = convexTable('user', {
   // ... existing fields

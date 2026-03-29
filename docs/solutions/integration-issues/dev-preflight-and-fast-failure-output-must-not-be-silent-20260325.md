@@ -11,7 +11,7 @@ tags:
   - init
 severity: high
 symptoms:
-  - better-convex dev prints only `Bootstrapping local Convex...` then exits
+  - kitcn dev prints only `Bootstrapping local Convex...` then exits
   - fast backend failures never show the actual Convex error
   - convex init preflight failures disappear completely in quiet mode
 ---
@@ -20,7 +20,7 @@ symptoms:
 
 ## Problem
 
-`better-convex dev` could fail like a mime.
+`kitcn dev` could fail like a mime.
 
 In the broken path, users saw the bootstrap banner and then a dead exit code,
 with none of the real Convex error text.

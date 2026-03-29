@@ -2,7 +2,7 @@
 
 import type { ApiInputs, ApiOutputs } from '@convex/api';
 import { skipToken } from '@tanstack/react-query';
-import { useInfiniteQuery } from 'better-convex/react';
+import { useInfiniteQuery } from 'kitcn/react';
 import { Archive, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';

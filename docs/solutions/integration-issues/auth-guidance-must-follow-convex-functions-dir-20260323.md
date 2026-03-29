@@ -18,7 +18,7 @@ resolved: 2026-03-23
 
 ## Problem
 
-Better Convex already respected `convex.json.functions` in codegen and
+kitcn already respected `convex.json.functions` in codegen and
 scaffolding, but generated auth guidance and parts of the docs still hardcoded
 `convex/functions/...`.
 
@@ -50,14 +50,14 @@ Also update docs and skill references to say:
 
 - auth definition lives at `<functionsDir>/auth.ts`
 - generated auth runtime lives at `<functionsDir>/generated/auth.ts`
-- scaffolded Better Convex apps use `convex/functions/*` because that is what
+- scaffolded kitcn apps use `convex/functions/*` because that is what
   their `convex.json` config says
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/codegen.test.ts packages/better-convex/src/integration/generated-api.integration.test.ts`
-- `bun --cwd packages/better-convex build`
-- `bun --cwd packages/better-convex typecheck`
+- `bun test packages/kitcn/src/cli/codegen.test.ts packages/kitcn/src/integration/generated-api.integration.test.ts`
+- `bun --cwd packages/kitcn build`
+- `bun --cwd packages/kitcn typecheck`
 - `bun lint:fix`
 
 Root `bun typecheck` still fails on unrelated `example/` package-resolution and

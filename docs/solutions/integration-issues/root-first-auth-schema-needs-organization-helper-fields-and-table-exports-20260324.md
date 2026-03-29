@@ -7,7 +7,7 @@ tags:
   - schema
   - orm
 symptoms:
-  - `better-convex add auth --schema --yes --no-codegen` rewrites auth schema, but generated auth tables are missing organization helper fields
+  - `kitcn add auth --schema --yes --no-codegen` rewrites auth schema, but generated auth tables are missing organization helper fields
   - example auth code references `userTable` / `sessionTable`, but root-first auth schema exports `user` / `session`
   - codegen fails after schema refresh because relations point at missing auth columns or app imports point at missing table exports
 module: auth-cli
@@ -44,7 +44,7 @@ There were two separate mismatches.
 
 That was too literal.
 
-For Better Convex apps, organization auth needs a few extra schema affordances:
+For kitcn apps, organization auth needs a few extra schema affordances:
 
 - `user.lastActiveOrganizationId`
 - `user.personalOrganizationId`
@@ -59,7 +59,7 @@ Normalize Better Auth tables before rendering the managed schema.
 
 The schema generators now:
 
-1. augment organization auth with Better Convex helper fields on `user`
+1. augment organization auth with kitcn helper fields on `user`
 2. upgrade session and team foreign-key fields to real references when the
    related tables exist
 3. render ORM declarations as `userTable`, `sessionTable`, `accountTable`, and
@@ -75,15 +75,15 @@ That gives root-first auth schema refresh the best of both worlds:
 
 ## Verification
 
-- `bun test packages/better-convex/src/auth/create-schema.test.ts packages/better-convex/src/auth/create-schema-orm.test.ts packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/auth/create-schema.test.ts packages/kitcn/src/auth/create-schema-orm.test.ts packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 - `bun lint:fix`
-- `bunx better-convex add auth --schema --yes --no-codegen`
+- `bunx kitcn add auth --schema --yes --no-codegen`
 
 ## Prevention
 
-1. Better Auth table metadata is not always the full Better Convex schema
+1. Better Auth table metadata is not always the full kitcn schema
    contract.
 2. Managed schema generators should match the app's naming conventions, not
    invent a second style.

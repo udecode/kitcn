@@ -30,53 +30,53 @@
       "@convex/*": [
         "./convex/shared/*"
       ],
-      "better-convex/aggregate": [
-        "../../packages/better-convex/src/aggregate/index.ts"
+      "kitcn/aggregate": [
+        "../../packages/kitcn/src/aggregate/index.ts"
       ],
-      "better-convex/auth": [
-        "../../packages/better-convex/src/auth/index.ts"
+      "kitcn/auth": [
+        "../../packages/kitcn/src/auth/index.ts"
       ],
-      "better-convex/auth/client": [
-        "../../packages/better-convex/src/auth-client/index.ts"
+      "kitcn/auth/client": [
+        "../../packages/kitcn/src/auth-client/index.ts"
       ],
-      "better-convex/auth/config": [
-        "../../packages/better-convex/src/auth-config/index.ts"
+      "kitcn/auth/config": [
+        "../../packages/kitcn/src/auth-config/index.ts"
       ],
-      "better-convex/auth/generated": [
-        "../../packages/better-convex/src/auth/generated.ts"
+      "kitcn/auth/generated": [
+        "../../packages/kitcn/src/auth/generated.ts"
       ],
-      "better-convex/auth/http": [
-        "../../packages/better-convex/src/auth-http/index.ts"
+      "kitcn/auth/http": [
+        "../../packages/kitcn/src/auth-http/index.ts"
       ],
-      "better-convex/auth/nextjs": [
-        "../../packages/better-convex/src/auth-nextjs/index.ts"
+      "kitcn/auth/nextjs": [
+        "../../packages/kitcn/src/auth-nextjs/index.ts"
       ],
-      "better-convex/crpc": [
-        "../../packages/better-convex/src/crpc/index.ts"
+      "kitcn/crpc": [
+        "../../packages/kitcn/src/crpc/index.ts"
       ],
-      "better-convex/orm": [
-        "../../packages/better-convex/src/orm/index.ts"
+      "kitcn/orm": [
+        "../../packages/kitcn/src/orm/index.ts"
       ],
-      "better-convex/plugins": [
-        "../../packages/better-convex/src/plugins/index.ts"
+      "kitcn/plugins": [
+        "../../packages/kitcn/src/plugins/index.ts"
       ],
-      "better-convex/ratelimit": [
-        "../../packages/better-convex/src/ratelimit/index.ts"
+      "kitcn/ratelimit": [
+        "../../packages/kitcn/src/ratelimit/index.ts"
       ],
-      "better-convex/ratelimit/react": [
-        "../../packages/better-convex/src/ratelimit/react/index.ts"
+      "kitcn/ratelimit/react": [
+        "../../packages/kitcn/src/ratelimit/react/index.ts"
       ],
-      "better-convex/react": [
-        "../../packages/better-convex/src/react/index.ts"
+      "kitcn/react": [
+        "../../packages/kitcn/src/react/index.ts"
       ],
-      "better-convex/rsc": [
-        "../../packages/better-convex/src/rsc/index.ts"
+      "kitcn/rsc": [
+        "../../packages/kitcn/src/rsc/index.ts"
       ],
-      "better-convex/server": [
-        "../../packages/better-convex/src/server/index.ts"
+      "kitcn/server": [
+        "../../packages/kitcn/src/server/index.ts"
       ],
-      "better-convex/solid": [
-        "../../packages/better-convex/src/solid/index.ts"
+      "kitcn/solid": [
+        "../../packages/kitcn/src/solid/index.ts"
       ]
     },
     "strictFunctionTypes": false

@@ -5,7 +5,7 @@ import {
   index,
   text,
   timestamp,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const messagesTable = convexTable('messages', {
   body: text().notNull(),

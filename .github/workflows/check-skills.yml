@@ -87,7 +87,7 @@ jobs:
             const summary = lines.join('\n');
 
             const prompt = [
-              'Review and update the following stale intent skills for better-convex:',
+              'Review and update the following stale intent skills for kitcn:',
               '',
               ...stale.map(s => '- ' + s.skill + ': ' + s.reasons.join(', ')),
               '',

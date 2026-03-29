@@ -25,7 +25,7 @@ Let's start with the basics.
 Define tables using `convexTable()` with Drizzle-style column builders. Here's a `users` table with name, email, age, and admin fields:
 
 ```ts title="convex/schema.ts" showLineNumbers {3-7}
-import { convexTable, text, integer, id } from 'better-convex/orm';
+import { convexTable, text, integer, id } from 'kitcn/orm';
 
 export const users = convexTable('users', {
   name: text().notNull(),
@@ -73,7 +73,7 @@ const users = convexTable('users', {
 You can configure default delete semantics per table with `deletion(...)`. Here's how to set up scheduled deletion with a 60-second delay:
 
 ```ts showLineNumbers {7}
-import { convexTable, deletion, integer, text } from 'better-convex/orm';
+import { convexTable, deletion, integer, text } from 'kitcn/orm';
 
 const users = convexTable(
   'users',
@@ -117,7 +117,7 @@ Use schema-native relations in `defineSchema(...).relations(...)` so codegen rea
 ```ts title="convex/schema.ts" showLineNumbers {5-10}
 import {
   defineSchema,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const posts = convexTable('posts', {
   title: text().notNull(),
@@ -146,7 +146,7 @@ Plugin relation composition follows the same model:
 `defineSchema` accepts Convex schema options plus ORM runtime guardrail options. Here's the simplest usage:
 
 ```ts showLineNumbers
-import { defineSchema } from 'better-convex/orm';
+import { defineSchema } from 'kitcn/orm';
 
 export default defineSchema({ users, posts }, { strict: false });
 ```
@@ -169,7 +169,7 @@ Strict guardrails cover relation indexes, relation fan-out cardinality, predicat
 Add indexes for fields you filter or sort by. Here's how to add an index on `authorId`:
 
 ```ts showLineNumbers {7}
-import { convexTable, text, id, index } from 'better-convex/orm';
+import { convexTable, text, id, index } from 'kitcn/orm';
 
 const posts = convexTable(
   'posts',
@@ -186,7 +186,7 @@ const posts = convexTable(
 For full-text search, use `searchIndex`. You can optionally filter results by additional fields:
 
 ```ts showLineNumbers {9}
-import { convexTable, text, id, searchIndex } from 'better-convex/orm';
+import { convexTable, text, id, searchIndex } from 'kitcn/orm';
 
 const posts = convexTable(
   'posts',
@@ -203,7 +203,7 @@ const posts = convexTable(
 For vector similarity search, use `vectorIndex` with a `vector(dimensions)` field. Here's how to set up an embedding-based search:
 
 ```ts showLineNumbers {9-13}
-import { convexTable, id, vector, vectorIndex } from 'better-convex/orm';
+import { convexTable, id, vector, vectorIndex } from 'kitcn/orm';
 
 const posts = convexTable(
   'posts',

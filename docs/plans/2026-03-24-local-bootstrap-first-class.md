@@ -2,8 +2,8 @@
 
 ## Goal
 
-Replace the leaked public one-shot flow with `better-convex dev --bootstrap`
-and make `better-convex add` reuse the same local Convex bootstrap path when a
+Replace the leaked public one-shot flow with `kitcn dev --bootstrap`
+and make `kitcn add` reuse the same local Convex bootstrap path when a
 plugin needs live multi-pass work.
 
 ## Phases
@@ -26,6 +26,6 @@ plugin needs live multi-pass work.
 - Start with auth presets; the planner model should support future plugins.
 - `env push` stays for prod, rotate, and explicit repair.
 - `next-auth` scenario passed after clearing a stale local `3005` listener.
-- Direct `better-convex dev --bootstrap` proof passed in the prepared local
+- Direct `kitcn dev --bootstrap` proof passed in the prepared local
   Convex auth app under
   `tmp/scenarios/create-convex-nextjs-shadcn-auth/project`.

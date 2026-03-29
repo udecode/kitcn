@@ -11,7 +11,7 @@ date: 2026-03-09
 Rewrite the final unreleased `.changeset/short-cameras-wave.md` so it absorbs
 the deleted `.changeset/calm-cycles-count.md`, covers every changed and
 untracked diff file in the branch, and keeps the public docs plus Convex skill
-docs synced to the latest `better-convex init -t next` scaffold.
+docs synced to the latest `kitcn init -t next` scaffold.
 
 ## Active Changeset Targets
 
@@ -36,21 +36,21 @@ Source of truth: `git status --short --untracked-files=all`
       codegen lookup-helper change
 - [x] `docs/plans/2026-03-09-rewrite-short-cameras-wave-changeset-plan.md` —
       added file-granular planning log
-- [x] `packages/better-convex/skills/convex/references/setup/index.md` —
+- [x] `packages/kitcn/skills/convex/references/setup/index.md` —
       updated skill docs for scaffold ownership
-- [x] `packages/better-convex/src/cli/codegen.test.ts` — reviewed; covered by
+- [x] `packages/kitcn/src/cli/codegen.test.ts` — reviewed; covered by
       changeset patch bullet
-- [x] `packages/better-convex/src/cli/codegen.ts` — reviewed; covered by
+- [x] `packages/kitcn/src/cli/codegen.ts` — reviewed; covered by
       changeset patch bullet
-- [x] `packages/better-convex/src/cli/commands/init.test.ts` — reviewed;
+- [x] `packages/kitcn/src/cli/commands/init.test.ts` — reviewed;
       covered by messages scaffold changes
-- [x] `packages/better-convex/src/cli/core.ts` — reviewed; covered by messages
+- [x] `packages/kitcn/src/cli/core.ts` — reviewed; covered by messages
       scaffold changes
-- [x] `packages/better-convex/src/cli/plugins/init/init-next-messages-page.template.ts`
+- [x] `packages/kitcn/src/cli/plugins/init/init-next-messages-page.template.ts`
       — reviewed; covered by messages scaffold changes
-- [x] `packages/better-convex/src/cli/plugins/init/init-next-messages.template.ts`
+- [x] `packages/kitcn/src/cli/plugins/init/init-next-messages.template.ts`
       — reviewed; covered by messages scaffold changes
-- [x] `packages/better-convex/src/cli/plugins/init/init-next-schema.template.ts`
+- [x] `packages/kitcn/src/cli/plugins/init/init-next-schema.template.ts`
       — reviewed; covered by messages scaffold changes
 - [x] `fixtures/next/app/convex/page.tsx` — reviewed; documented as scaffolded
       demo route
@@ -200,47 +200,47 @@ Source of truth: `git status --short --untracked-files=all`
 
 ## Convex Skill Doc Sync Checklist
 
-- [x] `packages/better-convex/skills/convex/SKILL.md` — reviewed; no change
+- [x] `packages/kitcn/skills/convex/SKILL.md` — reviewed; no change
       needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/aggregates.md`
+- [x] `packages/kitcn/skills/convex/references/features/aggregates.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/auth-admin.md`
+- [x] `packages/kitcn/skills/convex/references/features/auth-admin.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/auth-organizations.md`
+- [x] `packages/kitcn/skills/convex/references/features/auth-organizations.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/auth-polar.md`
+- [x] `packages/kitcn/skills/convex/references/features/auth-polar.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/auth.md` —
+- [x] `packages/kitcn/skills/convex/references/features/auth.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/create-plugins.md`
+- [x] `packages/kitcn/skills/convex/references/features/create-plugins.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/http.md` —
+- [x] `packages/kitcn/skills/convex/references/features/http.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/migrations.md`
+- [x] `packages/kitcn/skills/convex/references/features/migrations.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/orm.md` —
+- [x] `packages/kitcn/skills/convex/references/features/orm.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/react.md` —
+- [x] `packages/kitcn/skills/convex/references/features/react.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/scheduling.md`
+- [x] `packages/kitcn/skills/convex/references/features/scheduling.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/features/testing.md`
+- [x] `packages/kitcn/skills/convex/references/features/testing.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/setup/auth.md` —
+- [x] `packages/kitcn/skills/convex/references/setup/auth.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/setup/biome.md` —
+- [x] `packages/kitcn/skills/convex/references/setup/biome.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/setup/doc-guidelines.md`
+- [x] `packages/kitcn/skills/convex/references/setup/doc-guidelines.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/setup/index.md` —
+- [x] `packages/kitcn/skills/convex/references/setup/index.md` —
       updated for the messages demo route and starter scaffold ownership
-- [x] `packages/better-convex/skills/convex/references/setup/next.md` —
+- [x] `packages/kitcn/skills/convex/references/setup/next.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/setup/react.md` —
+- [x] `packages/kitcn/skills/convex/references/setup/react.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/setup/server.md` —
+- [x] `packages/kitcn/skills/convex/references/setup/server.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/better-convex/skills/convex/references/setup/start.md` —
+- [x] `packages/kitcn/skills/convex/references/setup/start.md` —
       reviewed; no change needed for this changeset surface
 
 ## Findings
@@ -251,7 +251,7 @@ Source of truth: `git status --short --untracked-files=all`
   `codegen.ts`, so the final changeset now includes an explicit patch bullet
   for generated runtime placeholders no longer tripping ESLint before real
   codegen output exists.
-- The current branch extends `better-convex init -t next` with a live
+- The current branch extends `kitcn init -t next` with a live
   messages demo route plus starter schema/procedures. Public docs now reflect
   `app/convex/page.tsx`, `convex/functions/messages.ts`, the messages starter
   table in `convex/functions/schema.ts`, and the generated messages
@@ -260,12 +260,12 @@ Source of truth: `git status --short --untracked-files=all`
   `git diff $(git merge-base HEAD main)` plus the live worktree, not
   branch-internal history or stale draft snippets.
 - A merge-base audit removed fabricated breaking migrations for
-  `@better-convex/resend/schema`, `definePluginMiddleware`,
+  `@kitcn/resend/schema`, `definePluginMiddleware`,
   `ctx.plugins.<plugin>.options`, `ResendResolvedOptions`, and
   `verifyResendWebhookEvent(...)`, and corrected the ratelimit "before" import
-  path to `better-convex/plugins/ratelimit`.
+  path to `kitcn/plugins/ratelimit`.
 - A second merge-base audit on `## Patches` showed `main` had no
-  `better-convex init`, no `fixtures/next` scaffold, no `packages/resend`,
+  `kitcn init`, no `fixtures/next` scaffold, no `packages/resend`,
   no `defineSchemaExtension(...)`, and no plugin-plan preview/apply flow. Those
   bullets were reclassified into `## Features`, leaving only main-backed fixes
   in `## Patches`.
@@ -279,7 +279,7 @@ Source of truth: `git status --short --untracked-files=all`
 - [x] Captured modified + untracked branch inventory with `git status --short`
 - [x] Identified doc-impact hotspots: `www/content/docs/cli.mdx`,
       `www/content/docs/templates.mdx`, and
-      `packages/better-convex/skills/convex/references/setup/index.md`
+      `packages/kitcn/skills/convex/references/setup/index.md`
 - [x] Rewrote `.changeset/short-cameras-wave.md`
 - [x] Synced impacted docs
 - [x] Marked every checklist item as `updated` or `no change needed`

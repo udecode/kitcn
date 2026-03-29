@@ -32,7 +32,7 @@ was still broken.
 
 The main break was variance, not resend itself.
 
-`packages/better-convex/src/orm/extensions.ts` used a fake bivariant callback
+`packages/kitcn/src/orm/extensions.ts` used a fake bivariant callback
 type that stopped being assignable under `strictFunctionTypes`. Relation-bearing
 schema extensions created through a wrapper function no longer satisfied
 `AnySchemaExtension`, so the combined resend extension blew up inside
@@ -69,9 +69,9 @@ Then clean up the integration edges the new scenario exposed:
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/cli.commands.ts --test-name-pattern "resend|keeps schema extensions in one ordered extend call"`
-- `bun test packages/better-convex/src/orm/schema-integration.test.ts`
-- `bun --cwd packages/better-convex typecheck`
+- `bun test packages/kitcn/src/cli/cli.commands.ts --test-name-pattern "resend|keeps schema extensions in one ordered extend call"`
+- `bun test packages/kitcn/src/orm/schema-integration.test.ts`
+- `bun --cwd packages/kitcn typecheck`
 - `bun tooling/scenarios.ts check convex-next-all`
 
 ## Prevention
@@ -85,8 +85,8 @@ Then clean up the integration edges the new scenario exposed:
 
 ## Files Changed
 
-- `packages/better-convex/src/orm/extensions.ts`
-- `packages/better-convex/src/cli/registry/planner.ts`
-- `packages/better-convex/src/cli/registry/items/ratelimit/ratelimit-plugin.template.ts`
-- `packages/better-convex/src/cli/registry/items/resend/resend-schema.template.ts`
-- `packages/better-convex/src/server/http-builder.ts`
+- `packages/kitcn/src/orm/extensions.ts`
+- `packages/kitcn/src/cli/registry/planner.ts`
+- `packages/kitcn/src/cli/registry/items/ratelimit/ratelimit-plugin.template.ts`
+- `packages/kitcn/src/cli/registry/items/resend/resend-schema.template.ts`
+- `packages/kitcn/src/server/http-builder.ts`

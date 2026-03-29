@@ -22,7 +22,7 @@ Most relevant per mutation/query constraints:
 Implication: row-count-only batching is insufficient. We need both row and byte budgets, and we should avoid producing excessive scheduler fan-out in one mutation.
 
 ## Verified Comparison (Corrected)
-### Better Convex ORM strengths
+### kitcn ORM strengths
 - Async cascade path paginates from the first FK query and schedules continuation.
 - FK action coverage is broader (`cascade`, `restrict`, `no action`, `set null`, `set default`) for delete and update.
 - Cascade updates are supported (`cascade-update`).
@@ -36,8 +36,8 @@ Implication: row-count-only batching is insufficient. We need both row and byte 
 
 ### Important corrections to prior claims
 - Ents does use `.collect()` in initial delete paths, but not unconditionally in all deletion modes; some paths are gated when soft/scheduled deletion behavior applies.
-- Better Convex cascade continuation currently ignores passed cursor in scheduled cascade work. This is a correctness risk, not only perf risk.
-- Better Convex `scheduledDelete` currently executes sync delete cascade (`.execute()`), so large delayed hard-deletes are not yet scale-batched.
+- kitcn cascade continuation currently ignores passed cursor in scheduled cascade work. This is a correctness risk, not only perf risk.
+- kitcn `scheduledDelete` currently executes sync delete cascade (`.execute()`), so large delayed hard-deletes are not yet scale-batched.
 
 ## Decision Audit (From Provided Spec)
 1. Keep sync fail-fast as default: **Keep**

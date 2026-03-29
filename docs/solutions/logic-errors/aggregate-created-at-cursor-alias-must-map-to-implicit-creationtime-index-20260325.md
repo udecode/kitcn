@@ -57,11 +57,11 @@ There were two separate bugs:
 ## Verification
 
 - unit regression tests in
-  `packages/better-convex/src/orm/query.is-nullish.test.ts`
+  `packages/kitcn/src/orm/query.is-nullish.test.ts`
   proving count and aggregate cursor plans compile through the `createdAt`
   alias
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 - live `example` proof:
   - sign in anonymously
   - run `bun convex run --push --identity ... aggregateDemo:getSnapshot '{}'`
@@ -75,4 +75,4 @@ There were two separate bugs:
 2. System `createdAt` behaves like an alias at the API surface and like an
    implicit `_creationTime` suffix at index-planning time.
 3. When proving package fixes against `example`, source tests are not enough.
-   Rebuild `packages/better-convex/dist` before trusting live runtime output.
+   Rebuild `packages/kitcn/dist` before trusting live runtime output.

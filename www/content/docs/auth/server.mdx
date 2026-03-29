@@ -7,26 +7,26 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, you'll install Better Auth through Better Convex's CLI-first
+In this guide, you'll install Better Auth through kitcn's CLI-first
 flow. The CLI owns the auth scaffold, schema blocks, HTTP route wiring, and the
 first local Convex auth bootstrap, so you can start from a working baseline and
 only drop to manual wiring when you actually need it.
 
 ## Start with the CLI
 
-If Better Convex is not bootstrapped yet, start there first:
+If kitcn is not bootstrapped yet, start there first:
 
 ```bash
-npx better-convex init -t next --yes
+npx kitcn init -t next --yes
 ```
 
-Use `npx better-convex init --yes` instead when you are adopting the current
+Use `npx kitcn init --yes` instead when you are adopting the current
 supported app.
 
 Then install auth:
 
 ```bash
-npx better-convex add auth --yes
+npx kitcn add auth --yes
 ```
 
 On local Convex, that command also finishes the live bootstrap pass for auth:
@@ -34,7 +34,7 @@ generated runtime, `BETTER_AUTH_SECRET`, and `JWKS`.
 
 ## What `add auth` owns
 
-The default Better Convex auth path writes and patches the auth surface for you:
+The default kitcn auth path writes and patches the auth surface for you:
 
 - `<functionsDir>/auth.config.ts`
 - `<functionsDir>/auth.ts`
@@ -43,7 +43,7 @@ The default Better Convex auth path writes and patches the auth surface for you:
 - auth-aware client wiring
 - the scaffolded auth page and Next auth route when the app shell supports them
 
-`functionsDir` comes from `convex.json.functions`. Scaffolded Better Convex
+`functionsDir` comes from `convex.json.functions`. Scaffolded kitcn
 apps use `convex/functions`.
 
 ## Auth Config
@@ -53,7 +53,7 @@ static JWKS when present and falls back to the provider helper before that first
 JWKS sync exists.
 
 ```ts title="convex/functions/auth.config.ts" showLineNumbers {3-9}
-import { getAuthConfigProvider } from 'better-convex/auth/config';
+import { getAuthConfigProvider } from 'kitcn/auth/config';
 import type { AuthConfig } from 'convex/server';
 import { getEnv } from '../lib/get-env';
 
@@ -72,7 +72,7 @@ export default {
 the Convex adapter, and imports `defineAuth` from the generated runtime:
 
 ```ts title="convex/functions/auth.ts" showLineNumbers {1-4,8-13}
-import { convex } from 'better-convex/auth';
+import { convex } from 'kitcn/auth';
 import { getEnv } from '../lib/get-env';
 import authConfig from './auth.config';
 import { defineAuth } from './generated/auth';
@@ -106,10 +106,10 @@ When plugin changes in `auth.ts` affect auth tables, refresh only the auth-owned
 schema blocks:
 
 ```bash
-npx better-convex add auth --schema --yes
+npx kitcn add auth --schema --yes
 ```
 
-The default Better Convex path patches auth-owned table blocks directly into
+The default kitcn path patches auth-owned table blocks directly into
 `<functionsDir>/schema.ts` and refreshes ownership in
 `<functionsDir>/plugins.lock.json`.
 
@@ -123,7 +123,7 @@ Use the raw Convex preset only when the app stays on the plain Convex auth
 surface:
 
 ```bash
-npx better-convex add auth --preset convex --yes
+npx kitcn add auth --preset convex --yes
 ```
 
 That path writes `authSchema.ts`, `auth.config.ts`, `auth.ts`, and raw Convex
@@ -140,8 +140,8 @@ Now we'll expose Better Auth's endpoints via HTTP.
 <Tabs groupId="router" items={["cRPC", "Convex", "Hono", ]} persist>
 <Tab value="cRPC">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-6,10-19,22}
-    import { authMiddleware } from 'better-convex/auth/http';
-    import { createHttpRouter } from 'better-convex/server';
+    import { authMiddleware } from 'kitcn/auth/http';
+    import { createHttpRouter } from 'kitcn/server';
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
     import { getEnv } from '../lib/get-env';
@@ -173,7 +173,7 @@ Now we'll expose Better Auth's endpoints via HTTP.
   </Tab>
   <Tab value="Convex">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
-    import { registerRoutes } from 'better-convex/auth/http';
+    import { registerRoutes } from 'kitcn/auth/http';
     import { httpRouter } from 'convex/server';
     import { getAuth } from './generated/auth';
 
@@ -190,8 +190,8 @@ Now we'll expose Better Auth's endpoints via HTTP.
   </Tab>
   <Tab value="Hono">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-5,9-18,21}
-    import { authMiddleware } from 'better-convex/auth/http';
-    import { HttpRouterWithHono } from 'better-convex/server';
+    import { authMiddleware } from 'kitcn/auth/http';
+    import { HttpRouterWithHono } from 'kitcn/server';
     import { Hono } from 'hono';
     import { cors } from 'hono/cors';
     import { getEnv } from '../lib/get-env';
@@ -237,8 +237,8 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
 For local Convex, no extra bootstrap command is needed after that.
-`better-convex init --yes`, `better-convex dev`, and
-`better-convex add auth --yes` already drive the local auth bootstrap when they
+`kitcn init --yes`, `kitcn dev`, and
+`kitcn add auth --yes` already drive the local auth bootstrap when they
 own the flow.
 
 See [CLI Backend](/docs/cli/backend#env) for more options.
@@ -246,7 +246,7 @@ See [CLI Backend](/docs/cli/backend#env) for more options.
 That's it for the basic setup! Your auth is now configured. To rotate keys later (this invalidates all tokens):
 
 ```bash
-npx better-convex env push --rotate
+npx kitcn env push --rotate
 ```
 
 ## Framework Integration
@@ -295,7 +295,7 @@ The recommended approach is schema-level [ORM Triggers](/docs/orm/schema/trigger
 <Tabs groupId="triggers" items={["Schema triggers (recommended)", "defineAuth triggers"]} persist>
   <Tab value="Schema triggers (recommended)">
     ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-20}
-    import { defineTriggers } from 'better-convex/orm';
+    import { defineTriggers } from 'kitcn/orm';
     import { relations } from './relations';
 
     const triggers = defineTriggers(relations, {
@@ -381,7 +381,7 @@ Authentication will fail at this point - that's expected.
 Run from your local machine with Convex CLI authenticated:
 
 ```bash
-npx better-convex env push --prod
+npx kitcn env push --prod
 ```
 
 This pushes `convex/.env`, generates `BETTER_AUTH_SECRET` when missing, fetches `JWKS`, and writes the full batch to the production deployment.
@@ -391,7 +391,7 @@ This pushes `convex/.env`, generates `BETTER_AUTH_SECRET` when missing, fetches 
 Test a protected endpoint or sign in through your app. Authentication should now succeed.
 
 <Callout icon={<InfoIcon />}>
-**Troubleshooting:** If you see "Invalid token signature" errors after deployment, re-run `better-convex env push --prod`.
+**Troubleshooting:** If you see "Invalid token signature" errors after deployment, re-run `kitcn env push --prod`.
 </Callout>
 
 ## Key Rotation
@@ -399,7 +399,7 @@ Test a protected endpoint or sign in through your app. Authentication should now
 Need to rotate signing keys? Maybe for security compliance or after a suspected compromise:
 
 ```bash
-npx better-convex env push --rotate --prod
+npx kitcn env push --rotate --prod
 ```
 
 <Callout icon={<InfoIcon />}>
@@ -498,7 +498,7 @@ convex({
 Returns the full user identity:
 
 ```ts showLineNumbers {1,3,5-8}
-import { getAuthUserIdentity } from 'better-convex/auth';
+import { getAuthUserIdentity } from 'kitcn/auth';
 
 const identity = await getAuthUserIdentity(ctx);
 
@@ -514,7 +514,7 @@ if (identity) {
 If you just need the user ID:
 
 ```ts showLineNumbers {1,3,5-7,10}
-import { getAuthUserId } from 'better-convex/auth';
+import { getAuthUserId } from 'kitcn/auth';
 
 const userId = await getAuthUserId(ctx);
 
@@ -531,7 +531,7 @@ const user = await ctx.orm.query.user.findFirst({ where: { id: userId } });
 Returns the full session document:
 
 ```ts showLineNumbers {1,3,5-10}
-import { getSession } from 'better-convex/auth';
+import { getSession } from 'kitcn/auth';
 
 const session = await getSession(ctx);
 
@@ -548,7 +548,7 @@ if (session) {
 Need to call an external API with the current session? This builds the headers:
 
 ```ts showLineNumbers {1,3-4,7-9}
-import { getHeaders } from 'better-convex/auth';
+import { getHeaders } from 'kitcn/auth';
 
 const headers = await getHeaders(ctx);
 // Headers { authorization: 'Bearer ...', x-forwarded-for: '...' }

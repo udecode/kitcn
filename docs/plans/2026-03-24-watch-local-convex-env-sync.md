@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make `better-convex dev` watch `convex/.env` on backend `convex` and auto-run
+Make `kitcn dev` watch `convex/.env` on backend `convex` and auto-run
 auth-aware env sync after local edits.
 
 ## Learnings

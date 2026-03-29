@@ -1,5 +1,5 @@
-import { and, eq, unsetToken } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
+import { and, eq, unsetToken } from 'kitcn/orm';
+import { CRPCError } from 'kitcn/server';
 import { z } from 'zod';
 import { authMutation, authQuery, optionalAuthQuery } from '../lib/crpc';
 import type { Insert, Select } from '../shared/api';

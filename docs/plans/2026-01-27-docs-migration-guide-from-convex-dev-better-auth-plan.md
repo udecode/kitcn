@@ -4,15 +4,15 @@ type: docs
 date: 2026-01-27
 ---
 
-# Migration Guide from @convex-dev/better-auth to better-convex
+# Migration Guide from @convex-dev/better-auth to kitcn
 
 ## Overview
 
-This guide walks you through migrating from `@convex-dev/better-auth` (the official Convex Better Auth package) to `better-convex`. We'll cover all the changes step-by-step, from removing the component pattern to setting up triggers and the new provider.
+This guide walks you through migrating from `@convex-dev/better-auth` (the official Convex Better Auth package) to `kitcn`. We'll cover all the changes step-by-step, from removing the component pattern to setting up triggers and the new provider.
 
 ## Problem Statement
 
-Users of `@convex-dev/better-auth` want to migrate to `better-convex` for:
+Users of `@convex-dev/better-auth` want to migrate to `kitcn` for:
 - Built-in trigger system for user/session lifecycle hooks
 - Simpler setup without Convex component pattern
 - Enhanced React utilities (`createAuthMutations`, auth store)
@@ -20,9 +20,9 @@ Users of `@convex-dev/better-auth` want to migrate to `better-convex` for:
 
 ## Key Differences
 
-| Aspect | @convex-dev/better-auth | better-convex |
+| Aspect | @convex-dev/better-auth | kitcn |
 |--------|------------------------|---------------|
-| Package | `@convex-dev/better-auth` | `better-convex` |
+| Package | `@convex-dev/better-auth` | `kitcn` |
 | Architecture | Convex component pattern | Direct integration |
 | Triggers | Not built-in | `triggers: { user, session }` |
 | Client Creation | `createClient(components.betterAuth, {...})` | `createClient({ authFunctions, schema, triggers })` |
@@ -33,7 +33,7 @@ Users of `@convex-dev/better-auth` want to migrate to `better-convex` for:
 ## Acceptance Criteria
 
 - [x] Remove Convex component pattern (convex.config.ts, betterAuth folder)
-- [x] Update all package imports from `@convex-dev/better-auth` to `better-convex`
+- [x] Update all package imports from `@convex-dev/better-auth` to `kitcn`
 - [x] Migrate `createClient` to new signature with triggers
 - [x] Update auth.ts to use new `createApi` pattern
 - [x] Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`
@@ -45,11 +45,11 @@ Users of `@convex-dev/better-auth` want to migrate to `better-convex` for:
 
 ### Step 1: Update Dependencies
 
-Remove the old package and install better-convex.
+Remove the old package and install kitcn.
 
 ```bash title="Terminal"
 bun remove @convex-dev/better-auth
-bun add better-convex
+bun add kitcn
 ```
 
 ### Step 2: Remove Component Pattern
@@ -151,7 +151,7 @@ export const getCurrentUser = query({
 ```typescript showLineNumbers title="convex/functions/auth.ts" {1-4,10-13,28-52,57-62}
 import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
-import { createApi, createClient, type AuthFunctions } from "better-convex/auth";
+import { createApi, createClient, type AuthFunctions } from "kitcn/auth";
 import { internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
@@ -271,7 +271,7 @@ export const authClient = createAuthClient({
 ```typescript showLineNumbers title="lib/convex/auth-client.ts" {3,8-9}
 import { convexClient } from "@convex-dev/better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
-import { createAuthMutations } from "better-convex/react";
+import { createAuthMutations } from "kitcn/react";
 
 export const authClient = createAuthClient({
   baseURL: process.env.NEXT_PUBLIC_SITE_URL!,
@@ -331,13 +331,13 @@ export function ConvexClientProvider({
 "use client";
 
 import { ConvexReactClient } from "convex/react";
-import { ConvexAuthProvider } from "better-convex/auth/client";
+import { ConvexAuthProvider } from "kitcn/auth/client";
 import { authClient } from "@/lib/convex/auth-client";
 import { useRouter } from "next/navigation";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-export function BetterConvexProvider({
+export function AppConvexProvider({
   children,
   token,
 }: {
@@ -398,7 +398,7 @@ export const ClientAuthBoundary = ({ children }: PropsWithChildren) => {
 If you want to use Convex Ents for relationships, you'll need to define the schema yourself instead of using the auto-generated component schema.
 
 ```typescript showLineNumbers title="convex/functions/schema.ts"
-import { authTables } from "better-convex/auth";
+import { authTables } from "kitcn/auth";
 import { defineEnts, defineEntSchema, getEntDefinitions } from "convex-ents";
 
 const entDefinitions = defineEnts(authTables, {
@@ -420,7 +420,7 @@ export default defineEntSchema(entDefinitions);
 
 ## Migration Checklist
 
-- [ ] **Dependencies:** Remove `@convex-dev/better-auth`, install `better-convex`
+- [ ] **Dependencies:** Remove `@convex-dev/better-auth`, install `kitcn`
 - [ ] **convex.config.ts:** Remove `app.use(betterAuth)` line
 - [ ] **betterAuth folder:** Delete the entire `convex/betterAuth/` directory
 - [ ] **auth.config.ts:** Update import, add `jwks` option
@@ -434,11 +434,11 @@ export default defineEntSchema(entDefinitions);
 
 ## Troubleshooting
 
-### "Cannot find module 'better-convex/auth'"
+### "Cannot find module 'kitcn/auth'"
 
 Make sure you've installed the package:
 ```bash
-bun add better-convex
+bun add kitcn
 ```
 
 ### "authFunctions is undefined"
@@ -458,6 +458,6 @@ Triggers must be defined in `createClient`. They won't fire for direct database 
 
 ## References
 
-- [better-convex example app](example/)
+- [kitcn example app](example/)
 - [@convex-dev/better-auth repo](https://github.com/get-convex/better-auth)
 - [Better Auth documentation](https://www.better-auth.com/)

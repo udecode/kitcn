@@ -4,7 +4,7 @@ import {
   QueryCache,
   QueryClient,
 } from '@tanstack/react-query';
-import { isCRPCClientError, isCRPCError } from 'better-convex/crpc';
+import { isCRPCClientError, isCRPCError } from 'kitcn/crpc';
 import SuperJSON from 'superjson';
 
 export const hydrationConfig: Pick<DefaultOptions, 'dehydrate' | 'hydrate'> = {

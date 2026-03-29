@@ -1057,7 +1057,7 @@ export const http_no_input = publicRoute
 // Section 20: HTTP Client Type Tests
 // ============================================================================
 
-import { type InferHttpInput, type InferHttpOutput } from 'better-convex/crpc';
+import { type InferHttpInput, type InferHttpOutput } from 'kitcn/crpc';
 
 // 20.1 InferHttpInput - POST with body
 type _InputPostInput = InferHttpInput<typeof http_post_input>;

@@ -1,4 +1,4 @@
-import { ResendPlugin } from '@better-convex/resend';
+import { ResendPlugin } from '@kitcn/resend';
 import { getEnv } from '../../get-env';
 
 export const resend = ResendPlugin.configure({

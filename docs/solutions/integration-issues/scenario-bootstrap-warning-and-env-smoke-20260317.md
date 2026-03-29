@@ -12,7 +12,7 @@ symptoms:
   - bun run scenario:check:convex fails before scenario validation starts
   - tooling/node-env-smoke.ts throws Cannot find package 'dotenv'
   - adoption scenarios pass but log Failed to parse http.ts warnings
-  - scaffolded http.ts files reference better-convex/server before the package is installed
+  - scaffolded http.ts files reference kitcn/server before the package is installed
 module: scenario-tooling
 resolved: 2026-03-17
 ---
@@ -34,9 +34,9 @@ Two separate issues stacked together:
 1. `tooling/node-env-smoke.ts` imported `dotenv` from the repo root. That
    package was not available in the tooling runtime, so the smoke check died
    before validating `env push` / `env pull`.
-2. `packages/better-convex/src/cli/codegen.ts` always logged `http.ts` parse
+2. `packages/kitcn/src/cli/codegen.ts` always logged `http.ts` parse
    failures. In adoption fixtures, that parse can fail briefly because
-   `http.ts` imports `better-convex/server` before `better-convex` is
+   `http.ts` imports `kitcn/server` before `kitcn` is
    installed into the generated app.
 
 The second case was expected during bootstrap, but the logger treated it like
@@ -61,11 +61,11 @@ const shouldLogParseFailure =
 ```
 
 `shouldSuppressHttpParseWarning(...)` only matches the known missing
-`better-convex/*` import shape. Everything else still logs.
+`kitcn/*` import shape. Everything else still logs.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/codegen.test.ts`
+- `bun test packages/kitcn/src/cli/codegen.test.ts`
 - `bun tooling/node-env-smoke.ts`
 - `bun run scenario:check:convex`
 - `bun run scenario:check` with zero `Failed to parse http.ts` lines in the
@@ -83,5 +83,5 @@ const shouldLogParseFailure =
 ## Files Changed
 
 - `tooling/node-env-smoke.ts`
-- `packages/better-convex/src/cli/codegen.ts`
-- `packages/better-convex/src/cli/codegen.test.ts`
+- `packages/kitcn/src/cli/codegen.ts`
+- `packages/kitcn/src/cli/codegen.test.ts`

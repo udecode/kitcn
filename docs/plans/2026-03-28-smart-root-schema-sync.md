@@ -37,10 +37,10 @@ patching that:
 
 ## Verification
 
-- Passed: `bun test packages/better-convex/src/cli/registry/schema-ownership.test.ts packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts`
-- Passed: `bun --cwd packages/better-convex build`
+- Passed: `bun test packages/kitcn/src/cli/registry/schema-ownership.test.ts packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts`
+- Passed: `bun --cwd packages/kitcn build`
 - Passed: `bun lint:fix`
-- Live proof: `bunx better-convex add auth --only schema --overwrite --yes`
+- Live proof: `bunx kitcn add auth --only schema --overwrite --yes`
   updated `example/convex/functions/schema.ts` to add auth plugin fields such
   as `displayUsername` while leaving `plugins.lock.json` unchanged.
 - Blocked: `bun typecheck` is still red on unrelated existing `example`

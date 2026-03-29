@@ -93,7 +93,7 @@ Full-text search enables searching string fields with relevance scoring. Each se
 Let's start by adding search indexes to your schema. Use the naming pattern `search_<searchField>`:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {8-12,14-16}
-import { convexTable, defineSchema, searchIndex, text } from 'better-convex/orm';
+import { convexTable, defineSchema, searchIndex, text } from 'kitcn/orm';
 
 export const articles = convexTable(
   'articles',
@@ -453,5 +453,5 @@ That's it. You now have all the tools for full-text search, predicate filtering,
   <Card title="ORM" href="/docs/orm" />
   <Card title="Triggers" href="/docs/orm/schema/triggers" />
   <Card title="Aggregates" href="/docs/orm/queries/aggregates" />
-  <Card title="better-convex" href="https://github.com/get-convex/better-convex" />
+  <Card title="kitcn" href="https://github.com/get-convex/kitcn" />
 </Cards>

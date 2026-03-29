@@ -9,7 +9,7 @@ tags:
   - jwks
   - logs
 symptoms:
-  - local `better-convex dev` logs repeated Better Auth warnings about missing client IP address
+  - local `kitcn dev` logs repeated Better Auth warnings about missing client IP address
   - the warning comes from `GET /api/auth/convex/jwks`
   - local auth bootstrap works, but startup logs look broken and noisy
 module: auth-runtime
@@ -20,7 +20,7 @@ resolved: 2026-03-25
 
 ## Problem
 
-Local Better Convex auth apps were logging this warning during normal startup
+Local kitcn auth apps were logging this warning during normal startup
 and token verification:
 
 ```txt
@@ -37,7 +37,7 @@ That made local auth look broken even when everything actually worked.
 
 ## Root Cause
 
-This warning was not coming from Better Convex ratelimit.
+This warning was not coming from kitcn ratelimit.
 
 It came from Better Auth's built-in rate limiter. The Convex auth runtime asks
 Better Auth to serve public JWKS and OIDC metadata routes, and local/runtime
@@ -45,7 +45,7 @@ fetches for those routes can legitimately arrive without a client IP.
 
 There were two seams:
 
-1. Better Convex was not marking Convex-owned metadata routes as
+1. kitcn was not marking Convex-owned metadata routes as
    non-rate-limited by default.
 2. Better Auth resolves the client IP before it evaluates
    `rateLimit.customRules`, so `"/convex/jwks": false` alone does not suppress
@@ -55,7 +55,7 @@ There were two seams:
 
 Fix both seams.
 
-First, apply Better Convex auth defaults when the generated auth runtime
+First, apply kitcn auth defaults when the generated auth runtime
 assembles Better Auth options. Disable Better Auth rate limiting for
 Convex-owned public/internal metadata routes:
 
@@ -77,10 +77,10 @@ actually computes the client IP.
 
 ## Verification
 
-- `bun test packages/better-convex/src/auth/generated-contract.test.ts`
-- `bun test packages/better-convex/src/auth/registerRoutes.test.ts`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/auth/generated-contract.test.ts`
+- `bun test packages/kitcn/src/auth/registerRoutes.test.ts`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 
 Probe confirmation from the real auth runtime:
 
@@ -93,7 +93,7 @@ Bridge confirmation from the route adapter:
 
 ## Prevention
 
-1. If Better Convex exposes auth routes that are public metadata or server-only
+1. If kitcn exposes auth routes that are public metadata or server-only
    maintenance endpoints, do not leave them on generic Better Auth rate-limit
    behavior by accident.
 2. Put auth runtime defaults at the generated auth assembly seam so existing
@@ -106,7 +106,7 @@ Bridge confirmation from the route adapter:
 
 ## Files Changed
 
-- `packages/better-convex/src/auth/generated-contract.ts`
-- `packages/better-convex/src/auth/generated-contract.test.ts`
-- `packages/better-convex/src/auth/registerRoutes.ts`
-- `packages/better-convex/src/auth/registerRoutes.test.ts`
+- `packages/kitcn/src/auth/generated-contract.ts`
+- `packages/kitcn/src/auth/generated-contract.test.ts`
+- `packages/kitcn/src/auth/registerRoutes.ts`
+- `packages/kitcn/src/auth/registerRoutes.test.ts`

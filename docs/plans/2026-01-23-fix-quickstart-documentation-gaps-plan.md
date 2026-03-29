@@ -2,7 +2,7 @@
 title: "fix: Complete quickstart documentation gaps"
 type: fix
 date: 2026-01-23
-issue: https://github.com/udecode/better-convex/issues/42
+issue: https://github.com/udecode/kitcn/issues/42
 ---
 
 # fix: Complete quickstart documentation gaps
@@ -41,7 +41,7 @@ graph TD
     D --> E
     E --> F[user.ts]
     F --> G[types.ts]
-    G --> H[better-convex dev]
+    G --> H[kitcn dev]
     H --> I[meta.ts - auto]
     I --> J[.env.local]
     J --> K[crpc.tsx]
@@ -68,7 +68,7 @@ export type Api = typeof api;
 
 // Uncomment when you add HTTP routes:
 // import type { appRouter } from '../functions/http';
-// import type { WithHttpRouter } from 'better-convex/server';
+// import type { WithHttpRouter } from 'kitcn/server';
 // export type Api = WithHttpRouter<typeof api, typeof appRouter>;
 ```
 
@@ -199,7 +199,7 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 - Access to www/content/docs folder
 - Understanding of fumadocs markdown syntax (Tabs, Tab, Callout)
-- Better Convex dev server working locally for testing
+- kitcn dev server working locally for testing
 
 ## Risk Analysis & Mitigation
 
@@ -228,7 +228,7 @@ Key additions (pseudo-diff):
 ## Installation
 
 ```bash
-bun add convex better-convex convex-helpers zod @tanstack/react-query
+bun add convex kitcn convex-helpers zod @tanstack/react-query
 ```
 
 +<Tabs groupId="db" items={["ctx.db", "ctx.table"]} persist>
@@ -295,7 +295,7 @@ bun add convex better-convex convex-helpers zod @tanstack/react-query
 
 ### External References
 
-- GitHub Issue: https://github.com/udecode/better-convex/issues/42
+- GitHub Issue: https://github.com/udecode/kitcn/issues/42
 
 ### Related Work
 

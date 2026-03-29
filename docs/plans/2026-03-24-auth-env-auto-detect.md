@@ -2,10 +2,10 @@
 
 ## Goal
 
-Make `better-convex env push` auth-aware by default and remove the public
+Make `kitcn env push` auth-aware by default and remove the public
 `--auth` flag.
 
-`better-convex dev` should stop requiring a second manual auth env pass. It
+`kitcn dev` should stop requiring a second manual auth env pass. It
 should prepare auth env before startup, then finish JWKS sync after the local
 backend is up.
 

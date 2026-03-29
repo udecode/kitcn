@@ -37,15 +37,15 @@ If you skip the `tsdown` entry cleanup, package builds fail with:
 
 ### 2. Move schema ownership into CLI templates
 
-- Add `convex/lib/plugins/<plugin>/schema.ts` template in `packages/better-convex/src/cli/plugins/<plugin>/`
+- Add `convex/lib/plugins/<plugin>/schema.ts` template in `packages/kitcn/src/cli/plugins/<plugin>/`
 - Register it in `plugin-catalog.ts`
 - Make function/runtime templates import local schema via a placeholder, not package `/schema`
-- Update schema registration metadata so `better-convex add` imports the local extension into root schema
+- Update schema registration metadata so `kitcn add` imports the local extension into root schema
 
 ### 3. Regenerate scaffold outputs
 
 - Never patch example plugin files first
-- Regenerate with `better-convex add <plugin> --overwrite --no-codegen`
+- Regenerate with `kitcn add <plugin> --overwrite --no-codegen`
 - Verify `example/convex/functions/schema.ts` imports `../lib/plugins/<plugin>/schema`
 
 ### 4. Update docs and skills in the same pass
@@ -55,8 +55,8 @@ Update all of these together:
 - `www/content/docs/plugins/*`
 - `www/content/docs/concepts.mdx`
 - `www/content/docs/templates.mdx`
-- `packages/better-convex/skills/convex/references/setup/*`
-- `packages/better-convex/skills/convex/references/features/create-plugins.md`
+- `packages/kitcn/skills/convex/references/setup/*`
+- `packages/kitcn/skills/convex/references/features/create-plugins.md`
 
 The public story should be one thing only: runtime package + scaffolded local schema extension.
 
@@ -74,14 +74,14 @@ Minimum coverage:
 Run this set after the cutover:
 
 ```bash
-bun --cwd packages/better-convex build
+bun --cwd packages/kitcn build
 bun --cwd packages/resend build
 bun --cwd packages/ratelimit build
 touch example/convex/functions/schema.ts
 bun run --cwd example codegen
 bun lint:fix
 bun typecheck
-bun test packages/better-convex/src/cli/cli.test.ts packages/better-convex/src/cli/codegen.test.ts packages/better-convex/src/cli/config.test.ts packages/better-convex/src/orm/schema-integration.test.ts packages/better-convex/src/orm/create-orm.test.ts
+bun test packages/kitcn/src/cli/cli.test.ts packages/kitcn/src/cli/codegen.test.ts packages/kitcn/src/cli/config.test.ts packages/kitcn/src/orm/schema-integration.test.ts packages/kitcn/src/orm/create-orm.test.ts
 ```
 
 ## Example
@@ -89,7 +89,7 @@ bun test packages/better-convex/src/cli/cli.test.ts packages/better-convex/src/c
 Before:
 
 ```ts
-import { ratelimitPlugin } from '@better-convex/ratelimit/schema';
+import { ratelimitPlugin } from '@kitcn/ratelimit/schema';
 
 export default defineSchema(tables, {
   plugins: [ratelimitPlugin()],

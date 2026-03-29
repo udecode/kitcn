@@ -148,7 +148,7 @@ function SchemaCode() {
       {pr('convexTable')}, {pr('defineRelations')}, {pr('text')},{' '}
       {pr('boolean')}, {pr('id')}, {pr('index')}
       {' }'} {kw('from ')}
-      {str("'better-convex/orm'")}
+      {str("'kitcn/orm'")}
       {';'}
       {'\n'}
       {'\n'}
@@ -275,7 +275,7 @@ function Step2Code() {
       {'{ '}
       {fn('createCRPCContext')}
       {' }'} {kw('from ')}
-      {str("'better-convex/react'")}
+      {str("'kitcn/react'")}
       {';'}
       {'\n'}
       {'\n'}
@@ -497,7 +497,7 @@ function QuickIntro() {
     <section className="px-6 py-16 md:py-24">
       <div className="mx-auto max-w-5xl">
         <SectionTitle
-          description="It's quick and easy to build a typesafe API with Better Convex."
+          description="It's quick and easy to build a typesafe API with kitcn."
           title="Simple to use"
         />
         <div className="space-y-16 md:space-y-24">

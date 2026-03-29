@@ -27,7 +27,7 @@ deepened: 2026-01-27
 
 ## Overview
 
-Add recursive directory scanning to `better-convex codegen` so meta is generated for nested file structures like `convex/functions/items/queries.ts`.
+Add recursive directory scanning to `kitcn codegen` so meta is generated for nested file structures like `convex/functions/items/queries.ts`.
 
 ## Problem Statement
 
@@ -104,7 +104,7 @@ export const meta = {
 **Create shared utility:**
 
 ```typescript
-// packages/better-convex/src/shared/meta-utils.ts
+// packages/kitcn/src/shared/meta-utils.ts
 
 import type { Meta, FnMeta } from './types';
 
@@ -251,14 +251,14 @@ export function getFunctionMeta(
 ## Files to Modify
 
 ### New Files
-1. `packages/better-convex/src/shared/meta-utils.ts` - shared utilities
+1. `packages/kitcn/src/shared/meta-utils.ts` - shared utilities
 
 ### Modified Files
-1. `packages/better-convex/src/cli/codegen.ts` - recursive scanning
-2. `packages/better-convex/src/react/proxy.ts` - use shared utility
-3. `packages/better-convex/src/react/vanilla-client.ts` - use shared utility
-4. `packages/better-convex/src/server/caller.ts` - use shared utility
-5. `packages/better-convex/src/rsc/proxy-server.ts` - use shared utility
+1. `packages/kitcn/src/cli/codegen.ts` - recursive scanning
+2. `packages/kitcn/src/react/proxy.ts` - use shared utility
+3. `packages/kitcn/src/react/vanilla-client.ts` - use shared utility
+4. `packages/kitcn/src/server/caller.ts` - use shared utility
+5. `packages/kitcn/src/rsc/proxy-server.ts` - use shared utility
 
 ## Implementation Order
 
@@ -279,7 +279,7 @@ export function getFunctionMeta(
 
 ## References
 
-- Current codegen: [codegen.ts:184-192](packages/better-convex/src/cli/codegen.ts#L184-L192)
+- Current codegen: [codegen.ts:184-192](packages/kitcn/src/cli/codegen.ts#L184-L192)
 - tRPC merging routers: https://trpc.io/docs/server/merging-routers
 - Convex API structure: Uses nested `api.folder.file.function` pattern
 - Node.js glob docs: https://nodejs.org/api/fs.html#fsglobsyncpattern-options

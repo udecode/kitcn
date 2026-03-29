@@ -30,10 +30,10 @@ Add explicit scan-risk metadata to query planning and use it to enforce strict-m
 4. Prefix range optimizations remain unaffected.
 
 ## Implementation Scope (File-Level)
-- `packages/better-convex/src/orm/where-clause-compiler.ts`
+- `packages/kitcn/src/orm/where-clause-compiler.ts`
   - Extend `WhereClauseResult` with risk metadata.
   - Classify risky operators and safe prefix optimizations.
-- `packages/better-convex/src/orm/query.ts`
+- `packages/kitcn/src/orm/query.ts`
   - Enforce strict gate using planner risk metadata.
   - Add targeted warning messages for risky paths when full scan is allowed.
 - `test/orm/where-clause-compiler.test.ts`
@@ -116,19 +116,19 @@ Mitigations:
 ## References & Research
 ### Internal References
 - Runtime strict gate currently only checks no-index + post-filter:
-  - `packages/better-convex/src/orm/query.ts:1650`
+  - `packages/kitcn/src/orm/query.ts:1650`
 - Existing multi-probe pagination full-scan gate:
-  - `packages/better-convex/src/orm/query.ts:1976`
+  - `packages/kitcn/src/orm/query.ts:1976`
 - Planner result shape lacks strict-risk metadata:
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:35`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:35`
 - Negation operators compile as `multiProbe`:
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:211`
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:240`
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:300`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:211`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:240`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:300`
 - Prefix optimizations:
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:331`
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:366`
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:534`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:331`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:366`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:534`
 - Existing compiler tests for these strategies:
   - `test/orm/where-clause-compiler.test.ts:47`
   - `test/orm/where-clause-compiler.test.ts:140`

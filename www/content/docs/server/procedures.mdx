@@ -142,7 +142,7 @@ Use `.mutation()` for write operations. Mutations are transactional - if any par
 
 ```ts showLineNumbers {1-4,6-17}
 import { z } from 'zod';
-import { eq } from 'better-convex/orm';
+import { eq } from 'kitcn/orm';
 import { user } from './schema';
 
 export const create = publicMutation
@@ -303,7 +303,7 @@ Here's a full CRUD example showing all the patterns together:
 
 ```ts title="convex/functions/user.ts" showLineNumbers
 import { z } from 'zod';
-import { eq } from 'better-convex/orm';
+import { eq } from 'kitcn/orm';
 import { publicQuery, publicMutation } from '../lib/crpc';
 import { user } from './schema';
 

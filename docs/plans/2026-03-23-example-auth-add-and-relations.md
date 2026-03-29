@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use `example/` as a real stress case for `better-convex add auth`, especially
+Use `example/` as a real stress case for `kitcn add auth`, especially
 with multiple Better Auth plugins already in play. If rerunning `add auth`
 breaks, fix the package source. Then support auth schema relations generation
 the same way the example app expects.
@@ -21,14 +21,14 @@ the same way the example app expects.
 
 ## Findings
 
-- `example/package.json` already uses `gen:auth = better-convex add auth --yes`
+- `example/package.json` already uses `gen:auth = kitcn add auth --yes`
 - `example/` already ships auth-heavy app code, including admin and
   organization client usage.
 - Existing auth schema reconcile coverage lives in
-  `packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
+  `packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
 - Existing docs already state that rerunning `add auth` should refresh the
   managed auth schema file.
-- Rerun auth schema generation has to set the `__BETTER_CONVEX_CODEGEN__`
+- Rerun auth schema generation has to set the `__KITCN_CODEGEN__`
   sentinel or env-backed `auth.ts` definitions can fail before schema
   derivation.
 - `auth.ts` and `auth.config.ts` are user-owned on reruns because the schema

@@ -29,9 +29,9 @@
  * ```
  */
 
-import { getHeaders } from 'better-convex/auth';
-import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
+import { getHeaders } from 'kitcn/auth';
+import { CRPCError } from 'kitcn/server';
 import { getAuth } from '../functions/generated/auth';
 import {
   type ActionCtx,

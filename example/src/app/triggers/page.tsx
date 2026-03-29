@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from 'better-convex/react';
+import { useAuth } from 'kitcn/react';
 import {
   Activity,
   AlertTriangle,

@@ -1,7 +1,7 @@
 ## Goal
 
-Make `better-convex add auth --only schema --yes` a real schema-only refresh
-path for the default Better Convex auth scaffold, even when auth schema
+Make `kitcn add auth --only schema --yes` a real schema-only refresh
+path for the default kitcn auth scaffold, even when auth schema
 ownership has not been written to `plugins.lock.json` yet.
 
 ## Plan
@@ -25,5 +25,5 @@ ownership has not been written to `plugins.lock.json` yet.
   against `example`; the wrapper path is the liar.
 - Live proof after the fix: `example` updates exactly
   `convex/functions/schema.ts` and `convex/functions/plugins.lock.json`.
-- The command still needs the default Better Convex auth scaffold files to
+- The command still needs the default kitcn auth scaffold files to
   exist. It no longer needs a prior auth schema lock entry.

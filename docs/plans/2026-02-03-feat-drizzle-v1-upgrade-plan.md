@@ -1,5 +1,5 @@
 ---
-title: "feat: Drizzle v1 upgrade for Better Convex ORM (breaking)"
+title: "feat: Drizzle v1 upgrade for kitcn ORM (breaking)"
 type: feat
 date: 2026-02-03
 ---
@@ -7,7 +7,7 @@ date: 2026-02-03
 # ✨ Drizzle v1 Upgrade (Breaking)
 
 ## Overview
-Upgrade Better Convex ORM from Drizzle stable (v0.45.x) to Drizzle v1 with full API parity for Convex-relevant features. This is a clean break: remove v0.45 API entirely, mirror `drizzle-v1` behavior and typings, and align tests/docs with v1.
+Upgrade kitcn ORM from Drizzle stable (v0.45.x) to Drizzle v1 with full API parity for Convex-relevant features. This is a clean break: remove v0.45 API entirely, mirror `drizzle-v1` behavior and typings, and align tests/docs with v1.
 
 ## Problem Statement
 The current ORM mirrors Drizzle stable and diverges from Drizzle v1’s API and typing patterns. Maintaining compatibility with v0.45 limits parity, increases type complexity, and blocks alignment with Drizzle’s latest TypeScript patterns and test coverage. We need a v1-only surface that mirrors `drizzle-v1` to reduce drift and keep typing behavior aligned with Drizzle’s canonical patterns.
@@ -71,10 +71,10 @@ Adopt a v1-only API surface that mirrors the `drizzle-v1` repo as canonical refe
 - Runtime relation loading works with v1 config.
 
 **Files**
-- `packages/better-convex/src/orm/relations.ts`
-- `packages/better-convex/src/orm/extractRelationsConfig.ts`
-- `packages/better-convex/src/orm/builders/column-builder.ts`
-- `packages/better-convex/src/orm/types.ts`
+- `packages/kitcn/src/orm/relations.ts`
+- `packages/kitcn/src/orm/extractRelationsConfig.ts`
+- `packages/kitcn/src/orm/builders/column-builder.ts`
+- `packages/kitcn/src/orm/types.ts`
 - `convex/test-types/db-rel.ts`
 - `convex/orm/relations.test.ts`
 
@@ -89,10 +89,10 @@ Adopt a v1-only API surface that mirrors the `drizzle-v1` repo as canonical refe
 - Runtime tests cover relation filtering and offsets.
 
 **Files**
-- `packages/better-convex/src/orm/query-builder.ts`
-- `packages/better-convex/src/orm/where-clause-compiler.ts`
-- `packages/better-convex/src/orm/query.ts`
-- `packages/better-convex/src/orm/types.ts`
+- `packages/kitcn/src/orm/query-builder.ts`
+- `packages/kitcn/src/orm/where-clause-compiler.ts`
+- `packages/kitcn/src/orm/query.ts`
+- `packages/kitcn/src/orm/types.ts`
 - `convex/test-types/select.ts`
 - `convex/orm/query-builder.test.ts`
 - `convex/orm/where-filtering.test.ts`
@@ -108,11 +108,11 @@ Adopt a v1-only API surface that mirrors the `drizzle-v1` repo as canonical refe
 - Runtime tests for insert/update/delete/upsert/returning.
 
 **Files**
-- `packages/better-convex/src/orm/database.ts`
-- `packages/better-convex/src/orm/insert.ts`
-- `packages/better-convex/src/orm/update.ts`
-- `packages/better-convex/src/orm/delete.ts`
-- `packages/better-convex/src/orm/types.ts`
+- `packages/kitcn/src/orm/database.ts`
+- `packages/kitcn/src/orm/insert.ts`
+- `packages/kitcn/src/orm/update.ts`
+- `packages/kitcn/src/orm/delete.ts`
+- `packages/kitcn/src/orm/types.ts`
 - `convex/test-types/` (new mutation-focused type tests)
 - `convex/write.test.ts`
 
@@ -210,7 +210,7 @@ Adopt a v1-only API surface that mirrors the `drizzle-v1` repo as canonical refe
 **ERD**: not applicable (no new model changes).
 
 ## Quality Gates
-- After each package change: `bun --cwd packages/better-convex build`.
+- After each package change: `bun --cwd packages/kitcn build`.
 - After each package change: `touch example/convex/functions/schema.ts`.
 - After each package change: `bun typecheck`.
 - After each package change: `bun run test`.
@@ -222,8 +222,8 @@ Adopt a v1-only API surface that mirrors the `drizzle-v1` repo as canonical refe
 - `docs/brainstorms/2026-02-03-drizzle-v1-upgrade-brainstorm.md:16`
 - `docs/learn-drizzle.md:5`
 - `docs/learn-drizzle.md:73`
-- `packages/better-convex/src/orm/relations.ts`
-- `packages/better-convex/src/orm/types.ts`
+- `packages/kitcn/src/orm/relations.ts`
+- `packages/kitcn/src/orm/types.ts`
 - `convex/test-types/select.ts`
 - `convex/orm/relations.test.ts`
 

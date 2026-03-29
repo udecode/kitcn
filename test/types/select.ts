@@ -1,3 +1,5 @@
+import type { GenericDatabaseReader } from 'convex/server';
+import type { GenericId, Value } from 'convex/values';
 import {
   convexTable,
   createOrm,
@@ -10,9 +12,7 @@ import {
   integer,
   type PredicateWhereIndexConfig,
   text,
-} from 'better-convex/orm';
-import type { GenericDatabaseReader } from 'convex/server';
-import type { GenericId, Value } from 'convex/values';
+} from 'kitcn/orm';
 import { UserRow } from './fixtures/types';
 import {
   bookAuthors,
@@ -26,7 +26,7 @@ import {
 } from './tables-rel';
 import { type Equal, Expect, IsAny, Not } from './utils';
 
-// Build schema following Better Convex pattern
+// Build schema following kitcn pattern
 const schemaConfig = relations;
 const edgeMetadata = extractRelationsConfig(relations);
 
@@ -1348,7 +1348,7 @@ db.query.users.findMany({
 
 // E. Relation Constraints - Invalid relation name in with
 {
-  type UsersQueryConfig = import('better-convex/orm').DBQueryConfig<
+  type UsersQueryConfig = import('kitcn/orm').DBQueryConfig<
     'many',
     true,
     typeof schemaConfig,

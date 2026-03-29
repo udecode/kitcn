@@ -12,7 +12,7 @@ tags:
   - convex
 severity: high
 symptoms:
-  - bootstrap-heavy scenario lanes fail after switching to `better-convex init --yes`
+  - bootstrap-heavy scenario lanes fail after switching to `kitcn init --yes`
   - init fallback starts a local backend before auth env prepare runs
   - failed fallback bootstrap leaves the local Convex port wedged
   - in-place init rewrites auth-aware `lib/convex/server.ts` back to the plain baseline
@@ -23,7 +23,7 @@ symptoms:
 ## Problem
 
 The bootstrap-heavy scenario cut moved validation onto in-place
-`better-convex init --yes`.
+`kitcn init --yes`.
 
 That exposed two real bugs:
 

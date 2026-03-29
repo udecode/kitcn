@@ -6,12 +6,12 @@ status: implemented
 
 # Drizzle v1 Constraints Support
 
-Add Drizzle v1 unique constraint support to Better Convex ORM with runtime enforcement only (no syntax-only constraints).
+Add Drizzle v1 unique constraint support to kitcn ORM with runtime enforcement only (no syntax-only constraints).
 
 ## What We're Building
 
 ### Goal
-Support Drizzle v1 unique constraints in Better Convex ORM with runtime enforcement only:
+Support Drizzle v1 unique constraints in kitcn ORM with runtime enforcement only:
 
 ```ts
 export const users = convexTable('users', {
@@ -100,7 +100,7 @@ uniqueIndex('email_unique').on(t.email)
 - Creates regular index (for efficient lookup)
 - Adds runtime check before insert/patch/replace
 - Throws clear error on duplicate: `"duplicate found: email = foo@bar.com"`
-- Only works with Better Convex mutation builders
+- Only works with kitcn mutation builders
 
 **Implementation:**
 - Hook into mutation helpers (to be created)
@@ -156,7 +156,7 @@ We will not add `primaryKey()` or `check()` until enforcement is implemented. No
 age: integer().default(0)
 ```
 
-**Better Convex behavior:**
+**kitcn behavior:**
 - Defaults are applied by ORM inserts when value is `undefined`
 - Explicit `null` is preserved
 - Direct `ctx.db` writes bypass defaults
@@ -166,16 +166,16 @@ age: integer().default(0)
 ### Phase 1: uniqueIndex() + unique() Runtime Enforcement
 
 **Files to modify:**
-1. `packages/better-convex/src/orm/indexes.ts`
+1. `packages/kitcn/src/orm/indexes.ts`
    - Store `unique: true` in config (already done)
 
-2. `packages/better-convex/src/orm/table.ts`
+2. `packages/kitcn/src/orm/table.ts`
    - Store unique index metadata when `unique: true`
    - Auto-create unique indexes for `unique()` constraints
    - Auto-create unique indexes for column `.unique()`
    - Make available to mutation builders
 
-3. Create `packages/better-convex/src/orm/mutation-utils.ts`
+3. Create `packages/kitcn/src/orm/mutation-utils.ts`
    - `checkUniqueness()` helper (convex-ents style)
    - Query-based duplicate check
    - Clear error messages

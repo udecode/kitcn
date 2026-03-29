@@ -75,7 +75,7 @@ will falsely claim the auth callbacks are wired when they are not.
 
 - `bun test ./tooling/scenarios.test.ts`
 - `bun lint:fix`
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn build`
 - `bun run scenario:test -- next-auth`
 
 Observed live behavior after the fix:

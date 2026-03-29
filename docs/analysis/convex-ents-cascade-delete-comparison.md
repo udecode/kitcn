@@ -1,4 +1,4 @@
-# Cascade Delete at Scale: Better Convex ORM vs Convex Ents
+# Cascade Delete at Scale: kitcn ORM vs Convex Ents
 
 Date: 2026-02-07
 Status: Post-plan comparison (verified against code)

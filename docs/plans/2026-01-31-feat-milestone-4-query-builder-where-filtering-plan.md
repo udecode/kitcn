@@ -102,7 +102,7 @@ Unlike Drizzle's SQL compilation, we compile to Convex's query builder API:
 // Drizzle (SQL):
 eq(users.name, "Alice") → SQL`users.name = 'Alice'`
 
-// Better Convex (Convex API):
+// kitcn (Convex API):
 eq(users.name, "Alice") → db.query('users').withIndex('name', q => q.eq('name', 'Alice'))
 ```
 
@@ -216,7 +216,7 @@ function not(condition: FilterExpression<boolean>): FilterExpression<boolean>;
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   filter-expression.ts      # FilterExpression class
   filter-operators.ts       # Operator factory functions
   types.ts                  # Update with filter types
@@ -349,7 +349,7 @@ export interface FieldReference<T = unknown> {
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   filter-operators.ts       # Add logical operators
 ```
 
@@ -498,7 +498,7 @@ function and(...conditions: (FilterExpression<boolean> | undefined)[]): ReturnTy
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   query-compiler.ts         # Add WhereClauseCompiler
   field-reference.ts        # FieldReference class
 ```
@@ -738,7 +738,7 @@ private isPrefixMatch(indexFields: string[], filterFields: string[]): boolean {
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   query-compiler.ts         # Extend with query generation
   query.ts                  # Update _toConvexQuery() to use compiler
 ```
@@ -1027,7 +1027,7 @@ private toConvexExpression(
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   filter-operators.ts       # Add string operators
   query-compiler.ts         # Add string operator compilation
 ```
@@ -1157,7 +1157,7 @@ where: (user, { like, startsWith }) =>
 
 **Files**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
   filter-operators.ts       # Add array and null operators
   query-compiler.ts         # Add compilation logic
 ```
@@ -1652,7 +1652,7 @@ compile(expression: FilterExpression, { debug = false } = {}) {
 **Dependencies**:
 - Convex SDK 1.31+
 - EdgeMetadata from M2 for index configuration
-- Better Convex package exports from M1/M2/M3
+- kitcn package exports from M1/M2/M3
 - FilterFunction and FilterOperators types from M3
 
 **Blockers**:
@@ -1714,18 +1714,18 @@ compile(expression: FilterExpression, { debug = false } = {}) {
 ### Internal References
 
 **M3 Query Builder** (Foundation):
-- [packages/better-convex/src/orm/query-builder.ts](packages/better-convex/src/orm/query-builder.ts) - RelationalQueryBuilder class
-- [packages/better-convex/src/orm/query.ts](packages/better-convex/src/orm/query.ts) - GelRelationalQuery execution
-- [packages/better-convex/src/orm/query-compiler.ts](packages/better-convex/src/orm/query-compiler.ts) - FilterFunction types (M3 stub)
-- [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts) - DBQueryConfig, BuildQueryResult types
+- [packages/kitcn/src/orm/query-builder.ts](packages/kitcn/src/orm/query-builder.ts) - RelationalQueryBuilder class
+- [packages/kitcn/src/orm/query.ts](packages/kitcn/src/orm/query.ts) - GelRelationalQuery execution
+- [packages/kitcn/src/orm/query-compiler.ts](packages/kitcn/src/orm/query-compiler.ts) - FilterFunction types (M3 stub)
+- [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts) - DBQueryConfig, BuildQueryResult types
 
 **M2 Relations** (Index Metadata):
-- [packages/better-convex/src/orm/extractRelationsConfig.ts:17-40](packages/better-convex/src/orm/extractRelationsConfig.ts#L17-L40) - EdgeMetadata interface
-- [packages/better-convex/src/orm/relations.ts:88-165](packages/better-convex/src/orm/relations.ts#L88-L165) - One and Many relation classes
+- [packages/kitcn/src/orm/extractRelationsConfig.ts:17-40](packages/kitcn/src/orm/extractRelationsConfig.ts#L17-L40) - EdgeMetadata interface
+- [packages/kitcn/src/orm/relations.ts:88-165](packages/kitcn/src/orm/relations.ts#L88-L165) - One and Many relation classes
 
 **M1 Schema Foundation**:
-- [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts) - ConvexTable implementation
-- [packages/better-convex/src/orm/symbols.ts](packages/better-convex/src/orm/symbols.ts) - Metadata symbols
+- [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts) - ConvexTable implementation
+- [packages/kitcn/src/orm/symbols.ts](packages/kitcn/src/orm/symbols.ts) - Metadata symbols
 
 **Test Suite**:
 - [convex/query-builder.test.ts](convex/query-builder.test.ts) - M3 query builder tests (7 tests)

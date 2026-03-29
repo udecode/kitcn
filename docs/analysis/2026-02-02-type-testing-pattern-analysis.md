@@ -1,11 +1,11 @@
 ---
-title: Type Testing Pattern Analysis - Better Convex ORM
+title: Type Testing Pattern Analysis - kitcn ORM
 type: analysis
 date: 2026-02-02
 scope: Type testing infrastructure for M1-M6 migration
 ---
 
-# Type Testing Pattern Analysis - Better Convex ORM
+# Type Testing Pattern Analysis - kitcn ORM
 
 ## Executive Summary
 
@@ -21,7 +21,7 @@ Analyzed type testing plan for 60 → 100+ assertion migration following Drizzle
 
 ### 1.1 ✅ Equal<> and Expect<> Assertion Pattern
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/convex/test-types/utils.ts`
+**Location**: `/Users/zbeyens/GitHub/kitcn/convex/test-types/utils.ts`
 
 **Implementation**:
 ```typescript
@@ -123,7 +123,7 @@ Expect<Equal<Expected, typeof result>>;
 
 ### 2.1 🚨 CRITICAL: Massive Type Duplication
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/convex/test-types/select.ts`
+**Location**: `/Users/zbeyens/GitHub/kitcn/convex/test-types/select.ts`
 
 **Problem**: Identical Expected type repeated 10 times
 
@@ -192,7 +192,7 @@ import { type UserRow } from './tables-rel';
 
 ### 2.2 🚨 WARNING: Debug File Pollution
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/convex/test-types/`
+**Location**: `/Users/zbeyens/GitHub/kitcn/convex/test-types/`
 
 **Problem**: 5 temporary/debug files still in codebase
 
@@ -233,7 +233,7 @@ mv convex/test-types/VERIFY-*.ts convex/test-types/debug/
 
 ### 2.3 ⚠️ MODERATE: Unused @ts-expect-error Directives
 
-**Location**: `/Users/zbeyens/GitHub/better-convex/convex/test-types/select.ts` (lines 302-372)
+**Location**: `/Users/zbeyens/GitHub/kitcn/convex/test-types/select.ts` (lines 302-372)
 
 **Problem**: 6 unused @ts-expect-error directives indicate type system not enforcing constraints
 
@@ -490,7 +490,7 @@ Type tests MUST use compile-time patterns, not runtime functions.
 import { type Equal, Expect } from './utils';
 
 // Appears in 6 files
-import { convexTable, text, integer, id } from 'better-convex/orm';
+import { convexTable, text, integer, id } from 'kitcn/orm';
 ```
 
 **Assessment**: ACCEPTABLE - standard practice
@@ -1004,7 +1004,7 @@ drizzle-orm/tests/pg/
 
 ## References
 
-- Plan Document: `/Users/zbeyens/GitHub/better-convex/docs/plans/2026-02-02-feat-m4-5-type-testing-audit-drizzle-parity-plan.md`
-- Type Inference Analysis: `/Users/zbeyens/GitHub/better-convex/docs/analysis/2026-02-01-type-inference-pattern-analysis.md`
-- Current Test Files: `/Users/zbeyens/GitHub/better-convex/convex/test-types/`
+- Plan Document: `/Users/zbeyens/GitHub/kitcn/docs/plans/2026-02-02-feat-m4-5-type-testing-audit-drizzle-parity-plan.md`
+- Type Inference Analysis: `/Users/zbeyens/GitHub/kitcn/docs/analysis/2026-02-01-type-inference-pattern-analysis.md`
+- Current Test Files: `/Users/zbeyens/GitHub/kitcn/convex/test-types/`
 - Drizzle Utils: https://github.com/drizzle-team/drizzle-orm/blob/main/drizzle-orm/tests/utils.ts

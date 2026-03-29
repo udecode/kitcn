@@ -4,11 +4,11 @@
     "@opentelemetry/api": "1.9.0",
     "@tanstack/react-query": "5.95.2",
     "better-auth": "1.5.3",
-    "better-convex": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "1.33.0",
     "hono": "4.12.9",
+    "kitcn": "workspace:*",
     "lucide-react": "^1.7.0",
     "next": "16.1.6",
     "next-themes": "^0.4.6",
@@ -36,7 +36,7 @@
     "@types/bun": "latest",
     "@concavejs/cli": "latest"
   },
-  "name": "better-convex-template-next-auth",
+  "name": "kitcn-template-next-auth",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack --port 3005",
@@ -45,8 +45,8 @@
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit && bun run typecheck:convex",
-    "codegen": "better-convex codegen",
-    "convex:dev": "better-convex dev",
+    "codegen": "kitcn codegen",
+    "convex:dev": "kitcn dev",
     "typecheck:convex": "tsc --noEmit --project convex/functions/tsconfig.json"
   },
   "type": "module",

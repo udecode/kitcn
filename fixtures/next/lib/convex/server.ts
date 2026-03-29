@@ -1,5 +1,5 @@
 import { api } from '@convex/api';
-import { createCallerFactory } from 'better-convex/server';
+import { createCallerFactory } from 'kitcn/server';
 
 export const { createContext, createCaller } = createCallerFactory({
   api,

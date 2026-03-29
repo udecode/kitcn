@@ -27,11 +27,11 @@ export default function ConvexMessagesPage() {
     <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-6 px-6 py-10 text-sm">
       <header className="space-y-2">
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Better Convex
+          kitcn
         </p>
         <h1 className="font-medium text-2xl tracking-tight">Messages</h1>
         <p className="max-w-xl text-muted-foreground leading-6">
-          This page is a tiny live query and mutation over Better Convex. Start
+          This page is a tiny live query and mutation over kitcn. Start
           the backend, send a message, and watch the list update.
         </p>
       </header>
@@ -53,7 +53,7 @@ export default function ConvexMessagesPage() {
         <p className="text-muted-foreground">Loading messages...</p>
       ) : messagesQuery.isError ? (
         <div className="rounded-md border border-dashed border-border px-4 py-3 text-muted-foreground leading-6">
-          Backend not ready. Start <code>better-convex dev</code> and refresh.
+          Backend not ready. Start <code>kitcn dev</code> and refresh.
         </div>
       ) : messagesQuery.data.length === 0 ? (
         <div className="rounded-md border border-dashed border-border px-4 py-6 text-muted-foreground">

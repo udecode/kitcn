@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Scaffold a Next.js app with Better Convex, bootstrap a local backend, and understand the starter messages demo.
+description: Scaffold a Next.js app with kitcn, bootstrap a local backend, and understand the starter messages demo.
 links:
   doc: https://docs.convex.dev/quickstart
 ---
@@ -30,10 +30,10 @@ Let's start with an empty directory and let the CLI own the bootstrap.
 ```bash showLineNumbers
 mkdir my-app
 cd my-app
-bunx better-convex init -t next --yes
+bunx kitcn init -t next --yes
 ```
 
-`init -t next` creates the Next.js shell and layers in the Better Convex
+`init -t next` creates the Next.js shell and layers in the kitcn
 baseline in one pass. That includes the backend files, client providers, local
 env scaffolding, and a tiny messages demo so you have something real to run
 immediately.
@@ -49,7 +49,7 @@ Here are the key files the quickstart uses:
 | `components/providers.tsx` | App-level providers |
 | `app/convex/page.tsx` | Starter demo page |
 
-If you already have a supported app shell, use `better-convex init --yes`
+If you already have a supported app shell, use `kitcn init --yes`
 instead. That adoption path is documented in
 [/docs/cli/registry](/docs/cli/registry).
 
@@ -59,7 +59,7 @@ Now let's start the backend for real and open the Next.js app in a second
 terminal.
 
 ```bash title="terminal 1" showLineNumbers
-bunx better-convex dev
+bunx kitcn dev
 ```
 
 ```bash title="terminal 2" showLineNumbers
@@ -78,7 +78,7 @@ That gives you the full end-to-end loop:
 
 <Callout icon={<InfoIcon />}>
 If the page says the backend is not ready, check the terminal running
-`better-convex dev`. The starter page already includes that empty/error state,
+`kitcn dev`. The starter page already includes that empty/error state,
 so you do not have to guess what failed.
 </Callout>
 
@@ -91,7 +91,7 @@ Now that the app is running, let's trace the files you just bootstrapped.
 We'll start with the starter schema. It is intentionally tiny.
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-7}
-import { convexTable, defineSchema, text } from 'better-convex/orm';
+import { convexTable, defineSchema, text } from 'kitcn/orm';
 
 export const messagesTable = convexTable('messages', {
   body: text().notNull(),
@@ -187,7 +187,7 @@ We'll start with the generated client context:
 
 ```tsx title="lib/convex/crpc.tsx" showLineNumbers {1-6}
 import { api } from '@convex/api';
-import { createCRPCContext } from 'better-convex/react';
+import { createCRPCContext } from 'kitcn/react';
 
 export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
   api,
@@ -243,7 +243,7 @@ export default function ConvexMessagesPage() {
       {messagesQuery.isPending ? (
         <p>Loading messages...</p>
       ) : messagesQuery.isError ? (
-        <div>Backend not ready. Start better-convex dev and refresh.</div>
+        <div>Backend not ready. Start kitcn dev and refresh.</div>
       ) : (
         <ul>
           {messagesQuery.data.map((message) => (
@@ -265,7 +265,7 @@ This is the starter loop you will reuse everywhere:
 
 ## 5. What To Build Next
 
-You now have a running Better Convex app, a local deployment, generated API
+You now have a running kitcn app, a local deployment, generated API
 types, and one live page wired end to end. That's the real starting point.
 
 From here, pick the next seam you actually need:

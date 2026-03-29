@@ -97,4 +97,4 @@ await db.delete(users).where(eq(users.id, id));
 
 - Run `bun typecheck`
 - Run `bun run test`
-- Run `bun --cwd packages/better-convex build` (known rolldown issue may persist)
+- Run `bun --cwd packages/kitcn build` (known rolldown issue may persist)

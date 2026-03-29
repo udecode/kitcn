@@ -1,6 +1,6 @@
 ## Goal
 
-Make `better-convex dev` print the real Convex bootstrap failure output instead
+Make `kitcn dev` print the real Convex bootstrap failure output instead
 of dying with only `Bootstrapping local Convex...`.
 
 ## Plan
@@ -14,7 +14,7 @@ of dying with only `Bootstrapping local Convex...`.
 
 ## Findings
 
-- `bun run convex:dev` and `bunx better-convex dev` both hide the underlying
+- `bun run convex:dev` and `bunx kitcn dev` both hide the underlying
   backend error right now.
 - Raw `bun convex dev --once --typecheck disable` in `example` prints the real
   stderr: `A local backend is still running on port 3210...`.

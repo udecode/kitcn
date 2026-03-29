@@ -1,6 +1,6 @@
 /* biome-ignore-all lint: compile-time type assertions only */
 
-import type { InferInsertModel, InferSelectModel } from 'better-convex/orm';
+import type { InferInsertModel, InferSelectModel } from 'kitcn/orm';
 import type { Doc } from '../functions/_generated/dataModel';
 import type { todosTable, userTable } from '../functions/schema';
 import type { ApiInputs, ApiOutputs, Insert, Select, TableName } from './api';

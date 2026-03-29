@@ -1,4 +1,4 @@
-import { convex } from 'better-convex/auth';
+import { convex } from 'kitcn/auth';
 import { getEnv } from '../lib/get-env';
 import authConfig from './auth.config';
 import { defineAuth } from './generated/auth';

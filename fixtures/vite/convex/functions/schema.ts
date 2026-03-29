@@ -1,4 +1,4 @@
-import { defineSchema } from 'better-convex/orm';
+import { defineSchema } from 'kitcn/orm';
 
 export const tables = {};
 

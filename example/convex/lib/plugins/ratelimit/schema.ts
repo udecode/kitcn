@@ -5,7 +5,7 @@ import {
   integer,
   text,
   textEnum,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const ratelimitStateTable = convexTable(
   'ratelimit_state',

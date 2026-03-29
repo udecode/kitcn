@@ -47,7 +47,7 @@ Direct proof from `createRequire(...).resolve(...)`:
 That means:
 
 1. the app's `QueryClientProvider` wrote to one React context
-2. `better-convex/react` read from a different React Query module instance
+2. `kitcn/react` read from a different React Query module instance
 3. the contexts never matched, so hooks behaved like no provider existed
 
 The drift came from two seams at once:
@@ -79,17 +79,17 @@ And `QueryClientContext` identity matches again.
 ## Verification
 
 - red test:
-  `bun test packages/better-convex/src/cli/supported-dependencies.test.ts`
+  `bun test packages/kitcn/src/cli/supported-dependencies.test.ts`
   failed before the new pinned React Query spec existed
 - green tests:
-  - `bun test packages/better-convex/src/cli/supported-dependencies.test.ts`
+  - `bun test packages/kitcn/src/cli/supported-dependencies.test.ts`
   - `bun test tooling/dependency-pins.test.ts`
 - package gates:
-  - `bun --cwd packages/better-convex typecheck`
-  - `bun --cwd packages/better-convex build`
+  - `bun --cwd packages/kitcn typecheck`
+  - `bun --cwd packages/kitcn build`
 - runtime proof of the actual seam:
   `createRequire(...).resolve('@tanstack/react-query')` returns the same path
-  for both the app and `packages/better-convex/dist/react/index.js`
+  for both the app and `packages/kitcn/dist/react/index.js`
 - fixture sync output shows fresh app installs now explicitly install
   `@tanstack/react-query@5.95.2`
 

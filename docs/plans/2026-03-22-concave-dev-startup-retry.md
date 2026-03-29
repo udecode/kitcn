@@ -7,7 +7,7 @@ backfill kickoff so transient readiness failures stop spamming warnings.
 
 ## Findings
 
-- `better-convex dev` fires `runMigrationFlow` and
+- `kitcn dev` fires `runMigrationFlow` and
   `runAggregateBackfillFlow` immediately on startup.
 - The warnings reproduce on Concave but not on Convex for the same prepared
   app.
@@ -28,7 +28,7 @@ backfill kickoff so transient readiness failures stop spamming warnings.
 - 2026-03-22: gathered reproduction and confirmed the Convex vs Concave
   parity gap.
 - 2026-03-22: retry loop landed, then live Concave repro showed the deeper
-  seam: `concave run` cannot execute Better Convex internal runtime functions.
+  seam: `concave run` cannot execute kitcn internal runtime functions.
 - 2026-03-22: fixed Concave internal runtime calls by posting to
   `/api/execute` with system auth for `generated/server:*`, and verified live
   `scenario:dev -- next` now settles without the old warning spam.

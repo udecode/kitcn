@@ -16,10 +16,10 @@ full Better Auth runtime into apps that do not use auth.
 ## Progress
 
 - 2026-03-22: reproduced the plain `next` Concave runtime error from
-  `convex/functions/generated/auth.ts` pulling `better-convex/auth`, which
+  `convex/functions/generated/auth.ts` pulling `kitcn/auth`, which
   reached Better Auth runtime code even with auth disabled.
 - 2026-03-22: added failing codegen and integration assertions for disabled
-  auth output to import `better-convex/auth/generated` instead of the full auth
+  auth output to import `kitcn/auth/generated` instead of the full auth
   surface.
 - 2026-03-22: added a cold `auth/generated` export, moved disabled auth runtime
   helpers into a separate module, and pointed disabled codegen output at that

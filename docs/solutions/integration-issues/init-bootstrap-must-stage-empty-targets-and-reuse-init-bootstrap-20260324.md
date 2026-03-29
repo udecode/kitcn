@@ -11,7 +11,7 @@ tags:
   - cli
 severity: high
 symptoms:
-  - `better-convex init -t next --yes --bootstrap` fails in an already-created empty directory
+  - `kitcn init -t next --yes --bootstrap` fails in an already-created empty directory
   - shadcn reports `dest already exists`
   - fresh `init --bootstrap` tries to start a second local Convex bootstrap and collides on port `3210`
 ---
@@ -25,7 +25,7 @@ The intended quickstart path was:
 ```bash
 mkdir my-app
 cd my-app
-better-convex init -t next --yes --bootstrap
+kitcn init -t next --yes --bootstrap
 ```
 
 But that shape broke in two places:
@@ -74,7 +74,7 @@ Make `init` own both seams explicitly:
 - package build
 - repo `lint:fix`
 - packed tarball smoke:
-  - `better-convex init -t next --yes --bootstrap`
+  - `kitcn init -t next --yes --bootstrap`
   - from an already-created empty temp directory
   - with generated runtime files present afterward
 

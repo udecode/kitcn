@@ -6,7 +6,7 @@ topic: hide-internal-classes-public-api
 # Hide Internal Classes from Public API
 
 ## What We're Building
-Reduce accidental public surface area in `better-convex/orm` by stopping direct public exports of implementation classes and internal helpers from the top-level ORM entrypoint.
+Reduce accidental public surface area in `kitcn/orm` by stopping direct public exports of implementation classes and internal helpers from the top-level ORM entrypoint.
 
 The intended public contract becomes:
 - factory functions and user-facing DSL (`createDatabase`, `convexTable`, `text`, `id`, `eq`, `and`, etc.)

@@ -1,13 +1,13 @@
 ---
 title: Tanstack Start
-description: Set up better-convex with Better Auth for a TanStack Start app.
+description: Set up kitcn with Better Auth for a TanStack Start app.
 links:
   doc: https://labs.convex.dev/better-auth/framework-guides/tanstack-start
 ---
 
 import { InfoIcon } from "lucide-react";
 
-In this guide, you'll set up better-convex with Better Auth for a TanStack Start
+In this guide, you'll set up kitcn with Better Auth for a TanStack Start
 app.
 
 <Callout icon={<InfoIcon />}>
@@ -20,7 +20,7 @@ app.
 First, install the required packages:
 
 ```bash
-bun add better-convex better-auth@1.5.3 @tanstack/react-query superjson
+bun add kitcn better-auth@1.5.3 @tanstack/react-query superjson
 ```
 
 <Callout icon={<InfoIcon />}>
@@ -105,7 +105,7 @@ First, create a caller factory for Better Auth:
 
 ```ts title="src/lib/convex/server.ts"
 import { api } from "@convex/api";
-import { createCallerFactory } from "better-convex/server";
+import { createCallerFactory } from "kitcn/server";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { getToken } from "./auth/auth-server";
 
@@ -161,7 +161,7 @@ Now define the query-client types needed for the router context:
 ```tsx title="src/routes/__root.tsx"
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext } from "@tanstack/react-router";
-import type { ConvexQueryClient, ConvexReactClient } from "better-convex/react";
+import type { ConvexQueryClient, ConvexReactClient } from "kitcn/react";
 import { createSeo } from "@/lib/seo";
 import appCss from "../styles.css?url";
 
@@ -196,7 +196,7 @@ import {
   ConvexReactClient,
   getConvexQueryClientSingleton,
   getQueryClientSingleton,
-} from "better-convex/react";
+} from "kitcn/react";
 import { initCRPC } from "@/lib/convex/crpc";
 import { NotFound } from "./components/not-found";
 import { createQueryClient } from "./lib/convex/query-client";
@@ -254,7 +254,7 @@ Here, `initCRPC` is imported from `src/lib/convex/crpc.tsx` and defined as:
 
 ```tsx title="src/lib/convex/crpc.tsx"
 import { api } from "@convex/api";
-import { createCRPCContext } from "better-convex/react";
+import { createCRPCContext } from "kitcn/react";
 import type { ComponentProps } from "react";
 
 type CRPCContext = ReturnType<typeof createCRPCContext>;
@@ -308,7 +308,7 @@ Before setting up the providers, get the token on the server in your `__root.tsx
 ```tsx title="src/routes/__root.tsx"
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext } from "@tanstack/react-router";
-import type { ConvexQueryClient, ConvexReactClient } from "better-convex/react";
+import type { ConvexQueryClient, ConvexReactClient } from "kitcn/react";
 import { createSeo } from "@/lib/seo";
 import { getCurrentUser } from "@/functions/getCurrentUser";
 import { getSessionToken } from "@/functions/getSessionToken";
@@ -366,11 +366,11 @@ So now we have access to the token in the `beforeLoad` function, and we can get 
 ```tsx title="src/lib/convex/convex-provider.tsx"
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { ConvexAuthProvider } from "better-convex/auth/client";
+import { ConvexAuthProvider } from "kitcn/auth/client";
 import { CRPCProvider } from "@/lib/convex/crpc";
 import { authClient } from "./auth/auth-client";
 
-export function BetterConvexProvider({
+export function AppConvexProvider({
   children,
 }: {
   children: React.ReactNode;
@@ -408,19 +408,19 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
 }
 ```
 
-And finally, we need to use this `BetterConvexProvider` in our `__root.tsx`
+And finally, we need to use this `AppConvexProvider` in our `__root.tsx`
 file:
 
 ```tsx title="src/routes/__root.tsx"
 function RootComponent() {
   return (
-      <BetterConvexProvider>
+      <AppConvexProvider>
         <Header />
         <main className="relative flex-1 pt-12">
           <Outlet />
         </main>
         <Footer />
-      </BetterConvexProvider>
+      </AppConvexProvider>
   );
 }
 ```

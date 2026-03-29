@@ -232,7 +232,7 @@ Following Better-Convex conventions:
 
 ```mdx
 ```ts title="convex/schema.ts" showLineNumbers {2-5}
-import { convexTable, relations } from 'better-convex/orm';
+import { convexTable, relations } from 'kitcn/orm';
 import { v } from 'convex/values';
 
 const users = convexTable('users', {
@@ -340,7 +340,7 @@ const users = db.query.users.where({ age: 25 });
 // www/components/docs/DrizzleComparison.tsx
 <DrizzleComparison
   drizzleCode="..."
-  betterConvexCode="..."
+  kitcnCode="..."
   category="compatible|limited|advantage|not-needed"
 />
 ```
@@ -358,7 +358,7 @@ Consistent formatting for common gotchas across all pages.
 ```tsx
 <PerformanceMatrix
   comparisons={[
-    { feature: "...", drizzle: "...", betterConvex: "...", notes: "..." }
+    { feature: "...", drizzle: "...", kitcn: "...", notes: "..." }
   ]}
 />
 ```
@@ -504,10 +504,10 @@ Create machine-readable indexes alongside human docs:
 ```
 
 **Files to Create**:
-- `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/llms-index.md`
-- `/Users/zbeyens/GitHub/better-convex/www/public/orm/api-catalog.json`
-- `/Users/zbeyens/GitHub/better-convex/www/public/orm/error-catalog.json`
-- `/Users/zbeyens/GitHub/better-convex/www/public/orm/examples-registry.json`
+- `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/llms-index.md`
+- `/Users/zbeyens/GitHub/kitcn/www/public/orm/api-catalog.json`
+- `/Users/zbeyens/GitHub/kitcn/www/public/orm/error-catalog.json`
+- `/Users/zbeyens/GitHub/kitcn/www/public/orm/examples-registry.json`
 
 **Benefits**:
 - LLMs can quickly find relevant docs without reading all pages
@@ -865,13 +865,13 @@ Create ESLint-style rules for MDX documentation:
 #### 🔬 Updated Documentation Plan
 
 **What needs creating**:
-- [ ] Create `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/` directory
+- [ ] Create `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/` directory
 - [ ] Create all **20 MDX files** following phase order (reduced from 26)
 - [ ] Create **4 agent-native artifacts**: llms-index.md, api-catalog.json, error-catalog.json, examples-registry.json
 - [ ] Create **3 custom components**: DrizzleComparison.tsx, GotchasTable.tsx, PerformanceMatrix.tsx
-- [ ] Create `/Users/zbeyens/GitHub/better-convex/www/snippets/` directory for shared code examples
-- [ ] Create `/Users/zbeyens/GitHub/better-convex/www/scripts/lint-docs.js` for automated consistency checks
-- [ ] Update `/Users/zbeyens/GitHub/better-convex/www/content/docs/meta.json` with flattened navigation
+- [ ] Create `/Users/zbeyens/GitHub/kitcn/www/snippets/` directory for shared code examples
+- [ ] Create `/Users/zbeyens/GitHub/kitcn/www/scripts/lint-docs.js` for automated consistency checks
+- [ ] Update `/Users/zbeyens/GitHub/kitcn/www/content/docs/meta.json` with flattened navigation
 - [ ] Add ORM section to main docs landing page
 - [ ] Update README with link to ORM docs
 
@@ -884,15 +884,15 @@ Create ESLint-style rules for MDX documentation:
 - 1:1 documentation mapping strategy
 - Implementation milestones
 
-**Existing Docs**: `/Users/zbeyens/GitHub/better-convex/www/content/docs/`
+**Existing Docs**: `/Users/zbeyens/GitHub/kitcn/www/content/docs/`
 - fumadocs conventions and patterns
 - meta.json navigation structure
 - Component usage (Tabs, Callout, Cards)
 
 **ORM Implementation**:
-- [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts) - M1 schema
-- [packages/better-convex/src/orm/relations.ts](packages/better-convex/src/orm/relations.ts) - M2 relations
-- [packages/better-convex/src/orm/query-builder.ts](packages/better-convex/src/orm/query-builder.ts) - M3 queries
+- [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts) - M1 schema
+- [packages/kitcn/src/orm/relations.ts](packages/kitcn/src/orm/relations.ts) - M2 relations
+- [packages/kitcn/src/orm/query-builder.ts](packages/kitcn/src/orm/query-builder.ts) - M3 queries
 
 ### External References
 
@@ -925,52 +925,52 @@ Create ESLint-style rules for MDX documentation:
 
 ### Phase 1 Files (6 MDX + 2 agent-native)
 **MDX Documentation**:
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/index.mdx` (Overview + Getting Started)
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/quickstart.mdx`
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/schema.mdx` (tables + relations + types combined)
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/queries.mdx` (findMany + select + filtering combined)
-- [x] `/Users/zbeynes/GitHub/better-convex/www/content/docs/orm/mutations.mdx` (insert + update + delete combined)
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/from-drizzle.mdx` (ELEVATED: Migration guide)
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/index.mdx` (Overview + Getting Started)
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/quickstart.mdx`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/schema.mdx` (tables + relations + types combined)
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/queries.mdx` (findMany + select + filtering combined)
+- [x] `/Users/zbeynes/GitHub/kitcn/www/content/docs/orm/mutations.mdx` (insert + update + delete combined)
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/from-drizzle.mdx` (ELEVATED: Migration guide)
 
 **Agent-Native Artifacts**:
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/llms-index.md`
-- [x] `/Users/zbeyens/GitHub/better-convex/www/public/orm/api-catalog.json`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/llms-index.md`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/public/orm/api-catalog.json`
 
 ### Phase 2 Files (5 MDX + 2 agent-native) ✅ COMPLETE
 **MDX Documentation**:
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/relations-deep-dive.mdx`
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/ordering-pagination.mdx` (orderBy + pagination combined)
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/type-safety.mdx`
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/from-prisma.mdx`
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/from-ents.mdx`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/relations-deep-dive.mdx`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/ordering-pagination.mdx` (orderBy + pagination combined)
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/type-safety.mdx`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/from-prisma.mdx`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/from-ents.mdx`
 
 **Agent-Native Artifacts**:
-- [x] `/Users/zbeyens/GitHub/better-convex/www/public/orm/error-catalog.json`
-- [x] Update `/Users/zbeyens/GitHub/better-convex/www/public/orm/api-catalog.json`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/public/orm/error-catalog.json`
+- [x] Update `/Users/zbeyens/GitHub/kitcn/www/public/orm/api-catalog.json`
 
 ### Phase 3 Files (3 MDX + 2 agent-native) ✅ COMPLETE
 **MDX Documentation**:
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/real-time.mdx`
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/api-reference.mdx` (API + operators combined)
-- [x] `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/limitations.mdx` (Category 2/4 + Performance)
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/real-time.mdx`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/api-reference.mdx` (API + operators combined)
+- [x] `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/limitations.mdx` (Category 2/4 + Performance)
 
 **Agent-Native Artifacts**:
-- [x] `/Users/zbeyens/GitHub/better-convex/www/public/orm/examples-registry.json`
-- [x] Finalize `/Users/zbeyens/GitHub/better-convex/www/content/docs/orm/llms-index.md`
+- [x] `/Users/zbeyens/GitHub/kitcn/www/public/orm/examples-registry.json`
+- [x] Finalize `/Users/zbeyens/GitHub/kitcn/www/content/docs/orm/llms-index.md`
 
 ### Phase 4 Files (Infrastructure + Components)
 **Navigation & Config**:
-- [ ] Update `/Users/zbeyens/GitHub/better-convex/www/content/docs/meta.json` (flattened navigation)
+- [ ] Update `/Users/zbeyens/GitHub/kitcn/www/content/docs/meta.json` (flattened navigation)
 
 **Custom Components**:
-- [ ] `/Users/zbeyens/GitHub/better-convex/www/components/docs/DrizzleComparison.tsx`
-- [ ] `/Users/zbeyens/GitHub/better-convex/www/components/docs/GotchasTable.tsx`
-- [ ] `/Users/zbeyens/GitHub/better-convex/www/components/docs/PerformanceMatrix.tsx`
+- [ ] `/Users/zbeyens/GitHub/kitcn/www/components/docs/DrizzleComparison.tsx`
+- [ ] `/Users/zbeyens/GitHub/kitcn/www/components/docs/GotchasTable.tsx`
+- [ ] `/Users/zbeyens/GitHub/kitcn/www/components/docs/PerformanceMatrix.tsx`
 
 **Shared Snippets & Tooling**:
-- [ ] `/Users/zbeyens/GitHub/better-convex/www/snippets/` (directory for reusable code)
-- [ ] `/Users/zbeyens/GitHub/better-convex/www/scripts/lint-docs.js` (consistency automation)
-- [ ] `/Users/zbeyens/GitHub/better-convex/www/docs-glossary.md` (terminology reference)
+- [ ] `/Users/zbeyens/GitHub/kitcn/www/snippets/` (directory for reusable code)
+- [ ] `/Users/zbeyens/GitHub/kitcn/www/scripts/lint-docs.js` (consistency automation)
+- [ ] `/Users/zbeyens/GitHub/kitcn/www/docs-glossary.md` (terminology reference)
 
 **Total**:
 - 15 MDX files (down from 26)

@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths:
       - "www/content/docs/**"
-      - "packages/better-convex/src/**"
-      - "packages/better-convex/skills/**"
+      - "packages/kitcn/src/**"
+      - "packages/kitcn/skills/**"
       - ".github/workflows/notify-playbooks.yml"
 
 concurrency:
@@ -42,7 +42,7 @@ jobs:
           event-type: skill-check
           client-payload: |
             {
-              "package": "better-convex",
+              "package": "kitcn",
               "sha": "${{ github.sha }}",
               "changed_files": ${{ steps.changes.outputs.files }}
             }

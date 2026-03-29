@@ -16,7 +16,7 @@ export async function GET(
   return new ImageResponse(
     <DefaultImage
       description={page.data.description}
-      site="Better Convex"
+      site="kitcn"
       title={page.data.title}
     />,
     {

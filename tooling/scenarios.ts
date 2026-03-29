@@ -11,9 +11,9 @@ import { createServer } from 'node:net';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import {
-  BETTER_CONVEX_INSTALL_SPEC_ENV,
-  BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV,
-} from '../packages/better-convex/src/cli/supported-dependencies';
+  KITCN_INSTALL_SPEC_ENV,
+  KITCN_RESEND_INSTALL_SPEC_ENV,
+} from '../packages/kitcn/src/cli/supported-dependencies';
 import { runAuthE2E } from './auth-e2e';
 import { runAuthSchemaStress } from './auth-schema-stress';
 import { runAuthSmoke } from './auth-smoke';
@@ -21,14 +21,14 @@ import {
   buildLocalCliCommand,
   DEFAULT_LOCAL_DEV_PORT,
   generateFreshApp,
-  getLocalBetterConvexInstallSpec,
+  getLocalInstallSpec,
   getLocalResendInstallSpec,
-  installLocalBetterConvex,
+  installLocalPackage,
   LOCAL_CLI_PATH,
   log,
   normalizeEnvLocal,
   PROJECT_ROOT,
-  packLocalBetterConvexPackage,
+  packLocalPackage,
   patchPreparedLocalDevPort,
   readJson,
   readPackageScripts,
@@ -80,8 +80,8 @@ const CLEARED_CONVEX_ENV = {
   CONVEX_SELF_HOSTED_ADMIN_KEY: undefined,
 } as const;
 const DEV_SCRIPT_OWNS_BACKEND_RE =
-  /\bconvex:dev\b|\bdev:backend\b|\bbetter-convex dev\b|\bconvex dev\b/;
-const BETTER_CONVEX_DEV_RE = /\bbetter-convex dev\b/;
+  /\bconvex:dev\b|\bdev:backend\b|\bkitcn dev\b|\bconvex dev\b/;
+const KITCN_DEV_RE = /\bkitcn dev\b/;
 const VITE_DEV_RE = /\bvite(?:\s|$)/;
 const VITE_CONFIG_FILES = [
   'vite.config.ts',
@@ -149,8 +149,7 @@ const getScenarioProjectDir = (
 const getScenarioMetadataDir = (
   scenarioKey: ScenarioKey,
   outputRoot = DEFAULT_OUTPUT_ROOT
-) =>
-  path.join(getScenarioDir(scenarioKey, outputRoot), '.better-convex-scenario');
+) => path.join(getScenarioDir(scenarioKey, outputRoot), '.kitcn-scenario');
 
 const getTemplateFixtureDir = (templateKey: string) =>
   path.join(PROJECT_ROOT, 'fixtures', templateKey);
@@ -371,7 +370,7 @@ const convexDevOwnsFrontend = (
   scripts: Record<string, string>
 ) =>
   backend === 'concave' &&
-  BETTER_CONVEX_DEV_RE.test(scripts['convex:dev'] ?? '') &&
+  KITCN_DEV_RE.test(scripts['convex:dev'] ?? '') &&
   VITE_DEV_RE.test(scripts.dev ?? '');
 
 const isViteScenarioProject = (projectDir: string) =>
@@ -646,7 +645,7 @@ const resolveScenarioCommand = (
     throw new Error('Scenario step cannot be empty.');
   }
 
-  if (command === 'better-convex') {
+  if (command === 'kitcn') {
     return buildLocalCliCommand(rest, {
       backend: params.backend,
       localCliPath: LOCAL_CLI_PATH,
@@ -677,7 +676,7 @@ const resolveScenarioCommand = (
 export const resolveScenarioStepEnv = (
   step: readonly string[],
   params: {
-    betterConvexInstallSpec: string;
+    kitcnInstallSpec: string;
     resendInstallSpec: string;
   }
 ) => {
@@ -687,8 +686,8 @@ export const resolveScenarioStepEnv = (
   }
 
   return {
-    [BETTER_CONVEX_INSTALL_SPEC_ENV]: params.betterConvexInstallSpec,
-    [BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV]: params.resendInstallSpec,
+    [KITCN_INSTALL_SPEC_ENV]: params.kitcnInstallSpec,
+    [KITCN_RESEND_INSTALL_SPEC_ENV]: params.resendInstallSpec,
   };
 };
 
@@ -702,10 +701,9 @@ export const resolveScenarioInstallSpecs = (projectDir: string) => {
   };
 
   return {
-    betterConvexInstallSpec:
-      dependencies['better-convex'] ?? getLocalBetterConvexInstallSpec(),
+    kitcnInstallSpec: dependencies.kitcn ?? getLocalInstallSpec(),
     resendInstallSpec:
-      dependencies['@better-convex/resend'] ?? getLocalResendInstallSpec(),
+      dependencies['@kitcn/resend'] ?? getLocalResendInstallSpec(),
   };
 };
 
@@ -771,7 +769,7 @@ const writeScenarioMetadata = (
   scenarioKey: ScenarioKey,
   outputRoot: string,
   params: {
-    betterConvexPackageSpec: string;
+    kitcnPackageSpec: string;
     backend: TemplateBackend;
     source: unknown;
     steps: ReadonlyArray<readonly string[]>;
@@ -783,7 +781,7 @@ const writeScenarioMetadata = (
     path.join(metadataDir, 'scenario.json'),
     `${JSON.stringify(
       {
-        betterConvexPackageSpec: params.betterConvexPackageSpec,
+        kitcnPackageSpec: params.kitcnPackageSpec,
         backend: params.backend,
         name: scenarioKey,
         source: params.source,
@@ -800,10 +798,10 @@ const prepareScenarioSource = async (
   params: {
     backend?: TemplateBackend;
     findAvailableScenarioDevPortFn?: typeof findAvailableScenarioDevPort;
-    installLocalBetterConvexFn?: typeof installLocalBetterConvex;
+    installLocalPackageFn?: typeof installLocalPackage;
     outputRoot?: string;
     patchPreparedLocalDevPortFn?: typeof patchPreparedLocalDevPort;
-    packLocalBetterConvexPackageFn?: typeof packLocalBetterConvexPackage;
+    packLocalPackageFn?: typeof packLocalPackage;
     runCommand?: typeof run;
   } = {}
 ) => {
@@ -814,10 +812,9 @@ const prepareScenarioSource = async (
   const metadataDir = getScenarioMetadataDir(scenarioKey, outputRoot);
   const runCommand = params.runCommand ?? run;
   const backend = getScenarioBackend(scenarioKey, params.backend);
-  const packLocalBetterConvexPackageFn =
-    params.packLocalBetterConvexPackageFn ?? packLocalBetterConvexPackage;
-  const installLocalBetterConvexFn =
-    params.installLocalBetterConvexFn ?? installLocalBetterConvex;
+  const packLocalPackageFn = params.packLocalPackageFn ?? packLocalPackage;
+  const installLocalPackageFn =
+    params.installLocalPackageFn ?? installLocalPackage;
   stopLocalConvexBackendForProject(projectDir);
 
   rmSync(scenarioDir, { force: true, recursive: true });
@@ -854,15 +851,15 @@ const prepareScenarioSource = async (
   normalizeEnvLocal(projectDir);
 
   const bootstrapSteps = resolvePrepareBootstrapSteps(scenarioKey, projectDir);
-  const betterConvexPackageSpec = packLocalBetterConvexPackageFn(metadataDir);
-  let installedLocalBetterConvex = false;
+  const kitcnPackageSpec = packLocalPackageFn(metadataDir);
+  let installedLocalPackage = false;
 
   if (bootstrapSteps.length > 0) {
-    await installLocalBetterConvexFn(projectDir, {
-      betterConvexPackageSpec,
+    await installLocalPackageFn(projectDir, {
+      kitcnPackageSpec,
       runCommand,
     });
-    installedLocalBetterConvex = true;
+    installedLocalPackage = true;
   }
 
   await runScenarioCommands(bootstrapSteps, {
@@ -885,14 +882,14 @@ const prepareScenarioSource = async (
     localDevPort
   );
 
-  if (!installedLocalBetterConvex) {
-    await installLocalBetterConvexFn(projectDir, {
-      betterConvexPackageSpec,
+  if (!installedLocalPackage) {
+    await installLocalPackageFn(projectDir, {
+      kitcnPackageSpec,
       runCommand,
     });
   }
   writeScenarioMetadata(scenarioKey, outputRoot, {
-    betterConvexPackageSpec,
+    kitcnPackageSpec,
     backend,
     source: scenario.source,
     steps: scenario.setup,
@@ -906,11 +903,11 @@ export const prepareScenario = async (
   params: {
     backend?: TemplateBackend;
     findAvailableScenarioDevPortFn?: typeof findAvailableScenarioDevPort;
-    installLocalBetterConvexFn?: typeof installLocalBetterConvex;
+    installLocalPackageFn?: typeof installLocalPackage;
     logFn?: typeof log;
     outputRoot?: string;
     patchPreparedLocalDevPortFn?: typeof patchPreparedLocalDevPort;
-    packLocalBetterConvexPackageFn?: typeof packLocalBetterConvexPackage;
+    packLocalPackageFn?: typeof packLocalPackage;
     runCommand?: typeof run;
   } = {}
 ) => {

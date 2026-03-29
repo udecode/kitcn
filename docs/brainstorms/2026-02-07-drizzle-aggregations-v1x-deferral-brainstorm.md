@@ -8,7 +8,7 @@ status: proposed
 
 ## What We're Building
 
-Define the ORM v1 boundary for Drizzle-style aggregations: `count`, `sum`, `avg`, `max`, and `min` are not added to the Better Convex ORM query API in v1.
+Define the ORM v1 boundary for Drizzle-style aggregations: `count`, `sum`, `avg`, `max`, and `min` are not added to the kitcn ORM query API in v1.
 
 Instead, v1 documentation should clearly position aggregation as a platform-level capability handled through Convex aggregates, with `@convex-dev/aggregate` as the recommended path. This keeps the v1 release focused on stable query/mutation parity and avoids introducing incomplete or misleading SQL-like aggregation semantics.
 

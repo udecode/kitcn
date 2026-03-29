@@ -11,7 +11,7 @@ topic: drizzle-convex
 
 **Goal**: Clone Drizzle ORM's API for Convex to reduce learning curve for developers coming from SQL ORMs.
 
-Similar to how Better Convex created cRPC (tRPC-like API for Convex), we'll create **Drizzle-Convex** - a Drizzle-inspired relations API built specifically for Convex's document database architecture.
+Similar to how kitcn created cRPC (tRPC-like API for Convex), we'll create **Drizzle-Convex** - a Drizzle-inspired relations API built specifically for Convex's document database architecture.
 
 ### Core Insight
 
@@ -128,7 +128,7 @@ After deep analysis of both libraries:
 
 1. TypeScript-first (no DSL parser needed)
 2. Simpler API surface to replicate
-3. Better alignment with Better Convex philosophy
+3. Better alignment with kitcn philosophy
 4. Growing community, modern design
 
 ## Technical Architecture
@@ -1253,7 +1253,7 @@ Better-Convex ORM brings Drizzle's familiar ergonomics to Convex. If you know Dr
 ## Installation
 
 \`\`\`bash
-npm install better-convex
+npm install kitcn
 \`\`\`
 
 ## Define Your Schema
@@ -1273,7 +1273,7 @@ email: text('email').notNull(),
 ### Better-Convex (Convex)
 
 \`\`\`typescript
-import { convexTable } from 'better-convex/orm';
+import { convexTable } from 'kitcn/orm';
 import { v } from 'convex/values';
 
 const users = convexTable('users', {
@@ -1298,7 +1298,7 @@ posts: many(posts),
 ### Better-Convex
 
 \`\`\`typescript
-import { relations } from 'better-convex/orm';
+import { relations } from 'kitcn/orm';
 
 const usersRelations = relations(users, ({ many }) => ({
 posts: many(posts),
@@ -1363,7 +1363,7 @@ Track coverage by category:
 ## Notes
 
 - **No convex-ents dependency**: Map directly to Convex ctx.db. Cherry-pick proven patterns from convex-ents source (edge traversal, soft deletion) into ORM code.
-- **Naming**: `better-convex/drizzle` follows existing pattern (like `better-convex/auth`).
+- **Naming**: `kitcn/drizzle` follows existing pattern (like `kitcn/auth`).
 - **Inspiration not rewrite**: Goal is familiar API, not 100% Drizzle compatibility. Adapt where Convex patterns diverge from SQL.
 
 ---
@@ -1381,9 +1381,9 @@ Track coverage by category:
 
 **Files Created:**
 
-- [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts) - ConvexTable implementation
-- [packages/better-convex/src/orm/symbols.ts](packages/better-convex/src/orm/symbols.ts) - Metadata symbols
-- [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts) - Type utilities
+- [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts) - ConvexTable implementation
+- [packages/kitcn/src/orm/symbols.ts](packages/kitcn/src/orm/symbols.ts) - Metadata symbols
+- [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts) - Type utilities
 
 **Test Coverage:** Integrated with existing convex-ents tests (103 passing)
 
@@ -1401,8 +1401,8 @@ Track coverage by category:
 
 **Files Created:**
 
-- [packages/better-convex/src/orm/relations.ts](packages/better-convex/src/orm/relations.ts:1-327) - Relations API (Drizzle pattern verified)
-- [packages/better-convex/src/orm/extractRelationsConfig.ts](packages/better-convex/src/orm/extractRelationsConfig.ts:1-284) - Schema extraction (O(n) algorithm)
+- [packages/kitcn/src/orm/relations.ts](packages/kitcn/src/orm/relations.ts:1-327) - Relations API (Drizzle pattern verified)
+- [packages/kitcn/src/orm/extractRelationsConfig.ts](packages/kitcn/src/orm/extractRelationsConfig.ts:1-284) - Schema extraction (O(n) algorithm)
 - [convex/relations.test.ts](convex/relations.test.ts:1-328) - 11 test cases
 
 **Test Coverage:** 126 tests passing (11 new relations tests + 115 existing)
@@ -1417,7 +1417,7 @@ Track coverage by category:
 
 **Package Integration:**
 
-- ✅ Export added: `better-convex/orm`
+- ✅ Export added: `kitcn/orm`
 - ✅ Build configuration updated (tsdown.config.ts)
 - ✅ TypeScript compilation: ✅ passing
 - ✅ Linting: ✅ passing
@@ -1426,7 +1426,7 @@ Track coverage by category:
 **Example Usage:**
 
 ```typescript
-import { convexTable, relations, text, id } from "better-convex/orm";
+import { convexTable, relations, text, id } from "kitcn/orm";
 
 // M1: Tables
 const users = convexTable("users", {
@@ -1474,17 +1474,17 @@ type UserRelations = InferRelations<typeof usersRelations>;
 
 **Files Created:**
 
-- [packages/better-convex/src/orm/query-promise.ts](packages/better-convex/src/orm/query-promise.ts) - QueryPromise base class for lazy execution
-- [packages/better-convex/src/orm/query.ts](packages/better-convex/src/orm/query.ts) - GelRelationalQuery with execute() implementation
-- [packages/better-convex/src/orm/query-builder.ts](packages/better-convex/src/orm/query-builder.ts) - RelationalQueryBuilder entry point
-- [packages/better-convex/src/orm/database.ts](packages/better-convex/src/orm/database.ts) - createDatabase()
-- [packages/better-convex/src/orm/query-compiler.ts](packages/better-convex/src/orm/query-compiler.ts) - Query compilation helpers
+- [packages/kitcn/src/orm/query-promise.ts](packages/kitcn/src/orm/query-promise.ts) - QueryPromise base class for lazy execution
+- [packages/kitcn/src/orm/query.ts](packages/kitcn/src/orm/query.ts) - GelRelationalQuery with execute() implementation
+- [packages/kitcn/src/orm/query-builder.ts](packages/kitcn/src/orm/query-builder.ts) - RelationalQueryBuilder entry point
+- [packages/kitcn/src/orm/database.ts](packages/kitcn/src/orm/database.ts) - createDatabase()
+- [packages/kitcn/src/orm/query-compiler.ts](packages/kitcn/src/orm/query-compiler.ts) - Query compilation helpers
 - [convex/query-builder.test.ts](convex/query-builder.test.ts) - 7 test cases
 
 **Files Modified:**
 
-- [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts) - Added M3 query builder types (DBQueryConfig, BuildQueryResult, etc.)
-- [packages/better-convex/src/orm/index.ts](packages/better-convex/src/orm/index.ts) - Added M3 exports
+- [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts) - Added M3 query builder types (DBQueryConfig, BuildQueryResult, etc.)
+- [packages/kitcn/src/orm/index.ts](packages/kitcn/src/orm/index.ts) - Added M3 exports
 
 **Test Coverage:** 29 tests passing (22 M1+M2 + 7 new M3)
 
@@ -1517,7 +1517,7 @@ import {
   extractRelationsConfig,
   text,
   id,
-} from "better-convex/orm";
+} from "kitcn/orm";
 
 // M1: Tables
 const users = convexTable("users", {
@@ -1654,7 +1654,7 @@ Run this checklist **after each milestone is complete** (when code is merged to 
   - `v.optional()` → `.notNull()` modifier (builders nullable by default)
 - [ ] Update import statements
   - Remove: `import { v } from 'convex/values';`
-  - Add: `import { text, integer, boolean, id } from 'better-convex/orm';`
+  - Add: `import { text, integer, boolean, id } from 'kitcn/orm';`
 - [ ] Handle complex validators (no direct builder equivalent):
   - `v.union(v.literal('a'), v.literal('b'))` - Document as advanced pattern
   - `v.object()` - Document separately if needed
@@ -1774,7 +1774,7 @@ Run this checklist **after each milestone is complete** (when code is merged to 
 
   ```bash
   grep -r "from 'convex/values'" www/content/docs/orm/*.mdx
-  # Should return 0 matches (builders import from better-convex/orm)
+  # Should return 0 matches (builders import from kitcn/orm)
   ```
 
 - [ ] **JSON validation**: All artifacts parse correctly
@@ -1789,7 +1789,7 @@ Run this checklist **after each milestone is complete** (when code is merged to 
 - [ ] **Cross-reference check**: Verify referenced code files exist
   ```bash
   # Check that all file paths in docs actually exist
-  # Example: [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts)
+  # Example: [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts)
   ```
 
 #### 7. Drizzle Parity Verification
@@ -1842,7 +1842,7 @@ Run this checklist **after each milestone is complete** (when code is merged to 
 
 ```typescript
 // Before (M1-M5)
-import { convexTable } from "better-convex/server";
+import { convexTable } from "kitcn/server";
 import { v } from "convex/values";
 
 const users = convexTable("users", {
@@ -1851,7 +1851,7 @@ const users = convexTable("users", {
 });
 
 // After (M6+)
-import { convexTable, text, integer } from "better-convex/orm";
+import { convexTable, text, integer } from "kitcn/orm";
 
 const users = convexTable("users", {
   name: text().notNull(),

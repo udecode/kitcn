@@ -22,7 +22,7 @@ Use `.default(value)` to define a default for inserts. Defaults are applied by O
 Here's how to set a default view count:
 
 ```ts showLineNumbers {4}
-import { convexTable, integer, text } from 'better-convex/orm';
+import { convexTable, integer, text } from 'kitcn/orm';
 
 export const posts = convexTable('posts', {
   title: text().notNull(),
@@ -35,7 +35,7 @@ export const posts = convexTable('posts', {
 Fields are nullable by default. Use `.notNull()` to require a value.
 
 ```ts showLineNumbers {4-5}
-import { convexTable, text } from 'better-convex/orm';
+import { convexTable, text } from 'kitcn/orm';
 
 export const users = convexTable('users', {
   email: text().notNull(),
@@ -52,7 +52,7 @@ You can model uniqueness in a few Drizzle-style ways.
 Let's define a unique index on an email field:
 
 ```ts showLineNumbers {6}
-import { convexTable, text, uniqueIndex } from 'better-convex/orm';
+import { convexTable, text, uniqueIndex } from 'kitcn/orm';
 
 export const users = convexTable(
   'users',
@@ -68,7 +68,7 @@ export const users = convexTable(
 For compound uniqueness, use `unique('name').on(...)` with multiple columns:
 
 ```ts showLineNumbers {8}
-import { convexTable, text, unique } from 'better-convex/orm';
+import { convexTable, text, unique } from 'kitcn/orm';
 
 export const users = convexTable(
   'users',
@@ -91,7 +91,7 @@ You can use `.nullsNotDistinct()` for PostgreSQL parity when you want `null` to 
 For single-column uniqueness, you can call `.unique()` directly on the column builder:
 
 ```ts showLineNumbers {4}
-import { convexTable, text } from 'better-convex/orm';
+import { convexTable, text } from 'kitcn/orm';
 
 export const users = convexTable('users', {
   email: text().notNull().unique(),
@@ -107,7 +107,7 @@ Foreign keys are enforced at runtime by the ORM mutation builders.
 Here's how to reference another table's `id`:
 
 ```ts showLineNumbers {8}
-import { convexTable, id, text } from 'better-convex/orm';
+import { convexTable, id, text } from 'kitcn/orm';
 
 export const users = convexTable('users', {
   email: text().notNull(),
@@ -124,7 +124,7 @@ export const posts = convexTable('posts', {
 For referencing non-`id` columns, use the `foreignKey()` builder:
 
 ```ts showLineNumbers {9}
-import { convexTable, foreignKey, text } from 'better-convex/orm';
+import { convexTable, foreignKey, text } from 'kitcn/orm';
 
 export const users = convexTable('users', {
   slug: text().notNull().unique(),
@@ -146,7 +146,7 @@ export const memberships = convexTable(
 When a table references itself (e.g. a tree of comments), annotate the callback return type with `AnyColumn` to avoid circular-reference errors:
 
 ```ts showLineNumbers {1,6-8}
-import { type AnyColumn, convexTable, text } from 'better-convex/orm';
+import { type AnyColumn, convexTable, text } from 'kitcn/orm';
 
 export const comments = convexTable('comments', {
   body: text().notNull(),
@@ -186,7 +186,7 @@ Use `check(name, expression)` to enforce invariants on inserts and updates.
 Let's add age and email checks to a users table:
 
 ```ts showLineNumbers {8-9}
-import { check, convexTable, gt, integer, isNotNull, text } from 'better-convex/orm';
+import { check, convexTable, gt, integer, isNotNull, text } from 'kitcn/orm';
 
 export const users = convexTable(
   'users',
@@ -208,7 +208,7 @@ export const users = convexTable(
 ## Indexes
 
 <Callout icon={<AlertTriangle />}>
-Do not create indexes on `createdAt`. In Better Convex ORM, `createdAt` maps to internal `_creationTime`, and explicit `createdAt` indexes can fail. Use `updatedAt` (or another explicit sortable field) for custom indexes.
+Do not create indexes on `createdAt`. In kitcn ORM, `createdAt` maps to internal `_creationTime`, and explicit `createdAt` indexes can fail. Use `updatedAt` (or another explicit sortable field) for custom indexes.
 </Callout>
 
 ### `index()`
@@ -216,7 +216,7 @@ Do not create indexes on `createdAt`. In Better Convex ORM, `createdAt` maps to 
 Add indexes for fields you filter or sort by.
 
 ```ts showLineNumbers {8}
-import { convexTable, id, index, text } from 'better-convex/orm';
+import { convexTable, id, index, text } from 'kitcn/orm';
 
 export const posts = convexTable(
   'posts',
@@ -235,7 +235,7 @@ Search indexes mirror Convex's text search, with a Drizzle-style builder API.
 Here's how to add a full-text search index on `title`, filtered by `authorId`:
 
 ```ts showLineNumbers {8}
-import { convexTable, id, searchIndex, text } from 'better-convex/orm';
+import { convexTable, id, searchIndex, text } from 'kitcn/orm';
 
 export const posts = convexTable(
   'posts',
@@ -258,7 +258,7 @@ Vector indexes mirror Convex's vector search API.
 Let's define a vector index for embedding search filtered by author:
 
 ```ts showLineNumbers {8-11}
-import { convexTable, id, vector, vectorIndex } from 'better-convex/orm';
+import { convexTable, id, vector, vectorIndex } from 'kitcn/orm';
 
 export const posts = convexTable(
   'posts',

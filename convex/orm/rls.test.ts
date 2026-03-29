@@ -1,7 +1,7 @@
 /**
  * RLS (Row-Level Security) Tests
  *
- * Verifies Drizzle-style rlsPolicy/rlsRole enforcement in Better Convex ORM.
+ * Verifies Drizzle-style rlsPolicy/rlsRole enforcement in kitcn ORM.
  */
 
 import {
@@ -15,7 +15,7 @@ import {
   rlsPolicy,
   rlsRole,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import { it as baseIt, describe, expect } from 'vitest';
 import { convexTest, withOrm } from '../setup.testing';
 

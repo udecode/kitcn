@@ -26,10 +26,10 @@ The last blocker was `create-convex-bare`.
 That scenario copied a raw Convex fixture, then tried to run:
 
 ```bash
-better-convex init --yes
+kitcn init --yes
 ```
 
-That no longer matches the product contract. `better-convex init --yes` now
+That no longer matches the product contract. `kitcn init --yes` now
 adopts supported Next or Vite app scaffolds in place. A bare Convex fixture is
 not one of those.
 
@@ -56,10 +56,10 @@ Treat `create-convex-bare` as what it actually is: a bare runtime smoke.
 The scenario now does three things only:
 
 1. copy the committed fixture into `tmp/scenarios/create-convex-bare/project`
-2. install the local `better-convex` package
+2. install the local `kitcn` package
 3. boot local dev and wait for readiness
 
-It no longer runs `better-convex init --yes`.
+It no longer runs `kitcn init --yes`.
 
 That keeps the runtime gate aligned with the current CLI contract instead of
 forcing a fake adoption path onto an unsupported fixture.

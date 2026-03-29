@@ -8,7 +8,7 @@ tags:
   - scaffolding
   - codegen
 symptoms:
-  - `better-convex add auth` needs to patch root `schema.ts` instead of extending a separate auth schema file
+  - `kitcn add auth` needs to patch root `schema.ts` instead of extending a separate auth schema file
   - rerunning `add auth` must preserve local schema ownership decisions per auth table
   - fixture sync can fail after root-schema insertion with broken `.relations(...)` output
   - schema finalization can crash on generated auth indexes that reference missing columns
@@ -22,7 +22,7 @@ resolved: 2026-03-24
 
 Default auth scaffold ownership lived in the wrong place.
 
-`better-convex add auth` wrote a separate auth schema file, then patched root
+`kitcn add auth` wrote a separate auth schema file, then patched root
 `schema.ts` through `authExtension()`. That kept root schema clean, but it made
 real ownership fuzzy:
 
@@ -50,7 +50,7 @@ Two real bugs fell out immediately:
 
 ## Solution
 
-Move the default Better Convex auth path to root-first schema ownership.
+Move the default kitcn auth path to root-first schema ownership.
 
 `add auth` now:
 
@@ -71,10 +71,10 @@ To make that hold up in practice:
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/registry/schema-ownership.test.ts packages/better-convex/src/cli/registry/index.test.ts packages/better-convex/src/cli/registry/planner.test.ts packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts packages/better-convex/src/cli/cli.commands.ts --test-name-pattern 'add auth|plugin stack|schema ownership|root schema'`
-- `bun test packages/better-convex/src/auth/create-schema-orm.test.ts packages/better-convex/src/auth/create-schema.test.ts packages/better-convex/src/cli/registry/schema-ownership.test.ts`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/cli/registry/schema-ownership.test.ts packages/kitcn/src/cli/registry/index.test.ts packages/kitcn/src/cli/registry/planner.test.ts packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts packages/kitcn/src/cli/cli.commands.ts --test-name-pattern 'add auth|plugin stack|schema ownership|root schema'`
+- `bun test packages/kitcn/src/auth/create-schema-orm.test.ts packages/kitcn/src/auth/create-schema.test.ts packages/kitcn/src/cli/registry/schema-ownership.test.ts`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 - `bun lint:fix`
 - `bun run fixtures:sync`
 - `bun run fixtures:check`

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { useAuth } from 'better-convex/react';
+import { useAuth } from 'kitcn/react';
 import { useState } from 'react';
 import {
   authClient,

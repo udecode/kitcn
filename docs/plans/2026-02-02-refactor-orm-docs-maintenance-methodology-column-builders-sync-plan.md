@@ -15,7 +15,7 @@ Before starting M5, establish documentation maintenance methodology in brainstor
 ## Problem Statement
 
 **Current State**:
-- Better Convex ORM docs (10 MDX files) use validator syntax from M1-M5 (`v.string()`, `v.number()`)
+- kitcn ORM docs (10 MDX files) use validator syntax from M1-M5 (`v.string()`, `v.number()`)
 - No documented process for syncing docs with code changes between milestones
 - Agent-native artifacts (`api-catalog.json`, `error-catalog.json`, `examples-registry.json`) are at M4, need M6 alignment
 - Drizzle parity gaps identified: missing Guides section (performance, testing), Integration docs (Zod, Convex-ents)
@@ -189,11 +189,11 @@ Cross-reference with Drizzle ORM docs at `/tmp/cc-repos/drizzle-orm/`:
 All examples need import updates:
 ```typescript
 // Before
-import { convexTable } from 'better-convex/server';
+import { convexTable } from 'kitcn/server';
 import { v } from 'convex/values';
 
 // After
-import { convexTable, text, integer, boolean, id } from 'better-convex/orm';
+import { convexTable, text, integer, boolean, id } from 'kitcn/orm';
 ```
 
 **Type Safety**:
@@ -403,7 +403,7 @@ grep -r "v\.string\|v\.number\|v\.boolean\|v\.id" www/content/docs/orm/*.mdx
 ```bash
 # Verify imports use builder syntax
 grep -r "from 'convex/values'" www/content/docs/orm/*.mdx
-# Should return 0 matches (builders come from better-convex/orm)
+# Should return 0 matches (builders come from kitcn/orm)
 ```
 
 ## References & Research
@@ -416,9 +416,9 @@ grep -r "from 'convex/values'" www/content/docs/orm/*.mdx
 - Agent artifacts: [www/public/orm/](www/public/orm/)
 
 **Implementation Files**:
-- Column builders: [packages/better-convex/src/orm/builders/](packages/better-convex/src/orm/builders/)
-- Table definitions: [packages/better-convex/src/orm/table.ts:1](packages/better-convex/src/orm/table.ts#L1)
-- Query builder: [packages/better-convex/src/orm/query-builder.ts:1](packages/better-convex/src/orm/query-builder.ts#L1)
+- Column builders: [packages/kitcn/src/orm/builders/](packages/kitcn/src/orm/builders/)
+- Table definitions: [packages/kitcn/src/orm/table.ts:1](packages/kitcn/src/orm/table.ts#L1)
+- Query builder: [packages/kitcn/src/orm/query-builder.ts:1](packages/kitcn/src/orm/query-builder.ts#L1)
 
 **Documentation Plan**:
 - Original plan: [docs/plans/2026-02-01-feat-write-all-orm-documentation-plan.md](docs/plans/2026-02-01-feat-write-all-orm-documentation-plan.md)
@@ -435,7 +435,7 @@ grep -r "from 'convex/values'" www/content/docs/orm/*.mdx
 ### Research Findings
 
 **From repo-research-analyst**:
-- Better Convex has 10 MDX files with Category 1-4 classification
+- kitcn has 10 MDX files with Category 1-4 classification
 - Agent-native artifacts use version tracking (`"1.0.0-m4"`)
 - Gap: No documented sync process between code and docs
 - Migration from validators to column builders not yet reflected
@@ -450,7 +450,7 @@ grep -r "from 'convex/values'" www/content/docs/orm/*.mdx
 - **HIGH priority gaps**: Guides section (performance, testing, type-safety)
 - **MEDIUM priority gaps**: Integration docs (Zod, Convex-ents, Auth)
 - **LOW priority**: SQL-specific features not applicable
-- Better Convex has superior limitations transparency and AI/LLM discovery
+- kitcn has superior limitations transparency and AI/LLM discovery
 - Parity status: Core ✅, Guides ❌, Integrations ❌
 
 **From SpecFlow analysis**:

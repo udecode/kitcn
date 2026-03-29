@@ -2,7 +2,7 @@
 title: Implement HKT Pattern to Fix Type Widening in Query Results
 type: feat
 date: 2026-02-03
-module: Better Convex ORM
+module: kitcn ORM
 component: Type System
 priority: high
 estimated_effort: 8-10 hours
@@ -31,7 +31,7 @@ enhanced_by: /deepen-plan with 5 parallel research agents
 **Root Cause Identified:**
 The type widening issue has **6 specific causes** (not just missing HKT):
 
-1. **🔴 CRITICAL: `as any` casts** at [query-builder.ts:82](../../packages/better-convex/src/orm/query-builder.ts#L82), [114](../../packages/better-convex/src/orm/query-builder.ts#L114), [154](../../packages/better-convex/src/orm/query-builder.ts#L154)
+1. **🔴 CRITICAL: `as any` casts** at [query-builder.ts:82](../../packages/kitcn/src/orm/query-builder.ts#L82), [114](../../packages/kitcn/src/orm/query-builder.ts#L114), [154](../../packages/kitcn/src/orm/query-builder.ts#L154)
    - These completely destroy type information when instantiating `GelRelationalQuery`
    - Type system cannot preserve specific table types through cast
 
@@ -60,9 +60,9 @@ The type widening issue has **6 specific causes** (not just missing HKT):
 - **Enhanced: 8-10 hours** (6 fixes instead of 1)
 
 **Key Files to Modify:**
-- `packages/better-convex/src/internal/types.ts` (add KnownKeysOnly)
-- `packages/better-convex/src/orm/types.ts` (add TIsRoot to DBQueryConfig)
-- `packages/better-convex/src/orm/query-builder.ts` (remove as any, use HKT, add wrappers)
+- `packages/kitcn/src/internal/types.ts` (add KnownKeysOnly)
+- `packages/kitcn/src/orm/types.ts` (add TIsRoot to DBQueryConfig)
+- `packages/kitcn/src/orm/query-builder.ts` (remove as any, use HKT, add wrappers)
 
 ---
 
@@ -102,8 +102,8 @@ type Users = UserType[]
 ### Previous Attempts (Partial Success)
 
 Applied 3 of 5 Drizzle patterns:
-1. ✅ `K & string` literal anchor - [database.ts:143](../../packages/better-convex/src/orm/database.ts#L143)
-2. ✅ `& {}` type seals - [Simplify](../../packages/better-convex/src/internal/types.ts#L15), [Merge](../../packages/better-convex/src/orm/types.ts#L19)
+1. ✅ `K & string` literal anchor - [database.ts:143](../../packages/kitcn/src/orm/database.ts#L143)
+2. ✅ `& {}` type seals - [Simplify](../../packages/kitcn/src/internal/types.ts#L15), [Merge](../../packages/kitcn/src/orm/types.ts#L19)
 3. ✅ Array wrapping at type level - Already had this
 4. ❌ **Missing: HKT pattern with readonly `_` interface** ← The critical piece
 5. ✅ IsUnion detection - Not needed yet
@@ -134,13 +134,13 @@ With HKT pattern:
 Add utilities that Drizzle uses alongside HKT pattern.
 
 **Files to Modify**:
-- `packages/better-convex/src/internal/types.ts` (add KnownKeysOnly)
-- `packages/better-convex/src/orm/types.ts` (update DBQueryConfig)
+- `packages/kitcn/src/internal/types.ts` (add KnownKeysOnly)
+- `packages/kitcn/src/orm/types.ts` (update DBQueryConfig)
 
 **Step 1: Add KnownKeysOnly Utility**
 
 ```typescript
-// packages/better-convex/src/internal/types.ts
+// packages/kitcn/src/internal/types.ts
 
 /**
  * Filter object type to only known keys from reference type.
@@ -161,7 +161,7 @@ export type KnownKeysOnly<T, K> = {
 **Step 2: Add TIsRoot Parameter to DBQueryConfig**
 
 ```typescript
-// packages/better-convex/src/orm/types.ts
+// packages/kitcn/src/orm/types.ts
 
 // BEFORE:
 export type DBQueryConfig<
@@ -209,13 +209,13 @@ export type DBQueryConfig<
 Create HKT foundation following Drizzle's pattern exactly.
 
 **Files to Modify**:
-- `packages/better-convex/src/orm/types.ts` (add HKT base types)
-- `packages/better-convex/src/orm/query-builder.ts` (add `_` interface)
+- `packages/kitcn/src/orm/types.ts` (add HKT base types)
+- `packages/kitcn/src/orm/query-builder.ts` (add `_` interface)
 
 **New Types to Add** (already done, but document usage):
 
 ```typescript
-// packages/better-convex/src/orm/types.ts
+// packages/kitcn/src/orm/types.ts
 
 /**
  * HKT Base Type for Query Builder
@@ -244,7 +244,7 @@ export type RelationalQueryBuilderKind<
 **Update RelationalQueryBuilder**:
 
 ```typescript
-// packages/better-convex/src/orm/query-builder.ts
+// packages/kitcn/src/orm/query-builder.ts
 
 export class RelationalQueryBuilder<
   TSchema extends TablesRelationalConfig,
@@ -284,13 +284,13 @@ export class RelationalQueryBuilder<
 **THIS IS THE CRITICAL PHASE** - Removing `as any` casts is what actually fixes type widening.
 
 **Files to Modify**:
-- `packages/better-convex/src/orm/query-builder.ts` (fix 3 methods)
-- `packages/better-convex/src/orm/query.ts` (update GelRelationalQuery constructor)
+- `packages/kitcn/src/orm/query-builder.ts` (fix 3 methods)
+- `packages/kitcn/src/orm/query.ts` (update GelRelationalQuery constructor)
 
 **Step 1: Update GelRelationalQuery to Preserve Generic Types**
 
 ```typescript
-// packages/better-convex/src/orm/query.ts
+// packages/kitcn/src/orm/query.ts
 
 // BEFORE:
 export class GelRelationalQuery<TSelection> {
@@ -325,7 +325,7 @@ export class GelRelationalQuery<
 **Step 2: Fix findMany Method (Remove `as any`)**
 
 ```typescript
-// packages/better-convex/src/orm/query-builder.ts:71-82
+// packages/kitcn/src/orm/query-builder.ts:71-82
 
 // BEFORE:
 findMany<TConfig extends DBQueryConfig<'many', TSchema, TTableConfig>>(
@@ -373,7 +373,7 @@ findMany<
 **Step 3: Fix findFirst Method (Remove `as any`)**
 
 ```typescript
-// packages/better-convex/src/orm/query-builder.ts:101-116
+// packages/kitcn/src/orm/query-builder.ts:101-116
 
 // BEFORE:
 findFirst<TConfig extends DBQueryConfig<'one', TSchema, TTableConfig>>(
@@ -423,7 +423,7 @@ findFirst<
 **Step 4: Fix paginate Method (Remove `as any`)**
 
 ```typescript
-// packages/better-convex/src/orm/query-builder.ts:134-154
+// packages/kitcn/src/orm/query-builder.ts:134-154
 
 // BEFORE:
 paginate<TConfig extends DBQueryConfig<'many', TSchema, TTableConfig>>(
@@ -487,7 +487,7 @@ paginate<
 The mapped type already works correctly once the casts are removed:
 
 ```typescript
-// packages/better-convex/src/orm/database.ts:25-32
+// packages/kitcn/src/orm/database.ts:25-32
 
 export type DatabaseWithQuery<TSchema extends TablesRelationalConfig> =
   GenericDatabaseReader<any> & {
@@ -536,7 +536,7 @@ import {
   defineRelations,
   createDatabase,
   extractRelationsConfig,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import type { GenericDatabaseReader } from 'convex/server';
 import * as schema from './tables';
 import { type Equal, Expect } from './utils';
@@ -805,7 +805,7 @@ const users = assertType<UserType[]>(db.query.users.findMany());
 - IDE autocomplete doesn't work
 - Doesn't fix root cause
 
-**Verdict**: ❌ Not recommended. Band-aid that undermines Better Convex's value proposition.
+**Verdict**: ❌ Not recommended. Band-aid that undermines kitcn's value proposition.
 
 ---
 
@@ -1032,7 +1032,7 @@ This HKT pattern enables:
 
 ### Files to Update
 
-1. **README.md** (`packages/better-convex/README.md`)
+1. **README.md** (`packages/kitcn/README.md`)
    - Add section: "Type System Architecture"
    - Document HKT pattern usage
    - Link to type testing guide
@@ -1094,10 +1094,10 @@ export class RelationalQueryBuilder<
 ### Internal References
 
 **Current Implementation**:
-- [query-builder.ts:27-154](../../packages/better-convex/src/orm/query-builder.ts#L27-L154) - RelationalQueryBuilder class (**as any at lines 82, 114, 154**)
-- [query.ts:36-1037](../../packages/better-convex/src/orm/query.ts#L36-L1037) - GelRelationalQuery execution engine
-- [database.ts:25-85](../../packages/better-convex/src/orm/database.ts#L25-L85) - DatabaseWithQuery type utility
-- [types.ts:14-556](../../packages/better-convex/src/orm/types.ts#L14-L556) - Core type utilities (Merge, GetColumnData, BuildQueryResult)
+- [query-builder.ts:27-154](../../packages/kitcn/src/orm/query-builder.ts#L27-L154) - RelationalQueryBuilder class (**as any at lines 82, 114, 154**)
+- [query.ts:36-1037](../../packages/kitcn/src/orm/query.ts#L36-L1037) - GelRelationalQuery execution engine
+- [database.ts:25-85](../../packages/kitcn/src/orm/database.ts#L25-L85) - DatabaseWithQuery type utility
+- [types.ts:14-556](../../packages/kitcn/src/orm/types.ts#L14-L556) - Core type utilities (Merge, GetColumnData, BuildQueryResult)
 
 **Documented Solutions**:
 - [Phantom Type Brand Preservation](../../docs/solutions/typescript-patterns/phantom-type-brand-preservation-20260202.md) - Merge utility pattern
@@ -1193,7 +1193,7 @@ Before starting each phase, verify:
 - [ ] Update convex/test-types/README.md
 
 ### Post-Implementation
-- [ ] Run `bun --cwd packages/better-convex build`
+- [ ] Run `bun --cwd packages/kitcn build`
 - [ ] Touch `example/convex/functions/schema.ts`
 - [ ] Update documentation (README, API docs, solutions)
 - [ ] Create solution document: hkt-pattern-implementation-20260203.md

@@ -22,7 +22,7 @@ If you diverge, say exactly why.
 
 ## Ownership Rule
 
-For `better-convex init -t next`, shadcn owns the app shell. Better Convex
+For `kitcn init -t next`, shadcn owns the app shell. kitcn
 owns the integration layer.
 
 Shadcn-owned files stay shadcn-owned:
@@ -37,7 +37,7 @@ Shadcn-owned files stay shadcn-owned:
 - `next.config.mjs`
 - `postcss.config.mjs`
 
-Better Convex-owned files stay Better Convex-owned:
+kitcn-owned files stay kitcn-owned:
 
 - `components/providers.tsx`
 - `lib/convex/*`
@@ -50,7 +50,7 @@ Better Convex-owned files stay Better Convex-owned:
 
 The rule is simple:
 
-- add Better Convex files
+- add kitcn files
 - patch the seam
 - do not replace shadcn shell files wholesale
 
@@ -60,10 +60,10 @@ For the current Next scaffold, the acceptable shell patches are narrow:
 - patch `tsconfig.json` to add `@convex/*`
 - patch `components.json` only when `tailwind.css` must follow `src/` vs root
 
-For `better-convex init`, overwrite behavior must match that ownership split:
+For `kitcn init`, overwrite behavior must match that ownership split:
 
 - shell seam patches apply directly
-- Better Convex-owned replacement files prompt per file in interactive mode
+- kitcn-owned replacement files prompt per file in interactive mode
 - `--yes` skips conflicting owned replacements
 - `--overwrite` is the only bulk replacement hammer
 
@@ -74,15 +74,15 @@ you are probably doing it wrong.
 
 Public templates stay concrete:
 
-- `better-convex init -t next`
-- `better-convex init -t vite`
+- `kitcn init -t next`
+- `kitcn init -t vite`
 
-Internally, Better Convex only has two scaffold modes:
+Internally, kitcn only has two scaffold modes:
 
 - `next-app`
 - `react`
 
-Framework detection should feel like shadcn, not like a fake Better Convex
+Framework detection should feel like shadcn, not like a fake kitcn
 abstraction:
 
 - `next-app` maps to `next-app`
@@ -94,7 +94,7 @@ abstraction:
 
 `init -t` always owns:
 
-- the detected app shell plus the Better Convex seam
+- the detected app shell plus the kitcn seam
 - `convex/functions/schema.ts`
 - `convex/functions/http.ts`
 - `convex/lib/crpc.ts`
@@ -142,9 +142,9 @@ Do not grow `init -t` with fake feature flags.
 
 Optional capability belongs in `add`:
 
-- `better-convex add auth`
-- `better-convex add ratelimit`
-- `better-convex add resend`
+- `kitcn add auth`
+- `kitcn add ratelimit`
+- `kitcn add resend`
 
 Auth is the first real bundle. It patches the `init -t` baseline and owns:
 
@@ -178,23 +178,23 @@ Rule:
 
 ## Registry Comparison
 
-Better Convex should match shadcn on the data model as closely as possible.
+kitcn should match shadcn on the data model as closely as possible.
 
 Same shape:
 
 - one item module per folder under
-  `packages/better-convex/src/cli/registry/items/<item>/<item>-item.ts`
+  `packages/kitcn/src/cli/registry/items/<item>/<item>-item.ts`
 - each item declares files
 - each item declares package dependencies
 - each item declares internal item dependencies
 
-Current Better Convex divergence:
+Current kitcn divergence:
 
 - the registry stays internal for now
 - install is not just file copy
-- add flows patch existing Better Convex seam files based on project mode
+- add flows patch existing kitcn seam files based on project mode
 
-That extra install layer is what Better Convex adds beyond plain shadcn
+That extra install layer is what kitcn adds beyond plain shadcn
 registry resolution:
 
 - register schema extensions into `schema.ts`
@@ -208,7 +208,7 @@ Rule:
 
 - keep the item files as close to shadcn `RegistryItem` as possible
 - keep the dynamic patching in install/runtime code
-- do not shove Better Convex-specific behavior back into the item shape unless
+- do not shove kitcn-specific behavior back into the item shape unless
   shadcn has a real equivalent
 
 ## Create
@@ -218,18 +218,18 @@ CLI output.
 
 The important bit:
 
-- committed template `_generated/*` output comes from real Better Convex
-  codegen during `better-convex init -t`
+- committed template `_generated/*` output comes from real kitcn
+  codegen during `kitcn init -t`
 - it is not copied from repo fixtures
 - it is not written by hand
 - template-mode `init -t` must fail if real codegen cannot be produced
-- do not call `better-convex codegen` directly from the fixture script
+- do not call `kitcn codegen` directly from the fixture script
 
-Why not direct `better-convex codegen`?
+Why not direct `kitcn codegen`?
 
 - a fresh temp app may still need Convex bootstrap before codegen can succeed
 - that bootstrap can become interactive if you bypass create's bootstrap flow
-- `better-convex init -t next` already owns the whole sequence:
+- `kitcn init -t next` already owns the whole sequence:
   scaffold -> dependency install -> codegen -> bootstrap retry -> codegen retry
 - the fixture script should consume that contract, not reimplement half of it
 
@@ -285,7 +285,7 @@ this lane because shadcn's default `eslint .` sweeps generated/runtime files.
 It validates against the current local package under test, not the last
 published npm version:
 
-- pack the current local `better-convex` package to a tarball
+- pack the current local `kitcn` package to a tarball
 - install that tarball into the generated temp app
 
 If you need the slower rebuild-first lane, use:
@@ -300,7 +300,7 @@ When checking parity or drift:
 
 1. run `bun run fixtures:sync` instead of editing `fixtures/*` by hand
 2. run `bun run fixtures:check`
-3. if drift remains, fix `better-convex init -t next`, not the fixture
+3. if drift remains, fix `kitcn init -t next`, not the fixture
 
 ### Real Generation Flow
 
@@ -310,26 +310,26 @@ When checking parity or drift:
 2. for each committed starter, run the local CLI:
 
    ```bash
-   bunx better-convex --backend concave init -t <next|vite> --yes --cwd <tmp> --name <starter>
+   bunx kitcn --backend concave init -t <next|vite> --yes --cwd <tmp> --name <starter>
    ```
 
    For auth starters, follow with:
 
    ```bash
-   bunx better-convex --backend concave add auth --yes
+   bunx kitcn --backend concave add auth --yes
    ```
 
 3. let `create` run the actual scaffold flow:
    - run `shadcn init -t next`
-   - apply Better Convex overlay files and patches
-   - install Better Convex baseline deps
-   - run Better Convex codegen via the init-owned backend adapter
+   - apply kitcn overlay files and patches
+   - install kitcn baseline deps
+   - run kitcn codegen via the init-owned backend adapter
 4. if codegen needs Convex bootstrap, `create` bootstraps Convex and reruns real
    codegen
    - for template sync, the selected backend is Concave
    - outside that flow, backend still resolves normally from config/CLI
 5. validate the fresh generated app:
-   - pack local `better-convex` to a tarball
+   - pack local `kitcn` to a tarball
    - rewrite the generated app to install that tarball
    - `bun install`
    - `bun typecheck`
@@ -337,7 +337,7 @@ When checking parity or drift:
 6. copy the generated app into `fixtures/<starter>`
 7. apply repo-only normalization:
    - strip volatile artifacts (`node_modules`, `.next`, lockfiles, etc.)
-   - rewrite `better-convex` to `workspace:*`
+   - rewrite `kitcn` to `workspace:*`
    - remove `CONVEX_DEPLOYMENT` noise from `.env.local`
 
 That means the fixture is allowed to normalize repo-local junk, but it is not
@@ -346,9 +346,9 @@ allowed to invent user-facing files.
 Do not change this into:
 
 ```bash
-bunx better-convex init -t next --yes --cwd <tmp> --name next
+bunx kitcn init -t next --yes --cwd <tmp> --name next
 cd <tmp>/next
-bunx better-convex codegen
+bunx kitcn codegen
 ```
 
 That skips the point of create owning bootstrap/codegen orchestration and can
@@ -459,7 +459,7 @@ Good:
 
 - same compare utility shape, stronger AST equivalence inside
 - same dry-run formatter shape, different plan payload underneath
-- same shadcn shell, Better Convex files mounted through minimal patches
+- same shadcn shell, kitcn files mounted through minimal patches
 
 Bad:
 

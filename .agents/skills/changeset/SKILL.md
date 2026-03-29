@@ -5,7 +5,7 @@ description: Use when writing changesets for releases
 
 # Changeset Writing
 
-Always mirror @packages/better-convex/CHANGELOG.md tone and structure.
+Always mirror @packages/kitcn/CHANGELOG.md tone and structure.
 
 ## 0) Reuse existing changeset
 
@@ -45,7 +45,7 @@ Always mirror @packages/better-convex/CHANGELOG.md tone and structure.
 
 ````md
 ---
-"better-convex": minor
+"kitcn": minor
 ---
 
 ## Breaking changes

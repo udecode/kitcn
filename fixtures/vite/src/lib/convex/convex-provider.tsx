@@ -6,7 +6,7 @@ import {
   ConvexReactClient,
   getConvexQueryClientSingleton,
   getQueryClientSingleton,
-} from 'better-convex/react';
+} from 'kitcn/react';
 import type { ReactNode } from 'react';
 
 import { CRPCProvider } from '@/lib/convex/crpc';
@@ -14,7 +14,7 @@ import { createQueryClient } from '@/lib/convex/query-client';
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL!);
 
-export function BetterConvexProvider({
+export function AppConvexProvider({
   children,
 }: {
   children: ReactNode;

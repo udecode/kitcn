@@ -2,14 +2,14 @@
 
 ## Goal
 
-Fix `example` so `better-convex dev` does not try to run `internal.init` before
+Fix `example` so `kitcn dev` does not try to run `internal.init` before
 functions exist on a fresh local Convex deployment.
 
 ## Learnings
 
 - `docs/solutions/integration-issues/raw-convex-auth-adoption-bootstrap-20260318.md`
   confirms raw Convex bootstrap must respect `convex init` timing and not assume
-  Better Convex install state.
+  kitcn install state.
 - `docs/solutions/integration-issues/auth-schema-only-should-bootstrap-ownership-from-existing-scaffold-20260324.md`
   and related schema-only notes confirm `example` is the live bullshit detector
   for auth/bootstrap flows.

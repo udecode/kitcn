@@ -1,4 +1,4 @@
-import { eq } from 'better-convex/orm';
+import { eq } from 'kitcn/orm';
 import { z } from 'zod';
 import { privateMutation, privateQuery } from '../lib/crpc';
 import { userTable } from './schema';

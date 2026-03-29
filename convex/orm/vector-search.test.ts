@@ -2,7 +2,7 @@ import {
   createOrm,
   requireSchemaRelations,
   type VectorSearchProvider,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import { expect, test } from 'vitest';
 import schema from '../schema';
 import { convexTest, runCtx } from '../setup.testing';

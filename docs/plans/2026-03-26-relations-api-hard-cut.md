@@ -1,7 +1,7 @@
 # 2026-03-26 Relations API Hard Cut
 
 ## Goal
-Decide whether Better Convex should support exported relations or only chained .relations(...) and implement the cleanest API.
+Decide whether kitcn should support exported relations or only chained .relations(...) and implement the cleanest API.
 
 ## Plan
 - [x] Inspect docs and current implementation
@@ -21,12 +21,12 @@ Decide whether Better Convex should support exported relations or only chained .
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/codegen.test.ts packages/better-convex/src/cli/registry/schema-ownership.test.ts`
+- `bun test packages/kitcn/src/cli/codegen.test.ts packages/kitcn/src/cli/registry/schema-ownership.test.ts`
 - `cd example && bun run codegen`
 - `cd example && bun run typecheck`
 - `bun typecheck`
 - `bun lint:fix`
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn build`
 - `cd example && bun run check`
   blocked by an already-running local backend on port `3210`, not by codegen or
   type errors

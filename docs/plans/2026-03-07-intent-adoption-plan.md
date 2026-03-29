@@ -11,8 +11,8 @@ status: complete
 Make the existing Convex skill discoverable by `@tanstack/intent` without losing any skill content.
 
 ## Locked decisions
-- Source of truth moves to `packages/better-convex/skills/convex`.
-- The published `better-convex` package must ship `skills/**` at package root.
+- Source of truth moves to `packages/kitcn/skills/convex`.
+- The published `kitcn` package must ship `skills/**` at package root.
 - Use package metadata compatible with intent discovery instead of relying on inferred fields.
 - Verify compatibility with a pack-level test and `intent validate`.
 
@@ -25,7 +25,7 @@ Make the existing Convex skill discoverable by `@tanstack/intent` without losing
 
 ## Work plan
 1. Add a failing package-pack verification test.
-2. Move the Convex skill tree into `packages/better-convex/skills/convex`.
+2. Move the Convex skill tree into `packages/kitcn/skills/convex`.
 3. Update live repo references that still point at `skills/convex`.
 4. Add `intent` metadata and package `files` coverage.
 5. Verify with tests, build, `intent validate`, and pack inspection.
@@ -33,8 +33,8 @@ Make the existing Convex skill discoverable by `@tanstack/intent` without losing
 ## Verification checklist
 - [x] Targeted failing test observed before implementation
 - [x] `bun test` for new package-pack test passes
-- [x] `bun --cwd packages/better-convex build` passes
-- [x] `bunx intent validate skills` passes from `packages/better-convex/`
-- [x] `npm pack --json --dry-run ./packages/better-convex` shows `skills/convex/**`
+- [x] `bun --cwd packages/kitcn build` passes
+- [x] `bunx intent validate skills` passes from `packages/kitcn/`
+- [x] `npm pack --json --dry-run ./packages/kitcn` shows `skills/convex/**`
 - [x] `bun lint:fix` passes
 - [x] `bun typecheck` passes

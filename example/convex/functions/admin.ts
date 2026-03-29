@@ -1,5 +1,5 @@
-import { eq } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
+import { eq } from 'kitcn/orm';
+import { CRPCError } from 'kitcn/server';
 import { z } from 'zod';
 
 import { authMutation, authQuery } from '../lib/crpc';

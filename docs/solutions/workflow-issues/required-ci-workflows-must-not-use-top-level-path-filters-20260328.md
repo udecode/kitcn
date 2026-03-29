@@ -43,8 +43,8 @@ based optimization is needed later, do it inside jobs, not at workflow
 dispatch.
 
 Keep the expensive lanes out of required PR CI. Split them into separate,
-non-required workflows that run on `main`, on a schedule, or by manual
-dispatch.
+non-required workflows that run only on the release/versioning branch or on
+whatever other explicit release gate actually matters.
 
 ## Verification
 

@@ -1,6 +1,6 @@
 import { admin, anonymous, organization, username } from 'better-auth/plugins';
-import { convex } from 'better-convex/auth';
-import { requireActionCtx } from 'better-convex/server';
+import { convex } from 'kitcn/auth';
+import { requireActionCtx } from 'kitcn/server';
 import { getEnv } from '../lib/get-env';
 import {
   AUTH_DEMO_ANON_EMAIL_DOMAIN,

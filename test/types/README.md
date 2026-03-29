@@ -1,6 +1,6 @@
 # Type Tests
 
-Type-only tests for Better Convex ORM, following Drizzle patterns.
+Type-only tests for kitcn ORM, following Drizzle patterns.
 
 ## Running Tests
 
@@ -31,7 +31,7 @@ Use `Expect<Equal<Actual, Expected>>` pattern from Drizzle:
 
 ```typescript
 import { Expect, Equal } from './utils';
-import { InferSelectModel } from 'better-convex/orm';
+import { InferSelectModel } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -210,7 +210,7 @@ grep -c "Expect<Equal<" type-tests/pg/insert.ts
 
 # 4. Create test file
 cat > convex/test-types/insert.ts << 'EOF'
-import { convexTable, text, integer, InferInsertModel } from 'better-convex/orm';
+import { convexTable, text, integer, InferInsertModel } from 'kitcn/orm';
 import { Expect, Equal } from './utils';
 
 // ============================================================================
@@ -249,7 +249,7 @@ bun typecheck
 3. Evaluate applicability to Convex
 4. Add corresponding tests if applicable
 
-**When Better Convex adds features**:
+**When kitcn adds features**:
 1. Check if Drizzle has equivalent feature
 2. Copy test patterns if they exist
 3. Create custom tests if Convex-specific

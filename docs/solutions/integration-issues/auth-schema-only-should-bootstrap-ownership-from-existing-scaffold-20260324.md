@@ -7,7 +7,7 @@ tags:
   - schema
   - scaffolding
 symptoms:
-  - `better-convex add auth --schema --yes` fails in an already-auth-wired app
+  - `kitcn add auth --schema --yes` fails in an already-auth-wired app
   - `plugins.lock.json` has no `auth` entry, so schema-only refresh refuses to run
   - apps like `example` need auth schema refresh without rerunning full auth scaffold
 module: auth-cli
@@ -18,8 +18,8 @@ resolved: 2026-03-24
 
 ## Problem
 
-`better-convex add auth --schema --yes` still failed in apps that already
-had the default Better Convex auth scaffold on disk but no `auth.schema` entry
+`kitcn add auth --schema --yes` still failed in apps that already
+had the default kitcn auth scaffold on disk but no `auth.schema` entry
 in `plugins.lock.json`.
 
 That made the command useless for real projects that had auth files and root
@@ -42,7 +42,7 @@ path for an already scaffolded app.
 
 ## Solution
 
-Use the existing Better Convex auth scaffold as the bootstrap source of truth.
+Use the existing kitcn auth scaffold as the bootstrap source of truth.
 
 Schema-only refresh now:
 
@@ -55,10 +55,10 @@ Schema-only refresh now:
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/cli.commands.ts --test-name-pattern 'fails clearly before auth scaffold exists|works without an existing auth lock entry'`
-- `bun test packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts --test-name-pattern 'schema-only auth reconcile forwards applyScope|claims existing auth tables'`
-- `bun --cwd packages/better-convex build`
-- `bun --cwd packages/better-convex typecheck`
+- `bun test packages/kitcn/src/cli/cli.commands.ts --test-name-pattern 'fails clearly before auth scaffold exists|works without an existing auth lock entry'`
+- `bun test packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts --test-name-pattern 'schema-only auth reconcile forwards applyScope|claims existing auth tables'`
+- `bun --cwd packages/kitcn build`
+- `bun --cwd packages/kitcn typecheck`
 - `bun lint:fix`
 - `cd example && bun run schema:sync`
 

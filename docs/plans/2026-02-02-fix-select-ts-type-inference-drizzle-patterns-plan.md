@@ -12,7 +12,7 @@ related_plans:
 
 ## Overview
 
-Fix 56 TypeScript errors in [convex/test-types/select.ts](convex/test-types/select.ts) by aligning Better Convex ORM's type inference with Drizzle ORM's proven patterns. The test file comprehensively validates column selection, where filtering, ordering, and relation loading types - all currently failing due to type system gaps.
+Fix 56 TypeScript errors in [convex/test-types/select.ts](convex/test-types/select.ts) by aligning kitcn ORM's type inference with Drizzle ORM's proven patterns. The test file comprehensively validates column selection, where filtering, ordering, and relation loading types - all currently failing due to type system gaps.
 
 **Current State**: M1-M3 complete (Schema, Relations, Query Builder basics), but type inference doesn't match Drizzle's patterns.
 
@@ -42,7 +42,7 @@ Fix 56 TypeScript errors in [convex/test-types/select.ts](convex/test-types/sele
 
 **Issue #1: ColumnFieldReferences Abstraction**
 
-[packages/better-convex/src/orm/types.ts:94-99](packages/better-convex/src/orm/types.ts#L94-L99)
+[packages/kitcn/src/orm/types.ts:94-99](packages/kitcn/src/orm/types.ts#L94-L99)
 
 ```typescript
 // Current: Maps columns to FieldReference at type level
@@ -105,7 +105,7 @@ export type SelectResult<
   : ApplyNotNullMapToJoins<SelectResultFields<TResult>, TNullabilityMap>;
 ```
 
-**Better Convex Needs**: Add `SelectMode` to QueryPromise/GelRelationalQuery for conditional result typing.
+**kitcn Needs**: Add `SelectMode` to QueryPromise/GelRelationalQuery for conditional result typing.
 
 ### 2. GetColumnData Pattern
 
@@ -120,7 +120,7 @@ export type GetColumnData<TColumn extends Column, TInferMode extends 'query' | '
     : TColumn['_']['data'] | null;
 ```
 
-**Better Convex Needs**: Similar utility that respects notNull brand, handles 'query' vs 'raw' modes.
+**kitcn Needs**: Similar utility that respects notNull brand, handles 'query' vs 'raw' modes.
 
 ### 3. SelectionProxyHandler Pattern
 
@@ -140,7 +140,7 @@ where(where: ((aliases: this['_']['selection']) => SQL | undefined) | SQL | unde
 }
 ```
 
-**Better Convex Needs**: Transparent column proxy that:
+**kitcn Needs**: Transparent column proxy that:
 - Returns raw column builders for type inference
 - Extracts column names at runtime for FilterExpression compilation
 
@@ -161,13 +161,13 @@ export const eq: BinaryOperator = (left: SQLWrapper, right: unknown): SQL => {
 };
 ```
 
-**Better Convex Needs**: Update FilterOperators to accept column builders directly, extract type with GetColumnData.
+**kitcn Needs**: Update FilterOperators to accept column builders directly, extract type with GetColumnData.
 
 ## Proposed Solution
 
 ### Phase 1: Add GetColumnData Utility (1-2 hours)
 
-**File**: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts)
+**File**: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts)
 
 ```typescript
 /**
@@ -213,7 +213,7 @@ Expect<Equal<NameRaw, string>>;
 
 ### Phase 2: Remove ColumnFieldReferences (2-3 hours)
 
-**File**: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts#L228)
+**File**: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts#L228)
 
 ```diff
 // Before
@@ -224,7 +224,7 @@ where?: (
 ) => any;
 ```
 
-**File**: [packages/better-convex/src/orm/query.ts](packages/better-convex/src/orm/query.ts) (execute method)
+**File**: [packages/kitcn/src/orm/query.ts](packages/kitcn/src/orm/query.ts) (execute method)
 
 ```diff
 // Before
@@ -245,7 +245,7 @@ const where = config.where?.(
 
 ### Phase 3: Update FilterOperators Interface (1-2 hours)
 
-**File**: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts)
+**File**: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts)
 
 ```typescript
 export interface FilterOperators {
@@ -300,7 +300,7 @@ const filter5 = eq(age, 'not a number');
 
 ### Phase 4: Fix BuildQueryResult Types (3-4 hours)
 
-**File**: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts#L277-L296)
+**File**: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts#L277-L296)
 
 **Current Issue**: Result types failing due to:
 1. System fields (_id, _creationTime) not merging correctly
@@ -405,7 +405,7 @@ Expect<Equal<PartialUser, {
 
 ### Phase 5: Add SelectMode Support (2-3 hours)
 
-**File**: [packages/better-convex/src/orm/query-promise.ts](packages/better-convex/src/orm/query-promise.ts)
+**File**: [packages/kitcn/src/orm/query-promise.ts](packages/kitcn/src/orm/query-promise.ts)
 
 ```typescript
 export type SelectMode = 'partial' | 'single' | 'multiple';
@@ -420,7 +420,7 @@ export abstract class QueryPromise<TResult> implements Promise<TResult> {
 }
 ```
 
-**File**: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts)
+**File**: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts)
 
 ```typescript
 // Mode-based result selection

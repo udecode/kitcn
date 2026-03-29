@@ -18,7 +18,7 @@ user-facing branch delta against `main`, not the local iteration history.
 - Diff against `main...HEAD`. Never diff against the current changeset draft.
 - Reuse the existing unreleased changeset file. Do not create another one.
 - Keep the release surface package-first:
-  - `packages/better-convex`
+  - `packages/kitcn`
   - `packages/resend`
   - root and `example` manifests/scripts when user-facing
   - docs only when they reveal public API shape
@@ -43,9 +43,9 @@ user-facing branch delta against `main`, not the local iteration history.
 2. Audit the real branch delta against `main`:
 
 ```bash
-git diff --stat main...HEAD -- packages/better-convex packages/resend package.json example/package.json www/content/docs
-git diff --name-only main...HEAD -- packages/better-convex packages/resend package.json example/package.json www/content/docs
-git diff main...HEAD -- packages/better-convex/package.json packages/resend/package.json package.json example/package.json
+git diff --stat main...HEAD -- packages/kitcn packages/resend package.json example/package.json www/content/docs
+git diff --name-only main...HEAD -- packages/kitcn packages/resend package.json example/package.json www/content/docs
+git diff main...HEAD -- packages/kitcn/package.json packages/resend/package.json package.json example/package.json
 ```
 
 3. Audit the likely-missed public seams:
@@ -59,9 +59,9 @@ git diff main...HEAD -- packages/better-convex/package.json packages/resend/pack
 4. Prove every breaking bullet:
 
 ```bash
-git show main:packages/better-convex/package.json
-git show main:packages/better-convex/src/cli/config.ts
-git grep -n "claim-you-are-making" main -- packages/better-convex packages/resend www/content/docs example
+git show main:packages/kitcn/package.json
+git show main:packages/kitcn/src/cli/config.ts
+git grep -n "claim-you-are-making" main -- packages/kitcn packages/resend www/content/docs example
 ```
 
 5. Classify honestly:

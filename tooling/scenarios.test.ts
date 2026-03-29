@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import {
-  BETTER_CONVEX_INSTALL_SPEC_ENV,
-  BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV,
-} from '../packages/better-convex/src/cli/supported-dependencies';
+  KITCN_INSTALL_SPEC_ENV,
+  KITCN_RESEND_INSTALL_SPEC_ENV,
+} from '../packages/kitcn/src/cli/supported-dependencies';
 import {
   buildLocalCliCommand,
   LOCAL_CLI_PATH,
@@ -66,7 +66,7 @@ describe('tooling/scenarios', () => {
       '--yes',
     ]);
     expect(LOCAL_CLI_PATH).toBe(
-      path.join(PROJECT_ROOT, 'packages', 'better-convex', 'dist', 'cli.mjs')
+      path.join(PROJECT_ROOT, 'packages', 'kitcn', 'dist', 'cli.mjs')
     );
   });
 
@@ -193,7 +193,7 @@ describe('tooling/scenarios', () => {
 
   test('checkScenario runs auth schema stress for convex-next-all', async () => {
     const calls: string[] = [];
-    const rootDir = `/tmp/better-convex-scenario-check-stress-${Date.now()}-${Math.random()
+    const rootDir = `/tmp/kitcn-scenario-check-stress-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const projectDir = `${rootDir}/project`;
@@ -204,8 +204,8 @@ describe('tooling/scenarios', () => {
         name: 'convex-next-all-stress',
         private: true,
         dependencies: {
-          'better-convex': 'file:/tmp/better-convex.tgz',
-          '@better-convex/resend': 'file:/tmp/better-convex-resend.tgz',
+          kitcn: 'file:/tmp/kitcn.tgz',
+          '@kitcn/resend': 'file:/tmp/kitcn-resend.tgz',
         },
       })
     );
@@ -236,39 +236,37 @@ describe('tooling/scenarios', () => {
     }
   });
 
-  test('resolveScenarioStepEnv keeps local package overrides on better-convex steps only', () => {
+  test('resolveScenarioStepEnv keeps local package overrides on kitcn steps only', () => {
     expect(
       resolveScenarioStepEnv(['add', 'resend', '--yes'], {
-        betterConvexInstallSpec: 'file:/tmp/better-convex.tgz',
-        resendInstallSpec: 'file:/tmp/better-convex-resend.tgz',
+        kitcnInstallSpec: 'file:/tmp/kitcn.tgz',
+        resendInstallSpec: 'file:/tmp/kitcn-resend.tgz',
       })
     ).toEqual({
-      [BETTER_CONVEX_INSTALL_SPEC_ENV]: 'file:/tmp/better-convex.tgz',
-      [BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV]:
-        'file:/tmp/better-convex-resend.tgz',
+      [KITCN_INSTALL_SPEC_ENV]: 'file:/tmp/kitcn.tgz',
+      [KITCN_RESEND_INSTALL_SPEC_ENV]: 'file:/tmp/kitcn-resend.tgz',
     });
 
     expect(
-      resolveScenarioStepEnv(['better-convex', 'dev', '--once'], {
-        betterConvexInstallSpec: 'file:/tmp/better-convex.tgz',
-        resendInstallSpec: 'file:/tmp/better-convex-resend.tgz',
+      resolveScenarioStepEnv(['kitcn', 'dev', '--once'], {
+        kitcnInstallSpec: 'file:/tmp/kitcn.tgz',
+        resendInstallSpec: 'file:/tmp/kitcn-resend.tgz',
       })
     ).toEqual({
-      [BETTER_CONVEX_INSTALL_SPEC_ENV]: 'file:/tmp/better-convex.tgz',
-      [BETTER_CONVEX_RESEND_INSTALL_SPEC_ENV]:
-        'file:/tmp/better-convex-resend.tgz',
+      [KITCN_INSTALL_SPEC_ENV]: 'file:/tmp/kitcn.tgz',
+      [KITCN_RESEND_INSTALL_SPEC_ENV]: 'file:/tmp/kitcn-resend.tgz',
     });
 
     expect(
       resolveScenarioStepEnv(['convex', 'init'], {
-        betterConvexInstallSpec: 'file:/tmp/better-convex.tgz',
-        resendInstallSpec: 'file:/tmp/better-convex-resend.tgz',
+        kitcnInstallSpec: 'file:/tmp/kitcn.tgz',
+        resendInstallSpec: 'file:/tmp/kitcn-resend.tgz',
       })
     ).toBeUndefined();
   });
 
   test('resolveScenarioInstallSpecs reuses the prepared app package specs', async () => {
-    const rootDir = `/tmp/better-convex-scenario-install-specs-${Date.now()}-${Math.random()
+    const rootDir = `/tmp/kitcn-scenario-install-specs-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const projectDir = `${rootDir}/project`;
@@ -279,15 +277,15 @@ describe('tooling/scenarios', () => {
         name: 'scenario-install-specs',
         private: true,
         dependencies: {
-          'better-convex': 'file:/tmp/scenario-better-convex.tgz',
-          '@better-convex/resend': 'file:/tmp/scenario-resend.tgz',
+          kitcn: 'file:/tmp/scenario-kitcn.tgz',
+          '@kitcn/resend': 'file:/tmp/scenario-resend.tgz',
         },
       })
     );
 
     try {
       expect(resolveScenarioInstallSpecs(projectDir)).toEqual({
-        betterConvexInstallSpec: 'file:/tmp/scenario-better-convex.tgz',
+        kitcnInstallSpec: 'file:/tmp/scenario-kitcn.tgz',
         resendInstallSpec: 'file:/tmp/scenario-resend.tgz',
       });
     } finally {
@@ -296,7 +294,7 @@ describe('tooling/scenarios', () => {
   });
 
   test('resolvePrepareBootstrapSteps backfills auth env for auth template scenarios', async () => {
-    const rootDir = `/tmp/better-convex-scenario-prepare-auth-${Date.now()}-${Math.random()
+    const rootDir = `/tmp/kitcn-scenario-prepare-auth-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const authProjectDir = `${rootDir}/auth-project`;
@@ -339,8 +337,8 @@ describe('tooling/scenarios', () => {
     }
   });
 
-  test('prepareScenario installs local better-convex before auth env backfill steps', async () => {
-    const outputRoot = `/tmp/better-convex-scenario-prepare-order-${Date.now()}-${Math.random()
+  test('prepareScenario installs local kitcn before auth env backfill steps', async () => {
+    const outputRoot = `/tmp/kitcn-scenario-prepare-order-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const events: string[] = [];
@@ -354,18 +352,18 @@ describe('tooling/scenarios', () => {
       }
       return 0;
     });
-    const installLocalBetterConvexFn = mock(
+    const installLocalPackageFn = mock(
       async (
         _directory: string,
         _params?: {
-          betterConvexPackageSpec?: string;
+          kitcnPackageSpec?: string;
           outputDir?: string;
           packageName?: string;
           runCommand?: typeof runCommand;
         }
       ) => {
         events.push('install-local');
-        return 'file:/tmp/better-convex.tgz';
+        return 'file:/tmp/kitcn.tgz';
       }
     );
 
@@ -373,10 +371,8 @@ describe('tooling/scenarios', () => {
       await prepareScenario('next-auth', {
         outputRoot,
         runCommand: runCommand as never,
-        installLocalBetterConvexFn: installLocalBetterConvexFn as never,
-        packLocalBetterConvexPackageFn: mock(
-          () => 'file:/tmp/better-convex.tgz'
-        ) as never,
+        installLocalPackageFn: installLocalPackageFn as never,
+        packLocalPackageFn: mock(() => 'file:/tmp/kitcn.tgz') as never,
         logFn: mock(() => {}) as never,
       });
 
@@ -391,7 +387,7 @@ describe('tooling/scenarios', () => {
   }, 15_000);
 
   test('prepareScenario patches the prepared app with an available local dev port', async () => {
-    const outputRoot = `/tmp/better-convex-scenario-prepare-port-${Date.now()}-${Math.random()
+    const outputRoot = `/tmp/kitcn-scenario-prepare-port-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const patched: Array<{ directory: string; port: number }> = [];
@@ -399,14 +395,10 @@ describe('tooling/scenarios', () => {
     try {
       await prepareScenario('next', {
         findAvailableScenarioDevPortFn: mock(async () => 3017) as never,
-        installLocalBetterConvexFn: mock(
-          async () => 'file:/tmp/better-convex.tgz'
-        ) as never,
+        installLocalPackageFn: mock(async () => 'file:/tmp/kitcn.tgz') as never,
         logFn: mock(() => {}) as never,
         outputRoot,
-        packLocalBetterConvexPackageFn: mock(
-          () => 'file:/tmp/better-convex.tgz'
-        ) as never,
+        packLocalPackageFn: mock(() => 'file:/tmp/kitcn.tgz') as never,
         patchPreparedLocalDevPortFn: mock((directory: string, port: number) => {
           patched.push({ directory, port });
         }) as never,
@@ -480,7 +472,7 @@ describe('tooling/scenarios', () => {
       validation: {
         beforeCheck: [
           ['convex', 'init'],
-          ['better-convex', 'add', 'auth', '--preset', 'convex', '--yes'],
+          ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes'],
         ],
         lint: false,
       },
@@ -533,7 +525,7 @@ describe('tooling/scenarios', () => {
   });
 
   test('patchPreparedLocalDevPort rewrites local temp apps to the selected port', async () => {
-    const rootDir = `/tmp/better-convex-scenario-port-patch-${Date.now()}-${Math.random()
+    const rootDir = `/tmp/kitcn-scenario-port-patch-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const nextDir = `${rootDir}/next`;
@@ -613,7 +605,7 @@ describe('tooling/scenarios', () => {
 
   test('runScenarioDev reuses an existing prepared project and runs its dev script', async () => {
     const outputRoot = Bun.file(
-      `/tmp/better-convex-scenario-dev-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      `/tmp/kitcn-scenario-dev-${Date.now()}-${Math.random().toString(36).slice(2)}`
     );
     const rootDir = outputRoot.name;
     const projectDir = `${rootDir}/next-auth/project`;
@@ -658,7 +650,7 @@ describe('tooling/scenarios', () => {
 
   test('runScenarioDev starts convex and frontend together when dev is frontend-only', async () => {
     const outputRoot = Bun.file(
-      `/tmp/better-convex-scenario-dual-dev-${Date.now()}-${Math.random()
+      `/tmp/kitcn-scenario-dual-dev-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2)}`
     );
@@ -671,7 +663,7 @@ describe('tooling/scenarios', () => {
         private: true,
         scripts: {
           dev: 'next dev --turbopack --port 3005',
-          'convex:dev': 'better-convex dev',
+          'convex:dev': 'kitcn dev',
         },
       })
     );
@@ -728,7 +720,7 @@ describe('tooling/scenarios', () => {
   });
 
   test('runScenarioDev fails clearly when the scenario has not been prepared yet', async () => {
-    const rootDir = `/tmp/better-convex-scenario-missing-${Date.now()}-${Math.random()
+    const rootDir = `/tmp/kitcn-scenario-missing-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
 
@@ -746,7 +738,7 @@ describe('tooling/scenarios', () => {
   });
 
   test('runScenarioDev injects anonymous agent mode for raw create-convex fixtures and bypasses upstream raw dev for bare apps', async () => {
-    const rootDir = `/tmp/better-convex-scenario-create-convex-dev-${Date.now()}-${Math.random()
+    const rootDir = `/tmp/kitcn-scenario-create-convex-dev-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const projectDir = `${rootDir}/create-convex-bare/project`;
@@ -795,7 +787,7 @@ describe('tooling/scenarios', () => {
   });
 
   test('runScenarioDev bypasses raw create-convex predev and uses dev:frontend plus convex:dev when available', async () => {
-    const rootDir = `/tmp/better-convex-scenario-create-convex-next-dev-${Date.now()}-${Math.random()
+    const rootDir = `/tmp/kitcn-scenario-create-convex-next-dev-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const projectDir = `${rootDir}/create-convex-nextjs-shadcn/project`;
@@ -809,7 +801,7 @@ describe('tooling/scenarios', () => {
           'dev:frontend': 'next dev --turbopack --port 3005',
           'dev:backend': 'convex dev',
           predev: 'convex dev --until-success && convex dashboard',
-          'convex:dev': 'better-convex dev',
+          'convex:dev': 'kitcn dev',
         },
       })
     );
@@ -866,7 +858,7 @@ describe('tooling/scenarios', () => {
   });
 
   test('runScenarioDev runs Vite scenarios on the prepared frontend port by splitting backend and frontend ownership', async () => {
-    const rootDir = `/tmp/better-convex-scenario-vite-single-dev-${Date.now()}-${Math.random()
+    const rootDir = `/tmp/kitcn-scenario-vite-single-dev-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const projectDir = `${rootDir}/vite-auth/project`;
@@ -877,7 +869,7 @@ describe('tooling/scenarios', () => {
         private: true,
         scripts: {
           dev: 'vite --port 3005',
-          'convex:dev': 'better-convex dev',
+          'convex:dev': 'kitcn dev',
         },
       })
     );
@@ -934,8 +926,8 @@ describe('tooling/scenarios', () => {
     expect(kills).toEqual([{ signal: 'SIGINT' }]);
   });
 
-  test('runScenarioDev splits raw create-convex Vite fixtures so better-convex owns only the backend', async () => {
-    const rootDir = `/tmp/better-convex-scenario-create-convex-vite-dev-${Date.now()}-${Math.random()
+  test('runScenarioDev splits raw create-convex Vite fixtures so kitcn owns only the backend', async () => {
+    const rootDir = `/tmp/kitcn-scenario-create-convex-vite-dev-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
     const projectDir = `${rootDir}/create-convex-react-vite-shadcn/project`;
@@ -948,7 +940,7 @@ describe('tooling/scenarios', () => {
           dev: 'npm-run-all --parallel dev:frontend dev:backend',
           'dev:frontend': 'vite --open --port 3005',
           'dev:backend': 'convex dev',
-          'convex:dev': 'better-convex dev',
+          'convex:dev': 'kitcn dev',
         },
       })
     );

@@ -10,7 +10,7 @@ Comprehensive analysis of how Drizzle v1 handles indexes, based on repository an
 - [Composite Indexes](#composite-indexes)
 - [Unique Indexes](#unique-indexes)
 - [Special Features](#special-features)
-- [Patterns for Better Convex](#patterns-for-better-convex)
+- [Patterns for kitcn](#patterns-for-kitcn)
 
 ---
 
@@ -437,9 +437,9 @@ index('custom_idx').on(users.customField.op('my_custom_ops'))
 
 ---
 
-## Patterns for Better Convex
+## Patterns for kitcn
 
-Based on Drizzle v1's design, here are recommended patterns for Better Convex ORM:
+Based on Drizzle v1's design, here are recommended patterns for kitcn ORM:
 
 ### 1. API Design
 
@@ -583,7 +583,7 @@ index('email_lower_idx').on(sql`lower(${t.email})`)
 
 ---
 
-## Key Takeaways for Better Convex
+## Key Takeaways for kitcn
 
 1. **Start simple**: Begin with basic index support (name + columns), add features as Convex evolves
 2. **Explicit naming**: Require explicit index names (like SQLite), not optional (like PostgreSQL)

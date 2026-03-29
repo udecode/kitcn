@@ -9,7 +9,7 @@ tags:
   - auth
   - cli
 symptoms:
-  - `better-convex dev --backend concave` prints startup retry counters, then still warns that migration or aggregate kickoff failed
+  - `kitcn dev --backend concave` prints startup retry counters, then still warns that migration or aggregate kickoff failed
   - Concave logs `INTERNAL_FUNCTION_ACCESS` for `generated/server:migrationRun` or `generated/server:aggregateBackfill`
   - routing those calls through `_system:systemExecuteFunction` via `concave run` still fails with the same internal access error
 module: concave-dev
@@ -20,7 +20,7 @@ resolved: 2026-03-22
 
 ## Problem
 
-Better Convex startup hooks call internal runtime mutations:
+kitcn startup hooks call internal runtime mutations:
 
 - `generated/server:migrationRun`
 - `generated/server:migrationStatus`
@@ -30,7 +30,7 @@ Better Convex startup hooks call internal runtime mutations:
 On Convex local dev, those startup-time calls work.
 
 On Concave local dev, they do not. `concave run` invokes the normal public
-execute path, so internal Better Convex runtime functions are rejected with:
+execute path, so internal kitcn runtime functions are rejected with:
 
 ```txt
 INTERNAL_FUNCTION_ACCESS
@@ -48,7 +48,7 @@ Concave has two different execution seams:
 
 `concave run` only uses the public seam.
 
-That is fine for normal user functions. It is wrong for Better Convex runtime
+That is fine for normal user functions. It is wrong for kitcn runtime
 functions because those are generated internal mutations under
 `generated/server:*`.
 
@@ -90,7 +90,7 @@ Use two fixes together.
 
 ### Keep the Concave-only startup retry loop
 
-Startup migration and aggregate kickoff in `better-convex dev` still use the
+Startup migration and aggregate kickoff in `kitcn dev` still use the
 TanStack-style retry loop:
 
 - 1s
@@ -106,9 +106,9 @@ While retrying, only show:
 
 No warning spam during intermediate retries.
 
-### Route Concave internal Better Convex runtime calls through `/api/execute`
+### Route Concave internal kitcn runtime calls through `/api/execute`
 
-When Better Convex calls `generated/server:*` on backend `concave`, do not
+When kitcn calls `generated/server:*` on backend `concave`, do not
 shell out to `concave run`.
 
 Instead:
@@ -117,15 +117,15 @@ Instead:
 2. `POST` directly to `/api/execute`
 3. call `_system:systemExecuteFunction`
 4. send `auth: { tokenType: "System" }`
-5. unwrap `result` into the JSON stdout shape Better Convex already expects
+5. unwrap `result` into the JSON stdout shape kitcn already expects
 
 That keeps the existing migration/backfill flows intact without requiring the
 Concave CLI to grow new flags first.
 
 ## Verification
 
-- `bun test ./packages/better-convex/src/cli/commands/dev.test.ts`
-- `bun test ./packages/better-convex/src/cli/commands/migrate.test.ts ./packages/better-convex/src/cli/cli.commands.ts --test-name-pattern "concave"`
+- `bun test ./packages/kitcn/src/cli/commands/dev.test.ts`
+- `bun test ./packages/kitcn/src/cli/commands/migrate.test.ts ./packages/kitcn/src/cli/cli.commands.ts --test-name-pattern "concave"`
 - `bun run scenario:prepare -- next`
 - `bun run scenario:dev -- next`
 
@@ -138,7 +138,7 @@ Observed live behavior after the fix:
 
 Repo gates:
 
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn build`
 - `bun lint:fix`
 - `bun typecheck` is still blocked by the existing committed `fixtures/vite`
   generated runtime typing errors
@@ -147,18 +147,18 @@ Repo gates:
 
 1. Do not assume a backend CLI `run` command can execute internal runtime
    functions just because public functions work.
-2. If Concave parity work touches Better Convex runtime internals, test the
+2. If Concave parity work touches kitcn runtime internals, test the
    live local dev path, not just stubbed CLI args.
 3. Retry loops only help for transient failures. If the backend is rejecting
    the function class entirely, fix the execution seam first.
 
 ## Files Changed
 
-- `packages/better-convex/src/cli/backend-core.ts`
-- `packages/better-convex/src/cli/commands/dev.ts`
-- `packages/better-convex/src/cli/commands/dev.test.ts`
-- `packages/better-convex/src/cli/commands/migrate.test.ts`
-- `packages/better-convex/src/cli/cli.commands.ts`
+- `packages/kitcn/src/cli/backend-core.ts`
+- `packages/kitcn/src/cli/commands/dev.ts`
+- `packages/kitcn/src/cli/commands/dev.test.ts`
+- `packages/kitcn/src/cli/commands/migrate.test.ts`
+- `packages/kitcn/src/cli/cli.commands.ts`
 
 ## Related
 

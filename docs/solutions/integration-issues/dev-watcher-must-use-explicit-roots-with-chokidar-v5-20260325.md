@@ -11,7 +11,7 @@ tags:
   - chokidar
 severity: medium
 symptoms:
-  - better-convex dev does not print any codegen rerun signal after editing Convex files
+  - kitcn dev does not print any codegen rerun signal after editing Convex files
   - shared API output stops updating during local dev even though startup still succeeds
   - mocked watcher tests pass while the real packaged watcher misses source edits
 ---
@@ -20,7 +20,7 @@ symptoms:
 
 ## Problem
 
-`better-convex dev` got quieter, but local edits stopped showing any codegen
+`kitcn dev` got quieter, but local edits stopped showing any codegen
 rerun signal.
 
 Worse, the shared API watcher was not just silent. It was dead. Editing a real
@@ -51,7 +51,7 @@ Treat the watcher like a real `chokidar@5` client:
 - package build
 - repo `lint:fix`
 - live proof in a prepared `create-convex-bare` app:
-  - start `better-convex dev`
+  - start `kitcn dev`
   - edit `convex/myFunctions.ts`
   - observe `Convex api updated`
 

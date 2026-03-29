@@ -3,7 +3,7 @@ title: fix: ORM v1 blocker set (index planner, FK cascade x RLS, strict full-sca
 type: fix
 date: 2026-02-07
 brainstorm: docs/brainstorms/2026-02-07-orm-pre-release-api-coverage-convex-helpers-brainstorm.md
-scope: better-convex/orm only
+scope: kitcn/orm only
 ---
 
 # fix: ORM v1 blocker set (index planner, FK cascade x RLS, strict full-scan)
@@ -28,19 +28,19 @@ Current query planning can select a non-prefix compound index and push invalid f
 ### Local findings (repo-research-analyst equivalent)
 
 - Planner scoring/splitting hotspots:
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:741`
-  - `packages/better-convex/src/orm/where-clause-compiler.ts:879`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:741`
+  - `packages/kitcn/src/orm/where-clause-compiler.ts:879`
 - Query execution and index application:
-  - `packages/better-convex/src/orm/query.ts:1597`
-  - `packages/better-convex/src/orm/query.ts:1650`
-  - `packages/better-convex/src/orm/query.ts:1859`
-  - `packages/better-convex/src/orm/query.ts:2208`
+  - `packages/kitcn/src/orm/query.ts:1597`
+  - `packages/kitcn/src/orm/query.ts:1650`
+  - `packages/kitcn/src/orm/query.ts:1859`
+  - `packages/kitcn/src/orm/query.ts:2208`
 - FK cascade + RLS relevant runtime paths:
-  - `packages/better-convex/src/orm/delete.ts:500`
-  - `packages/better-convex/src/orm/update.ts:463`
-  - `packages/better-convex/src/orm/mutation-utils.ts:919`
-  - `packages/better-convex/src/orm/mutation-utils.ts:1112`
-  - `packages/better-convex/src/orm/rls/evaluator.ts:166`
+  - `packages/kitcn/src/orm/delete.ts:500`
+  - `packages/kitcn/src/orm/update.ts:463`
+  - `packages/kitcn/src/orm/mutation-utils.ts:919`
+  - `packages/kitcn/src/orm/mutation-utils.ts:1112`
+  - `packages/kitcn/src/orm/rls/evaluator.ts:166`
 
 ### Institutional learnings (learnings-researcher equivalent)
 
@@ -138,11 +138,11 @@ Ship a TDD-first fix set in four workstreams, in strict order:
 
 #### GREEN implementation
 
-- `packages/better-convex/src/orm/where-clause-compiler.ts`
+- `packages/kitcn/src/orm/where-clause-compiler.ts`
   - Enforce prefix-valid index filter extraction.
   - Prevent partial-overlap index selection from producing executable index filters.
   - Normalize index filter order to index field order when applicable.
-- `packages/better-convex/src/orm/query.ts`
+- `packages/kitcn/src/orm/query.ts`
   - Ensure `withIndex` predicate building uses validated index filter sequence only.
 
 #### REFACTOR
@@ -187,7 +187,7 @@ Recommended for v1 stabilization: Option 2 (documented explicit bypass), unless 
 #### GREEN implementation
 
 - If Option 1 selected:
-  - `packages/better-convex/src/orm/mutation-utils.ts`
+  - `packages/kitcn/src/orm/mutation-utils.ts`
     - Add child-row RLS checks before cascade fan-out writes.
 - If Option 2 selected:
   - Keep runtime behavior; add explicit invariant comments and docs.
@@ -209,7 +209,7 @@ Recommended for v1 stabilization: Option 2 (documented explicit bypass), unless 
 
 #### GREEN implementation
 
-- `packages/better-convex/src/orm/query.ts`
+- `packages/kitcn/src/orm/query.ts`
   - Make strict-mode checks explicit for risky post-filter paths.
   - Preserve existing safe/indexable fast paths.
 
@@ -282,16 +282,16 @@ Update ORM docs only for scoped behavior changes:
 
 ### Internal references
 
-- `packages/better-convex/src/orm/where-clause-compiler.ts:741`
-- `packages/better-convex/src/orm/where-clause-compiler.ts:879`
-- `packages/better-convex/src/orm/query.ts:1597`
-- `packages/better-convex/src/orm/query.ts:1650`
-- `packages/better-convex/src/orm/query.ts:2208`
-- `packages/better-convex/src/orm/delete.ts:500`
-- `packages/better-convex/src/orm/update.ts:463`
-- `packages/better-convex/src/orm/mutation-utils.ts:919`
-- `packages/better-convex/src/orm/mutation-utils.ts:1112`
-- `packages/better-convex/src/orm/rls/evaluator.ts:166`
+- `packages/kitcn/src/orm/where-clause-compiler.ts:741`
+- `packages/kitcn/src/orm/where-clause-compiler.ts:879`
+- `packages/kitcn/src/orm/query.ts:1597`
+- `packages/kitcn/src/orm/query.ts:1650`
+- `packages/kitcn/src/orm/query.ts:2208`
+- `packages/kitcn/src/orm/delete.ts:500`
+- `packages/kitcn/src/orm/update.ts:463`
+- `packages/kitcn/src/orm/mutation-utils.ts:919`
+- `packages/kitcn/src/orm/mutation-utils.ts:1112`
+- `packages/kitcn/src/orm/rls/evaluator.ts:166`
 - `test/orm/where-clause-compiler.test.ts:18`
 - `convex/orm/foreign-key-actions.test.ts:324`
 - `convex/orm/mutations.test.ts:155`
@@ -305,11 +305,11 @@ Update ORM docs only for scoped behavior changes:
 
 - [x] `test/orm/where-clause-compiler.test.ts` add failing compound-prefix/order regressions.
 - [x] `convex/orm/where-filtering.test.ts` add failing runtime reproduction.
-- [x] `packages/better-convex/src/orm/where-clause-compiler.ts` enforce prefix-valid index filter plan.
-- [x] `packages/better-convex/src/orm/query.ts` apply only validated index filters in index order (achieved through compiler normalization; no direct query.ts logic change required).
+- [x] `packages/kitcn/src/orm/where-clause-compiler.ts` enforce prefix-valid index filter plan.
+- [x] `packages/kitcn/src/orm/query.ts` apply only validated index filters in index order (achieved through compiler normalization; no direct query.ts logic change required).
 - [x] `convex/orm/foreign-key-actions.test.ts` add FK cascade x RLS contract tests (RED first).
 - [x] `convex/orm/rls.test.ts` add root-vs-fan-out contract coverage (RED first).
-- [x] `packages/better-convex/src/orm/mutation-utils.ts` codify selected cascade-RLS contract.
+- [x] `packages/kitcn/src/orm/mutation-utils.ts` codify selected cascade-RLS contract.
 - [x] `convex/orm/pagination.test.ts` add strict post-filter/full-scan path assertions.
 - [x] `test/types/select.ts` adjust type-level strict-gating assertions if needed (no additional changes required after runtime/compile validation).
 - [x] `www/content/docs/orm/{queries,limitations,rls}.mdx` document only scoped behavior updates.

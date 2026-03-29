@@ -3,11 +3,11 @@ import path from 'node:path';
 import ts from 'typescript';
 import {
   generateFreshApp,
-  installLocalBetterConvex,
+  installLocalPackage,
   log,
   normalizeEnvLocal,
   PROJECT_ROOT,
-  packLocalBetterConvexPackage,
+  packLocalPackage,
   patchPreparedLocalDevPort,
   readJson,
   run,
@@ -32,7 +32,7 @@ const getTemplateFixtureDir = (templateKey: TemplateKey) =>
   path.join(PROJECT_ROOT, 'fixtures', templateKey);
 
 const getFixturePackageName = (templateKey: TemplateKey) =>
-  `better-convex-template-${templateKey}`;
+  `kitcn-template-${templateKey}`;
 
 const getValidationPackageName = (templateKey: TemplateKey) =>
   `${getFixturePackageName(templateKey)}-check`;
@@ -46,22 +46,22 @@ const FIXTURE_TSCONFIG_FILES = [
 ] as const;
 
 const FIXTURE_PACKAGE_PATHS = {
-  'better-convex/aggregate': 'src/aggregate/index.ts',
-  'better-convex/auth': 'src/auth/index.ts',
-  'better-convex/auth/client': 'src/auth-client/index.ts',
-  'better-convex/auth/config': 'src/auth-config/index.ts',
-  'better-convex/auth/generated': 'src/auth/generated.ts',
-  'better-convex/auth/http': 'src/auth-http/index.ts',
-  'better-convex/auth/nextjs': 'src/auth-nextjs/index.ts',
-  'better-convex/crpc': 'src/crpc/index.ts',
-  'better-convex/orm': 'src/orm/index.ts',
-  'better-convex/plugins': 'src/plugins/index.ts',
-  'better-convex/ratelimit': 'src/ratelimit/index.ts',
-  'better-convex/ratelimit/react': 'src/ratelimit/react/index.ts',
-  'better-convex/react': 'src/react/index.ts',
-  'better-convex/rsc': 'src/rsc/index.ts',
-  'better-convex/server': 'src/server/index.ts',
-  'better-convex/solid': 'src/solid/index.ts',
+  'kitcn/aggregate': 'src/aggregate/index.ts',
+  'kitcn/auth': 'src/auth/index.ts',
+  'kitcn/auth/client': 'src/auth-client/index.ts',
+  'kitcn/auth/config': 'src/auth-config/index.ts',
+  'kitcn/auth/generated': 'src/auth/generated.ts',
+  'kitcn/auth/http': 'src/auth-http/index.ts',
+  'kitcn/auth/nextjs': 'src/auth-nextjs/index.ts',
+  'kitcn/crpc': 'src/crpc/index.ts',
+  'kitcn/orm': 'src/orm/index.ts',
+  'kitcn/plugins': 'src/plugins/index.ts',
+  'kitcn/ratelimit': 'src/ratelimit/index.ts',
+  'kitcn/ratelimit/react': 'src/ratelimit/react/index.ts',
+  'kitcn/react': 'src/react/index.ts',
+  'kitcn/rsc': 'src/rsc/index.ts',
+  'kitcn/server': 'src/server/index.ts',
+  'kitcn/solid': 'src/solid/index.ts',
 } as const;
 
 const normalizeTemplatePackageJson = (
@@ -70,7 +70,7 @@ const normalizeTemplatePackageJson = (
 ): WorkspacePackageJson => ({
   dependencies: {
     ...packageJson.dependencies,
-    'better-convex': 'workspace:*',
+    kitcn: 'workspace:*',
   },
   devDependencies: packageJson.devDependencies,
   name: getFixturePackageName(templateKey),
@@ -138,7 +138,7 @@ const patchFixtureTsconfigPaths = (
       const relativeSourcePath = path
         .relative(
           snapshotTsconfigDir,
-          path.join(PROJECT_ROOT, 'packages', 'better-convex', sourcePath)
+          path.join(PROJECT_ROOT, 'packages', 'kitcn', sourcePath)
         )
         .replaceAll(path.sep, '/');
       paths[specifier] = [
@@ -239,7 +239,7 @@ export const syncTemplate = async (
   params: {
     backend?: TemplateBackend;
     generateTemplateFn?: typeof generateTemplate;
-    installLocalBetterConvexFn?: typeof installLocalBetterConvex;
+    installLocalPackageFn?: typeof installLocalPackage;
     logFn?: typeof log;
     normalizeTemplateFn?: typeof normalizeTemplateSnapshot;
     runCommand?: typeof run;
@@ -256,11 +256,11 @@ export const syncTemplate = async (
   });
 
   try {
-    const betterConvexPackageSpec = packLocalBetterConvexPackage(tempRoot);
-    await (params.installLocalBetterConvexFn ?? installLocalBetterConvex)(
+    const kitcnPackageSpec = packLocalPackage(tempRoot);
+    await (params.installLocalPackageFn ?? installLocalPackage)(
       generatedAppDir,
       {
-        betterConvexPackageSpec,
+        kitcnPackageSpec,
         runCommand,
       }
     );
@@ -324,9 +324,9 @@ export const checkTemplate = async (
   });
 
   try {
-    const betterConvexPackageSpec = packLocalBetterConvexPackage(tempRoot);
-    await installLocalBetterConvex(generatedAppDir, {
-      betterConvexPackageSpec,
+    const kitcnPackageSpec = packLocalPackage(tempRoot);
+    await installLocalPackage(generatedAppDir, {
+      kitcnPackageSpec,
       packageName: getValidationPackageName(templateKey),
       runCommand,
     });

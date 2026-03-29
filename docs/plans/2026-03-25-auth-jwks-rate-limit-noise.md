@@ -14,7 +14,7 @@ forcing app-level config.
 
 ## Findings
 
-- warning comes from Better Auth's own rate limiter, not better-convex
+- warning comes from Better Auth's own rate limiter, not kitcn
   ratelimit
 - the noisy path is `/convex/jwks`
 - Better Auth supports `rateLimit.customRules[path] = false`

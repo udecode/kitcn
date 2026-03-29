@@ -1,6 +1,6 @@
 /* biome-ignore-all lint: compile-time type assertions only */
 
-import type { OrmWriter } from 'better-convex/orm';
+import type { OrmWriter } from 'kitcn/orm';
 import schema from './functions/schema';
 
 declare const db: OrmWriter<typeof schema>;

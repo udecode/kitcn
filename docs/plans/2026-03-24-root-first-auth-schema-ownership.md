@@ -5,7 +5,7 @@
 Replace the default auth scaffold path with root-schema ownership that still
 behaves losslessly enough for real apps:
 
-- `better-convex add auth` should patch `convex/functions/schema.ts` directly
+- `kitcn add auth` should patch `convex/functions/schema.ts` directly
 - conflicts should be resolved per auth table
 - ownership decisions should persist in `plugins.lock.json`
 - `--yes` should reuse known ownership only
@@ -40,10 +40,10 @@ behaves losslessly enough for real apps:
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/registry/schema-ownership.test.ts packages/better-convex/src/cli/registry/index.test.ts packages/better-convex/src/cli/registry/planner.test.ts packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts packages/better-convex/src/cli/cli.commands.ts --test-name-pattern 'add auth|plugin stack|schema ownership|root schema'`
-- `bun test packages/better-convex/src/auth/create-schema-orm.test.ts packages/better-convex/src/auth/create-schema.test.ts packages/better-convex/src/cli/registry/schema-ownership.test.ts`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/cli/registry/schema-ownership.test.ts packages/kitcn/src/cli/registry/index.test.ts packages/kitcn/src/cli/registry/planner.test.ts packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts packages/kitcn/src/cli/cli.commands.ts --test-name-pattern 'add auth|plugin stack|schema ownership|root schema'`
+- `bun test packages/kitcn/src/auth/create-schema-orm.test.ts packages/kitcn/src/auth/create-schema.test.ts packages/kitcn/src/cli/registry/schema-ownership.test.ts`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 - `bun lint:fix`
 - `bun run fixtures:sync`
 - `bun run fixtures:check`

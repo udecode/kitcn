@@ -17,11 +17,11 @@ Get `bun check` green again by fixing the last runtime gate failure in
 - `create-convex-bare` is a raw Convex fixture with no supported Next/Vite app
   scaffold.
 - `scenario:test -- create-convex-bare` fails during prepare because
-  `better-convex init --yes` now only adopts supported app scaffolds.
+  `kitcn init --yes` now only adopts supported app scaffolds.
 - `create-convex-nextjs-shadcn` and `create-convex-react-vite-shadcn` still
   pass. The bare fixture is the outlier.
 - The correct contract is plain runtime smoke: copy fixture, install local
-  package, boot backend. No Better Convex adoption step.
+  package, boot backend. No kitcn adoption step.
 - Verified green with `bun test tooling/scenarios.test.ts`,
   `bun run scenario:test -- create-convex-bare`, `bun typecheck`, and
   `bun check`.

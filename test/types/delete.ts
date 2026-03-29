@@ -1,10 +1,10 @@
+import type { GenericDatabaseWriter } from 'convex/server';
 import {
   createOrm,
   defineRelations,
   eq,
   extractRelationsConfig,
-} from 'better-convex/orm';
-import type { GenericDatabaseWriter } from 'convex/server';
+} from 'kitcn/orm';
 import { UserRow } from './fixtures/types';
 import { users } from './tables-rel';
 import { type Equal, Expect, IsAny, Not } from './utils';

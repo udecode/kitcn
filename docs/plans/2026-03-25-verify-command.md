@@ -1,23 +1,23 @@
-# better-convex verify
+# kitcn verify
 
 ## Goal
 
-Add an agent-friendly runtime verification command for local Better Convex apps.
+Add an agent-friendly runtime verification command for local kitcn apps.
 
 The command should:
 
 - verify local dev/runtime boot works
 - avoid lint/typecheck/build scope creep
 - hide upstream non-interactive Convex setup junk
-- be usable in CI as `better-convex verify`
+- be usable in CI as `kitcn verify`
 
 ## Findings
 
-- `better-convex dev --once` is the closest existing runtime smoke path.
-- `better-convex dev --bootstrap` is a different contract: one-shot bootstrap,
+- `kitcn dev --once` is the closest existing runtime smoke path.
+- `kitcn dev --bootstrap` is a different contract: one-shot bootstrap,
   no watcher, forced `--typecheck disable`.
 - `CONVEX_AGENT_MODE=anonymous` is upstream Convex plumbing, not a good public
-  Better Convex surface.
+  kitcn surface.
 - local stale `.convex/` state can trigger a non-interactive Convex backend
   upgrade prompt, so verify needs to isolate or neutralize that seam.
 
@@ -33,7 +33,7 @@ The command should:
 
 - 2026-03-25: gathered current `dev` behavior, runtime learnings, and the
   scenario/non-interactive Convex seam before implementation.
-- 2026-03-25: added `better-convex verify`, wired it into the public CLI,
+- 2026-03-25: added `kitcn verify`, wired it into the public CLI,
   updated docs and skill refs, and proved it live in
   `tmp/scenarios/create-convex-bare/project`.
 - 2026-03-25: added a dedicated root `test:verify` lane and wired `check` to

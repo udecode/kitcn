@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/performance/noBarrelFile: package entry */
 
-import { definePlugin, type Plugin } from 'better-convex/plugins';
+import { definePlugin, type Plugin } from 'kitcn/plugins';
 import {
   type ResendApi,
   type ResendOptions,

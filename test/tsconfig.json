@@ -19,12 +19,10 @@
     "allowJs": true,
     "paths": {
       "*": ["./*"],
-      "better-convex/aggregate": [
-        "../packages/better-convex/src/aggregate/index.ts"
-      ],
-      "better-convex/server": ["../packages/better-convex/src/server/index.ts"],
-      "better-convex/orm": ["../packages/better-convex/src/orm/index.ts"],
-      "better-convex/auth": ["../packages/better-convex/src/auth/index.ts"]
+      "kitcn/aggregate": ["../packages/kitcn/src/aggregate/index.ts"],
+      "kitcn/server": ["../packages/kitcn/src/server/index.ts"],
+      "kitcn/orm": ["../packages/kitcn/src/orm/index.ts"],
+      "kitcn/auth": ["../packages/kitcn/src/auth/index.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

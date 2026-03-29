@@ -51,7 +51,7 @@ We'll start by setting up schema and context once. This keeps every later endpoi
 ### Define tables, indexes, and relations
 
 ```ts title="convex/schema.ts" showLineNumbers {3-7,10-14,16-22}
-import { convexTable, defineSchema, text, boolean, integer, id, index, uniqueIndex } from 'better-convex/orm';
+import { convexTable, defineSchema, text, boolean, integer, id, index, uniqueIndex } from 'kitcn/orm';
 
 export const users = convexTable('users', {
   name: text().notNull(),
@@ -79,16 +79,16 @@ This mirrors native Convex indexing discipline: index the fields you filter and 
 
 ### Generate Runtime
 
-If using cRPC, run `better-convex dev` (generates all runtime including cRPC modules):
+If using cRPC, run `kitcn dev` (generates all runtime including cRPC modules):
 
 ```bash
-npx better-convex dev
+npx kitcn dev
 ```
 
 Otherwise, run a scoped generation pass:
 
 ```bash
-npx better-convex codegen --scope orm
+npx kitcn codegen --scope orm
 ```
 
 ### Attach ORM to context once
@@ -548,7 +548,7 @@ Native `insert` returns an ID directly. ORM returns `void` unless you call `.ret
 ### Patch/replace semantics (`db.patch` / `db.replace` -> `update().set().where()`)
 
 ```ts showLineNumbers {2}
-import { eq, unsetToken } from 'better-convex/orm';
+import { eq, unsetToken } from 'kitcn/orm';
 ```
 
 ```ts showLineNumbers

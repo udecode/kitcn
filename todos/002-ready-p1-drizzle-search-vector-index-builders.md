@@ -17,7 +17,7 @@ The ORM currently supports Drizzle-style builders for basic indexes but still us
 ## Findings
 
 - Phase 1 builder pattern exists for `index()` and `uniqueIndex()`.
-- `applyExtraConfig` in `packages/better-convex/src/orm/table.ts` already handles index builders with type-guard based validation.
+- `applyExtraConfig` in `packages/kitcn/src/orm/table.ts` already handles index builders with type-guard based validation.
 - Search/vector index builders need to mirror Drizzle v1 style while integrating Convex-specific behaviors.
 - Vector column builder is required to ensure runtime validation and full Convex coverage.
 
@@ -68,10 +68,10 @@ Implement Option 1: full builder support, vector column builder with runtime val
 ## Technical Details
 
 **Affected files (expected):**
-- `packages/better-convex/src/orm/indexes.ts`
-- `packages/better-convex/src/orm/table.ts`
-- `packages/better-convex/src/orm/index.ts`
-- `packages/better-convex/src/orm/validators.ts` (or similar for column builders)
+- `packages/kitcn/src/orm/indexes.ts`
+- `packages/kitcn/src/orm/table.ts`
+- `packages/kitcn/src/orm/index.ts`
+- `packages/kitcn/src/orm/validators.ts` (or similar for column builders)
 - `convex/schema.ts`
 - `test/...` (type + runtime tests)
 - `www/content/docs/...` (ORM docs)
@@ -125,4 +125,4 @@ Implement Option 1: full builder support, vector column builder with runtime val
 - Ran `bun typecheck` and `bun run test` (pass)
 
 **Notes:**
-- `bun --cwd packages/better-convex build` fails with a tsdown/rolldown `node:util: styleText` error on Node.js v20.12.1
+- `bun --cwd packages/kitcn build` fails with a tsdown/rolldown `node:util: styleText` error on Node.js v20.12.1

@@ -25,7 +25,7 @@ See Schema Options for strict policy details.
 
 ## Relation Config Options
 
-The callback shape mirrors Drizzle's relation builder, but in Better Convex you attach relations directly to the default schema export with `.relations(...)`.
+The callback shape mirrors Drizzle's relation builder, but in kitcn you attach relations directly to the default schema export with `.relations(...)`.
 
 ### `one()`
 
@@ -70,7 +70,7 @@ If you have **multiple relations between the same two tables**, you must use `al
 Classic example: a post has both an `author` and a `reviewer`, pointing at the same `users` table.
 
 ```ts title="convex/schema.ts" showLineNumbers
-import { convexTable, defineSchema, id, text } from 'better-convex/orm';
+import { convexTable, defineSchema, id, text } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -112,7 +112,7 @@ export default defineSchema({ users, posts }).relations((r) => ({
 A one-to-one relation connects exactly one record in each table. Here's a user with a single profile:
 
 ```ts title="convex/schema.ts" showLineNumbers {12-21}
-import { convexTable, defineSchema, text, id } from 'better-convex/orm';
+import { convexTable, defineSchema, text, id } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -149,7 +149,7 @@ export default defineSchema({ users, profiles }).relations((r) => ({
 The most common relation type - one user has many posts. Let's define both sides:
 
 ```ts title="convex/schema.ts" showLineNumbers {12-20}
-import { convexTable, defineSchema, text, boolean, id } from 'better-convex/orm';
+import { convexTable, defineSchema, text, boolean, id } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -185,7 +185,7 @@ export default defineSchema({ users, posts }).relations((r) => ({
 The ORM does not auto-create join tables. You model many-to-many with an explicit join table:
 
 ```ts title="convex/schema.ts" showLineNumbers {15-24}
-import { convexTable, defineSchema, text, id } from 'better-convex/orm';
+import { convexTable, defineSchema, text, id } from 'kitcn/orm';
 
 const posts = convexTable('posts', {
   title: text().notNull(),
@@ -219,7 +219,7 @@ export default defineSchema({ posts, tags, postsTags }).relations((r) => ({
 If you need extra data on the relationship (role, timestamps, etc.), put it on the join table. No special API required:
 
 ```ts title="convex/schema.ts" showLineNumbers {11-16,18-29}
-import { convexTable, defineSchema, id, integer, text } from 'better-convex/orm';
+import { convexTable, defineSchema, id, integer, text } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -268,7 +268,7 @@ const usersWithGroups = await db.query.users.findMany({
 You can also define direct many-to-many relations with `.through()` to point at junction table columns:
 
 ```ts title="convex/schema.ts" showLineNumbers {16-27}
-import { boolean, convexTable, defineSchema, id, text } from 'better-convex/orm';
+import { boolean, convexTable, defineSchema, id, text } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -306,7 +306,7 @@ export default defineSchema({ users, groups, usersToGroups }).relations((r) => (
 You can define relations where a table references itself. Here's a manager/reports hierarchy:
 
 ```ts title="convex/schema.ts" showLineNumbers {7-17}
-import { convexTable, defineSchema, text, id } from 'better-convex/orm';
+import { convexTable, defineSchema, text, id } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -339,7 +339,7 @@ export default defineSchema({ users }).relations((r) => ({
 By default, `one()` relations are optional and return `null` when no match is found. Use `optional: false` when the relation is required:
 
 ```ts title="convex/schema.ts" showLineNumbers {10-16}
-import { convexTable, defineSchema, id, text } from 'better-convex/orm';
+import { convexTable, defineSchema, id, text } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -397,7 +397,7 @@ export default defineSchema({ users, posts }).relations((r) => ({
 Use `defineRelationsPart` to split large relation graphs across modules and merge them later:
 
 ```ts title="convex/relations.ts" showLineNumbers {4-12,14-21,23-30}
-import { defineSchema, defineRelationsPart } from 'better-convex/orm';
+import { defineSchema, defineRelationsPart } from 'kitcn/orm';
 import { users, posts, comments } from './schema';
 
 const userRelations = defineRelationsPart({ users, posts }, (r) => ({
@@ -445,7 +445,7 @@ You can define relations only on the side you need. When you do, provide explici
 You can attach a predefined `where` filter to a relation. It will always be applied when loading:
 
 ```ts title="convex/schema.ts" showLineNumbers {13-19}
-import { boolean, convexTable, defineSchema, id, text } from 'better-convex/orm';
+import { boolean, convexTable, defineSchema, id, text } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(),
@@ -482,7 +482,7 @@ Polymorphism is schema-first via a discriminator column builder. Instead of manu
 Use one nullable FK per target plus a discriminator. This gives polymorphic-style relation loading and filtered aliases, without strict one-of enforcement.
 
 ```ts title="convex/schema.ts" showLineNumbers
-import { convexTable, defineSchema, id, text } from 'better-convex/orm';
+import { convexTable, defineSchema, id, text } from 'kitcn/orm';
 
 const posts = convexTable('posts', {
   title: text().notNull(),
@@ -534,7 +534,7 @@ import {
   index,
   integer,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 const auditLogs = convexTable(
   'audit_logs',
@@ -711,7 +711,7 @@ The ORM will use indexes when loading relations and will throw (unless `allowFul
 - `one()`: `to: ...id` uses `db.get()` (no extra index); non-`id` targets require an index on the target fields
 
 ```ts title="convex/schema.ts" showLineNumbers {8,18-19}
-import { convexTable, id, index, text } from 'better-convex/orm';
+import { convexTable, id, index, text } from 'kitcn/orm';
 
 export const posts = convexTable(
   'posts',

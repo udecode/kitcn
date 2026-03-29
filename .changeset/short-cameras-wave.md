@@ -1,12 +1,25 @@
 ---
-"better-convex": minor
-"@better-convex/resend": minor
+"kitcn": minor
+"@kitcn/resend": minor
 ---
 
 ## Breaking changes
 
-- Use `concave.json` as the Better Convex config file. `better-convex.json`
-  and `better-convex.config.ts` are not loaded.
+- Use `kitcn` and `@kitcn/resend` as the published package names, CLI
+  commands, import paths, generated comments, and scaffold output.
+
+```ts
+// Before
+import { defineSchema } from "<previous package name>/orm";
+import { sendEmail } from "<previous scoped plugin>/resend";
+
+// After
+import { defineSchema } from "kitcn/orm";
+import { sendEmail } from "@kitcn/resend";
+```
+
+- Use `concave.json` as the kitcn config file. `kitcn.json`
+  and `kitcn.config.ts` are not loaded.
 
 ```ts
 // Before
@@ -17,7 +30,7 @@ export default {
 // After
 {
   "meta": {
-    "better-convex": {
+    "kitcn": {
       "paths": {
         "shared": "convex/shared"
       }
@@ -32,8 +45,8 @@ export default {
 
 ```ts
 // Before
-import { defineRelations, defineSchema } from "better-convex/orm";
-import { ratelimitPlugin } from "better-convex/plugins/ratelimit";
+import { defineRelations, defineSchema } from "kitcn/orm";
+import { ratelimitPlugin } from "kitcn/plugins/ratelimit";
 
 export const schema = defineSchema(tables, {
   plugins: [ratelimitPlugin()],
@@ -46,7 +59,7 @@ export const relations = defineRelations(tables, (r) => ({
 }));
 
 // After
-import { defineSchema } from "better-convex/orm";
+import { defineSchema } from "kitcn/orm";
 import { ratelimitExtension } from "../lib/plugins/ratelimit/schema";
 
 export default defineSchema(tables)
@@ -58,28 +71,28 @@ export default defineSchema(tables)
   }));
 ```
 
-- Use `better-convex env push` and `better-convex env pull` for env sync.
+- Use `kitcn env push` and `kitcn env pull` for env sync.
   `env sync` is gone.
 
 ```bash
 # Before
-npx better-convex env sync --auth
+npx kitcn env sync --auth
 
 # After
-npx better-convex env push
+npx kitcn env push
 ```
 
-- Use `better-convex/ratelimit` and `better-convex/ratelimit/react`. The old
-  `better-convex/plugins/ratelimit*` surface is gone.
+- Use `kitcn/ratelimit` and `kitcn/ratelimit/react`. The old
+  `kitcn/plugins/ratelimit*` surface is gone.
 
 ```ts
 // Before
-import { calculateRateLimit } from "better-convex/plugins/ratelimit";
-import { useRateLimit } from "better-convex/plugins/ratelimit/react";
+import { calculateRateLimit } from "kitcn/plugins/ratelimit";
+import { useRateLimit } from "kitcn/plugins/ratelimit/react";
 
 // After
-import { calculateRatelimit } from "better-convex/ratelimit";
-import { useRatelimit } from "better-convex/ratelimit/react";
+import { calculateRatelimit } from "kitcn/ratelimit";
+import { useRatelimit } from "kitcn/ratelimit/react";
 ```
 
 ## Features
@@ -87,19 +100,19 @@ import { useRatelimit } from "better-convex/ratelimit/react";
 - Add a registry-driven CLI with `init`, `add`, `view`, `info`, and `docs`,
   plus `--json`, dry-run, and diff output for scaffold changes.
 - Add backend-aware CLI support for both Convex and Concave, including
-  `concave.json`, local bootstrap wrappers, and `better-convex verify`.
+  `concave.json`, local bootstrap wrappers, and `kitcn verify`.
 - Add project-owned ORM migrations with generated `defineMigration(...)`
-  helpers, migration manifests, docs, and `better-convex migrate`.
+  helpers, migration manifests, docs, and `kitcn migrate`.
 - Add starter scaffolds for Next.js and Vite, plus adoption flows for raw
   Convex and create-convex-style apps.
 - Add packaged Convex skills and TanStack Intent metadata so installed apps
   carry their own agent guidance.
 - Add auth scaffolding and schema sync that picks up plugin changes from
-  `auth.ts`, keeps `jwks` wired on first install, and supports both Better
-  Convex and raw Convex auth adoption.
-- Add `better-convex/auth/generated` and typed auth runtime helpers for
+  `auth.ts`, keeps `jwks` wired on first install, and supports raw Convex
+  auth adoption.
+- Add `kitcn/auth/generated` and typed auth runtime helpers for
   generated auth files.
-- Add `@better-convex/resend` with scaffolded schema, plugin, webhook, cron,
+- Add `@kitcn/resend` with scaffolded schema, plugin, webhook, cron,
   and email helpers.
 - Add app-owned schema extensions, typed plugin middleware helpers, and
   project-owned ratelimit scaffolding.

@@ -31,7 +31,7 @@ Here's a typical import block for mutation handlers:
 
 ```ts showLineNumbers title="convex/functions/users.ts"
 import { z } from 'zod';
-import { eq } from 'better-convex/orm';
+import { eq } from 'kitcn/orm';
 import { publicMutation } from '../lib/crpc';
 import { users } from '../schema';
 ```
@@ -176,7 +176,7 @@ The paginated result includes:
 Mutations that affect large sets of rows run in **async mode by default**. The first batch runs in the current mutation, then remaining batches are scheduled automatically through the Convex scheduler.
 
 ```ts showLineNumbers title="convex/functions/users.ts" {7}
-import { eq } from 'better-convex/orm';
+import { eq } from 'kitcn/orm';
 import { publicMutation } from '../lib/crpc';
 import { users } from '../schema';
 

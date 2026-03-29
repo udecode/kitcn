@@ -28,10 +28,10 @@ deepened: 2026-01-27
 
 ## Overview
 
-Queries with `skipUnauth: true` never resolve for users using `@convex-dev/auth` (React Native). PR #44 introduced a regression where `useSafeConvexAuth()` assumes no auth exists when `authStore.store` is undefined, but `@convex-dev/auth` users don't use better-convex's `AuthProvider`.
+Queries with `skipUnauth: true` never resolve for users using `@convex-dev/auth` (React Native). PR #44 introduced a regression where `useSafeConvexAuth()` assumes no auth exists when `authStore.store` is undefined, but `@convex-dev/auth` users don't use kitcn's `AuthProvider`.
 
-**Issue:** [#52](https://github.com/udecode/better-convex/issues/52)
-**Regression from:** [PR #44](https://github.com/udecode/better-convex/pull/44)
+**Issue:** [#52](https://github.com/udecode/kitcn/issues/52)
+**Regression from:** [PR #44](https://github.com/udecode/kitcn/pull/44)
 
 ## Problem Statement
 
@@ -53,7 +53,7 @@ export function useSafeConvexAuth() {
 
 **Flow for @convex-dev/auth users:**
 1. User wraps app with `ConvexProviderWithAuth` (from `@convex-dev/auth`)
-2. No `AuthProvider` from better-convex → `authStore.store` is undefined
+2. No `AuthProvider` from kitcn → `authStore.store` is undefined
 3. `useSafeConvexAuth()` returns `{ isAuthenticated: false, isLoading: false }`
 4. `useAuthSkip()` condition: `(!isAuthenticated && !isAuthLoading && !!opts?.skipUnauth)` → TRUE
 5. Query is ALWAYS skipped, never resolves
@@ -142,7 +142,7 @@ export function useSafeConvexAuth(): ConvexAuthResult {
   const authStore = useAuthStore();
   const bridgeAuth = useContext(ConvexAuthContext);
 
-  // Check better-convex AuthProvider first
+  // Check kitcn AuthProvider first
   if (authStore.store) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return useConvexAuth();
@@ -199,16 +199,16 @@ export function ConvexAuthBridge({ children }: { children: ReactNode }) {
 
 ### Files to Modify
 
-1. **`packages/better-convex/src/react/auth-store.tsx`**
+1. **`packages/kitcn/src/react/auth-store.tsx`**
    - Add `ConvexAuthContext` (holds auth result)
    - Update `useSafeConvexAuth()` to check context
    - **Also update `useAuth()` hook** (lines 100-133) - same pattern issue
    - Export `ConvexAuthBridge` component
 
-2. **`packages/better-convex/src/react/index.ts`**
+2. **`packages/kitcn/src/react/index.ts`**
    - Export `ConvexAuthBridge`
 
-3. **`packages/better-convex/src/auth-client/convex-auth-provider.tsx`** (optional symmetry)
+3. **`packages/kitcn/src/auth-client/convex-auth-provider.tsx`** (optional symmetry)
    - Wrap children with `ConvexAuthContext.Provider` for consistency
 
 ### Research Insights - Architecture
@@ -246,7 +246,7 @@ export function ConvexAuthBridge({ children }: { children: ReactNode }) {
 - [ ] Queries wait during auth loading (don't skip immediately)
 - [ ] Existing better-auth users unaffected (backward compatible)
 - [ ] Users without auth unaffected
-- [ ] Export `ConvexAuthBridge` from `better-convex/react`
+- [ ] Export `ConvexAuthBridge` from `kitcn/react`
 - [ ] **Fix `useAuth()` hook** with same pattern
 - [ ] Add unit tests for all scenarios
 - [ ] Update documentation
@@ -400,10 +400,10 @@ Wrap `useConvexAuth()` in an error boundary component.
 
 ## References
 
-- Issue: [#52](https://github.com/udecode/better-convex/issues/52)
-- Regression PR: [#44](https://github.com/udecode/better-convex/pull/44)
-- [auth-store.tsx:87-98](packages/better-convex/src/react/auth-store.tsx#L87-L98) - useSafeConvexAuth
-- [auth-store.tsx:100-133](packages/better-convex/src/react/auth-store.tsx#L100-L133) - useAuth (also needs fix)
-- [auth.ts:19-38](packages/better-convex/src/internal/auth.ts#L19-L38) - useAuthSkip
+- Issue: [#52](https://github.com/udecode/kitcn/issues/52)
+- Regression PR: [#44](https://github.com/udecode/kitcn/pull/44)
+- [auth-store.tsx:87-98](packages/kitcn/src/react/auth-store.tsx#L87-L98) - useSafeConvexAuth
+- [auth-store.tsx:100-133](packages/kitcn/src/react/auth-store.tsx#L100-L133) - useAuth (also needs fix)
+- [auth.ts:19-38](packages/kitcn/src/internal/auth.ts#L19-L38) - useAuthSkip
 - [Kent C. Dodds - React Context Effectively](https://kentcdodds.com/blog/how-to-use-react-context-effectively)
 - [React Rules of Hooks](https://legacy.reactjs.org/docs/hooks-rules.html)

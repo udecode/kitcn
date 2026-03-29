@@ -9,11 +9,11 @@ workarounds, or removing Concave-specific bandaids after upstream catches up.
 
 Keep the boundary hard:
 
-- public Better Convex CLI supports `backend: "concave"` and `--backend concave`
-- public Better Convex CLI still defaults to Convex
+- public kitcn CLI supports `backend: "concave"` and `--backend concave`
+- public kitcn CLI still defaults to Convex
 - `/example` stays on Convex
 - the big `convex-test` suites stay on Convex tooling
-- Concave is both a real Better Convex backend and the repo's preferred agent/CI runtime lane
+- Concave is both a real kitcn backend and the repo's preferred agent/CI runtime lane
 
 Do not restate generic Convex docs here. The `convex` skill already owns that.
 
@@ -53,7 +53,7 @@ These are the Concave-only facts worth keeping in your head.
 ### Configuration / API differences
 
 - `concave.config.ts` is real Concave surface area.
-- `convex.json` works now. That matters here because Better Convex already uses it.
+- `convex.json` works now. That matters here because kitcn already uses it.
 - Bun/Node use `createConcave(...)`.
 - Cloudflare uses explicit `defineConcaveRuntime(...)` wiring.
 - Adapter choice is part of the product, not hidden infra:
@@ -81,10 +81,10 @@ We use Concave in two concrete ways.
 
 ### Public backend selector
 
-Better Convex now resolves backend in this order:
+kitcn now resolves backend in this order:
 
 1. `--backend <convex|concave>`
-2. `meta["better-convex"].backend` in `concave.json`
+2. `meta["kitcn"].backend` in `concave.json`
 3. default `convex`
 
 Public meaning:
@@ -98,16 +98,16 @@ Internal meaning:
 
 Files:
 
-- `packages/better-convex/src/cli/config.ts`
-- `packages/better-convex/src/cli/core.ts`
-- `packages/better-convex/src/cli/cli.ts`
+- `packages/kitcn/src/cli/config.ts`
+- `packages/kitcn/src/cli/core.ts`
+- `packages/kitcn/src/cli/cli.ts`
 
 Command shape:
 
-- Better Convex orchestration commands (`init`, `dev`, `codegen`, `deploy`, `migrate`, `aggregate`, `reset`) run on the selected backend
+- kitcn orchestration commands (`init`, `dev`, `codegen`, `deploy`, `migrate`, `aggregate`, `reset`) run on the selected backend
 - unknown commands pass through to the selected backend CLI
-- `better-convex env sync` stays a Better Convex helper
-- raw `better-convex env ...` passthrough is Convex-only because Concave has no matching upstream env command
+- `kitcn env sync` stays a kitcn helper
+- raw `kitcn env ...` passthrough is Convex-only because Concave has no matching upstream env command
 
 ### Concave smoke lane
 
@@ -130,7 +130,7 @@ Runtime shape:
 
 Goal:
 
-- generated Better Convex runtime contract loads
+- generated kitcn runtime contract loads
 - one mutation/query roundtrip works end-to-end
 
 Keep it small. This is a smoke lane, not a migration plan.
@@ -140,14 +140,14 @@ Keep it small. This is a smoke lane, not a migration plan.
 ### Template sync/check uses the public backend selector
 
 `tooling/fixtures.ts` runs local committed starter sync with
-`better-convex init -t <next|vite> --backend concave`.
+`kitcn init -t <next|vite> --backend concave`.
 
 That means:
 
 - committed `fixtures/*/convex/functions/_generated/*` comes from the create
-  flow running Better Convex codegen against Concave-backed bootstrap
+  flow running kitcn codegen against Concave-backed bootstrap
 - template-mode Concave codegen intentionally uses `concave codegen --static`
-- `tooling/fixtures.ts` itself must not shell out to raw `better-convex codegen`
+- `tooling/fixtures.ts` itself must not shell out to raw `kitcn codegen`
 
 ### `_generated/*` drift is expected
 
@@ -170,7 +170,7 @@ Current repo truth:
 
 - alpha.14 emits the same `api.d.ts` shape our old source-backed override used
   to force
-- Better Convex no longer post-writes `_generated/api.d.ts`
+- kitcn no longer post-writes `_generated/api.d.ts`
 
 Meaning:
 
@@ -202,9 +202,9 @@ The right model is:
 
 Start with repo wiring:
 
-- `packages/better-convex/src/cli/backend-core.ts`
-- `packages/better-convex/src/cli/commands/init.ts`
-- `packages/better-convex/src/cli/commands/init.test.ts`
+- `packages/kitcn/src/cli/backend-core.ts`
+- `packages/kitcn/src/cli/commands/init.ts`
+- `packages/kitcn/src/cli/commands/init.test.ts`
 - `tooling/fixtures.ts`
 - `tooling/fixtures.test.ts`
 - `tooling/scenarios.ts`
@@ -230,8 +230,8 @@ Then read Concave docs starting from:
 When touching Concave repo-runtime wiring, run:
 
 ```bash
-bun test packages/better-convex/src/cli/commands/init.test.ts ./tooling/fixtures.test.ts ./tooling/scenarios.test.ts
-bun test packages/better-convex/src/cli/cli.test.ts
+bun test packages/kitcn/src/cli/commands/init.test.ts ./tooling/fixtures.test.ts ./tooling/scenarios.test.ts
+bun test packages/kitcn/src/cli/cli.test.ts
 bun run test:concave
 bun run fixtures:check
 bun run scenario:check
@@ -240,7 +240,7 @@ bun run scenario:check
 If package code changed too, also run:
 
 ```bash
-bun --cwd packages/better-convex build
+bun --cwd packages/kitcn build
 bun lint:fix
 bun typecheck
 ```
@@ -254,11 +254,11 @@ When Concave docs or repo usage changes, update this skill with this exact loop.
 ```bash
 rg -n "backend|concave-bun|test:concave|createConcave|@concavejs|Concave|--backend" \
   package.json \
-  packages/better-convex/src/cli/backend-core.ts \
-  packages/better-convex/src/cli/config.ts \
-  packages/better-convex/src/cli/cli.ts \
-  packages/better-convex/src/cli/commands/init.ts \
-  packages/better-convex/src/cli/commands/init.test.ts \
+  packages/kitcn/src/cli/backend-core.ts \
+  packages/kitcn/src/cli/config.ts \
+  packages/kitcn/src/cli/cli.ts \
+  packages/kitcn/src/cli/commands/init.ts \
+  packages/kitcn/src/cli/commands/init.test.ts \
   tooling/fixtures.ts \
   tooling/fixtures.test.ts \
   tooling/scenarios.ts \

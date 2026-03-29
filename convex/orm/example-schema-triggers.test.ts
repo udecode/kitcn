@@ -2,10 +2,10 @@ import {
   getSchemaTriggers,
   getTableConfig,
   requireSchemaRelations,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import { describe, expect, test } from 'vitest';
 import schema, { tables } from '../../example/convex/functions/schema';
-import { compileCountQueryPlan } from '../../packages/better-convex/src/orm/aggregate-index/runtime';
+import { compileCountQueryPlan } from '../../packages/kitcn/src/orm/aggregate-index/runtime';
 
 describe('example schema aggregate triggers', () => {
   const relations = requireSchemaRelations(schema);

@@ -1,8 +1,8 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRatelimit } from 'better-convex/ratelimit/react';
-import { useMaybeAuth } from 'better-convex/react';
+import { useRatelimit } from 'kitcn/ratelimit/react';
+import { useMaybeAuth } from 'kitcn/react';
 import {
   AlertTriangle,
   CheckCircle2,

@@ -323,7 +323,7 @@ db.query.users.findMany({
 ```markdown
 # Type Tests
 
-Type-only tests for Better Convex ORM, following Drizzle patterns.
+Type-only tests for kitcn ORM, following Drizzle patterns.
 
 ## Running Tests
 
@@ -516,7 +516,7 @@ Expect<Not<IsAny<InferSelectModel<typeof users>>>>;  // Catch 'any' leaks
 **Implementation**:
 ```typescript
 // Example structure (tables.ts)
-import { convexTable, text, integer, id, InferSelectModel, InferInsertModel } from 'better-convex/orm';
+import { convexTable, text, integer, id, InferSelectModel, InferInsertModel } from 'kitcn/orm';
 import { Expect, Equal } from './utils';
 
 // Test 1: InferSelectModel equivalence

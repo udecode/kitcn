@@ -9,7 +9,7 @@ tags:
   - opentelemetry
   - cli
 symptoms:
-  - plain `better-convex codegen` fails in non-auth apps with `Cannot find package '@opentelemetry/api'`
+  - plain `kitcn codegen` fails in non-auth apps with `Cannot find package '@opentelemetry/api'`
   - `fixtures:sync` or `fixtures:check` break in plain `vite` or `next` lanes before auth is installed
   - the packaged CLI imports Better Auth runtime code on startup even when the app has no `auth.ts`
 module: codegen
@@ -22,7 +22,7 @@ resolved: 2026-03-25
 
 Plain scaffold lanes started failing again during packaged CLI runs.
 
-The app did not have auth enabled, but `better-convex codegen` still crashed
+The app did not have auth enabled, but `kitcn codegen` still crashed
 with:
 
 ```txt
@@ -40,7 +40,7 @@ The managed auth schema reconcile helper had a static import:
 import { convex } from "@convex-dev/better-auth/plugins";
 ```
 
-That file is bundled into the CLI. So a cold command like `better-convex
+That file is bundled into the CLI. So a cold command like `kitcn
 codegen` dragged the managed auth Convex plugin into the startup graph even
 when auth was disabled.
 
@@ -63,17 +63,17 @@ generation when auth scaffold is present.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
-- `bun test packages/better-convex/src/cli/codegen.test.ts`
-- `bun --cwd packages/better-convex typecheck`
-- `bun --cwd packages/better-convex build`
+- `bun test packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
+- `bun test packages/kitcn/src/cli/codegen.test.ts`
+- `bun --cwd packages/kitcn typecheck`
+- `bun --cwd packages/kitcn build`
 - `bun run fixtures:sync`
 - `bun run fixtures:check`
 - `bun run scenario:test -- vite`
 
 Live repro after the fix:
 
-- a freshly packed `better-convex` tarball installed into a plain temp Vite app
+- a freshly packed `kitcn` tarball installed into a plain temp Vite app
 - `bun run codegen` completed without pulling `@opentelemetry/api`
 
 ## Prevention

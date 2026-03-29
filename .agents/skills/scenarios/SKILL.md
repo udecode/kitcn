@@ -1,6 +1,6 @@
 ---
 name: scenarios
-description: Prove Better Convex scenario and template runtime the right way. Use when validating prepared scenario apps, auth smoke and browser lanes, or deciding whether a scenario key should use `scenario:dev` or `scenario:check`.
+description: Prove kitcn scenario and template runtime the right way. Use when validating prepared scenario apps, auth smoke and browser lanes, or deciding whether a scenario key should use `scenario:dev` or `scenario:check`.
 ---
 
 # Scenarios
@@ -135,12 +135,12 @@ Or:
 
 Why:
 
-- Fresh Better Convex lanes already bootstrap during `scenario:prepare`
-  through `better-convex init -t <next|vite> --yes`, then finish the
-  bootstrap-heavy proof with in-place `better-convex init --yes` after plugin
+- Fresh kitcn lanes already bootstrap during `scenario:prepare`
+  through `kitcn init -t <next|vite> --yes`, then finish the
+  bootstrap-heavy proof with in-place `kitcn init --yes` after plugin
   setup.
 - The raw Convex auth adoption lane still owns `convex init` plus
-  `better-convex add auth --preset convex --yes`.
+  `kitcn add auth --preset convex --yes`.
 - Raw Convex auth adoption is not a `next-auth` browser demo. Do not invent
   `/auth`.
 

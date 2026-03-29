@@ -1,34 +1,27 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "better-convex",
+  "name": "kitcn",
   "owner": {
     "name": "zbeyens"
   },
   "metadata": {
-    "description": "Better Convex development skills",
+    "description": "kitcn development skills",
     "version": "0.6.2"
   },
   "plugins": [
     {
-      "name": "better-convex",
-      "description": "Better Convex development skills",
+      "name": "kitcn",
+      "description": "kitcn development skills",
       "version": "0.6.2",
       "source": "./",
       "strict": false,
       "author": {
         "name": "zbeyens"
       },
-      "homepage": "https://github.com/udecode/better-convex",
-      "repository": "https://github.com/udecode/better-convex",
+      "homepage": "https://github.com/udecode/kitcn",
+      "repository": "https://github.com/udecode/kitcn",
       "license": "MIT",
-      "keywords": [
-        "convex",
-        "crpc",
-        "orm",
-        "better-convex",
-        "auth",
-        "triggers"
-      ],
+      "keywords": ["convex", "crpc", "orm", "kitcn", "auth", "triggers"],
       "category": "development"
     }
   ]

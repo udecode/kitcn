@@ -10,7 +10,7 @@ tags:
 symptoms:
   - docs tell users to run `@better-auth/cli generate` by hand after changing auth plugins or auth fields
   - managed auth schema files drift from the current auth definition
-  - raw Convex and Better Convex auth paths use different generated files but need the same refresh behavior
+  - raw Convex and kitcn auth paths use different generated files but need the same refresh behavior
 module: auth-cli
 resolved: 2026-03-23
 ---
@@ -21,7 +21,7 @@ resolved: 2026-03-23
 
 The auth install flow already owned managed schema files:
 
-- Better Convex scaffold writes `convex/lib/plugins/auth/schema.ts`
+- kitcn scaffold writes `convex/lib/plugins/auth/schema.ts`
 - raw Convex adoption writes `<functionsDir>/authSchema.ts`
 
 But the docs still told users to run `@better-auth/cli generate` by hand when
@@ -36,7 +36,7 @@ The registry planner rendered auth schema files from static templates only.
 There was no reconciliation step that loaded the current auth definition and
 re-rendered the managed schema file from real auth tables.
 
-So rerunning `better-convex add auth` could patch routes and other files, but
+So rerunning `kitcn add auth` could patch routes and other files, but
 it could not refresh the managed auth schema file from the current auth
 options.
 
@@ -54,15 +54,15 @@ Auth now:
 
 Mode-specific output stays intact:
 
-- Better Convex scaffold refreshes the schema extension file
+- kitcn scaffold refreshes the schema extension file
 - raw Convex adoption refreshes `<functionsDir>/authSchema.ts` with
   `export const authSchema = ...`
 
 ## Verification
 
-- `bun test packages/better-convex/src/auth/create-schema-orm.test.ts packages/better-convex/src/auth/create-schema.test.ts packages/better-convex/src/cli/registry/index.test.ts packages/better-convex/src/cli/registry/planner.test.ts packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
-- `bun --cwd packages/better-convex build`
-- `bun --cwd packages/better-convex typecheck`
+- `bun test packages/kitcn/src/auth/create-schema-orm.test.ts packages/kitcn/src/auth/create-schema.test.ts packages/kitcn/src/cli/registry/index.test.ts packages/kitcn/src/cli/registry/planner.test.ts packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
+- `bun --cwd packages/kitcn build`
+- `bun --cwd packages/kitcn typecheck`
 - `bun lint:fix`
 
 ## Prevention

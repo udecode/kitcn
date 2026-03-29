@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make `better-convex dev` show Better Convex-owned bootstrap summaries instead of
+Make `kitcn dev` show kitcn-owned bootstrap summaries instead of
 raw Convex subprocess spam.
 
 ## Phases
@@ -20,6 +20,6 @@ raw Convex subprocess spam.
 - Follow-up: keep one explicit rerun signal on file edits. `chokidar@5`
   dropped glob support, so the watcher has to use explicit roots plus an
   ignore predicate or live dev silently stops regenerating shared API output.
-- Final cut: long-running `better-convex dev` keeps the raw Convex backend
+- Final cut: long-running `kitcn dev` keeps the raw Convex backend
   stream. Only one-shot bootstrap/verify stay on the filtered owned output
   path.

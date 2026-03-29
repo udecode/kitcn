@@ -8,7 +8,7 @@ status: draft
 # fix: cascade delete scale safety under Convex limits
 
 ## Overview
-Harden Better Convex ORM cascade execution so large fan-out delete/update workloads remain correct and predictable under Convex transaction and scheduling limits.
+Harden kitcn ORM cascade execution so large fan-out delete/update workloads remain correct and predictable under Convex transaction and scheduling limits.
 
 This plan implements five changes together:
 1. Fix cascade continuation semantics by work type (cursor-forward for patch/update paths, re-query-from-null for hard-delete cascade path).
@@ -22,8 +22,8 @@ Found brainstorm from 2026-02-07: `cascade-delete-scale-vs-ents`. Using as conte
 
 ## Problem Statement / Motivation
 Current async cascade logic has scale and correctness gaps for high fan-out graphs:
-- Scheduled cascade worker currently ignores passed cursor for cascade work and re-queries from start (`packages/better-convex/src/orm/scheduled-mutation-batch.ts:207`, `packages/better-convex/src/orm/scheduled-mutation-batch.ts:316`).
-- `scheduledDelete` executes sync cascade path (`packages/better-convex/src/orm/scheduled-delete.ts:39`), which can hit single-mutation limits for large delayed hard deletes.
+- Scheduled cascade worker currently ignores passed cursor for cascade work and re-queries from start (`packages/kitcn/src/orm/scheduled-mutation-batch.ts:207`, `packages/kitcn/src/orm/scheduled-mutation-batch.ts:316`).
+- `scheduledDelete` executes sync cascade path (`packages/kitcn/src/orm/scheduled-delete.ts:39`), which can hit single-mutation limits for large delayed hard deletes.
 - Batch budgeting uses row count only; no byte budget to protect `16 MiB` read limits.
 - Scheduler usage is uncapped per mutation despite Convex scheduling limit of 1000 enqueues per mutation.
 
@@ -106,7 +106,7 @@ Why:
 - Hard-delete paths mutate the scanned set; this plan intentionally uses re-query-from-null for correctness-first behavior.
 
 File scope:
-- `packages/better-convex/src/orm/scheduled-mutation-batch.ts:196-323`
+- `packages/kitcn/src/orm/scheduled-mutation-batch.ts:196-323`
 
 ## 2) Async `scheduledDelete` (P1)
 Make delayed hard-delete scale-safe.
@@ -117,8 +117,8 @@ Changes:
 - Update `createOrm` wiring to pass required refs.
 
 File scope:
-- `packages/better-convex/src/orm/scheduled-delete.ts:16-44`
-- `packages/better-convex/src/orm/create-orm.ts:151-162`
+- `packages/kitcn/src/orm/scheduled-delete.ts:16-44`
+- `packages/kitcn/src/orm/create-orm.ts:151-162`
 
 Compatibility note:
 - If `scheduledDeleteFactory` signature changes, treat as internal API change and update all internal exports/re-exports.
@@ -136,11 +136,11 @@ Behavior:
 - Read-budget only (no separate write-byte budget in v1).
 
 File scope:
-- `packages/better-convex/src/orm/symbols.ts:6-12`
-- `packages/better-convex/src/orm/schema.ts:16-63` (validation + normalization)
-- `packages/better-convex/src/orm/mutation-utils.ts` (defaults plumbing)
-- `packages/better-convex/src/orm/scheduled-mutation-batch.ts` (enforcement)
-- `packages/better-convex/src/orm/types.ts:994-1002` (optional async config extension if per-call override added now)
+- `packages/kitcn/src/orm/symbols.ts:6-12`
+- `packages/kitcn/src/orm/schema.ts:16-63` (validation + normalization)
+- `packages/kitcn/src/orm/mutation-utils.ts` (defaults plumbing)
+- `packages/kitcn/src/orm/scheduled-mutation-batch.ts` (enforcement)
+- `packages/kitcn/src/orm/types.ts:994-1002` (optional async config extension if per-call override added now)
 
 ## 4) Recursive vs Non-Recursive Batch Routing (P2)
 Add separate defaults for narrow and wide cascade work.
@@ -154,10 +154,10 @@ Classification:
 - Non-recursive: all other delete/update action types.
 
 File scope:
-- `packages/better-convex/src/orm/symbols.ts`
-- `packages/better-convex/src/orm/schema.ts`
-- `packages/better-convex/src/orm/mutation-utils.ts:834-1130`
-- `packages/better-convex/src/orm/scheduled-mutation-batch.ts:215-314`
+- `packages/kitcn/src/orm/symbols.ts`
+- `packages/kitcn/src/orm/schema.ts`
+- `packages/kitcn/src/orm/mutation-utils.ts:834-1130`
+- `packages/kitcn/src/orm/scheduled-mutation-batch.ts:215-314`
 
 ## 5) Scheduler Fan-Out Cap + Coalescing (P1)
 Add hard cap for runAfter calls per mutation invocation (target ~100).
@@ -174,8 +174,8 @@ Notes:
 - Coalescing should include deterministic dedupe to avoid duplicate continuation units.
 
 File scope:
-- `packages/better-convex/src/orm/mutation-utils.ts`
-- `packages/better-convex/src/orm/scheduled-mutation-batch.ts`
+- `packages/kitcn/src/orm/mutation-utils.ts`
+- `packages/kitcn/src/orm/scheduled-mutation-batch.ts`
 
 ## Data Model / Config Changes
 Add new schema defaults:
@@ -248,16 +248,16 @@ Validation rules:
 
 ## References (Code + Docs)
 - Current cascade scheduling behavior:
-  - `packages/better-convex/src/orm/mutation-utils.ts:893`
-  - `packages/better-convex/src/orm/scheduled-mutation-batch.ts:207`
-  - `packages/better-convex/src/orm/scheduled-mutation-batch.ts:316`
+  - `packages/kitcn/src/orm/mutation-utils.ts:893`
+  - `packages/kitcn/src/orm/scheduled-mutation-batch.ts:207`
+  - `packages/kitcn/src/orm/scheduled-mutation-batch.ts:316`
 - Current scheduled delete sync path:
-  - `packages/better-convex/src/orm/scheduled-delete.ts:39`
-  - `packages/better-convex/src/orm/delete.ts:213`
+  - `packages/kitcn/src/orm/scheduled-delete.ts:39`
+  - `packages/kitcn/src/orm/delete.ts:213`
 - Current defaults/types:
-  - `packages/better-convex/src/orm/symbols.ts:6`
-  - `packages/better-convex/src/orm/schema.ts:16`
-  - `packages/better-convex/src/orm/types.ts:994`
+  - `packages/kitcn/src/orm/symbols.ts:6`
+  - `packages/kitcn/src/orm/schema.ts:16`
+  - `packages/kitcn/src/orm/types.ts:994`
 - Existing async/cascade tests:
   - `convex/orm/foreign-key-actions.test.ts:442`
   - `convex/orm/mutations.test.ts:527`

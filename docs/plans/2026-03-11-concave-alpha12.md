@@ -2,7 +2,7 @@
 
 ## Goal
 - Upgrade repo Concave deps to the first installable release carrying the alpha.12 feature batch.
-- Update Concave-specific docs/skills for alpha.12 facts that affect Better Convex.
+- Update Concave-specific docs/skills for alpha.12 facts that affect kitcn.
 - Verify Concave smoke and template lanes still pass.
 
 ## Scope

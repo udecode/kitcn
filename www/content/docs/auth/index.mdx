@@ -7,11 +7,11 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore better-convex's integration with Better Auth. You'll learn the key concepts, understand the architecture, and see what components are available for both server and client.
+In this guide, we'll explore kitcn's integration with Better Auth. You'll learn the key concepts, understand the architecture, and see what components are available for both server and client.
 
 ## Overview
 
-better-convex integrates [Better Auth](https://better-auth.com) with Convex:
+kitcn integrates [Better Auth](https://better-auth.com) with Convex:
 
 | Feature | Description |
 |---------|-------------|
@@ -29,9 +29,9 @@ Let's understand the key concepts.
 | Approach | Schema Location | Database Access |
 |----------|-----------------|-----------------|
 | Legacy component adapter | Component schema | Via `ctx.runQuery`/`ctx.runMutation` |
-| **Local** (`better-convex/auth`) | Your app schema | ORM (`ctx.orm`) |
+| **Local** (`kitcn/auth`) | Your app schema | ORM (`ctx.orm`) |
 
-better-convex uses the **local approach**:
+kitcn uses the **local approach**:
 - Auth tables live in your app schema
 - Triggers can directly access and modify your app tables
 - Single transaction for complex operations

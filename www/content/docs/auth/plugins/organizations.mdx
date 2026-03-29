@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore multi-tenant organization features with better-convex. You'll learn to set up the organization plugin, define roles and permissions, manage members and invitations, and implement team functionality.
+In this guide, we'll explore multi-tenant organization features with kitcn. You'll learn to set up the organization plugin, define roles and permissions, manage members and invitations, and implement team functionality.
 
 ## Overview
 
@@ -114,7 +114,7 @@ import {
   json,
   text,
   timestamp,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const organization = convexTable(
   'organization',
@@ -176,7 +176,7 @@ export default defineSchema(tables, { strict: false });
 ### Teams (Optional)
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-26}
-import { convexTable, id, index, integer, text, timestamp } from 'better-convex/orm';
+import { convexTable, id, index, integer, text, timestamp } from 'kitcn/orm';
 
 export const team = convexTable(
   'team',
@@ -233,7 +233,7 @@ organization({
 Then update your schema to include these fields:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-26}
-import { convexTable, text } from 'better-convex/orm';
+import { convexTable, text } from 'kitcn/orm';
 
 export const organization = convexTable('organization', {
   // ... existing fields
@@ -364,7 +364,7 @@ organization({
 ### Permission Helper
 
 ```ts title="convex/lib/auth/auth-helpers.ts" showLineNumbers {1-2,4-7,9-17}
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 import type { AuthCtx } from '../crpc';
 
 export const hasPermission = async (

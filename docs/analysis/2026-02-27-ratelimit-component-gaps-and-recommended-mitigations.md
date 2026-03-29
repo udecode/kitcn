@@ -7,7 +7,7 @@ type: analysis
 # Ratelimit component gaps and recommended mitigations
 
 ## Context
-This document captures known pain points from community references and Convex team responses, and records mitigation guidance that should be reflected in `better-convex/plugins/ratelimit` docs.
+This document captures known pain points from community references and Convex team responses, and records mitigation guidance that should be reflected in `kitcn/plugins/ratelimit` docs.
 
 ## Gaps
 
@@ -29,7 +29,7 @@ This document captures known pain points from community references and Convex te
 - For anonymous flows, prefer captcha + validated session IDs over raw client-generated IDs.
 - Add monitoring/alerts for traffic anomalies and use support escalation when antagonistic traffic appears.
 
-## Explicit non-goals for `better-convex/plugins/ratelimit`
+## Explicit non-goals for `kitcn/plugins/ratelimit`
 - Not a network firewall.
 - Not a DDoS mitigation service.
 - Not a zero-cost invocation shield.

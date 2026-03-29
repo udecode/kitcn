@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { useAuth } from 'better-convex/react';
+import { useAuth } from 'kitcn/react';
 import { Loader2, Play, RotateCcw, Square } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';

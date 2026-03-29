@@ -14,8 +14,8 @@ Drizzle v1 RQB docs cover SQL-only features like `extras` (SQL computed fields),
 
 ## Findings
 
-- Runtime throws for `RAW` filters and SQL placeholders in `packages/better-convex/src/orm/query.ts`.
-- `DBQueryConfig.extras` is explicitly type-only (see comment in `packages/better-convex/src/orm/types.ts`) and is ignored at runtime.
+- Runtime throws for `RAW` filters and SQL placeholders in `packages/kitcn/src/orm/query.ts`.
+- `DBQueryConfig.extras` is explicitly type-only (see comment in `packages/kitcn/src/orm/types.ts`) and is ignored at runtime.
 - `www/content/docs/orm/relations.mdx` does not call out these unsupported SQL-only features.
 
 ## Proposed Solutions
@@ -78,8 +78,8 @@ Documented SQL-only RQB limitations in `limitations.mdx` and clarified per-relat
 ## Technical Details
 
 **Affected files:**
-- `packages/better-convex/src/orm/query.ts`
-- `packages/better-convex/src/orm/types.ts`
+- `packages/kitcn/src/orm/query.ts`
+- `packages/kitcn/src/orm/types.ts`
 - `www/content/docs/orm/limitations.mdx`
 - `www/content/docs/orm/queries.mdx`
 

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add `better-convex init --bootstrap` so scaffold or adoption can chain directly
+Add `kitcn init --bootstrap` so scaffold or adoption can chain directly
 into the first local Convex bootstrap.
 
 ## Phases

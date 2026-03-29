@@ -1,3 +1,8 @@
+import type {
+  GenericDatabaseReader,
+  GenericDatabaseWriter,
+  SchedulableFunctionReference,
+} from 'convex/server';
 import {
   convexTable,
   createOrm,
@@ -8,12 +13,7 @@ import {
   type GenericOrm,
   type GenericOrmCtx,
   text,
-} from 'better-convex/orm';
-import type {
-  GenericDatabaseReader,
-  GenericDatabaseWriter,
-  SchedulableFunctionReference,
-} from 'convex/server';
+} from 'kitcn/orm';
 import { users } from './tables-rel';
 import { type Equal, Expect, IsAny } from './utils';
 

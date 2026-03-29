@@ -6,7 +6,7 @@ import { generateFreshApp, log, PROJECT_ROOT, run } from './scaffold-utils';
 const DIST_CLI_PATH = path.join(
   PROJECT_ROOT,
   'packages',
-  'better-convex',
+  'kitcn',
   'dist',
   'cli.mjs'
 );

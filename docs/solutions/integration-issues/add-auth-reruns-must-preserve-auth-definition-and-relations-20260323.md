@@ -9,7 +9,7 @@ tags:
   - scaffolding
   - example
 symptoms:
-  - rerunning `better-convex add auth --overwrite` overwrites user-authored `auth.ts` or `auth.config.ts`
+  - rerunning `kitcn add auth --overwrite` overwrites user-authored `auth.ts` or `auth.config.ts`
   - apps that already own auth tables can get duplicate auth schema registration
   - managed auth schema files drift when auth plugins are added, removed, or replaced
   - scaffolded auth schema output misses `.relations(...)` that apps expect
@@ -21,7 +21,7 @@ resolved: 2026-03-23
 
 ## Problem
 
-`example/` is the real stress case for `better-convex add auth`.
+`example/` is the real stress case for `kitcn add auth`.
 
 It already owns auth-heavy app code, already defines local auth tables in its
 root schema, and changes Better Auth plugins over time. Rerunning `add auth`
@@ -74,9 +74,9 @@ That gives the command the right behavior for plugin churn:
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/registry/items/auth/reconcile-auth-schema.test.ts packages/better-convex/src/cli/registry/items/auth/auth-item.test.ts packages/better-convex/src/auth/create-schema-orm.test.ts`
-- `bun --cwd packages/better-convex build`
-- `bun --cwd packages/better-convex typecheck`
+- `bun test packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts packages/kitcn/src/auth/create-schema-orm.test.ts`
+- `bun --cwd packages/kitcn build`
+- `bun --cwd packages/kitcn typecheck`
 - live example churn with `bun run gen:auth -- --overwrite --no-codegen` for:
   - base `convex()` only
   - `admin()`

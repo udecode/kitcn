@@ -82,9 +82,9 @@ verification stays black-box.
 
 ## Verification
 
-- `bun test packages/better-convex/src/cli/codegen.test.ts --test-name-pattern 'runtime refs without _generated api namespace indexing'`
+- `bun test packages/kitcn/src/cli/codegen.test.ts --test-name-pattern 'runtime refs without _generated api namespace indexing'`
 - `bun test tooling/fixtures.test.ts`
-- `bun --cwd packages/better-convex build`
+- `bun --cwd packages/kitcn build`
 - `bun install`
 - `bun typecheck`
 - `bun run fixtures:check`
