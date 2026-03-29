@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { relative } from 'node:path';
 import {
   parseArgs,
   parseInitCommandArgs,
@@ -67,9 +67,7 @@ export const handleInitCommand = async (
   }
 
   const initArgs = parseInitCommandArgs(parsed.restArgs);
-  const bootstrapConfigPath = parsed.configPath
-    ? resolve(parsed.configPath)
-    : undefined;
+  const bootstrapConfigPath = parsed.configPath;
   const {
     execa: execaFn,
     generateMeta: generateMetaFn,

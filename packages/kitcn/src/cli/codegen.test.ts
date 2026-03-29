@@ -2406,6 +2406,88 @@ describe('cli/codegen', () => {
     }
   });
 
+  test('generateMeta keeps generated auth and migrations schema-free when schema metadata is absent', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'kitcn', 'package.json'),
+        JSON.stringify({
+          name: 'kitcn',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'kitcn', 'server.js'),
+        `
+        export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
+          const meta = maybeMeta ?? pathOrMeta;
+          const fn = Array.isArray(pathOrMeta)
+            ? pathOrMeta.reduce((current, segment) => current?.[segment], fnOrRoot)
+            : fnOrRoot;
+          return Object.assign(fn, meta, { functionRef: fn });
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'api.js'),
+        `
+        export const api = {
+          todos: {
+            list: { ref: 'todos:list' },
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedAuth = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'auth.ts'),
+        'utf-8'
+      );
+      const generatedMigrations = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'migrations.gen.ts'),
+        'utf-8'
+      );
+
+      expect(generatedAuth).toContain('createDisabledAuthRuntime');
+      expect(generatedAuth).not.toContain("import schema from '../schema';");
+      expect(generatedAuth).toContain(
+        "import type { GenericSchema, SchemaDefinition } from 'convex/server';"
+      );
+      expect(generatedAuth).toContain(
+        'type GeneratedSchema = SchemaDefinition<GenericSchema, true>;'
+      );
+      expect(generatedAuth).toContain(
+        '> = createDisabledAuthRuntime<DataModel, GeneratedSchema, MutationCtx, GenericCtx>({'
+      );
+      expect(generatedMigrations).toContain(
+        "export { defineMigration } from 'kitcn/orm';"
+      );
+      expect(generatedMigrations).not.toContain(
+        "import schema from '../schema';"
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta uses convex.json functions dir in disabled auth guidance', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

@@ -517,6 +517,11 @@ function buildAuthConvexReactEntryPlanFile(
       'Auth preset "convex" requires a supported Next or Vite app shell.'
     );
   }
+  if (!projectContext.clientEntryFile) {
+    throw new Error(
+      'Auth preset "convex" requires a Vite-style client entry file (main.tsx/main.jsx).'
+    );
+  }
 
   const entryPath = resolve(process.cwd(), projectContext.clientEntryFile);
   let source = fs.readFileSync(entryPath, 'utf8');

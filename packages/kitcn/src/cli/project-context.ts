@@ -39,7 +39,7 @@ export type ReactScaffoldContext = CommonScaffoldContext & {
   framework: Exclude<DetectedProjectFramework, 'next-app'>;
   mode: 'react';
   appDir: null;
-  clientEntryFile: string;
+  clientEntryFile: string | null;
   tailwindCssPath: string | null;
   tsconfigAppFile: string | null;
   viteConfigFile: string | null;
@@ -224,7 +224,10 @@ function inferUsesSrc(cwd: string, mode: ScaffoldMode): boolean {
   return distinct[0] ?? false;
 }
 
-function resolveReactClientEntryFile(cwd: string, usesSrc: boolean): string {
+function resolveReactClientEntryFile(
+  cwd: string,
+  usesSrc: boolean
+): string | null {
   const candidates = usesSrc
     ? ['src/main.tsx', 'src/main.jsx', 'src/main.ts', 'src/main.js']
     : ['main.tsx', 'main.jsx', 'main.ts', 'main.js'];
@@ -232,14 +235,7 @@ function resolveReactClientEntryFile(cwd: string, usesSrc: boolean): string {
   const match = candidates.find((relativePath) =>
     fs.existsSync(resolve(cwd, relativePath))
   );
-
-  if (!match) {
-    throw new Error(
-      'React scaffolding requires a Vite-style client entry file (main.tsx/main.jsx).'
-    );
-  }
-
-  return match.replaceAll('\\', '/');
+  return match ? match.replaceAll('\\', '/') : null;
 }
 
 export function detectProjectFramework(

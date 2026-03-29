@@ -2120,6 +2120,11 @@ function buildInitReactViteConfigPlanFile(
 function buildInitReactMainPlanFile(
   context: ReactScaffoldContext
 ): PluginInstallPlanFile {
+  if (!context.clientEntryFile) {
+    throw new Error(
+      'React scaffolding requires a Vite-style client entry file (main.tsx/main.jsx).'
+    );
+  }
   const filePath = resolve(process.cwd(), context.clientEntryFile);
   if (!fs.existsSync(filePath)) {
     throw new Error(

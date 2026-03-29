@@ -522,7 +522,13 @@ describe('cli/commands/init', () => {
     );
     const generateMetaStub = mock(async () => {});
     const syncEnvStub = mock(async () => {});
-    const loadConfigStub = mock(() => createDefaultConfig());
+    const resolvedConfigPaths: string[] = [];
+    const loadConfigStub = mock((configPath?: string) => {
+      if (configPath) {
+        resolvedConfigPaths.push(path.resolve(configPath));
+      }
+      return createDefaultConfig();
+    });
     const runLocalBootstrapStub = mock(async () => 0);
     const originalCwd = process.cwd();
     process.chdir(tmpDir);
@@ -539,7 +545,51 @@ describe('cli/commands/init', () => {
         }
       );
       expect(exitCode).toBe(0);
-      expect(loadConfigStub.mock.calls.at(-1)?.[0]).toBe(absoluteConfigPath);
+      expect(resolvedConfigPaths.at(-1)).toBe(absoluteConfigPath);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand resolves relative --config paths from the init target directory', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-bootstrap-target-config-')
+    );
+    const projectDir = path.join(tmpDir, 'apps', 'web');
+    writeShadcnNextApp(projectDir);
+    const expectedConfigPath = path.join(
+      fs.realpathSync(projectDir),
+      'concave.json'
+    );
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const resolvedConfigPaths: string[] = [];
+    const loadConfigStub = mock((configPath?: string) => {
+      if (configPath) {
+        resolvedConfigPaths.push(path.resolve(configPath));
+      }
+      return createDefaultConfig();
+    });
+    const runLocalBootstrapStub = mock(async () => 0);
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(
+        ['init', '--cwd', 'apps/web', '--yes', '--config', 'concave.json'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+          runLocalBootstrap: runLocalBootstrapStub as any,
+        }
+      );
+      expect(exitCode).toBe(0);
+      expect(resolvedConfigPaths.at(-1)).toBe(expectedConfigPath);
     } finally {
       process.chdir(originalCwd);
     }

@@ -10,6 +10,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { renderInitNextEnvLocalTemplate } from '../packages/kitcn/src/cli/registry/init/next/init-next-env-local.template';
+import { renderInitReactEnvLocalTemplate } from '../packages/kitcn/src/cli/registry/init/react/init-react-env-local.template';
 import {
   KITCN_INSTALL_SPEC_ENV,
   KITCN_RESEND_INSTALL_SPEC_ENV,
@@ -53,7 +55,18 @@ const TRAILING_NEWLINES_RE = /\n*$/;
 const APPLEDOUBLE_ENTRY_RE = /^\._/;
 const SCRIPT_PORT_FLAG_RE = /(?:^|\s)--port(?:=|\s)\d+\b/;
 const NEXT_DEV_SCRIPT_RE = /\bnext\s+dev\b/;
+const NEXT_CONFIG_ENTRY_NAMES = new Set([
+  'next.config.js',
+  'next.config.mjs',
+  'next.config.ts',
+]);
 const VITE_DEV_SCRIPT_RE = /^vite(?:\s|$)/;
+const VITE_CONFIG_ENTRY_NAMES = new Set([
+  'vite.config.js',
+  'vite.config.mjs',
+  'vite.config.ts',
+  'vite.config.mts',
+]);
 const ENV_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
 const GET_ENV_SITE_URL_DEFAULT_RE =
   /SITE_URL:\s*z\.string\(\)\.default\((['"])http:\/\/localhost:3000\1\)/;
@@ -483,10 +496,34 @@ export const patchPreparedLocalDevPort = (
 ) => {
   const localDevSiteUrl = resolveLocalDevSiteUrl(port);
   const packageJsonPath = path.join(directory, 'package.json');
+  let envTemplateKind: 'next' | 'vite' | null = null;
   if (existsSync(packageJsonPath)) {
     const packageJson = readJson<WorkspacePackageJson>(packageJsonPath);
     const nextScripts = { ...(packageJson.scripts ?? {}) };
+    const scriptValues = Object.values(nextScripts);
+    const dependencies = {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+    };
     let packageJsonChanged = false;
+
+    if (
+      scriptValues.some((script) => NEXT_DEV_SCRIPT_RE.test(script ?? '')) ||
+      'next' in dependencies ||
+      [...NEXT_CONFIG_ENTRY_NAMES].some((entry) =>
+        existsSync(path.join(directory, entry))
+      )
+    ) {
+      envTemplateKind = 'next';
+    } else if (
+      scriptValues.some((script) => VITE_DEV_SCRIPT_RE.test(script ?? '')) ||
+      'vite' in dependencies ||
+      [...VITE_CONFIG_ENTRY_NAMES].some((entry) =>
+        existsSync(path.join(directory, entry))
+      )
+    ) {
+      envTemplateKind = 'vite';
+    }
 
     for (const scriptName of ['dev', 'dev:frontend'] as const) {
       const normalized = normalizeLocalDevScript(nextScripts[scriptName], port);
@@ -505,6 +542,13 @@ export const patchPreparedLocalDevPort = (
   }
 
   const envLocalPath = path.join(directory, '.env.local');
+  if (!existsSync(envLocalPath)) {
+    if (envTemplateKind === 'next') {
+      writeFileSync(envLocalPath, renderInitNextEnvLocalTemplate());
+    } else if (envTemplateKind === 'vite') {
+      writeFileSync(envLocalPath, renderInitReactEnvLocalTemplate());
+    }
+  }
   if (existsSync(envLocalPath)) {
     const envLocalSource = readFileSync(envLocalPath, 'utf8');
     const envEntries: Record<string, string> = {};

@@ -603,6 +603,61 @@ describe('tooling/scenarios', () => {
     }
   });
 
+  test('patchPreparedLocalDevPort recreates missing baseline .env.local files', async () => {
+    const rootDir = `/tmp/kitcn-scenario-env-local-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const nextDir = `${rootDir}/next`;
+    const viteDir = `${rootDir}/vite`;
+    const localPort = 3017;
+
+    await Bun.write(
+      `${nextDir}/package.json`,
+      JSON.stringify({
+        name: 'next-app',
+        private: true,
+        scripts: {
+          dev: 'next dev --turbopack',
+        },
+      })
+    );
+    await Bun.write(
+      `${nextDir}/convex/.env`,
+      'SITE_URL=http://localhost:3000\n'
+    );
+
+    await Bun.write(
+      `${viteDir}/package.json`,
+      JSON.stringify({
+        name: 'vite-app',
+        private: true,
+        scripts: {
+          dev: 'vite',
+        },
+      })
+    );
+
+    try {
+      patchPreparedLocalDevPort(nextDir, localPort);
+      patchPreparedLocalDevPort(viteDir, localPort);
+
+      expect(fs.readFileSync(`${nextDir}/.env.local`, 'utf8')).toContain(
+        'NEXT_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211'
+      );
+      expect(fs.readFileSync(`${nextDir}/.env.local`, 'utf8')).toContain(
+        'NEXT_PUBLIC_SITE_URL=http://localhost:3017'
+      );
+      expect(fs.readFileSync(`${viteDir}/.env.local`, 'utf8')).toContain(
+        'VITE_CONVEX_SITE_URL=http://127.0.0.1:3211'
+      );
+      expect(fs.readFileSync(`${viteDir}/.env.local`, 'utf8')).toContain(
+        'VITE_SITE_URL=http://localhost:3017'
+      );
+    } finally {
+      await Bun.$`rm -rf ${rootDir}`.quiet();
+    }
+  });
+
   test('runScenarioDev reuses an existing prepared project and runs its dev script', async () => {
     const outputRoot = Bun.file(
       `/tmp/kitcn-scenario-dev-${Date.now()}-${Math.random().toString(36).slice(2)}`
