@@ -1,6 +1,9 @@
 ---
-name: 2-tech-stack
 description: Tech stack documentation for the project
+name: 2-tech-stack
+metadata:
+  skiller:
+    source: .agents/rules/2-tech-stack.mdc
 ---
 
 # Tech Stack Documentation

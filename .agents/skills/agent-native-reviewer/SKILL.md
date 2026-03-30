@@ -4,6 +4,9 @@ description: Reviews code to ensure agent-native parity -- any action a user can
 model: inherit
 color: cyan
 tools: Read, Grep, Glob, Bash
+metadata:
+  skiller:
+    source: plugins/compound-engineering/agents/review/agent-native-reviewer.md
 ---
 
 <examples>

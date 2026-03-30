@@ -1,6 +1,9 @@
 ---
-name: changeset
 description: Use when writing changesets for releases
+name: changeset
+metadata:
+  skiller:
+    source: .agents/rules/changeset.mdc
 ---
 
 # Changeset Writing

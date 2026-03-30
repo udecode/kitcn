@@ -4,6 +4,9 @@ description: Always-on code-review persona. Reviews code for logic errors, edge 
 model: inherit
 tools: Read, Grep, Glob, Bash
 color: blue
+metadata:
+  skiller:
+    source: plugins/compound-engineering/agents/review/correctness-reviewer.md
 ---
 
 # Correctness Reviewer

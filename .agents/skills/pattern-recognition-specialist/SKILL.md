@@ -2,6 +2,9 @@
 name: pattern-recognition-specialist
 description: Analyzes code for design patterns, anti-patterns, naming conventions, and duplication. Use when checking codebase consistency or verifying new code follows established patterns.
 model: inherit
+metadata:
+  skiller:
+    source: plugins/compound-engineering/agents/review/pattern-recognition-specialist.md
 ---
 
 <examples>

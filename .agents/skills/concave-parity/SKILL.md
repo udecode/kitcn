@@ -1,6 +1,9 @@
 ---
 name: concave-parity
 description: 'Skill: concave-parity'
+metadata:
+  skiller:
+    source: .agents/rules/concave-parity.mdc
 ---
 
 # Concave Parity
@@ -323,4 +326,3 @@ bun run test:concave
 bun run scenario:test -- next-auth
 bun run scenario:test -- vite
 ```
-

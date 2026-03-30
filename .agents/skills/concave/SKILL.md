@@ -1,6 +1,9 @@
 ---
 name: concave
-description: Use and maintain this skill when working on kitcn's Concave backend, Concave-specific behavior, template sync, or the Concave smoke lane.
+description: 'Skill: concave'
+metadata:
+  skiller:
+    source: .agents/rules/concave.mdc
 ---
 
 # Concave
@@ -315,4 +318,3 @@ bun run intent:stale
 ```
 
 If `.claude/AGENTS.md` changes, that is expected. It is generated from `.claude/**`.
-

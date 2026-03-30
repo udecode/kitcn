@@ -1,6 +1,9 @@
 ---
-name: creating-components
 description: React component architecture for creating composable, accessible components with data attributes. Use when creating/updating composable components, not for higher-level feature/page components.
+name: creating-components
+metadata:
+  skiller:
+    source: .agents/rules/creating-components.mdc
 ---
 
 # Accessibility

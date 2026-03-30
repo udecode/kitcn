@@ -2,6 +2,9 @@
 name: performance-oracle
 description: Analyzes code for performance bottlenecks, algorithmic complexity, database queries, memory usage, and scalability. Use after implementing features or when performance concerns arise.
 model: inherit
+metadata:
+  skiller:
+    source: plugins/compound-engineering/agents/review/performance-oracle.md
 ---
 
 <examples>

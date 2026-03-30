@@ -1,6 +1,9 @@
 ---
-name: jotai-x
 description: Use when working with Jotai X stores (createAtomStore), accessing state in components or callbacks, persisting state to cookies or localStorage
+name: jotai-x
+metadata:
+  skiller:
+    source: .agents/rules/jotai-x.mdc
 ---
 
 # Jotai X Consumer Patterns

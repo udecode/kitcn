@@ -13,6 +13,28 @@ If the user is asking to update, refresh, or rewrite an existing PR description 
 
 For description-only updates, follow the Description Update workflow below. Otherwise, follow the full workflow.
 
+## Reusable PR probe
+
+When checking whether the current branch already has a PR, keep using current-branch `gh pr view` semantics. Do **not** switch to `gh pr list --head "<branch>"` just to avoid the no-PR exit path. That branch-name search can select the wrong PR in multi-fork repos.
+
+Also do **not** run bare `gh pr view --json ...` in a way that lets the shell tool render the expected no-PR state as a red failed step. Capture the output and exit code yourself so you can interpret "no PR for this branch" as normal workflow state:
+
+```bash
+if PR_VIEW_OUTPUT=$(gh pr view --json url,title,state 2>&1); then
+  PR_VIEW_EXIT=0
+else
+  PR_VIEW_EXIT=$?
+fi
+printf '%s\n__GH_PR_VIEW_EXIT__=%s\n' "$PR_VIEW_OUTPUT" "$PR_VIEW_EXIT"
+```
+
+Interpret the result this way:
+
+- `__GH_PR_VIEW_EXIT__=0` and JSON with `state: OPEN` -> an open PR exists for the current branch
+- `__GH_PR_VIEW_EXIT__=0` and JSON with a non-OPEN state -> treat as no open PR
+- non-zero exit with output indicating `no pull requests found for branch` -> expected no-PR state
+- any other non-zero exit -> real error (auth, network, repo config, etc.)
+
 ---
 
 ## Description Update workflow
@@ -36,10 +58,15 @@ If empty (detached HEAD), report that there is no branch to update and stop.
 Otherwise, check for an existing open PR:
 
 ```bash
-gh pr view --json url,title,state
+if PR_VIEW_OUTPUT=$(gh pr view --json url,title,state 2>&1); then
+  PR_VIEW_EXIT=0
+else
+  PR_VIEW_EXIT=$?
+fi
+printf '%s\n__GH_PR_VIEW_EXIT__=%s\n' "$PR_VIEW_OUTPUT" "$PR_VIEW_EXIT"
 ```
 
-Interpret the result. Do not treat every non-zero exit as a fatal error here:
+Interpret the result using the Reusable PR probe rules above:
 
 - If it returns PR data with `state: OPEN`, an open PR exists for the current branch.
 - If it returns PR data with a non-OPEN state (CLOSED, MERGED), treat this as "no open PR." Report that no open PR exists for this branch and stop.
@@ -129,10 +156,15 @@ Run `git branch --show-current` to get the current branch name. If it returns an
 Then check for an existing open PR:
 
 ```bash
-gh pr view --json url,title,state
+if PR_VIEW_OUTPUT=$(gh pr view --json url,title,state 2>&1); then
+  PR_VIEW_EXIT=0
+else
+  PR_VIEW_EXIT=$?
+fi
+printf '%s\n__GH_PR_VIEW_EXIT__=%s\n' "$PR_VIEW_OUTPUT" "$PR_VIEW_EXIT"
 ```
 
-Interpret the result. Do not treat every non-zero exit as a fatal error here:
+Interpret the result using the Reusable PR probe rules above:
 
 - If it **returns PR data with `state: OPEN`**, an open PR exists for the current branch. Note the URL and continue to Step 4 (commit) and Step 5 (push). Then skip to Step 7 (existing PR flow) instead of creating a new PR.
 - If it **returns PR data with a non-OPEN state** (CLOSED, MERGED), treat this the same as "no PR exists" -- the previous PR is done and a new one is needed. Continue to Step 4 through Step 8 as normal.
@@ -205,11 +237,11 @@ Once the base branch and remote are known:
    ```bash
    git merge-base <base-remote>/<base-branch> HEAD
    ```
-2. List all commits unique to this branch:
+3. List all commits unique to this branch:
    ```bash
    git log --oneline <merge-base>..HEAD
    ```
-3. Get the full diff a reviewer will see:
+4. Get the full diff a reviewer will see:
    ```bash
    git diff <merge-base>...HEAD
    ```
@@ -256,6 +288,39 @@ Use this to select the right description depth:
 
 - **No empty sections**: If a section (like "Breaking Changes" or "Migration Guide") doesn't apply, omit it entirely. Do not include it with "N/A" or "None".
 - **Test plan -- only when it adds value**: Include a test plan section when the testing approach is non-obvious: edge cases the reviewer might not think of, verification steps for behavior that's hard to see in the diff, or scenarios that require specific setup. Omit it for straightforward changes where the tests are self-explanatory or where "run the tests" is the only useful guidance. A test plan for "verify the typo is fixed" is noise.
+
+#### Visual communication
+
+Include a visual aid when the PR changes something structurally complex enough that a reviewer would struggle to reconstruct the mental model from prose alone. Visual aids are conditional on content patterns -- what the PR changes -- not on PR size. A small PR that restructures a complex workflow may warrant a diagram; a large mechanical refactor may not.
+
+The bar for including visual aids in PR descriptions is higher than in brainstorms or plans. Reviewers scan PR descriptions to orient before reading the diff -- visuals must earn their space quickly.
+
+**When to include:**
+
+| PR changes... | Visual aid | Placement |
+|---|---|---|
+| Architecture touching 3+ interacting components or services | Mermaid component or interaction diagram | Within the approach or changes section |
+| A multi-step workflow, pipeline, or data flow with non-obvious sequencing | Mermaid flow diagram | After the summary or within the changes section |
+| 3+ behavioral modes, states, or variants being introduced or changed | Markdown comparison table | Within the relevant section |
+| Before/after performance data, behavioral differences, or option trade-offs | Markdown table (see the "Markdown tables for data" writing principle above) | Inline with the data being discussed |
+| Data model changes with 3+ related entities or relationship changes | Mermaid ERD or relationship diagram | Within the changes section |
+
+**When to skip:**
+- The change is trivial -- if the sizing table routes to "1-2 sentences", skip visual aids
+- Prose already communicates the change clearly
+- The diagram would just restate the diff in visual form without adding comprehension value
+- The change is mechanical (renames, dependency bumps, config changes, formatting)
+- The PR description is already short enough that a diagram would be heavier than the prose around it
+
+**Format selection:**
+- **Mermaid** (default) for flow diagrams, interaction diagrams, and dependency graphs -- 5-10 nodes typical for a PR description, up to 15 only for genuinely complex changes. Use `TB` (top-to-bottom) direction so diagrams stay narrow in both rendered and source form. Source should be readable as fallback in diff views, email notifications, and Slack previews.
+- **ASCII/box-drawing diagrams** for annotated flows that need rich in-box content -- decision logic branches, file path layouts, step-by-step transformations with annotations. More expressive than mermaid when the diagram's value comes from annotations within steps. Follow 80-column max for code blocks, use vertical stacking.
+- **Markdown tables** for mode/variant comparisons, before/after data, and decision matrices.
+- Keep diagrams proportionate to the change. A PR touching a 5-component interaction gets 5-8 nodes. A larger architectural change may need 10-15 nodes -- that is fine if every node earns its place.
+- Place inline at the point of relevance within the description, not in a separate "Diagrams" section.
+- Prose is authoritative: when a visual aid and surrounding description prose disagree, the prose governs.
+
+After generating a visual aid, verify it accurately represents the change described in the PR -- correct components, no missing interactions, no merged steps. Diagrams derived from a diff (rather than from code analysis) carry higher inaccuracy risk.
 
 #### Numbering and references
 

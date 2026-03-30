@@ -1,6 +1,9 @@
 ---
+description: Read every doc in www and packages/kitcn/skills/convex, sync to active changeset(s), and track with checkmarks.
 name: changeset-doc-sync
-description: Use when syncing docs in www and packages/kitcn/skills/convex to active changeset(s) with per-file checkmarks.
+metadata:
+  skiller:
+    source: .agents/rules/changeset-doc-sync.mdc
 ---
 
 # Changeset Doc Sync

@@ -1,0 +1,197 @@
+---
+description: Prove kitcn fixture and scenario runtime the right way. Use when validating prepared scenario apps, auth smoke and browser lanes, or deciding whether a scenario key should use `scenario:dev` or `scenario:check`.
+user-invocable: false
+---
+
+# Scenarios
+
+Use this skill for committed fixture checks and runtime proof of prepared scenarios.
+
+## Contract
+
+- Pick the proof path from the registered scenario key.
+- Use committed `fixtures/*` only as sources. The runnable app lives under
+  `tmp/scenarios/*`.
+- Stop once the assigned proof path succeeds. Do not keep poking the app for
+  sport.
+
+## Hard Rules
+
+- Never run committed `fixtures/*` in place.
+- Always prepare into `tmp/scenarios/<name>/project`.
+- `fixtures:*` owns committed snapshot sync/check.
+- `scenario:*` owns runnable temp apps.
+- Stop spawned dev processes once proof succeeds or fails.
+- If a temp app is stale after package or scaffold changes, rerun
+  `bun run scenario:prepare -- <name>` once. If it still fails, debug the
+  cause. Do not loop forever.
+- If a scenario has no real browser auth surface, do not invent one.
+- For bootstrap-heavy Convex lanes, `bun run scenario:check -- <name>` is the
+  proof. Do not replace it with ad-hoc `scenario:dev`.
+
+## Canonical Commands
+
+```bash
+bun run fixtures:sync
+bun run fixtures:check
+bun run scenario:prepare -- <name>
+bun run scenario:dev -- <name>
+bun run scenario:check -- <name>
+bun run scenario:test -- <name>
+bun run test:runtime
+bun run test:auth -- <name|url>
+bun run test:e2e -- <name|url>
+```
+
+`test:auth` and `test:e2e` assume the scenario is already running.
+`scenario:test` wraps the proof matrix below.
+`test:runtime` runs `scenario:test -- all` and is the full runtime gate.
+
+## Proof Matrix
+
+### Plain runtime proof
+
+Use this path for:
+
+- `next`
+- `vite`
+- `create-convex-bare`
+- `create-convex-nextjs-shadcn`
+- `create-convex-react-vite-shadcn`
+
+Run:
+
+1. `bun run scenario:prepare -- <name>`
+2. `bun run scenario:dev -- <name>`
+3. Wait for ready logs.
+4. Stop.
+
+Or:
+
+1. `bun run scenario:test -- <name>`
+
+### Auth demo proof
+
+Use this path for:
+
+- `next-auth`
+
+Run:
+
+1. `bun run scenario:prepare -- next-auth`
+2. `bun run scenario:dev -- next-auth`
+3. `bun run test:auth -- next-auth`
+4. `bun run test:e2e -- next-auth`
+5. Stop.
+
+Or:
+
+1. `bun run scenario:test -- next-auth`
+
+Why:
+
+- `next-auth` is the only scenario with a real auth browser surface today.
+
+### Auth backend proof without browser auth
+
+Use this path for:
+
+- `vite-auth`
+
+Run:
+
+1. `bun run scenario:prepare -- vite-auth`
+2. `bun run scenario:dev -- vite-auth`
+3. Stop.
+
+Or:
+
+1. `bun run scenario:test -- vite-auth`
+
+Why:
+
+- There is no `/auth` page or equivalent browser auth surface today.
+- Do not fake `test:e2e`.
+- Do not add `test:auth` here unless the registry grows a dedicated auth proof
+  lane.
+
+### Bootstrap-heavy Convex proof
+
+Use this path for:
+
+- `convex-next-auth-bootstrap`
+- `convex-vite-auth-bootstrap`
+- `convex-next-all`
+- `create-convex-nextjs-shadcn-auth`
+
+Run:
+
+1. `bun run scenario:check -- <name>`
+2. Stop.
+
+Or:
+
+1. `bun run scenario:test -- <name>`
+
+Why:
+
+- Fresh kitcn lanes already bootstrap during `scenario:prepare`
+  through `kitcn init -t <next|vite> --yes`, then finish the
+  bootstrap-heavy proof with in-place `kitcn init --yes` after plugin
+  setup.
+- The raw Convex auth adoption lane still owns `convex init` plus
+  `kitcn add auth --preset convex --yes`.
+- Raw Convex auth adoption is not a `next-auth` browser demo. Do not invent
+  `/auth`.
+
+## Re-prepare Rule
+
+Re-run `scenario:prepare` once when:
+
+- package or scaffold source changed
+- the temp app predates that change
+- the temp app is missing expected local env or generated files
+
+Otherwise, reuse the prepared app.
+
+## Examples
+
+### `next-auth`
+
+```bash
+bun run scenario:prepare -- next-auth
+bun run scenario:dev -- next-auth
+bun run test:auth -- next-auth
+bun run test:e2e -- next-auth
+```
+
+Short path:
+
+```bash
+bun run scenario:test -- next-auth
+```
+
+### `vite-auth`
+
+```bash
+bun run scenario:prepare -- vite-auth
+bun run scenario:dev -- vite-auth
+```
+
+Short path:
+
+```bash
+bun run scenario:test -- vite-auth
+```
+
+### `convex-next-all`
+
+```bash
+bun run scenario:check -- convex-next-all
+```
+
+Short path:
+
+```bash
+bun run scenario:test -- convex-next-all
+```

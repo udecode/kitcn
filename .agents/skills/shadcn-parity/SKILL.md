@@ -1,6 +1,9 @@
 ---
 name: shadcn-parity
-description: Clone shadcn implementation patterns with source-by-source parity. Use when the user says "shadcn parity", asks to mirror shadcn, copy shadcn UX/architecture/tests, or wants more than inspiration.
+description: 'Skill: shadcn-parity'
+metadata:
+  skiller:
+    source: .agents/rules/shadcn-parity.mdc
 ---
 
 # Shadcn Parity
@@ -519,4 +522,3 @@ When reporting parity work back to the user, state:
 3. any intentional divergence
 
 If there was no divergence, say so plainly.
-

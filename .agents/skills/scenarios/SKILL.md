@@ -1,6 +1,10 @@
 ---
+description: Prove kitcn fixture and scenario runtime the right way. Use when validating prepared scenario apps, auth smoke and browser lanes, or deciding whether a scenario key should use `scenario:dev` or `scenario:check`.
+user-invocable: false
 name: scenarios
-description: Prove kitcn scenario and template runtime the right way. Use when validating prepared scenario apps, auth smoke and browser lanes, or deciding whether a scenario key should use `scenario:dev` or `scenario:check`.
+metadata:
+  skiller:
+    source: .agents/rules/scenarios.mdc
 ---
 
 # Scenarios

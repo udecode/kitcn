@@ -1,6 +1,10 @@
 ---
-name: browser-debug-setup
 description: One-time setup for a persistent debug browser on `127.0.0.1:9222` for `dev-browser --connect`. Use when browser work is needed but no reusable debug browser is running yet.
+user-invocable: false
+name: browser-debug-setup
+metadata:
+  skiller:
+    source: .agents/rules/browser-debug-setup.mdc
 ---
 
 # Browser Debug Setup

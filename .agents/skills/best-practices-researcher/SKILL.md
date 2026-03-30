@@ -2,6 +2,9 @@
 name: best-practices-researcher
 description: Researches and synthesizes external best practices, documentation, and examples for any technology or framework. Use when you need industry standards, community conventions, or implementation guidance.
 model: inherit
+metadata:
+  skiller:
+    source: plugins/compound-engineering/agents/research/best-practices-researcher.md
 ---
 
 <examples>

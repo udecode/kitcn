@@ -4,6 +4,9 @@ description: Always-on code-review persona. Reviews code for premature abstracti
 model: inherit
 tools: Read, Grep, Glob, Bash
 color: blue
+metadata:
+  skiller:
+    source: plugins/compound-engineering/agents/review/maintainability-reviewer.md
 ---
 
 # Maintainability Reviewer

@@ -4,6 +4,9 @@ description: Always-on code-review persona. Audits changes against the project's
 model: inherit
 tools: Read, Grep, Glob, Bash
 color: blue
+metadata:
+  skiller:
+    source: plugins/compound-engineering/agents/review/project-standards-reviewer.md
 ---
 
 # Project Standards Reviewer

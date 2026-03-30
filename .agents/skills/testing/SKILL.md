@@ -1,6 +1,9 @@
 ---
-name: testing
 description: Use when writing React hook tests, encountering test failures, flaky tests, cross-file contamination, or "Hook timed out" errors - Bun test patterns with proper spy cleanup
+name: testing
+metadata:
+  skiller:
+    source: .agents/rules/testing.mdc
 ---
 
 # Bun Testing Patterns

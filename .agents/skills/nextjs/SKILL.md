@@ -1,6 +1,9 @@
 ---
-name: nextjs
 description: Next.js routing with typed routes, PageProps, LayoutProps helpers, and nuqs for URL state. Use for pages, layouts, navigation, and query parameters.
+name: nextjs
+metadata:
+  skiller:
+    source: .agents/rules/nextjs.mdc
 ---
 
 # Next.js Routing & Navigation

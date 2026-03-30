@@ -1,2 +1,2 @@
-@.claude/AGENTS.md
-@.claude/skills/4-ultracite/4-ultracite.mdc
+@.agents/AGENTS.md
+@.agents/rules/4-ultracite.mdc
