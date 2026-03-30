@@ -1,17 +1,17 @@
 ---
 title: Setup
-description: Set up better-convex with Better Auth for Next.js App Router.
+description: Set up kitcn with Better Auth for Next.js App Router.
 links:
   doc: https://nextjs.org/docs/app
 ---
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll set up better-convex with Better Auth for Next.js App Router. You'll configure environment variables, create the caller factory, set up the client provider, and prepare RSC helpers for server-side rendering.
+In this guide, we'll set up kitcn with Better Auth for Next.js App Router. You'll configure environment variables, create the caller factory, set up the client provider, and prepare RSC helpers for server-side rendering.
 
 ## Overview
 
-Setting up better-convex with Next.js involves these components:
+Setting up kitcn with Next.js involves these components:
 
 | Component | Description |
 |-----------|-------------|
@@ -31,7 +31,7 @@ Let's set it up.
 First, install the required packages:
 
 ```bash
-bun add better-convex better-auth@1.5.3 @tanstack/react-query superjson
+bun add kitcn better-auth@1.5.3 @tanstack/react-query superjson
 ```
 
 <Callout icon={<InfoIcon />}>
@@ -75,7 +75,7 @@ First, create a caller factory for Better Auth:
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {3,5-9}
 import { api } from '@convex/api';
-import { convexBetterAuth } from 'better-convex/auth/nextjs';
+import { convexBetterAuth } from 'kitcn/auth/nextjs';
 
 export const { createContext, createCaller, handler } = convexBetterAuth({
   api,
@@ -97,10 +97,10 @@ Set up the client provider with Better Auth. The `initialToken` prop enables aut
 'use client';
 
 import { ConvexReactClient } from 'convex/react';
-import { ConvexAuthProvider } from 'better-convex/auth/client';
+import { ConvexAuthProvider } from 'kitcn/auth/client';
 import { inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'better-convex/auth/client';
+import { convexClient } from 'kitcn/auth/client';
 
 import type { Auth } from '@convex/auth-shared';
 
@@ -172,7 +172,7 @@ import {
 import {
   createServerCRPCProxy,
   getServerQueryClientOptions,
-} from 'better-convex/rsc';
+} from 'kitcn/rsc';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 
@@ -288,7 +288,7 @@ The RSC Setup exports these helpers (see code above for implementations):
 - Generates the same query keys as the client proxy
 
 ```ts showLineNumbers {4-6}
-import { createServerCRPCProxy } from 'better-convex/rsc';
+import { createServerCRPCProxy } from 'kitcn/rsc';
 
 // Server proxy - queryOptions only, no auth config
 const crpc = createServerCRPCProxy({ api });
@@ -301,7 +301,7 @@ crpc.posts.create.mutationOptions(); // Not available in RSC
 `getServerQueryClientOptions` configures the QueryClient for server-side HTTP fetching:
 
 ```ts showLineNumbers {5-9,13-15}
-import { getServerQueryClientOptions } from 'better-convex/rsc';
+import { getServerQueryClientOptions } from 'kitcn/rsc';
 
 // With auth + HTTP routes
 const queryClient = new QueryClient({

@@ -1,6 +1,6 @@
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { ReactNode } from 'react';
-import { BetterConvexProvider } from '@/lib/convex/convex-provider';
+import { AppConvexProvider } from '@/lib/convex/convex-provider';
 import { caller, crpc, HydrateClient, prefetch } from '@/lib/convex/rsc';
 
 export async function Providers({ children }: { children: ReactNode }) {
@@ -11,10 +11,10 @@ export async function Providers({ children }: { children: ReactNode }) {
   );
 
   return (
-    <BetterConvexProvider token={token}>
+    <AppConvexProvider token={token}>
       <HydrateClient>
         <NuqsAdapter>{children}</NuqsAdapter>
       </HydrateClient>
-    </BetterConvexProvider>
+    </AppConvexProvider>
   );
 }

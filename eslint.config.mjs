@@ -15,6 +15,8 @@ export default defineConfig([
       '**/next-env.d.ts',
       '**/out/**',
       '**/build/**',
+      'fixtures/**',
+      'tooling/scenario-fixtures/**',
       '**/tmp/**',
       '**/coverage/**',
       '**/coverage-*/**',

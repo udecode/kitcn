@@ -12,7 +12,7 @@ This guide compares Drizzle and the ORM side-by-side. It focuses on API mapping 
 ## At A Glance
 
 **Same API surface:**
-- Table builders and relations (`convexTable`, `defineRelations`, `one`, `many`)
+- Table builders and relation primitives (`convexTable`, `.relations(...)`, `one`, `many`)
 - Relational query builder (`findMany`, `findFirst`, object/callback `where`, `orderBy`, `limit`, `offset`, `with`)
 - Type inference (`InferSelectModel`, `InferInsertModel`, `$inferSelect`, `$inferInsert`)
 - Mutation helpers (`insert`, `update`, `delete`, `returning`, `onConflictDoUpdate`)
@@ -54,10 +54,10 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
 
 ## Migration Checklist
 
-- [ ] Install `better-convex`
+- [ ] Install `kitcn`
 - [ ] Convert table definitions to `convexTable()` with column builders (`text`, `integer`, `boolean`, `id`)
 - [ ] Replace manual `id` fields with Convex `id`
-- [ ] Define relations using `defineRelations()` and `with`
+- [ ] Define relations on the default schema export with `.relations(...)` and load them with `with`
 - [ ] Attach ORM to `ctx.orm` in context (create once)
 - [ ] Keep `where`, `orderBy`, `limit`, `offset` shapes the same
 - [ ] Move joins to relation loading (`with`)
@@ -88,7 +88,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
   </CompareItem>
   <CompareItem title="ORM">
     ```ts showLineNumbers
-    import { convexTable, text, integer, boolean, id } from 'better-convex/orm';
+    import { convexTable, text, integer, boolean, id } from 'kitcn/orm';
 
     const users = convexTable('users', {
       // id is auto-created as Id<'users'>
@@ -121,7 +121,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
     ```ts showLineNumbers
     import { defineRelations } from 'drizzle-orm';
 
-    export const relations = defineRelations({ users, posts }, (r) => ({
+    const relations = defineRelations({ users, posts }, (r) => ({
       users: {
         posts: r.many.posts(),
       },
@@ -135,10 +135,10 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
     ```
   </CompareItem>
   <CompareItem title="ORM">
-    ```ts showLineNumbers {11}
-    import { defineRelations } from 'better-convex/orm';
+    ```ts showLineNumbers {1}
+    import { defineSchema } from 'kitcn/orm';
 
-    export const relations = defineRelations({ users, posts }, (r) => ({
+    export default defineSchema({ users, posts }).relations((r) => ({
       users: {
         posts: r.many.posts(),
       },
@@ -202,7 +202,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
 | Drizzle | ORM | Notes |
 |---|---|---|
 | `pgTable()` / `mysqlTable()` / `sqliteTable()` | `convexTable()` | Same surface | 
-| `defineRelations()` | `defineRelations()` | Same surface |
+| `defineRelations()` | `defineSchema(...).relations(...)` | Same relation builder, attached to the default schema export |
 | `db.query.*.findMany()` | `db.query.*.findMany()` | Same surface via `ctx.orm` |
 | `db.query.*.findFirst()` | `db.query.*.findFirst()` | Same surface via `ctx.orm` |
 | n/a | `db.query.*.findFirstOrThrow()` | ORM sugar; throws if no row exists |
@@ -221,7 +221,7 @@ See [Migrate from native Convex](/docs/migrations/db) (for `ctx.db`) or [Migrate
 
 ## Query Capability Matrix
 
-| Capability | Drizzle | better-convex ORM | Notes |
+| Capability | Drizzle | kitcn ORM | Notes |
 |---|---|---|---|
 | `findMany` / `findFirst` | Yes | Yes | Same top-level shape |
 | `findMany({ distinct })` | Yes (SQL `DISTINCT`) | No | Use `select().distinct({ fields })` pipeline when needed |
@@ -259,7 +259,7 @@ These Drizzle features are SQL-specific and do not map to Convex:
 - SQL `having` and SQL window functions (`groupBy` is supported with finite constraints)
 - Raw SQL execution
 - RQB SQL-only features: `RAW` filters and SQL placeholders in `where`/`limit`/`offset` are not supported at runtime
-- SQL database migrations and database-side constraints/triggers (use `better-convex migrate ...` for online data migrations)
+- SQL database migrations and database-side constraints/triggers (use `kitcn migrate ...` for online data migrations)
 - Custom SQL data types
 
 Use relation filters for Convex-style existence checks:
@@ -414,7 +414,7 @@ For Drizzle parity, `date()` and `timestamp()` exist in the ORM, but storage fol
 
 | Issue | Cause | Fix |
 |---|---|---|
-| **`ctx.orm` is missing** | ORM not attached to context | Run `better-convex codegen` to generate `convex/functions/generated/server.ts` |
+| **`ctx.orm` is missing** | ORM not attached to context | Run `kitcn codegen` to generate `convex/functions/generated/server.ts` |
 | **Convex internal IDs** | Convex stores `_id` internally | Use public `id` in ORM APIs |
 | **Convex internal creation time** | Convex stores `_creationTime` internally | Use public `createdAt` in ORM APIs |
 | **Nullable fields** | Nullable by default | Add `.notNull()` |
@@ -435,7 +435,7 @@ For Drizzle parity, `date()` and `timestamp()` exist in the ORM, but storage fol
 The ORM exposes Drizzle-style helpers for runtime schema metadata:
 
 ```ts showLineNumbers
-import { getTableColumns, getTableConfig } from 'better-convex/orm';
+import { getTableColumns, getTableConfig } from 'kitcn/orm';
 
 const columns = getTableColumns(users); // includes id/createdAt
 const config = getTableConfig(users);   // indexes/unique/fks/rls/checks

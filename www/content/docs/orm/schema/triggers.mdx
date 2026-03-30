@@ -2,12 +2,12 @@
 title: Triggers
 description: Schema-level database hooks for insert/update/delete lifecycle.
 links:
-  doc: https://github.com/get-convex/better-convex
+  doc: https://github.com/get-convex/kitcn
 ---
 
 import { InfoIcon } from "lucide-react"
 
-Triggers are declared once in `schema.ts` and wired automatically when you export `triggers`.
+Triggers are declared once in `schema.ts` and wired automatically when you chain `.triggers(...)` on the default schema export.
 
 ## Overview
 
@@ -18,16 +18,16 @@ Use triggers for:
 - aggregate updates via `change`
 - write cancellation based on business rules
 
-Define them with:
-
-```ts
-import { defineTriggers } from "better-convex/orm";
-```
+Define them on the schema chain with `.triggers({ ... })`.
 
 ## API Shape
 
 ```ts title="convex/functions/schema.ts"
-export const triggers = defineTriggers(relations, {
+export default defineSchema({ todos })
+  .relations(() => ({
+    todos: {},
+  }))
+  .triggers({
   todos: {
     create: {
       before: async (data, ctx) => {
@@ -57,10 +57,9 @@ For hook signatures and return types, see [API Reference](#api-reference) below.
 ```ts title="convex/functions/schema.ts"
 import {
   convexTable,
-  defineRelations,
-  defineTriggers,
+  defineSchema,
   text,
-} from "better-convex/orm";
+} from "kitcn/orm";
 import type { MutationCtx } from "./generated/server";
 import { createUserCaller } from "./generated/user.runtime";
 
@@ -69,11 +68,11 @@ export const userTable = convexTable("user", {
   email: text().notNull(),
 });
 
-export const relations = defineRelations({ user: userTable }, () => ({
-  user: {},
-}));
-
-export const triggers = defineTriggers<typeof relations, MutationCtx>(relations, {
+export default defineSchema({ user: userTable })
+  .relations(() => ({
+    user: {},
+  }))
+  .triggers<MutationCtx>({
   user: {
     create: {
       before: async (data) => ({
@@ -110,7 +109,11 @@ Trigger definitions are schema-level only. `convexTable(..., extraConfig)` no lo
 ### Validation + Cancellation
 
 ```ts title="convex/functions/schema.ts"
-export const triggers = defineTriggers(relations, {
+export default defineSchema({ users })
+  .relations(() => ({
+    users: {},
+  }))
+  .triggers({
   users: {
     create: {
       before: async (data) => {
@@ -129,7 +132,11 @@ export const triggers = defineTriggers(relations, {
 ### Payload Mutation
 
 ```ts title="convex/functions/schema.ts"
-export const triggers = defineTriggers(relations, {
+export default defineSchema({ users })
+  .relations(() => ({
+    users: {},
+  }))
+  .triggers({
   users: {
     update: {
       before: async (data) => ({
@@ -146,7 +153,11 @@ export const triggers = defineTriggers(relations, {
 ### Change Auditing
 
 ```ts title="convex/functions/schema.ts"
-export const triggers = defineTriggers(relations, {
+export default defineSchema({ teams })
+  .relations(() => ({
+    teams: {},
+  }))
+  .triggers({
   teams: {
     change: async (change, ctx) => {
       await ctx.orm.insert(auditLog).values({

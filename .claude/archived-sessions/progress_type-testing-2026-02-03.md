@@ -177,7 +177,7 @@
 - String operators (startsWith, endsWith, contains) work on text fields
 - System fields (_creationTime, _id) can be used in orderBy
 - Method chaining: text().notNull().default() creates required fields (not optional)
-- Defaults don't change nullability in Better Convex (nullable in select, required in insert)
+- Defaults don't change nullability in kitcn (nullable in select, required in insert)
 
 **Result**: ✅ `bun typecheck`, `bun run test`, and `bun lint:fix` all passing
 **Time**: ~30 minutes

@@ -1,0 +1,38 @@
+{
+  "plugins": {
+    "auth": {
+      "package": "better-auth",
+      "files": {
+        "auth-client": "lib/convex/auth-client.ts",
+        "auth-config": "convex/functions/auth.config.ts",
+        "auth-page": "app/auth/page.tsx",
+        "auth-runtime": "convex/functions/auth.ts"
+      },
+      "schema": {
+        "path": "convex/functions/schema.ts",
+        "tables": {
+          "account": {
+            "checksum": "0d378994c19c",
+            "owner": "managed"
+          },
+          "jwks": {
+            "checksum": "68e9a48ed9f7",
+            "owner": "managed"
+          },
+          "session": {
+            "checksum": "6fb042402973",
+            "owner": "managed"
+          },
+          "user": {
+            "checksum": "8a96073bc92f",
+            "owner": "managed"
+          },
+          "verification": {
+            "checksum": "bcdfc6bc46bb",
+            "owner": "managed"
+          }
+        }
+      }
+    }
+  }
+}

@@ -49,7 +49,7 @@ export type ColumnBuilderTypeConfig<
 
 ### Our Buggy Implementation
 
-**Location:** `packages/better-convex/src/orm/builders/column-builder.ts` (lines 55-66)
+**Location:** `packages/kitcn/src/orm/builders/column-builder.ts` (lines 55-66)
 
 ```typescript
 export interface ColumnBuilderTypeConfig<
@@ -97,7 +97,7 @@ boolean & true = true  // ← TypeScript narrows to the literal type
 
 ### Fix 1: Update ColumnBuilderTypeConfig (Primary Fix)
 
-**File:** `packages/better-convex/src/orm/builders/column-builder.ts`
+**File:** `packages/kitcn/src/orm/builders/column-builder.ts`
 
 **Change:**
 ```typescript
@@ -137,7 +137,7 @@ export type ColumnBuilderTypeConfig<
 
 ### Fix 2: Verify Type Extraction Works
 
-**File:** `packages/better-convex/src/orm/types.ts`
+**File:** `packages/kitcn/src/orm/types.ts`
 
 **Current BuilderToType (should work after Fix 1):**
 ```typescript
@@ -163,7 +163,7 @@ type BuilderToType<TBuilder extends ColumnBuilder<any, any, any>> =
 ## Implementation Checklist
 
 ### Phase 1: Core Fix
-- [x] Change `ColumnBuilderTypeConfig` from `interface` to `type` in [column-builder.ts](packages/better-convex/src/orm/builders/column-builder.ts:55)
+- [x] Change `ColumnBuilderTypeConfig` from `interface` to `type` in [column-builder.ts](packages/kitcn/src/orm/builders/column-builder.ts:55)
 - [x] Replace `notNull: false` with `notNull: T extends { notNull: infer U } ? U : boolean`
 - [x] Replace `hasDefault: false` with `hasDefault: T extends { hasDefault: infer U } ? U : boolean`
 - [x] Replace `isPrimaryKey: false` with `isPrimaryKey: T extends { isPrimaryKey: infer U } ? U : boolean`
@@ -188,12 +188,12 @@ type BuilderToType<TBuilder extends ColumnBuilder<any, any, any>> =
 
 ## Success Criteria
 
-- [ ] Zero type errors in `packages/better-convex`
+- [ ] Zero type errors in `packages/kitcn`
 - [ ] Zero type errors in `convex/`
 - [ ] All type assertions in `convex/test-types/` pass
 - [ ] Type inference test: `text().notNull()` → `string` (not `never`)
 - [ ] Type inference test: `text()` → `string | null`
-- [ ] Build succeeds: `bun --cwd packages/better-convex build`
+- [ ] Build succeeds: `bun --cwd packages/kitcn build`
 
 ## Expected Outcome
 

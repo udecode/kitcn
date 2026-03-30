@@ -1,5 +1,5 @@
-import { eq, unsetToken } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
+import { eq, unsetToken } from 'kitcn/orm';
+import { CRPCError } from 'kitcn/server';
 import { z } from 'zod';
 import { authMutation, authQuery, optionalAuthQuery } from '../lib/crpc';
 import type { QueryCtx } from './generated/server';
@@ -325,7 +325,6 @@ export const get = authQuery
 
 // Create a new todo
 export const create = authMutation
-  .meta({ rateLimit: 'todo/create' })
   .input(
     z.object({
       title: z.string().min(1).max(200),
@@ -370,7 +369,6 @@ export const create = authMutation
 
 // Update a todo
 export const update = authMutation
-  .meta({ rateLimit: 'todo/update' })
   .input(
     z.object({
       id: z.string(),
@@ -435,7 +433,6 @@ export const update = authMutation
 
 // Toggle todo completion status
 export const toggleComplete = authMutation
-  .meta({ rateLimit: 'todo/update' })
   .input(z.object({ id: z.string() }))
   .output(z.boolean())
   .mutation(async ({ ctx, input }) => {
@@ -454,7 +451,6 @@ export const toggleComplete = authMutation
 
 // Soft delete a todo
 export const deleteTodo = authMutation
-  .meta({ rateLimit: 'todo/delete' })
   .input(z.object({ id: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -470,7 +466,6 @@ export const deleteTodo = authMutation
 
 // Restore a soft-deleted todo
 export const restore = authMutation
-  .meta({ rateLimit: 'todo/update' })
   .input(z.object({ id: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -493,7 +488,6 @@ export const restore = authMutation
 
 // Bulk delete todos
 export const bulkDelete = authMutation
-  .meta({ rateLimit: 'todo/delete' })
   .input(z.object({ ids: z.array(z.string()).min(1).max(100) }))
   .output(
     z.object({

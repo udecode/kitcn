@@ -1,262 +1,193 @@
 ---
 title: Quickstart
-description: Get Better Convex running in 5 minutes.
+description: Scaffold a Next.js app with kitcn, bootstrap a local backend, and understand the starter messages demo.
 links:
   doc: https://docs.convex.dev/quickstart
 ---
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll get Better Convex running from scratch. You'll set up a Next.js app with Convex, create your first cRPC procedures, and use them with TanStack Query.
+In this guide, we'll take the fastest happy path: scaffold a fresh Next.js app
+with the CLI, run the first local Convex bootstrap in the same command, and
+walk through the starter messages demo from schema to client.
 
 <Callout icon={<InfoIcon />}>
-Docs use the ORM (`ctx.orm`) everywhere. If you're migrating from native Convex, see
-[/docs/migrations/db](/docs/migrations/db).
+If you want the full command map, start with
+[/docs/cli/registry](/docs/cli/registry). This guide stays on the shortest
+path.
 </Callout>
 
-## Create Next.js App
+<Callout icon={<InfoIcon />}>
+Docs use the ORM (`ctx.orm`) everywhere. The scaffolded starter demo keeps the
+backend tiny on purpose, so it uses direct Convex reads and writes. Once the
+app is running, you can move deeper into the ORM guides and migration docs.
+</Callout>
+
+## 1. Scaffold A Fresh App
+
+Let's start with an empty directory and let the CLI own the bootstrap.
 
 ```bash showLineNumbers
-bunx create-next-app@latest my-app --typescript --tailwind --eslint --app --src-dir
+mkdir my-app
 cd my-app
+bunx kitcn init -t next --yes
 ```
 
-## Installation
+`init -t next` creates the Next.js shell and layers in the kitcn
+baseline in one pass. That includes the backend files, client providers, local
+env scaffolding, and a tiny messages demo so you have something real to run
+immediately.
 
-```bash
-bun add convex better-convex zod @tanstack/react-query
+Here are the key files the quickstart uses:
+
+| File | Purpose |
+| ---- | ------- |
+| `convex/functions/schema.ts` | Starter schema |
+| `convex/functions/messages.ts` | Starter query and mutation |
+| `convex/lib/crpc.ts` | Server-side cRPC builders |
+| `lib/convex/crpc.tsx` | React cRPC context |
+| `components/providers.tsx` | App-level providers |
+| `app/convex/page.tsx` | Starter demo page |
+
+If you already have a supported app shell, use `kitcn init --yes`
+instead. That adoption path is documented in
+[/docs/cli/registry](/docs/cli/registry).
+
+## 2. Run The App
+
+Now let's start the backend for real and open the Next.js app in a second
+terminal.
+
+```bash title="terminal 1" showLineNumbers
+bunx kitcn dev
 ```
 
-## Configure Folder Structure
-
-Better Convex uses a specific folder structure. Create `convex.json`:
-
-```json title="convex.json" showLineNumbers {2-5}
-{
-  "functions": "convex/functions",
-  "codegen": {
-    "staticApi": true,
-    "staticDataModel": true
-  }
-}
+```bash title="terminal 2" showLineNumbers
+bun dev
 ```
+
+Open [http://localhost:3000/convex](http://localhost:3000/convex). You should
+see the starter messages page. Add a message and watch the list update.
+
+That gives you the full end-to-end loop:
+
+- query from React
+- mutation from React
+- live backend round-trip
+- generated API metadata through `@convex/api`
 
 <Callout icon={<InfoIcon />}>
-The `codegen.staticApi` setting is required for TypeScript types to work correctly with cRPC.
+If the page says the backend is not ready, check the terminal running
+`kitcn dev`. The starter page already includes that empty/error state,
+so you do not have to guess what failed.
 </Callout>
 
-This enables the recommended structure:
+## 3. Read The Starter Backend
 
-```plaintext showLineNumbers
-convex/
-├── functions/           # Convex functions (configured above)
-│   ├── _generated/      # api.ts, dataModel.ts
-│   ├── schema.ts        # Database schema
-│   └── *.ts             # Procedures
-├── lib/                 # Server helpers (NOT deployed)
-│   └── crpc.ts          # cRPC builder
-└── shared/              # Client-importable
-    └── api.ts          # Generated procedure metadata
-```
+Now that the app is running, let's trace the files you just bootstrapped.
 
-Create these folders:
+### Schema
 
-```bash
-mkdir -p convex/functions convex/lib src/lib/convex
-```
+We'll start with the starter schema. It is intentionally tiny.
 
-Next, add these settings to your existing `tsconfig.json`:
+```ts title="convex/functions/schema.ts" showLineNumbers {1-7}
+import { convexTable, defineSchema, text } from 'kitcn/orm';
 
-```json title="tsconfig.json" showLineNumbers {3,5-6}
-{
-  "compilerOptions": {
-    "strict": true,
-    "strictFunctionTypes": false,
-    "paths": {
-      "@/*": ["./src/*"],
-      "@convex/*": ["./convex/shared/*"]
-    }
-  }
-}
-```
-
-<Callout icon={<InfoIcon />}>
-`strictFunctionTypes: false` is required for middleware type inference to work correctly.
-Use relative imports for `convex/functions/_generated/*` inside backend Convex files.
-</Callout>
-
-See [Concepts](/docs/concepts) for detailed folder structure explanation.
-
-## 1. Define Schema
-
-We'll start by defining tables and relations in one file.
-
-```ts title="convex/functions/schema.ts" showLineNumbers {3-8,10-15,17-22}
-import {
-  boolean,
-  convexTable,
-  defineRelations,
-  defineSchema,
-  id,
-  index,
-  text,
-} from 'better-convex/orm';
-
-export const user = convexTable('user', {
-  name: text().notNull(),
-  email: text().notNull(),
+export const messagesTable = convexTable('messages', {
+  body: text().notNull(),
 });
 
-export const posts = convexTable(
-  'posts',
-  {
-    title: text().notNull(),
-    published: boolean(),
-    userId: id('user').notNull(),
-  },
-  (t) => [index('by_user').on(t.userId)]
-);
+export const tables = {
+  messages: messagesTable,
+};
 
-const tables = { user, posts };
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  user: { posts: r.many.posts() },
-  posts: { author: r.one.user({ from: r.posts.userId, to: r.user.id }) },
-}));
+export default defineSchema(tables);
 ```
 
-<Callout icon={<InfoIcon />}>
-Docs use `strict: false` to keep snippets short. Keep strict default and add indexes in real apps.
-</Callout>
+This gives the demo one `messages` table with a single required `body` field.
+That is enough to prove the full query and mutation loop without burying the
+quickstart in schema noise.
 
-## 2. Initialize Convex
+### Procedures
 
-Start the Better Convex dev server:
+Next, let's look at the starter procedures.
 
-```bash showLineNumbers
-bunx better-convex dev
-```
-
-This generates `convex/functions/_generated/` (types) and `convex/shared/api.ts` (procedure metadata). Keep it running in a separate terminal.
-
-<Callout icon={<InfoIcon />}>
-For one-time codegen without watch mode, use `bunx better-convex codegen`.
-</Callout>
-
-<Callout icon={<InfoIcon />}>
-For new local deployments, Convex stores backend data in `.convex/` at your project root. This gives each worktree/clone isolated local state.
-</Callout>
-
-## Environment Variables
-
-Create `.env.local` with your Convex URLs:
-
-<Tabs groupId="env" items={["Local", "Cloud"]} persist>
-  <Tab value="Local">
-    ```bash title=".env.local"
-    # WebSocket API (port 3210)
-    NEXT_PUBLIC_CONVEX_URL=http://localhost:3210
-
-    # HTTP routes (port 3211)
-    NEXT_PUBLIC_CONVEX_SITE_URL=http://localhost:3211
-    ```
-  </Tab>
-  <Tab value="Cloud">
-    ```bash title=".env.local"
-    # Generated by Convex
-    NEXT_PUBLIC_CONVEX_URL=https://your-project.convex.cloud
-
-    # Add manually - replace .cloud with .site
-    NEXT_PUBLIC_CONVEX_SITE_URL=https://your-project.convex.site
-    ```
-  </Tab>
-</Tabs>
-
-## 3. Create ORM + cRPC Builder
-
-`convex/functions/generated.ts` is the generated canonical server contract. It includes `initCRPC` and ORM helpers when `relations` exists.
-For Better Auth setups, run codegen first, then define `convex/functions/auth.ts` with `defineAuth` imported from `./generated`; this file remains the canonical auth runtime contract (`authEnabled`, `getAuth`, CRUD/triggers, and `auth`).
-If you are not using codegen, use manual `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
-
-Now create the cRPC builder in `convex/lib/crpc.ts`:
-
-```ts title="convex/lib/crpc.ts" showLineNumbers
-import { initCRPC } from '../functions/generated/server';
-
-
-const c = initCRPC.create();
-
-export const publicQuery = c.query;
-export const publicMutation = c.mutation;
-```
-
-## 4. Define Procedures
-
-```ts title="convex/functions/user.ts" showLineNumbers {1-4,6-27,29-40}
+```ts title="convex/functions/messages.ts" showLineNumbers {5-17,19-30}
 import { z } from 'zod';
-import { publicQuery, publicMutation } from '../lib/crpc';
-import { user } from './schema';
+
+import { publicMutation, publicQuery } from '../lib/crpc';
 
 export const list = publicQuery
-  .input(z.object({ limit: z.number().optional() }))
   .output(
     z.array(
       z.object({
         id: z.string(),
+        body: z.string(),
         createdAt: z.date(),
-        name: z.string(),
-        email: z.string(),
-        posts: z.array(
-          z.object({
-            id: z.string(),
-            createdAt: z.date(),
-            title: z.string(),
-            published: z.boolean().nullable(),
-          })
-        ),
       })
     )
   )
-  .query(async ({ ctx, input }) => {
-    return ctx.orm.query.user.findMany({
-      limit: input.limit ?? 10,
-      with: {
-        posts: {
-          limit: 5,
-          orderBy: { createdAt: 'desc' },
-          columns: {
-            id: true,
-            createdAt: true,
-            title: true,
-            published: true,
-          },
-        },
-      },
-    });
+  .query(async ({ ctx }) => {
+    const rows = await ctx.db.query('messages').order('desc').take(10);
+
+    return rows.map((row) => ({
+      id: row._id,
+      body: row.body,
+      createdAt: new Date(row._creationTime),
+    }));
   });
 
 export const create = publicMutation
-  .input(z.object({ name: z.string(), email: z.string() }))
+  .input(z.object({ body: z.string().trim().min(1).max(120) }))
   .output(z.string())
-  .mutation(async ({ ctx, input }) => {
-    const [row] = await ctx.orm
-      .insert(user)
-      .values(input)
-      .returning({ id: user.id });
-    return row.id;
-  });
+  .mutation(async ({ ctx, input }) =>
+    await ctx.db.insert('messages', { body: input.body })
+  );
 ```
 
-<Callout icon={<InfoIcon />}>
-The `.output()` schema is required for proper TypeScript inference when using `staticApi` codegen.
-</Callout>
+The pattern is simple:
 
-## 5. Set Up Client
+- `publicQuery` reads data
+- `publicMutation` writes data
+- `zod` defines the contract
+- the return value is shaped for the client immediately
 
-```tsx title="src/lib/convex/crpc.tsx" showLineNumbers {1-3,5-8}
+The starter demo uses direct `ctx.db` calls because they are easy to read. The
+rest of the docs build on top of `ctx.orm` once you need richer schemas,
+relations, and typed query helpers.
+
+### cRPC builder
+
+The builders come from the scaffolded cRPC file:
+
+```ts title="convex/lib/crpc.ts" showLineNumbers {1-10}
+import { initCRPC } from '../functions/generated/server';
+
+const c = initCRPC.create();
+
+export const publicQuery = c.query;
+export const publicAction = c.action;
+export const publicMutation = c.mutation;
+
+export const privateQuery = c.query.internal();
+export const privateMutation = c.mutation.internal();
+export const privateAction = c.action.internal();
+```
+
+That file is part of the baseline. You do not need to hand-roll cRPC setup in
+the quickstart. `init` already gave you the builders the starter app needs.
+
+## 4. Read The Starter Client
+
+The client side is just as small.
+
+### React cRPC context
+
+We'll start with the generated client context:
+
+```tsx title="lib/convex/crpc.tsx" showLineNumbers {1-6}
 import { api } from '@convex/api';
-import { createCRPCContext } from 'better-convex/react';
+import { createCRPCContext } from 'kitcn/react';
 
 export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
   api,
@@ -264,125 +195,84 @@ export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
 });
 ```
 
-Wrap your app:
+`@convex/api` is the generated metadata surface. `createCRPCContext(...)`
+turns that into typed TanStack Query helpers for your React app.
 
-```tsx title="src/app/providers.tsx" showLineNumbers {3-8,10,12-14,17-20,23-25}
+### Demo page
+
+Now let's look at the starter page you just opened:
+
+```tsx title="app/convex/page.tsx" showLineNumbers {9-18,34-47,58-74}
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  ConvexProvider,
-  ConvexReactClient,
-  getQueryClientSingleton,
-  getConvexQueryClientSingleton,
-} from 'better-convex/react';
-import { CRPCProvider } from '@/lib/convex/crpc';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { type FormEvent, useState } from 'react';
 
-const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
-function createQueryClient() {
-  return new QueryClient({
-    defaultOptions: { queries: { staleTime: Infinity } },
-  });
-}
-
-export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <ConvexProvider client={convex}>
-      <QueryProvider>{children}</QueryProvider>
-    </ConvexProvider>
-  );
-}
-
-function QueryProvider({ children }: { children: React.ReactNode }) {
-  const queryClient = getQueryClientSingleton(createQueryClient);
-  const convexQueryClient = getConvexQueryClientSingleton({
-    convex,
-    queryClient,
-  });
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <CRPCProvider
-        convexClient={convex}
-        convexQueryClient={convexQueryClient}
-      >
-        {children}
-      </CRPCProvider>
-    </QueryClientProvider>
-  );
-}
-```
-
-Finally, update your existing `src/app/layout.tsx` to wrap the app with providers:
-
-```tsx title="src/app/layout.tsx" showLineNumbers {1,7}
-import { Providers } from './providers';
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body>
-        <Providers>{children}</Providers>
-      </body>
-    </html>
-  );
-}
-```
-
-## 6. Use It
-
-```tsx title="src/app/user/page.tsx" showLineNumbers {3-4,6,8-10,12,16-18}
-'use client';
-
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
 import { useCRPC } from '@/lib/convex/crpc';
 
-export default function UserPage() {
+export default function ConvexMessagesPage() {
   const crpc = useCRPC();
+  const [draft, setDraft] = useState('');
+  const messagesQuery = useQuery(crpc.messages.list.queryOptions());
+  const createMessage = useMutation(crpc.messages.create.mutationOptions());
 
-  const { data: users, isPending } = useQuery(
-    crpc.user.list.queryOptions({ limit: 10 })
-  );
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const body = draft.trim();
+    if (!body) return;
 
-  const createUser = useMutation(crpc.user.create.mutationOptions());
-
-  if (isPending) return <div>Loading...</div>;
+    try {
+      await createMessage.mutateAsync({ body });
+      setDraft('');
+    } catch {}
+  }
 
   return (
-    <div>
-      <button
-        onClick={() => createUser.mutate({ name: 'John', email: 'john@example.com' })}
-      >
-        Create User
-      </button>
-      {users?.map((user) => (
-        <div key={user.id}>{user.name}</div>
-      ))}
-    </div>
+    <main>
+      <form onSubmit={handleSubmit}>
+        <input
+          onChange={(event) => setDraft(event.target.value)}
+          value={draft}
+        />
+        <Button disabled={createMessage.isPending} type="submit">
+          {createMessage.isPending ? 'Saving...' : 'Add message'}
+        </Button>
+      </form>
+
+      {messagesQuery.isPending ? (
+        <p>Loading messages...</p>
+      ) : messagesQuery.isError ? (
+        <div>Backend not ready. Start kitcn dev and refresh.</div>
+      ) : (
+        <ul>
+          {messagesQuery.data.map((message) => (
+            <li key={message.id}>{message.body}</li>
+          ))}
+        </ul>
+      )}
+    </main>
   );
 }
 ```
 
-## 7. Run the App
+This is the starter loop you will reuse everywhere:
 
-Start Next.js and open [http://localhost:3000/user](http://localhost:3000/user):
+- `useCRPC()` gives you typed procedure handles
+- `useQuery(...)` reads data from a query procedure
+- `useMutation(...)` calls a mutation procedure
+- the UI handles loading, error, and success states in the same file
 
-```bash
-bun dev
-```
+## 5. What To Build Next
 
-## Next Steps
+You now have a running kitcn app, a local deployment, generated API
+types, and one live page wired end to end. That's the real starting point.
 
-You have a working Better Convex app. Add more features:
+From here, pick the next seam you actually need:
 
 <Cards>
-  <Card title="Add Auth" href="/docs/auth/server" />
-  <Card title="Add Triggers" href="/docs/orm/schema/triggers" />
-  <Card title="Add Rate Limiting" href="/docs/plugins/ratelimit" />
-  <Card title="Full Templates" href="/docs/templates" />
+  <Card title="CLI Registry" href="/docs/cli/registry" />
+  <Card title="Server Setup" href="/docs/server/setup" />
+  <Card title="Auth Server" href="/docs/auth/server" />
+  <Card title="ORM Queries" href="/docs/orm/queries/index" />
 </Cards>

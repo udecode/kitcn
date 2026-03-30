@@ -29,9 +29,9 @@
  * ```
  */
 
-import { getHeaders } from 'better-convex/auth';
-import { CRPCError } from 'better-convex/server';
 import type { Auth } from 'convex/server';
+import { getHeaders } from 'kitcn/auth';
+import { CRPCError } from 'kitcn/server';
 import { getAuth } from '../functions/generated/auth';
 import {
   type ActionCtx,
@@ -44,7 +44,7 @@ import { createUserCaller } from '../functions/generated/user.runtime';
 import type { SessionUser } from '../shared/auth-shared';
 import { getSessionUser } from './auth/auth-helpers';
 import { getEnv } from './get-env';
-import { rateLimitGuard } from './rate-limiter';
+import { type RatelimitBucket, ratelimit } from './plugins/ratelimit/plugin';
 
 // =============================================================================
 // Context Types
@@ -81,7 +81,7 @@ const c = initCRPC
   .meta<{
     auth?: 'optional' | 'required';
     role?: 'admin';
-    rateLimit?: string;
+    ratelimit?: RatelimitBucket;
     dev?: boolean;
   }>()
   .create();
@@ -98,18 +98,6 @@ const devMiddleware = c.middleware<object>(({ meta, next, ctx }) => {
       message: 'This function is only available in development',
     });
   }
-  return next({ ctx });
-});
-
-/** Rate limit middleware - applies rate limiting based on meta.rateLimit and user tier */
-const rateLimitMiddleware = c.middleware<
-  MutationCtx & { user?: Pick<SessionUser, 'id' | 'plan' | 'session'> | null }
->(async ({ ctx, meta, next }) => {
-  await rateLimitGuard({
-    ...ctx,
-    rateLimitKey: meta.rateLimit ?? 'default',
-    user: ctx.user ?? null,
-  });
   return next({ ctx });
 });
 
@@ -197,7 +185,7 @@ export const authQuery = c.query
 /** Public mutation - no auth required, rate limited, supports dev: true in meta */
 export const publicMutation = c.mutation
   .use(devMiddleware)
-  .use(rateLimitMiddleware);
+  .use(ratelimit.middleware());
 
 /** Private mutation - only callable from other Convex functions */
 export const privateMutation = c.mutation.use(devMiddleware).internal();
@@ -224,7 +212,7 @@ export const optionalAuthMutation = c.mutation
       },
     });
   })
-  .use(rateLimitMiddleware);
+  .use(ratelimit.middleware());
 
 /** Auth mutation - ctx.user required, rate limited, supports role: 'admin' and dev: true in meta */
 export const authMutation = c.mutation
@@ -247,7 +235,7 @@ export const authMutation = c.mutation
     });
   })
   .use(roleMiddleware)
-  .use(rateLimitMiddleware);
+  .use(ratelimit.middleware());
 
 // =============================================================================
 // Action Procedures

@@ -6,10 +6,10 @@ import {
   defineSchema,
   integer,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import { describe, expect, it, vi } from 'vitest';
-import * as aggregateRuntime from '../../packages/better-convex/src/orm/aggregate-index/runtime';
-import type { OrmRuntimeDefaults } from '../../packages/better-convex/src/orm/symbols';
+import * as aggregateRuntime from '../../packages/kitcn/src/orm/aggregate-index/runtime';
+import type { OrmRuntimeDefaults } from '../../packages/kitcn/src/orm/symbols';
 import { convexTest } from '../setup.testing';
 
 const schedulerStub = {

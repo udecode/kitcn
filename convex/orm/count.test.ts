@@ -1,4 +1,4 @@
-import { TableAggregate } from 'better-convex/aggregate';
+import { TableAggregate } from 'kitcn/aggregate';
 import {
   aggregateIndex,
   convexTable,
@@ -7,11 +7,14 @@ import {
   defineSchema,
   index,
   integer,
+  requireSchemaRelations,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import { it as baseIt, describe, expect, test, vi } from 'vitest';
-import baseSchema, { relations as baseRelations } from '../schema';
+import baseSchema from '../schema';
 import { convexTest, runCtx, type TestCtx } from '../setup.testing';
+
+const baseRelations = requireSchemaRelations(baseSchema);
 
 const it = baseIt.extend<{ ctx: TestCtx }>({
   ctx: async ({}, use) => {
@@ -1443,7 +1446,7 @@ describe('ORM count() with aggregateIndex', () => {
         .collect();
 
       expect(buckets[0]?.keyParts[1]).toEqual({
-        __betterConvexUndefined: true,
+        __kitcnUndefined: true,
       });
     });
   });

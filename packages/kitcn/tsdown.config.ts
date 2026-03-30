@@ -1,0 +1,70 @@
+import solid from 'rolldown-plugin-solid';
+import { defineConfig } from 'tsdown';
+
+export default defineConfig([
+  // Client builds (auth/client, react) - need "use client" directive
+  {
+    entry: {
+      'auth/client/index': 'src/auth-client/index.ts',
+      'ratelimit/react/index': 'src/ratelimit/react/index.ts',
+      'react/index': 'src/react/index.ts',
+    },
+    platform: 'neutral',
+    target: 'esnext',
+    tsconfig: 'tooling/tsconfig.build.json',
+    exports: true,
+    dts: true,
+    banner: "'use client';",
+    checks: { pluginTimings: false },
+  },
+  // SolidJS client builds - no "use client", no React Compiler
+  {
+    entry: {
+      'solid/index': 'src/solid/index.ts',
+    },
+    platform: 'neutral',
+    target: 'esnext',
+    tsconfig: 'tooling/tsconfig.build.solid.json',
+    exports: true,
+    dts: true,
+    plugins: [solid()],
+    checks: { pluginTimings: false },
+  },
+  // Server-safe builds (crpc, rsc, server, orm) - no "use client"
+  {
+    entry: {
+      'aggregate/index': 'src/aggregate/index.ts',
+      'auth/config/index': 'src/auth-config/index.ts',
+      'auth/generated/index': 'src/auth/generated.ts',
+      'auth/http/index': 'src/auth-http/index.ts',
+      'auth/index': 'src/auth/index.ts',
+      'auth/nextjs/index': 'src/auth-nextjs/index.ts',
+      'crpc/index': 'src/crpc/index.ts',
+      'ratelimit/index': 'src/ratelimit/index.ts',
+      'plugins/index': 'src/plugins/index.ts',
+      'rsc/index': 'src/rsc/index.ts',
+      'server/index': 'src/server/index.ts',
+      'orm/index': 'src/orm/index.ts',
+    },
+    // Keep CI strict: only allow this known transitive Better Auth dep to inline.
+    inlineOnly: ['kysely'],
+    platform: 'neutral',
+    target: 'esnext',
+    tsconfig: 'tooling/tsconfig.build.json',
+    exports: true,
+    dts: true,
+    checks: { pluginTimings: false },
+  },
+  // CLI builds (ESM) - skip bundling node_modules like tsup
+  {
+    entry: ['src/cli/cli.ts', 'src/cli/watcher.ts'],
+    format: 'esm',
+    platform: 'node',
+    target: 'esnext',
+    tsconfig: 'tooling/tsconfig.build.json',
+    shims: true,
+    skipNodeModulesBundle: true,
+    banner: '#!/usr/bin/env node',
+    checks: { pluginTimings: false },
+  },
+]);

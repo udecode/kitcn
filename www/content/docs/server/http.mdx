@@ -105,7 +105,7 @@ The fluent API chains methods to build the endpoint:
 Export HTTP route builders from your cRPC setup. These determine whether endpoints require authentication.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
-import { CRPCError, initCRPC } from 'better-convex/server';
+import { CRPCError, initCRPC } from 'kitcn/server';
 import type { DataModel } from '../functions/_generated/dataModel';
 
 const c = initCRPC
@@ -334,8 +334,8 @@ bun add hono
 ```
 
 ```ts title="convex/functions/http.ts" showLineNumbers {1-6,8-18,20-24}
-import { authMiddleware } from 'better-convex/auth/http';
-import { createHttpRouter } from 'better-convex/server';
+import { authMiddleware } from 'kitcn/auth/http';
+import { createHttpRouter } from 'kitcn/server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { router } from '../lib/crpc';
@@ -405,7 +405,7 @@ app.use(
 Throw `CRPCError` to return appropriate HTTP status codes. The error code maps to standard HTTP status codes.
 
 ```ts title="convex/routers/todos.ts" showLineNumbers {10-14}
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 
 export const get = publicRoute
   .get('/api/todos/:id')
@@ -550,7 +550,7 @@ export const chat = publicRoute
 Handle external service callbacks like Stripe or GitHub using cRPC routes. Always verify signatures before processing.
 
 ```ts title="convex/routers/webhooks.ts" showLineNumbers {3-5,15,20-23,27-32}
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 import { publicRoute } from '../lib/crpc';
 import { createPaymentsCaller } from '../functions/generated/payments.runtime';
 import { createStripeCaller } from '../functions/generated/stripe.runtime';
@@ -612,7 +612,7 @@ The HTTP proxy is automatically available when you set up cRPC.
 
 ```tsx title="lib/convex/crpc.tsx"
 import { api } from '@convex/api';
-import { createCRPCContext } from 'better-convex/react';
+import { createCRPCContext } from 'kitcn/react';
 
 export const { CRPCProvider, useCRPC } = createCRPCContext({
   api,

@@ -13,7 +13,7 @@ Let's start with a mutation that deletes a user by `id`:
 
 ```ts showLineNumbers title="convex/functions/users.ts"
 import { z } from 'zod';
-import { eq } from 'better-convex/orm';
+import { eq } from 'kitcn/orm';
 import { publicMutation } from '../lib/crpc';
 import { users } from '../schema';
 
@@ -108,7 +108,7 @@ To force sync execution (all rows in a single transaction), use `.execute({ mode
 You can configure default delete semantics per table using `deletion(...)` in the table definition. This is useful when a table should always default to soft or scheduled deletes.
 
 ```ts showLineNumbers title="convex/schema.ts" {8}
-import { convexTable, deletion, integer, text } from 'better-convex/orm';
+import { convexTable, deletion, integer, text } from 'kitcn/orm';
 
 const users = convexTable(
   'users',

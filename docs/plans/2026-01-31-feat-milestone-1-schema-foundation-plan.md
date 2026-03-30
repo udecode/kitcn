@@ -33,7 +33,7 @@ Implement the foundational schema layer for Drizzle-Convex ORM, providing TypeSc
 
 ```typescript
 // Drizzle-Convex (Goal)
-import { convexTable, InferSelectModel, InferInsertModel } from 'better-convex/orm';
+import { convexTable, InferSelectModel, InferInsertModel } from 'kitcn/orm';
 
 const users = convexTable("users", {
   name: v.string(),
@@ -67,12 +67,12 @@ Based on SpecFlow analysis, resolving 5 critical questions:
 
 ```typescript
 // Primary import path
-import { convexTable, InferSelectModel, InferInsertModel } from 'better-convex/orm';
+import { convexTable, InferSelectModel, InferInsertModel } from 'kitcn/orm';
 import { v } from 'convex/values';
 ```
 
 **Rationale**:
-- Separate namespace prevents collision with existing better-convex exports
+- Separate namespace prevents collision with existing kitcn exports
 - Allows independent evolution of ORM features
 - Clear signal to developers ("this is ORM-specific")
 
@@ -154,10 +154,10 @@ export default defineSchema({
 Following Drizzle's pattern, store metadata using symbols:
 
 ```typescript
-// packages/better-convex/src/orm/symbols.ts
-export const TableName = Symbol.for('better-convex:TableName');
-export const Columns = Symbol.for('better-convex:Columns');
-export const Brand = Symbol.for('better-convex:Brand');
+// packages/kitcn/src/orm/symbols.ts
+export const TableName = Symbol.for('kitcn:TableName');
+export const Columns = Symbol.for('kitcn:Columns');
+export const Brand = Symbol.for('kitcn:Brand');
 ```
 
 **Why Symbols**:
@@ -169,7 +169,7 @@ export const Brand = Symbol.for('better-convex:Brand');
 #### 2. Type Branding with `_` Property
 
 ```typescript
-// packages/better-convex/src/orm/table.ts
+// packages/kitcn/src/orm/table.ts
 export class ConvexTable<T extends TableConfig> {
   declare readonly _: {
     readonly brand: 'ConvexTable';
@@ -189,7 +189,7 @@ export class ConvexTable<T extends TableConfig> {
 #### 3. Type Inference Implementation
 
 ```typescript
-// packages/better-convex/src/orm/types.ts
+// packages/kitcn/src/orm/types.ts
 import { Simplify } from '../internal/types';
 
 export type InferSelectModel<TTable extends ConvexTable<any>> = Simplify<
@@ -234,7 +234,7 @@ Support ALL standard Convex validators:
 
 **File Structure**:
 ```
-packages/better-convex/src/orm/
+packages/kitcn/src/orm/
 ├── index.ts          # Public exports
 ├── table.ts          # ConvexTable class
 ├── types.ts          # Type inference utilities
@@ -253,7 +253,7 @@ packages/better-convex/src/orm/
 ### Security Considerations
 
 - **Table Name Validation**: Prevent reserved names (`_storage`, `_scheduled_functions`)
-- **Symbol Collision**: Use namespaced symbols (`better-convex:*`) to avoid conflicts
+- **Symbol Collision**: Use namespaced symbols (`kitcn:*`) to avoid conflicts
 - **Type Safety**: No runtime casting, all type inference is compile-time
 
 ### Test-Driven Development Strategy
@@ -393,7 +393,7 @@ function validateTableName(name: string): void {
 
 - **Type Safety**: 100% type inference coverage for all Convex validators
 - **Test Coverage**: All 103 existing tests pass + 10+ new tests added
-- **Bundle Size**: <5KB added to better-convex package (gzipped)
+- **Bundle Size**: <5KB added to kitcn package (gzipped)
 - **Compilation Time**: <10% increase on large schemas (100+ tables)
 
 ### Qualitative
@@ -433,8 +433,8 @@ export default defineSchema({ users }); // ✅ Works
 - None (self-contained milestone)
 
 **Leverages Existing**:
-- [packages/better-convex/src/internal/types.ts:13-15](../../../packages/better-convex/src/internal/types.ts#L13-L15) - `Simplify<T>` utility
-- [packages/better-convex/src/crpc/types.ts:32](../../../packages/better-convex/src/crpc/types.ts#L32) - `Symbol.for()` pattern
+- [packages/kitcn/src/internal/types.ts:13-15](../../../packages/kitcn/src/internal/types.ts#L13-L15) - `Simplify<T>` utility
+- [packages/kitcn/src/crpc/types.ts:32](../../../packages/kitcn/src/crpc/types.ts#L32) - `Symbol.for()` pattern
 - [convex/setup.testing.ts](../../../convex/setup.testing.ts) - Test harness
 - [vitest.config.mts](../../../vitest.config.mts) - Edge-runtime test environment
 
@@ -472,7 +472,7 @@ export default defineSchema({ users }); // ✅ Works
 
 5. **Symbol Collision** (Likelihood: Very Low, Impact: Low)
    - **Risk**: Another library uses same symbol names
-   - **Mitigation**: Namespace symbols with `better-convex:*`
+   - **Mitigation**: Namespace symbols with `kitcn:*`
    - **Fallback**: Use local symbols instead of global
 
 ## References & Research
@@ -489,7 +489,7 @@ export default defineSchema({ users }); // ✅ Works
 - [convex/types.test.ts](../../../convex/types.test.ts) - Starting point for TDD (15 lines)
 
 **Type Utilities**:
-- [packages/better-convex/src/internal/types.ts](../../../packages/better-convex/src/internal/types.ts) - `Simplify`, `DistributiveOmit`, `DeepPartial`
+- [packages/kitcn/src/internal/types.ts](../../../packages/kitcn/src/internal/types.ts) - `Simplify`, `DistributiveOmit`, `DeepPartial`
 
 ### Institutional Learnings
 
@@ -513,8 +513,8 @@ export default defineSchema({ users }); // ✅ Works
 
 **Symbol-Based Metadata** (from Drizzle):
 ```typescript
-export const TableName = Symbol.for('better-convex:TableName');
-export const Columns = Symbol.for('better-convex:Columns');
+export const TableName = Symbol.for('kitcn:TableName');
+export const Columns = Symbol.for('kitcn:Columns');
 ```
 
 **Type Branding** (from Drizzle):
@@ -545,7 +545,7 @@ For future milestones:
 ## Next Steps
 
 1. **Set up TDD environment** - Ensure vitest + convex-test working
-2. **Create package structure** - `packages/better-convex/src/orm/`
+2. **Create package structure** - `packages/kitcn/src/orm/`
 3. **Write failing tests** - Start with `types.test.ts`
 4. **Implement `convexTable()`** - Basic function with symbol metadata
 5. **Implement type inference** - `InferSelectModel`, `InferInsertModel`

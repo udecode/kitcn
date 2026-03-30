@@ -9,7 +9,7 @@ The ORM mirrors Drizzle's relational query builder while adapting to Convex's do
 
 ## What You Get
 
-- Drizzle-style schema and relations (`convexTable`, `defineRelations`, `one`, `many`)
+- Drizzle-style schema and relations (`convexTable`, `.relations(...)`, `one`, `many`)
 - Type-safe queries (`findMany`, `findFirst`, cursor pagination, `where`, `orderBy`, `with`)
 - Mutations (`insert`, `update`, `delete`, `returning`, `onConflictDoUpdate`)
 - Runtime RLS policies (`rlsPolicy`, `convexTable.withRLS`)
@@ -42,7 +42,7 @@ The ORM keeps Convex storage constraints and gives you a stronger public type AP
 For most tables, define an explicit timestamp column:
 
 ```ts title="convex/schema.ts" showLineNumbers
-import { convexTable, text, timestamp } from 'better-convex/orm';
+import { convexTable, text, timestamp } from 'kitcn/orm';
 
 export const posts = convexTable('posts', {
   title: text().notNull(),
@@ -57,7 +57,15 @@ With cRPC, Date wire serialization is built in, so `Date` values round-trip with
 Let's define a simple schema with `users` and `posts` tables, then wire up relations between them:
 
 ```ts title="convex/schema.ts" showLineNumbers {3-7,10-14}
-import { convexTable, defineRelations, text, boolean, integer, id, index } from 'better-convex/orm';
+import {
+  boolean,
+  convexTable,
+  defineSchema,
+  id,
+  index,
+  integer,
+  text,
+} from 'kitcn/orm';
 
 export const users = convexTable('users', {
   name: text().notNull(),
@@ -73,8 +81,11 @@ export const posts = convexTable('posts', {
   userId: id('users'),
 }, (t) => [index('by_published').on(t.published)]);
 
-export const relations = defineRelations({ users, posts }, (r) => ({
-  users: { posts: r.many.posts() },
+const tables = { users, posts };
+export default defineSchema(tables).relations((r) => ({
+  users: {
+    posts: r.many.posts(),
+  },
   posts: {
     author: r.one.users({ from: r.posts.userId, to: r.users.id }),
   },

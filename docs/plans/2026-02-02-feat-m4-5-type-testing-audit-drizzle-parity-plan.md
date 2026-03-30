@@ -855,9 +855,9 @@ type Combined = SystemFields & UserFields;
 - [docs/plans/2026-02-02-fix-relations-type-inference-plan.md](../../docs/plans/2026-02-02-fix-relations-type-inference-plan.md)
 
 **Core ORM Files**:
-- [packages/better-convex/src/orm/types.ts](../../packages/better-convex/src/orm/types.ts) - All type utilities
-- [packages/better-convex/src/orm/relations.ts](../../packages/better-convex/src/orm/relations.ts) - Relations implementation
-- [packages/better-convex/src/orm/query-builder.ts](../../packages/better-convex/src/orm/query-builder.ts) - Query builder
+- [packages/kitcn/src/orm/types.ts](../../packages/kitcn/src/orm/types.ts) - All type utilities
+- [packages/kitcn/src/orm/relations.ts](../../packages/kitcn/src/orm/relations.ts) - Relations implementation
+- [packages/kitcn/src/orm/query-builder.ts](../../packages/kitcn/src/orm/query-builder.ts) - Query builder
 
 **Existing Test Files**:
 - [convex/test-types/get-column-data.ts](../../convex/test-types/get-column-data.ts) - 22 tests, good coverage

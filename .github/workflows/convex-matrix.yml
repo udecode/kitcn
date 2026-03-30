@@ -1,0 +1,49 @@
+name: Convex Matrix
+
+on:
+  push:
+    branches:
+      - changeset-release/main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  convex-matrix:
+    name: Convex Matrix
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        name: Install bun
+        with:
+          bun-version-file: package.json
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/cache@v4
+        name: ♻️ Setup bun cache
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: 📥 Install
+        run: bun install --frozen-lockfile && bun gen
+
+      - name: 📦 Build Packages
+        run: bun build:pkg
+
+      - name: 🧪 Run full Convex matrix
+        run: bun run scenario:check:convex
+
+      - name: 🧪 Run runtime scenarios
+        run: bun run test:runtime

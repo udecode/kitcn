@@ -4,7 +4,7 @@
  * Tests for findMany({ cursor, limit }) with Convex-native cursor pagination (O(1) performance)
  */
 
-import { defineRelations, defineSchema } from 'better-convex/orm';
+import { defineRelations, defineSchema } from 'kitcn/orm';
 import { expect, test, vi } from 'vitest';
 import schema, { tables } from '../schema';
 import { convexTest, runCtx, withOrmCtx } from '../setup.testing';

@@ -2,17 +2,17 @@
 date: 2026-02-07
 topic: orm-pre-release-breaking-parity-performance-convex-helpers-ranked
 status: proposed
-scope: better-convex/orm only
+scope: kitcn/orm only
 ---
 
 # ORM Pre-release: Breaking Changes, Parity, Performance, and convex-helpers
 
 ## What We're Building
 
-A final pre-release product decision for `better-convex/orm` that prioritizes long-term API trust over short-term feature count. The core question is not "can we add more" but "what contract should be stable on day one."
+A final pre-release product decision for `kitcn/orm` that prioritizes long-term API trust over short-term feature count. The core question is not "can we add more" but "what contract should be stable on day one."
 
 Coverage used for this brainstorm:
-- ORM source API and internals (`packages/better-convex/src/orm/*`)
+- ORM source API and internals (`packages/kitcn/src/orm/*`)
 - ORM docs (`www/content/docs/orm/*`)
 - Convex docs (`/tmp/cc-repos/convex-backend/npm-packages/docs/docs`)
 - convex-helpers docs and source (`/tmp/cc-repos/convex-helpers/packages/convex-helpers/*`)

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useMaybeAuth } from 'better-convex/react';
+import { useMaybeAuth } from 'kitcn/react';
 import {
   Activity,
   BarChart3,
@@ -143,7 +143,6 @@ export function BreadcrumbNav() {
   const activeSection = activeSectionFromPath(pathname);
   const scopedNavItems =
     activeSection === 'labs' ? LAB_NAV_ITEMS : APP_NAV_ITEMS;
-  const labsRootHref = '/orm';
 
   return (
     <header className="sticky top-0 z-50 border-border/40 border-b bg-background/80 backdrop-blur-xl">
@@ -156,7 +155,7 @@ export function BreadcrumbNav() {
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
-              href="/"
+              href={'/' as Route}
             >
               App
             </Link>
@@ -166,7 +165,7 @@ export function BreadcrumbNav() {
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
-              href={labsRootHref}
+              href={'/orm' as Route}
             >
               Labs
             </Link>

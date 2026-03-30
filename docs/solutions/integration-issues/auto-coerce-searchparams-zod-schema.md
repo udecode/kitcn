@@ -8,7 +8,7 @@ tags:
   - http-builder
   - schema-introspection
 severity: medium
-component: packages/better-convex/src/server/http-builder.ts
+component: packages/kitcn/src/server/http-builder.ts
 date: 2026-01-21
 ---
 
@@ -150,6 +150,6 @@ if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) { ... }
 
 ## Related
 
-- [http-builder.ts](packages/better-convex/src/server/http-builder.ts) - Implementation
+- [http-builder.ts](packages/kitcn/src/server/http-builder.ts) - Implementation
 - [examples.ts](example/convex/routers/examples.ts) - Usage examples
 - [http.mdx](www/content/docs/server/http.mdx) - HTTP documentation

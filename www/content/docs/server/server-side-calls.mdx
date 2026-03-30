@@ -55,7 +55,7 @@ The caller requires the Convex **site URL** (for HTTP actions), which is differe
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {4-8}
 import { api } from '@convex/api';
-import { createCallerFactory } from 'better-convex/server';
+import { createCallerFactory } from 'kitcn/server';
 
 export const { createContext, createCaller } = createCallerFactory({
   api,
@@ -65,7 +65,7 @@ export const { createContext, createCaller } = createCallerFactory({
 
 ### Better Auth (Next.js)
 
-For Better Auth with Next.js, see [Next.js Setup](/docs/nextjs) which uses `convexBetterAuth` from `better-convex/auth/nextjs`.
+For Better Auth with Next.js, see [Next.js Setup](/docs/nextjs) which uses `convexBetterAuth` from `kitcn/auth/nextjs`.
 
 ### Custom Auth
 
@@ -73,7 +73,7 @@ Use `createCallerFactory` with a custom `getToken` function.
 
 ```ts title="src/lib/convex/server.ts" showLineNumbers {7-11}
 import { api } from '@convex/api';
-import { createCallerFactory } from 'better-convex/server';
+import { createCallerFactory } from 'kitcn/server';
 
 export const { createContext, createCaller } = createCallerFactory({
   api,
@@ -106,7 +106,7 @@ There are two caller APIs, each for a different context:
 
 | API | Location | When to use | Transport |
 |-----|----------|-------------|-----------|
-| `createCallerFactory` | `better-convex/server` | Server-side HTTP calls (Next.js API routes, RSC) | Convex fetch APIs |
+| `createCallerFactory` | `kitcn/server` | Server-side HTTP calls (Next.js API routes, RSC) | Convex fetch APIs |
 | `create<Module>Caller(ctx)` | `convex/functions/generated/<module>.runtime.ts` | In-process composition inside Convex handlers | Direct handler, `runQuery`/`runMutation`, `runAction`, and `scheduler` |
 
 Use `create<Module>Caller(ctx)` when you're already inside a Convex handler and want to call other cRPC procedures with type-safe autocomplete — no need to manually choose between `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction`, and `ctx.scheduler`.

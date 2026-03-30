@@ -1,5 +1,5 @@
 ---
-module: Better Convex ORM
+module: kitcn ORM
 date: 2026-02-02
 problem_type: type_inference_issue
 component: query_builder
@@ -28,7 +28,7 @@ Query builder type inference was failing in two ways: FilterOperators accepted w
 **Impact:** Blocked M4 completion (query builder with where filtering). Users couldn't write type-safe where clauses or use relations in queries.
 
 ## Environment
-- Module: Better Convex ORM
+- Module: kitcn ORM
 - Component: Query Builder (M3/M4 milestone)
 - TypeScript: 5.x
 - Date: 2026-02-02
@@ -152,7 +152,7 @@ Object.entries(relationsConfig)  // relationsConfig is undefined → crash
 
 ### 1. Implemented GetColumnData Utility
 
-Added mode-based type extraction to [packages/better-convex/src/orm/types.ts:75-82](../../packages/better-convex/src/orm/types.ts#L75-L82):
+Added mode-based type extraction to [packages/kitcn/src/orm/types.ts:75-82](../../packages/kitcn/src/orm/types.ts#L75-L82):
 
 ```typescript
 /**
@@ -177,7 +177,7 @@ export type GetColumnData<
 
 ### 2. Updated FilterOperators Interface
 
-Changed value parameters to use GetColumnData<TBuilder, 'raw'> in [packages/better-convex/src/orm/types.ts:195-259](../../packages/better-convex/src/orm/types.ts#L195-L259):
+Changed value parameters to use GetColumnData<TBuilder, 'raw'> in [packages/kitcn/src/orm/types.ts:195-259](../../packages/kitcn/src/orm/types.ts#L195-L259):
 
 ```typescript
 // Before (broken):
@@ -207,7 +207,7 @@ export interface FilterOperators {
 
 ### 3. Fixed Relations Constructor Bug
 
-Added config evaluation in [packages/better-convex/src/orm/relations.ts:34-45](../../packages/better-convex/src/orm/relations.ts#L34-L45):
+Added config evaluation in [packages/kitcn/src/orm/relations.ts:34-45](../../packages/kitcn/src/orm/relations.ts#L34-L45):
 
 ```typescript
 // Before (broken):
@@ -438,12 +438,12 @@ class Relations<TTable, TConfig> {
 ### Files Modified
 
 **Type system:**
-- [packages/better-convex/src/orm/types.ts](../../packages/better-convex/src/orm/types.ts)
+- [packages/kitcn/src/orm/types.ts](../../packages/kitcn/src/orm/types.ts)
   - Added GetColumnData utility (lines 75-82)
   - Updated FilterOperators interface to use GetColumnData<TBuilder, 'raw'> (lines 195-259)
 
 **Runtime:**
-- [packages/better-convex/src/orm/relations.ts](../../packages/better-convex/src/orm/relations.ts)
+- [packages/kitcn/src/orm/relations.ts](../../packages/kitcn/src/orm/relations.ts)
   - Fixed Relations constructor to evaluate config callback (lines 34-45)
 
 **Tests created:**
@@ -457,7 +457,7 @@ class Relations<TTable, TConfig> {
 
 After changes, rebuild required:
 ```bash
-bun --cwd packages/better-convex build
+bun --cwd packages/kitcn build
 touch convex/schema.ts  # Trigger type regen
 ```
 
@@ -507,7 +507,7 @@ These are tracked for future milestones.
 - Extensive type tests in drizzle-orm/drizzle-orm/tests/pg
 
 ### Symbol-Based Runtime Storage
-Pattern used by both Better Convex and Drizzle:
+Pattern used by both kitcn and Drizzle:
 ```typescript
 // Compile-time phantom types
 declare readonly [Symbol]: Type;

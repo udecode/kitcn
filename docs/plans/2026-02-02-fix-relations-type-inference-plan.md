@@ -26,7 +26,7 @@ _creationTime, userId, _id, title
 Our `InferRelationType` tries to extract the table type directly from the relation generic:
 
 ```typescript
-// packages/better-convex/src/orm/types.ts:126-133
+// packages/kitcn/src/orm/types.ts:126-133
 type InferRelationType<T> =
   T extends One<infer TTable, any>
     ? InferSelectModel<TTable> | null
@@ -161,7 +161,7 @@ export class Many<
 
 ### Phase 1: Add Schema-Aware InferRelations
 
-**File:** [packages/better-convex/src/orm/types.ts](../../packages/better-convex/src/orm/types.ts)
+**File:** [packages/kitcn/src/orm/types.ts](../../packages/kitcn/src/orm/types.ts)
 
 1. **Add new InferRelations with schema parameter:**
 ```typescript
@@ -269,7 +269,7 @@ it('should infer relation types correctly', () => {
 
 ### Phase 3: Add ExtractTablesWithRelations Helper
 
-**File:** [packages/better-convex/src/orm/index.ts](../../packages/better-convex/src/orm/index.ts)
+**File:** [packages/kitcn/src/orm/index.ts](../../packages/kitcn/src/orm/index.ts)
 
 Export helper to extract schema type from schema object:
 
@@ -362,8 +362,8 @@ const result = await db.query.users.findMany({
 - Drizzle ORM relations research: [Task output from dig skill](../../tmp/cc-repos/drizzle-orm)
 - Drizzle `BuildRelationResult` pattern: `/tmp/cc-repos/drizzle-orm/drizzle-orm/src/table.ts:320-339`
 - Drizzle `ExtractTablesWithRelations`: `/tmp/cc-repos/drizzle-orm/drizzle-orm/src/relations.ts:298-315`
-- Our `FindTableByDBName`: [packages/better-convex/src/orm/types.ts:340](../../packages/better-convex/src/orm/types.ts#L340)
-- Our `BuildRelationResult`: [packages/better-convex/src/orm/types.ts:277-294](../../packages/better-convex/src/orm/types.ts#L277-294)
+- Our `FindTableByDBName`: [packages/kitcn/src/orm/types.ts:340](../../packages/kitcn/src/orm/types.ts#L340)
+- Our `BuildRelationResult`: [packages/kitcn/src/orm/types.ts:277-294](../../packages/kitcn/src/orm/types.ts#L277-294)
 
 ## Related Patterns
 

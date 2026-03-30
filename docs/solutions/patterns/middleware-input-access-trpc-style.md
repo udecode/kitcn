@@ -1,5 +1,5 @@
 ---
-module: better-convex/server
+module: kitcn/server
 date: 2026-01-22
 problem_type: feature_request
 component: middleware_system

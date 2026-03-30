@@ -2,7 +2,6 @@ import {
   bigint,
   boolean,
   convexTable,
-  defineRelations,
   defineSchema,
   index,
   integer,
@@ -10,10 +9,10 @@ import {
   text,
   vector,
   vectorIndex,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 // ============================================================================
-// Better Convex ORM Schema (Drizzle-style)
+// kitcn ORM Schema (Drizzle-style)
 // ============================================================================
 
 export const users = convexTable(
@@ -133,13 +132,7 @@ export default defineSchema(tables, {
     mutationScheduleCallCap: 800,
     mutationAsyncDelayMs: 0,
   },
-});
-
-// ============================================================================
-// ORM Relations Config
-// ============================================================================
-
-export const relations = defineRelations(tables, (r) => ({
+}).relations((r) => ({
   users: {
     city: r.one.cities({
       from: r.users.cityId,

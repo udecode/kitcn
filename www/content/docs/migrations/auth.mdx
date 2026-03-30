@@ -1,39 +1,32 @@
 ---
 title: From Better Auth Component
-description: Migrate from @convex-dev/better-auth to better-convex.
+description: Migrate from @convex-dev/better-auth to kitcn.
 links:
   doc: https://github.com/get-convex/better-auth
 ---
 
 import { AlertTriangle, InfoIcon } from "lucide-react"
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion"
+import { Tab, Tabs } from "fumadocs-ui/components/tabs"
 
-In this guide, we'll migrate from `@convex-dev/better-auth` (the component-based auth package) to `better-convex`. You'll remove the component pattern, update imports, and configure the new trigger system.
+In this guide, we'll migrate from `@convex-dev/better-auth` (the component-based auth package) to `kitcn`. You'll remove the component pattern, update imports, and configure the new trigger system.
 
 ## Overview
 
 The main differences between the packages:
 
-| Aspect | @convex-dev/better-auth | better-convex |
+| Aspect | @convex-dev/better-auth | kitcn |
 |--------|------------------------|---------------|
 | Architecture | Convex component pattern | Direct integration |
 | Triggers | Not built-in | `triggers: { user, session }` |
-| Auth Contract | `createAuthOptions/getAuth` split | `default defineAuth((ctx) => ({ ...options, triggers }))` |
+| Auth Contract | `createAuthOptions/getAuth` split | `default defineAuth(() => ({ ...options, triggers }))` |
 | DB Adapter | `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` (context-aware adapter) |
 | Provider | `ConvexBetterAuthProvider` | `ConvexAuthProvider` |
-| React Utils | `AuthBoundary` | `createAuthMutations()`, auth store |
+| React Utils | `AuthBoundary` | `createAuthMutations()` on the kitcn path, plain `authClient` on the raw Convex preset |
 
 Let's migrate step by step.
 
-## Step 1: Update Dependencies
-
-Install `better-convex`.
-
-```bash
-bun add better-convex
-```
-
-## Step 2: Remove Component Pattern
+## Step 1: Remove Component Pattern
 
 Next, we'll remove the Convex component configuration. This is the biggest architectural change.
 
@@ -73,10 +66,10 @@ Next, we'll remove the Convex component configuration. This is the biggest archi
 
     ```bash
     mkdir -p ./better-auth-component-migration
-    curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/cli.ts -o ./better-auth-component-migration/cli.ts
-    curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/id-v6.ts -o ./better-auth-component-migration/id-v6.ts
-    curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/migrate-snapshot.ts -o ./better-auth-component-migration/migrate-snapshot.ts
-    curl -fsSL https://raw.githubusercontent.com/udecode/better-convex/main/tooling/migrations/better-auth-component/zip.ts -o ./better-auth-component-migration/zip.ts
+    curl -fsSL https://raw.githubusercontent.com/udecode/kitcn/main/tooling/migrations/better-auth-component/cli.ts -o ./better-auth-component-migration/cli.ts
+    curl -fsSL https://raw.githubusercontent.com/udecode/kitcn/main/tooling/migrations/better-auth-component/id-v6.ts -o ./better-auth-component-migration/id-v6.ts
+    curl -fsSL https://raw.githubusercontent.com/udecode/kitcn/main/tooling/migrations/better-auth-component/migrate-snapshot.ts -o ./better-auth-component-migration/migrate-snapshot.ts
+    curl -fsSL https://raw.githubusercontent.com/udecode/kitcn/main/tooling/migrations/better-auth-component/zip.ts -o ./better-auth-component-migration/zip.ts
     ```
 
     **3) Install migration zip dependencies**
@@ -146,7 +139,49 @@ Next, we'll remove the Convex component configuration. This is the biggest archi
   </Accordion>
 </Accordions>
 
-## Step 3: Update auth.config.ts
+## Step 2: Rebuild Auth
+
+From here, choose the path that matches how you want to migrate the auth files.
+
+<Tabs groupId="auth-migration-path" items={["CLI", "Manual"]} persist>
+  <Tab value="CLI">
+    If you only want auth and you are keeping this as a plain Convex app, use
+    the CLI path.
+
+    ### Run the auth scaffold
+
+    ```bash
+    npx kitcn add auth --preset convex --yes
+    ```
+
+    This scaffolds the auth files, runs the auth bootstrap, and keeps the app
+    on the plain Convex path.
+
+    ### Review the generated auth config
+
+    The generated `auth.config.ts` starts with `getAuthConfigProvider()`. Keep
+    that generated file as-is on the raw Convex preset. This path does not
+    switch over to the kitcn `getEnv()`-based config shape.
+
+    ### Done
+
+    That's it. The CLI path already updates the auth contract, HTTP routes,
+    client wiring, provider wiring, and schema integration for you without
+    pulling in the wider kitcn scaffold.
+  </Tab>
+  <Tab value="Manual">
+    If you want full control over each file, work through these steps in
+    order.
+
+### Update Dependencies
+
+Install `kitcn`.
+
+```bash
+bun add kitcn
+```
+
+### Update auth.config.ts
 
 The auth config stays similar. We just need to ensure we're passing the static JWKS.
 
@@ -163,7 +198,7 @@ The auth config stays similar. We just need to ensure we're passing the static J
   </CompareItem>
   <CompareItem title="After">
     ```ts showLineNumbers {4}
-    import { getAuthConfigProvider } from "better-convex/auth/config";
+    import { getAuthConfigProvider } from "kitcn/auth/config";
     import type { AuthConfig } from "convex/server";
 
     export default {
@@ -177,23 +212,23 @@ The auth config stays similar. We just need to ensure we're passing the static J
 Passing a static JWKS avoids database queries during token verification.
 </Callout>
 
-## Step 4: Generate Runtime
+### Generate Runtime
 
-If using cRPC, run `better-convex dev` (generates all runtime including cRPC modules):
+If using cRPC, run `kitcn dev` (generates all runtime including cRPC modules):
 
 ```bash
-npx better-convex dev
+npx kitcn dev
 ```
 
 Otherwise, run a scoped generation pass:
 
 ```bash
-npx better-convex codegen --scope auth
+npx kitcn codegen --scope auth
 ```
 
-## Step 5: Migrate auth.ts
+### Migrate auth.ts
 
-This is the biggest change in the migration. We're replacing the component-based pattern — where you manually created a client, wired up adapters, and exported runtime helpers — with a single `defineAuth` contract. You declare your auth options and triggers in one place, and `better-convex` generates all the runtime for you.
+This is the biggest change in the migration. We're replacing the component-based pattern — where you manually created a client, wired up adapters, and exported runtime helpers — with a single `defineAuth` contract. You declare your auth options and triggers in one place, and `kitcn` generates all the runtime for you.
 
 Here's what the before and after looks like:
 
@@ -234,11 +269,11 @@ Here's what the before and after looks like:
   <CompareItem title="After (direct pattern)">
     ```ts showLineNumbers title="convex/functions/auth.ts" {3,6-20}
     import { admin } from "better-auth/plugins";
-    import { convex } from "better-convex/auth";
+    import { convex } from "kitcn/auth";
     import authConfig from "./auth.config";
     import { defineAuth } from "./generated/auth";
 
-    export default defineAuth((ctx) => ({
+    export default defineAuth(() => ({
       baseURL: process.env.SITE_URL!,
       emailAndPassword: { enabled: true },
       plugins: [
@@ -270,8 +305,8 @@ Here's a summary of what changed and why:
 
 | Before | After | Why |
 |--------|-------|-----|
-| `createAuthOptions`/`getAuth` split | Single `defineAuth((ctx) => ({ ... }))` | One contract, less boilerplate |
-| Runtime exports from `auth.ts` | Generated runtime in `convex/functions/generated.ts` | Codegen handles wiring for you |
+| `createAuthOptions`/`getAuth` split | Single `defineAuth(() => ({ ... }))` | One contract, less boilerplate |
+| Runtime exports from `auth.ts` | Generated runtime in `<functionsDir>/generated/auth.ts` | Codegen handles wiring for you |
 | `authComponent.adapter(ctx)` | Generated `getAuth(ctx)` with context-aware adapter | Automatic direct DB in queries, HTTP adapter in actions |
 | Trigger signature `(ctx, ...)` | Trigger signatures `(..., ctx)` | Full parity with ORM `defineTriggers` callbacks |
 | Component namespace routing | Generated contract + `internal.generated.*` handlers | No more component indirection |
@@ -280,7 +315,7 @@ Here's a summary of what changed and why:
 **Context-aware adapter:** The generated `getAuth(ctx)` automatically picks the right adapter. In queries and mutations, it uses direct DB access for performance. In actions and HTTP contexts, it uses the HTTP adapter with `ctx.run*` APIs.
 </Callout>
 
-## Step 6: Update http.ts
+### Update http.ts
 
 If you're not using cRPC, keep Convex's built-in `httpRouter` and use `registerRoutes`.
 Use Hono only when you need cRPC or Hono middleware.
@@ -304,7 +339,7 @@ Use Hono only when you need cRPC or Hono middleware.
     <Tabs groupId="router" items={["Convex", "Hono", "cRPC"]} persist>
       <Tab value="Convex">
         ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
-        import { registerRoutes } from 'better-convex/auth/http';
+        import { registerRoutes } from 'kitcn/auth/http';
         import { httpRouter } from 'convex/server';
         import { getAuth } from './generated/auth';
 
@@ -321,8 +356,8 @@ Use Hono only when you need cRPC or Hono middleware.
       </Tab>
       <Tab value="Hono">
         ```ts title="convex/functions/http.ts" showLineNumbers {1-5,9-18,21}
-        import { authMiddleware } from 'better-convex/auth/http';
-        import { HttpRouterWithHono } from 'better-convex/server';
+        import { authMiddleware } from 'kitcn/auth/http';
+        import { HttpRouterWithHono } from 'kitcn/server';
         import { Hono } from 'hono';
         import { cors } from 'hono/cors';
         import { getAuth } from './generated/auth';
@@ -348,8 +383,8 @@ Use Hono only when you need cRPC or Hono middleware.
       </Tab>
       <Tab value="cRPC">
         ```ts title="convex/functions/http.ts" showLineNumbers {1-6,10-19,22}
-        import { authMiddleware } from 'better-convex/auth/http';
-        import { createHttpRouter } from 'better-convex/server';
+        import { authMiddleware } from 'kitcn/auth/http';
+        import { createHttpRouter } from 'kitcn/server';
         import { Hono } from 'hono';
         import { cors } from 'hono/cors';
         import { router } from '../lib/crpc';
@@ -383,7 +418,7 @@ Use Hono only when you need cRPC or Hono middleware.
   </CompareItem>
 </Compare>
 
-## Step 7: Update auth-client.ts
+### Update auth-client.ts
 
 Now we'll update the client-side auth setup.
 
@@ -405,9 +440,9 @@ Now we'll update the client-side auth setup.
   </CompareItem>
   <CompareItem title="After (lib/convex/auth-client.ts)">
     ```ts showLineNumbers title="lib/convex/auth-client.ts" {3,12-16}
-    import { convexClient } from "better-convex/auth/client";
+    import { convexClient } from "kitcn/auth/client";
     import { createAuthClient } from "better-auth/react";
-    import { createAuthMutations } from "better-convex/react";
+    import { createAuthMutations } from "kitcn/react";
 
     export const authClient = createAuthClient({
       baseURL: process.env.NEXT_PUBLIC_SITE_URL!,
@@ -430,7 +465,14 @@ Now we'll update the client-side auth setup.
 
 The new `createAuthMutations` helper generates TanStack Query mutation options for common auth operations.
 
-## Step 8: Update Provider
+<Callout icon={<InfoIcon />}>
+This is the kitcn client surface. If you are keeping a plain Convex app
+with `kitcn add auth --preset convex --yes`, keep the generated auth
+client scaffold. That preset uses `createAuthClient(...)` plus `convexClient()`
+and does not add `createAuthMutations`.
+</Callout>
+
+### Update Provider
 
 Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
 
@@ -463,13 +505,13 @@ Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
     "use client";
 
     import { ConvexReactClient } from "convex/react";
-    import { ConvexAuthProvider } from "better-convex/auth/client";
+    import { ConvexAuthProvider } from "kitcn/auth/client";
     import { authClient } from "@/lib/convex/auth-client";
     import { useRouter } from "next/navigation";
 
     const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-    export function BetterConvexProvider({ children, token }) {
+    export function AppConvexProvider({ children, token }) {
       const router = useRouter();
 
       return (
@@ -496,64 +538,52 @@ Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`.
 - `onMutationUnauthorized` - Handle auth errors on mutations
 - `onQueryUnauthorized` - Handle auth errors on queries (includes `queryName` for debugging)
 
-## Step 9: Remove AuthBoundary
+<Callout icon={<InfoIcon />}>
+If you are keeping the raw Convex preset, keep the provider shell the preset
+patched in place. The raw path adds `ConvexAuthProvider`, but it does not
+assume the larger kitcn provider layout.
+</Callout>
 
-Remove `AuthBoundary` and use the provider's `onQueryUnauthorized` and `onMutationUnauthorized` callbacks instead (configured in Step 8).
+### Remove AuthBoundary
 
-## Step 10: Update Schema
+Remove `AuthBoundary` and use the provider's `onQueryUnauthorized` and `onMutationUnauthorized` callbacks instead.
+
+### Update Schema
 
 If you were using the auto-generated component schema, you'll now define auth tables in your main schema.
 
 <Tabs groupId="schema-style" items={["ORM", "DB"]} persist>
   <Tab value="ORM">
-    Generate auth tables:
+    Refresh the full auth scaffold once:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
+    npx kitcn add auth --yes
     ```
 
-    Merge generated auth tables into your ORM schema:
+    After changing plugins or auth fields in `<functionsDir>/auth.ts`, refresh
+    only the auth-owned schema blocks:
 
-    ```ts title="convex/functions/schema.ts" showLineNumbers
-    import { defineSchema } from 'better-convex/orm';
-    import { tables as authSchema } from './authSchema';
-
-    export const tables = {
-      ...authSchema,
-      // ...your app convexTable definitions
-    };
-
-    export default defineSchema(tables, { strict: false });
+    ```bash
+    npx kitcn add auth --schema --yes
     ```
-
-    <Callout icon={<InfoIcon />}>
-    CLI emits ORM-flavored output (`convexTable`, `defineSchema`) when ORM schema metadata is detected.
-    </Callout>
   </Tab>
   <Tab value="DB">
-    Generate auth tables:
+    Refresh the auth tables:
 
     ```bash
-    npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
+    npx kitcn add auth --preset convex --yes
     ```
 
-    Merge generated auth tables into your Convex schema:
-
-    ```ts title="convex/functions/schema.ts" showLineNumbers
-    import { defineSchema } from 'convex/server';
-    import { tables as authSchema } from './authSchema';
-
-    export default defineSchema({
-      ...authSchema,
-      // ...your app defineTable definitions
-    });
-    ```
+    kitcn refreshes `<functionsDir>/authSchema.ts` and patches `<functionsDir>/schema.ts` to import and spread `authSchema`.
   </Tab>
 </Tabs>
 
-For fully manual table definitions, see [Auth Server Setup](/docs/auth/server#4-update-schema).
+For fully manual table definitions, see [Auth Server Setup](/docs/auth/server#refresh-auth-owned-schema).
 
-## Step 11: Migrate Helper Methods
+  </Tab>
+</Tabs>
+
+## Step 3: Migrate Helper Methods
 
 The component pattern provided several helper methods on `authComponent`. These now use direct `ctx.db` access.
 
@@ -569,7 +599,7 @@ The component pattern provided several helper methods on `authComponent`. These 
   </CompareItem>
   <CompareItem title="After">
     ```ts showLineNumbers {1,5-6,9-14}
-    import { getAuthUserIdentity } from 'better-convex/auth';
+    import { getAuthUserIdentity } from 'kitcn/auth';
 
     // In a query or mutation
     export const myQuery = query({
@@ -598,7 +628,7 @@ The component pattern provided several helper methods on `authComponent`. These 
   </CompareItem>
   <CompareItem title="After">
     ```ts showLineNumbers {1,4}
-    import { getHeaders } from 'better-convex/auth';
+    import { getHeaders } from 'kitcn/auth';
 
     // In a query or mutation
     const headers = await getHeaders(ctx);
@@ -617,14 +647,14 @@ The component pattern provided several helper methods on `authComponent`. These 
   </CompareItem>
   <CompareItem title="After">
     ```ts showLineNumbers {1,5-6}
-    import { getHeaders, getSession } from 'better-convex/auth';
+    import { getHeaders, getSession } from 'kitcn/auth';
 
     // Option 1: Use helper for common operations
     const session = await getSession(ctx);
 
     // Option 2: Use Better Auth API directly
     const headers = await getHeaders(ctx);
-    const auth = getAuth(ctx); // generated getAuth from convex/functions/generated.ts
+    const auth = getAuth(ctx); // generated getAuth from <functionsDir>/generated/auth.ts
     const session = await auth.api.getSession({ headers });
     ```
   </CompareItem>
@@ -640,7 +670,7 @@ The component pattern provided several helper methods on `authComponent`. These 
   </CompareItem>
   <CompareItem title="After (convex/functions/queries.ts)">
     ```ts showLineNumbers title="convex/functions/queries.ts" {1,4-10}
-    import { getAuthUserIdentity } from 'better-convex/auth';
+    import { getAuthUserIdentity } from 'kitcn/auth';
 
     export const getAuthUser = query({
       handler: async (ctx) => {
@@ -656,24 +686,35 @@ The component pattern provided several helper methods on `authComponent`. These 
 
 ## Migration Checklist
 
-- [ ] **Dependencies:** Install `better-convex`
+- [ ] **Dependencies:** Install `kitcn`
 - [ ] **convex.config.ts:** Remove `app.use(betterAuth)` line
 - [ ] **Component data:** Migrate `betterAuth` component data to app namespace before deletion
 - [ ] **betterAuth folder:** Delete the entire `convex/betterAuth/` directory
-- [ ] **auth.config.ts:** Add `jwks: process.env.JWKS` option
-- [ ] **Generated runtime:** Run `npx better-convex dev` so `convex/functions/generated.ts` exists
-- [ ] **auth.ts:** Rewrite to `export default defineAuth((ctx) => ({ ...options, triggers }))`
-- [ ] **auth-client.ts:** Add `createAuthMutations`, update imports
-- [ ] **Provider:** Replace `ConvexBetterAuthProvider` with `ConvexAuthProvider`
-- [ ] **AuthBoundary:** Remove and use provider callbacks
+- [ ] **auth.ts:** Rewrite to `export default defineAuth(() => ({ ...options, triggers }))`
 - [ ] **Helper methods:** Replace `authComponent.getAuthUser` etc with `ctx.db` access
-- [ ] **Schema:** Generate or define auth tables in main schema
-- [ ] **Env vars:** Run `npx better-convex env sync --auth` for JWKS
 - [ ] **Test:** Verify sign-in, sign-up, session persistence, and token refresh
+
+### kitcn path
+
+- [ ] Run `npx kitcn add auth --yes`
+- [ ] Use `npx kitcn add auth --schema --yes` after auth table changes
+- [ ] Use the `getEnv()`-based auth config shape
+- [ ] Add `createAuthMutations`, update auth client imports
+- [ ] Replace provider wiring with the kitcn auth-aware provider surface
+- [ ] Use `npx kitcn dev` for ongoing local runtime and codegen
+
+### Raw Convex preset
+
+- [ ] Run `npx kitcn add auth --preset convex --yes`
+- [ ] Keep generated `auth.config.ts` scaffolded with `getAuthConfigProvider()`
+- [ ] Keep the generated plain auth client scaffold; do not add `createAuthMutations` unless you are choosing the richer kitcn client surface yourself
+- [ ] Re-run the full preset command after auth schema changes; `--schema` does not apply here
+- [ ] Keep the app on the plain Convex provider/router shape the preset patched in place
+- [ ] Use `npx kitcn env push --prod` for production JWKS sync
 
 ## Next.js Migration
 
-If you're using Next.js, you can migrate server-side auth helpers to `better-convex/auth/nextjs` even when you do **not** use cRPC.
+If you're using Next.js, you can migrate server-side auth helpers to `kitcn/auth/nextjs` even when you do **not** use cRPC.
 
 <Callout icon={<InfoIcon />}>
 If this app only uses Next.js auth helpers after migration, you can remove `@convex-dev/better-auth`.
@@ -681,14 +722,14 @@ If this app only uses Next.js auth helpers after migration, you can remove `@con
 
 ### Without cRPC
 
-If you're not using cRPC, you can still use `better-convex/auth/nextjs`.
+If you're not using cRPC, you can still use `kitcn/auth/nextjs`.
 Only `handler` and `createCaller().getToken()` are needed.
 
 **Server setup:**
 
 ```ts showLineNumbers title="lib/auth-server.ts"
 import { api } from "@convex/api";
-import { convexBetterAuth } from "better-convex/auth/nextjs";
+import { convexBetterAuth } from "kitcn/auth/nextjs";
 
 export const { createCaller, handler } = convexBetterAuth({
   api,
@@ -723,7 +764,7 @@ export default async function RootLayout({ children }) {
 ```
 
 <Callout icon={<InfoIcon />}>
-`better-convex/auth/nextjs` does not require cRPC. cRPC is only needed if you also use server callers beyond auth.
+`kitcn/auth/nextjs` does not require cRPC. cRPC is only needed if you also use server callers beyond auth.
 </Callout>
 
 ### With cRPC
@@ -744,7 +785,7 @@ export default async function RootLayout({ children }) {
   <CompareItem title="After (lib/convex/server.ts)">
     ```ts showLineNumbers title="lib/convex/server.ts" {3,5}
     import { api } from '@convex/api';
-    import { convexBetterAuth } from 'better-convex/auth/nextjs';
+    import { convexBetterAuth } from 'kitcn/auth/nextjs';
 
     export const { createContext, createCaller, handler } = convexBetterAuth({
       api,
@@ -776,7 +817,7 @@ export default async function RootLayout({ children }) {
   </CompareItem>
   <CompareItem title="After (app/layout.tsx)">
     ```tsx showLineNumbers title="app/layout.tsx" {3,6}
-    import { BetterConvexProvider } from "@/lib/convex/convex-provider";
+    import { AppConvexProvider } from "@/lib/convex/convex-provider";
     import { createCaller } from "@/lib/convex/server";
 
     export default async function RootLayout({ children }) {
@@ -784,7 +825,7 @@ export default async function RootLayout({ children }) {
       return (
         <html lang="en">
           <body>
-            <BetterConvexProvider token={token}>{children}</BetterConvexProvider>
+            <AppConvexProvider token={token}>{children}</AppConvexProvider>
           </body>
         </html>
       );
@@ -884,7 +925,7 @@ import {
 } from '@tanstack/react-router';
 import { QueryClient } from '@tanstack/react-query';
 import { ConvexQueryClient } from '@convex-dev/react-query';
-import { ConvexAuthProvider } from 'better-convex/auth/client';
+import { ConvexAuthProvider } from 'kitcn/auth/client';
 import { authClient } from '@/lib/auth-client';
 import { createServerFn } from '@tanstack/react-start';
 import { getToken } from '@/lib/auth-server';
@@ -990,12 +1031,12 @@ export function SignOutButton() {
 
 ### "Auth runtime is disabled ..."
 
-Generated runtime can be disabled when `convex/functions/auth.ts` is missing or lacks a default export.
+Generated runtime can be disabled when `<functionsDir>/auth.ts` is missing or lacks a default export. `functionsDir` comes from `convex.json.functions` (default: `convex`), so scaffolded kitcn apps use `convex/functions/auth.ts`.
 
 ```ts
 import { defineAuth } from './generated/auth';
 
-export default defineAuth((ctx) => ({
+export default defineAuth(() => ({
   // ...options
 }));
 ```
@@ -1003,18 +1044,26 @@ export default defineAuth((ctx) => ({
 Then run:
 
 ```bash
-npx better-convex codegen
+npx kitcn codegen
 ```
 
 ### Better Auth CLI says config is invalid / cannot read auth config
 
-Use generated config entrypoint (not `auth.ts`):
+Use the kitcn auth scaffold command for your mode:
 
 ```bash
-npx @better-auth/cli generate -y --output convex/functions/authSchema.ts --config convex/functions/generated/auth.ts
+npx kitcn add auth --yes
+npx kitcn add auth --schema --yes
 ```
 
-If it still fails, re-run `better-convex codegen` first so generated exports are up to date.
+For raw Convex adoption, use:
+
+```bash
+npx kitcn add auth --preset convex --yes
+```
+
+This path assumes the raw Convex app is already initialized. If it still fails,
+re-run `kitcn codegen` first so generated exports are up to date.
 
 ## Next Steps
 

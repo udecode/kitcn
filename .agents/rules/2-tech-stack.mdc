@@ -1,0 +1,131 @@
+---
+alwaysApply: false
+description: Tech stack documentation for the project
+---
+
+# Tech Stack Documentation
+
+## Overview
+
+Next.js application with Convex backend, Better Auth authentication, and Tailwind CSS v4 styling. Built with TypeScript and React.
+
+## Programming Language & Runtime
+
+- **TypeScript**
+- **Node.js**: v22
+- **Package Manager**: Bun v1.3.9
+
+## Frontend
+
+### UI Framework
+
+- **React** (with React Compiler enabled)
+- **Next.js** (App Router, Turbopack, Typed Routes)
+
+### Styling
+
+- **Tailwind CSS**: v4 (CSS-first configuration)
+- **PostCSS**: @tailwindcss/postcss
+- **tw-animate-css**
+- **Fonts**: Geist Sans, Geist Mono (Google Fonts)
+
+### Component Libraries
+
+- **Radix UI**: Complete UI primitives library
+- **shadcn/ui components**: Built on Radix UI
+- **class-variance-authority**
+- **clsx**
+- **tailwind-merge**
+
+### State Management
+
+- **jotai-x**
+- **React Hook Form**
+- **@hookform/resolvers**
+
+### Data Fetching
+
+- **@tanstack/react-query**
+
+### UI Components
+
+- **cmdk** (Command palette)
+- **date-fns** (Date utilities)
+- **embla-carousel-react**
+- **input-otp**
+- **lucide-react** (Icons)
+- **react-day-picker**
+- **react-resizable-panels**
+- **recharts** (Charts)
+- **sonner** (Toast notifications)
+- **vaul** (Drawer component)
+
+### Utilities
+
+- **next-themes** (Theme management)
+- **nuqs** (URL state management)
+- **ts-essentials**
+- **use-debounce**
+- **superjson**
+
+## Backend
+
+### Backend Framework
+
+- **Convex**
+- **kitcn**
+
+### Authentication
+
+- **better-auth**
+
+### Backend Components
+
+- **@convex-dev/resend** (Email service)
+
+### Email
+
+- **@react-email/components**
+- **@react-email/render**
+
+### Validation
+
+- **zod**
+
+## Database & Storage
+
+- **Convex Database**: Built-in reactive database
+- **Schema**: Defined using convex-ents with users table
+
+## Development Tools & Workflow
+
+### Build Tools
+
+- **Next.js Turbopack**: Development server
+- **TypeScript**: Compiler with custom tsconfig
+- **React Compiler**: Babel plugin for automatic optimizations
+
+### Code Quality
+
+- **Ultracite**: Zero-config Biome preset (formatting & linting)
+- **Biome**: Rust-based linter and formatter (replaces Prettier)
+- **ESLint**: JavaScript linting with React Hooks plugin
+- **TypeScript ESLint**: TypeScript-specific linting
+- **Lefthook**: Git hooks management
+
+### Environment Configuration
+
+- **@t3-oss/env-nextjs**
+
+## Path Aliases
+
+- `@/*` → `./src/*`
+- `@convex/*` → `./convex/*`
+
+## Convex Configuration
+
+- Better Auth integration
+- Rate limiting
+- User aggregation
+- Custom authentication with email verification
+- Session management (30-day expiry, 15-day update age)

@@ -19,7 +19,10 @@
     "allowJs": true,
     "paths": {
       "*": ["./*"],
-      "better-convex/orm": ["../packages/better-convex/src/orm/index.ts"]
+      "kitcn/aggregate": ["../packages/kitcn/src/aggregate/index.ts"],
+      "kitcn/auth": ["../packages/kitcn/src/auth/index.ts"],
+      "kitcn/orm": ["../packages/kitcn/src/orm/index.ts"],
+      "kitcn/server": ["../packages/kitcn/src/server/index.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

@@ -25,7 +25,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
       <div className="not-prose mb-6 flex flex-row items-center gap-2">
         <LLMCopyButton markdownUrl={`${page.url}.mdx`} />
         <ViewOptions
-          githubUrl={`https://github.com/zbeyens/udecode/better-convex/main/docs/content/docs/${page.slugs.join('/')}.mdx`}
+          githubUrl={`https://github.com/zbeyens/udecode/kitcn/main/docs/content/docs/${page.slugs.join('/')}.mdx`}
           markdownUrl={`${page.url}.mdx`}
         />
       </div>

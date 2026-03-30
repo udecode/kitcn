@@ -189,7 +189,7 @@ Implement Drizzle-style `relations()` API for Convex ORM, providing declarative 
 
 ## Problem Statement / Motivation
 
-Developers familiar with Drizzle/Prisma face steep learning curves when adopting Convex because they must learn convex-ents' different API. By providing familiar Drizzle-style `relations()` ergonomics, we eliminate this barrier while maintaining Better Convex's philosophy of TypeScript-first, type-safe development.
+Developers familiar with Drizzle/Prisma face steep learning curves when adopting Convex because they must learn convex-ents' different API. By providing familiar Drizzle-style `relations()` ergonomics, we eliminate this barrier while maintaining kitcn's philosophy of TypeScript-first, type-safe development.
 
 **Key insight**: Similar to how cRPC brought tRPC ergonomics to Convex, this milestone brings Drizzle ORM relation ergonomics to Convex.
 
@@ -251,7 +251,7 @@ type UsersWithRelations = InferRelations<typeof usersRelations>;
 
 ### Core Components
 
-1. **relations() function** (packages/better-convex/src/orm/relations.ts)
+1. **relations() function** (packages/kitcn/src/orm/relations.ts)
    - Accept table and callback with helpers
    - Return `Relations` instance with metadata
    - Store in symbol-based registry
@@ -284,7 +284,7 @@ type UsersWithRelations = InferRelations<typeof usersRelations>;
 
 ```typescript
 // symbols.ts - extend existing symbols
-export const RelationsSymbol = Symbol.for('better-convex:Relations');  // ← Renamed to avoid collision
+export const RelationsSymbol = Symbol.for('kitcn:Relations');  // ← Renamed to avoid collision
 
 // Relation class with metadata
 export class Relations<
@@ -997,9 +997,9 @@ type Relation<TSource, TTarget> =
 ### Internal References
 
 **ORM Core Files**:
-- [table.ts:78-89](packages/better-convex/src/orm/table.ts#L78-L89) - ConvexTable constructor with validator integration
-- [types.ts:35-50](packages/better-convex/src/orm/types.ts#L35-L50) - ValidatorsToType pattern for type inference
-- [symbols.ts:1-3](packages/better-convex/src/orm/symbols.ts#L1-L3) - Existing symbol-based metadata
+- [table.ts:78-89](packages/kitcn/src/orm/table.ts#L78-L89) - ConvexTable constructor with validator integration
+- [types.ts:35-50](packages/kitcn/src/orm/types.ts#L35-L50) - ValidatorsToType pattern for type inference
+- [symbols.ts:1-3](packages/kitcn/src/orm/symbols.ts#L1-L3) - Existing symbol-based metadata
 
 **Test References**:
 - [types.test.ts:27-37](convex/types.test.ts#L27-L37) - Symbol metadata verification tests
@@ -1007,8 +1007,8 @@ type Relation<TSource, TTarget> =
 - [read.test.ts](convex/read.test.ts) - Edge traversal patterns (~500 lines, convex-ents baseline)
 
 **Pattern References**:
-- [builder.ts](packages/better-convex/src/server/builder.ts) - Builder pattern for fluent API
-- [crpc/types.ts](packages/better-convex/src/crpc/types.ts) - Recursive type mapping patterns
+- [builder.ts](packages/kitcn/src/server/builder.ts) - Builder pattern for fluent API
+- [crpc/types.ts](packages/kitcn/src/crpc/types.ts) - Recursive type mapping patterns
 
 ### External References
 
@@ -1125,8 +1125,8 @@ Explicitly excluded to maintain focus:
 ## Build Commands
 
 ```bash
-# After modifying packages/better-convex
-bun --cwd packages/better-convex build
+# After modifying packages/kitcn
+bun --cwd packages/kitcn build
 touch example/convex/functions/schema.ts
 
 # Run tests

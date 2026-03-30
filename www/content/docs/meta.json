@@ -1,10 +1,9 @@
 {
-  "title": "better-convex",
+  "title": "kitcn",
   "pages": [
     "index",
     "quickstart",
     "concepts",
-    "templates",
     "migrations",
     "comparison",
     "---Server---",

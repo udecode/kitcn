@@ -1,5 +1,4 @@
 // Type testing utilities from Drizzle pattern
-// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
 export function Expect<T extends true>() {}
 
 export type Equal<X, Y> =

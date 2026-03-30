@@ -8,6 +8,7 @@
  * - Optional relations (null handling)
  */
 
+import type { StorageActionWriter } from 'convex/server';
 import {
   convexTable,
   type DatabaseWithMutations,
@@ -17,8 +18,7 @@ import {
   id,
   index,
   text,
-} from 'better-convex/orm';
-import type { StorageActionWriter } from 'convex/server';
+} from 'kitcn/orm';
 import { test as baseTest, describe, expect } from 'vitest';
 import type { MutationCtx } from '../_generated/server';
 import { cities, posts, users } from '../schema';
@@ -947,7 +947,7 @@ describe('M6.5 Phase 3: Relation Filters and Limits', () => {
       const db = ctx.orm;
 
       // Import asc helper
-      const { asc } = await import('better-convex/orm');
+      const { asc } = await import('kitcn/orm');
 
       const users = await db.query.users.findMany({
         with: {
@@ -994,7 +994,7 @@ describe('M6.5 Phase 3: Relation Filters and Limits', () => {
       const db = ctx.orm;
 
       // Import desc helper
-      const { desc } = await import('better-convex/orm');
+      const { desc } = await import('kitcn/orm');
 
       const users = await db.query.users.findMany({
         with: {
@@ -1238,7 +1238,7 @@ describe('M6.5 Phase 3: Relation Filters and Limits', () => {
       });
 
       const db = ctx.orm;
-      const { desc } = await import('better-convex/orm');
+      const { desc } = await import('kitcn/orm');
 
       const users = await db.query.users.findMany({
         with: {

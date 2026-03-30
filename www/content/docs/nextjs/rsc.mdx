@@ -13,7 +13,7 @@ In this guide, we'll explore using cRPC in React Server Components. You'll learn
 
 cRPC provides a server-compatible proxy for RSCs with **non-blocking prefetch** - a pattern not available in vanilla Convex:
 
-| | Vanilla Convex | better-convex |
+| | Vanilla Convex | kitcn |
 |-|----------------|---------------|
 | Non-blocking prefetch | **Not available** | `prefetch()` |
 | Direct server calls | `fetchQuery()` | `caller` |
@@ -21,7 +21,7 @@ cRPC provides a server-compatible proxy for RSCs with **non-blocking prefetch** 
 | Prop drilling | Required | Not needed |
 | Client hooks | `usePreloadedQuery(preloaded)` | Standard `useQuery()` |
 
-better-convex provides three patterns:
+kitcn provides three patterns:
 
 | Pattern | Description |
 |---------|-------------|

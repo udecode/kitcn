@@ -1,17 +1,17 @@
 ---
 title: From Convex
-description: Migrate from vanilla Convex to better-convex step by step.
+description: Migrate from vanilla Convex to kitcn step by step.
 links:
   doc: https://docs.convex.dev/production/best-practices
 ---
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore migrating from vanilla Convex to better-convex. You'll learn to convert functions incrementally, set up middleware, and migrate client hooks while keeping existing code working.
+In this guide, we'll explore migrating from vanilla Convex to kitcn. You'll learn to convert functions incrementally, set up middleware, and migrate client hooks while keeping existing code working.
 
 ## Overview
 
-Migrate incrementally - better-convex works alongside vanilla Convex. Convert functions one at a time:
+Migrate incrementally - kitcn works alongside vanilla Convex. Convert functions one at a time:
 
 | Aspect | What Changes |
 |--------|--------------|
@@ -27,7 +27,7 @@ Let's migrate step by step.
 ## Step 1: Install
 
 ```bash showLineNumbers
-bun add better-convex @tanstack/react-query zod
+bun add kitcn @tanstack/react-query zod
 ```
 
 ## Step 2: Server Setup
@@ -35,7 +35,7 @@ bun add better-convex @tanstack/react-query zod
 ### Create cRPC Builder
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {10-11,16-18}
-import { initCRPC } from 'better-convex/server';
+import { initCRPC } from 'kitcn/server';
 import type { DataModel } from '../functions/_generated/dataModel';
 
 const c = initCRPC
@@ -218,8 +218,8 @@ The output is automatically typed as `{ continueCursor, isDone, page: User[] }`.
   </CompareItem>
   <CompareItem title="After (cRPC middleware)">
     ```ts title="convex/lib/crpc.ts" showLineNumbers {1-2,4-10,13}
-    import { getSession } from 'better-convex/auth';
-    import { CRPCError } from 'better-convex/server';
+    import { getSession } from 'kitcn/auth';
+    import { CRPCError } from 'kitcn/server';
 
     export const authQuery = c.query.use(async ({ ctx, next }) => {
       const session = await getSession(ctx);
@@ -259,8 +259,8 @@ The output is automatically typed as `{ continueCursor, isDone, page: User[] }`.
   </CompareItem>
   <CompareItem title="After (cRPC middleware)">
     ```ts title="convex/lib/crpc.ts" showLineNumbers {1-2,4-10,13}
-    import { getSession } from 'better-convex/auth';
-    import { CRPCError } from 'better-convex/server';
+    import { getSession } from 'kitcn/auth';
+    import { CRPCError } from 'kitcn/server';
 
     export const authQuery = c.query.use(async ({ ctx, next }) => {
       const session = await getSession(ctx);
@@ -312,14 +312,14 @@ const adminQuery = authQuery.pipe(async ({ ctx, next }) => {
 ```ts showLineNumbers {1,3,5-6,8-10}
 const c = initCRPC
   .dataModel<DataModel>()
-  .meta<{ rateLimit?: number }>()
+  .meta<{ ratelimit?: number }>()
   .create({ ... });
 
 export const limited = c.query
-  .meta({ rateLimit: 100 })
+  .meta({ ratelimit: 100 })
   .use(async ({ ctx, meta, next }) => {
-    if (meta.rateLimit) {
-      await checkRateLimit(ctx, meta.rateLimit);
+    if (meta.ratelimit) {
+      await checkRatelimit(ctx, meta.ratelimit);
     }
     return next({ ctx });
   })
@@ -338,7 +338,7 @@ export const limited = c.query
   </CompareItem>
   <CompareItem title="After (cRPC)">
     ```ts showLineNumbers {1,3-6}
-    import { CRPCError } from 'better-convex/server';
+    import { CRPCError } from 'kitcn/server';
 
     throw new CRPCError({
       code: 'NOT_FOUND',  // Maps to HTTP 404
@@ -374,7 +374,7 @@ Available codes: `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `BAD_REQUEST`, `CONFL
     );
 
     // Or check error type
-    import { isCRPCErrorCode } from 'better-convex/react';
+    import { isCRPCErrorCode } from 'kitcn/react';
 
     if (isCRPCErrorCode(error, 'NOT_FOUND')) {
       // Handle 404
@@ -395,7 +395,7 @@ import {
   ConvexReactClient,
   getQueryClientSingleton,
   getConvexQueryClientSingleton,
-} from 'better-convex/react';
+} from 'kitcn/react';
 import { CRPCProvider } from '@/lib/convex/crpc';
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -430,7 +430,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 ```tsx title="src/lib/convex/crpc.tsx" showLineNumbers {1-4,6-9}
 import { api } from '@convex/api';
-import { createCRPCContext } from 'better-convex/react';
+import { createCRPCContext } from 'kitcn/react';
 
 export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
   api,
@@ -441,7 +441,7 @@ export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
 ### Generate Metadata
 
 ```bash showLineNumbers
-bunx better-convex dev
+bunx kitcn dev
 ```
 
 ## Step 7: Migrate Client Hooks
@@ -529,7 +529,7 @@ const { data } = useQuery(crpc.user.get.queryOptions({ id }, {
   <CompareItem title="After (cRPC)">
     ```tsx showLineNumbers {1-2,4-10}
     import { skipToken } from '@tanstack/react-query';
-    import { useInfiniteQuery } from 'better-convex/react';
+    import { useInfiniteQuery } from 'kitcn/react';
 
     const {
       data,           // Flattened array (was: results)
@@ -598,7 +598,7 @@ export default async function Page() {
 
 ```tsx title="src/lib/convex/server.ts" showLineNumbers {1,4-8}
 import { api } from '@convex/api';
-import { createCallerFactory } from 'better-convex/server';
+import { createCallerFactory } from 'kitcn/server';
 
 export const { createContext, createCaller } = createCallerFactory({
   api,
@@ -610,7 +610,7 @@ export const { createContext, createCaller } = createCallerFactory({
 import 'server-only';
 
 import { api } from '@convex/api';
-import { createServerCRPCProxy } from 'better-convex/rsc';
+import { createServerCRPCProxy } from 'kitcn/rsc';
 import { cache } from 'react';
 import { headers } from 'next/headers';
 
@@ -623,7 +623,7 @@ export const crpc = createServerCRPCProxy({ api });
 
 ## Quick Reference
 
-| Aspect | Vanilla Convex | better-convex |
+| Aspect | Vanilla Convex | kitcn |
 |--------|---------------|---------------|
 | **Validators** | `v.string()` | `z.string()` |
 | **Arguments** | `args: { ... }` | `.input(z.object({ ... }))` |

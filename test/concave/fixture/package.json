@@ -1,0 +1,7 @@
+{
+  "name": "kitcn-concave-fixture",
+  "private": true,
+  "dependencies": {
+    "convex": "1.33.0"
+  }
+}

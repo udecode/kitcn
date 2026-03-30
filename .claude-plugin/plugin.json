@@ -1,11 +1,11 @@
 {
-  "name": "better-convex",
+  "name": "kitcn",
   "version": "0.6.2",
-  "description": "Better Convex development skill",
+  "description": "kitcn development skill",
   "author": {
     "name": "zbeyens"
   },
-  "repository": "https://github.com/udecode/better-convex",
+  "repository": "https://github.com/udecode/kitcn",
   "license": "MIT",
-  "keywords": ["convex", "crpc", "orm", "better-convex", "auth", "triggers"]
+  "keywords": ["convex", "crpc", "orm", "kitcn", "auth", "triggers"]
 }

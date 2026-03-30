@@ -1,7 +1,11 @@
-import { getAuthConfigProvider } from 'better-convex/auth/config';
 import type { AuthConfig } from 'convex/server';
+import { getAuthConfigProvider } from 'kitcn/auth/config';
 import { getEnv } from '../lib/get-env';
 
 export default {
-  providers: [getAuthConfigProvider({ jwks: getEnv().JWKS })],
+  providers: [
+    getEnv().JWKS
+      ? getAuthConfigProvider({ jwks: getEnv().JWKS })
+      : getAuthConfigProvider(),
+  ],
 } satisfies AuthConfig;

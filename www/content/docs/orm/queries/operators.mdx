@@ -64,7 +64,7 @@ Mutation builders (`insert`, `update`, `delete`) use operator helpers that retur
 Here's how to update all users with a specific role who are over 18:
 
 ```ts showLineNumbers {3-6}
-import { and, eq, gt } from 'better-convex/orm';
+import { and, eq, gt } from 'kitcn/orm';
 
 // Schema: index('by_role').on(t.role) on users table
 await ctx.orm.update(users).set({ role: 'admin' }).where(

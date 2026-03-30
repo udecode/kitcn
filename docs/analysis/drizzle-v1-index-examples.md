@@ -26,7 +26,7 @@ export const users = sqliteTable('users', {
 ]);
 ```
 
-**Better Convex (Target):**
+**kitcn (Target):**
 ```ts
 export const users = defineTable({
   name: v.string(),
@@ -47,7 +47,7 @@ export const users = pgTable('users', {
 ]);
 ```
 
-**Better Convex (Target):**
+**kitcn (Target):**
 ```ts
 export const users = defineTable({
   firstName: v.string(),
@@ -68,7 +68,7 @@ export const users = pgTable('users', {
 ]);
 ```
 
-**Better Convex (Target):**
+**kitcn (Target):**
 ```ts
 export const users = defineTable({
   email: v.string(),
@@ -93,7 +93,7 @@ export const users = pgTable('users', {
 ]);
 ```
 
-**Better Convex (Future):**
+**kitcn (Future):**
 ```ts
 export const users = defineTable({
   email: v.string(),
@@ -124,7 +124,7 @@ export const users = pgTable('users', {
 ]);
 ```
 
-**Better Convex (Future):**
+**kitcn (Future):**
 ```ts
 export const users = defineTable({
   email: v.string(),
@@ -158,7 +158,7 @@ export const users = pgTable('users', {
 ]);
 ```
 
-**Better Convex (Future):**
+**kitcn (Future):**
 ```ts
 export const users = defineTable({
   name: v.string(),
@@ -329,7 +329,7 @@ export const users = pgTable('users', {
 ]);
 ```
 
-**Better Convex (Target - Phase 1):**
+**kitcn (Target - Phase 1):**
 ```ts
 export const users = defineTable({
   email: v.string(),
@@ -394,7 +394,7 @@ export const orders = pgTable('orders', {
 ]);
 ```
 
-**Better Convex (Target):**
+**kitcn (Target):**
 ```ts
 export const orders = defineTable({
   userId: v.id('users'),
@@ -449,7 +449,7 @@ export const documents = pgTable('documents', {
 ]);
 ```
 
-**Better Convex (Target):**
+**kitcn (Target):**
 ```ts
 export const documents = defineTable({
   workspaceId: v.id('workspaces'),
@@ -498,7 +498,7 @@ export const users = pgTable('users', {
 // Indexes stored internally, not exposed on table
 ```
 
-## Better Convex Migration Path
+## kitcn Migration Path
 
 ### Current Convex API
 
@@ -511,7 +511,7 @@ defineTable({
   .index("by_name", ["name"]);
 ```
 
-### Better Convex Target API
+### kitcn Target API
 
 ```ts
 defineTable({
@@ -558,7 +558,7 @@ const users = pgTable('users', {
 ]
 ```
 
-**Better Convex (Target):**
+**kitcn (Target):**
 ```ts
 const users = defineTable({
   id: v.id('users'),

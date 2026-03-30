@@ -19,7 +19,7 @@ ORM documentation is out of sync with recent API changes and Drizzle parity deci
 - `index.mdx` uses `db(ctx)` and `eq(posts.published, true)` without a `where` callback; current API expects `createDatabase` and `where: (cols, { eq }) => ...`.
 - `quickstart.mdx` relations example references `posts.userId` but schema definition omits `userId`.
 - `index.mdx` orderBy example shows a single field; implementation now supports multi-field and column builders.
-- `index.mdx` suggests `eq` from `better-convex/orm/filter`; actual export is from main package.
+- `index.mdx` suggests `eq` from `kitcn/orm/filter`; actual export is from main package.
 - Feature compatibility section needs re-check against current scope (no `sql` support, `with` implemented, orderBy implemented).
 
 ## Proposed Solutions
@@ -76,7 +76,7 @@ Proceed with Option 1. Read and update each of the following files: `index.mdx`,
 - `www/content/docs/orm/llms-index.md`
 
 **Related components:**
-- ORM package APIs in `packages/better-convex/src/orm`
+- ORM package APIs in `packages/kitcn/src/orm`
 - Type tests in `convex/test-types`
 
 ## Resources

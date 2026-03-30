@@ -1,6 +1,6 @@
-import { admin, anonymous, organization } from 'better-auth/plugins';
-import { convex } from 'better-convex/auth';
-import { requireActionCtx } from 'better-convex/server';
+import { admin, anonymous, organization, username } from 'better-auth/plugins';
+import { convex } from 'kitcn/auth';
+import { requireActionCtx } from 'kitcn/server';
 import { getEnv } from '../lib/get-env';
 import {
   AUTH_DEMO_ANON_EMAIL_DOMAIN,
@@ -28,6 +28,8 @@ export default defineAuth((ctx) => {
     baseURL: env.SITE_URL,
     plugins: [
       admin(),
+      username(),
+
       anonymous({
         emailDomainName: AUTH_DEMO_ANON_EMAIL_DOMAIN,
         generateName: async () =>
@@ -69,17 +71,21 @@ export default defineAuth((ctx) => {
         },
         sendInvitationEmail: async (data) => {
           const actionCtx = requireActionCtx(ctx);
+          const inviterName = data.inviter.user.name || 'Team Admin';
+          const organizationName = data.organization.name;
+          const roleSuffix = data.role ? ` as ${data.role}` : '';
+          const acceptUrl = `${env.SITE_URL}/w/${data.organization.slug}?invite=${data.id}`;
+
           await actionCtx.scheduler.runAfter(
             0,
-            internal.email.sendOrganizationInviteEmail,
+            internal.plugins.email.sendTemplatedEmail,
             {
-              acceptUrl: `${env.SITE_URL}/w/${data.organization.slug}?invite=${data.id}`,
-              invitationId: data.id,
-              inviterEmail: data.inviter.user.email,
-              inviterName: data.inviter.user.name || 'Team Admin',
-              organizationName: data.organization.name,
-              role: data.role,
               to: data.email,
+              subject: `${inviterName} invited you to join ${organizationName}`,
+              title: `Invitation to join ${organizationName}`,
+              body: `${inviterName} (${data.inviter.user.email}) invited you to join ${organizationName}${roleSuffix}.`,
+              ctaLabel: 'Accept invitation',
+              ctaUrl: acceptUrl,
             }
           );
         },

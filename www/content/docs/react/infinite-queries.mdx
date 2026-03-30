@@ -23,7 +23,7 @@ In this guide, we'll explore infinite queries in cRPC. You'll learn to implement
 Let's see how it works.
 
 ```tsx showLineNumbers {1,7-9,14}
-import { useInfiniteQuery } from 'better-convex/react';
+import { useInfiniteQuery } from 'kitcn/react';
 import { useCRPC } from '@/lib/crpc';
 
 function SessionList({ userId }: { userId: string }) {
@@ -267,7 +267,7 @@ If you're coming from vanilla Convex, here's what changes.
   </CompareItem>
   <CompareItem title="After (cRPC)">
     ```tsx showLineNumbers {1-2,5-7,10,13}
-    import { useInfiniteQuery } from 'better-convex/react';
+    import { useInfiniteQuery } from 'kitcn/react';
     import { useCRPC } from '@/lib/crpc';
 
     const crpc = useCRPC();

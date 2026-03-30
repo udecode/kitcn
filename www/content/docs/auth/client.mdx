@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore client-side authentication with better-convex. You'll learn to implement sign in/out flows, use auth state hooks, and render components conditionally based on authentication state.
+In this guide, we'll explore client-side authentication with kitcn. You'll learn to implement sign in/out flows, use auth state hooks, and render components conditionally based on authentication state.
 
 ## Overview
 
@@ -29,8 +29,8 @@ Create an auth client with mutation hooks:
 ```ts title="src/lib/convex/auth-client.ts" showLineNumbers {4,8-9,12-16}
 import { inferAdditionalFields } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'better-convex/auth/client';
-import { createAuthMutations } from 'better-convex/react';
+import { convexClient } from 'kitcn/auth/client';
+import { createAuthMutations } from 'kitcn/react';
 
 import type { Auth } from '@convex/auth-shared';
 
@@ -238,7 +238,7 @@ The hooks provide two key features:
 Get comprehensive auth state:
 
 ```tsx title="src/components/auth-status.tsx" showLineNumbers {1,4,6}
-import { useAuth } from 'better-convex/react';
+import { useAuth } from 'kitcn/react';
 
 function AuthStatus() {
   const { hasSession, isAuthenticated, isLoading } = useAuth();
@@ -264,7 +264,7 @@ function AuthStatus() {
 Check if user maybe has auth (optimistic, has token):
 
 ```tsx showLineNumbers {1,4}
-import { useMaybeAuth } from 'better-convex/react';
+import { useMaybeAuth } from 'kitcn/react';
 
 function Component() {
   const isAuth = useMaybeAuth();
@@ -277,7 +277,7 @@ function Component() {
 Check if user is authenticated (server-verified):
 
 ```tsx showLineNumbers {1,4}
-import { useIsAuth } from 'better-convex/react';
+import { useIsAuth } from 'kitcn/react';
 
 function SecureComponent() {
   const isAuth = useIsAuth();
@@ -290,7 +290,7 @@ function SecureComponent() {
 Guard mutations that require authentication:
 
 ```tsx title="src/components/create-post.tsx" showLineNumbers {1,5,8-9,12}
-import { useAuthGuard } from 'better-convex/react';
+import { useAuthGuard } from 'kitcn/react';
 import { useMutation } from '@tanstack/react-query';
 
 function CreatePostButton() {
@@ -328,7 +328,7 @@ const handleClick = () => {
 Render children only when has session (optimistic):
 
 ```tsx showLineNumbers {1,5-7}
-import { MaybeAuthenticated } from 'better-convex/react';
+import { MaybeAuthenticated } from 'kitcn/react';
 
 function App() {
   return (
@@ -344,7 +344,7 @@ function App() {
 Render children only when server-verified:
 
 ```tsx showLineNumbers {1,5-7}
-import { Authenticated } from 'better-convex/react';
+import { Authenticated } from 'kitcn/react';
 
 function App() {
   return (
@@ -360,7 +360,7 @@ function App() {
 Render children only when no session (optimistic):
 
 ```tsx showLineNumbers {1,5-11}
-import { MaybeAuthenticated, MaybeUnauthenticated } from 'better-convex/react';
+import { MaybeAuthenticated, MaybeUnauthenticated } from 'kitcn/react';
 
 function App() {
   return (
@@ -381,7 +381,7 @@ function App() {
 Render children only when not server-verified (waits for loading):
 
 ```tsx showLineNumbers {1,5-7}
-import { Unauthenticated } from 'better-convex/react';
+import { Unauthenticated } from 'kitcn/react';
 
 function App() {
   return (
@@ -397,7 +397,7 @@ function App() {
 Configure auth callbacks in the provider:
 
 ```tsx title="src/app.tsx" showLineNumbers {1,5-14}
-import { ConvexAuthProvider } from 'better-convex/auth/client';
+import { ConvexAuthProvider } from 'kitcn/auth/client';
 
 function App() {
   return (
@@ -447,7 +447,7 @@ Let's understand how the SSR → client hydration flow works:
 │     └─> Fetches user data via HTTP with token in Authorization header        │
 │     └─> Stores result in server QueryClient                                  │
 │                                                                              │
-│  3. <BetterConvexProvider token={token}>                                     │
+│  3. <AppConvexProvider token={token}>                                     │
 │     └─> Passes token to client as initialToken prop                          │
 │                                                                              │
 │  4. <HydrateClient>                                                          │
@@ -494,10 +494,10 @@ Let's understand how the SSR → client hydration flow works:
 
 ## React Native / @convex-dev/auth Users
 
-If you're using `@convex-dev/auth` (common in React Native) instead of better-auth, import `ConvexProviderWithAuth` from `better-convex/react`:
+If you're using `@convex-dev/auth` (common in React Native) instead of better-auth, import `ConvexProviderWithAuth` from `kitcn/react`:
 
 ```tsx title="App.tsx" showLineNumbers {1}
-import { ConvexProviderWithAuth } from 'better-convex/react';
+import { ConvexProviderWithAuth } from 'kitcn/react';
 
 function App() {
   return (

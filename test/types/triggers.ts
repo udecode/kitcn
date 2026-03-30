@@ -1,20 +1,20 @@
-import { TableAggregate } from 'better-convex/aggregate';
-import * as ormModule from 'better-convex/orm';
+import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server';
+import { TableAggregate } from 'kitcn/aggregate';
+import * as ormModule from 'kitcn/orm';
 import {
   convexTable,
   createOrm,
   defineRelations,
+  defineSchema,
   defineTriggers,
   type GenericOrmCtx,
   type InferSelectModel,
   type OrmBeforeResult,
   type OrmTriggerChange,
   type OrmTriggerContext,
-  type OrmWriter,
   text,
-} from 'better-convex/orm';
-import { createGenericCallerFactory } from 'better-convex/server';
-import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server';
+} from 'kitcn/orm';
+import { createGenericCallerFactory } from 'kitcn/server';
 import { type Equal, Expect } from './utils';
 
 type IsUnknown<T> = Equal<T, unknown>;
@@ -55,7 +55,7 @@ void usersAggregateHandler;
 
 const createUsersCaller = createGenericCallerFactory<
   QueryCtx,
-  MutationCtx,
+  MutationCtx | TriggerMutationCtx,
   {
     'users.sendWelcomeEmail': readonly [
       'mutation',
@@ -89,7 +89,8 @@ const triggers = defineTriggers<typeof relations, MutationCtx>(relations, {
   users: {
     create: {
       before: (data, ctx) => {
-        Expect<Equal<typeof ctx.orm, OrmWriter<typeof relations>>>;
+        const _ctx: UsersAggregateCtx = ctx;
+        void _ctx;
         data.name;
         const result: OrmBeforeResult<typeof data> = {
           data: { email: 'ada@example.com' },
@@ -123,7 +124,8 @@ const triggers = defineTriggers<typeof relations, MutationCtx>(relations, {
       },
     },
     change: async (change, ctx) => {
-      Expect<Equal<typeof ctx.orm, OrmWriter<typeof relations>>>;
+      const _ctx: UsersAggregateCtx = ctx;
+      void _ctx;
       Expect<Equal<IsUnknown<typeof change.id>, false>>;
 
       await usersAggregate.trigger(change, ctx);
@@ -164,7 +166,14 @@ const aggregateCompatibleTriggers = defineTriggers(relations, {
   },
 });
 
-const orm = createOrm({ schema: relations, triggers });
+// @ts-expect-error triggers must be declared in defineSchema metadata
+createOrm({ schema: relations, triggers });
+const schemaWithTriggers = defineSchema({ users, posts }).triggers({
+  users: {
+    change: usersAggregate.trigger,
+  },
+});
+const orm = createOrm({ schema: schemaWithTriggers });
 void orm;
 void aggregateCompatibleTriggers;
 

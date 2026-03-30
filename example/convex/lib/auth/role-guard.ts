@@ -1,4 +1,4 @@
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 
 // Helper function to check role authorization
 export function roleGuard(

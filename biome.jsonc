@@ -8,12 +8,14 @@
   "files": {
     "includes": [
       "!!tmp",
+      "!fixtures",
+      "!**/skills",
       "!**/_generated",
       "!**/generated",
       "!**/convex/shared/api.ts",
       "!!**/convex.json",
       "!**/migrations",
-      "!!packages/better-convex/src/internal/upstream/server/zod4.ts"
+      "!!packages/kitcn/src/internal/upstream/server/zod4.ts"
     ]
   },
   "javascript": {
@@ -126,7 +128,7 @@
                 "paths": {
                   "convex/values": {
                     "importNames": ["ConvexError"],
-                    "message": "Use CRPCError from 'better-convex/crpc' instead."
+                    "message": "Use CRPCError from 'kitcn/crpc' instead."
                   },
                   "convex/react": "Use useCRPC from '@/lib/convex/crpc' instead.",
                   "convex/nextjs": "Use caller from '@/lib/convex/rsc' or createContext({ headers }).caller from '@/lib/convex/server' instead."
@@ -154,7 +156,7 @@
                 "paths": {
                   "convex/values": {
                     "importNames": ["ConvexError"],
-                    "message": "Use CRPCError from 'better-convex/crpc' instead."
+                    "message": "Use CRPCError from 'kitcn/crpc' instead."
                   }
                 },
                 "patterns": [
@@ -230,7 +232,12 @@
       }
     },
     {
-      "includes": ["convex/**", "test/**", "**/*.test.*"],
+      "includes": [
+        "convex/**",
+        "test/**",
+        "tooling/scenario-fixtures/**",
+        "**/*.test.*"
+      ],
       "linter": {
         "enabled": false
       }

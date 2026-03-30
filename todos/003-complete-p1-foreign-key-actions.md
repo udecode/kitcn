@@ -66,8 +66,8 @@ Implement Option 1. Update FK metadata handling and referencing-row queries. Re-
 ## Technical Details
 
 **Affected files:**
-- `packages/better-convex/src/orm/table.ts`
-- `packages/better-convex/src/orm/mutation-utils.ts`
+- `packages/kitcn/src/orm/table.ts`
+- `packages/kitcn/src/orm/mutation-utils.ts`
 - `convex/orm/foreign-key-actions.test.ts`
 
 ## Acceptance Criteria

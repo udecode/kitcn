@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   RATELIMIT_COVERAGE_DEFINITIONS,
-  type RateLimitCoverageStatus,
+  type RatelimitCoverageStatus,
 } from '../../example/convex/functions/ratelimitDemo.coverage';
 
 const REQUIRED_IDS = [
@@ -17,7 +17,7 @@ const REQUIRED_IDS = [
   'get-value-snapshot',
 ] as const;
 
-const VALID_STATUSES: RateLimitCoverageStatus[] = [
+const VALID_STATUSES: RatelimitCoverageStatus[] = [
   'supported',
   'partial',
   'blocked',

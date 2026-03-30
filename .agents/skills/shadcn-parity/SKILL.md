@@ -1,0 +1,524 @@
+---
+name: shadcn-parity
+description: 'Skill: shadcn-parity'
+metadata:
+  skiller:
+    source: .agents/rules/shadcn-parity.mdc
+---
+
+# Shadcn Parity
+
+## Contract
+
+When the user asks for shadcn parity, treat `../shadcn` as the source of
+truth. Do not give them "inspired by shadcn". Do not abstract away the parts
+that matter. Clone the methodology:
+
+- source first
+- file structure first
+- helper layering first
+- unit tests first
+- output parity first
+
+Only diverge when:
+
+1. the product domain is genuinely different
+2. the current repo has an explicit constraint
+3. the user explicitly asks for a divergence
+
+If you diverge, say exactly why.
+
+## Ownership Rule
+
+For `kitcn init -t next`, shadcn owns the app shell. kitcn
+owns the integration layer.
+
+Shadcn-owned files stay shadcn-owned:
+
+- `app/layout.tsx`
+- `app/page.tsx`
+- `app/globals.css`
+- `components/theme-provider.tsx`
+- `lib/utils.ts`
+- `components.json`
+- `eslint.config.mjs`
+- `next.config.mjs`
+- `postcss.config.mjs`
+
+kitcn-owned files stay kitcn-owned:
+
+- `components/providers.tsx`
+- `lib/convex/*`
+- `.env.local`
+- `convex/*`
+- `concave.json`
+- package.json baseline patches
+- `<functionsDir>/tsconfig.json`
+- `tsconfig.json` alias patch for `@convex/*`
+
+The rule is simple:
+
+- add kitcn files
+- patch the seam
+- do not replace shadcn shell files wholesale
+
+For the current Next scaffold, the acceptable shell patches are narrow:
+
+- patch `layout.tsx` to mount `Providers`
+- patch `tsconfig.json` to add `@convex/*`
+- patch `components.json` only when `tailwind.css` must follow `src/` vs root
+
+For `kitcn init`, overwrite behavior must match that ownership split:
+
+- shell seam patches apply directly
+- kitcn-owned replacement files prompt per file in interactive mode
+- `--yes` skips conflicting owned replacements
+- `--overwrite` is the only bulk replacement hammer
+
+If you find yourself authoring a full replacement for a shadcn-owned file,
+you are probably doing it wrong.
+
+## Universal Create Matrix
+
+Public templates stay concrete:
+
+- `kitcn init -t next`
+- `kitcn init -t vite`
+
+Internally, kitcn only has two scaffold modes:
+
+- `next-app`
+- `react`
+
+Framework detection should feel like shadcn, not like a fake kitcn
+abstraction:
+
+- `next-app` maps to `next-app`
+- `next-pages`, `vite`, `react-router`, `tanstack-start`, and `manual` map to
+  `react`
+- unsupported frameworks should fail clearly
+
+`init -t` stays universal. Keep it narrow.
+
+`init -t` always owns:
+
+- the detected app shell plus the kitcn seam
+- `convex/functions/schema.ts`
+- `convex/functions/http.ts`
+- `convex/lib/crpc.ts`
+- `convex/lib/get-env.ts`
+- `<functionsDir>/tsconfig.json`
+- root `tsconfig.json` patch
+- `.gitignore` entries for `.convex/` and `.concave/`
+- `components/providers.tsx`
+- `lib/convex/*`
+- `.env.local`
+- baseline scripts: `codegen`, `convex:dev`, `typecheck:convex`, root `typecheck`
+
+Next-only baseline pieces:
+
+- `/convex` messages demo
+- `lib/convex/server.ts`
+- `lib/convex/rsc.tsx`
+- narrow shell seam patches:
+  - `layout.tsx`
+  - `tsconfig.json`
+  - `components.json`
+
+React-mode baseline keeps the client core only:
+
+- no RSC files
+- no Next-only provider/server helpers
+- no `/convex` demo in v1
+- Vite is the concrete reference for this mode
+
+`init -t` options stay narrow:
+
+- `-t next`
+- `-t vite`
+- `--backend convex|concave`
+- `--cwd`
+- `--name`
+- `--defaults`
+- `--yes`
+- `--prod`
+- `--preview-name`
+- `--deployment-name`
+- `--env-file`
+
+Do not grow `init -t` with fake feature flags.
+
+Optional capability belongs in `add`:
+
+- `kitcn add auth`
+- `kitcn add ratelimit`
+- `kitcn add resend`
+
+Auth is the first real bundle. It patches the `init -t` baseline and owns:
+
+- auth server config/runtime
+- auth client files
+- auth-aware provider wiring
+- auth env through `get-env`
+- auth cRPC families:
+  - `optionalAuth*`
+  - `auth*`
+
+Mode split:
+
+- `next-app`: minimal `/auth` page + provider/client/server wiring
+- `react`: auth server config/runtime, auth client, provider wiring, auth env,
+  and auth cRPC families only
+
+Auth v1 does not own:
+
+- role/admin policy
+- orgs/invitations
+- anonymous upgrade flows
+- app-specific auth UX beyond minimal sign-in/session wiring
+
+Rule:
+
+- universal starter scaffold = `init -t`
+- in-place adoption = `init`
+- optional/invasive/app-policy features = `add`
+- if a capability already fits cleanly as a first-party plugin, do not stuff it into `init -t`
+
+## Registry Comparison
+
+kitcn should match shadcn on the data model as closely as possible.
+
+Same shape:
+
+- one item module per folder under
+  `packages/kitcn/src/cli/registry/items/<item>/<item>-item.ts`
+- each item declares files
+- each item declares package dependencies
+- each item declares internal item dependencies
+
+Current kitcn divergence:
+
+- the registry stays internal for now
+- install is not just file copy
+- add flows patch existing kitcn seam files based on project mode
+
+That extra install layer is what kitcn adds beyond plain shadcn
+registry resolution:
+
+- register schema extensions into `schema.ts`
+- patch `crpc.ts`, `http.ts`, providers, and `get-env.ts`
+- resolve different roots for `next-app` vs `react`
+- maintain `plugins.lock.json`
+- install pinned package specs when needed
+- run codegen and post-add hooks
+
+Rule:
+
+- keep the item files as close to shadcn `RegistryItem` as possible
+- keep the dynamic patching in install/runtime code
+- do not shove kitcn-specific behavior back into the item shape unless
+  shadcn has a real equivalent
+
+## Create
+
+`fixtures/*` is not hand-authored. It is a normalized snapshot of real
+CLI output.
+
+The important bit:
+
+- committed template `_generated/*` output comes from real kitcn
+  codegen during `kitcn init -t`
+- it is not copied from repo fixtures
+- it is not written by hand
+- template-mode `init -t` must fail if real codegen cannot be produced
+- do not call `kitcn codegen` directly from the fixture script
+
+Why not direct `kitcn codegen`?
+
+- a fresh temp app may still need Convex bootstrap before codegen can succeed
+- that bootstrap can become interactive if you bypass create's bootstrap flow
+- `kitcn init -t next` already owns the whole sequence:
+  scaffold -> dependency install -> codegen -> bootstrap retry -> codegen retry
+- the fixture script should consume that contract, not reimplement half of it
+
+Repo automation adds two deliberate details:
+
+- `tooling/fixtures.ts` owns committed starters:
+  `next`, `next-auth`, `vite`, `vite-auth`
+- that uses the same public backend selector users can use elsewhere
+- template sync intentionally chooses Concave because it is more agent/CI-friendly here
+- default CLI behavior is still backend `convex` unless config or `--backend` says otherwise
+- manual runtime lives in `tooling/scenarios.ts`, materialized under
+  `tmp/scenarios/*`
+
+### Human Repro
+
+To regenerate the checked-in fixture:
+
+```bash
+bun run fixtures:sync
+```
+
+To verify the fixture still matches fresh CLI output:
+
+```bash
+bun run fixtures:check
+```
+
+To materialize runnable tmp apps for manual runtime:
+
+```bash
+bun run scenario:prepare all
+```
+
+Why this exists:
+
+- committed `fixtures/*/package.json` stays normalized to `workspace:*`
+- `fixtures:check` swaps that to a packed local tarball before validation
+- manual runtime happens in `tmp/scenarios/*`, never in `fixtures/*`
+- use @.claude/skills/scenarios/scenarios.mdc for runtime proof after prepare;
+  it owns which scenario keys stop at `scenario:dev`, which ones add
+  `test:auth` and `test:e2e`, and which ones must use `scenario:check`
+
+`fixtures:check` is not just a diff. It validates the fresh generated app with:
+
+```bash
+bun install
+bun typecheck
+```
+
+Next starters also run `bun lint`. Vite starters intentionally skip lint in
+this lane because shadcn's default `eslint .` sweeps generated/runtime files.
+
+It validates against the current local package under test, not the last
+published npm version:
+
+- pack the current local `kitcn` package to a tarball
+- install that tarball into the generated temp app
+
+If you need the slower rebuild-first lane, use:
+
+```bash
+bun run fixtures:check:full
+```
+
+### Agent Repro
+
+When checking parity or drift:
+
+1. run `bun run fixtures:sync` instead of editing `fixtures/*` by hand
+2. run `bun run fixtures:check`
+3. if drift remains, fix `kitcn init -t next`, not the fixture
+
+### Real Generation Flow
+
+`tooling/fixtures.ts` does this:
+
+1. create a temp directory
+2. for each committed starter, run the local CLI:
+
+   ```bash
+   bunx kitcn --backend concave init -t <next|vite> --yes --cwd <tmp> --name <starter>
+   ```
+
+   For auth starters, follow with:
+
+   ```bash
+   bunx kitcn --backend concave add auth --yes
+   ```
+
+3. let `create` run the actual scaffold flow:
+   - run `shadcn init -t next`
+   - apply kitcn overlay files and patches
+   - install kitcn baseline deps
+   - run kitcn codegen via the init-owned backend adapter
+4. if codegen needs Convex bootstrap, `create` bootstraps Convex and reruns real
+   codegen
+   - for template sync, the selected backend is Concave
+   - outside that flow, backend still resolves normally from config/CLI
+5. validate the fresh generated app:
+   - pack local `kitcn` to a tarball
+   - rewrite the generated app to install that tarball
+   - `bun install`
+   - `bun typecheck`
+   - `bun lint` only for templates whose registry entry enables lint
+6. copy the generated app into `fixtures/<starter>`
+7. apply repo-only normalization:
+   - strip volatile artifacts (`node_modules`, `.next`, lockfiles, etc.)
+   - rewrite `kitcn` to `workspace:*`
+   - remove `CONVEX_DEPLOYMENT` noise from `.env.local`
+
+That means the fixture is allowed to normalize repo-local junk, but it is not
+allowed to invent user-facing files.
+
+Do not change this into:
+
+```bash
+bunx kitcn init -t next --yes --cwd <tmp> --name next
+cd <tmp>/next
+bunx kitcn codegen
+```
+
+That skips the point of create owning bootstrap/codegen orchestration and can
+reintroduce interactive or half-bootstrapped failure modes.
+
+### Rule
+
+If `fixtures/next` differs from fresh output, assume the CLI is wrong first.
+Do not "fix" fixture drift by patching the fixture directly unless the change is
+strictly part of repo-only normalization.
+
+## Primary Sources
+
+Start here before editing:
+
+- `../shadcn/packages/shadcn/src/commands`
+- `../shadcn/packages/shadcn/src/utils`
+- `../shadcn/packages/shadcn/test`
+
+Prefer shadcn's non-e2e tests over guessing intended behavior.
+
+## Method
+
+### 1. Map direct analogs
+
+Build a parity map between the local surface and the shadcn surface.
+
+Check:
+
+- command files
+- utility files
+- file boundaries
+- exported helpers
+- parsing/option ownership
+- formatter/logger/spinner ownership
+- unit tests
+
+If there is a direct analog, mirror it.
+
+### 2. Read code and tests before edits
+
+Read the matching shadcn implementation and the relevant unit tests before
+changing local code.
+
+Do not stop at the happy path source file. Read the tests too. That is where
+the real contract usually lives.
+
+### 3. Port tests first
+
+For parity work, the first useful move is usually test porting.
+
+Port/adapt shadcn's non-e2e tests for:
+
+- command parsing
+- formatter output
+- path matching
+- dry-run/diff/view behavior
+- compare/normalization behavior
+- logger/spinner interactions when relevant
+
+Adjust only the domain-specific payloads, paths, and names.
+
+Do not add dead legacy tests like "old API no longer exists". Just delete the
+old path.
+
+### 4. Copy structure, not just behavior
+
+If shadcn splits logic into command modules and shared utilities, mirror that
+split locally.
+
+Prefer:
+
+- same file boundaries
+- same helper names
+- same call flow
+- same responsibility split
+
+Avoid:
+
+- thin wrapper files that still delegate everything into one giant legacy file
+- new local abstractions invented only to avoid copying the proven pattern
+- "cleaned up" rewrites that quietly drift from shadcn
+- full-file local templates for shadcn-owned shell files
+
+### 5. Copy presentation too
+
+Parity includes UX, not just logic.
+
+Mirror:
+
+- colors
+- logger/highlighter vocabulary
+- spinner lifecycle
+- summary boxes
+- aligned sections
+- diff/view formatting
+- truncation hints
+
+If local dependencies differ, keep the behavior and shape the same with the
+closest local equivalent.
+
+### 6. Keep local extensions narrow
+
+If the repo needs a stronger behavior than shadcn, keep it behind the same
+surface.
+
+Good:
+
+- same compare utility shape, stronger AST equivalence inside
+- same dry-run formatter shape, different plan payload underneath
+- same shadcn shell, kitcn files mounted through minimal patches
+
+Bad:
+
+- separate helper stack "because our use case is special"
+- extra compatibility shims
+- alternate command surface
+- replacing shadcn output just because patching feels annoying
+
+### 7. Delete conflicting legacy paths
+
+If an old local abstraction conflicts with the parity target, remove it.
+
+Do not keep:
+
+- backward-compat aliases
+- compatibility wrappers
+- fallback parsing for removed flags
+- parallel old/new code paths
+
+Make the result look like it was built that way from the start.
+
+## Parity Checklist
+
+Before calling the work done, verify:
+
+- matching command/module ownership exists
+- matching utility layering exists
+- matching human output shape exists
+- matching unit-test granularity exists
+- relevant shadcn non-e2e tests were ported or consciously adapted
+- remaining divergences are explicit and justified
+
+## Anti-Patterns
+
+If you catch yourself doing any of these, stop:
+
+- "I captured the spirit"
+- "I built a cleaner local abstraction"
+- "I kept the old path for safety"
+- "I only matched the terminal output"
+- "I skipped the tests because behavior looked obvious"
+- "I rewrote the shadcn file because it was faster"
+
+That is how parity rots into fan fiction.
+
+## Output Rule
+
+When reporting parity work back to the user, state:
+
+1. what was cloned directly
+2. what tests were ported/adapted
+3. any intentional divergence
+
+If there was no divergence, say so plainly.

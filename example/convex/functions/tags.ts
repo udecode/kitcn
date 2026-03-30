@@ -1,5 +1,5 @@
-import { eq } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
+import { eq } from 'kitcn/orm';
+import { CRPCError } from 'kitcn/server';
 import { z } from 'zod';
 import { authMutation, authQuery } from '../lib/crpc';
 import { tagsTable, todoTagsTable } from './schema';
@@ -38,7 +38,6 @@ export const list = authQuery
 
 // Create a new tag
 export const create = authMutation
-  .meta({ rateLimit: 'tag/create' })
   .input(
     z.object({
       name: z.string().min(1).max(50),
@@ -76,7 +75,6 @@ export const create = authMutation
 
 // Update tag name or color
 export const update = authMutation
-  .meta({ rateLimit: 'tag/update' })
   .input(
     z.object({
       tagId: z.string(),
@@ -115,7 +113,6 @@ export const update = authMutation
 
 // Delete a tag (removes from all todos)
 export const deleteTag = authMutation
-  .meta({ rateLimit: 'tag/delete' })
   .input(
     z.object({
       tagId: z.string(),
@@ -132,7 +129,6 @@ export const deleteTag = authMutation
 
 // Merge two tags
 export const merge = authMutation
-  .meta({ rateLimit: 'tag/update' })
   .input(
     z.object({
       sourceTagId: z.string(),

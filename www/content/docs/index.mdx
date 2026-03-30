@@ -10,13 +10,13 @@ import { InfoIcon } from "lucide-react"
 
 ## Introduction
 
-Better Convex is a complete framework for Convex. It brings tRPC-style APIs, TanStack Query, a Drizzle-style ORM, and Better Auth into one cohesive developer experience.
+kitcn is a complete framework for Convex. It brings tRPC-style APIs, TanStack Query, a Drizzle-style ORM, and Better Auth into one cohesive developer experience.
 
 **This is not just a query wrapper.** It's how you build production Convex applications.
 
 ## Philosophy
 
-Better Convex integrates Convex for realtime data, TanStack Query for caching, and Better Auth for authentication behind a consistent API:
+kitcn integrates Convex for realtime data, TanStack Query for caching, and Better Auth for authentication behind a consistent API:
 
 - **Type safety end-to-end** - From schema to procedures to client, with full inference
 - **Real-time by default** - WebSocket subscriptions flow into TanStack Query cache
@@ -27,17 +27,17 @@ Better Convex integrates Convex for realtime data, TanStack Query for caching, a
 
 | Export | Description | Depends on |
 |--------|-------------|------------|
-| `better-convex` (CLI) | Codegen, `better-convex dev` | — |
-| `better-convex/server` | cRPC builder, middleware, server caller | — |
-| `better-convex/orm` | Drizzle-style ORM schema and query helpers | — |
-| `better-convex/react` | React client, providers, auth hooks | `server` |
-| `better-convex/rsc` | RSC prefetching, hydration | `server`, `react`, `next` |
-| `better-convex/auth` | Better Auth adapter | — |
-| `better-convex/auth/client` | Better Auth client plugins | `react` |
-| `better-convex/auth/config` | Convex auth config provider | `auth` |
-| `better-convex/auth/http` | Auth HTTP helpers | `auth` |
-| `better-convex/auth/nextjs` | Better Auth Next.js adapter | `server`, `next` |
-| `better-convex/plugins/ratelimit` | Rate limiting plugin | `orm` |
+| `kitcn` (CLI) | Codegen, `kitcn dev` | — |
+| `kitcn/server` | cRPC builder, middleware, server caller | — |
+| `kitcn/orm` | Drizzle-style ORM schema and query helpers | — |
+| `kitcn/react` | React client, providers, auth hooks | `server` |
+| `kitcn/rsc` | RSC prefetching, hydration | `server`, `react`, `next` |
+| `kitcn/auth` | Better Auth adapter | — |
+| `kitcn/auth/client` | Better Auth client plugins | `react` |
+| `kitcn/auth/config` | Convex auth config provider | `auth` |
+| `kitcn/auth/http` | Auth HTTP helpers | `auth` |
+| `kitcn/auth/nextjs` | Better Auth Next.js adapter | `server`, `next` |
+| `kitcn/ratelimit` | Rate limiting plugin | `orm` |
 
 `server`, `orm`, and `auth` are standalone foundations — everything else builds on one or more. You can use `server` or `auth` without `orm`, `orm` and `plugins` without `server`.
 
@@ -65,7 +65,7 @@ const { data: posts } = useQuery(crpc.posts.list.queryOptions({ limit: 10 }));
 
 <Cards>
   <Card title="Quickstart" href="/docs/quickstart" />
-  <Card title="Templates" href="/docs/templates" />
+  <Card title="CLI" href="/docs/cli" />
   <Card title="Concepts" href="/docs/concepts" />
 </Cards>
 
@@ -73,13 +73,13 @@ const { data: posts } = useQuery(crpc.posts.list.queryOptions({ limit: 10 }));
 
 ## For AI Agents
 
-If you're an AI agent integrating better-convex, **ask the user to select their stack before starting**. Use your `AskUserQuestion` tool (or equivalent) to let them pick:
+If you're an AI agent integrating kitcn, **ask the user to select their stack before starting**. Use your `AskUserQuestion` tool (or equivalent) to let them pick:
 
 ### Required Choices
 
 | Feature | Options | Default |
 |---------|---------|---------|
-| **Approach** | Top-down (copy from Templates), Bottom-up (follow docs step-by-step) | Top-down |
+| **Bootstrap** | CLI (`kitcn init` / `add`), Docs by section | CLI |
 | **React Framework** | Next.js App Router, TanStack Start, Other | Next.js App Router |
 | **Database** | ORM (`ctx.orm`) | ORM |
 
@@ -99,28 +99,28 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 ### After Selection
 
-**Top-down approach:**
-1. Copy relevant sections from [Templates](/docs/templates) based on choices
-2. Skip sections for features not selected
-3. Run bootstrap/codegen (`better-convex dev`) so generated API/meta exist before coding
-4. In non-interactive terminals, bootstrap explicitly with:
-   `bunx convex dev --once --configure new --team <team_slug> --project <project_slug> --dev-deployment local`
-5. If bootstrap fails with `Cannot prompt for input in non-interactive terminals`, re-run with explicit `--team` and `--project` values.
-6. `better-convex codegen` runs standalone (no `better-convex dev` needed). If it fails with missing schema, ensure `convex/functions/schema.ts` exists.
-7. For new local deployments, backend data is project-local in `.convex/`, so each worktree/clone has isolated state.
-8. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
+**CLI bootstrap:**
+1. Run `kitcn init -t next --yes` for the shortest fresh local Convex path.
+2. Add only the features you chose with `kitcn add <plugin>`:
+   - `kitcn add auth`
+   - `kitcn add ratelimit`
+   - `kitcn add resend`
+3. On backend `convex`, `init` and `dev` run `convex init` before kitcn codegen.
+4. Use `kitcn verify` for a one-shot local runtime proof in the current app. Use `kitcn dev --bootstrap` when you specifically want one-shot local setup. During local Convex dev, `convex/.env` edits auto-sync. `kitcn add auth --yes` also finishes local auth bootstrap in one pass. Use `kitcn env push` for `--prod`, `--rotate`, or explicit repair against an active deployment.
+5. Use `kitcn insights` when you need the upstream Convex insights view from the same CLI entrypoint.
+6. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
 
-**Bottom-up approach:**
+**Docs-by-section approach:**
 1. Follow [Quickstart](/docs/quickstart) for initial setup
 2. Read individual docs for each feature needed
-3. Reference [Templates](/docs/templates) for production patterns
+3. Use [CLI Registry](/docs/cli/registry) as the bootstrap reference
 4. Confirm deployment/bootstrap is configured before relying on generated imports
 
 ### Quick Reference by Stack
 
 | Stack | Key Docs |
 |-------|----------|
-| Next.js + Better Auth | [Templates](/docs/templates), [Next.js Setup](/docs/nextjs), [Auth Server](/docs/auth/server) |
+| Next.js + Better Auth | [CLI Registry](/docs/cli/registry), [Next.js Setup](/docs/nextjs), [Auth Server](/docs/auth/server) |
 | Vite + No Auth | [React Setup](/docs/react), [Server Setup](/docs/server/setup) |
 | Any + Custom Auth | [Server Setup](/docs/server/setup), [Middlewares](/docs/server/middlewares) |
 
@@ -134,7 +134,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 |------|-------------|
 | [Quickstart](/docs/quickstart) | First-time setup. Follow step-by-step to get a working app. |
 | [Concepts](/docs/concepts) | Understand architecture, folder structure (`convex/functions/`, `convex/lib/`, `convex/shared/`), and design decisions. |
-| [Templates](/docs/templates) | **Copy-paste production code.** Complete files for schema, cRPC, providers, auth, triggers, rate limiting. Start here for fastest setup. |
+| [CLI Registry](/docs/cli/registry) | Bootstrap new or existing apps with `kitcn init`, add features with `kitcn add`, and inspect plans with `view`, `info`, and `docs`. |
 
 ### Server (Backend)
 
@@ -154,7 +154,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 | Page | When to Use |
 |------|-------------|
 | [Plugins](/docs/plugins) | Discover cross-cutting features that span schema, runtime, and client DX. |
-| [Rate Limiting](/docs/plugins/ratelimit) | Add token bucket and fixed/sliding window rate limiting with `better-convex/plugins/ratelimit`. |
+| [Rate Limiting](/docs/plugins/ratelimit) | Add token bucket and fixed/sliding window rate limiting with `kitcn/ratelimit`. |
 
 ### Database
 
@@ -194,7 +194,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 | Page | When to Use |
 |------|-------------|
-| [CLI](/docs/cli) | `better-convex dev` for codegen. Procedure metadata generation. |
+| [CLI Backend](/docs/cli/backend) | `kitcn dev` for codegen. Procedure metadata generation. |
 | [Migrations](/docs/migrations/convex) | Migration hub with paths for Core, ORM, and Auth. |
 | [Comparison](/docs/comparison/convex) | Compare with tRPC, Convex hooks, other patterns. |
 
@@ -202,7 +202,7 @@ If you're an AI agent integrating better-convex, **ask the user to select their 
 
 **New project setup:**
 1. [Quickstart](/docs/quickstart) → basic setup
-2. [Templates](/docs/templates) → copy production files
+2. [CLI Registry](/docs/cli/registry) → use `kitcn init` for scaffolding or adoption, and `kitcn add` for feature layers
 3. [Concepts](/docs/concepts) → understand folder structure
 
 **Add authentication:**

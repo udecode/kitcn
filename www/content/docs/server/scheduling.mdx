@@ -213,7 +213,7 @@ This is perfect for sending emails, webhooks, or other side effects that shouldn
 Use `schedule.at(timestamp)` to schedule a function to run at a specific Unix timestamp:
 
 ```ts title="convex/functions/reminders.ts" showLineNumbers {1,10-13}
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 import { createRemindersCaller } from './generated/reminders.runtime';
 
 export const scheduleReminder = authMutation

@@ -6,13 +6,9 @@
  * unchanged.
  */
 
-import {
-  createOrm,
-  defineRelations,
-  extractRelationsConfig,
-} from 'better-convex/orm';
 import type { GenericDatabaseReader } from 'convex/server';
 import type { GenericId } from 'convex/values';
+import { createOrm, defineRelations, extractRelationsConfig } from 'kitcn/orm';
 import * as schema from './tables-rel';
 import { type Equal, Expect } from './utils';
 
@@ -23,7 +19,7 @@ type CityId = string;
 type BookId = string;
 type NodeId = string;
 
-// Build schema following Better Convex pattern
+// Build schema following kitcn pattern
 const schemaConfig = schema.relations;
 const edgeMetadata = extractRelationsConfig(schema.relations);
 

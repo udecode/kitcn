@@ -22,15 +22,18 @@ cRPC gives you a fluent, type-safe API for building Convex procedures. Instead o
 
 ## Generate Runtime
 
-Start `better-convex dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
+Start `kitcn dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
 
 ```bash
-npx better-convex dev
+npx kitcn dev
 ```
 
 ## Initialize cRPC
 
-`convex/functions/generated.ts` is the canonical server contract — it exports `initCRPC` (with ORM pre-wired when `relations` exists) and `defineAuth` for auth.
+`<functionsDir>/generated/server.ts` is the canonical server contract. It
+exports `initCRPC` with ORM pre-wired when your default schema chains
+`.relations(...)`.
+`<functionsDir>/generated/auth.ts` is the auth contract.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
 import { initCRPC } from '../functions/generated/server';
@@ -48,7 +51,7 @@ cRPC serializes inputs/outputs through a transformer at the procedure boundary.
 - Custom transformer is additive to the built-in Date transformer
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers
-import { createTaggedTransformer } from 'better-convex/crpc';
+import { createTaggedTransformer } from 'kitcn/crpc';
 import { initCRPC } from '../functions/generated/server';
 
 const transformer = createTaggedTransformer([
@@ -93,13 +96,12 @@ Before creating procedures, you'll need a database schema. These docs assume the
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-7,9-29,31-42}
 import {
   convexTable,
-  defineRelations,
   defineSchema,
   id,
   index,
   integer,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const user = convexTable(
   'user',
@@ -118,16 +120,20 @@ export const session = convexTable(
 );
 
 export const tables = { user, session };
-export default defineSchema(tables, { strict: false });
-
-export const relations = defineRelations(tables, (r) => ({
-  user: { sessions: r.many.session({ from: r.user.id, to: r.session.userId }) },
-  session: { user: r.one.user({ from: r.session.userId, to: r.user.id }) },
+export default defineSchema(tables, {
+  strict: false,
+}).relations((r) => ({
+  user: {
+    sessions: r.many.session({ from: r.user.id, to: r.session.userId }),
+  },
+  session: {
+    user: r.one.user({ from: r.session.userId, to: r.user.id }),
+  },
 }));
 ```
 
 <Callout icon={<InfoIcon />}>
-Without codegen, use `initCRPC` from `better-convex/server` with `.dataModel()` and optional `.context()`.
+Without codegen, use `initCRPC` from `kitcn/server` with `.dataModel()` and optional `.context()`.
 </Callout>
 
 ## Your First Procedure
@@ -217,7 +223,7 @@ const c = initCRPC
   .meta<{
     auth?: 'optional' | 'required';
     role?: 'admin';
-    rateLimit?: string;
+    ratelimit?: string;
   }>()
   .create();
 ```
@@ -252,7 +258,8 @@ With generated `initCRPC`, ORM context is already wired. Chain `.use()` for addi
 | `authMutation` | Auth + rate limiting | Auth + rate limit |
 | `adminQuery` | Auth + admin role | Auth + role check |
 
-See [Templates](/docs/templates) for complete implementations with rate limiting, error handling, and more.
+For production bootstrap, start with [CLI Registry](/docs/cli/registry). Use
+this page when you want to wire the backend by hand.
 
 ## File Organization
 
@@ -265,7 +272,9 @@ convex/
 │   ├── user.ts       # → crpc.user.list, crpc.user.create
 │   ├── session.ts    # → crpc.session.getByToken
 │   ├── account.ts    # → crpc.account.list, crpc.account.delete
-│   └── generated.ts  # Generated server contract (ORM + initCRPC + auth runtime)
+│   └── generated/
+│       ├── server.ts # Generated server contract (ORM + initCRPC)
+│       └── auth.ts   # Generated auth contract
 ├── lib/
 │   └── crpc.ts       # Setup + procedure variants
 └── shared/           # Client-importable
@@ -300,10 +309,11 @@ Key differences:
 - `{ ctx, input }` destructured params
 - Reusable procedure variants with built-in middleware
 
-## Full Template
+## Next Step
 
 <Cards>
-  <Card title="Templates" href="/docs/templates#crpcts" />
+  <Card title="CLI Registry" href="/docs/cli/registry" />
+  <Card title="Auth Server" href="/docs/auth/server" />
 </Cards>
 
 ## Next Steps

@@ -1,5 +1,5 @@
 ---
-module: Better Convex ORM
+module: kitcn ORM
 date: 2026-02-02
 problem_type: workflow_issue
 component: testing_framework
@@ -21,7 +21,7 @@ During M4.5 Type Testing Audit, 19 TypeScript errors appeared in type test files
 
 ## Environment
 
-- Module: Better Convex ORM
+- Module: kitcn ORM
 - Milestone: M4.5 (Type Testing Audit)
 - TypeScript: via bun typecheck
 - Test Framework: Vitest
@@ -49,7 +49,7 @@ Established workflow pattern for managing type tests with deferred features:
 ### 1. Identify Implementation Status
 
 Read source code to verify what's implemented vs stubbed:
-- Relation loading: Type inference complete, runtime stubbed ([packages/better-convex/src/orm/query.ts:390](../../packages/better-convex/src/orm/query.ts))
+- Relation loading: Type inference complete, runtime stubbed ([packages/kitcn/src/orm/query.ts:390](../../packages/kitcn/src/orm/query.ts))
 - Column exclusion: Not implemented (only `include === true` handled)
 
 ### 2. Defer Tests with TODO Markers
@@ -204,5 +204,5 @@ No related workflow issues documented yet. This establishes the pattern for test
 ## References
 
 - Drizzle ORM type tests: `/tmp/cc-repos/drizzle-orm/drizzle-orm/type-tests/pg/`
-- Better Convex M4.5 Plan: [docs/plans/2026-02-02-feat-m4-5-type-testing-audit-drizzle-parity-plan.md](../../docs/plans/2026-02-02-feat-m4-5-type-testing-audit-drizzle-parity-plan.md)
+- kitcn M4.5 Plan: [docs/plans/2026-02-02-feat-m4-5-type-testing-audit-drizzle-parity-plan.md](../../docs/plans/2026-02-02-feat-m4-5-type-testing-audit-drizzle-parity-plan.md)
 - Brainstorm with Deferred Features: [docs/brainstorms/2026-01-31-drizzle-orm-brainstorm.md](../../docs/brainstorms/2026-01-31-drizzle-orm-brainstorm.md)

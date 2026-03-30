@@ -1,0 +1,28 @@
+{
+  "name": "@kitcn/resend",
+  "version": "0.1.0",
+  "description": "kitcn Resend plugin",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "kitcn": "workspace:*",
+    "svix": "^1.84.1"
+  },
+  "peerDependencies": {
+    "convex": ">=1.33"
+  },
+  "devDependencies": {
+    "tsdown": "^0.20.3"
+  }
+}

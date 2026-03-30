@@ -1,5 +1,5 @@
-import { eq } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
+import { eq } from 'kitcn/orm';
+import { CRPCError } from 'kitcn/server';
 import { z } from 'zod';
 import {
   authMutation,
@@ -433,7 +433,6 @@ export const getUserComments = optionalAuthQuery
 
 // Add comment to todo
 export const addComment = authMutation
-  .meta({ rateLimit: 'todoComment/create' })
   .input(
     z.object({
       todoId: z.string(),
@@ -525,7 +524,6 @@ export const addComment = authMutation
 
 // Update comment
 export const updateComment = authMutation
-  .meta({ rateLimit: 'todoComment/update' })
   .input(
     z.object({
       commentId: z.string(),
@@ -563,7 +561,6 @@ export const updateComment = authMutation
 
 // Delete comment
 export const deleteComment = authMutation
-  .meta({ rateLimit: 'todoComment/update' }) // Using update rate limit for delete
   .input(z.object({ commentId: z.string() }))
 
   .mutation(async ({ ctx, input }) => {

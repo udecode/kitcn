@@ -1,4 +1,6 @@
 **/tsconfig.tsbuildinfo
+.netrc
+*.tgz
 
 # dependencies
 src/generated
@@ -93,3 +95,5 @@ yarn-error.log*
 
 *.local*
 .convex/
+.concave/
+.worktrees

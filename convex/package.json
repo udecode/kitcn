@@ -1,6 +1,9 @@
 {
   "name": "test-convex",
   "private": true,
+  "dependencies": {
+    "kitcn": "workspace:*"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   }

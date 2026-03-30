@@ -75,7 +75,7 @@ export type DataModel = {
       count: number;
       indexName: string;
       keyHash: string;
-      keyParts: Array<any>;
+      keyParts: Array<null | any>;
       nonNullCountValues: Record<string, number>;
       sumValues: Record<string, number>;
       tableKey: string;
@@ -163,10 +163,10 @@ export type DataModel = {
   aggregate_member: {
     document: {
       docId: string;
-      extremaValues: Record<string, any>;
+      extremaValues: Record<string, null | any>;
       indexName: string;
       keyHash: string;
-      keyParts: Array<any>;
+      keyParts: Array<null | any>;
       kind: string;
       nonNullCountValues: Record<string, number>;
       rankKey?: null | any;
@@ -215,7 +215,7 @@ export type DataModel = {
   aggregate_rank_node: {
     document: {
       aggregate?: null | { count: number; sum: number };
-      items: Array<{ k: any; s: number; v: any }>;
+      items: Array<{ k: null | any; s: number; v: null | any }>;
       subtrees: Array<string>;
       _id: Id<"aggregate_rank_node">;
       _creationTime: number;
@@ -392,6 +392,7 @@ export type DataModel = {
       ];
       email_status: ["email", "status", "_creationTime"];
       inviterId: ["inviterId", "_creationTime"];
+      organizationId: ["organizationId", "_creationTime"];
       organizationId_email: ["organizationId", "email", "_creationTime"];
       organizationId_email_status: [
         "organizationId",
@@ -400,6 +401,7 @@ export type DataModel = {
         "_creationTime",
       ];
       organizationId_status: ["organizationId", "status", "_creationTime"];
+      role: ["role", "_creationTime"];
       status: ["status", "_creationTime"];
     };
     searchIndexes: {};
@@ -408,6 +410,7 @@ export type DataModel = {
   jwks: {
     document: {
       createdAt?: number;
+      expiresAt?: null | number;
       privateKey: string;
       publicKey: string;
       _id: Id<"jwks">;
@@ -417,6 +420,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "createdAt"
+      | "expiresAt"
       | "privateKey"
       | "publicKey";
     indexes: {
@@ -445,6 +449,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      organizationId: ["organizationId", "_creationTime"];
       organizationId_role: ["organizationId", "role", "_creationTime"];
       organizationId_userId: ["organizationId", "userId", "_creationTime"];
       role: ["role", "_creationTime"];
@@ -661,12 +666,12 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
-  ratelimit_dynamic_limit: {
+  ratelimitDynamicLimit: {
     document: {
       limit: number;
       prefix: string;
       updatedAt: number;
-      _id: Id<"ratelimit_dynamic_limit">;
+      _id: Id<"ratelimitDynamicLimit">;
       _creationTime: number;
     };
     fieldPaths: "_creationTime" | "_id" | "limit" | "prefix" | "updatedAt";
@@ -678,7 +683,7 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
-  ratelimit_protection_hit: {
+  ratelimitProtectionHit: {
     document: {
       blockedUntil?: null | number;
       hits: number;
@@ -686,7 +691,7 @@ export type DataModel = {
       prefix: string;
       updatedAt: number;
       value: string;
-      _id: Id<"ratelimit_protection_hit">;
+      _id: Id<"ratelimitProtectionHit">;
       _creationTime: number;
     };
     fieldPaths:
@@ -707,7 +712,7 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
-  ratelimit_state: {
+  ratelimitState: {
     document: {
       auxTs?: null | number;
       auxValue?: null | number;
@@ -716,7 +721,7 @@ export type DataModel = {
       shard: number;
       ts: number;
       value: number;
-      _id: Id<"ratelimit_state">;
+      _id: Id<"ratelimitState">;
       _creationTime: number;
     };
     fieldPaths:
@@ -734,6 +739,148 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_name_key: ["name", "key", "_creationTime"];
       by_name_key_shard: ["name", "key", "shard", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  resendContent: {
+    document: {
+      content: ArrayBuffer;
+      filename?: null | string;
+      mimeType: string;
+      path?: null | string;
+      _id: Id<"resendContent">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "content"
+      | "filename"
+      | "mimeType"
+      | "path";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  resendDeliveryEvents: {
+    document: {
+      createdAt: string;
+      emailId: string;
+      eventType: string;
+      message?: null | string;
+      resendId: string;
+      _id: Id<"resendDeliveryEvents">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "emailId"
+      | "eventType"
+      | "message"
+      | "resendId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_emailId: ["emailId", "_creationTime"];
+      by_emailId_eventType: ["emailId", "eventType", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  resendEmails: {
+    document: {
+      attempt: number;
+      bcc?: null | Array<string>;
+      bounced?: null | boolean;
+      cc?: null | Array<string>;
+      clicked?: null | boolean;
+      complained: boolean;
+      deliveryDelayed?: null | boolean;
+      errorMessage?: null | string;
+      failed?: null | boolean;
+      finalizedAt: number;
+      from: string;
+      headers?: null | Array<{ name: string; value: string }>;
+      html?: null | string;
+      opened: boolean;
+      replyTo: Array<string>;
+      resendId?: null | string;
+      segment: number;
+      sentAt?: null | number;
+      status:
+        | "waiting"
+        | "queued"
+        | "cancelled"
+        | "sent"
+        | "delivered"
+        | "delivery_delayed"
+        | "bounced"
+        | "failed";
+      subject?: null | string;
+      template?: null | {
+        id: string;
+        variables: Record<string, string | number>;
+      };
+      text?: null | string;
+      to: Array<string>;
+      _id: Id<"resendEmails">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "attempt"
+      | "bcc"
+      | "bounced"
+      | "cc"
+      | "clicked"
+      | "complained"
+      | "deliveryDelayed"
+      | "errorMessage"
+      | "failed"
+      | "finalizedAt"
+      | "from"
+      | "headers"
+      | "html"
+      | "opened"
+      | "replyTo"
+      | "resendId"
+      | "segment"
+      | "sentAt"
+      | "status"
+      | "subject"
+      | "template"
+      | "template.id"
+      | "template.variables"
+      | `template.variables.${string}`
+      | "text"
+      | "to";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_finalizedAt: ["finalizedAt", "_creationTime"];
+      by_resendId: ["resendId", "_creationTime"];
+      by_status_segment: ["status", "segment", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  resendNextBatchRun: {
+    document: {
+      runId: string;
+      _id: Id<"resendNextBatchRun">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "runId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -767,6 +914,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      activeOrganizationId: ["activeOrganizationId", "_creationTime"];
       expiresAt: ["expiresAt", "_creationTime"];
       expiresAt_userId: ["expiresAt", "userId", "_creationTime"];
       token: ["token", "_creationTime"];
@@ -1088,6 +1236,7 @@ export type DataModel = {
       createdAt?: number;
       customerId?: null | string;
       deletedAt?: null | number;
+      displayUsername?: null | string;
       email: string;
       emailVerified: boolean;
       firstName?: null | string;
@@ -1102,6 +1251,7 @@ export type DataModel = {
       personalOrganizationId?: null | string;
       role?: null | string;
       updatedAt: number;
+      userId?: null | string;
       username?: null | string;
       website?: null | string;
       x?: null | string;
@@ -1118,6 +1268,7 @@ export type DataModel = {
       | "createdAt"
       | "customerId"
       | "deletedAt"
+      | "displayUsername"
       | "email"
       | "emailVerified"
       | "firstName"
@@ -1132,6 +1283,7 @@ export type DataModel = {
       | "personalOrganizationId"
       | "role"
       | "updatedAt"
+      | "userId"
       | "username"
       | "website"
       | "x";

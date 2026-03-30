@@ -5,6 +5,7 @@
  * Mirrors Drizzle ORM patterns and includes institutional learnings.
  */
 
+import type { GenericId } from 'convex/values';
 import {
   bigint,
   boolean,
@@ -24,8 +25,7 @@ import {
   uniqueIndex,
   vector,
   vectorIndex,
-} from 'better-convex/orm';
-import type { GenericId } from 'convex/values';
+} from 'kitcn/orm';
 import { type Equal, Expect, IsAny, IsNever, Not } from './utils';
 
 // ============================================================================

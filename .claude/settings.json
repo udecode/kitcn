@@ -34,30 +34,5 @@
         ]
       }
     ]
-  },
-  "enabledPlugins": {
-    "debug@dotai": true,
-    "dig@dotai": true,
-    "dotai@dotai": true,
-    "git@dotai": true,
-    "learn@dotai": true,
-    "notification@dotai": true,
-    "test@dotai": true,
-    "frontend-design@claude-plugins-official": true,
-    "compound-engineering@every-marketplace": true
-  },
-  "extraKnownMarketplaces": {
-    "dotai": {
-      "source": {
-        "source": "github",
-        "repo": "udecode/dotai"
-      }
-    },
-    "every-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "EveryInc/compound-engineering-plugin"
-      }
-    }
   }
 }

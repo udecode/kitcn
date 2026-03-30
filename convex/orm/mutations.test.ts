@@ -8,6 +8,7 @@
  * - onConflictDoNothing/onConflictDoUpdate
  */
 
+import { type SchedulableFunctionReference } from 'convex/server';
 import {
   aggregateIndex,
   convexTable,
@@ -23,13 +24,14 @@ import {
   isNotNull,
   ne,
   notInArray,
+  requireSchemaRelations,
   scheduledMutationBatchFactory,
   text,
   timestamp,
-} from 'better-convex/orm';
-import { anyApi, type SchedulableFunctionReference } from 'convex/server';
+} from 'kitcn/orm';
+import { createGeneratedFunctionReference } from 'kitcn/server';
 import { it as baseIt, describe, expect, vi } from 'vitest';
-import schema, { relations as appRelations, users } from '../schema';
+import schema, { users } from '../schema';
 import {
   convexTest,
   runCtx,
@@ -37,6 +39,8 @@ import {
   withOrm,
   withOrmCtx,
 } from '../setup.testing';
+
+const appRelations = requireSchemaRelations(schema);
 
 const it = baseIt.extend<{ ctx: TestCtx }>({
   ctx: async ({}, use) => {
@@ -60,8 +64,11 @@ const baseUser = {
   homeCityId: null,
 };
 
-const scheduledMutationBatchRef = anyApi.orm
-  .scheduledMutationBatch as SchedulableFunctionReference;
+const scheduledMutationBatchRef = createGeneratedFunctionReference<
+  'mutation',
+  'internal',
+  unknown
+>('generated/server:scheduledMutationBatch') as SchedulableFunctionReference;
 
 const relationCountSchedulerStub = {
   runAfter: vi.fn(async () => undefined),

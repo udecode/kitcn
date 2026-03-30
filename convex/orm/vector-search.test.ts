@@ -1,8 +1,13 @@
-import { createOrm, type VectorSearchProvider } from 'better-convex/orm';
+import {
+  createOrm,
+  requireSchemaRelations,
+  type VectorSearchProvider,
+} from 'kitcn/orm';
 import { expect, test } from 'vitest';
-import schema, { relations } from '../schema';
+import schema from '../schema';
 import { convexTest, runCtx } from '../setup.testing';
 
+const relations = requireSchemaRelations(schema);
 const orm = createOrm({ schema: relations });
 
 test('vector search returns rows in provider order', async () => {

@@ -49,7 +49,7 @@ Add `staticQueryOptions` as a new terminal method on the CRPC proxy that calls t
 
 ## MVP
 
-### packages/better-convex/src/react/proxy.ts
+### packages/kitcn/src/react/proxy.ts
 
 Add after line ~122 (after `queryOptions` terminal method):
 
@@ -83,7 +83,7 @@ if (prop === "staticQueryOptions") {
 }
 ```
 
-### packages/better-convex/src/crpc/types.ts
+### packages/kitcn/src/crpc/types.ts
 
 Add to `DecorateQuery<T>` type (around line 215) and `DecorateAction<T>` (around line 362):
 
@@ -111,7 +111,7 @@ export type DecorateQuery<T extends FunctionReference<'query'>> = {
 };
 ```
 
-### packages/better-convex/src/react/proxy.ts (imports)
+### packages/kitcn/src/react/proxy.ts (imports)
 
 Add `skipToken` import and `convexAction`:
 
@@ -123,6 +123,6 @@ import { convexAction, convexQuery } from "../crpc/query-options";
 ## References
 
 - Brainstorm: [2026-01-22-static-query-options-brainstorm.md](../brainstorms/2026-01-22-static-query-options-brainstorm.md)
-- Existing pattern: [proxy.ts:100-122](../../packages/better-convex/src/react/proxy.ts#L100-L122)
-- Non-hook function: [query-options.ts:24-60](../../packages/better-convex/src/crpc/query-options.ts#L24-L60)
-- Types: [types.ts:191-216](../../packages/better-convex/src/crpc/types.ts#L191-L216)
+- Existing pattern: [proxy.ts:100-122](../../packages/kitcn/src/react/proxy.ts#L100-L122)
+- Non-hook function: [query-options.ts:24-60](../../packages/kitcn/src/crpc/query-options.ts#L24-L60)
+- Types: [types.ts:191-216](../../packages/kitcn/src/crpc/types.ts#L191-L216)

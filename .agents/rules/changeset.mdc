@@ -1,0 +1,70 @@
+---
+description: Use when writing changesets for releases
+---
+
+# Changeset Writing
+
+Always mirror @packages/kitcn/CHANGELOG.md tone and structure.
+
+## 0) Reuse existing changeset
+
+- Before creating a new changeset, check `.changeset/` for an existing unreleased changeset.
+- If one exists, UPDATE it instead of creating a new file. Nothing in it has been released yet, so treat it as a living draft.
+- Replace outdated content — don't append "also added..." or track progress. Write the latest state as if from scratch.
+
+## 1) Versioning (project is still v0)
+
+- Breaking change => `minor`
+- Non-breaking change => `patch`
+- If a release has both breaking and non-breaking work, use `minor`.
+
+## 2) Required body structure
+
+- Split the body into explicit sections:
+  - `## Breaking changes`
+  - `## Features`
+  - `## Patches`
+- Omit empty sections, but never mix categories in one section.
+- Keep bullets concise and user-facing.
+
+## 3) Migration snippets (required for breaking changes)
+
+- Every breaking change must include a short `Before/After` code snippet immediately under that section.
+- Include changed imports, renamed exports, or changed call signatures.
+- If a symbol is renamed, include a dedicated rename snippet.
+
+## 4) Bullet quality rules
+
+- Start bullets with action verbs: `Add`, `Support`, `Fix`, `Improve`, `Deprecate`, `Remove`, `Drop`.
+- Describe what users can do now, not internals.
+- Do not mention file paths, private implementation details, or algorithm notes.
+- Keep each bullet to one concrete outcome.
+
+## 5) Copy-paste template
+
+````md
+---
+"kitcn": minor
+---
+
+## Breaking changes
+
+- Drop ...
+
+```ts
+// Before
+...
+
+// After
+...
+```
+
+## Features
+
+- Add ...
+
+## Patches
+
+- Improve ...
+```
+````

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Better Convex - Todo App',
+  title: 'kitcn - Todo App',
   description: 'A feature-rich todo application built with Convex',
 };
 

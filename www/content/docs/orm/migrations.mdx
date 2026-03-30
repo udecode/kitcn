@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll walk through built-in data migrations for better-convex. You'll learn when to use them, how to author migration files, and how they integrate with `better-convex dev` and `better-convex deploy` for safe, auditable schema evolution.
+In this guide, we'll walk through built-in data migrations for kitcn. You'll learn when to use them, how to author migration files, and how they integrate with `kitcn dev` and `kitcn deploy` for safe, auditable schema evolution.
 
 ## When to Migrate
 
@@ -36,7 +36,7 @@ Convex is not SQL — you don't need migrations for every schema change. Most ch
 We'll start by scaffolding a new migration file. The CLI generates a timestamped file and updates the manifest:
 
 ```bash showLineNumbers
-npx better-convex migrate create backfill_todo_priority
+npx kitcn migrate create backfill_todo_priority
 ```
 
 This creates two files:
@@ -47,7 +47,7 @@ This creates two files:
 Now let's open the generated file and implement the migration:
 
 ```ts showLineNumbers title="convex/functions/migrations/20260227_080239_backfill_todo_priority.ts" {5-10}
-import { defineMigration } from 'better-convex/orm';
+import { defineMigration } from 'kitcn/orm';
 
 export const migration = defineMigration({
   id: '20260227_080239_backfill_todo_priority',
@@ -70,7 +70,7 @@ Each migration has an `id` (timestamped, unique), a `table` to iterate over, and
 If you want rollback support, add a `down` step:
 
 ```ts showLineNumbers title="convex/functions/migrations/20260227_080239_backfill_todo_priority.ts" {12-20}
-import { defineMigration } from 'better-convex/orm';
+import { defineMigration } from 'kitcn/orm';
 
 export const migration = defineMigration({
   id: '20260227_080239_backfill_todo_priority',
@@ -96,7 +96,7 @@ export const migration = defineMigration({
 });
 ```
 
-`down` is optional and always explicit. `better-convex dev` and `better-convex deploy` only auto-run `up` migrations. If you try to roll back a migration without a `down` handler, the CLI will error.
+`down` is optional and always explicit. `kitcn dev` and `kitcn deploy` only auto-run `up` migrations. If you try to roll back a migration without a `down` handler, the CLI will error.
 
 <Callout icon={<InfoIcon />}>
 Not every migration should have a `down`. If the transform is not safely reversible, leave `down` undefined and treat rollback as a forward fix in a new migration.
@@ -108,10 +108,10 @@ Not every migration should have a `down`. If the transform is not safely reversi
 
 ```bash showLineNumbers
 # Local
-npx better-convex migrate up
+npx kitcn migrate up
 
 # Production
-npx better-convex migrate up --prod
+npx kitcn migrate up --prod
 ```
 
 This applies all pending migrations in order. Already-applied migrations are skipped.
@@ -120,16 +120,16 @@ This applies all pending migrations in order. Already-applied migrations are ski
 
 ```bash showLineNumbers {2,5}
 # Roll back the latest migration
-npx better-convex migrate down --steps 1 --prod
+npx kitcn migrate down --steps 1 --prod
 
 # Roll back everything after a specific migration
-npx better-convex migrate down --to 20260227_080239_backfill_todo_priority --prod
+npx kitcn migrate down --to 20260227_080239_backfill_todo_priority --prod
 ```
 
 ### Check Status
 
 ```bash showLineNumbers
-npx better-convex migrate status --prod
+npx kitcn migrate status --prod
 ```
 
 Shows applied/pending migrations, active runs, and any drift issues.
@@ -137,14 +137,14 @@ Shows applied/pending migrations, active runs, and any drift issues.
 ### Cancel Active Run
 
 ```bash showLineNumbers
-npx better-convex migrate cancel --prod
+npx kitcn migrate cancel --prod
 ```
 
 Cancels a currently running migration. Useful if a migration is taking too long or you need to deploy a fix.
 
 ## Deploy Integration
 
-`better-convex deploy` orchestrates the full lifecycle automatically:
+`kitcn deploy` orchestrates the full lifecycle automatically:
 
 1. `convex deploy` — push code
 2. `migrate up` — apply pending migrations
@@ -152,23 +152,27 @@ Cancels a currently running migration. Useful if a migration is taking too long 
 
 By default, deploy is **strict** — it blocks on migration drift and waits for completion. You can configure this behavior per environment:
 
-```json title="better-convex.json" showLineNumbers {4-12}
+```json title="concave.json" showLineNumbers {6-14}
 {
-  "deploy": {
-    "migrations": {
-      "enabled": "auto",
-      "wait": true,
-      "batchSize": 256,
-      "pollIntervalMs": 1000,
-      "timeoutMs": 900000,
-      "strict": true,
-      "allowDrift": false
+  "meta": {
+    "kitcn": {
+      "deploy": {
+        "migrations": {
+          "enabled": "auto",
+          "wait": true,
+          "batchSize": 256,
+          "pollIntervalMs": 1000,
+          "timeoutMs": 900000,
+          "strict": true,
+          "allowDrift": false
+        }
+      }
     }
   }
 }
 ```
 
-`better-convex dev` also supports auto-migration with more relaxed defaults (`strict: false`, `allowDrift: true`). See [CLI docs](/docs/cli) for the full configuration reference.
+`kitcn dev` also supports auto-migration with more relaxed defaults (`strict: false`, `allowDrift: true`). See [CLI Backend](/docs/cli/backend) for the full configuration reference.
 
 ## Drift Safety
 
@@ -196,7 +200,7 @@ Let's walk through the most common migration workflow — hardening an optional 
 **Step 1:** Create the migration:
 
 ```bash showLineNumbers
-npx better-convex migrate create backfill_todo_priority
+npx kitcn migrate create backfill_todo_priority
 ```
 
 **Step 2:** Implement the backfill (fill in missing values):
@@ -218,8 +222,8 @@ export const migration = defineMigration({
 **Step 3:** Run codegen and apply:
 
 ```bash showLineNumbers
-npx better-convex codegen
-npx better-convex migrate up
+npx kitcn codegen
+npx kitcn migrate up
 ```
 
 **Step 4:** Harden the schema now that all rows have the field:
@@ -282,7 +286,7 @@ const priority = doc.priority ?? 'medium';
 ### `defineMigration()`
 
 ```ts showLineNumbers
-import { defineMigration } from 'better-convex/orm';
+import { defineMigration } from 'kitcn/orm';
 
 defineMigration({
   id: string,            // Unique timestamped identifier
@@ -322,7 +326,7 @@ The `ctx` argument in `migrateOne` provides:
 Used internally by the generated manifest. Collects migrations, computes checksums, and sorts by id:
 
 ```ts showLineNumbers
-import { defineMigrationSet } from 'better-convex/orm';
+import { defineMigrationSet } from 'kitcn/orm';
 
 export const migrations = defineMigrationSet([
   migration1,
@@ -366,6 +370,6 @@ These are reserved table names. Do not create tables with these names.
 ## Next Steps
 
 <Cards>
-  <Card title="CLI Reference" href="/docs/cli" />
+  <Card title="CLI Backend" href="/docs/cli/backend" />
   <Card title="Triggers" href="/docs/orm/schema/triggers" />
 </Cards>

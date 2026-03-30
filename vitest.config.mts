@@ -3,18 +3,54 @@ import solid from 'vite-plugin-solid';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      'kitcn/aggregate': path.resolve(
+        import.meta.dirname,
+        'packages/kitcn/src/aggregate/index.ts'
+      ),
+      'kitcn/auth': path.resolve(
+        import.meta.dirname,
+        'packages/kitcn/src/auth/index.ts'
+      ),
+      'kitcn/auth/config': path.resolve(
+        import.meta.dirname,
+        'packages/kitcn/src/auth-config/index.ts'
+      ),
+      'kitcn/auth/http': path.resolve(
+        import.meta.dirname,
+        'packages/kitcn/src/auth-http/index.ts'
+      ),
+      'kitcn/crpc': path.resolve(
+        import.meta.dirname,
+        'packages/kitcn/src/crpc/index.ts'
+      ),
+      'kitcn/orm': path.resolve(
+        import.meta.dirname,
+        'packages/kitcn/src/orm/index.ts'
+      ),
+      'kitcn/ratelimit': path.resolve(
+        import.meta.dirname,
+        'packages/kitcn/src/ratelimit/index.ts'
+      ),
+      'kitcn/server': path.resolve(
+        import.meta.dirname,
+        'packages/kitcn/src/server/index.ts'
+      ),
+    },
+  },
   test: {
     projects: [
       {
         resolve: {
           alias: {
-            'better-convex/aggregate': path.resolve(
+            'kitcn/aggregate': path.resolve(
               import.meta.dirname,
-              'packages/better-convex/src/aggregate/index.ts'
+              'packages/kitcn/src/aggregate/index.ts'
             ),
-            'better-convex/orm': path.resolve(
+            'kitcn/orm': path.resolve(
               import.meta.dirname,
-              'packages/better-convex/src/orm/index.ts'
+              'packages/kitcn/src/orm/index.ts'
             ),
           },
         },
@@ -22,7 +58,7 @@ export default defineConfig({
           name: 'integration',
           environment: 'edge-runtime',
           server: {
-            deps: { inline: ['convex-test', 'better-convex'] },
+            deps: { inline: ['convex-test', 'kitcn'] },
           },
           include: [
             'convex/**/*.test.ts',
@@ -38,7 +74,7 @@ export default defineConfig({
         test: {
           name: 'solid',
           environment: 'happy-dom',
-          include: ['packages/better-convex/src/solid/**/*.vitest.{ts,tsx}'],
+          include: ['packages/kitcn/src/solid/**/*.vitest.{ts,tsx}'],
           exclude: ['**/node_modules/**'],
           setupFiles: ['./tooling/test-setup-solid.ts'],
           globals: true,

@@ -1,0 +1,60 @@
+{
+  "plugins": {
+    "auth": {
+      "package": "better-auth",
+      "files": {
+        "auth-client": "src/lib/convex/auth-client.ts",
+        "auth-config": "convex/functions/auth.config.ts",
+        "auth-page": "src/app/auth/page.tsx",
+        "auth-runtime": "convex/functions/auth.ts"
+      },
+      "schema": {
+        "path": "convex/functions/schema.ts",
+        "tables": {
+          "account": {
+            "owner": "local"
+          },
+          "invitation": {
+            "owner": "local"
+          },
+          "jwks": {
+            "owner": "local"
+          },
+          "member": {
+            "owner": "local"
+          },
+          "organization": {
+            "owner": "local"
+          },
+          "session": {
+            "owner": "local"
+          },
+          "user": {
+            "owner": "local"
+          },
+          "verification": {
+            "owner": "local"
+          }
+        }
+      }
+    },
+    "ratelimit": {
+      "package": "kitcn",
+      "files": {
+        "ratelimit-plugin": "convex/lib/plugins/ratelimit/plugin.ts",
+        "ratelimit-schema": "convex/lib/plugins/ratelimit/schema.ts"
+      }
+    },
+    "resend": {
+      "package": "@kitcn/resend",
+      "files": {
+        "resend-crons": "convex/lib/plugins/resend/crons.ts",
+        "resend-email": "convex/functions/plugins/email.tsx",
+        "resend-functions": "convex/functions/plugins/resend.ts",
+        "resend-plugin": "convex/lib/plugins/resend/plugin.ts",
+        "resend-schema": "convex/lib/plugins/resend/schema.ts",
+        "resend-webhook": "convex/lib/plugins/resend/webhook.ts"
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 ---
-module: Better Convex ORM
+module: kitcn ORM
 date: 2026-02-02
 problem_type: type_inference_issue
 component: typescript_types
@@ -29,7 +29,7 @@ TypeScript intersection types (`&`) lose phantom type brands when combining lite
 - Types work when tested individually but fail when combined with intersection
 
 **Common in:**
-- ORMs (Drizzle, Prisma, Better Convex)
+- ORMs (Drizzle, Prisma, kitcn)
 - Type-safe APIs (tRPC)
 - Any code using phantom type branding for compile-time metadata
 
@@ -100,7 +100,7 @@ Replace intersection types with a `Merge<A, B>` utility that manually combines k
 ### 1. Create Merge Utility
 
 ```typescript
-// packages/better-convex/src/orm/types.ts
+// packages/kitcn/src/orm/types.ts
 
 /**
  * Merge two object types without using intersection
@@ -244,7 +244,7 @@ type Result = {
 
 ## Example: Fixing ORM Type Inference
 
-**Context:** Building Better Convex ORM with Drizzle-like API. NotNull brands were being lost during type inference.
+**Context:** Building kitcn ORM with Drizzle-like API. NotNull brands were being lost during type inference.
 
 **Investigation approach:**
 
@@ -256,7 +256,7 @@ type Result = {
 
 **Files changed:**
 
-- `packages/better-convex/src/orm/types.ts`
+- `packages/kitcn/src/orm/types.ts`
   - Added `Merge<A, B>` utility
   - Updated `InferSelectModel` to use Merge
   - Updated `InferModelFromColumns` to use Merge
@@ -316,7 +316,7 @@ Similar approach:
 ## Files Changed
 
 **Modified:**
-- [packages/better-convex/src/orm/types.ts](../../packages/better-convex/src/orm/types.ts) - Added Merge utility, updated inference types
+- [packages/kitcn/src/orm/types.ts](../../packages/kitcn/src/orm/types.ts) - Added Merge utility, updated inference types
 
 **Test files created:**
 - [convex/test-types/ORIGINAL-ISSUE-never-type.ts](../../convex/test-types/ORIGINAL-ISSUE-never-type.ts) - Verifies fields are not `never`

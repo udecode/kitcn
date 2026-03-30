@@ -2,16 +2,16 @@
 date: 2026-02-08
 topic: orm-v1-breaking-parity-performance-convex-helpers-ranked
 status: proposed
-scope: better-convex/orm only
+scope: kitcn/orm only
 ---
 
 # ORM v1 Release: Breaking Changes, Parity, Performance, and convex-helpers
 
 ## What We're Building
 
-A final pre-release decision set for `better-convex/orm` that uses remaining breaking-change budget on correctness and long-term API trust, while still shipping targeted parity improvements.
+A final pre-release decision set for `kitcn/orm` that uses remaining breaking-change budget on correctness and long-term API trust, while still shipping targeted parity improvements.
 
-This is scoped to ORM only (`packages/better-convex/src/orm/*` and `www/content/docs/orm/*`). It intentionally excludes `crpc`, `auth`, and other packages.
+This is scoped to ORM only (`packages/kitcn/src/orm/*` and `www/content/docs/orm/*`). It intentionally excludes `crpc`, `auth`, and other packages.
 
 Coverage used for this brainstorm:
 

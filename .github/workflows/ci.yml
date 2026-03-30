@@ -4,38 +4,18 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'packages/**'
-      - 'www/**'
-      - 'example/**'
-      - 'tooling/**'
-      - 'package.json'
-      - 'bun.lock'
-      - 'tsconfig*.json'
-      - 'biome.json'
-      - '.github/workflows/ci.yml'
   pull_request:
     types:
       - opened
       - synchronize
       - reopened
-    paths:
-      - 'packages/**'
-      - 'www/**'
-      - 'example/**'
-      - 'tooling/**'
-      - 'package.json'
-      - 'bun.lock'
-      - 'tsconfig*.json'
-      - 'biome.json'
-      - '.github/workflows/ci.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint:
+  default:
     name: CI
     runs-on: ubuntu-latest
 
@@ -72,8 +52,11 @@ jobs:
       - name: 📥 Install
         run: bun install --frozen-lockfile && bun gen
 
+      - name: 🧠 Validate Skills
+        run: bun run intent:validate
+
       - name: 📦 Build Packages
         run: bun build:pkg
 
-      - name: 🔬 Run Biome & ESLint & Typecheck & Test
-        run: bun check
+      - name: 🔬 Run PR gate
+        run: bun run check:ci

@@ -1,6 +1,6 @@
 # Drizzle v1 Index Implementation - Quick Reference
 
-Quick reference guide for implementing Drizzle-style indexes in Better Convex ORM.
+Quick reference guide for implementing Drizzle-style indexes in kitcn ORM.
 
 ## Core API Pattern
 
@@ -216,11 +216,11 @@ index('ordered').on(t.column.asc(), t.other.desc())
 
 ## Key Differences from Drizzle
 
-### Simplifications for Better Convex
+### Simplifications for kitcn
 
 1. **Name always required** (like SQLite, unlike PostgreSQL)
    - Drizzle PG: `index()` and `index('name')` both valid
-   - Better Convex: `index('name')` required
+   - kitcn: `index('name')` required
 
 2. **No database-specific features** (initially)
    - Skip: `.concurrently()`, `.onOnly()`, `.using()`, `.with()`, `.op()`
@@ -233,14 +233,14 @@ index('ordered').on(t.column.asc(), t.other.desc())
 
 4. **Array-only extraConfig**
    - Drizzle: Supports both object (old) and array (new)
-   - Better Convex: Array only from start
+   - kitcn: Array only from start
 
 ## Code Organization
 
 Recommended file structure:
 
 ```
-packages/better-convex/src/schema/
+packages/kitcn/src/schema/
   ├── index.ts           # Main exports
   ├── table.ts           # Table definition
   ├── indexes.ts         # Index builders and types
@@ -251,7 +251,7 @@ packages/better-convex/src/schema/
 
 ## Real-World Examples
 
-### From Better Convex Context
+### From kitcn Context
 
 ```ts
 // Current Convex indexes
@@ -324,7 +324,7 @@ test.skip('column modifiers')
 - [ ] Update table building logic to process indexes
 - [ ] Add type tests for index builders
 - [ ] Add runtime tests for index creation
-- [ ] Document index API in Better Convex docs
+- [ ] Document index API in kitcn docs
 - [ ] Create migration guide for existing code
 - [ ] (Future) Add `.where()` support
 - [ ] (Future) Add expression support

@@ -16,7 +16,7 @@ import {
   id,
   index,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import { it as baseIt, describe, expect } from 'vitest';
 import schema from '../schema';
 import { convexTest, runCtx, type TestCtx, withOrmCtx } from '../setup.testing';

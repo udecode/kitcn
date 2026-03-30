@@ -81,10 +81,10 @@ This is the fix - document in changelog/migration guide.
 
 | File | Lines | Hook |
 |------|-------|------|
-| [auth-mutations.ts](packages/better-convex/src/react/auth-mutations.ts#L120-L134) | 120-134 | `useSignInSocialMutationOptions` |
-| [auth-mutations.ts](packages/better-convex/src/react/auth-mutations.ts#L136-L149) | 136-149 | `useSignInMutationOptions` |
-| [auth-mutations.ts](packages/better-convex/src/react/auth-mutations.ts#L151-L164) | 151-164 | `useSignUpMutationOptions` |
-| [auth-mutations.ts](packages/better-convex/src/react/auth-mutations.ts#L113) | ~113 | `useSignOutMutationOptions` (check if same issue) |
+| [auth-mutations.ts](packages/kitcn/src/react/auth-mutations.ts#L120-L134) | 120-134 | `useSignInSocialMutationOptions` |
+| [auth-mutations.ts](packages/kitcn/src/react/auth-mutations.ts#L136-L149) | 136-149 | `useSignInMutationOptions` |
+| [auth-mutations.ts](packages/kitcn/src/react/auth-mutations.ts#L151-L164) | 151-164 | `useSignUpMutationOptions` |
+| [auth-mutations.ts](packages/kitcn/src/react/auth-mutations.ts#L113) | ~113 | `useSignOutMutationOptions` (check if same issue) |
 
 ## Acceptance Criteria
 
@@ -96,7 +96,7 @@ This is the fix - document in changelog/migration guide.
 
 ## MVP
 
-### packages/better-convex/src/react/auth-mutations.ts
+### packages/kitcn/src/react/auth-mutations.ts
 
 ```typescript
 // New error class at top of file
@@ -135,7 +135,7 @@ const useSignUpMutationOptions = ((options) => {
 ### Type guard utility (optional)
 
 ```typescript
-// packages/better-convex/src/react/auth-mutations.ts
+// packages/kitcn/src/react/auth-mutations.ts
 export function isAuthMutationError(error: unknown): error is AuthMutationError {
   return error instanceof AuthMutationError;
 }
@@ -160,6 +160,6 @@ export function isAuthMutationError(error: unknown): error is AuthMutationError 
 
 ## References
 
-- [auth-mutations.ts](packages/better-convex/src/react/auth-mutations.ts)
+- [auth-mutations.ts](packages/kitcn/src/react/auth-mutations.ts)
 - [Better Auth error typing issue #3879](https://github.com/better-auth/better-auth/issues/3879)
 - [TanStack Query mutation docs](https://tanstack.com/query/latest/docs/framework/react/guides/mutations)

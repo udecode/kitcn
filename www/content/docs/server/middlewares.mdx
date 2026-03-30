@@ -104,7 +104,7 @@ const c = initCRPC
   .meta<{
     auth?: 'optional' | 'required';
     role?: 'admin';
-    rateLimit?: string;
+    ratelimit?: string;
   }>()
   .create();
 ```
@@ -136,7 +136,7 @@ export const authMutation = c.mutation
   .meta({ auth: 'required' })
   .use(authMiddleware)      // 1. Check auth, add user to ctx
   .use(roleMiddleware)      // 2. Check role if meta.role set
-  .use(rateLimitMiddleware); // 3. Apply rate limiting
+  .use(ratelimit.middleware()); // 3. Apply rate limiting
 ```
 
 <Callout icon={<InfoIcon />}>
@@ -197,17 +197,10 @@ const logMiddleware = c.middleware(async ({ ctx, next }) => {
   return result;
 });
 
-// Type-constrained middleware
-const rateLimitMiddleware = c.middleware<
-  MutationCtx & { user?: { id: string; plan: string } | null }
->(async ({ ctx, meta, next }) => {
-  await rateLimitGuard({
-    ...ctx,
-    rateLimitKey: meta.rateLimit ?? 'default',
-    user: ctx.user ?? null,
-  });
-  return next({ ctx });
-});
+// Plugin-owned middleware
+import { ratelimit } from './plugins/ratelimit/plugin';
+
+export const publicMutation = c.mutation.use(ratelimit.middleware());
 ```
 
 ### Extending with `.pipe()`
@@ -239,8 +232,8 @@ Here are common middleware patterns.
 With Better Auth, use `getSession()` to retrieve the session and fetch the user:
 
 ```ts showLineNumbers {4-6,8-11}
-import { getSession } from 'better-convex/auth';
-import { CRPCError } from 'better-convex/server';
+import { getSession } from 'kitcn/auth';
+import { CRPCError } from 'kitcn/server';
 
 export const authQuery = c.query.use(async ({ ctx, next }) => {
   const session = await getSession(ctx);
@@ -296,18 +289,9 @@ export const optionalAuthQuery = c.query.use(async ({ ctx, next }) => {
 ### Rate Limiting
 
 ```ts showLineNumbers {2-6}
-const rateLimitMiddleware = c.middleware<MutationCtx>(
-  async ({ ctx, meta, next }) => {
-    await rateLimitGuard({
-      ...ctx,
-      rateLimitKey: meta.rateLimit ?? 'default',
-    });
-    return next({ ctx });
-  }
-);
+import { ratelimit } from './plugins/ratelimit/plugin';
 
-export const publicMutation = c.mutation
-  .use(rateLimitMiddleware);
+export const publicMutation = c.mutation.use(ratelimit.middleware());
 ```
 
 ### Logging

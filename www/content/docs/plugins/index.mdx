@@ -1,81 +1,81 @@
 ---
 title: Plugins
-description: Cross-cutting plugins for Better Convex
+description: Runtime plugins with scaffold-owned schema extensions and user-owned runtime files.
 ---
 
-import { InfoIcon } from "lucide-react"
+Plugins are first-class in kitcn. Install the runtime package, scaffold local files with `kitcn add`, then keep customizing those local files.
 
-In this guide, we'll explain how Better Convex plugins work, what's available today, and where the system is headed.
+## Runtime vs schema
 
-## What are plugins?
+First-party plugins are split on purpose:
 
-Plugins are cross-cutting building blocks inspired by [better-auth's plugin architecture](https://www.better-auth.com/docs/concepts/plugins). A single plugin registration can touch multiple layers of your app at once:
+- Runtime package: middleware, helpers, and types
+- Local schema extension: `convex/lib/plugins/<plugin>/schema.ts`
+- Local runtime files: `convex/functions/plugins/<plugin>.ts` and `convex/lib/plugins/<plugin>/...`
 
-- **Schema** — inject internal storage tables (e.g. `ratelimit_state`, `migration_run`)
-- **Server/runtime** — add guards, hooks, or background processing
-- **Client** — optional client helpers
+Schema is app-owned and uses `defineSchemaExtension(...)`:
 
-This means you don't wire up tables, server logic, and client helpers separately. You register a plugin once, and it handles everything.
+```ts showLineNumbers
+import { defineSchemaExtension } from 'kitcn/orm';
+
+export function myExtension() {
+  return defineSchemaExtension('my-plugin', {}).relations(() => ({}));
+}
+```
+
+## Discovery model
+
+`defineSchema(...).extend(...)` is the source of truth for installed schema capabilities:
+
+```ts showLineNumbers {2,5}
+import { defineSchema } from 'kitcn/orm';
+import { resendExtension } from '../lib/plugins/resend/schema';
+
+export default defineSchema(tables).extend(resendExtension());
+```
+
+Extension composition rules:
+
+- Extension `relations(...)` merge before app `relations`.
+- Extension `triggers` merge before app `triggers`.
+- Duplicate relation fields and trigger hooks throw.
+
+## Ownership model (shadcn-style)
+
+- Packages own stable runtime helpers.
+- The CLI owns scaffold templates.
+- Your app owns scaffolded schema and runtime files.
+- `kitcn add <plugin>` creates or refreshes local plugin files.
+- If `paths.env` is missing, `kitcn add <plugin>` also bootstraps `convex/lib/get-env.ts` and writes `paths.env` into `concave.json`.
+- `kitcn diff <plugin>` previews scaffold drift.
+- Installed plugin state is tracked in `<functionsDir>/plugins.lock.json`.
+
+Codegen behavior:
+
+- Installed extension keys drive generated plugin typing.
+- Plugin runtime modules stay scaffold-owned.
+- Stale `generated/plugins/**` artifacts are removed automatically.
 
 ## Available plugins
 
-| Plugin | What it gives you | Best for |
-| --- | --- | --- |
-| [`ratelimit`](/docs/plugins/ratelimit) | Upstash-style API with Convex-native storage, middleware-friendly guards, and optional React hook UX | Protecting expensive mutations, login flows, and public endpoints |
+| Plugin | What it gives you |
+| --- | --- |
+| [`ratelimit`](/docs/plugins/ratelimit) | Convex-native rate limiting with middleware + React hook support |
+| [`resend`](/docs/plugins/resend) | Durable queued email delivery, batching, webhook status ingestion, and cleanup APIs |
 
-## Experimental — more to come
+## Built-in internal extensions
 
-The plugin system is **experimental**. The core interface (`key`, `tableNames`, `inject`) is stable enough for production use today, but the API surface will grow.
+These are always active and do not require explicit registration:
 
-We're working toward a richer plugin contract inspired by better-auth's `ctx.api` pattern — where plugins can expose their own procedures, extend the ORM context, and be overridden by downstream code. Think of it like `auth.api` but for any cross-cutting concern: a plugin registers its schema, exposes typed server functions via `ctx.api`, and optionally ships client helpers.
-
-What's coming:
-
-- **`ctx.api` for plugins** — plugins will be able to expose typed procedures (queries, mutations, actions) that integrate with cRPC and the ORM context, similar to how better-auth plugins expose `auth.api.pluginName.*`
-- **Extensible and overridable** — downstream code will be able to override plugin behavior, swap implementations, or extend plugin-provided procedures
-- **More first-party plugins** — we're evaluating candidates like the official convex components
-
-For now, the plugin system gives you schema injection and table management.
-
-## API Reference
-
-Every plugin implements the `OrmSchemaPlugin` interface:
-
-```ts showLineNumbers
-type OrmSchemaPlugin = {
-  key: string;
-  tableNames: readonly string[];
-  inject: (schema) => schema & Record<string, unknown>;
-};
-```
-
-You register plugins in `defineSchema`:
-
-```ts showLineNumbers title="convex/functions/schema.ts" {1,5}
-import { ratelimitPlugin } from 'better-convex/plugins/ratelimit';
-
-export default defineSchema(tables, {
-  plugins: [ratelimitPlugin()],
-});
-```
-
-Two plugins are built-in and always active — you don't need to register them:
-
-| Plugin | Tables injected | Purpose |
-| --- | --- | --- |
-| `aggregatePlugin` | `aggregate_bucket`, `aggregate_member`, `aggregate_extrema`, `aggregate_rank_tree`, `aggregate_rank_node`, `aggregate_state` | Powers `aggregateIndex` and `rankIndex` |
-| `migrationPlugin` | `migration_state`, `migration_run` | Powers `defineMigration` and `createMigrationHandlers` |
-
-Opt-in plugins like `ratelimitPlugin` must be registered explicitly.
-
-<Callout icon={<InfoIcon />}>
-  **Important:** Each plugin key must be unique. Registering the same plugin twice (e.g. `[ratelimitPlugin(), ratelimitPlugin()]`) throws a duplicate plugin error. If a plugin tries to inject a table name that's already in your schema, it throws a collision error.
-</Callout>
+| Extension | Purpose |
+| --- | --- |
+| `aggregate` | Aggregate storage + runtime support |
+| `migration` | Migration state + runtime support |
 
 ## Next steps
 
 <Cards>
+  <Card title="Resend" href="/docs/plugins/resend" />
   <Card title="Rate Limiting" href="/docs/plugins/ratelimit" />
-  <Card title="Aggregates" href="/docs/orm/queries/aggregates" />
-  <Card title="Middlewares" href="/docs/server/middlewares" />
+  <Card title="CLI Registry" href="/docs/cli/registry" />
 </Cards>

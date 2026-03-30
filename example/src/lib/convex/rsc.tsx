@@ -7,10 +7,7 @@ import {
   HydrationBoundary,
   QueryClient,
 } from '@tanstack/react-query';
-import {
-  createServerCRPCProxy,
-  getServerQueryClientOptions,
-} from 'better-convex/rsc';
+import { createServerCRPCProxy, getServerQueryClientOptions } from 'kitcn/rsc';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 

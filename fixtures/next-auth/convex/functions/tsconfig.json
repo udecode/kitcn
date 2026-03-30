@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "strict": true,
+    "strictFunctionTypes": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": [
+      "esnext",
+      "dom"
+    ],
+    "types": [
+      "bun-types"
+    ],
+    "target": "esnext",
+    "moduleDetection": "force",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "paths": {
+      "kitcn/aggregate": [
+        "../../../../packages/kitcn/src/aggregate/index.ts"
+      ],
+      "kitcn/auth": [
+        "../../../../packages/kitcn/src/auth/index.ts"
+      ],
+      "kitcn/auth/client": [
+        "../../../../packages/kitcn/src/auth-client/index.ts"
+      ],
+      "kitcn/auth/config": [
+        "../../../../packages/kitcn/src/auth-config/index.ts"
+      ],
+      "kitcn/auth/generated": [
+        "../../../../packages/kitcn/src/auth/generated.ts"
+      ],
+      "kitcn/auth/http": [
+        "../../../../packages/kitcn/src/auth-http/index.ts"
+      ],
+      "kitcn/auth/nextjs": [
+        "../../../../packages/kitcn/src/auth-nextjs/index.ts"
+      ],
+      "kitcn/crpc": [
+        "../../../../packages/kitcn/src/crpc/index.ts"
+      ],
+      "kitcn/orm": [
+        "../../../../packages/kitcn/src/orm/index.ts"
+      ],
+      "kitcn/plugins": [
+        "../../../../packages/kitcn/src/plugins/index.ts"
+      ],
+      "kitcn/ratelimit": [
+        "../../../../packages/kitcn/src/ratelimit/index.ts"
+      ],
+      "kitcn/ratelimit/react": [
+        "../../../../packages/kitcn/src/ratelimit/react/index.ts"
+      ],
+      "kitcn/react": [
+        "../../../../packages/kitcn/src/react/index.ts"
+      ],
+      "kitcn/rsc": [
+        "../../../../packages/kitcn/src/rsc/index.ts"
+      ],
+      "kitcn/server": [
+        "../../../../packages/kitcn/src/server/index.ts"
+      ],
+      "kitcn/solid": [
+        "../../../../packages/kitcn/src/solid/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "./**/*",
+    "../lib/**/*",
+    "../shared/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "./_generated",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
+}

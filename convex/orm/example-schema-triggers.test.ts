@@ -1,13 +1,16 @@
-import { getTableConfig } from 'better-convex/orm';
-import { describe, expect, test } from 'vitest';
 import {
-  relations,
-  tables,
-  triggers,
-} from '../../example/convex/functions/schema';
-import { compileCountQueryPlan } from '../../packages/better-convex/src/orm/aggregate-index/runtime';
+  getSchemaTriggers,
+  getTableConfig,
+  requireSchemaRelations,
+} from 'kitcn/orm';
+import { describe, expect, test } from 'vitest';
+import schema, { tables } from '../../example/convex/functions/schema';
+import { compileCountQueryPlan } from '../../packages/kitcn/src/orm/aggregate-index/runtime';
 
 describe('example schema aggregate triggers', () => {
+  const relations = requireSchemaRelations(schema);
+  const triggers = getSchemaTriggers(schema);
+
   test('registers user/session create triggers in addition to aggregate change triggers', () => {
     const triggerConfig = triggers as Record<
       string,

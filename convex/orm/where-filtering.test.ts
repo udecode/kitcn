@@ -11,7 +11,7 @@
  * - Convex query generation
  */
 
-import { and, eq, inArray, notInArray, or } from 'better-convex/orm';
+import { and, eq, inArray, notInArray, or } from 'kitcn/orm';
 import { test as baseTest, describe, expect } from 'vitest';
 import schema from '../schema';
 import { convexTest, runCtx, type TestCtx } from '../setup.testing';

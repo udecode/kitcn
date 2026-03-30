@@ -9,7 +9,7 @@ import {
   id,
   index,
   text,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 import { describe, expect, it } from 'vitest';
 import { withOrmCtx } from '../setup.testing';
 

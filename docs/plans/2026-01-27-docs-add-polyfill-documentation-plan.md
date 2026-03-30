@@ -76,5 +76,5 @@ Import this at the top of your HTTP file (before other imports).
 
 ## References
 
-- PR #47: https://github.com/udecode/better-convex/pull/47
+- PR #47: https://github.com/udecode/kitcn/pull/47
 - Example file: `example/convex/lib/http-polyfills.ts`

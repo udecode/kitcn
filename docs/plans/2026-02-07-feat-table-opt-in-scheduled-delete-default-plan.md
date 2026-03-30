@@ -65,9 +65,9 @@ Keep existing methods and add explicit hard override:
 Add table-level deletion metadata symbol + storage on `ConvexTableImpl`.
 
 Planned files:
-- `packages/better-convex/src/orm/symbols.ts`
-- `packages/better-convex/src/orm/table.ts`
-- `packages/better-convex/src/orm/index.ts` (export helper)
+- `packages/kitcn/src/orm/symbols.ts`
+- `packages/kitcn/src/orm/table.ts`
+- `packages/kitcn/src/orm/index.ts` (export helper)
 
 ### 2) New helper/builder
 Implement `deletion(mode, options?)` as a supported `convexTable` extra config value.
@@ -77,9 +77,9 @@ Validation:
 - `delayMs` must be non-negative integer when provided
 
 Planned files:
-- `packages/better-convex/src/orm/table.ts`
-- `packages/better-convex/src/orm/types.ts` (if helper types are exposed)
-- `packages/better-convex/src/orm/index.ts`
+- `packages/kitcn/src/orm/table.ts`
+- `packages/kitcn/src/orm/types.ts` (if helper types are exposed)
+- `packages/kitcn/src/orm/index.ts`
 
 ### 3) Delete mode resolver
 Centralize mode resolution in delete builder:
@@ -91,14 +91,14 @@ Centralize mode resolution in delete builder:
   - otherwise `0`
 
 Planned files:
-- `packages/better-convex/src/orm/delete.ts`
+- `packages/kitcn/src/orm/delete.ts`
 
 ### 4) Scheduled worker compatibility
 No behavior change needed to cancellation token logic; only ensure table-default scheduled path enqueues same tokenized payload as explicit `.scheduled(...)`.
 
 Planned files:
-- `packages/better-convex/src/orm/delete.ts`
-- `packages/better-convex/src/orm/scheduled-delete.ts` (no-op unless wiring changes needed)
+- `packages/kitcn/src/orm/delete.ts`
+- `packages/kitcn/src/orm/scheduled-delete.ts` (no-op unless wiring changes needed)
 
 ## TDD Plan (Required)
 
@@ -196,13 +196,13 @@ GREEN:
 
 ## References
 - Delete mode execution flow:
-  - `packages/better-convex/src/orm/delete.ts:81`
-  - `packages/better-convex/src/orm/delete.ts:160`
-  - `packages/better-convex/src/orm/delete.ts:218`
-  - `packages/better-convex/src/orm/delete.ts:532`
+  - `packages/kitcn/src/orm/delete.ts:81`
+  - `packages/kitcn/src/orm/delete.ts:160`
+  - `packages/kitcn/src/orm/delete.ts:218`
+  - `packages/kitcn/src/orm/delete.ts:532`
 - Scheduled worker + token check:
-  - `packages/better-convex/src/orm/scheduled-delete.ts:14`
-  - `packages/better-convex/src/orm/scheduled-delete.ts:40`
+  - `packages/kitcn/src/orm/scheduled-delete.ts:14`
+  - `packages/kitcn/src/orm/scheduled-delete.ts:40`
 - Table extra config parsing:
-  - `packages/better-convex/src/orm/table.ts:653`
-  - `packages/better-convex/src/orm/table.ts:1164`
+  - `packages/kitcn/src/orm/table.ts:653`
+  - `packages/kitcn/src/orm/table.ts:1164`

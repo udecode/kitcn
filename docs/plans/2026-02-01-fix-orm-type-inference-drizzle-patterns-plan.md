@@ -45,7 +45,7 @@ deepened: 2026-02-01
 1. **Run Pre-Implementation Verification** (45 min) - Verify validator structure, Table.Symbol, operator patterns
 2. **Reorder Phases**: 2→3→4→5→1→6→7 (prioritize high-impact, low-risk changes)
 3. **Consider Minimal Alternative**: 1-hour fix (Phases 2+3 only) may suffice before full 7-phase plan
-4. **Add Symbol-Based Column Identity**: Attach `Symbol.for('better-convex:columnName')` to validators
+4. **Add Symbol-Based Column Identity**: Attach `Symbol.for('kitcn:columnName')` to validators
 5. **Implement TDD Workflow**: Write failing type tests BEFORE each phase (Red→Green→Refactor)
 
 ## Overview
@@ -109,7 +109,7 @@ export type BuildQueryResult<
     : never;
 ```
 
-**Our Current Pattern** (packages/better-convex/src/orm/types.ts:212-231):
+**Our Current Pattern** (packages/kitcn/src/orm/types.ts:212-231):
 ```typescript
 export type BuildQueryResult<
   TSchema extends TablesRelationalConfig,
@@ -349,7 +349,7 @@ npx tsc --noEmit convex/test-types/validator-structure-check.ts
 
 ```bash
 # Verify symbol exists in ConvexTable implementation
-grep -n "Symbol.*Name\|export.*Symbol" packages/better-convex/src/orm/table.ts
+grep -n "Symbol.*Name\|export.*Symbol" packages/kitcn/src/orm/table.ts
 
 # Expected output: Symbol definition like:
 # static readonly Symbol = { Name: Symbol.for('table-name'), ... }
@@ -448,7 +448,7 @@ private _createOperators() {
 
 ### Phase 1: Add InferModelFromColumns Abstraction
 
-**File**: `packages/better-convex/src/orm/types.ts`
+**File**: `packages/kitcn/src/orm/types.ts`
 
 **Add after ValidatorsToType (line ~50)**:
 
@@ -506,7 +506,7 @@ export type InferInsertModel<TTable extends ConvexTable<any>> = Simplify<
 
 ### Phase 2: Fix BuildQueryResult Empty Relations
 
-**File**: `packages/better-convex/src/orm/types.ts`
+**File**: `packages/kitcn/src/orm/types.ts`
 
 **Change line ~226** from:
 ```typescript
@@ -542,7 +542,7 @@ export type BuildQueryResult<
 
 ### Phase 3: Fix Relation Property Access
 
-**File**: `packages/better-convex/src/orm/relations.ts`
+**File**: `packages/kitcn/src/orm/relations.ts`
 
 **Current pattern** (line ~45):
 ```typescript
@@ -582,7 +582,7 @@ export class Many<TTable extends ConvexTable<any>, TTableName extends string> {
 
 ### Phase 4: Simplify Where Clause Types
 
-**File**: `packages/better-convex/src/orm/types.ts`
+**File**: `packages/kitcn/src/orm/types.ts`
 
 **Current DBQueryConfig** (line ~95):
 ```typescript
@@ -620,7 +620,7 @@ where?: (
 
 ### Phase 5: Update _createColumnProxies Implementation
 
-**File**: `packages/better-convex/src/orm/query.ts`
+**File**: `packages/kitcn/src/orm/query.ts`
 
 **Current implementation** (line ~191):
 ```typescript
@@ -666,7 +666,7 @@ private _createOperators(): any {
 
 ### Phase 6: Ensure Consistent Simplify Usage
 
-**File**: `packages/better-convex/src/orm/types.ts`
+**File**: `packages/kitcn/src/orm/types.ts`
 
 **Audit all public type exports** and ensure they use Simplify:
 
@@ -708,7 +708,7 @@ export type BuildRelationResult<
 
 ### Phase 7: Verify ValidatorsToType Handles All Cases
 
-**File**: `packages/better-convex/src/orm/types.ts`
+**File**: `packages/kitcn/src/orm/types.ts`
 
 **Current implementation** (line ~48):
 ```typescript
@@ -744,7 +744,7 @@ type ValidatorToType<V> =
 
 ```bash
 # Build ORM package
-bun --cwd packages/better-convex build
+bun --cwd packages/kitcn build
 
 # Full typecheck from root
 bun typecheck
@@ -1117,9 +1117,9 @@ Assume<TInclude[K], true | Record<string, unknown>>
 
 ### Our Implementation
 
-- `packages/better-convex/src/orm/types.ts` - All type definitions
-- `packages/better-convex/src/orm/relations.ts` - One/Many classes
-- `packages/better-convex/src/orm/query.ts` - Query execution
+- `packages/kitcn/src/orm/types.ts` - All type definitions
+- `packages/kitcn/src/orm/relations.ts` - One/Many classes
+- `packages/kitcn/src/orm/query.ts` - Query execution
 - `convex/test-types/` - Type test files
 - `docs/brainstorms/2026-01-31-drizzle-orm-brainstorm.md` - Project context
 

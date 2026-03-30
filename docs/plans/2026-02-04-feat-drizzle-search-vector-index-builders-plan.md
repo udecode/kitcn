@@ -8,7 +8,7 @@ date: 2026-02-04
 
 Dig into https://github.com/zbeyens/drizzle-v1 for Drizzle v1 - it's the latest version of Drizzle. Only when needed, you can dig into https://github.com/drizzle-team/drizzle-orm which was the original reference so far.
 Make sure we maximize mirroring drizzle-v1 - dont forget all ts answers are in drizzle repo, dig into it when needed. they master more typescript than you. drizzle has many db integrations so just pick the most relevant one - making sure we mirror all typing magic - dig into https://github.com/get-convex/convex-backend if you need to dig into convex typing, testing or src code.
-SAME for testing / type testing - but when you need to test convex part, see .claude/skills/convex-test/convex-test.mdc or convex-backend/npm-packages tests. see @.claude/skills/convex-test-orm/convex-test-orm.mdc for more details. We don't want to reinvent the wheel, but we want the closest API to Drizzle. At the end of each package change, make sure you didn't break the types: `bun typecheck` at root and `bun run test` at root.codex/skills/dig/SKILL.md has more details on how to dig into code.
+SAME for testing / type testing - but when you need to test convex part, see .claude/skills/convex-test/convex-test.mdc or convex-backend/npm-packages tests. see @.claude/skills/convex-test-orm/convex-test-orm.mdc for more details. We don't want to reinvent the wheel, but we want the closest API to Drizzle. At the end of each package change, make sure you didn't break the types: `bun typecheck` at root and `bun run test` at root.agents/skills/dig/SKILL.md has more details on how to dig into code.
 
 ## Overview
 
@@ -88,9 +88,9 @@ VectorIndexBuilderOn → .on(field) → VectorIndexBuilder → .dimensions(n) / 
 
 **Integration Points:**
 
-1. **New builder classes** in `packages/better-convex/src/orm/indexes.ts`
-2. **Update extraConfig processing** in `packages/better-convex/src/orm/table.ts`
-3. **Export new functions** from `packages/better-convex/src/orm/index.ts`
+1. **New builder classes** in `packages/kitcn/src/orm/indexes.ts`
+2. **Update extraConfig processing** in `packages/kitcn/src/orm/table.ts`
+3. **Export new functions** from `packages/kitcn/src/orm/index.ts`
 4. **Add vector column builder** (decision needed - see Open Questions)
 
 ### Implementation Phases
@@ -99,9 +99,9 @@ VectorIndexBuilderOn → .on(field) → VectorIndexBuilder → .dimensions(n) / 
 
 **Files to modify:**
 
-- `packages/better-convex/src/orm/indexes.ts`
-- `packages/better-convex/src/orm/table.ts`
-- `packages/better-convex/src/orm/index.ts`
+- `packages/kitcn/src/orm/indexes.ts`
+- `packages/kitcn/src/orm/table.ts`
+- `packages/kitcn/src/orm/index.ts`
 
 **New classes:**
 
@@ -329,7 +329,7 @@ if (isConvexVectorIndexBuilder(entry)) {
 
 #### Phase 2c: Update Type Exports
 
-**packages/better-convex/src/orm/index.ts:**
+**packages/kitcn/src/orm/index.ts:**
 
 ```ts
 export { searchIndex, vectorIndex } from "./indexes";
@@ -501,7 +501,7 @@ export const posts = convexTable(
 
 ### Q1: Vector Column Builder (CRITICAL)
 
-**Question**: Should Better Convex provide a `vector(dimensions)` column builder?
+**Question**: Should kitcn provide a `vector(dimensions)` column builder?
 
 **Options**:
 
@@ -641,9 +641,9 @@ export const posts = convexTable(
 ### Internal References
 
 - **Brainstorm**: [docs/brainstorms/2026-02-04-drizzle-index-api.md](docs/brainstorms/2026-02-04-drizzle-index-api.md)
-- **Current builders**: [packages/better-convex/src/orm/indexes.ts](packages/better-convex/src/orm/indexes.ts)
-- **Table integration**: [packages/better-convex/src/orm/table.ts:120-166](packages/better-convex/src/orm/table.ts#L120-L166)
-- **Type utilities**: [packages/better-convex/src/orm/types.ts](packages/better-convex/src/orm/types.ts)
+- **Current builders**: [packages/kitcn/src/orm/indexes.ts](packages/kitcn/src/orm/indexes.ts)
+- **Table integration**: [packages/kitcn/src/orm/table.ts:120-166](packages/kitcn/src/orm/table.ts#L120-L166)
+- **Type utilities**: [packages/kitcn/src/orm/types.ts](packages/kitcn/src/orm/types.ts)
 
 ### Institutional Learnings
 

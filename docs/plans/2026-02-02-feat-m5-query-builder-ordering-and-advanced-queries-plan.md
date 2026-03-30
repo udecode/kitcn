@@ -39,13 +39,13 @@ const sorted = posts.sort((a, b) => b._creationTime - a._creationTime);
 **Goal:**
 ```typescript
 // M5: Native ordering
-import { desc } from 'better-convex/orm';
+import { desc } from 'kitcn/orm';
 const posts = await db(ctx).query.posts.findMany({
   orderBy: desc(posts._creationTime),
 });
 
 // M5: String operators
-import { like } from 'better-convex/orm';
+import { like } from 'kitcn/orm';
 const users = await db(ctx).query.users.findMany({
   where: like(users.name, '%alice%'),
 });
@@ -68,11 +68,11 @@ QueryBuilder (query.ts)
 ```
 
 **Key files to modify:**
-1. `packages/better-convex/src/orm/filter-expression.ts` - Add string operators
-2. `packages/better-convex/src/orm/query.ts` - Implement orderBy stub (lines 96-99)
-3. `packages/better-convex/src/orm/query-compiler.ts` - Compile orderBy to Convex API
-4. `packages/better-convex/src/orm/types.ts` - Add OrderBy types
-5. `packages/better-convex/src/orm/index.ts` - Export asc(), desc() helpers
+1. `packages/kitcn/src/orm/filter-expression.ts` - Add string operators
+2. `packages/kitcn/src/orm/query.ts` - Implement orderBy stub (lines 96-99)
+3. `packages/kitcn/src/orm/query-compiler.ts` - Compile orderBy to Convex API
+4. `packages/kitcn/src/orm/types.ts` - Add OrderBy types
+5. `packages/kitcn/src/orm/index.ts` - Export asc(), desc() helpers
 
 ### Implementation Phases
 
@@ -380,12 +380,12 @@ orderBy: desc(posts.title) // No index on title
 ### Internal References
 
 **Query builder patterns:**
-- `packages/better-convex/src/orm/query.ts:96-99` - Stubbed orderBy
-- `packages/better-convex/src/orm/filter-expression.ts` - Operator pattern to extend
-- `packages/better-convex/src/orm/where-clause-compiler.ts` - Visitor pattern for compilation
+- `packages/kitcn/src/orm/query.ts:96-99` - Stubbed orderBy
+- `packages/kitcn/src/orm/filter-expression.ts` - Operator pattern to extend
+- `packages/kitcn/src/orm/where-clause-compiler.ts` - Visitor pattern for compilation
 
 **Type inference patterns:**
-- `packages/better-convex/src/orm/types.ts` - GetColumnData dual-mode pattern
+- `packages/kitcn/src/orm/types.ts` - GetColumnData dual-mode pattern
 - Institutional learning: Merge utility for type brand preservation
 
 **Test structure:**

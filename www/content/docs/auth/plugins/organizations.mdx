@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore multi-tenant organization features with better-convex. You'll learn to set up the organization plugin, define roles and permissions, manage members and invitations, and implement team functionality.
+In this guide, we'll explore multi-tenant organization features with kitcn. You'll learn to set up the organization plugin, define roles and permissions, manage members and invitations, and implement team functionality.
 
 ## Overview
 
@@ -55,17 +55,21 @@ export default defineAuth((ctx) => ({
           maximumTeams: 10,
         },
         sendInvitationEmail: async (data) => {
+          const inviterName = data.inviter.user.name || 'Team Admin';
+          const organizationName = data.organization.name;
+          const roleSuffix = data.role ? ` as ${data.role}` : '';
+          const acceptUrl = `${process.env.SITE_URL!}/w/${data.organization.slug}?invite=${data.id}`;
+
           await (ctx as ActionCtx).scheduler.runAfter(
             0,
-            internal.email.sendOrganizationInviteEmail,
+            internal.plugins.email.sendTemplatedEmail,
             {
-              acceptUrl: `${process.env.SITE_URL!}/w/${data.organization.slug}?invite=${data.id}`,
-              invitationId: data.id,
-              inviterEmail: data.inviter.user.email,
-              inviterName: data.inviter.user.name || 'Team Admin',
-              organizationName: data.organization.name,
-              role: data.role,
               to: data.email,
+              subject: `${inviterName} invited you to join ${organizationName}`,
+              title: `Invitation to join ${organizationName}`,
+              body: `${inviterName} (${data.inviter.user.email}) invited you to join ${organizationName}${roleSuffix}.`,
+              ctaLabel: 'Accept invitation',
+              ctaUrl: acceptUrl,
             }
           );
         },
@@ -110,7 +114,7 @@ import {
   json,
   text,
   timestamp,
-} from 'better-convex/orm';
+} from 'kitcn/orm';
 
 export const organization = convexTable(
   'organization',
@@ -172,7 +176,7 @@ export default defineSchema(tables, { strict: false });
 ### Teams (Optional)
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-26}
-import { convexTable, id, index, integer, text, timestamp } from 'better-convex/orm';
+import { convexTable, id, index, integer, text, timestamp } from 'kitcn/orm';
 
 export const team = convexTable(
   'team',
@@ -229,7 +233,7 @@ organization({
 Then update your schema to include these fields:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-26}
-import { convexTable, text } from 'better-convex/orm';
+import { convexTable, text } from 'kitcn/orm';
 
 export const organization = convexTable('organization', {
   // ... existing fields
@@ -360,7 +364,7 @@ organization({
 ### Permission Helper
 
 ```ts title="convex/lib/auth/auth-helpers.ts" showLineNumbers {1-2,4-7,9-17}
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 import type { AuthCtx } from '../crpc';
 
 export const hasPermission = async (
@@ -475,7 +479,7 @@ export const listOrganizations = authQuery
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-4,7-18,21-33,36-43}
 export const createOrganization = authMutation
-  .meta({ rateLimit: 'organization/create' })
+  .meta({ ratelimit: 'organization/create' })
   .input(z.object({ name: z.string().min(1).max(100) }))
   .output(z.object({ id: z.string(), slug: z.string() }))
   .mutation(async ({ ctx, input }) => {
@@ -518,7 +522,7 @@ export const createOrganization = authMutation
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-8,11-17,20-36,40-49}
 export const updateOrganization = authMutation
-  .meta({ rateLimit: 'organization/update' })
+  .meta({ ratelimit: 'organization/update' })
   .input(
     z.object({
       organizationId: z.string(),
@@ -601,7 +605,7 @@ export const deleteOrganization = authMutation
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-5}
 export const setActiveOrganization = authMutation
-  .meta({ rateLimit: 'organization/setActive' })
+  .meta({ ratelimit: 'organization/setActive' })
   .input(z.object({ organizationId: z.string() }))
   
   .mutation(async ({ ctx, input }) => setActiveOrganizationHandler(ctx, input));
@@ -613,7 +617,7 @@ export const setActiveOrganization = authMutation
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-7,10-17,20-28,31-38}
 export const inviteMember = authMutation
-  .meta({ rateLimit: 'organization/invite' })
+  .meta({ ratelimit: 'organization/invite' })
   .input(
     z.object({
       email: z.string().email(),
@@ -701,7 +705,7 @@ export const acceptInvitation = authMutation
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-8,11-19,22-25}
 export const rejectInvitation = authMutation
-  .meta({ rateLimit: 'organization/rejectInvite' })
+  .meta({ ratelimit: 'organization/rejectInvite' })
   .input(z.object({ invitationId: z.string() }))
   
   .mutation(async ({ ctx, input }) => {
@@ -736,7 +740,7 @@ export const rejectInvitation = authMutation
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-6,9-13,16-25}
 export const cancelInvitation = authMutation
-  .meta({ rateLimit: 'organization/cancelInvite' })
+  .meta({ ratelimit: 'organization/cancelInvite' })
   .input(z.object({ invitationId: z.string() }))
   
   .mutation(async ({ ctx, input }) => {
@@ -917,7 +921,7 @@ Add a member without invitation (admin use):
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-8,11-17}
 export const addMember = authMutation
-  .meta({ rateLimit: 'organization/addMember' })
+  .meta({ ratelimit: 'organization/addMember' })
   .input(
     z.object({
       role: z.enum(['owner', 'member']),
@@ -1021,7 +1025,7 @@ export const listMembers = authQuery
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-7,10-16,19-23}
 export const updateMemberRole = authMutation
-  .meta({ rateLimit: 'organization/updateRole' })
+  .meta({ ratelimit: 'organization/updateRole' })
   .input(
     z.object({
       memberId: z.string(),
@@ -1056,7 +1060,7 @@ export const updateMemberRole = authMutation
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-8,11-15,18-25}
 export const removeMember = authMutation
-  .meta({ rateLimit: 'organization/removeMember' })
+  .meta({ ratelimit: 'organization/removeMember' })
   .input(z.object({ memberId: z.string() }))
   
   .mutation(async ({ ctx, input }) => {
@@ -1085,7 +1089,7 @@ export const removeMember = authMutation
 
 ```ts title="convex/functions/organization.ts" showLineNumbers {1-8,11-22,25-37,40-47}
 export const leaveOrganization = authMutation
-  .meta({ rateLimit: 'organization/leave' })
+  .meta({ ratelimit: 'organization/leave' })
   .input(z.object({ organizationId: z.string() }))
   
   .mutation(async ({ ctx, input }) => {
@@ -1417,6 +1421,6 @@ Use Better Auth API for operations that modify multiple tables. Use direct table
 ## Next Steps
 
 <Cards>
-  <Card title="Templates" href="/docs/templates" />
+  <Card title="CLI Registry" href="/docs/cli/registry" />
   <Card title="Auth Server" href="/docs/auth/server" />
 </Cards>

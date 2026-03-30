@@ -1,5 +1,5 @@
-import { eq } from 'better-convex/orm';
-import { CRPCError } from 'better-convex/server';
+import { eq } from 'kitcn/orm';
+import { CRPCError } from 'kitcn/server';
 import { z } from 'zod';
 import { hasPermission } from '../lib/auth/auth-helpers';
 import {
@@ -168,7 +168,6 @@ export const listOrganizations = authQuery
 
 // Create a new organization (max 1 without subscription)
 export const createOrganization = authMutation
-  .meta({ rateLimit: 'organization/create' })
   .input(z.object({ name: z.string().min(1).max(100) }))
   .output(z.object({ id: z.string(), slug: z.string() }))
   .mutation(async ({ ctx, input }) => {
@@ -228,7 +227,6 @@ export const createOrganization = authMutation
 
 // Update organization details
 export const updateOrganization = authMutation
-  .meta({ rateLimit: 'organization/update' })
   .input(
     z.object({
       organizationId: z.string(),
@@ -357,7 +355,6 @@ const setActiveOrganizationHandler = async (
 
 // Set active organization
 export const setActiveOrganization = authMutation
-  .meta({ rateLimit: 'organization/setActive' })
   .input(z.object({ organizationId: z.string() }))
 
   .mutation(async ({ ctx, input }) => setActiveOrganizationHandler(ctx, input));
@@ -395,7 +392,6 @@ export const acceptInvitation = authMutation
 
 // Reject invitation
 export const rejectInvitation = authMutation
-  .meta({ rateLimit: 'organization/rejectInvite' })
   .input(z.object({ invitationId: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -427,7 +423,6 @@ export const rejectInvitation = authMutation
 
 // Remove member from organization
 export const removeMember = authMutation
-  .meta({ rateLimit: 'organization/removeMember' })
   .input(z.object({ memberId: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -452,7 +447,6 @@ export const removeMember = authMutation
 
 // Leave organization (self-leave)
 export const leaveOrganization = authMutation
-  .meta({ rateLimit: 'organization/leave' })
   .input(z.object({ organizationId: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -514,7 +508,6 @@ export const leaveOrganization = authMutation
 
 // Update member role
 export const updateMemberRole = authMutation
-  .meta({ rateLimit: 'organization/updateRole' })
   .input(
     z.object({
       memberId: z.string(),
@@ -884,7 +877,6 @@ export const listPendingInvitations = authQuery
 
 // Invite member to organization by slug
 export const inviteMember = authMutation
-  .meta({ rateLimit: 'organization/invite' })
   .input(
     z.object({
       email: z.string().email(),
@@ -1000,7 +992,6 @@ export const inviteMember = authMutation
 
 // Cancel invitation
 export const cancelInvitation = authMutation
-  .meta({ rateLimit: 'organization/cancelInvite' })
   .input(z.object({ invitationId: z.string() }))
 
   .mutation(async ({ ctx, input }) => {
@@ -1131,7 +1122,6 @@ export const getActiveMember = authQuery
 
 // Add member directly without invitation (admin use)
 export const addMember = authMutation
-  .meta({ rateLimit: 'organization/addMember' })
   .input(
     z.object({
       role: z.enum(['owner', 'member']),

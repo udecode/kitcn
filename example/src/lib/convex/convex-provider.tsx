@@ -1,13 +1,13 @@
 'use client';
 
 import { QueryClientProvider as TanstackQueryClientProvider } from '@tanstack/react-query';
-import { ConvexAuthProvider } from 'better-convex/auth/client';
+import { ConvexAuthProvider } from 'kitcn/auth/client';
 import {
   ConvexReactClient,
   getConvexQueryClientSingleton,
   getQueryClientSingleton,
   useAuthStore,
-} from 'better-convex/react';
+} from 'kitcn/react';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ import { createQueryClient } from '@/lib/convex/query-client';
 
 const convex = new ConvexReactClient(env.NEXT_PUBLIC_CONVEX_URL);
 
-export function BetterConvexProvider({
+export function AppConvexProvider({
   children,
   token,
 }: {

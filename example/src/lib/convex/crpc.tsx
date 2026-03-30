@@ -1,5 +1,5 @@
 import { api } from '@convex/api';
-import { createCRPCContext } from 'better-convex/react';
+import { createCRPCContext } from 'kitcn/react';
 import { env } from '@/env';
 
 export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({

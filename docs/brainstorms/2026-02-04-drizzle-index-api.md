@@ -6,7 +6,7 @@ status: implemented
 
 # Drizzle v1 Index API Migration
 
-Migrate Better Convex ORM index definitions from method chaining to Drizzle v1's builder pattern with extraConfig callback for maximum API parity and type safety.
+Migrate kitcn ORM index definitions from method chaining to Drizzle v1's builder pattern with extraConfig callback for maximum API parity and type safety.
 
 ## What We're Building
 
@@ -118,7 +118,7 @@ convexTable('posts', {
 uniqueIndex('email_unique').on(t.email)  // Creates regular index
 ```
 
-**Implementation in [table.ts:144-146](packages/better-convex/src/orm/table.ts#L144-L146):**
+**Implementation in [table.ts:144-146](packages/kitcn/src/orm/table.ts#L144-L146):**
 ```ts
 if (unique) {
   // Convex does not enforce unique indexes, but we accept the syntax for Drizzle parity.
@@ -153,7 +153,7 @@ vectorIndex('vec').on(t.embedding).dimensions(1536).filter(t.type)
 ### 5. Error Handling Strategy
 **Decision:** Fail fast with helpful errors
 
-**Implemented checks in [table.ts:129-165](packages/better-convex/src/orm/table.ts#L129-L165):**
+**Implemented checks in [table.ts:129-165](packages/kitcn/src/orm/table.ts#L129-L165):**
 ```ts
 // Forgot to call .on()
 if (isConvexIndexBuilderOn(entry)) {
@@ -178,8 +178,8 @@ if (tableName && tableName !== table.tableName) {
 ### ✅ Phase 1: Basic Indexes (COMPLETED)
 
 **Files created/modified:**
-- ✅ [packages/better-convex/src/orm/indexes.ts](packages/better-convex/src/orm/indexes.ts) - Builder classes
-- ✅ [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts) - extraConfig integration
+- ✅ [packages/kitcn/src/orm/indexes.ts](packages/kitcn/src/orm/indexes.ts) - Builder classes
+- ✅ [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts) - extraConfig integration
 - ✅ [convex/schema.ts](convex/schema.ts) - Example usage
 
 **Implemented:**
@@ -385,8 +385,8 @@ test('queries use defined indexes')
 ### Key Source Files
 - Drizzle: `drizzle-orm/src/pg-core/indexes.ts`
 - Drizzle: `drizzle-orm/src/sqlite-core/indexes.ts`
-- Better Convex: `packages/better-convex/src/orm/indexes.ts`
-- Better Convex: `packages/better-convex/src/orm/table.ts`
+- kitcn: `packages/kitcn/src/orm/indexes.ts`
+- kitcn: `packages/kitcn/src/orm/table.ts`
 
 ## Next Steps
 

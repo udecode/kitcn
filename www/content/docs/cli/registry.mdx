@@ -1,0 +1,261 @@
+---
+title: CLI Registry
+description: Bootstrap a new or existing app with `kitcn init`, add features with `add`, and inspect plans with `view`, `info`, and `docs`.
+links:
+  doc: https://docs.convex.dev/cli
+---
+
+Run the CLI first. `kitcn init` is the bootstrap command. It can
+scaffold a fresh app when you pass `-t`, or adopt the current supported app in
+place when you do not.
+
+## Start Here
+
+Use this table when you want the blunt version:
+
+| Goal | Command |
+| ---- | ------- |
+| Start a new Next.js app | `kitcn init -t next --yes` |
+| Start a new Vite app | `kitcn init -t vite --yes` |
+| Adopt the current supported app | `kitcn init --yes` |
+| Add a capability | `kitcn add <plugin>` |
+| Verify local runtime | `kitcn verify` |
+| Preview a plugin plan | `kitcn view <plugin>` |
+| Inspect installed state | `kitcn info` |
+| Open docs from the CLI | `kitcn docs <topic...>` |
+
+## init
+
+We'll start with `init`, because it owns bootstrap in both directions.
+
+### Scaffold a fresh app
+
+Pass `-t next` or `-t vite` when you want kitcn to create the app shell
+and patch its integration layer in one pass.
+
+```bash showLineNumbers
+npx kitcn init -t next --yes
+npx kitcn init -t vite --yes
+npx kitcn init -t next --yes --cwd apps --name web
+npx kitcn --backend concave init -t next --yes
+```
+
+For a fresh Next.js app, `init -t next` creates the shadcn shell, then layers
+in the kitcn seam:
+
+- `components/providers.tsx`
+- `lib/convex/*`
+- `.env.local`
+- `convex/functions/schema.ts`
+- `convex/functions/http.ts`
+- `convex/functions/messages.ts`
+- `convex/functions/generated/messages.runtime.ts`
+- `convex/lib/crpc.ts`
+- `convex/lib/get-env.ts`
+- `convex/shared/api.ts`
+- `concave.json`
+
+It also applies a few narrow shell patches where they belong:
+
+- `app/layout.tsx` mounts `Providers`
+- `tsconfig.json` gets the `@convex/*` alias
+- `package.json` gets the kitcn scripts and baseline dependency patch
+
+For a fresh Vite app, `init -t vite` keeps the flow smaller. It writes the
+React client core, the backend baseline, and the shared env/codegen wiring.
+That means provider and cRPC setup are ready without pretending Vite is a Next
+app.
+
+On backend `convex`, `init --yes` finishes the first local Convex bootstrap in
+the same command. Remote deployment-targeting flags stay `convex init` flags;
+they do not trigger the local bootstrap wrapper.
+
+### Adopt the current app in place
+
+Run `init --yes` inside a supported app when the app shell already exists and
+you only want kitcn layered in place.
+
+```bash showLineNumbers
+npx kitcn init --yes
+npx kitcn --backend concave init --yes
+npx kitcn init --env-file .env.agent --yes
+```
+
+This path detects the current app, keeps the existing shell, and patches the
+kitcn baseline into the right root. If the current directory is not a
+supported app, `init` fails fast instead of guessing.
+
+### What `init` owns
+
+The rule is simple:
+
+- `init` owns the kitcn integration layer
+- the framework tool owns the framework shell
+- `add` owns optional capabilities
+
+That means `init` owns things like `convex/functions/*`, `convex/lib/*`,
+`convex/shared/api.ts`, env bootstrap, provider wiring, and baseline scripts.
+It does not pretend to own your whole application.
+
+### Backend bootstrap
+
+On backend `convex`, `init` also drives `convex init` before the first Better
+Convex codegen pass. Deployment-targeting flags such as `--prod`,
+`--preview-name`, `--deployment-name`, and `--env-file` are forwarded to
+`convex init`.
+
+Backend resolution order stays:
+
+1. `--backend`
+2. `meta["kitcn"].backend`
+3. `convex`
+
+### Options
+
+| Flag | Description |
+| ---- | ----------- |
+| `-t, --template <next\|vite>` | Fresh app template |
+| `--cwd <cwd>` | Target directory, or parent when used with `--name` |
+| `--name <name>` | New app directory name |
+| `--backend <convex\|concave>` | Backend CLI to drive |
+| `--prod` | Forward to `convex init` |
+| `--preview-name <name>` | Forward to `convex init` |
+| `--deployment-name <name>` | Forward to `convex init` |
+| `--env-file <path>` | Forward to `convex init` |
+| `--yes` | Deterministic non-interactive mode |
+| `--defaults` | Use default shadcn answers without widening the rest of `--yes` |
+| `--json` | Machine-readable command output |
+
+## add
+
+Once the baseline is in place, use `add` for feature layers.
+
+```bash showLineNumbers
+npx kitcn add auth --yes
+npx kitcn add auth --schema --yes
+npx kitcn add ratelimit --yes
+npx kitcn add resend --yes
+```
+
+`add` is idempotent. It can preview the full repo delta, scaffold missing files,
+patch existing kitcn seams, install package dependencies, run codegen,
+and keep `plugins.lock.json` in sync.
+
+Preview the plan before writing files:
+
+```bash showLineNumbers
+npx kitcn add resend --dry-run
+npx kitcn add resend --diff convex/plugins/resend.ts
+npx kitcn add resend --view convex/schema.ts
+```
+
+The preview surface covers:
+
+- scaffold files
+- env helper bootstrap
+- `concave.json`
+- `convex.json` when needed
+- `schema.ts`
+- `http.ts`
+- cRPC wiring
+- dependency install status
+- codegen and `hooks.postAdd`
+- env reminders
+
+### Auth presets
+
+`add auth` has two honest modes.
+
+The default path is kitcn-first:
+
+```bash showLineNumbers
+npx kitcn init -t next --yes
+npx kitcn add auth --yes
+npx kitcn add auth --schema --yes
+```
+
+This keeps the kitcn auth stack, including the richer Next.js auth
+surface.
+
+Use the full `add auth` command for the first install. After changing plugins
+or auth fields in `<functionsDir>/auth.ts`, use `add auth --schema --yes`
+when you only want the managed auth schema blocks and `plugins.lock.json`
+refreshed.
+
+The raw Convex path stays minimal:
+
+```bash showLineNumbers
+npx kitcn add auth --preset convex --yes
+```
+
+`--preset convex` keeps the app on the plain Convex backend path. It still
+patches the supported frontend shell in place, but it stays conservative:
+
+- Next.js gets provider and auth client wiring, not a larger kitcn auth
+  stack
+- React/Vite gets provider and auth client wiring, not invented routes
+- no fake page generation outside the supported shell boundary
+- this path assumes the raw Convex app is already initialized
+- `--schema` does not apply; re-run the full preset command when that auth
+  schema changes
+
+### Options
+
+| Flag | Description |
+| ---- | ----------- |
+| `--yes` | Deterministic non-interactive mode |
+| `--json` | Machine-readable command output |
+| `--dry-run` | Show the full install plan without writing files |
+| `--diff [path]` | Show unified diffs for planned file changes |
+| `--view [path]` | Show planned file contents |
+| `--schema` | Refresh only the managed auth schema scope |
+| `--overwrite` | Overwrite existing changed files without prompt |
+| `--no-codegen` | Skip automatic codegen after add |
+| `--preset <name>` | Plugin preset override |
+
+## view
+
+Use `view` when you want the resolved plugin plan without writing files.
+
+```bash showLineNumbers
+npx kitcn view auth
+npx kitcn view resend --json
+```
+
+`view` shows the resolved preset, selection source, docs link, planned files,
+and planned operations. It uses the same install-plan engine as `add`.
+
+## info
+
+Use `info` when you want to inspect the current project state.
+
+```bash showLineNumbers
+npx kitcn info
+npx kitcn info --json
+```
+
+It reports the resolved backend, config paths, installed versions, plugin state,
+schema/lockfile mismatches, missing dependencies, and scaffold drift.
+
+## docs
+
+Use `docs` when you want local and public doc links from the CLI.
+
+```bash showLineNumbers
+npx kitcn docs cli
+npx kitcn docs auth
+npx kitcn docs resend --json
+```
+
+Supported topics include `cli`, `plugins`, `auth`, `orm`, `migrations`,
+`resend`, and `ratelimit`.
+
+## Next Steps
+
+You now have the command map. From here, pick the next seam you actually need.
+
+<Cards>
+  <Card title="CLI Backend" href="/docs/cli/backend" />
+  <Card title="Auth Server" href="/docs/auth/server" />
+  <Card title="Server Setup" href="/docs/server/setup" />
+</Cards>

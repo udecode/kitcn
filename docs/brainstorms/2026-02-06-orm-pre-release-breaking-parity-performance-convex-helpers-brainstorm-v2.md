@@ -6,7 +6,7 @@ status: proposed
 
 # ORM Pre-release: Breaking Changes, Parity, Performance, convex-helpers
 
-Deep audit of `packages/better-convex/src/orm` (~16k LOC), 212 runtime tests, 18 doc pages, and all of `convex-helpers`.
+Deep audit of `packages/kitcn/src/orm` (~16k LOC), 212 runtime tests, 18 doc pages, and all of `convex-helpers`.
 
 ## Ranked Recommendations
 
@@ -219,7 +219,7 @@ This is the largest Convex parity gap on the read path.
 
 #### 18. [FORK] stream.ts - Already Forked, Keep Internal
 
-**Status**: Already forked into `packages/better-convex/src/orm/stream.ts`.
+**Status**: Already forked into `packages/kitcn/src/orm/stream.ts`.
 **LOC**: 1,888 (convex-helpers) → adapted in ORM.
 **Decision**: **KEEP FORK**. Track upstream changes periodically. Don't re-export.
 

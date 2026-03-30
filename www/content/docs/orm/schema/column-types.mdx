@@ -34,7 +34,7 @@ In Drizzle, you can optionally provide a database column name (`text('email')`) 
 Here's how to define a simple table with a required email field:
 
 ```ts showLineNumbers
-import { convexTable, text } from 'better-convex/orm';
+import { convexTable, text } from 'kitcn/orm';
 
 export const users = convexTable('users', {
   email: text().notNull(),
@@ -55,7 +55,7 @@ The ORM mirrors Drizzle's core inference rules:
 Let's see how these rules work in practice:
 
 ```ts showLineNumbers {3-5}
-import { convexTable, text, integer, InferInsertModel, InferSelectModel } from 'better-convex/orm';
+import { convexTable, text, integer, InferInsertModel, InferSelectModel } from 'kitcn/orm';
 
 const posts = convexTable('posts', {
   title: text().notNull(),
@@ -86,7 +86,7 @@ The ORM supports Drizzle-style column hooks for common patterns like timestamps 
 Here's how to use `$defaultFn`, `$onUpdateFn`, and `json<T>()` together:
 
 ```ts showLineNumbers {4-6}
-import { convexTable, json, text, timestamp } from 'better-convex/orm';
+import { convexTable, json, text, timestamp } from 'kitcn/orm';
 
 const users = convexTable('users', {
   email: text().notNull(),
@@ -113,7 +113,7 @@ The available hooks are:
 Represents a string field.
 
 ```ts showLineNumbers
-import { convexTable, text } from 'better-convex/orm';
+import { convexTable, text } from 'kitcn/orm';
 
 const users = convexTable('users', {
   name: text().notNull(), // string
@@ -126,7 +126,7 @@ const users = convexTable('users', {
 Defines an enum-like string field, validated at runtime and inferred as a string union in TypeScript.
 
 ```ts showLineNumbers
-import { convexTable, textEnum } from 'better-convex/orm';
+import { convexTable, textEnum } from 'kitcn/orm';
 
 const users = convexTable('users', {
   role: textEnum(['admin', 'member'] as const).notNull(),
@@ -138,7 +138,7 @@ const users = convexTable('users', {
 Represents a numeric field. In Convex, `integer()` maps to `v.number()` (Float64).
 
 ```ts showLineNumbers
-import { convexTable, integer } from 'better-convex/orm';
+import { convexTable, integer } from 'kitcn/orm';
 
 const events = convexTable('events', {
   retries: integer().notNull(),
@@ -151,7 +151,7 @@ const events = convexTable('events', {
 Calendar date column (`YYYY-MM-DD` semantics).
 
 ```ts showLineNumbers
-import { convexTable, date } from 'better-convex/orm';
+import { convexTable, date } from 'kitcn/orm';
 
 const users = convexTable('users', {
   birthday: date(), // string | null (default mode)
@@ -164,7 +164,7 @@ const users = convexTable('users', {
 Point-in-time column for event and audit timestamps.
 
 ```ts showLineNumbers
-import { convexTable, timestamp } from 'better-convex/orm';
+import { convexTable, timestamp } from 'kitcn/orm';
 
 const users = convexTable('users', {
   createdAt: timestamp().notNull().defaultNow(), // Date
@@ -177,7 +177,7 @@ const users = convexTable('users', {
 Represents a boolean field.
 
 ```ts showLineNumbers
-import { convexTable, boolean } from 'better-convex/orm';
+import { convexTable, boolean } from 'kitcn/orm';
 
 const flags = convexTable('flags', {
   enabled: boolean().notNull(),
@@ -190,7 +190,7 @@ const flags = convexTable('flags', {
 Represents a 64-bit integer field. In Convex, `bigint()` maps to `v.int64()` and uses JavaScript `bigint`.
 
 ```ts showLineNumbers
-import { convexTable, bigint } from 'better-convex/orm';
+import { convexTable, bigint } from 'kitcn/orm';
 
 const ledger = convexTable('ledger', {
   balance: bigint().notNull(),
@@ -202,7 +202,7 @@ const ledger = convexTable('ledger', {
 Represents a binary field (`ArrayBuffer`).
 
 ```ts showLineNumbers
-import { bytes, convexTable } from 'better-convex/orm';
+import { bytes, convexTable } from 'kitcn/orm';
 
 const files = convexTable('files', {
   data: bytes().notNull(),
@@ -214,7 +214,7 @@ const files = convexTable('files', {
 Represents a reference to another table (`Id<'table'>`).
 
 ```ts showLineNumbers
-import { convexTable, id, text } from 'better-convex/orm';
+import { convexTable, id, text } from 'kitcn/orm';
 
 const posts = convexTable('posts', {
   title: text().notNull(),
@@ -231,7 +231,7 @@ const posts = convexTable('posts', {
 Represents an embedding vector (`number[]`) and is used with `vectorIndex()`.
 
 ```ts showLineNumbers
-import { convexTable, vector } from 'better-convex/orm';
+import { convexTable, vector } from 'kitcn/orm';
 
 const posts = convexTable('posts', {
   embedding: vector(1536).notNull(),
@@ -243,7 +243,7 @@ const posts = convexTable('posts', {
 Defines a schema-first discriminated union column. The discriminator field stores the variant key as a string, and each variant's fields are generated as nullable top-level columns. On read, variant fields are grouped into a nested object at the alias (default `"details"`).
 
 ```ts showLineNumbers
-import { boolean, convexTable, discriminator, id, index, integer, text } from 'better-convex/orm';
+import { boolean, convexTable, discriminator, id, index, integer, text } from 'kitcn/orm';
 
 const auditLogs = convexTable(
   'audit_logs',
@@ -275,9 +275,9 @@ const auditLogs = convexTable(
 **Note:** One `discriminator()` column per table. Variant field `.notNull()` means required in that branch only. Duplicate field names across variants must use identical builder signatures. See [Polymorphic Associations](/docs/orm/schema/relations#polymorphic-associations) for the full guide.
 </Callout>
 
-### `arrayOf(element)` / `objectOf(shape)`
+### `arrayOf(element)` / `objectOf(...)` / `unionOf(...)`
 
-Use these helpers for nested arrays and objects in ORM schemas without importing `v` directly.
+Use these helpers for nested arrays, nested objects, homogeneous records, and scalar unions without importing `v` directly.
 
 ```ts showLineNumbers
 import {
@@ -287,7 +287,8 @@ import {
   objectOf,
   text,
   textEnum,
-} from 'better-convex/orm';
+  unionOf,
+} from 'kitcn/orm';
 
 const events = convexTable('events', {
   timeline: arrayOf(
@@ -298,6 +299,9 @@ const events = convexTable('events', {
       addedBy: text().notNull(),
     })
   ).notNull(),
+  variables: objectOf(
+    unionOf(text().notNull(), integer().notNull()).notNull()
+  ).notNull(),
 });
 ```
 
@@ -306,7 +310,7 @@ const events = convexTable('events', {
 Use `custom()` to wrap any Convex validator directly when you need an escape hatch.
 
 ```ts showLineNumbers
-import { convexTable, custom } from 'better-convex/orm';
+import { convexTable, custom } from 'kitcn/orm';
 import { v } from 'convex/values';
 
 const events = convexTable('events', {
@@ -324,7 +328,7 @@ const events = convexTable('events', {
 `json<T>()` is a convenience wrapper around `custom(v.any()).$type<T>()`.
 
 ```ts showLineNumbers
-import { convexTable, json } from 'better-convex/orm';
+import { convexTable, json } from 'kitcn/orm';
 
 const posts = convexTable('posts', {
   metadata: json<{ tags: string[] }>(),

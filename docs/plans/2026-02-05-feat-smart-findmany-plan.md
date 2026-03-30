@@ -46,11 +46,11 @@ Users should not choose between many similar APIs. Drizzle parity favors one que
 - Remove `paginate` method from `RelationalQueryBuilder` types.
 
 ## 2) Query Builder
-- Remove `paginate()` method from `packages/better-convex/src/orm/query-builder.ts`.
+- Remove `paginate()` method from `packages/kitcn/src/orm/query-builder.ts`.
 - Add `paginate` handling inside `findMany` execution.
 
 ## 3) Planner
-- In query execution (likely `packages/better-convex/src/orm/query.ts`):
+- In query execution (likely `packages/kitcn/src/orm/query.ts`):
   - If `paginate` + no `where` function → Convex native paginate.
   - If `paginate` + `where` function → stream + filterWith + paginate.
   - If `where` function only → stream + filterWith + collect/take.

@@ -1,26 +1,39 @@
-import {
-  type CreateOrmOptions,
-  createOrm,
-  type OrmWriter,
-  type TablesRelationalConfig,
-} from 'better-convex/orm';
 import type {
   GenericDatabaseWriter,
   SchemaDefinition,
   StorageActionWriter,
 } from 'convex/server';
 import { convexTest as baseConvexTest } from 'convex-test';
-import { relations } from './schema';
+import {
+  type CreateOrmOptions,
+  createOrm,
+  type OrmWriter,
+  requireSchemaRelations,
+} from 'kitcn/orm';
+import schema from './schema';
+
+type ImportMetaWithGlob = ImportMeta & {
+  glob: (
+    globs: string | readonly string[]
+  ) => Record<string, () => Promise<unknown>>;
+};
+
+const convexModules = (import.meta as ImportMetaWithGlob).glob([
+  './**/*.{ts,tsx,js,jsx,mts,mjs}',
+  '!./**/*.test.{ts,tsx,js,jsx,mts,mjs}',
+  '!./**/*.typecheck.ts',
+]);
+const relations = requireSchemaRelations(schema);
 
 export function convexTest<Schema extends SchemaDefinition<any, any>>(
   schema: Schema
 ) {
-  return baseConvexTest(schema);
+  return baseConvexTest(schema, convexModules);
 }
 
 export const withOrm = <
   Ctx extends { db: GenericDatabaseWriter<any> },
-  Schema extends TablesRelationalConfig,
+  Schema extends object,
 >(
   ctx: Ctx,
   schema: Schema,
@@ -39,7 +52,7 @@ export const withOrm = <
   return ctxWithOrm;
 };
 
-// Default context wrapper that attaches Better Convex ORM as ctx.orm
+// Default context wrapper that attaches kitcn ORM as ctx.orm
 export async function runCtx<T extends { db: GenericDatabaseWriter<any> }>(
   ctx: T
 ): Promise<ReturnType<typeof withOrm<T, typeof relations>>> {
@@ -50,13 +63,13 @@ export type TestCtx = Awaited<ReturnType<typeof runCtx>>;
 
 export async function withOrmCtx<
   Schema extends SchemaDefinition<any, any>,
-  Relations extends TablesRelationalConfig,
+  OrmSchema extends object,
   Result,
 >(
   schema: Schema,
-  relationsConfig: Relations,
+  ormSchema: OrmSchema,
   fn: (ctx: {
-    orm: OrmWriter<Relations>;
+    orm: OrmWriter<OrmSchema>;
     db: GenericDatabaseWriter<any>;
   }) => Promise<Result>,
   options?: CreateOrmOptions
@@ -64,7 +77,7 @@ export async function withOrmCtx<
   const t = convexTest(schema);
   let result: Result | undefined;
   await t.run(async (baseCtx) => {
-    const ctx = withOrm(baseCtx, relationsConfig, options);
+    const ctx = withOrm(baseCtx, ormSchema, options);
     result = await fn(ctx);
   });
   return result as Result;

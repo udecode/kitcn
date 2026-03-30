@@ -552,7 +552,7 @@ Expect<typeof field extends DrizzleTypeError<any> ? true : false>;
 
 **For Convex:**
 ```typescript
-// packages/better-convex/test-utils/type-testing.ts
+// packages/kitcn/test-utils/type-testing.ts
 export function Expect<T extends true>() {}
 
 export type Equal<X, Y extends X> =
@@ -1001,7 +1001,7 @@ type-tests/
 ### 5.2 Test Structure
 
 ```
-packages/better-convex/
+packages/kitcn/
 ├── src/
 │   └── orm/
 │       ├── ...
@@ -1327,7 +1327,7 @@ Expect<
 ### Immediate (M5 - Type Testing Infrastructure)
 
 1. **Create test infrastructure:**
-   - [ ] Create `packages/better-convex/type-tests/` directory
+   - [ ] Create `packages/kitcn/type-tests/` directory
    - [ ] Add `utils.ts` with `Expect`, `Equal`, `ConvexTypeError`
    - [ ] Add `tsconfig.json` for type tests
    - [ ] Add `package.json` script: `"test:types": "tsc --project type-tests"`

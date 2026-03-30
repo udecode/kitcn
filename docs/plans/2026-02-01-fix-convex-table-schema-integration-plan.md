@@ -86,12 +86,12 @@ export function defineEnt<DocumentSchema>(
 
 ## Proposed Solution
 
-**Approach**: Follow convex-ents pattern with Better Convex adaptations
+**Approach**: Follow convex-ents pattern with kitcn adaptations
 
 ### Phase 1: Create Validator from Column Builders
 
 ```typescript
-// packages/better-convex/src/orm/table.ts
+// packages/kitcn/src/orm/table.ts
 
 function createValidatorFromColumns<TColumns>(
   columns: TColumns
@@ -112,7 +112,7 @@ function createValidatorFromColumns<TColumns>(
 ### Phase 2: Extend TableDefinition Interface
 
 ```typescript
-// packages/better-convex/src/orm/table.ts
+// packages/kitcn/src/orm/table.ts
 
 export interface ConvexTableDefinition<
   T extends TableConfig,
@@ -147,7 +147,7 @@ export interface ConvexTableDefinition<
 ### Phase 3: Implementation Class
 
 ```typescript
-// packages/better-convex/src/orm/table.ts
+// packages/kitcn/src/orm/table.ts
 
 class ConvexTableImpl<T extends TableConfig> {
   // Required by TableDefinition
@@ -190,7 +190,7 @@ class ConvexTableImpl<T extends TableConfig> {
 ### Phase 4: Update convexTable Factory
 
 ```typescript
-// packages/better-convex/src/orm/table.ts
+// packages/kitcn/src/orm/table.ts
 
 export function convexTable<
   TName extends string,
@@ -217,7 +217,7 @@ export function convexTable<
 
 ### Step 1: Add convexValidator to Column Builders
 
-**Files**: All builder files ([text.ts](packages/better-convex/src/orm/builders/text.ts), [number.ts](packages/better-convex/src/orm/builders/number.ts), etc.)
+**Files**: All builder files ([text.ts](packages/kitcn/src/orm/builders/text.ts), [number.ts](packages/kitcn/src/orm/builders/number.ts), etc.)
 
 ```typescript
 export class ConvexTextBuilder<T extends ColumnBuilderBaseConfig<'string', string>> {
@@ -239,7 +239,7 @@ export class ConvexTextBuilder<T extends ColumnBuilderBaseConfig<'string', strin
 
 ### Step 2: Create Validator Factory
 
-**File**: [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts)
+**File**: [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts)
 
 Implement `createValidatorFromColumns()` as shown in Phase 1.
 
@@ -247,7 +247,7 @@ Implement `createValidatorFromColumns()` as shown in Phase 1.
 
 ### Step 3: Implement ConvexTableImpl Class
 
-**File**: [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts)
+**File**: [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts)
 
 Create `ConvexTableImpl` with:
 - All private fields (indexes, searchIndexes, etc.)
@@ -259,7 +259,7 @@ Create `ConvexTableImpl` with:
 
 ### Step 4: Update ConvexTableDefinition Interface
 
-**File**: [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts)
+**File**: [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts)
 
 Extend `TableDefinition` interface as shown in Phase 2.
 
@@ -267,7 +267,7 @@ Extend `TableDefinition` interface as shown in Phase 2.
 
 ### Step 5: Update convexTable Factory
 
-**File**: [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts)
+**File**: [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts)
 
 Return `ConvexTableImpl` instance cast to `ConvexTableDefinition`.
 
@@ -353,9 +353,9 @@ type User = InferSelectModel<typeof users>;  // { _id: GenericId<'users'>, _crea
 
 ### Internal References
 
-- Current implementation: [packages/better-convex/src/orm/table.ts](packages/better-convex/src/orm/table.ts)
+- Current implementation: [packages/kitcn/src/orm/table.ts](packages/kitcn/src/orm/table.ts)
 - Failing test: [convex/orm/schema-integration.test.ts](convex/orm/schema-integration.test.ts)
-- Column builders: [packages/better-convex/src/orm/builders/](packages/better-convex/src/orm/builders/)
+- Column builders: [packages/kitcn/src/orm/builders/](packages/kitcn/src/orm/builders/)
 
 ### External References
 

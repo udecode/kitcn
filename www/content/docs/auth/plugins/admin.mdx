@@ -7,7 +7,7 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore role-based admin features with better-convex. You'll learn to configure the admin plugin, set up role-based access control, and use admin APIs for user management, banning, and impersonation.
+In this guide, we'll explore role-based admin features with kitcn. You'll learn to configure the admin plugin, set up role-based access control, and use admin APIs for user management, banning, and impersonation.
 
 ## Overview
 
@@ -105,7 +105,7 @@ export const authClient = createAuthClient({
 Add admin fields to your user table:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-2,4-18}
-import { boolean, convexTable, defineSchema, integer, text } from 'better-convex/orm';
+import { boolean, convexTable, defineSchema, integer, text } from 'kitcn/orm';
 
 export const user = convexTable('user', {
   // ... existing fields
@@ -158,13 +158,13 @@ export const authMutation = c.mutation
   .use(devMiddleware)
   .use(authMiddleware)
   .use(roleMiddleware)
-  .use(rateLimitMiddleware);
+  .use(ratelimit.middleware());
 ```
 
 ### Role Guard Helper
 
 ```ts title="convex/lib/auth/role-guard.ts" showLineNumbers {4-7,8-12}
-import { CRPCError } from 'better-convex/server';
+import { CRPCError } from 'kitcn/server';
 
 export function roleGuard(
   role: 'admin',
@@ -605,5 +605,5 @@ Use Convex functions for custom admin operations. Use Better Auth client API for
 <Cards>
   <Card title="Organizations" href="/docs/auth/plugins/organizations" />
   <Card title="Auth Server" href="/docs/auth/server" />
-  <Card title="Templates" href="/docs/templates" />
+  <Card title="CLI Registry" href="/docs/cli/registry" />
 </Cards>

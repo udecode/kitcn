@@ -8,7 +8,7 @@ date: 2026-01-31
 
 ## Overview
 
-Pull convex-ents' complete test folder into `packages/better-convex/src/drizzle/test` to establish a **green test baseline** before implementing Drizzle API.
+Pull convex-ents' complete test folder into `packages/kitcn/src/drizzle/test` to establish a **green test baseline** before implementing Drizzle API.
 
 **Strategy**: Get all tests passing with bun + convex-ents first (safe baseline), THEN incrementally adapt to drizzle implementation.
 
@@ -49,10 +49,10 @@ Building from scratch would duplicate this proven work. Better to pull, adapt mi
 
 ```bash
 # Copy test infrastructure
-cp -r /tmp/cc-repos/convex-ents/test packages/better-convex/src/drizzle/
+cp -r /tmp/cc-repos/convex-ents/test packages/kitcn/src/drizzle/
 
 # Result structure:
-packages/better-convex/src/drizzle/
+packages/kitcn/src/drizzle/
 ├── test/
 │   ├── convex/
 │   │   ├── _generated/     # Convex generated files
@@ -96,16 +96,16 @@ packages/better-convex/src/drizzle/
 
 ```bash
 # From repo root
-cp -r /tmp/cc-repos/convex-ents/test packages/better-convex/src/drizzle/
+cp -r /tmp/cc-repos/convex-ents/test packages/kitcn/src/drizzle/
 ```
 
 ### Step 2: Update package.json for Bun (Minimal Changes)
 
-**File**: `packages/better-convex/src/drizzle/test/package.json`
+**File**: `packages/kitcn/src/drizzle/test/package.json`
 
 ```json
 {
-  "name": "@better-convex/drizzle-tests",
+  "name": "@kitcn/drizzle-tests",
   "private": true,
   "version": "0.1.0",
   "scripts": {
@@ -142,7 +142,7 @@ cp -r /tmp/cc-repos/convex-ents/test packages/better-convex/src/drizzle/
 ### Step 3: Install Dependencies
 
 ```bash
-cd packages/better-convex/src/drizzle/test
+cd packages/kitcn/src/drizzle/test
 bun install
 ```
 
@@ -191,7 +191,7 @@ bun test
 
 ### Functional Requirements
 
-- [ ] Test folder copied to `packages/better-convex/src/drizzle/test`
+- [ ] Test folder copied to `packages/kitcn/src/drizzle/test`
 - [ ] package.json adapted for bun (scripts only, keep convex-ents deps)
 - [ ] Dependencies install successfully with `bun install`
 - [ ] **All tests pass with `bun test`** (using convex-ents)

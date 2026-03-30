@@ -8,7 +8,7 @@ tags:
   - recursive-scanning
   - globSync
 severity: medium
-component: packages/better-convex/src/cli/codegen.ts
+component: packages/kitcn/src/cli/codegen.ts
 date: 2026-01-27
 ---
 
@@ -67,7 +67,7 @@ for (const file of files) {
 
 ### 3. Extract shared utilities (DRY)
 
-Created `packages/better-convex/src/shared/meta-utils.ts`:
+Created `packages/kitcn/src/shared/meta-utils.ts`:
 
 ```typescript
 const EXCLUDED_FILES = new Set(['schema.ts', 'convex.config.ts', 'auth.config.ts']);
@@ -127,17 +127,17 @@ const fnType = getFunctionType(meta, namespace, fnName);
 ## Files Modified
 
 ### New Files
-- `packages/better-convex/src/shared/meta-utils.ts` - shared utilities
+- `packages/kitcn/src/shared/meta-utils.ts` - shared utilities
 
 ### Modified Files
-- `packages/better-convex/src/cli/codegen.ts` - recursive scanning
-- `packages/better-convex/src/react/proxy.ts` - use shared utility
-- `packages/better-convex/src/react/vanilla-client.ts` - use shared utility
-- `packages/better-convex/src/server/caller.ts` - use shared utility
-- `packages/better-convex/src/rsc/proxy-server.ts` - use shared utility
+- `packages/kitcn/src/cli/codegen.ts` - recursive scanning
+- `packages/kitcn/src/react/proxy.ts` - use shared utility
+- `packages/kitcn/src/react/vanilla-client.ts` - use shared utility
+- `packages/kitcn/src/server/caller.ts` - use shared utility
+- `packages/kitcn/src/rsc/proxy-server.ts` - use shared utility
 
 ## Related
 
-- [codegen.ts](packages/better-convex/src/cli/codegen.ts) - Implementation
+- [codegen.ts](packages/kitcn/src/cli/codegen.ts) - Implementation
 - [Node.js glob docs](https://nodejs.org/api/fs.html#fsglobsyncpattern-options) - globSync reference
 - [tRPC merging routers](https://trpc.io/docs/server/merging-routers) - Similar namespace pattern

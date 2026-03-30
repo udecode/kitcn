@@ -1,7 +1,6 @@
-import type { FilterOperators, GetColumnData } from 'better-convex/orm';
-
-import { bigint, boolean, id, integer, text } from 'better-convex/orm';
 import type { GenericId } from 'convex/values';
+import type { FilterOperators, GetColumnData } from 'kitcn/orm';
+import { bigint, boolean, id, integer, text } from 'kitcn/orm';
 
 import { type Equal, Expect, IsAny, Not } from './utils';
 
