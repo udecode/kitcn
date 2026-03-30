@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { CopyButton } from '@/components/copy-button';
 
 const features = [
   {
@@ -80,11 +81,11 @@ const features = [
   },
   {
     icon: Route,
-    title: 'Migrations',
+    title: 'CLI',
     description:
-      'Versioned, resumable data migrations with up/down, dry-run, and drift detection.',
+      'Registry-driven backend scaffolding, diffs, and app-owned code. Shadcn-style ownership for your backend.',
     color: 'bg-teal-500/10 text-teal-500',
-    href: '/docs/orm/migrations',
+    href: '/docs/cli',
   },
 ];
 
@@ -383,16 +384,43 @@ const steps = [
 function Hero() {
   return (
     <section className="flex flex-col items-center px-6 pt-20 pb-8 text-center md:pt-32 md:pb-12">
-      <h1 className="flex flex-wrap items-center justify-center gap-x-3 font-black text-5xl text-fd-foreground uppercase [letter-spacing:-.05em] md:text-6xl lg:text-7xl">
-        <span>Better</span>
-        <span className="bg-gradient-to-r from-sky-500 to-blue-600 bg-clip-text text-transparent">
-          Convex
-        </span>
+      <h1 className="text-balance font-black text-5xl text-fd-foreground md:text-6xl lg:text-7xl">
+        kitcn
       </h1>
-      <h2 className="mt-4 max-w-xl text-balance font-bold text-2xl [letter-spacing:-0.03em] md:text-4xl">
-        Best-in-class stack
+      <h2 className="mt-4 max-w-2xl text-balance font-bold text-2xl text-fd-foreground md:text-4xl">
+        The complete framework for Convex.
       </h2>
+
+      <div className="mt-8 w-full max-w-2xl overflow-hidden rounded-2xl border border-fd-border">
+        <div className="border-fd-border border-b bg-[#282a36] px-4 py-3">
+          <div className="flex gap-1.5">
+            <div className="h-3 w-3 rounded-full bg-[#ff5555]/80" />
+            <div className="h-3 w-3 rounded-full bg-[#f1fa8c]/80" />
+            <div className="h-3 w-3 rounded-full bg-[#50fa7b]/80" />
+          </div>
+        </div>
+        <div className="relative">
+          <pre className="overflow-x-auto bg-[#282a36] px-4 py-5 pr-14 text-left font-mono text-[#f8f8f2] text-sm md:text-base">
+            <code>npx kitcn init -t next</code>
+          </pre>
+          <CopyButton
+            className="top-3 right-3 border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+            label="Copy command"
+            value="npx kitcn init -t next"
+          />
+        </div>
+      </div>
+
       <p className="mt-6 max-w-2xl text-fd-muted-foreground text-lg md:text-xl">
+        <a
+          className="font-medium text-fd-foreground underline decoration-fd-muted-foreground/50 decoration-dashed underline-offset-2 hover:decoration-fd-foreground"
+          href="https://ui.shadcn.com"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          shadcn
+        </a>
+        {' + '}
         <a
           className="font-medium text-fd-foreground underline decoration-fd-muted-foreground/50 decoration-dashed underline-offset-2 hover:decoration-fd-foreground"
           href="https://trpc.io"
@@ -435,7 +463,7 @@ function Hero() {
           className="inline-flex h-10 items-center justify-center rounded-md bg-fd-primary px-6 font-medium text-fd-primary-foreground text-sm transition-colors hover:bg-fd-primary/90"
           href="/docs"
         >
-          Get Started
+          Get started
         </Link>
       </div>
     </section>
@@ -497,8 +525,8 @@ function QuickIntro() {
     <section className="px-6 py-16 md:py-24">
       <div className="mx-auto max-w-5xl">
         <SectionTitle
-          description="It's quick and easy to build a typesafe API with kitcn."
-          title="Simple to use"
+          description="After init, the seam stays small: define schema, add procedures, create the client, ship."
+          title="After init, wire the stack"
         />
         <div className="space-y-16 md:space-y-24">
           {steps.map((step, i) => (

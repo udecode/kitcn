@@ -1,35 +1,35 @@
-# Better Convex
+# kitcn
 
 Type-safe Convex framework with a tRPC-style server API, Drizzle-style ORM, and TanStack Query client integration.
 
-> Note: Better Convex has been renamed to `kitcn`. Prefer `kitcn`
+> Note: `better-convex` has been renamed to `kitcn`. Prefer `kitcn`
 > package names, the `kitcn` CLI, and docs at
-> [kitcn.com](https://kitcn.com). Older `better-convex`
-> references in this README are legacy.
+> [kitcn.com](https://kitcn.com). The old name appears here only
+> for that rename note.
 
 ## Docs
 
-[better-convex.com](https://better-convex.com)
+[kitcn.com](https://kitcn.com)
 
 ## What You Get
 
-- cRPC procedure builder (`better-convex/server`)
-- Drizzle-style ORM for Convex (`better-convex/orm`)
-- React + TanStack Query integration with real-time updates (`better-convex/react`)
-- Next.js server helpers for RSC/auth (`better-convex/auth/nextjs`, `better-convex/rsc`)
-- Better Auth adapter utilities (`better-convex/auth`, `better-convex/auth/client`, `better-convex/auth/config`, `better-convex/auth/http`)
-- CLI metadata/codegen/runtime analysis helpers (`better-convex` bin)
+- cRPC procedure builder (`kitcn/server`)
+- Drizzle-style ORM for Convex (`kitcn/orm`)
+- React + TanStack Query integration with real-time updates (`kitcn/react`)
+- Next.js server helpers for RSC/auth (`kitcn/auth/nextjs`, `kitcn/rsc`)
+- Better Auth adapter utilities (`kitcn/auth`, `kitcn/auth/client`, `kitcn/auth/config`, `kitcn/auth/http`)
+- CLI metadata/codegen/runtime analysis helpers (`kitcn` bin)
 
 ## Quick Start
 
 ```bash
-bun add convex better-convex zod @tanstack/react-query
+bun add convex kitcn zod @tanstack/react-query
 ```
 
 Then follow:
 
-- [Quickstart](https://better-convex.com/docs/quickstart)
-- [Templates](https://better-convex.com/docs/templates)
+- [Quickstart](https://kitcn.com/docs/quickstart)
+- [Templates](https://kitcn.com/docs/templates)
 
 ## Local Dev
 

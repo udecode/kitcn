@@ -8,7 +8,7 @@ export function baseOptions(): BaseLayoutProps {
         <div className="flex items-center gap-2">
           <Layers className="size-5" />
           <p className="font-(family-name:--font-geist-sans) select-none font-normal">
-            BETTER-CONVEX
+            kitcn
           </p>
         </div>
       ),
