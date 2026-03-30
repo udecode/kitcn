@@ -51,6 +51,8 @@
 
 Use those skills when relevant:
 
+- `task` for normal repo task execution
+- `major-task` for heavyweight architecture, framework comparison, migration, benchmark, or proposal work
 - `tdd`
 - `ce-review` when doing a code review
 
