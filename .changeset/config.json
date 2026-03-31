@@ -3,7 +3,7 @@
   "changelog": ["@changesets/changelog-github", { "repo": "udecode/kitcn" }],
   "commit": false,
   "fixed": [],
-  "linked": [],
+  "linked": [["kitcn", "@kitcn/*"]],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
