@@ -19,7 +19,7 @@
     "svix": "^1.84.1"
   },
   "peerDependencies": {
-    "kitcn": "^0.11.0",
+    "kitcn": ">=0.11.0 <1",
     "convex": ">=1.33"
   },
   "devDependencies": {
