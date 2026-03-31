@@ -1,10 +1,152 @@
 # kitcn
 
+## 0.12.0
+
+### Minor Changes
+
+- [#139](https://github.com/udecode/kitcn/pull/139) [`11aa0ee`](https://github.com/udecode/kitcn/commit/11aa0ee2091827e6d52b30c261004f4ed64cac07) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Breaking changes
+
+  - Use `kitcn` and `@kitcn/resend` as the published package names, CLI
+    commands, import paths, generated comments, and scaffold output.
+
+  ```ts
+  // Before
+  import { defineSchema } from "<previous package name>/orm";
+  import { sendEmail } from "<previous scoped plugin>/resend";
+
+  // After
+  import { defineSchema } from "kitcn/orm";
+  import { sendEmail } from "@kitcn/resend";
+  ```
+
+  - Use `kitcn.json` as the default discovered kitcn config file.
+
+  ```ts
+  // Before
+  export default {
+    outputDir: "convex/shared",
+  };
+
+  // After
+  {
+    "paths": {
+      "shared": "convex/shared"
+    }
+  }
+  ```
+
+  - Use app-owned schema composition from the default export. Package schema
+    plugin entrypoints are gone, and relations/triggers chain on
+    `defineSchema(...)`.
+
+  ```ts
+  // Before
+  import { defineRelations, defineSchema } from "kitcn/orm";
+  import { ratelimitPlugin } from "kitcn/plugins/ratelimit";
+
+  export const schema = defineSchema(tables, {
+    plugins: [ratelimitPlugin()],
+  });
+
+  export const relations = defineRelations(tables, (r) => ({
+    users: {
+      posts: r.many.posts(),
+    },
+  }));
+
+  // After
+  import { defineSchema } from "kitcn/orm";
+  import { ratelimitExtension } from "../lib/plugins/ratelimit/schema";
+
+  export default defineSchema(tables)
+    .extend(ratelimitExtension())
+    .relations((r) => ({
+      users: {
+        posts: r.many.posts(),
+      },
+    }));
+  ```
+
+  - Use `kitcn env push` and `kitcn env pull` for env sync.
+    `env sync` is gone.
+
+  ```bash
+  # Before
+  npx kitcn env sync --auth
+
+  # After
+  npx kitcn env push
+  ```
+
+  - Use `kitcn/ratelimit` and `kitcn/ratelimit/react`. The old
+    `kitcn/plugins/ratelimit*` surface is gone.
+
+  ```ts
+  // Before
+  import { calculateRateLimit } from "kitcn/plugins/ratelimit";
+  import { useRateLimit } from "kitcn/plugins/ratelimit/react";
+
+  // After
+  import { calculateRatelimit } from "kitcn/ratelimit";
+  import { useRatelimit } from "kitcn/ratelimit/react";
+  ```
+
+  ## Features
+
+  - Add a registry-driven CLI with `init`, `add`, `view`, `info`, and `docs`,
+    plus `--json`, dry-run, and diff output for scaffold changes.
+  - Add backend-aware CLI support for both Convex and Concave, including
+    `kitcn.json`, local bootstrap wrappers, and `kitcn verify`.
+  - Add project-owned ORM migrations with generated `defineMigration(...)`
+    helpers, migration manifests, docs, and `kitcn migrate`.
+  - Add starter scaffolds for Next.js and Vite, plus adoption flows for raw
+    Convex and create-convex-style apps.
+  - Add packaged Convex skills and TanStack Intent metadata so installed apps
+    carry their own agent guidance.
+  - Add auth scaffolding and schema sync that picks up plugin changes from
+    `auth.ts`, keeps `jwks` wired on first install, and supports raw Convex
+    auth adoption.
+  - Add `kitcn/auth/generated` and typed auth runtime helpers for
+    generated auth files.
+  - Add `@kitcn/resend` with scaffolded schema, plugin, webhook, cron,
+    and email helpers.
+  - Add app-owned schema extensions, typed plugin middleware helpers, and
+    project-owned ratelimit scaffolding.
+  - Add `codegen.trimSegments`, `unionOf(...)`, and broader `objectOf(...)`
+    support for generated runtimes and schema builders.
+
+  ## Patches
+
+  - Improve local dev and codegen so env bootstrap, JWKS sync, watcher reruns,
+    and supported-Node re-exec behave consistently in real apps.
+  - Improve `dev` and `verify` output so one-shot bootstrap stays readable while
+    long-running dev still preserves raw Convex logs.
+  - Improve codegen failure handling so fatal parse errors keep the last good
+    generated files instead of clobbering them with partial output.
+  - Fix relation pairing for aliased auth organization edges so generated
+    runtimes recover cleanly in apps with multiple relations between the same
+    tables.
+  - Fix TanStack Query/provider drift and generated runtime typing so local apps
+    avoid duplicate React Query context failures and self-import cycles.
+  - Improve auth runtime behavior so local auth metadata routes stay quiet, state
+    updates land immediately, and optional env values do not break auth analysis.
+  - Improve schema-only auth refresh so app-owned `schema.ts` files merge missing
+    compatible auth fields, indexes, and relations, then stop on real conflicts
+    with manual-action guidance.
+  - Keep internal example and scenario typechecks pointed at workspace source so
+    fresh CI runs do not depend on stale built package output after package
+    renames.
+  - Fix ratelimit storage and generated scaffolds so apps use the real
+    ratelimit tables instead of failing with bogus missing-table guidance.
+  - Keep scaffolded apps on the tested Hono and TanStack Query baselines across
+    the example app, generated fixtures, and prepared scenarios.
+
 ## 0.11.0
 
 ### Minor Changes
 
 - [#135](https://github.com/udecode/kitcn/pull/135) [`2977aa6`](https://github.com/udecode/kitcn/commit/2977aa68204f239bce5214582f111901affdc2ee) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Breaking changes
+
   - Drop Better Auth `1.4` support and align auth integrations with Better Auth `1.5.3` and `@convex-dev/better-auth@0.11.1`.
   - Remove bundled passkey schema assumptions and follow the upstream `oauthApplication.redirectUrls` rename during `0.11` migrations.
 
@@ -27,6 +169,7 @@
   ```
 
   ## Patches
+
   - Improve Next.js server-side token forwarding by forcing `accept-encoding: identity` for internal auth fetches behind proxy compression.
   - Fix auth adapter selection and OR-query handling so `id` selects preserve `_id`, nullish filters behave correctly, unsupported `experimental.joins` are rejected, and OR updates/deletes/counts dedupe by document id.
   - Improve auth route origin handling by filtering nullish `trustedOrigins` values before CORS matching.
@@ -95,6 +238,7 @@
 ### Minor Changes
 
 - [#112](https://github.com/udecode/kitcn/pull/112) [`5bd956c`](https://github.com/udecode/kitcn/commit/5bd956c7d6602d14f3a8f9062638b31879fa1160) Thanks [@zbeyens](https://github.com/zbeyens)! - ORM Discriminator (polymorphic):
+
   - Drop the experimental query-level `polymorphic` config from `findMany`, `findFirst`, and `findFirstOrThrow`.
 
   ```ts
@@ -137,10 +281,12 @@
 - [`7f23a8e`](https://github.com/udecode/kitcn/commit/7f23a8eb512b626b952313b31ed0c2a74b1bee46) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix generated caller support for non-cRPC Convex procedure exports (like `orm.api()` internals such as `migrationStatus`).
 
 - [`02e40e8`](https://github.com/udecode/kitcn/commit/02e40e8610b6f51962326abce95c51277c3d0177) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+
   - Add `polymorphic` query config support for `findMany()`, `findFirst()`, and `findFirstOrThrow()` to synthesize discriminated-union targets from `one()` relations.
   - Support custom target aliases with `polymorphic.as` (default alias is `target`) while preserving discriminated-union narrowing by discriminator value.
 
   ## Patches
+
   - Validate polymorphic configs at runtime and throw on discriminator/case mismatches or schema parse failures.
   - Auto-load required polymorphic case relations during synthesis and strip them from results unless explicitly requested via `with`.
   - Reject `pipeline` + `polymorphic` combinations with explicit query-builder errors.
@@ -165,9 +311,11 @@
 ### Minor Changes
 
 - [#105](https://github.com/udecode/kitcn/pull/105) [`9ea3902`](https://github.com/udecode/kitcn/commit/9ea3902a9b37bf1206c99c46d3121b95b10af8e7) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Breaking Changes
+
   - Moved imports from `kitcn/migration` to `kitcn/orm`.
 
   ## Features
+
   - Add `arrayOf(...)` and `objectOf(...)` ORM helpers to reduce `custom(...)` boilerplate for nested array/object schemas.
   - Add schema plugin pipeline to `defineSchema(...)` with builtin/default `aggregatePlugin()` and `migrationPlugin()`.
   - Add optional `plugins` option on `defineSchema` so feature tables can be opt-in.
@@ -177,6 +325,7 @@
   - Add `ratelimitPlugin()` for explicit ratelimit internal table enablement in ORM `defineSchema`.
 
   Usage:
+
   - Replace example app rate limiting from `@convex-dev/rate-limiter` component usage to `kitcn/plugins/ratelimit`.
   - Add `/ratelimit` coverage demo and guard test suite for ratelimit coverage definitions.
   - Rewrite rate-limiting docs/template references to the new `kitcn/plugins/ratelimit` package surface.
@@ -224,6 +373,7 @@
 - [#97](https://github.com/udecode/kitcn/pull/97) [`4f83203`](https://github.com/udecode/kitcn/commit/4f83203381bbd5030db77b76baed47db29d25057) Thanks [@{](https://github.com/{)! - ## Auth
 
   ### Breaking changes
+
   - Redesign auth trigger API from flat callbacks to nested `{ create, update, delete, change }` shape matching ORM `defineTriggers` pattern.
   - Replace split auth exports (`getAuthOptions` + `authTriggers`) with one default `defineAuth((ctx) => ({ ...options, triggers }))` contract.
   - Drop generated trigger procedures (`beforeCreate`, `onCreate`, `beforeUpdate`, `onUpdate`, `beforeDelete`, `onDelete`); triggers now run inline in the same CRUD transaction.
@@ -300,6 +450,7 @@
   ```
 
   ### Features
+
   - Add `defineAuth` helpers to unify codegen and non-codegen auth setup.
   - Add always-generated Better Auth runtime contract in `convex/functions/generated/auth.ts`.
   - Add generated `defineAuth` export in `convex/functions/generated/auth.ts` for inference-first `auth.ts` authoring.
@@ -308,6 +459,7 @@
   ## Codegen
 
   ### Breaking changes
+
   - Drop generated internal auth calls from `internal.auth.*`; use `internal.generated.*`.
   - Drop manual `initCRPC.dataModel().context(...)` bootstrap; import generated `initCRPC` from `convex/functions/generated/server`.
   - Drop manual `ctx.runQuery`/`ctx.runMutation` for inter-procedure calls; use per-module `create<Module>Handler`/`create<Module>Caller` from `convex/functions/generated/<module>.runtime`.
@@ -360,6 +512,7 @@
   ```
 
   ### Features
+
   - Add generated `convex/functions/generated/` directory:
     - `generated/server.ts` — ORM exports (`orm`, `withOrm`, `scheduledMutationBatch`, `scheduledDelete`), wrapped ctx types (`OrmCtx`, `QueryCtx`, `MutationCtx`, `GenericCtx`), prewired `initCRPC`.
     - `generated/auth.ts` — `defineAuth`, `getAuth`, auth runtime contract.
@@ -404,11 +557,13 @@
   ```
 
   ### Patches
+
   - Add generated internal API refs for async ORM workers and generated auth handlers under `internal.generated`.
 
   ## API Types
 
   ### Breaking changes
+
   - Drop separate `meta` arguments in context/proxy/caller/auth setup APIs; pass only `api`.
   - Drop the `@convex/types` workflow and use generated `@convex/api` types.
   - Drop manual codegen outputs `convex/shared/meta.ts` and `convex/shared/types.ts` in favor of generated `convex/shared/api.ts`.
@@ -434,10 +589,12 @@
   ```
 
   ### Features
+
   - Add a single generated `@convex/api` surface that exports `api`, `Api`, `ApiInputs`, and `ApiOutputs` for client typing.
   - Add optional generated table helpers (`TableName`, `Select`, `Insert`) when schema exports `tables`.
 
   ### Patches
+
   - Add Date-safe API inference from cRPC exports so `z.date()` fields stay typed as `Date` in generated API input/output types.
   - Improve generated `Api` typing so HTTP router types are embedded in `typeof api`, reducing manual `<Api>` generics in common setup calls.
   - Build function metadata from the generated `api` object at runtime, eliminating separate `meta` plumbing in cRPC React/RSC/server helpers.
@@ -468,11 +625,13 @@
   ## Dependency
 
   ### Breaking changes
+
   - Bump Convex minimum peer dependency to `>=1.32`.
 
   ## ORM
 
   ### Breaking changes
+
   - Drop manual `convex/lib/orm.ts` server wiring; import `orm`/`withOrm` from `convex/functions/generated/server`.
   - Drop `OrmQueryCtx`/`OrmMutationCtx`; import wrapped `QueryCtx`/`MutationCtx` from `convex/functions/generated/server`.
   - Table-level lifecycle registration in `convexTable(..., extraConfig)` is removed.
@@ -489,6 +648,7 @@
   ```
 
   ### Features
+
   - ORM triggers are schema-level only and must be exported as `export const triggers = defineTriggers(relations, { ... })`.
   - Trigger definitions use object hooks per table:
     - `create.before` / `create.after`
@@ -506,6 +666,7 @@
   ## Aggregates
 
   ### Features
+
   - Add built-in aggregate-core runtime (B-tree backed).
   - Add `aggregateIndex` schema builder for declaring ORM count and aggregate index coverage:
     - `aggregateIndex(name).on(field1, field2)` — filter key fields.
@@ -525,7 +686,7 @@
         .min(t.score)
         .max(t.score),
       aggregateIndex("all_metrics").all().sum(t.amount).count(t.orgId),
-    ],
+    ]
   );
   ```
 
@@ -574,6 +735,7 @@
   ## CLI
 
   ### Features
+
   - Add `kitcn analyze` command with two modes:
     - Default **hotspot** mode: per-entry bundle analysis showing output size, dependency size, and handler counts. Interactive TUI with keyboard navigation, live filtering, sort cycling, detail panes (handlers/packages/inputs), and file watch for auto-refresh.
     - `--deploy` mode: single-isolate bundle analysis matching Convex deploy bundling. Reports total size, top inputs, and top packages.
@@ -633,10 +795,12 @@
 ### Minor Changes
 
 - [#75](https://github.com/udecode/kitcn/pull/75) [`54eeb6d`](https://github.com/udecode/kitcn/commit/54eeb6d68909737b21b3dddfa860de0fc84e7924) Thanks [@zbeyens](https://github.com/zbeyens)! - - Added `kitcn/orm` as the recommended DB API surface (Drizzle-style schema/query/mutation API).
+
   - Docs: [/docs/db/orm](https://www.kitcn.dev/docs/db/orm)
   - Migration guide: [/docs/migrations/convex](https://www.kitcn.dev/docs/migrations/convex)
 
   ## Breaking changes
+
   - `createAuth(ctx)` is removed. Use `getAuth(ctx)` for query/mutation/action/http.
 
   ```ts
@@ -707,6 +871,7 @@
     Update UI/client code and shared types accordingly.
 
   ## Features
+
   - `initCRPC.create()` supports default Convex builders, so old manual wiring is usually unnecessary.
 
   ```ts
@@ -772,6 +937,7 @@
   - Added new public server helpers: context guards (`isActionCtx`/`requireActionCtx`, etc.).
 
   ## Patched
+
   - Updated template and docs to use:
     - `kitcn/auth/client` (`convexClient`)
     - `kitcn/auth/config` (`getAuthConfigProvider`)
@@ -824,7 +990,7 @@
     useSignUpMutationOptions({
       onSuccess: () => router.push("/"), // Only on success now
       onError: (error) => toast.error(error.message), // Fires on auth errors
-    }),
+    })
   );
   ```
 
@@ -925,6 +1091,7 @@
   ```
 
   Coercion behavior:
+
   - `z.number()` - parses string to number (`"5"` → `5`)
   - `z.boolean()` - parses `"true"`/`"1"` → `true`, everything else → `false`
   - Works with `.optional()`, `.nullable()`, `.default()` wrappers
@@ -973,6 +1140,7 @@
   The HTTP client now uses a hybrid API combining tRPC-style JSON body at root level with explicit `params`/`searchParams` for URL data.
 
   #### Breaking Changes
+
   - **Query/mutation args restructured**: Path params and search params now use explicit keys instead of flat merging
     - Before: `queryOptions({ id: '123', limit: 10 })`
     - After: `queryOptions({ params: { id: '123' }, searchParams: { limit: '10' } })`
@@ -984,6 +1152,7 @@
     - After: `.query(async ({ searchParams }) => { searchParams.limit })`
 
   #### New Features
+
   - **Explicit input args**: `params`, `searchParams` keys for clear separation
   - **JSON body at root**: Non-reserved keys spread at root level (tRPC-style): `mutate({ title: 'New' })`
   - **Typed form uploads**: `.form()` builder method for typed FormData schemas (client args + server handler)
@@ -1040,6 +1209,7 @@
   The HTTP router now wraps a Hono app, enabling full middleware support.
 
   #### New Features
+
   - **Hono-based routing**: `createHttpRouter(app, router)` accepts a Hono app
   - **Auth middleware**: `authMiddleware(createAuth)` for Better Auth routes
   - **Hono context in handlers**: Access `c.json()`, `c.text()`, `c.redirect()`, `c.req`
@@ -1047,6 +1217,7 @@
   - **CLI watch improvements**: Watches `routers/**/*.ts` and `http.ts` for changes
 
   #### Breaking Changes
+
   - **Removed `response()` mode**: Return `Response` directly from handler
   - **Removed per-procedure `cors()`**: Use Hono's `cors()` middleware
   - **CORS via Hono**: `app.use('/api/*', cors())` instead of router options
@@ -1096,7 +1267,7 @@
     cors({
       origin: process.env.SITE_URL!,
       credentials: true,
-    }),
+    })
   );
 
   app.use(authMiddleware(createAuth));
@@ -1123,7 +1294,7 @@
 
       c.header(
         "Content-Disposition",
-        `attachment; filename="todos.${params.format}"`,
+        `attachment; filename="todos.${params.format}"`
       );
 
       if (params.format === "csv") {
@@ -1239,6 +1410,7 @@
   ```
 
   **Fix:** Improved authentication in `ConvexAuthProvider`:
+
   - **FetchAccessTokenContext**: New context passes `fetchAccessToken` through React tree - eliminates race conditions where token wasn't available during render
   - **Token Expiration Tracking**: Added `expiresAt` field with `decodeJwtExp()` - 60s cache leeway prevents unnecessary token refreshes
   - **SSR Hydration Fix**: Defensive `isLoading` check prevents UNAUTHORIZED errors when Better Auth briefly returns null during hydration
