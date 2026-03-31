@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.12.3
+
+### Patch Changes
+
+- [`ec0aaaa`](https://github.com/udecode/kitcn/commit/ec0aaaa525a95788db5b2ec76626ae445e68eae2) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix scenario packaging for `@kitcn/resend` after the plugin moved `kitcn` to peer dependencies.
+
 ## 0.12.2
 
 ### Patch Changes
