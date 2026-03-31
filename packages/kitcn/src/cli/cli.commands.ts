@@ -377,6 +377,38 @@ function expectDependencyInstallCall(calls: unknown[], packageSpec: string) {
   }
 }
 
+function expectDependencyInstallOrder(
+  calls: unknown[],
+  earlierPackageSpec: string,
+  laterPackageSpec: string
+) {
+  const normalized = (
+    calls as [string, string[], Record<string, unknown>][]
+  ).filter((call) => {
+    return call[0] === 'bun' && call[1]?.[0] === 'add';
+  });
+  const earlierIndex = normalized.findIndex((call) => {
+    return (
+      JSON.stringify(call[1]) === JSON.stringify(['add', earlierPackageSpec])
+    );
+  });
+  const laterIndex = normalized.findIndex((call) => {
+    return (
+      JSON.stringify(call[1]) === JSON.stringify(['add', laterPackageSpec])
+    );
+  });
+  if (earlierIndex < 0 || laterIndex < 0) {
+    throw new Error(
+      `Expected dependency install order for ${earlierPackageSpec} before ${laterPackageSpec}, received ${JSON.stringify(normalized.map((call) => call[1]))}.`
+    );
+  }
+  if (earlierIndex >= laterIndex) {
+    throw new Error(
+      `Expected dependency install order for ${earlierPackageSpec} before ${laterPackageSpec}, received ${JSON.stringify(normalized.map((call) => call[1]))}.`
+    );
+  }
+}
+
 function expectDependencyInstallCallWithPackages(
   calls: unknown[],
   packageSpecs: string[]
@@ -1797,6 +1829,11 @@ describe('cli/cli', () => {
         execaStub.mock.calls as unknown as unknown[],
         '@opentelemetry/api@1.9.0'
       );
+      expectDependencyInstallOrder(
+        execaStub.mock.calls as unknown as unknown[],
+        '@opentelemetry/api@1.9.0',
+        BETTER_AUTH_INSTALL_SPEC
+      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -2076,6 +2113,11 @@ describe('cli/cli', () => {
       expectDependencyInstallCall(
         execaStub.mock.calls as unknown as unknown[],
         '@opentelemetry/api@1.9.0'
+      );
+      expectDependencyInstallOrder(
+        execaStub.mock.calls as unknown as unknown[],
+        '@opentelemetry/api@1.9.0',
+        BETTER_AUTH_INSTALL_SPEC
       );
     } finally {
       process.chdir(oldCwd);

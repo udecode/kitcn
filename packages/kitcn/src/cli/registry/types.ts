@@ -124,6 +124,7 @@ export type PluginCatalogEntry = {
   };
   packageName: string;
   packageInstallSpec?: string;
+  planningDependencies?: readonly string[];
   envFields?: readonly PluginEnvField[];
   liveBootstrap?: PluginLiveBootstrap;
   schemaRegistration: PluginSchemaRegistration;
@@ -156,6 +157,7 @@ export type InternalPluginRegistryPreset = {
 
 export type InternalPluginRegistryMeta = {
   localDocsPath: string;
+  planningDependencies?: readonly string[];
   envFields?: readonly PluginEnvField[];
   liveBootstrap?: PluginLiveBootstrap;
   schemaRegistration: PluginSchemaRegistration;

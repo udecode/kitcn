@@ -64,6 +64,7 @@ function toPluginCatalogEntry(
     },
     packageName: getPackageNameFromInstallSpec(installDependency),
     packageInstallSpec: installDependency,
+    planningDependencies: internal.planningDependencies,
     envFields: internal.envFields,
     liveBootstrap: internal.liveBootstrap,
     schemaRegistration: internal.schemaRegistration,

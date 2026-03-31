@@ -582,6 +582,7 @@ export const authRegistryItem = defineInternalRegistryItem({
   },
   internal: {
     localDocsPath: 'www/content/docs/auth/server.mdx',
+    planningDependencies: [OPENTELEMETRY_API_INSTALL_SPEC],
     envFields: AUTH_ENV_FIELDS,
     liveBootstrap: {
       mode: 'local',

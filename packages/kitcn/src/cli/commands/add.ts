@@ -16,6 +16,7 @@ import {
 import { resolveProjectScaffoldContext } from '../project-context.js';
 import {
   applyDependencyHintsInstall,
+  applyPlanningDependencyInstall,
   applyPluginDependencyInstall,
 } from '../registry/dependencies.js';
 import {
@@ -487,6 +488,12 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
     ) {
       throw new Error(AUTH_SCHEMA_ONLY_MISSING_ERROR);
     }
+  }
+  if (!addArgs.dryRun) {
+    await applyPlanningDependencyInstall(
+      pluginDescriptor.planningDependencies ?? [],
+      execaFn
+    );
   }
   const plan = filterPluginInstallPlanForAddScope({
     plan: await buildPluginInstallPlan({

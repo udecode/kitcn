@@ -127,6 +127,24 @@ export const applyDependencyHintsInstall = async (
   return missingDependencyHints;
 };
 
+export const applyPlanningDependencyInstall = async (
+  dependencySpecs: readonly string[],
+  execaFn: typeof execa
+) => {
+  const missingDependencySpecs = resolveMissingDependencyHints(dependencySpecs);
+  if (missingDependencySpecs.length === 0) {
+    return [];
+  }
+
+  const { packageJsonPath } = resolvePackageJsonInstallTarget();
+  await execaFn('bun', ['add', ...missingDependencySpecs], {
+    cwd: dirname(packageJsonPath),
+    stdio: 'inherit',
+  });
+
+  return missingDependencySpecs;
+};
+
 export const applyPluginDependencyInstall = async (
   install: PluginDependencyInstallResult,
   execaFn: typeof execa

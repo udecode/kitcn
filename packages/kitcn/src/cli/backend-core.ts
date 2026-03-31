@@ -44,6 +44,7 @@ import {
   resolveProjectScaffoldContext,
 } from './project-context.js';
 import {
+  applyPlanningDependencyInstall,
   applyPluginDependencyInstall,
   inspectPluginDependencyInstall,
 } from './registry/dependencies.js';
@@ -5847,6 +5848,12 @@ export async function run(
       selectedTemplateIds,
       'add'
     );
+    if (!addArgs.dryRun) {
+      await applyPlanningDependencyInstall(
+        pluginDescriptor.planningDependencies ?? [],
+        execaFn
+      );
+    }
     const plan = await buildPluginInstallPlan({
       descriptor: pluginDescriptor,
       selectedPlugin,
