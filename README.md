@@ -2,9 +2,7 @@
 
 Type-safe Convex framework with a tRPC-style server API, Drizzle-style ORM, and TanStack Query client integration.
 
-> Note: `better-convex` has been renamed to `kitcn`. Prefer `kitcn`
-> package names, the `kitcn` CLI, and docs at
-> [kitcn.dev](https://kitcn.dev).
+> Note: `better-convex` has been renamed to `kitcn`.
 
 ## Docs
 
