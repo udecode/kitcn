@@ -71,6 +71,7 @@
     "picocolors": "^1.1.1",
     "remeda": "^2.33.6",
     "svix": "^1.84.1",
+    "typescript": "5.9.3",
     "type-fest": "^5.4.4"
   },
   "devDependencies": {

@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 describe('package intent metadata', () => {
@@ -8,6 +9,7 @@ describe('package intent metadata', () => {
   test('declares intent metadata and packs the convex skill', () => {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
       bin?: Record<string, string>;
+      dependencies?: Record<string, string>;
       exports?: Record<string, string>;
       files?: string[];
       keywords?: string[];
@@ -22,6 +24,7 @@ describe('package intent metadata', () => {
     expect(packageJson.files).toContain('bin');
     expect(packageJson.keywords).toContain('tanstack-intent');
     expect(packageJson.bin?.intent).toBe('./bin/intent.js');
+    expect(packageJson.dependencies?.typescript).toBeDefined();
     expect(packageJson.exports?.['./ratelimit']).toBe(
       './dist/ratelimit/index.js'
     );
@@ -48,6 +51,7 @@ describe('package intent metadata', () => {
       new TextDecoder().decode(pack.stdout)
     ) as Array<{
       files: Array<{ path: string }>;
+      filename: string;
     }>;
 
     expect(result?.files.map((file) => file.path)).toEqual(
@@ -58,5 +62,49 @@ describe('package intent metadata', () => {
         'skills/convex/references/features/create-plugins.md',
       ])
     );
+
+    const packDir = mkdtempSync(path.join(os.tmpdir(), 'kitcn-pack-'));
+
+    try {
+      const realPack = Bun.spawnSync({
+        cmd: ['npm', 'pack', '--json'],
+        cwd: packageDir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: {
+          ...process.env,
+          npm_config_pack_destination: packDir,
+        },
+      });
+
+      expect(realPack.exitCode).toBe(0);
+
+      const [packedResult] = JSON.parse(
+        new TextDecoder().decode(realPack.stdout)
+      ) as Array<{
+        filename: string;
+      }>;
+
+      const tarballPath = path.join(packDir, packedResult.filename);
+      const extract = Bun.spawnSync({
+        cmd: ['tar', '-xOf', tarballPath, 'package/package.json'],
+        cwd: packageDir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+      });
+
+      expect(extract.exitCode).toBe(0);
+
+      const packedPackageJson = JSON.parse(
+        new TextDecoder().decode(extract.stdout)
+      ) as {
+        dependencies?: Record<string, string>;
+      };
+
+      expect(packedPackageJson.dependencies?.typescript).toBeDefined();
+    } finally {
+      rmSync(packDir, { force: true, recursive: true });
+    }
   });
 });

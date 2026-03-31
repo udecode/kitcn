@@ -2696,6 +2696,7 @@ async function runScaffoldCommandFlow(params: {
         params.allowCodegenBootstrapFallback ?? true,
       config: initPlan.config,
       backend,
+      yes: params.yes,
       sharedDir: initPlan.config.paths.shared,
       debug: initPlan.config.codegen.debug,
       generateMetaFn: params.generateMetaFn,
@@ -3684,9 +3685,21 @@ function didConvexInitCreateConfiguration(output: string) {
   return CONVEX_INIT_CREATED_CONFIG_RE.test(output);
 }
 
+function hasRemoteConvexInitTargetArgs(targetArgs?: string[]) {
+  return (
+    targetArgs?.some(
+      (arg) =>
+        arg === '--prod' ||
+        arg === '--preview-name' ||
+        arg === '--deployment-name'
+    ) ?? false
+  );
+}
+
 export async function runConvexInitIfNeeded(params: {
   execaFn: typeof execa;
   backendAdapter: BackendAdapter;
+  yes?: boolean;
   env?: Record<string, string | undefined>;
   echoOutput?: boolean;
   targetArgs?: string[];
@@ -3705,6 +3718,8 @@ export async function runConvexInitIfNeeded(params: {
     };
   }
 
+  const shouldUseAnonymousAgentMode =
+    params.yes && !hasRemoteConvexInitTargetArgs(params.targetArgs);
   const result = normalizeConvexCommandResult(
     await params.execaFn(
       params.backendAdapter.command,
@@ -3715,7 +3730,12 @@ export async function runConvexInitIfNeeded(params: {
       ],
       {
         cwd: process.cwd(),
-        env: createBackendCommandEnv(params.env),
+        env: createBackendCommandEnv({
+          ...params.env,
+          CONVEX_AGENT_MODE: shouldUseAnonymousAgentMode
+            ? 'anonymous'
+            : params.env?.CONVEX_AGENT_MODE,
+        }),
         reject: false,
         stdio: 'pipe',
       }
@@ -3867,6 +3887,7 @@ async function runInitializationCodegen(params: {
   allowCodegenBootstrapFallback: boolean;
   config: ReturnType<typeof loadCliConfig>;
   backend: CliBackend;
+  yes: boolean;
   sharedDir: string;
   debug: boolean;
   generateMetaFn: typeof generateMeta;
@@ -3895,6 +3916,7 @@ async function runInitializationCodegen(params: {
     const initResult = await runConvexInitIfNeeded({
       execaFn: params.execaFn,
       backendAdapter: runtimeAdapter,
+      yes: params.yes,
       targetArgs: params.targetArgs,
     });
     if (initResult.exitCode !== 0) {

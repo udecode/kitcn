@@ -139,6 +139,7 @@
         "remeda": "^2.33.6",
         "svix": "^1.84.1",
         "type-fest": "^5.4.4",
+        "typescript": "5.9.3",
       },
       "devDependencies": {
         "@rollup/plugin-babel": "^6.1.0",
@@ -175,14 +176,15 @@
       "name": "@kitcn/resend",
       "version": "0.1.0",
       "dependencies": {
-        "kitcn": "workspace:*",
         "svix": "^1.84.1",
       },
       "devDependencies": {
+        "kitcn": "workspace:*",
         "tsdown": "^0.20.3",
       },
       "peerDependencies": {
         "convex": ">=1.33",
+        "kitcn": ">=0.11.0 <1",
       },
     },
     "test": {

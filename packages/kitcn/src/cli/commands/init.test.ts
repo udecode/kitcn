@@ -250,12 +250,19 @@ describe('cli/commands/init', () => {
       ]);
       expect(shadcnCall?.[1]).toContain('--defaults');
       expect(shadcnCall?.[1]).toContain('--yes');
+      const convexInitCall = execaStub.mock.calls.find((call) => {
+        const [, args] = call as unknown as [string, string[]];
+        return args[0] === '/fake/convex/main.js' && args[1] === 'init';
+      }) as [string, string[], Record<string, unknown>] | undefined;
+      expect(convexInitCall).toBeDefined();
+      expect(convexInitCall?.[1]).not.toContain('--yes');
       expect(
-        execaStub.mock.calls.some((call) => {
-          const [, args] = call as unknown as [string, string[]];
-          return args[0] === '/fake/convex/main.js' && args[1] === 'init';
-        })
-      ).toBe(true);
+        (
+          convexInitCall?.[2] as
+            | { env?: Record<string, string | undefined> }
+            | undefined
+        )?.env?.CONVEX_AGENT_MODE
+      ).toBe('anonymous');
       expect(fs.existsSync(path.join(expectedProjectDir, 'package.json'))).toBe(
         true
       );
@@ -679,6 +686,17 @@ describe('cli/commands/init', () => {
         }
       );
       expect(exitCode).toBe(0);
+      const convexInitCall = execaStub.mock.calls.find((call) => {
+        const [, args] = call as unknown as [string, string[]];
+        return args[0] === '/fake/convex/main.js' && args[1] === 'init';
+      }) as [string, string[], Record<string, unknown>] | undefined;
+      expect(
+        (
+          convexInitCall?.[2] as
+            | { env?: Record<string, string | undefined> }
+            | undefined
+        )?.env?.CONVEX_AGENT_MODE
+      ).toBeUndefined();
       expect(runLocalBootstrapStub).not.toHaveBeenCalled();
     } finally {
       process.chdir(originalCwd);

@@ -91,7 +91,9 @@ bunx kitcn init -t next --yes
 
 Then start the long-running backend with `bunx kitcn dev`, run the
 framework dev server (`bun dev` for the Next starter), and open `/convex` for
-the scaffolded messages demo.
+the scaffolded messages demo. In `--yes` mode, kitcn provisions an anonymous
+local Convex deployment when no account is linked yet, so the starter path does
+not stop on a login prompt.
 
 Use the CLI first:
 
