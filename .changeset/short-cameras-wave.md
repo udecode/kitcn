@@ -1,6 +1,5 @@
 ---
 "kitcn": minor
-"@kitcn/resend": minor
 ---
 
 ## Breaking changes
