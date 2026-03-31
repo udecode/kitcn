@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { relative } from 'node:path';
-import ts from 'typescript';
+import type * as tsType from 'typescript';
 import type {
   PluginRootSchemaOwnership,
   PluginRootSchemaTableOwnership,
   PromptAdapter,
 } from '../types.js';
+import { createTypeScriptProxy } from '../utils/typescript-runtime.js';
 
 export type RootSchemaTableUnit = {
   declaration: string;
@@ -18,24 +19,24 @@ export type RootSchemaTableUnit = {
 export type RootSchemaOwnershipLock = PluginRootSchemaOwnership;
 
 type TablesObjectInfo = {
-  object: ts.ObjectLiteralExpression;
-  sourceFile: ts.SourceFile;
+  object: tsType.ObjectLiteralExpression;
+  sourceFile: tsType.SourceFile;
   statementStart: number;
 };
 
 type RelationsChainInfo = {
-  call: ts.CallExpression;
-  object: ts.ObjectLiteralExpression;
-  sourceFile: ts.SourceFile;
+  call: tsType.CallExpression;
+  object: tsType.ObjectLiteralExpression;
+  sourceFile: tsType.SourceFile;
 };
 
 type TableDeclarationInfo = {
-  call: ts.CallExpression;
-  fieldsObject: ts.ObjectLiteralExpression;
-  indexEntries: readonly ts.Expression[] | null;
+  call: tsType.CallExpression;
+  fieldsObject: tsType.ObjectLiteralExpression;
+  indexEntries: readonly tsType.Expression[] | null;
   indexParamName: string | null;
-  sourceFile: ts.SourceFile;
-  statement: ts.VariableStatement;
+  sourceFile: tsType.SourceFile;
+  statement: tsType.VariableStatement;
   tableKey: string;
   tableNameText: string;
   thirdArgText: string | null;
@@ -55,8 +56,13 @@ const OBJECT_ENTRY_INDENT = '  ';
 const LEADING_INDENT_RE = /^[ \t]*/;
 const LEGACY_MANAGED_COMMENT_RE = /^[ \t]*\/\* kitcn-managed [^*]+ \*\/\n?/gm;
 const WHITESPACE_RE = /\s/;
+const ts = createTypeScriptProxy();
+let printer: tsType.Printer | null = null;
 
-const printer = ts.createPrinter({ removeComments: true });
+const getPrinter = () => {
+  printer ??= ts.createPrinter({ removeComments: true });
+  return printer;
+};
 
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -106,11 +112,11 @@ const replaceRange = (
 ) => `${source.slice(0, start)}${content}${source.slice(end)}`;
 
 const isStringLiteralLike = (
-  node: ts.Node
-): node is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral =>
+  node: tsType.Node
+): node is tsType.StringLiteral | tsType.NoSubstitutionTemplateLiteral =>
   ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
 
-const getPropertyName = (property: ts.ObjectLiteralElementLike) => {
+const getPropertyName = (property: tsType.ObjectLiteralElementLike) => {
   if (
     (ts.isPropertyAssignment(property) ||
       ts.isShorthandPropertyAssignment(property)) &&
@@ -127,8 +133,8 @@ const getPropertyName = (property: ts.ObjectLiteralElementLike) => {
   return null;
 };
 
-const renderNode = (node: ts.Node, sourceFile: ts.SourceFile) =>
-  printer.printNode(ts.EmitHint.Unspecified, node, sourceFile).trim();
+const renderNode = (node: tsType.Node, sourceFile: tsType.SourceFile) =>
+  getPrinter().printNode(ts.EmitHint.Unspecified, node, sourceFile).trim();
 
 const renderObjectLiteral = (
   baseIndent: string,
@@ -180,7 +186,7 @@ const findTablesObject = (source: string): TablesObjectInfo | null => {
 
   let defineSchemaObject: TablesObjectInfo | null = null;
 
-  const visit = (node: ts.Node, statementStart: number) => {
+  const visit = (node: tsType.Node, statementStart: number) => {
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
@@ -213,7 +219,7 @@ const findRelationsCall = (source: string): RelationsChainInfo | null => {
   const sourceFile = parseSource(source);
   let result: RelationsChainInfo | null = null;
 
-  const visit = (node: ts.Node) => {
+  const visit = (node: tsType.Node) => {
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
@@ -244,7 +250,7 @@ const hasStandaloneDefineRelations = (source: string) => {
   const sourceFile = parseSource(source);
   let found = false;
 
-  const visit = (node: ts.Node) => {
+  const visit = (node: tsType.Node) => {
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
@@ -262,7 +268,7 @@ const hasStandaloneDefineRelations = (source: string) => {
   return found;
 };
 
-const getArrayLiteralFromExpression = (expression: ts.Expression) => {
+const getArrayLiteralFromExpression = (expression: tsType.Expression) => {
   if (ts.isArrayLiteralExpression(expression)) {
     return expression;
   }
@@ -309,7 +315,7 @@ const readTableDeclarationInfo = (
       }
 
       const thirdArg = declaration.initializer.arguments[2];
-      let indexEntries: readonly ts.Expression[] | null = null;
+      let indexEntries: readonly tsType.Expression[] | null = null;
       let indexParamName: string | null = null;
       if (
         thirdArg &&
@@ -322,7 +328,7 @@ const readTableDeclarationInfo = (
           : getArrayLiteralFromExpression(thirdArg.body);
         if (arrayLiteral) {
           indexEntries = arrayLiteral.elements.filter(
-            (element): element is ts.Expression => ts.isExpression(element)
+            (element): element is tsType.Expression => ts.isExpression(element)
           );
           indexParamName = thirdArg.parameters[0].name.text;
         }
@@ -394,8 +400,8 @@ const readPropertyObject = (source: string, expectedKey?: string) => {
 };
 
 const getObjectPropertyMap = (
-  object: ts.ObjectLiteralExpression,
-  _sourceFile: ts.SourceFile
+  object: tsType.ObjectLiteralExpression,
+  _sourceFile: tsType.SourceFile
 ) =>
   new Map(
     object.properties.flatMap((property) => {
@@ -405,10 +411,10 @@ const getObjectPropertyMap = (
   );
 
 const getFieldRootSignature = (
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile
+  expression: tsType.Expression,
+  sourceFile: tsType.SourceFile
 ) => {
-  let current: ts.Expression = expression;
+  let current: tsType.Expression = expression;
 
   while (
     ts.isCallExpression(current) &&
@@ -421,10 +427,10 @@ const getFieldRootSignature = (
 };
 
 const isCompatibleFieldProperty = (
-  existingProperty: ts.ObjectLiteralElementLike,
-  existingSourceFile: ts.SourceFile,
-  desiredProperty: ts.ObjectLiteralElementLike,
-  desiredSourceFile: ts.SourceFile
+  existingProperty: tsType.ObjectLiteralElementLike,
+  existingSourceFile: tsType.SourceFile,
+  desiredProperty: tsType.ObjectLiteralElementLike,
+  desiredSourceFile: tsType.SourceFile
 ) => {
   if (
     !ts.isPropertyAssignment(existingProperty) ||
@@ -455,8 +461,8 @@ const isCompatibleFieldProperty = (
 };
 
 const getRelationCompatibilitySignature = (
-  property: ts.ObjectLiteralElementLike,
-  sourceFile: ts.SourceFile
+  property: tsType.ObjectLiteralElementLike,
+  sourceFile: tsType.SourceFile
 ) => {
   if (
     !ts.isPropertyAssignment(property) ||
@@ -487,10 +493,10 @@ const getRelationCompatibilitySignature = (
 };
 
 const getIndexIdentity = (
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile
+  expression: tsType.Expression,
+  sourceFile: tsType.SourceFile
 ) => {
-  let current: ts.Expression = expression;
+  let current: tsType.Expression = expression;
 
   while (
     ts.isCallExpression(current) &&
@@ -512,8 +518,8 @@ const getIndexIdentity = (
 };
 
 const renderNormalizedExpression = (
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
+  node: tsType.Node,
+  sourceFile: tsType.SourceFile,
   replacements: Record<string, string>
 ): string => {
   if (ts.isIdentifier(node)) {
@@ -542,18 +548,18 @@ const renderNormalizedExpression = (
 const mergeNamedEntries = (params: {
   compatibilityLabel: string;
   displayPath: string;
-  existingEntries: readonly ts.ObjectLiteralElementLike[];
-  existingSourceFile: ts.SourceFile;
+  existingEntries: readonly tsType.ObjectLiteralElementLike[];
+  existingSourceFile: tsType.SourceFile;
   isCompatible: (
-    existingEntry: ts.ObjectLiteralElementLike,
-    existingSourceFile: ts.SourceFile,
-    desiredEntry: ts.ObjectLiteralElementLike,
-    desiredSourceFile: ts.SourceFile
+    existingEntry: tsType.ObjectLiteralElementLike,
+    existingSourceFile: tsType.SourceFile,
+    desiredEntry: tsType.ObjectLiteralElementLike,
+    desiredSourceFile: tsType.SourceFile
   ) => boolean;
   key: string;
   pluginKey: string;
-  desiredEntries: readonly ts.ObjectLiteralElementLike[];
-  desiredSourceFile: ts.SourceFile;
+  desiredEntries: readonly tsType.ObjectLiteralElementLike[];
+  desiredSourceFile: tsType.SourceFile;
   tableKey: string;
 }): MergeNamedEntriesResult => {
   const existingMap = new Map(
@@ -937,8 +943,8 @@ const findRelationsInsertIndex = (source: string) => {
 const mergeRelationProperty = (params: {
   desiredRelation: string;
   displayPath: string;
-  existingProperty: ts.ObjectLiteralElementLike;
-  existingSourceFile: ts.SourceFile;
+  existingProperty: tsType.ObjectLiteralElementLike;
+  existingSourceFile: tsType.SourceFile;
   pluginKey: string;
   tableKey: string;
 }) => {
@@ -1164,8 +1170,8 @@ const renderManagedChecksum = (unit: RootSchemaTableUnit) =>
     .slice(0, 12);
 
 const findObjectProperty = (
-  object: ts.ObjectLiteralExpression,
-  sourceFile: ts.SourceFile,
+  object: tsType.ObjectLiteralExpression,
+  sourceFile: tsType.SourceFile,
   tableKey: string
 ) => {
   for (const property of object.properties) {
@@ -1235,7 +1241,7 @@ const mergeOrmImports = (source: string, importNames: readonly string[]) => {
 
   const sourceFile = parseSource(source);
   const ormImport = sourceFile.statements.find(
-    (statement): statement is ts.ImportDeclaration =>
+    (statement): statement is tsType.ImportDeclaration =>
       ts.isImportDeclaration(statement) &&
       isStringLiteralLike(statement.moduleSpecifier) &&
       statement.moduleSpecifier.text === 'kitcn/orm'

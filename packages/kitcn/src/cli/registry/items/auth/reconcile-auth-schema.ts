@@ -2,10 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BetterAuthOptions } from 'better-auth/minimal';
 import { createJiti } from 'jiti';
-import ts from 'typescript';
+import type * as tsType from 'typescript';
 import { getAuthConfigProvider } from '../../../../auth/auth-config';
 import { createSchema } from '../../../../auth/create-schema';
 import { createSchemaExtensionOrm } from '../../../../auth/create-schema-orm';
+import { createTypeScriptProxy } from '../../../utils/typescript-runtime.js';
 import type { RootSchemaTableUnit } from '../../schema-ownership.js';
 
 type AuthSchemaTemplateId = 'auth-schema' | 'auth-schema-convex';
@@ -45,6 +46,7 @@ const loadGetAuthTables = async () =>
   (await import('better-auth/db')).getAuthTables;
 const loadConvexAuthPlugin = async () =>
   (await import('@convex-dev/better-auth/plugins')).convex;
+const ts = createTypeScriptProxy();
 
 const withAuthSchemaEnv = async <T>(run: () => Promise<T>): Promise<T> => {
   const globalScope = globalThis as Record<string, unknown>;
@@ -159,9 +161,9 @@ const parseRootSchemaUnitsFromExtension = (
     }
   }
 
-  let registrationObject: ts.ObjectLiteralExpression | null = null;
-  let relationObject: ts.ObjectLiteralExpression | null = null;
-  const visit = (node: ts.Node) => {
+  let registrationObject: tsType.ObjectLiteralExpression | null = null;
+  let relationObject: tsType.ObjectLiteralExpression | null = null;
+  const visit = (node: tsType.Node) => {
     if (ts.isCallExpression(node)) {
       if (
         ts.isIdentifier(node.expression) &&
@@ -213,12 +215,12 @@ const parseRootSchemaUnitsFromExtension = (
     return [];
   }
   const registrationObjectLiteral =
-    registrationObject as ts.ObjectLiteralExpression;
+    registrationObject as tsType.ObjectLiteralExpression;
   const relationObjectLiteral =
-    relationObject as ts.ObjectLiteralExpression | null;
+    relationObject as tsType.ObjectLiteralExpression | null;
 
   const relationMap = new Map<string, string>();
-  const relationProperties: readonly ts.ObjectLiteralElementLike[] =
+  const relationProperties: readonly tsType.ObjectLiteralElementLike[] =
     relationObjectLiteral?.properties ?? [];
   for (const property of relationProperties) {
     if (
@@ -232,10 +234,10 @@ const parseRootSchemaUnitsFromExtension = (
     }
   }
 
-  const registrationProperties: readonly ts.ObjectLiteralElementLike[] =
+  const registrationProperties: readonly tsType.ObjectLiteralElementLike[] =
     registrationObjectLiteral.properties;
   return registrationProperties.flatMap(
-    (property: ts.ObjectLiteralElementLike) => {
+    (property: tsType.ObjectLiteralElementLike) => {
       if (
         !ts.isPropertyAssignment(property) &&
         !ts.isShorthandPropertyAssignment(property)

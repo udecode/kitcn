@@ -20,7 +20,6 @@ import {
 import { parse as parseDotEnv } from 'dotenv';
 import { execa } from 'execa';
 import { createJiti } from 'jiti';
-import ts from 'typescript';
 import { getTableConfig } from '../orm/introspection.js';
 import { getSchemaRelations } from '../orm/schema.js';
 import { runAnalyze } from './analyze.js';
@@ -135,10 +134,12 @@ import {
 import { highlighter } from './utils/highlighter.js';
 import { logger } from './utils/logger.js';
 import { createSpinner } from './utils/spinner.js';
+import { createTypeScriptProxy } from './utils/typescript-runtime.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 let ownVersion: string | undefined | null;
+const ts = createTypeScriptProxy();
 
 // Resolve real convex CLI binary
 // Can't use require.resolve('convex/bin/main.js') because it's not exported
