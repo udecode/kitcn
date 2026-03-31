@@ -31,7 +31,7 @@ describe('package intent metadata', () => {
     expect(packageJson.intent).toEqual({
       version: 1,
       repo: 'udecode/kitcn',
-      docs: 'https://kitcn.com/docs',
+      docs: 'https://kitcn.dev/docs',
     });
 
     const pack = Bun.spawnSync({

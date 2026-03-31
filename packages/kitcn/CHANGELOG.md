@@ -633,8 +633,8 @@
 ### Minor Changes
 
 - [#75](https://github.com/udecode/kitcn/pull/75) [`54eeb6d`](https://github.com/udecode/kitcn/commit/54eeb6d68909737b21b3dddfa860de0fc84e7924) Thanks [@zbeyens](https://github.com/zbeyens)! - - Added `kitcn/orm` as the recommended DB API surface (Drizzle-style schema/query/mutation API).
-  - Docs: [/docs/db/orm](https://www.kitcn.com/docs/db/orm)
-  - Migration guide: [/docs/migrations/convex](https://www.kitcn.com/docs/migrations/convex)
+  - Docs: [/docs/db/orm](https://www.kitcn.dev/docs/db/orm)
+  - Migration guide: [/docs/migrations/convex](https://www.kitcn.dev/docs/migrations/convex)
 
   ## Breaking changes
   - `createAuth(ctx)` is removed. Use `getAuth(ctx)` for query/mutation/action/http.

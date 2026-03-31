@@ -12,7 +12,7 @@
     "agent-skills",
     "intent"
   ],
-  "homepage": "https://kitcn.com",
+  "homepage": "https://kitcn.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/udecode/kitcn.git"
@@ -123,6 +123,6 @@
   "intent": {
     "version": 1,
     "repo": "udecode/kitcn",
-    "docs": "https://kitcn.com/docs"
+    "docs": "https://kitcn.dev/docs"
   }
 }

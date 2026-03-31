@@ -4,12 +4,11 @@ Type-safe Convex framework with a tRPC-style server API, Drizzle-style ORM, and 
 
 > Note: `better-convex` has been renamed to `kitcn`. Prefer `kitcn`
 > package names, the `kitcn` CLI, and docs at
-> [kitcn.com](https://kitcn.com). The old name appears here only
-> for that rename note.
+> [kitcn.dev](https://kitcn.dev).
 
 ## Docs
 
-[kitcn.com](https://kitcn.com)
+[kitcn.dev](https://kitcn.dev)
 
 ## What You Get
 
@@ -28,8 +27,8 @@ bun add convex kitcn zod @tanstack/react-query
 
 Then follow:
 
-- [Quickstart](https://kitcn.com/docs/quickstart)
-- [Templates](https://kitcn.com/docs/templates)
+- [Quickstart](https://kitcn.dev/docs/quickstart)
+- [Templates](https://kitcn.dev/docs/templates)
 
 ## Local Dev
 

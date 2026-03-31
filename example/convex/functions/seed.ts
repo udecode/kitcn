@@ -14,7 +14,7 @@ import {
 
 // Admin configuration - moved inside functions to avoid module-level execution
 const getAdminConfig = () => {
-  const adminEmail = getEnv().ADMIN[0] || 'admin@kitcn.com';
+  const adminEmail = getEnv().ADMIN[0] || 'admin@kitcn.dev';
 
   return { adminEmail };
 };
@@ -24,28 +24,28 @@ const getUsersData = () => [
   {
     id: 'alice',
     bio: 'Frontend Developer',
-    email: 'alice@kitcn.com',
+    email: 'alice@kitcn.dev',
     image: 'https://avatars.githubusercontent.com/u/2',
     name: 'Alice Johnson',
   },
   {
     id: 'bob',
     bio: 'Backend Developer',
-    email: 'bob@kitcn.com',
+    email: 'bob@kitcn.dev',
     image: 'https://avatars.githubusercontent.com/u/3',
     name: 'Bob Smith',
   },
   {
     id: 'carol',
     bio: 'UI/UX Designer',
-    email: 'carol@kitcn.com',
+    email: 'carol@kitcn.dev',
     image: 'https://avatars.githubusercontent.com/u/4',
     name: 'Carol Williams',
   },
   {
     id: 'dave',
     bio: 'DevOps Engineer',
-    email: 'dave@kitcn.com',
+    email: 'dave@kitcn.dev',
     image: undefined,
     name: 'Dave Brown',
   },
