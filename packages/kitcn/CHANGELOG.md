@@ -1,5 +1,16 @@
 # kitcn
 
+## 0.12.1
+
+### Patch Changes
+
+- [`93726d3`](https://github.com/udecode/kitcn/commit/93726d3d337a7469f98efbf5d932beb370d09d5d) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix fresh `bunx kitcn init` installs so the published CLI ships its runtime
+    TypeScript dependency instead of failing before scaffold setup starts.
+  - Fix `kitcn init -t next --yes` so non-interactive local bootstrap provisions
+    an anonymous Convex deployment instead of stopping on a login prompt.
+
 ## 0.12.0
 
 ### Minor Changes
