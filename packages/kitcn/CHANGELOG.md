@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.12.2
+
+### Patch Changes
+
+- [`4f9907e`](https://github.com/udecode/kitcn/commit/4f9907e95ceae9f30499b2bad0d1fb20d1fa5fc1) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix fresh `bunx kitcn` installs so the CLI keeps TypeScript off the cold
+    startup path and still boots when Bun omits `typescript` from the transient
+    install tree.
+
 ## 0.12.1
 
 ### Patch Changes
