@@ -4,6 +4,8 @@ on:
   release:
     types: [published]
   workflow_dispatch: {}
+  repository_dispatch:
+    types: [skill-check]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
