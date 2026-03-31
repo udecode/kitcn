@@ -37,16 +37,17 @@ The code change was not the problem. The release math was.
 ## Guidance
 
 When a plugin package peers on a host package that is still below `1.0.0`,
-Changesets needs two things to avoid fake majors:
+Changesets needs three things to stay honest:
 
 1. turn on `onlyUpdatePeerDependentsWhenOutOfRange`
 2. use an honest bounded peer range that actually includes the next minor
+3. use a `fixed` group for packages that should ship lockstep
 
 In this repo, the fix was:
 
 ```json
 {
-  "linked": [["kitcn", "@kitcn/*"]],
+  "fixed": [["kitcn", "@kitcn/*"]],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
   }
@@ -65,16 +66,23 @@ and:
 
 Do not use `^0.11.0` if you mean to allow `0.12.0`. On `0.x`, caret is narrow.
 Do not use naked `>=` either unless you actually mean "every future major too".
+Do not paper over versioning drift with a custom auto-changeset script if the
+packages are really one product family. Use Changesets' native `fixed` support
+instead.
 
 ## Why This Matters
 
 Two Changesets rules stack here:
 
 - peer dependency bumps can major-bump dependents
-- linked packages inherit the highest bump type in the linked set
+- fixed groups release the whole family together
+- linked packages do not auto-enter the release set on their own
 
 That means one plugin peer mismatch can boomerang back into the host package
-and manufacture a major release you never asked for.
+and manufacture a major release you never asked for. Even after fixing that,
+`linked` still will not pull a dependent package into the version PR unless a
+changeset already exists for it. If the family is supposed to stay aligned,
+`fixed` is the cleaner tool.
 
 The release plan looks authoritative, but it is just faithfully applying your
 config. If the peer range is too narrow, Changesets is not wrong. Your config
@@ -84,7 +92,7 @@ is.
 
 - when a package under `packages/*` peers on another internal package
 - when the host package is still on `0.x`
-- when linked packages should stay version-aligned without fake majors
+- when official plugin packages should stay version-aligned with the host
 - when `changeset status` shows a major cascade after a host minor
 
 ## Examples
@@ -102,7 +110,7 @@ Bad:
 That excludes `0.12.0`, so a `kitcn` minor still leaves range and Changesets
 can escalate the peer package to `major`.
 
-Good:
+Good for compatibility:
 
 ```json
 {
@@ -112,8 +120,19 @@ Good:
 }
 ```
 
-With `onlyUpdatePeerDependentsWhenOutOfRange: true`, the plugin stays put when
-the new host version still satisfies the peer range.
+With `onlyUpdatePeerDependentsWhenOutOfRange: true`, the plugin does not take a
+fake major when the new host version still satisfies the peer range.
+
+Good for lockstep family releases:
+
+```json
+{
+  "fixed": [["kitcn", "@kitcn/*"]]
+}
+```
+
+That keeps the official `kitcn` family on the same released version without
+adding custom release-graph logic.
 
 ## Related
 

@@ -2,8 +2,8 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
   "changelog": ["@changesets/changelog-github", { "repo": "udecode/kitcn" }],
   "commit": false,
-  "fixed": [],
-  "linked": [["kitcn", "@kitcn/*"]],
+  "fixed": [["kitcn", "@kitcn/*"]],
+  "linked": [],
   "access": "public",
   "baseBranch": "main",
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
