@@ -33,12 +33,14 @@ We'll start with `init`, because it owns bootstrap in both directions.
 Pass `-t next` or `-t vite` when you want kitcn to create the app shell
 and patch its integration layer in one pass.
 
-```bash showLineNumbers
-npx kitcn init -t next --yes
-npx kitcn init -t vite --yes
-npx kitcn init -t next --yes --cwd apps --name web
-npx kitcn --backend concave init -t next --yes
-```
+<KitcnLatestCommandTabs
+  commands={[
+    'init -t next --yes',
+    'init -t vite --yes',
+    'init -t next --yes --cwd apps --name web',
+    '--backend concave init -t next --yes',
+  ]}
+/>
 
 For a fresh Next.js app, `init -t next` creates the shadcn shell, then layers
 in the kitcn seam:
@@ -75,11 +77,13 @@ they do not trigger the local bootstrap wrapper.
 Run `init --yes` inside a supported app when the app shell already exists and
 you only want kitcn layered in place.
 
-```bash showLineNumbers
-npx kitcn init --yes
-npx kitcn --backend concave init --yes
-npx kitcn init --env-file .env.agent --yes
-```
+<KitcnLatestCommandTabs
+  commands={[
+    'init --yes',
+    '--backend concave init --yes',
+    'init --env-file .env.agent --yes',
+  ]}
+/>
 
 This path detects the current app, keeps the existing shell, and patches the
 kitcn baseline into the right root. If the current directory is not a
@@ -169,7 +173,7 @@ The preview surface covers:
 The default path is kitcn-first:
 
 ```bash showLineNumbers
-npx kitcn init -t next --yes
+npx kitcn@latest init -t next --yes
 npx kitcn add auth --yes
 npx kitcn add auth --schema --yes
 ```

@@ -69,7 +69,7 @@ Use the CLI-first path:
 npx kitcn add auth --yes
 ```
 
-If kitcn is not bootstrapped yet, start with `npx kitcn init -t next --yes` for a fresh app or `npx kitcn init --yes` for in-place adoption.
+If kitcn is not bootstrapped yet, start with `npx kitcn@latest init -t next --yes` for a fresh app or `npx kitcn@latest init --yes` for in-place adoption.
 
 On local Convex, `add auth --yes` also finishes the first auth bootstrap pass: generated runtime, `BETTER_AUTH_SECRET`, and `JWKS`.
 
@@ -278,6 +278,12 @@ export const {
 ```
 
 ### Sign In
+
+Rule:
+
+1. The standard Next local path assumes `NEXT_PUBLIC_SITE_URL=http://localhost:3000`.
+2. If the app runs on another port, update `.env.local` `NEXT_PUBLIC_SITE_URL`,
+   `convex/.env` `SITE_URL`, and the app dev script together.
 
 **Social:**
 ```ts

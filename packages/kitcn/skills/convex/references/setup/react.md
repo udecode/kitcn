@@ -172,4 +172,3 @@ Provider mount checklist:
 1. `AppConvexProvider` wraps app routes before client feature components render.
 2. `CRPCProvider` is nested inside TanStack Query provider (`QueryClientProvider`).
 3. Next.js apps pass token where required (Section 8.A.4) or intentionally run without token for public-only paths.
-

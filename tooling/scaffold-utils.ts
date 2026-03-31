@@ -84,6 +84,7 @@ export type WorkspacePackageJson = {
   devDependencies?: Record<string, string>;
   name: string;
   packageManager?: string;
+  peerDependencies?: Record<string, string>;
   private?: boolean;
   scripts?: Record<string, string>;
   type?: string;
@@ -198,8 +199,8 @@ const createPackableLocalResendPackageDir = () => {
   );
   if (packageJson.dependencies?.kitcn) {
     packageJson.dependencies.kitcn = getLocalInstallSpec();
-    writeJson(packageJsonPath, packageJson);
   }
+  writeJson(packageJsonPath, packageJson);
 
   return packageDir;
 };

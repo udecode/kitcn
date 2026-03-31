@@ -93,7 +93,7 @@ See the [API Reference](#convexbetterauth) below for full details on what `conve
 
 Set up the client provider with Better Auth. The `initialToken` prop enables authenticated SSR:
 
-```tsx title="src/lib/convex/convex-provider.tsx" showLineNumbers {2-3,9-12,18-23}
+```tsx title="src/lib/convex/convex-provider.tsx" showLineNumbers {2-3,9-13,19-24}
 'use client';
 
 import { ConvexReactClient } from 'convex/react';
@@ -107,7 +107,7 @@ import type { Auth } from '@convex/auth-shared';
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_SITE_URL,
+  baseURL: process.env.NEXT_PUBLIC_SITE_URL!,
   plugins: [inferAdditionalFields<Auth>(), convexClient()],
 });
 

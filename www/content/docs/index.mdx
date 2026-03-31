@@ -106,9 +106,9 @@ If you're an AI agent integrating kitcn, **ask the user to select their stack be
    - `kitcn add ratelimit`
    - `kitcn add resend`
 3. On backend `convex`, `init` and `dev` run `convex init` before kitcn codegen.
-4. Use `kitcn verify` for a one-shot local runtime proof in the current app. Use `kitcn dev --bootstrap` when you specifically want one-shot local setup. During local Convex dev, `convex/.env` edits auto-sync. `kitcn add auth --yes` also finishes local auth bootstrap in one pass. Use `kitcn env push` for `--prod`, `--rotate`, or explicit repair against an active deployment.
+4. Use `kitcn verify` for a one-shot local runtime proof in the current app. Run it with any long-running local backend process stopped first. Use `kitcn dev --bootstrap` when you specifically want one-shot local setup. During local Convex dev, `convex/.env` edits auto-sync. `kitcn add auth --yes` also finishes local auth bootstrap in one pass. Use `kitcn env push` for `--prod`, `--rotate`, or explicit repair against an active deployment.
 5. Use `kitcn insights` when you need the upstream Convex insights view from the same CLI entrypoint.
-6. If browser smoke says use `http://localhost:3000` but port 3000 is occupied, run smoke on the actual dev server port instead and note it in the report.
+6. Local auth setup assumes `http://localhost:3000` for the app. If you move the app to another port, update `.env.local` `NEXT_PUBLIC_SITE_URL`, `convex/.env` `SITE_URL`, and the app dev script before running smoke or auth flows.
 
 **Docs-by-section approach:**
 1. Follow [Quickstart](/docs/quickstart) for initial setup

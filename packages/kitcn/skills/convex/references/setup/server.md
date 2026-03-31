@@ -1,6 +1,6 @@
 ## 5. Core Backend
 
-For production bootstrap, start in the CLI Registry: use `bunx kitcn init -t <next|vite> --yes` for the shortest fresh local path, `bunx kitcn init --yes` to adopt the current app and finish the first local Convex bootstrap in one command, and `bunx kitcn add <plugin>` for feature layers. This file is the manual backend wiring reference.
+For production bootstrap, start in the CLI Registry: use `npx kitcn@latest init -t <next|vite> --yes` for the shortest fresh local path, `npx kitcn@latest init --yes` to adopt the current app and finish the first local Convex bootstrap in one command, and `bunx kitcn add <plugin>` for feature layers. This file is the manual backend wiring reference.
 
 ### 5.1 Define schema and relations
 
@@ -204,8 +204,8 @@ Do not fake generated files.
 
 Automation/non-interactive path:
 
-1. Run `bunx kitcn init --yes` when you want scaffold or adoption plus the one-shot local Convex bootstrap in one command.
-2. Run `bunx kitcn verify` when you want a non-interactive local runtime proof in the current app. It reuses an existing local deployment when one is already configured, and only falls back to anonymous fresh-local setup when it has to.
+1. Run `npx kitcn@latest init --yes` when you want scaffold or adoption plus the one-shot local Convex bootstrap in one command.
+2. Run `bunx kitcn verify` when you want a non-interactive local runtime proof in the current app. Stop any long-running local backend first. It reuses an existing local deployment when one is already configured, and only falls back to anonymous fresh-local setup when it has to.
 3. Confirm the generated runtime exists in `convex/functions/generated/server.ts`.
 4. Then run `bunx kitcn dev` for ongoing codegen/API refresh.
 
@@ -222,7 +222,7 @@ Agent command policy:
 1. Default to `bunx kitcn dev`.
 2. `kitcn dev` already runs codegen/API generation.
 3. Do not run `bunx kitcn codegen` as a separate default step.
-4. Use `bunx kitcn verify` for one-shot local runtime proof in CI or agent runs.
+4. Use `bunx kitcn verify` for one-shot local runtime proof in CI or agent runs, with any long-running local backend stopped first.
 5. Use manual `bunx kitcn codegen` only as fallback when `kitcn dev` cannot be run and backend is already active.
 6. Use `bunx kitcn insights` for cloud-deployment debugging; it forwards to the upstream Convex insights CLI.
 

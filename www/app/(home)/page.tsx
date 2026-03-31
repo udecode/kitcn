@@ -14,6 +14,7 @@ import {
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { CopyButton } from '@/components/copy-button';
+import { getLatestKitcnCommands } from '@/lib/kitcn-commands';
 
 const features = [
   {
@@ -382,6 +383,8 @@ const steps = [
 ];
 
 function Hero() {
+  const initCommand = getLatestKitcnCommands('init -t next --yes').npm;
+
   return (
     <section className="flex flex-col items-center px-6 pt-20 pb-8 text-center md:pt-32 md:pb-12">
       <h1 className="text-balance font-black text-5xl text-fd-foreground md:text-6xl lg:text-7xl">
@@ -401,12 +404,12 @@ function Hero() {
         </div>
         <div className="relative">
           <pre className="overflow-x-auto bg-[#282a36] px-4 py-5 pr-14 text-left font-mono text-[#f8f8f2] text-sm md:text-base">
-            <code>npx kitcn init -t next</code>
+            <code>{initCommand}</code>
           </pre>
           <CopyButton
             className="top-3 right-3 border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
             label="Copy command"
-            value="npx kitcn init -t next"
+            value={initCommand}
           />
         </div>
       </div>

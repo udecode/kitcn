@@ -30,8 +30,9 @@ Let's start with an empty directory and let the CLI own the bootstrap.
 ```bash showLineNumbers
 mkdir my-app
 cd my-app
-bunx kitcn init -t next --yes
 ```
+
+<KitcnLatestCommandTabs commands="init -t next --yes" />
 
 `init -t next` creates the Next.js shell and layers in the kitcn
 baseline in one pass. That includes the backend files, client providers, local
@@ -49,7 +50,7 @@ Here are the key files the quickstart uses:
 | `components/providers.tsx` | App-level providers |
 | `app/convex/page.tsx` | Starter demo page |
 
-If you already have a supported app shell, use `kitcn init --yes`
+If you already have a supported app shell, use `npx kitcn@latest init --yes`
 instead. That adoption path is documented in
 [/docs/cli/registry](/docs/cli/registry).
 

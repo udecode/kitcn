@@ -1707,7 +1707,10 @@ describe('cli/cli', () => {
         path.join(dir, 'lib', 'convex', 'auth-client.ts'),
         'utf8'
       );
-      expect(authClientSource).toContain('process.env.NEXT_PUBLIC_SITE_URL!');
+      expect(authClientSource).toContain(
+        'baseURL: process.env.NEXT_PUBLIC_SITE_URL!'
+      );
+      expect(authClientSource).toContain('createAuthClient({');
       expect(authClientSource).not.toContain(
         'process.env.NEXT_PUBLIC_CONVEX_SITE_URL!'
       );

@@ -7,10 +7,10 @@ Feature gate: only apply this section if auth is enabled.
 If kitcn is not bootstrapped yet, start there first:
 
 ```bash
-bunx kitcn init -t next --yes
+npx kitcn@latest init -t next --yes
 ```
 
-Use `bunx kitcn init --yes` instead for in-place adoption of the
+Use `npx kitcn@latest init --yes` instead for in-place adoption of the
 current supported app.
 
 Then install auth:
@@ -82,7 +82,7 @@ export default defineAuth(() => ({
 
 Canonical rule:
 
-1. `bunx kitcn init --yes`, `bunx kitcn dev`, and `bunx kitcn add auth --yes` all drive generation of `convex/functions/generated/` when they own the local Convex flow.
+1. `npx kitcn@latest init --yes`, `bunx kitcn dev`, and `bunx kitcn add auth --yes` all drive generation of `convex/functions/generated/` when they own the local Convex flow.
 2. `auth.ts` default-exports `defineAuth(() => ({ ...options, triggers }))` imported from `./generated/auth`.
 3. Import runtime auth contract (`getAuth`, `authClient`, CRUD/triggers, `auth`) from `<functionsDir>/generated/auth`.
 4. If `auth.ts` is missing or incomplete, codegen still succeeds and generated runtime exports `authEnabled = false` with setup guidance at call time.

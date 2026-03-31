@@ -86,7 +86,7 @@ Quickstart path:
 ```bash
 mkdir my-app
 cd my-app
-bunx kitcn init -t next --yes
+npx kitcn@latest init -t next --yes
 ```
 
 Then start the long-running backend with `bunx kitcn dev`, run the
@@ -99,19 +99,19 @@ Use the CLI first:
 
 ```bash
 # Adopt the current supported app in place
-bunx kitcn init --yes
+npx kitcn@latest init --yes
 
 # Adopt the current supported app on Concave
-bunx kitcn --backend concave init --yes
+npx kitcn@latest --backend concave init --yes
 
 # New Next.js app with deterministic shadcn bootstrap + first local Convex bootstrap
-bunx kitcn init -t next --yes
+npx kitcn@latest init -t next --yes
 
 # New Vite app with the React baseline + first local Convex bootstrap
-bunx kitcn init -t vite --yes
+npx kitcn@latest init -t vite --yes
 
 # Nested app target
-bunx kitcn init -t next --yes --cwd apps --name web
+npx kitcn@latest init -t next --yes --cwd apps --name web
 ```
 
 Then add only the features you want:
@@ -373,6 +373,13 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 Rule: real-time URL uses `.cloud`; HTTP/router/caller URL uses `.site`.
 
+Local auth contract:
+
+1. Default app origin is `http://localhost:3000`.
+2. If you move the app to another local port, update `.env.local`
+   `NEXT_PUBLIC_SITE_URL`, `convex/.env` `SITE_URL`, and the app dev script
+   together.
+
 ### 4.3 Typed env helper (recommended for full backend parity)
 
 When multiple Convex functions and libs share env values (auth, billing, dev guards), create one typed helper:
@@ -598,6 +605,7 @@ CLI commands:
 ```bash
 bunx kitcn dev
 # deterministic one-shot local runtime proof:
+# stop any long-running local backend first
 bunx kitcn verify
 # optional fallback only if dev cannot run and backend is already active:
 bunx kitcn codegen
@@ -622,6 +630,7 @@ dev session and auto-pushes later edits. Keep `env push` for `--prod`,
 Run these after base setup (Sections 3-5) and before starting Section 6:
 
 ```bash
+# stop any long-running local backend first
 bunx kitcn verify
 bunx convex run internal.seed.seed
 bunx convex run internal.init.default
@@ -643,6 +652,7 @@ Then sanity-check runtime paths (non-auth only):
 Run this after Section 6 and before Sections 7-10:
 
 ```bash
+# stop any long-running local backend first
 bunx kitcn verify
 bun run typecheck || bunx tsc --noEmit
 bun test
