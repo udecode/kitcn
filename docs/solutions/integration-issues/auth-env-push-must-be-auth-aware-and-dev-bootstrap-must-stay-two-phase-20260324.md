@@ -51,7 +51,7 @@ handling it inside the CLI lifecycle.
 Make `kitcn env push` auth-aware by default and remove the public
 `--auth` flag.
 
-Use scaffold state, not `concave.json`, to detect auth:
+Use scaffold state, not `kitcn.json`, to detect auth:
 
 - if auth scaffold is absent, `env push` behaves like normal env sync
 - if auth scaffold is present, `env push` ensures `BETTER_AUTH_SECRET`, fetches

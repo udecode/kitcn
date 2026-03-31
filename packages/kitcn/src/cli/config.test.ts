@@ -4,7 +4,8 @@ import path from 'node:path';
 import type { CliConfig } from './config';
 import { loadCliConfig } from './config';
 
-const CONCAVE_CONFIG_FILE = 'concave.json';
+const KITCN_CONFIG_FILE = 'kitcn.json';
+const LEGACY_CONFIG_FILE = 'concave.json';
 
 function mkTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-config-'));
@@ -16,23 +17,12 @@ function writeFile(filePath: string, content: string) {
 }
 
 function writeCliConfig(dir: string, config: Record<string, unknown>) {
-  writeFile(
-    path.join(dir, CONCAVE_CONFIG_FILE),
-    JSON.stringify(
-      {
-        meta: {
-          kitcn: config,
-        },
-      },
-      null,
-      2
-    )
-  );
+  writeFile(path.join(dir, KITCN_CONFIG_FILE), JSON.stringify(config, null, 2));
 }
 
-function writeConcaveConfig(dir: string, config: Record<string, unknown>) {
+function writeLegacyConfig(dir: string, config: Record<string, unknown>) {
   writeFile(
-    path.join(dir, CONCAVE_CONFIG_FILE),
+    path.join(dir, LEGACY_CONFIG_FILE),
     JSON.stringify(config, null, 2)
   );
 }
@@ -95,7 +85,7 @@ const DEFAULT_CONFIG: CliConfig = {
 };
 
 describe('cli/config', () => {
-  test('loads concave.json meta["kitcn"] and ignores kitcn.config.ts', () => {
+  test('loads kitcn.json and ignores kitcn.config.ts', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -123,7 +113,7 @@ describe('cli/config', () => {
     }
   });
 
-  test('returns defaults when concave.json is missing', () => {
+  test('returns defaults when kitcn.json is missing', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
@@ -135,46 +125,43 @@ describe('cli/config', () => {
     }
   });
 
-  test('returns defaults when concave.json exists without meta["kitcn"]', () => {
+  test('throws when legacy concave.json exists without kitcn.json', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
-    writeConcaveConfig(dir, {
-      meta: {
-        otherTool: {
-          enabled: true,
-        },
-      },
-      deploy: {
-        target: 'cloudflare',
+    writeLegacyConfig(dir, {
+      paths: {
+        shared: 'convex/legacy-shared',
       },
     });
 
     process.chdir(dir);
     try {
-      expect(loadCliConfig()).toEqual(DEFAULT_CONFIG);
+      expect(() => loadCliConfig()).toThrow(
+        'Legacy config file concave.json is no longer supported'
+      );
     } finally {
       process.chdir(oldCwd);
     }
   });
 
-  test('throws when legacy kitcn.json exists without concave.json', () => {
+  test('loads explicit custom.json with top-level schema', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
     writeFile(
-      path.join(dir, 'kitcn.json'),
+      path.join(dir, 'custom.json'),
       JSON.stringify({
         paths: {
-          shared: 'convex/legacy-shared',
+          shared: 'convex/custom-shared',
         },
       })
     );
 
     process.chdir(dir);
     try {
-      expect(() => loadCliConfig()).toThrow(
-        'Legacy config file kitcn.json is no longer supported'
+      expect(loadCliConfig('./custom.json').paths.shared).toBe(
+        'convex/custom-shared'
       );
     } finally {
       process.chdir(oldCwd);
@@ -220,26 +207,28 @@ describe('cli/config', () => {
     }
   });
 
-  test('throws when explicit config file has no meta["kitcn"] object', () => {
+  test('loads explicit concave.json with top-level schema', () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
 
     writeFile(
-      path.join(dir, 'custom.json'),
+      path.join(dir, 'concave.json'),
       JSON.stringify({
-        meta: {
-          somethingElse: {
-            foo: 'bar',
-          },
+        backend: 'concave',
+        paths: {
+          shared: 'convex/legacy-name',
         },
       })
     );
 
     process.chdir(dir);
     try {
-      expect(() => loadCliConfig('./custom.json')).toThrow(
-        'Missing meta["kitcn"]'
-      );
+      expect(loadCliConfig('./concave.json')).toMatchObject({
+        backend: 'concave',
+        paths: {
+          shared: 'convex/legacy-name',
+        },
+      });
     } finally {
       process.chdir(oldCwd);
     }
@@ -459,7 +448,7 @@ describe('cli/config', () => {
 
     process.chdir(dir);
     try {
-      expect(() => loadCliConfig()).toThrow('Invalid meta["kitcn"].backend in');
+      expect(() => loadCliConfig()).toThrow('Invalid backend in');
     } finally {
       process.chdir(oldCwd);
     }
@@ -522,7 +511,7 @@ describe('cli/config', () => {
     process.chdir(dir);
     try {
       expect(() => loadCliConfig()).toThrow('Unknown config key');
-      expect(() => loadCliConfig()).toThrow('meta["kitcn"].plugins');
+      expect(() => loadCliConfig()).toThrow('plugins');
     } finally {
       process.chdir(oldCwd);
     }
@@ -712,7 +701,7 @@ describe('cli/config', () => {
     process.chdir(dir);
     try {
       expect(() => loadCliConfig()).toThrow('Unknown config key');
-      expect(() => loadCliConfig()).toThrow('meta["kitcn"].api');
+      expect(() => loadCliConfig()).toThrow('api');
     } finally {
       process.chdir(oldCwd);
     }
@@ -752,7 +741,7 @@ describe('cli/config', () => {
     process.chdir(dir);
     try {
       expect(() => loadCliConfig()).toThrow('Unknown config key');
-      expect(() => loadCliConfig()).toThrow('meta["kitcn"].plugins');
+      expect(() => loadCliConfig()).toThrow('plugins');
     } finally {
       process.chdir(oldCwd);
     }
@@ -771,7 +760,7 @@ describe('cli/config', () => {
     process.chdir(dir);
     try {
       expect(() => loadCliConfig()).toThrow('Unknown config key');
-      expect(() => loadCliConfig()).toThrow('meta["kitcn"].plugins');
+      expect(() => loadCliConfig()).toThrow('plugins');
     } finally {
       process.chdir(oldCwd);
     }
@@ -792,7 +781,7 @@ describe('cli/config', () => {
     process.chdir(dir);
     try {
       expect(() => loadCliConfig()).toThrow('Unknown config key');
-      expect(() => loadCliConfig()).toThrow('meta["kitcn"].plugins');
+      expect(() => loadCliConfig()).toThrow('plugins');
     } finally {
       process.chdir(oldCwd);
     }

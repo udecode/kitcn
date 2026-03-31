@@ -150,25 +150,18 @@ const resolveFunctionsDir = (projectDir: string) => {
 };
 
 const resolveSharedDir = (projectDir: string) => {
-  const concaveConfigPath = path.join(projectDir, 'concave.json');
-  if (!existsSync(concaveConfigPath)) {
+  const kitcnConfigPath = path.join(projectDir, 'kitcn.json');
+  if (!existsSync(kitcnConfigPath)) {
     return path.join(projectDir, 'convex', 'shared');
   }
 
-  const concaveConfig = readJson<{
-    meta?: {
-      kitcn?: {
-        paths?: {
-          shared?: string;
-        };
-      };
+  const kitcnConfig = readJson<{
+    paths?: {
+      shared?: string;
     };
-  }>(concaveConfigPath);
+  }>(kitcnConfigPath);
 
-  return path.join(
-    projectDir,
-    concaveConfig.meta?.kitcn?.paths?.shared ?? 'convex/shared'
-  );
+  return path.join(projectDir, kitcnConfig.paths?.shared ?? 'convex/shared');
 };
 
 const orderImportName = (left: string, right: string) =>

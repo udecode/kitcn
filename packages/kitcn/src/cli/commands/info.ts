@@ -182,7 +182,7 @@ export const handleInfoCommand = async (
         : undefined,
       kitcnVersion: versions.kitcnVersion,
       convexVersion: versions.convexVersion,
-      configPath: (parsed.configPath ?? 'concave.json').replaceAll('\\', '/'),
+      configPath: (parsed.configPath ?? 'kitcn.json').replaceAll('\\', '/'),
       config: {
         lib: config.paths.lib,
         shared: config.paths.shared,

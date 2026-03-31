@@ -18,7 +18,7 @@ Options:
 | `--api <dir>` | Output directory for api.ts (default: `convex/shared`) |
 | `--backend <convex\|concave>` | Backend CLI to drive |
 | `--bootstrap` | Run one-shot local Convex bootstrap and exit |
-| `--config <path>` | Path to kitcn config file (default: `./concave.json`) |
+| `--config <path>` | Path to kitcn config file (default: `./kitcn.json`) |
 | `--backfill=auto\|on\|off` | Dev aggregate backfill mode toggle (default: `auto`) |
 | `--backfill-wait` / `--no-backfill-wait` | Wait for all target indexes to become `READY` |
 | `--backfill-batch-size <n>` | Batch size for aggregate backfill kickoff |
@@ -31,7 +31,7 @@ Wraps the selected backend `dev` command, generates runtime files on startup, wa
 On backend `convex`, `kitcn dev` runs `convex init` before codegen,
 watchers, and the main `convex dev` process.
 
-Set `meta["kitcn"].dev.preRun` in `concave.json` to run one Convex
+Set `dev.preRun` in `kitcn.json` to run one Convex
 setup function inside the main dev loop. It is Convex-only; backend `concave`
 has no equivalent `--run` flow.
 
@@ -85,7 +85,7 @@ Options:
 | `--api <dir>` | Output directory (default: `convex/shared`) |
 | `--backend <convex\|concave>` | Backend CLI to drive |
 | `--scope <all\|auth\|orm>` | Generation scope (default: `all`) |
-| `--config <path>` | Path to kitcn config file (default: `./concave.json`) |
+| `--config <path>` | Path to kitcn config file (default: `./kitcn.json`) |
 | `--debug` | Show detailed output |
 | `--silent` | Suppress all output |
 
@@ -341,8 +341,7 @@ The CLI extracts metadata from procedure exports automatically. See [Metadata Ex
 
 ## Configuration
 
-`kitcn` supports a project config at `./concave.json` (or pass `--config <path>`).
-It reads settings from `meta["kitcn"]`.
+`kitcn` supports a project config at `./kitcn.json` (or pass `--config <path>`).
 
 The CLI reads from `convex.json`:
 
@@ -455,63 +454,59 @@ export const admin = authQuery
 
 ### Configuration Reference
 
-`kitcn` supports a project config at `./concave.json` (or `--config <path>`):
+`kitcn` supports a project config at `./kitcn.json` (or `--config <path>`):
 
-```json title="concave.json" showLineNumbers
+```json title="kitcn.json" showLineNumbers
 {
-  "meta": {
-    "kitcn": {
-      "paths": {
-        "lib": "convex/lib",
-        "shared": "convex/shared"
-      },
-      "dev": {
-        "debug": false,
-        "args": [],
-        "preRun": "init",
-        "aggregateBackfill": {
-          "enabled": "auto",
-          "wait": true,
-          "batchSize": 1000,
-          "pollIntervalMs": 1000,
-          "timeoutMs": 900000,
-          "strict": false
-        },
-        "migrations": {
-          "enabled": "auto",
-          "wait": true,
-          "batchSize": 256,
-          "pollIntervalMs": 1000,
-          "timeoutMs": 900000,
-          "strict": false,
-          "allowDrift": true
-        }
-      },
-      "codegen": {
-        "debug": false,
-        "scope": "all",
-        "args": []
-      },
-      "deploy": {
-        "args": [],
-        "aggregateBackfill": {
-          "enabled": "auto",
-          "wait": true,
-          "batchSize": 1000,
-          "pollIntervalMs": 1000,
-          "timeoutMs": 900000,
-          "strict": true
-        },
-        "migrations": {
-          "enabled": "auto",
-          "wait": true,
-          "batchSize": 256,
-          "pollIntervalMs": 1000,
-          "timeoutMs": 900000,
-          "strict": true,
-          "allowDrift": false
-        }
-      }
+  "paths": {
+    "lib": "convex/lib",
+    "shared": "convex/shared"
+  },
+  "dev": {
+    "debug": false,
+    "args": [],
+    "preRun": "init",
+    "aggregateBackfill": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 1000,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": false
+    },
+    "migrations": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 256,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": false,
+      "allowDrift": true
+    }
+  },
+  "codegen": {
+    "debug": false,
+    "scope": "all",
+    "args": []
+  },
+  "deploy": {
+    "args": [],
+    "aggregateBackfill": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 1000,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": true
+    },
+    "migrations": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 256,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": true,
+      "allowDrift": false
     }
   }
 }
@@ -524,4 +519,4 @@ Precedence:
 3. If `codegen.scope` is missing, it defaults to `all`.
 4. Plugin lockfile path is fixed at `<functionsDir>/plugins.lock.json`.
 
-If no config file is found, defaults are used silently. If only `kitcn.json` exists, the CLI exits with a legacy-config error. If `--config` points to a missing file, the CLI exits with an error.
+If no config file is found, defaults are used silently. If `--config` points to a missing file, the CLI exits with an error.

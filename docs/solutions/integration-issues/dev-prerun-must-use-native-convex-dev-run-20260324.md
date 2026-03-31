@@ -19,7 +19,7 @@ symptoms:
 
 ## Problem
 
-`kitcn dev` supported `meta["kitcn"].dev.preRun`, but it
+`kitcn dev` supported `dev.preRun`, but it
 implemented that hook as a separate `convex run <function>` call before the
 main `convex dev` process started.
 

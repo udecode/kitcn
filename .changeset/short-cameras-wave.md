@@ -18,8 +18,7 @@ import { defineSchema } from "kitcn/orm";
 import { sendEmail } from "@kitcn/resend";
 ```
 
-- Use `concave.json` as the kitcn config file. `kitcn.json`
-  and `kitcn.config.ts` are not loaded.
+- Use `kitcn.json` as the default discovered kitcn config file.
 
 ```ts
 // Before
@@ -29,12 +28,8 @@ export default {
 
 // After
 {
-  "meta": {
-    "kitcn": {
-      "paths": {
-        "shared": "convex/shared"
-      }
-    }
+  "paths": {
+    "shared": "convex/shared"
   }
 }
 ```
@@ -100,7 +95,7 @@ import { useRatelimit } from "kitcn/ratelimit/react";
 - Add a registry-driven CLI with `init`, `add`, `view`, `info`, and `docs`,
   plus `--json`, dry-run, and diff output for scaffold changes.
 - Add backend-aware CLI support for both Convex and Concave, including
-  `concave.json`, local bootstrap wrappers, and `kitcn verify`.
+  `kitcn.json`, local bootstrap wrappers, and `kitcn verify`.
 - Add project-owned ORM migrations with generated `defineMigration(...)`
   helpers, migration manifests, docs, and `kitcn migrate`.
 - Add starter scaffolds for Next.js and Vite, plus adoption flows for raw

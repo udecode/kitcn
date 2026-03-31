@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { CodegenScope } from './codegen.js';
 
-const DEFAULT_JSON_CONFIG_PATH = 'concave.json';
-const LEGACY_JSON_CONFIG_PATH = 'kitcn.json';
+const DEFAULT_JSON_CONFIG_PATH = 'kitcn.json';
+const LEGACY_JSON_CONFIG_PATH = 'concave.json';
 
 const CODEGEN_SCOPES = new Set<CodegenScope>(['all', 'auth', 'orm']);
 const BACKFILL_ENABLED_VALUES = new Set(['auto', 'on', 'off']);
@@ -672,7 +672,7 @@ export function loadCliConfig(configPathArg?: string): CliConfig {
 
   if (!hasExplicitConfigPath && legacyPath) {
     throw new Error(
-      `Legacy config file ${LEGACY_JSON_CONFIG_PATH} is no longer supported. Use ${DEFAULT_JSON_CONFIG_PATH} with meta["kitcn"].`
+      `Legacy config file ${LEGACY_JSON_CONFIG_PATH} is no longer supported. Use ${DEFAULT_JSON_CONFIG_PATH}.`
     );
   }
 
@@ -700,34 +700,11 @@ export function loadCliConfig(configPathArg?: string): CliConfig {
     );
   }
 
-  const rawMeta = rawConfig.meta;
-  if (rawMeta !== undefined && !isRecord(rawMeta)) {
-    throw new Error(
-      `Invalid meta in ${resolvedConfigPath}: expected object when provided.`
-    );
-  }
-
-  const kitcnConfig = isRecord(rawMeta) ? rawMeta.kitcn : undefined;
-
-  if (kitcnConfig === undefined) {
-    if (hasExplicitConfigPath) {
-      throw new Error(`Missing meta["kitcn"] in ${resolvedConfigPath}.`);
-    }
-    return createDefaultConfig();
-  }
-
-  if (!isRecord(kitcnConfig)) {
-    throw new Error(
-      `Invalid meta["kitcn"] in ${resolvedConfigPath}: expected object.`
-    );
-  }
-
-  const parsedConfig = kitcnConfig;
+  const parsedConfig = rawConfig;
   assertNoUnknownKeys(
     parsedConfig,
     ['backend', 'paths', 'hooks', 'dev', 'codegen', 'deploy'],
-    resolvedConfigPath,
-    'meta["kitcn"]'
+    resolvedConfigPath
   );
 
   const config = createDefaultConfig();
@@ -735,7 +712,7 @@ export function loadCliConfig(configPathArg?: string): CliConfig {
   if ('backend' in parsedConfig && parsedConfig.backend !== undefined) {
     config.backend = parseBackend(
       parsedConfig.backend,
-      'meta["kitcn"].backend',
+      'backend',
       resolvedConfigPath
     );
   }

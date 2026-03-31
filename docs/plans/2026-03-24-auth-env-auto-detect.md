@@ -29,5 +29,5 @@ backend is up.
 ## Notes
 
 - Hard cut only. No compatibility alias for `--auth`.
-- Auth detection belongs in scaffold/plugin state, not `concave.json`.
+- Auth detection belongs in scaffold/plugin state, not `kitcn.json`.
 - Keep `--rotate`; it is a real distinct action.

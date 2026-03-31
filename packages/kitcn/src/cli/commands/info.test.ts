@@ -46,7 +46,7 @@ describe('cli/commands/info', () => {
         lockfileExists: true,
         kitcnVersion: '0.9.0',
         convexVersion: '1.0.0',
-        configPath: 'concave.json',
+        configPath: 'kitcn.json',
         config: {
           lib: 'convex/lib',
           shared: 'convex/shared',

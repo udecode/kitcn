@@ -357,7 +357,7 @@ describe('cli/commands/init', () => {
       expect(fs.existsSync(path.join(expectedProjectDir, 'package.json'))).toBe(
         true
       );
-      expect(fs.existsSync(path.join(expectedProjectDir, 'concave.json'))).toBe(
+      expect(fs.existsSync(path.join(expectedProjectDir, 'kitcn.json'))).toBe(
         true
       );
     } finally {
@@ -1549,13 +1549,9 @@ describe('cli/commands/init', () => {
         })
       ).toBe(true);
       expect(
-        JSON.parse(fs.readFileSync(path.join(tmpDir, 'concave.json'), 'utf8'))
+        JSON.parse(fs.readFileSync(path.join(tmpDir, 'kitcn.json'), 'utf8'))
       ).toMatchObject({
-        meta: {
-          kitcn: {
-            backend: 'concave',
-          },
-        },
+        backend: 'concave',
       });
     } finally {
       process.chdir(originalCwd);

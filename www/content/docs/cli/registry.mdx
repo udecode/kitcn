@@ -53,7 +53,7 @@ in the kitcn seam:
 - `convex/lib/crpc.ts`
 - `convex/lib/get-env.ts`
 - `convex/shared/api.ts`
-- `concave.json`
+- `kitcn.json`
 
 It also applies a few narrow shell patches where they belong:
 
@@ -107,7 +107,7 @@ Convex codegen pass. Deployment-targeting flags such as `--prod`,
 Backend resolution order stays:
 
 1. `--backend`
-2. `meta["kitcn"].backend`
+2. `backend` in `kitcn.json`
 3. `convex`
 
 ### Options
@@ -153,7 +153,7 @@ The preview surface covers:
 
 - scaffold files
 - env helper bootstrap
-- `concave.json`
+- `kitcn.json`
 - `convex.json` when needed
 - `schema.ts`
 - `http.ts`

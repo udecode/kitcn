@@ -947,7 +947,7 @@ describe('cli/cli', () => {
       );
       expect(localEnvSource).toContain('DEPLOY_ENV=development');
       expect(localEnvSource).toContain('SITE_URL=http://localhost:3000');
-      expect(fs.existsSync(path.join(dir, 'concave.json'))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'kitcn.json'))).toBe(true);
     } finally {
       if (originalAgentMode === undefined) {
         process.env.CONVEX_AGENT_MODE = undefined;
@@ -1251,7 +1251,7 @@ describe('cli/cli', () => {
             kind: 'lockfile',
           }),
           expect.objectContaining({
-            path: 'concave.json',
+            path: 'kitcn.json',
             kind: 'config',
           }),
           expect.objectContaining({
@@ -1971,7 +1971,7 @@ describe('cli/cli', () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(fs.existsSync(path.join(dir, 'concave.json'))).toBe(false);
+      expect(fs.existsSync(path.join(dir, 'kitcn.json'))).toBe(false);
       expect(fs.existsSync(path.join(dir, 'convex', 'lib', 'get-env.ts'))).toBe(
         false
       );
@@ -2115,7 +2115,7 @@ describe('cli/cli', () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(fs.existsSync(path.join(dir, 'concave.json'))).toBe(false);
+      expect(fs.existsSync(path.join(dir, 'kitcn.json'))).toBe(false);
       expect(
         fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'crpc.tsx'))
       ).toBe(false);
@@ -3027,19 +3027,13 @@ describe('cli/cli', () => {
       );
       expect(envSource).toContain('RESEND_FROM_EMAIL: z.string().optional()');
       const createdConfig = JSON.parse(
-        fs.readFileSync(path.join(dir, 'concave.json'), 'utf8')
+        fs.readFileSync(path.join(dir, 'kitcn.json'), 'utf8')
       ) as {
-        meta?: {
-          kitcn?: {
-            paths?: {
-              env?: string;
-            };
-          };
+        paths?: {
+          env?: string;
         };
       };
-      expect(createdConfig.meta?.kitcn?.paths?.env).toBe(
-        'convex/lib/get-env.ts'
-      );
+      expect(createdConfig.paths?.env).toBe('convex/lib/get-env.ts');
       expect(
         fs.readFileSync(
           path.join(dir, 'convex', 'lib', 'plugins', 'resend', 'plugin.ts'),
@@ -4486,19 +4480,13 @@ describe('cli/cli', () => {
         "SITE_URL: z.string().default('http://localhost:3000')"
       );
       const createdConfig = JSON.parse(
-        fs.readFileSync(path.join(dir, 'concave.json'), 'utf8')
+        fs.readFileSync(path.join(dir, 'kitcn.json'), 'utf8')
       ) as {
-        meta?: {
-          kitcn?: {
-            paths?: {
-              env?: string;
-            };
-          };
+        paths?: {
+          env?: string;
         };
       };
-      expect(createdConfig.meta?.kitcn?.paths?.env).toBe(
-        'convex/lib/get-env.ts'
-      );
+      expect(createdConfig.paths?.env).toBe('convex/lib/get-env.ts');
     } finally {
       process.chdir(oldCwd);
     }
@@ -6463,9 +6451,7 @@ describe('cli/cli', () => {
         syncEnv: syncEnvStub as any,
         loadCliConfig: loadConfigStub as any,
       })
-    ).rejects.toThrow(
-      '`--pre-run` was removed. Use meta["kitcn"].dev.preRun in concave.json.'
-    );
+    ).rejects.toThrow('`--pre-run` was removed. Use dev.preRun in kitcn.json.');
 
     expect(generateMetaStub).not.toHaveBeenCalled();
     expect(execaStub).not.toHaveBeenCalled();

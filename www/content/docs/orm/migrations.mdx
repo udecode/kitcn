@@ -152,21 +152,17 @@ Cancels a currently running migration. Useful if a migration is taking too long 
 
 By default, deploy is **strict** — it blocks on migration drift and waits for completion. You can configure this behavior per environment:
 
-```json title="concave.json" showLineNumbers {6-14}
+```json title="kitcn.json" showLineNumbers {3-11}
 {
-  "meta": {
-    "kitcn": {
-      "deploy": {
-        "migrations": {
-          "enabled": "auto",
-          "wait": true,
-          "batchSize": 256,
-          "pollIntervalMs": 1000,
-          "timeoutMs": 900000,
-          "strict": true,
-          "allowDrift": false
-        }
-      }
+  "deploy": {
+    "migrations": {
+      "enabled": "auto",
+      "wait": true,
+      "batchSize": 256,
+      "pollIntervalMs": 1000,
+      "timeoutMs": 900000,
+      "strict": true,
+      "allowDrift": false
     }
   }
 }

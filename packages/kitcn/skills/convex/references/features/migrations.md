@@ -95,15 +95,13 @@ export const migrations = defineMigrationSet([migration1, migration2]);
 
 `kitcn deploy` auto-runs: `convex deploy` → `migrate up` → `aggregate backfill`.
 
-Config in `concave.json` under `meta["kitcn"]`:
+Config in `kitcn.json`:
 
 ```json
 {
-  "meta": {
-    "kitcn": {
-      "deploy": {
-        "migrations": {
-          "enabled": "auto",
+  "deploy": {
+    "migrations": {
+      "enabled": "auto",
           "wait": true,
           "batchSize": 256,
           "pollIntervalMs": 1000,

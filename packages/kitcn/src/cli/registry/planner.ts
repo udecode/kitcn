@@ -110,7 +110,7 @@ const resolveDefaultEnvHelperPath = (config: CliConfig): string =>
   );
 
 const resolveConfigWritePath = (configPathArg?: string): string =>
-  resolve(process.cwd(), configPathArg ?? 'concave.json');
+  resolve(process.cwd(), configPathArg ?? 'kitcn.json');
 
 const resolveEnvHelperFilePath = (envPath: string): string => {
   const normalized = normalizeRelativePathOrThrow(envPath, 'paths.env');
@@ -246,24 +246,18 @@ const renderConfigWithEnvPath = (
   }
 
   const nextRoot = { ...existingRaw } as Record<string, unknown>;
-  const nextMeta = isPlainObject(nextRoot.meta) ? { ...nextRoot.meta } : {};
-  const nextCliConfig = isPlainObject(nextMeta.kitcn)
-    ? { ...(nextMeta.kitcn as Record<string, unknown>) }
-    : {};
-  const nextPaths = isPlainObject(nextCliConfig.paths)
-    ? { ...(nextCliConfig.paths as Record<string, unknown>) }
+  const nextPaths = isPlainObject(nextRoot.paths)
+    ? { ...(nextRoot.paths as Record<string, unknown>) }
     : {};
 
   nextPaths.lib = config.paths.lib;
   nextPaths.shared = config.paths.shared;
   nextPaths.env = envPath;
 
-  nextCliConfig.paths = nextPaths;
-  if (config.backend !== 'convex' || 'backend' in nextCliConfig) {
-    nextCliConfig.backend = config.backend;
+  nextRoot.paths = nextPaths;
+  if (config.backend !== 'convex' || 'backend' in nextRoot) {
+    nextRoot.backend = config.backend;
   }
-  nextMeta.kitcn = nextCliConfig;
-  nextRoot.meta = nextMeta;
 
   return `${JSON.stringify(nextRoot, null, 2)}\n`;
 };

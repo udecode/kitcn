@@ -108,12 +108,12 @@ Trigger composition rules:
 4. `kitcn codegen` must not generate plugin runtime modules.
 5. Scaffold templates need stable template IDs.
 6. `add` can merge/upsert scaffold mappings; never clobber custom files unless overwrite is explicit.
-7. `add --dry-run`, `add --diff [path]`, and `add --view [path]` preview one shared install plan: scaffold files, env bootstrap, `concave.json`, schema registration, lockfile write, dependency install status, codegen/hooks, env reminders.
+7. `add --dry-run`, `add --diff [path]`, and `add --view [path]` preview one shared install plan: scaffold files, env bootstrap, `kitcn.json`, schema registration, lockfile write, dependency install status, codegen/hooks, env reminders.
 8. Preview comparisons for `.ts`, `.tsx`, `.js`, `.jsx`, and `.json` should be semantic enough to ignore formatter-only churn.
 9. `view` is read-only plan inspection. Default template source is lockfile mappings, fallback is the resolved preset, `--preset` forces preset selection.
 10. `info` audits installed plugins from schema + lockfile and reports scaffold drift / missing dependencies.
 11. Runtime packages should stay focused on stable logic; function wiring and schema stay local.
-12. If `paths.env` is missing, `kitcn add <plugin>` bootstraps `${paths.lib}/get-env.ts` and writes `paths.env` into `concave.json`.
+12. If `paths.env` is missing, `kitcn add <plugin>` bootstraps `${paths.lib}/get-env.ts` and writes `paths.env` into `kitcn.json`.
 13. `envFields` can attach reminder metadata; `kitcn add <plugin>` prints those reminders against `<functionsDir>/.env` and includes them in JSON output.
 14. Scaffolded Convex files should read env through `getEnv()` only. Do not generate `process.env` access in plugin scaffolds.
 

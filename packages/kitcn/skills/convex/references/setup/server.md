@@ -444,7 +444,7 @@ bun add @kitcn/resend
 
 `kitcn add resend` scaffolds `convex/lib/plugins/resend/schema.ts` and registers `resendExtension()` in `convex/functions/schema.ts`.
 
-If `paths.env` is missing, the add flow also bootstraps `convex/lib/get-env.ts`, writes `paths.env` into `concave.json`, and adds resend env fields there. The schema keeps `RESEND_API_KEY` optional for local dev flow, and the add command reminds you to set it in `convex/.env` before sending email. Webhook secret and default sender stay optional.
+If `paths.env` is missing, the add flow also bootstraps `convex/lib/get-env.ts`, writes `paths.env` into `kitcn.json`, and adds resend env fields there. The schema keeps `RESEND_API_KEY` optional for local dev flow, and the add command reminds you to set it in `convex/.env` before sending email. Webhook secret and default sender stay optional.
 
 ```ts
 import { resendExtension } from "../lib/plugins/resend/schema";

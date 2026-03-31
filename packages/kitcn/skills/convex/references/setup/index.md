@@ -136,7 +136,7 @@ bunx kitcn add resend
 - `convex/lib/crpc.ts`
 - `convex/lib/get-env.ts`
 - `convex/shared/api.ts`
-- `concave.json`
+- `kitcn.json`
 
 Template-mode `init -t next` preserves the shadcn-owned shell (`app/layout.tsx`, `app/page.tsx`, `app/globals.css`, `components/theme-provider.tsx`, `lib/utils.ts`, `components.json`, `eslint.config.mjs`, `next.config.mjs`, `postcss.config.mjs`) and only patches:
 
@@ -149,7 +149,7 @@ Template-mode `init -t next` preserves the shadcn-owned shell (`app/layout.tsx`,
 Template-mode `init -t` also seeds a live messages demo route plus starter schema and
 procedures, so the scaffold has one working query/mutation flow out of the box.
 Template-mode `init -t` infers `src/` vs root app layouts and writes the Next client scaffold into the matching tree. Conflicting `src` + root layouts should fail instead of guessing.
-Backend resolves from `--backend`, then `meta["kitcn"].backend`, then `convex`.
+Backend resolves from `--backend`, then `backend` in `kitcn.json`, then `convex`.
 
 Universal scaffold rule:
 
@@ -420,7 +420,7 @@ Rules:
 
 1. `kitcn add <plugin>` bootstraps baseline files first when they are missing.
 2. `--diff [path]` / `--view [path]` match workspace-relative output path by exact match first, substring fallback.
-3. Preview scope includes scaffold files, env bootstrap, `concave.json`, schema registration, lockfile write, dependency install status, codegen/hooks, env reminders.
+3. Preview scope includes scaffold files, env bootstrap, `kitcn.json`, schema registration, lockfile write, dependency install status, codegen/hooks, env reminders.
 
 ### 11.1 Dev bootstrap functions (example parity mode)
 
@@ -588,7 +588,7 @@ Recommended scripts:
 }
 ```
 
-Set `meta["kitcn"].dev.preRun = "init"` in `concave.json` when the
+Set `dev.preRun = "init"` in `kitcn.json` when the
 app owns an `init.ts` preflight.
 
 CLI commands:

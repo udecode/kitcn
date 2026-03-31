@@ -11,7 +11,7 @@ tags:
   - typescript
 symptoms:
   - raw Convex auth adoption should use `convex init` first, then one `add auth --preset convex` command
-  - raw Convex auth adoption should not create concave.json, get-env.ts, or cRPC files
+  - raw Convex auth adoption should not create kitcn.json, get-env.ts, or cRPC files
   - staged bootstrap commands leak `--no-codegen`, manual `codegen --scope auth`, and manual `env push --auth` into user-facing flow
   - auth-scoped codegen fails on first bootstrap when auth.config.ts expects JWKS too early
   - env push --auth fails because generated auth code runs before BETTER_AUTH_SECRET is deployed
@@ -29,7 +29,7 @@ resolved: 2026-03-18
 started from `create-convex`, not from kitcn `create`.
 
 That path needed to stay bare: plain `convex/`, plain `httpRouter()`,
-no `concave.json`, no `convex/lib/get-env.ts`, and no cRPC scaffolding.
+no `kitcn.json`, no `convex/lib/get-env.ts`, and no cRPC scaffolding.
 
 The flow also needed to stop leaking bootstrap internals into docs and
 scenarios. The intended user path is:
@@ -89,7 +89,7 @@ The raw preset writes:
 - patches plain `convex/schema.ts` with `...authSchema`
 - writes plain `convex/http.ts` with `httpRouter()` +
   `registerRoutes(...)`
-- skips `concave.json`, `get-env.ts`, cRPC files, and kitcn demo
+- skips `kitcn.json`, `get-env.ts`, cRPC files, and kitcn demo
   surfaces
 
 Make the first bootstrap auth config secret-safe instead of JWKS-hardcoded:

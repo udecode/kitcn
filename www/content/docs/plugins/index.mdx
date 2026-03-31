@@ -46,7 +46,7 @@ Extension composition rules:
 - The CLI owns scaffold templates.
 - Your app owns scaffolded schema and runtime files.
 - `kitcn add <plugin>` creates or refreshes local plugin files.
-- If `paths.env` is missing, `kitcn add <plugin>` also bootstraps `convex/lib/get-env.ts` and writes `paths.env` into `concave.json`.
+- If `paths.env` is missing, `kitcn add <plugin>` also bootstraps `convex/lib/get-env.ts` and writes `paths.env` into `kitcn.json`.
 - `kitcn diff <plugin>` previews scaffold drift.
 - Installed plugin state is tracked in `<functionsDir>/plugins.lock.json`.
 

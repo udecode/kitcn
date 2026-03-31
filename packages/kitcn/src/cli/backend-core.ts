@@ -1303,7 +1303,7 @@ function normalizeRelativePathOrThrow(
 }
 
 function resolveConfigWritePath(configPathArg?: string): string {
-  return resolve(process.cwd(), configPathArg ?? 'concave.json');
+  return resolve(process.cwd(), configPathArg ?? 'kitcn.json');
 }
 
 function overrideConfigBackend(
@@ -4109,7 +4109,7 @@ const CONVEX_DEV_PRE_RUN_CONFLICT_FLAGS = [
   '--run-component',
 ] as const;
 const REMOVED_DEV_PRE_RUN_MESSAGE =
-  '`--pre-run` was removed. Use meta["kitcn"].dev.preRun in concave.json.';
+  '`--pre-run` was removed. Use dev.preRun in kitcn.json.';
 
 function parsePositiveIntegerArg(flag: string, raw: string): number {
   const parsed = Number(raw);
