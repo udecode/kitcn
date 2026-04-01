@@ -13,6 +13,7 @@
   ],
   "scripts": {
     "build": "tsdown",
+    "prepack": "bun run build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
