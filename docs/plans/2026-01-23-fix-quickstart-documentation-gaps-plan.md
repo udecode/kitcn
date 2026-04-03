@@ -185,7 +185,7 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 ### Quality Gates
 
-- [ ] Run simulation test (`docs/solutions/simulate-doc.md`) on both flows
+- [ ] Run docs stress-test protocol (`docs/analysis/docs-stress-test-protocol.md`) on both flows
 - [ ] Zero TypeScript errors when following guide literally
 - [ ] App renders and displays data from Convex
 
@@ -287,7 +287,7 @@ bun add convex kitcn convex-helpers zod @tanstack/react-query
 ### Internal References
 
 - Style guide: [docs/solutions/style.md](docs/solutions/style.md)
-- Simulation testing: [docs/solutions/simulate-doc.md](docs/solutions/simulate-doc.md)
+- Simulation testing: [docs/analysis/docs-stress-test-protocol.md](../analysis/docs-stress-test-protocol.md)
 - Example types.ts: [example/convex/shared/api.ts:1-22](example/convex/shared/api.ts)
 - Example ents.ts: [example/convex/lib/ents.ts:1-41](example/convex/lib/ents.ts)
 - Current quickstart: [www/content/docs/quickstart.mdx](www/content/docs/quickstart.mdx)

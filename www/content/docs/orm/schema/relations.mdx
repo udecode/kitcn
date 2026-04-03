@@ -5,8 +5,6 @@ description: Define relationships between tables with the ORM
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to define relationships between tables. You'll master one-to-one, one-to-many, and many-to-many relations, self-references, and eager loading with `with:`.
-
 ## Overview
 
 Relations in the ORM use the same API as Drizzle for **defining** and **loading** relationships. The `with:` option is type-safe, with a few nested constraints noted below.
@@ -29,8 +27,6 @@ The callback shape mirrors Drizzle's relation builder, but in kitcn you attach r
 
 ### `one()`
 
-Here's the full set of options for a `one()` relation:
-
 ```ts showLineNumbers
 r.one.users({
   from: r.posts.authorId,
@@ -47,8 +43,6 @@ r.one.users({
 - `where`: conditional relation loading (filter which related rows are loaded)
 
 ### `many()`
-
-And the options for a `many()` relation:
 
 ```ts showLineNumbers
 r.many.posts({
@@ -109,7 +103,7 @@ export default defineSchema({ users, posts }).relations((r) => ({
 
 ### One-to-One Relations
 
-A one-to-one relation connects exactly one record in each table. Here's a user with a single profile:
+A one-to-one relation connects exactly one record in each table:
 
 ```ts title="convex/schema.ts" showLineNumbers {12-21}
 import { convexTable, defineSchema, text, id } from 'kitcn/orm';
@@ -146,7 +140,7 @@ export default defineSchema({ users, profiles }).relations((r) => ({
 
 ### One-to-Many Relations
 
-The most common relation type - one user has many posts. Let's define both sides:
+The most common relation type - one user has many posts:
 
 ```ts title="convex/schema.ts" showLineNumbers {12-20}
 import { convexTable, defineSchema, text, boolean, id } from 'kitcn/orm';
@@ -303,7 +297,7 @@ export default defineSchema({ users, groups, usersToGroups }).relations((r) => (
 
 ### Self-Referencing Relations
 
-You can define relations where a table references itself. Here's a manager/reports hierarchy:
+You can define relations where a table references itself:
 
 ```ts title="convex/schema.ts" showLineNumbers {7-17}
 import { convexTable, defineSchema, text, id } from 'kitcn/orm';
@@ -659,7 +653,7 @@ For index requirements per relation type, see [API Reference](#indexing-for-rela
 
 ## Relation Loading with `with:`
 
-The ORM supports Drizzle-style relation loading. Here's how to eagerly load posts for each user:
+The ORM supports Drizzle-style relation loading:
 
 ```ts showLineNumbers {3-7}
 const usersWithPosts = await ctx.orm.query.users.findMany({
@@ -738,8 +732,6 @@ export const usersToGroups = convexTable(
 
 ## Common Gotchas
 
-Here's a quick reference for the most frequent issues:
-
 | Issue | Solution |
 |-------|----------|
 | **Relations not working** | Define relations in `defineSchema(...).relations(...)` and verify both sides (or explicit `from`/`to`) |
@@ -749,8 +741,6 @@ Here's a quick reference for the most frequent issues:
 | **`with:` not working** | Ensure relations are defined on both tables (or explicit `from`/`to`) |
 | **`many()` relation throws sizing error** | Add `with.<relation>.limit`, configure `defaults.defaultLimit`, or set `allowFullScan` |
 | **Relation fan-out guardrail throws** | Reduce source cardinality, raise `defaults.relationFanOutMaxKeys`, or set `allowFullScan` |
-
-You now know how to define every kind of relation and load them eagerly with `with:`.
 
 ## Next Steps
 

@@ -1,31 +1,33 @@
 ## 8.B TanStack Start
 
-Explicit exception: current docs still use `@convex-dev/better-auth/*` helpers for TanStack Start integration.
-
 ### 8.B.1 Auth client + auth server helpers
 
-**Create:** `src/lib/convex/auth/auth-client.ts`
+**Create:** `src/lib/convex/auth-client.ts`
 
 ```ts
-import type { Auth } from "@convex/auth-shared";
-import { convexClient } from "@convex-dev/better-auth/client/plugins";
-import { adminClient, inferAdditionalFields } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+import { convexClient } from "kitcn/auth/client";
+import { createAuthMutations } from "kitcn/react";
 
 export const authClient = createAuthClient({
   baseURL:
     typeof window === "undefined"
       ? (import.meta.env.VITE_SITE_URL as string | undefined)
       : window.location.origin,
-  sessionOptions: { refetchOnWindowFocus: false },
-  plugins: [inferAdditionalFields<Auth>(), adminClient(), convexClient()],
+  plugins: [convexClient()],
 });
+
+export const {
+  useSignInMutationOptions,
+  useSignOutMutationOptions,
+  useSignUpMutationOptions,
+} = createAuthMutations(authClient);
 ```
 
-**Create:** `src/lib/convex/auth/auth-server.ts`
+**Create:** `src/lib/convex/auth-server.ts`
 
 ```ts
-import { convexBetterAuthReactStart } from "@convex-dev/better-auth/react-start";
+import { convexBetterAuthReactStart } from "kitcn/auth/start";
 
 export const {
   handler,
@@ -34,8 +36,8 @@ export const {
   fetchAuthMutation,
   fetchAuthAction,
 } = convexBetterAuthReactStart({
-  convexUrl: process.env.VITE_CONVEX_URL!,
-  convexSiteUrl: process.env.VITE_CONVEX_SITE_URL!,
+  convexUrl: import.meta.env.VITE_CONVEX_URL!,
+  convexSiteUrl: import.meta.env.VITE_CONVEX_SITE_URL!,
 });
 ```
 
@@ -45,9 +47,9 @@ export const {
 
 ```ts
 import { createFileRoute } from "@tanstack/react-router";
-import { handler } from "@/lib/convex/auth/auth-server";
+import { handler } from "@/lib/convex/auth-server";
 
-export const Route = createFileRoute("/api/auth/$")({
+export const Route = createFileRoute("/api/auth/$" as never)({
   server: {
     handlers: {
       GET: ({ request }) => handler(request),
@@ -59,9 +61,48 @@ export const Route = createFileRoute("/api/auth/$")({
 
 ### 8.B.3 Caller/context and providers
 
-Use docs pattern from `tanstack-start.mdx` for:
+**Create:** `src/lib/convex/server.ts`
 
-- `createCallerFactory` + `runServerCall`
-- router context values (`convex`, `queryClient`, `convexQueryClient`)
-- provider wrapping with `ConvexAuthProvider` and `initialToken`
+```ts
+import { api } from "@convex/api";
+import { getRequestHeaders } from "@tanstack/react-start/server";
+import { createCallerFactory } from "kitcn/server";
 
+import { getToken } from "@/lib/convex/auth-server";
+
+const { createContext, createCaller } = createCallerFactory({
+  api,
+  convexSiteUrl: import.meta.env.VITE_CONVEX_SITE_URL!,
+  auth: {
+    getToken: async () => {
+      return {
+        token: await getToken(),
+      };
+    },
+  },
+});
+
+type ServerCaller = ReturnType<typeof createCaller>;
+
+async function makeContext() {
+  const headers = await getRequestHeaders();
+  return createContext({ headers });
+}
+
+function createServerCaller(): ServerCaller {
+  return createCaller(async () => {
+    return await makeContext();
+  });
+}
+
+export function runServerCall<T>(fn: (caller: ServerCaller) => Promise<T> | T) {
+  const caller = createServerCaller();
+  return fn(caller);
+}
+```
+
+Use the docs pattern from `tanstack-start.mdx` for:
+
+- `src/routes/__root.tsx` shell/provider wiring
+- `src/lib/convex/convex-provider.tsx`
+- router setup in `src/router.tsx`

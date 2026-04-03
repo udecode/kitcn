@@ -1,5 +1,6 @@
 ---
 title: Auth scaffold peer installs and fixture sync must follow the packaged CLI path
+last_updated: 2026-04-01
 category: integration-issues
 tags:
   - auth
@@ -11,6 +12,7 @@ tags:
 symptoms:
   - `bun check` fails in `fixtures:check` during temp app `kitcn codegen`
   - auth apps hit `Cannot find package '@opentelemetry/api'`
+  - fresh Bun apps can warn during later `kitcn add ...` runs because `bun.lock` already carries Better Auth peers
   - plain non-auth apps can still fail codegen because the packaged CLI bundle imports Better Auth too early
   - `fixtures:sync` can say snapshots are fresh while `fixtures:check` still reports drift
 module: cli-fixtures-auth
@@ -45,6 +47,9 @@ There were three separate mistakes:
    packaged local install and reran codegen, while `sync` snapshotted the app
    earlier in the flow. That let generated fixture output drift even after a
    fresh sync.
+4. Fresh app baselines still omitted `@opentelemetry/api`, so Bun could keep
+   warning on later `bun add` operations even after the auth-specific planning
+   fix landed.
 
 ## Solution
 
@@ -55,6 +60,13 @@ Install the missing auth runtime peer explicitly during auth scaffold:
   Auth internals
 - teach dependency hints to treat exact install specs by package name when
   deciding whether a dependency is already present
+
+Then stop Bun from rediscovering the same peer gap later:
+
+- add `@opentelemetry/api@1.9.0` to fresh `init -t next` and `init -t vite`
+  package baselines
+- preinstall `@opentelemetry/api` before later plugin adds when `bun.lock`
+  already contains `@better-auth/core` and the app still lacks the package
 
 Then cut the hot auth import out of the CLI bundle:
 
@@ -88,3 +100,6 @@ Finally, make fixture sync mirror fixture check:
    Auth into plain scaffold flows at module load time.
 4. Snapshot sync and snapshot check must execute the same product path, or the
    fixture diff becomes theater.
+5. If Bun warnings only disappear after manually adding a package once, fix the
+   generated app baseline or the CLI preflight. Do not teach users to ignore
+   the warning.

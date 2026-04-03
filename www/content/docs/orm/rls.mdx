@@ -5,13 +5,11 @@ description: Drizzle-style rlsPolicy rules enforced at runtime for the ORM
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to add row-level security (RLS) to your ORM tables. You'll define per-table policies that control which rows each user can read, insert, update, and delete -- all enforced automatically at runtime.
-
 ## Define Policies
 
 Policies live alongside your table definition. Use `convexTable.withRLS` and pass an array of `rlsPolicy` rules that reference table columns and the request context.
 
-Here's a `secrets` table where each user can only access their own rows:
+A `secrets` table where each user can only access their own rows:
 
 ```ts title="convex/schema.ts" showLineNumbers {3-4,6-24}
 import { convexTable, rlsPolicy, text, id, eq } from 'kitcn/orm';
@@ -147,9 +145,7 @@ const ormDb = orm.db(ctx, {
 
 ## Drizzle Differences
 
-ORM RLS is inspired by Drizzle but runs differently since Convex is not a SQL database. Here are the key distinctions to keep in mind.
-
-Policies are enforced at runtime in your application layer, not inside a database engine. This means `ctx.db` (raw Convex access) always bypasses RLS -- only `ctx.orm` enforces your rules.
+ORM RLS is inspired by Drizzle but runs differently since Convex is not a SQL database. Policies are enforced at runtime in your application layer, not inside a database engine. This means `ctx.db` (raw Convex access) always bypasses RLS -- only `ctx.orm` enforces your rules.
 
 <Callout icon={<AlertTriangle />}>
 **Important:** If RLS is enabled on a table but no permissive policies exist, all access through `ctx.orm` is denied by default. You must add at least one permissive policy to grant access.

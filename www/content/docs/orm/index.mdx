@@ -19,8 +19,6 @@ The ORM mirrors Drizzle's relational query builder while adapting to Convex's do
 
 ## Where It Differs From SQL ORMs
 
-Here's a quick summary of the key differences you'll encounter coming from a SQL-based ORM:
-
 - `id` and `createdAt` are auto-created by Convex
 - System `createdAt` is `number`; define `createdAt: timestamp().notNull().defaultNow()` for `Date`
 - `timestamp()` is the recommended point-in-time type for audit fields like `createdAt` / `updatedAt`
@@ -53,8 +51,6 @@ export const posts = convexTable('posts', {
 With cRPC, Date wire serialization is built in, so `Date` values round-trip without manual `getTime()` calls.
 
 ## Quick Example
-
-Let's define a simple schema with `users` and `posts` tables, then wire up relations between them:
 
 ```ts title="convex/schema.ts" showLineNumbers {3-7,10-14}
 import {
@@ -92,7 +88,7 @@ export default defineSchema(tables).relations((r) => ({
 }));
 ```
 
-Here's how to query published posts with their authors using `ctx.orm` in cRPC:
+Query published posts with their authors:
 
 ```ts title="convex/functions/posts.ts" showLineNumbers {3-7}
 import { publicQuery } from '../lib/crpc';
@@ -107,39 +103,22 @@ export const getRecentPosts = publicQuery.query(async ({ ctx }) => {
 });
 ```
 
-You now have a fully typed query with relation loading in just a few lines.
-
 ## Next Steps
 
 <Cards>
-  <Card title="Quickstart" href="/docs/quickstart#orm-setup">
-    Get running in 5 minutes
-  </Card>
-  <Card title="Migrate from native Convex" href="/docs/migrations/db">
-    ctx.db to ORM mapping guide
-  </Card>
-  <Card title="Migrate from Convex Ents" href="/docs/migrations/ents">
-    Ents to ORM mapping guide
-  </Card>
   <Card title="Schema Definition" href="/docs/orm/schema">
     Tables, relations, and indexes
   </Card>
   <Card title="Querying Data" href="/docs/orm/queries">
     Filters, ordering, and pagination
   </Card>
-  <Card title="Pagination" href="/docs/orm/queries/pagination">
-    Offset vs cursor pagination reference
-  </Card>
-  <Card title="Row-Level Security" href="/docs/orm/rls">
-    rlsPolicy rules and enforcement
-  </Card>
-  <Card title="Triggers" href="/docs/orm/schema/triggers">
-    Automatic side effects in schema
+  <Card title="Mutations" href="/docs/orm/mutations">
+    Insert, update, and delete operations
   </Card>
   <Card title="Migrations" href="/docs/orm/migrations">
     Online data migrations with Drizzle-like DX
   </Card>
-  <Card title="Drizzle Comparison" href="/docs/comparison/drizzle">
-    Side-by-side API mapping
+  <Card title="API Reference" href="/docs/orm/api-reference">
+    Full API surface
   </Card>
 </Cards>

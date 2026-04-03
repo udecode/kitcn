@@ -5,13 +5,11 @@ description: Query `where` operators and mutation filter helpers (Drizzle-style)
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll learn how to filter data using ORM operators. You'll master two filter contexts: **object filters** for relational queries (`where: { ... }`) and **operator helpers** for mutations and RLS (`eq(...)`, `and(...)`, etc.).
-
 ## Query `where` (Object Filters)
 
 Object filters are the primary query mechanism for ORM relational queries. You can combine equality checks, comparison operators, and logical combinators in a single `where` object.
 
-Here's a query that finds admin or member users over 18:
+Combine equality checks, comparison operators, and logical combinators in a single `where` object:
 
 ```ts showLineNumbers {2-4}
 await db.query.users.findMany({
@@ -28,7 +26,7 @@ For the full list of supported operators, see [API Reference](#supported-operato
 
 The ORM supports Drizzle-style `like`/`ilike` operators and evaluates them **post-fetch**.
 
-Here's how to search for posts containing "javascript" (case-insensitive):
+Search for posts containing "javascript" (case-insensitive):
 
 ```ts showLineNumbers {2}
 await db.query.posts.withIndex('by_title').findMany({
@@ -61,7 +59,7 @@ If a field is an array (for example, embeddings or other array-like values), you
 
 Mutation builders (`insert`, `update`, `delete`) use operator helpers that return a `FilterExpression`. These helpers accept **column builders** (like `users.role`) and use builder typing to infer the right value type.
 
-Here's how to update all users with a specific role who are over 18:
+Update all users with a specific role who are over 18:
 
 ```ts showLineNumbers {3-6}
 import { and, eq, gt } from 'kitcn/orm';
@@ -85,7 +83,7 @@ These SQL-specific features are not available in the ORM:
 - Prepared statements
 - SQL subquery operators `exists` / `notExists` (Convex has no SQL subquery runtime)
 
-For existence checks, use relation filters instead. Here's how to find users who have posts, and users who don't:
+For existence checks, use relation filters instead:
 
 ```ts showLineNumbers
 // Users with posts
@@ -99,13 +97,11 @@ await db.query.users.findMany({
 });
 ```
 
-You now know how to filter data in both query and mutation contexts. Object filters give you a declarative syntax for relational queries, while operator helpers provide composable expressions for mutations and RLS rules.
-
 ## API Reference
 
 ### Supported Operators
 
-Here's the full list of operators you can use inside a `where` object:
+Full list of operators available inside a `where` object:
 
 ```ts showLineNumbers
 where: {
@@ -139,7 +135,7 @@ where: {
 
 ### Common Helpers
 
-Here's a reference of all available mutation/RLS operator helpers:
+All available mutation/RLS operator helpers:
 
 | Category | Helpers |
 |----------|---------|

@@ -7,8 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore role-based admin features with kitcn. You'll learn to configure the admin plugin, set up role-based access control, and use admin APIs for user management, banning, and impersonation.
-
 ## Overview
 
 Admin features built on [Better Auth's admin plugin](https://www.better-auth.com/docs/plugins/admin):
@@ -21,8 +19,6 @@ Admin features built on [Better Auth's admin plugin](https://www.better-auth.com
 | Session management | List, revoke user sessions |
 | Impersonation | Admin can impersonate users |
 | Custom permissions | Granular access control beyond roles |
-
-Let's set up admin features step by step.
 
 ## Prerequisites
 
@@ -253,209 +249,13 @@ export const checkUserAdminStatus = authQuery
   });
 ```
 
-### Update User Role
+Build additional admin functions (update role, grant admin, list users, dashboard stats) following this pattern. The key conventions:
 
-```ts title="convex/functions/admin.ts" showLineNumbers {1-2,6-9,13-16,20-27}
-export const updateUserRole = authMutation
-  .meta({ role: 'admin' })
-  .input(
-    z.object({
-      role: z.enum(['user', 'admin']),
-      userId: z.string(),
-    })
-  )
-  .output(z.boolean())
-  .mutation(async ({ ctx, input }) => {
-    if (input.role === 'admin' && !ctx.user.isAdmin) {
-      throw new CRPCError({
-        code: 'FORBIDDEN',
-        message: 'Only admin can promote users to admin',
-      });
-    }
+- Gate admin functions with `.meta({ role: 'admin' })` to trigger role middleware
+- Use `ctx.orm` for user reads and role updates
+- Use `.paginated()` for list endpoints
 
-    const targetUser = await ctx.orm.query.user.findFirstOrThrow({
-      where: { id: input.userId },
-    });
-
-    if (targetUser.role === 'admin' && !ctx.user.isAdmin) {
-      throw new CRPCError({
-        code: 'FORBIDDEN',
-        message: 'Cannot modify admin users',
-      });
-    }
-
-    await ctx.orm
-      .update(userTable)
-      .set({ role: input.role.toLowerCase() })
-      .where(eq(userTable.id, targetUser.id));
-
-    return true;
-  });
-```
-
-### Grant Admin by Email
-
-```ts title="convex/functions/admin.ts" showLineNumbers {6-12,15-19,22-32}
-export const grantAdminByEmail = authMutation
-  .meta({ role: 'admin' })
-  .input(
-    z.object({
-      email: z.string().email(),
-      role: z.enum(['admin']),
-    })
-  )
-  .output(
-    z.object({
-      success: z.boolean(),
-      userId: z.string().optional(),
-    })
-  )
-  .mutation(async ({ ctx, input }) => {
-    const user = await ctx.orm.query.user.findFirst({
-      where: { email: input.email },
-    });
-
-    if (!user) {
-      return { success: false };
-    }
-
-    await ctx.orm
-      .update(userTable)
-      .set({ role: input.role.toLowerCase() })
-      .where(eq(userTable.id, user.id));
-
-    return { success: true, userId: user.id };
-  });
-```
-
-### List All Users (Paginated)
-
-```ts title="convex/functions/admin.ts" showLineNumbers {1-10,14-17,20-24,38-47,53-56}
-const UserListItemSchema = z.object({
-  id: z.string(),
-  createdAt: z.date(),
-  name: z.string().optional(),
-  email: z.string(),
-  image: z.string().nullish(),
-  role: z.string(),
-  isBanned: z.boolean().nullish(),
-  banReason: z.string().nullish(),
-  banExpiresAt: z.date().nullish(),
-});
-
-export const getAllUsers = authQuery
-  .input(
-    z.object({
-      role: z.enum(['all', 'user', 'admin']).optional(),
-      search: z.string().optional(),
-    })
-  )
-  .paginated({ limit: 20, item: UserListItemSchema.nullable() })
-  .query(async ({ ctx, input }) => {
-    const query = ctx.orm.query.user;
-    const result = await query.findMany({
-      cursor: input.cursor,
-      limit: input.limit,
-    });
-
-    const enrichedPage = result.page
-      .map((user) => {
-        const userData = {
-          ...user,
-          banExpiresAt: user?.banExpires,
-          banReason: user?.banReason,
-          email: user?.email || '',
-          isBanned: user?.banned,
-          role: user?.role || 'user',
-        };
-
-        if (input.search) {
-          const searchLower = input.search.toLowerCase();
-          if (
-            !(
-              userData.name?.toLowerCase().includes(searchLower) ||
-              userData.email.toLowerCase().includes(searchLower)
-            )
-          ) {
-            return null;
-          }
-        }
-
-        if (input.role && input.role !== 'all' && userData.role !== input.role) {
-          return null;
-        }
-
-        return userData;
-      })
-      .filter((row): row is NonNullable<typeof row> => row !== null);
-
-    return { ...result, page: enrichedPage };
-  });
-```
-
-### Dashboard Stats
-
-```ts title="convex/functions/admin.ts" showLineNumbers {4-17,20-31,34-37,40-52}
-export const getDashboardStats = authQuery
-  .meta({ role: 'admin' })
-  .output(
-    z.object({
-      recentUsers: z.array(
-        z.object({
-          id: z.string(),
-          createdAt: z.date(),
-          image: z.string().nullish(),
-          name: z.string().optional(),
-        })
-      ),
-      totalAdmins: z.number(),
-      totalUsers: z.number(),
-      userGrowth: z.array(z.object({ count: z.number(), date: z.string() })),
-    })
-  )
-  .query(async ({ ctx }) => {
-    const toRows = <TRow>(result: TRow[] | { page: TRow[] }): TRow[] =>
-      Array.isArray(result) ? result : result.page;
-
-    const recentUsersResult = await ctx.orm.query.user.findMany({
-      limit: 5,
-      orderBy: { createdAt: 'desc' },
-      columns: { id: true, createdAt: true, image: true, name: true },
-    });
-    const recentUsers = toRows(recentUsersResult);
-
-    const usersLast7Days = toRows(
-      await ctx.orm.query.user.findMany({
-        where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-        limit: 1000,
-      })
-    );
-
-    const userGrowth: { count: number; date: string }[] = [];
-    const now = Date.now();
-    const oneDay = 24 * 60 * 60 * 1000;
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(now - i * oneDay);
-      const startOfDay = new Date(date.setHours(0, 0, 0, 0)).getTime();
-      const endOfDay = new Date(date.setHours(23, 59, 59, 999)).getTime();
-
-      userGrowth.push({
-        count: usersLast7Days.filter((user) => {
-          const createdAt = user.createdAt.getTime();
-          return createdAt >= startOfDay && createdAt <= endOfDay;
-        }).length,
-        date: new Date(startOfDay).toISOString().split('T')[0],
-      });
-    }
-
-    const sampleUsers = toRows(await ctx.orm.query.user.findMany({ limit: 100 }));
-    const adminCount = sampleUsers.filter((user) => user.role === 'admin').length;
-    const totalUsers = await ctx.orm.query.user.count();
-    const totalAdmins = Math.round((adminCount / sampleUsers.length) * totalUsers);
-
-    return { recentUsers, totalAdmins, totalUsers, userGrowth };
-  });
-```
+See the [example app](https://github.com/nichochar/kitcn/tree/main/example) for complete admin CRUD implementations.
 
 ## Client Usage
 

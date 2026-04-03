@@ -38,7 +38,7 @@ const HELP_FLAGS = new Set(['--help', '-h']);
 const VERSION_FLAGS = new Set(['--version', '-v']);
 const packageJson = readOwnPackageJson(import.meta.url);
 const REMOVED_CREATE_MESSAGE =
-  'Removed `kitcn create`. Use `kitcn init -t <next|vite>` for fresh app scaffolding.';
+  'Removed `kitcn create`. Use `kitcn init -t <next|start|vite>` for fresh app scaffolding.';
 const LOCAL_NODE_REEXEC_ENV = 'KITCN_NODE_REEXEC';
 const LOCAL_NODE_REEXEC_COMMANDS = new Set([
   'add',

@@ -7,21 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore cRPC queries. You'll learn to fetch data with TanStack Query, subscribe to real-time updates, handle conditional queries, and migrate from vanilla Convex hooks.
-
-## Overview
-
-cRPC queries provide a tRPC-like interface for fetching data with TanStack Query:
-
-| Feature | Benefit |
-|---------|---------|
-| Real-time by default | WebSocket subscriptions update automatically |
-| TanStack Query API | `isPending`, `isError`, `refetch`, devtools |
-| Auth-aware | Skips queries when not authenticated |
-| Type-safe keys | `queryKey()` and `queryFilter()` for cache control |
-
-Let's see how it works.
-
 ```tsx showLineNumbers {3,5-7}
 import { useQuery } from '@tanstack/react-query';
 import { useCRPC } from '@/lib/convex/crpc';
@@ -39,7 +24,7 @@ function UserProfile({ id }: { id: string }) {
 
 ## queryOptions
 
-The `queryOptions` method creates options for TanStack Query's `useQuery` hook. Here's the basic usage:
+The `queryOptions` method creates options for TanStack Query's `useQuery` hook.
 
 ```tsx showLineNumbers {3,6,9-14}
 const crpc = useCRPC();
@@ -113,8 +98,6 @@ queryClient.invalidateQueries(crpc.analytics.getReport.queryFilter());
 </Callout>
 
 ## Conditional Queries
-
-Sometimes you need to conditionally run queries. Let's explore the options.
 
 ### With enabled
 
@@ -343,71 +326,6 @@ const handleClick = async () => {
 </Callout>
 
 See [API Reference](#method-comparison) for a method comparison table.
-
-## Migrate from Convex
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- Real-time updates via WebSocket
-- Automatic retry and reconnection
-- Database consistency guarantees
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```tsx showLineNumbers
-    import { useQuery } from 'convex/react';
-    import { api } from '@convex/_generated/api';
-    import type { FunctionReturnType } from 'convex/server';
-
-    const data = useQuery(api.user.list, {});
-
-    type User = FunctionReturnType<typeof api.user.get>;
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```tsx showLineNumbers {1-2,5-6,8}
-    import { useQuery } from '@tanstack/react-query';
-    import { useCRPC } from '@/lib/convex/crpc';
-    import type { ApiOutputs } from '@convex/api';
-
-    const crpc = useCRPC();
-    const { data } = useQuery(crpc.user.list.queryOptions({}));
-
-    type User = ApiOutputs['user']['get'];
-    ```
-  </CompareItem>
-</Compare>
-
-**Key differences:**
-
-| Feature | Description |
-|---------|-------------|
-| TanStack Query API | `isPending`, `isError`, `refetch`, etc. |
-| Query key management | `queryKey()` and `queryFilter()` |
-| DevTools integration | React Query DevTools |
-| One-time fetches | `subscribe: false` option |
-| Imperative calls | `useCRPCClient()` for event handlers |
-
-**Imperative queries (event handlers, effects):**
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```tsx showLineNumbers
-    const convex = useConvex();
-    await convex.query(api.user.get, {});
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```tsx showLineNumbers
-    const client = useCRPCClient();
-    await client.user.get.query({});
-    ```
-  </CompareItem>
-</Compare>
 
 ## Troubleshooting
 

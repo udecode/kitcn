@@ -5,8 +5,6 @@ description: ORM column builders (Drizzle-style) and their TypeScript types
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to define document fields using Drizzle-style column builders. You'll master string, number, boolean, and reference fields, column hooks like `$defaultFn`, nested shapes via `arrayOf()` / `objectOf()`, and advanced escape hatches like `custom()` / `json<T>()`.
-
 <Callout icon={<AlertTriangle />}>
 The ORM documents a **Convex subset** of Drizzle's PostgreSQL column types. Temporal fields are supported with `date()` and `timestamp()`. For nested document arrays/objects, use `arrayOf()` / `objectOf()`. Use `custom()` / `json()` for advanced validator escape hatches.
 </Callout>
@@ -31,8 +29,6 @@ This gives `createdAt: Date` in ORM types while keeping Convex storage numeric.
 
 In Drizzle, you can optionally provide a database column name (`text('email')`) that can differ from the TypeScript key. In the ORM, the **TypeScript key is the document field name**.
 
-Here's how to define a simple table with a required email field:
-
 ```ts showLineNumbers
 import { convexTable, text } from 'kitcn/orm';
 
@@ -51,8 +47,6 @@ The ORM mirrors Drizzle's core inference rules:
 
 - **Select** (`Select<'table'>`, `$inferSelect`, `InferSelectModel`): fields are `T | null` unless `.notNull()` is set
 - **Insert** (`Insert<'table'>`, `$inferInsert`, `InferInsertModel`): required if `.notNull()` and **no** `.default()`, `$defaultFn()`, or `$onUpdateFn()`, otherwise optional
-
-Let's see how these rules work in practice:
 
 ```ts showLineNumbers {3-5}
 import { convexTable, text, integer, InferInsertModel, InferSelectModel } from 'kitcn/orm';
@@ -82,8 +76,6 @@ type NewPost = Insert<'posts'>;
 ## Column Hooks (Defaults and Type Overrides)
 
 The ORM supports Drizzle-style column hooks for common patterns like timestamps and JSON blobs.
-
-Here's how to use `$defaultFn`, `$onUpdateFn`, and `json<T>()` together:
 
 ```ts showLineNumbers {4-6}
 import { convexTable, json, text, timestamp } from 'kitcn/orm';
@@ -348,8 +340,6 @@ These Drizzle (SQL) column type categories don't map to Convex documents and are
 - SQL database enums (use `textEnum(...)`)
 - SQL arrays (`arrayOf(...)` models document arrays, not SQL array columns)
 - Custom SQL types
-
-You now know every column builder available in the ORM. From basic primitives to typed references and custom validators, these builders give you full control over your document shape with end-to-end TypeScript inference.
 
 ## Next Steps
 

@@ -5,8 +5,6 @@ description: Drizzle-style indexes and constraints, enforced at runtime in the O
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to define indexes and constraints for your tables. You'll master default values, not-null and unique constraints, foreign keys with cascading actions, check constraints, and all three index types -- standard, search, and vector.
-
 The ORM mirrors Drizzle's schema API where it makes sense, but enforces constraints **at runtime** (in ORM mutations), not inside a SQL database.
 
 <Callout icon={<AlertTriangle />}>
@@ -18,8 +16,6 @@ The ORM mirrors Drizzle's schema API where it makes sense, but enforces constrai
 ### Default
 
 Use `.default(value)` to define a default for inserts. Defaults are applied by ORM inserts when the value is `undefined`. Explicit `null` is preserved.
-
-Here's how to set a default view count:
 
 ```ts showLineNumbers {4}
 import { convexTable, integer, text } from 'kitcn/orm';
@@ -48,8 +44,6 @@ export const users = convexTable('users', {
 You can model uniqueness in a few Drizzle-style ways.
 
 #### `uniqueIndex()`
-
-Let's define a unique index on an email field:
 
 ```ts showLineNumbers {6}
 import { convexTable, text, uniqueIndex } from 'kitcn/orm';
@@ -103,8 +97,6 @@ export const users = convexTable('users', {
 Foreign keys are enforced at runtime by the ORM mutation builders.
 
 #### Column `.references()`
-
-Here's how to reference another table's `id`:
 
 ```ts showLineNumbers {8}
 import { convexTable, id, text } from 'kitcn/orm';
@@ -160,8 +152,6 @@ export const comments = convexTable('comments', {
 
 The ORM supports Drizzle-style foreign key actions, enforced at runtime by ORM mutations.
 
-Here's how to cascade deletes when a user is removed:
-
 ```ts showLineNumbers {5-7}
 export const posts = convexTable(
   'posts',
@@ -182,8 +172,6 @@ export const posts = convexTable(
 ### Check Constraints
 
 Use `check(name, expression)` to enforce invariants on inserts and updates.
-
-Let's add age and email checks to a users table:
 
 ```ts showLineNumbers {8-9}
 import { check, convexTable, gt, integer, isNotNull, text } from 'kitcn/orm';
@@ -232,8 +220,6 @@ export const posts = convexTable(
 
 Search indexes mirror Convex's text search, with a Drizzle-style builder API.
 
-Here's how to add a full-text search index on `title`, filtered by `authorId`:
-
 ```ts showLineNumbers {8}
 import { convexTable, id, searchIndex, text } from 'kitcn/orm';
 
@@ -254,8 +240,6 @@ export const posts = convexTable(
 ### `vectorIndex()`
 
 Vector indexes mirror Convex's vector search API.
-
-Let's define a vector index for embedding search filtered by author:
 
 ```ts showLineNumbers {8-11}
 import { convexTable, id, vector, vectorIndex } from 'kitcn/orm';
@@ -282,8 +266,6 @@ A few things work differently from SQL-based Drizzle:
 - Convex creates `id` automatically (no `primaryKey()` builder)
 - Check constraints are enforced at runtime (ORM mutations only)
 - SQL-only features (database-side cascades, triggers, raw SQL) are not applicable
-
-You now know how to keep your data consistent with constraints and make queries fast with indexes.
 
 ## Next Steps
 

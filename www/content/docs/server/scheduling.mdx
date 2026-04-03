@@ -7,8 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore scheduling in Convex. You'll learn to set up cron jobs for recurring tasks, schedule one-time delayed execution, cancel scheduled functions, and check job status.
-
 ## Overview
 
 Convex provides two ways to run [functions](/docs/server/procedures) in the future:
@@ -22,7 +20,7 @@ View scheduled jobs in the [Dashboard](https://dashboard.convex.dev) under the *
 
 ## When to Use Scheduling
 
-Here's a quick reference for choosing the right approach:
+Quick reference for choosing the right approach:
 
 | Scenario | Cron Jobs | Scheduled Functions |
 |----------|-----------|---------------------|
@@ -37,8 +35,6 @@ Here's a quick reference for choosing the right approach:
 <Callout icon={<InfoIcon />}>
 **Tip:** Use `schedule.now` to trigger [actions](/docs/server/procedures#actions) immediately after a mutation commits — perfect for sending emails, webhooks, or other side effects.
 </Callout>
-
-Let's explore both approaches.
 
 ## Cron Jobs
 
@@ -79,7 +75,7 @@ export default crons;
 
 ### Cron Expressions
 
-Here are common cron patterns:
+Common cron patterns:
 
 | Pattern | Description |
 |---------|-------------|
@@ -99,7 +95,7 @@ Format: `minute hour day-of-month month day-of-week`
 
 ### Handler Implementation
 
-Now let's define the handler functions that cron jobs call:
+Handler functions that cron jobs call:
 
 ```ts title="convex/functions/crons.ts" showLineNumbers {5-13,15-25}
 import { z } from 'zod';
@@ -145,7 +141,7 @@ export const generateDailyReport = privateAction
 
 ## Scheduled Functions
 
-Scheduled functions run once at a specific time or after a delay. Let's explore the key concepts.
+Scheduled functions run once at a specific time or after a delay.
 
 <Callout icon={<InfoIcon />}>
 **Warning:** Auth context is NOT available in scheduled functions. Pass `userId` or other auth data as arguments when scheduling.
@@ -241,7 +237,7 @@ export const scheduleReminder = authMutation
 
 ### Canceling Scheduled Functions
 
-Store the job ID to cancel later. Here's the pattern:
+Store the job ID to cancel later:
 
 ```ts title="convex/functions/subscriptions.ts" showLineNumbers {1,7-10,13-17}
 import { createSubscriptionsCaller } from './generated/subscriptions.runtime';
@@ -393,17 +389,6 @@ Mutations are automatically retried on internal Convex errors and execute exactl
 | **No automatic retry** | Actions may have side effects, so not retried |
 | **At most once** | Actions execute at most once |
 | **Manual retry** | Implement retry logic if needed |
-
-## Best Practices
-
-Here are key practices to follow when using scheduling:
-
-1. **Use internal functions** - Prevent external access to scheduled work
-2. **Store job IDs** - When you need to cancel scheduled functions
-3. **Check conditions** - Target may be deleted before execution
-4. **Consider idempotency** - Scheduled functions might run multiple times
-5. **Pass auth info** - Auth not propagated, pass user data as arguments
-6. **Use `schedule.now`** - Trigger actions after mutation commits
 
 ## Next Steps
 

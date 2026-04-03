@@ -5,11 +5,7 @@ description: Delete rows with Drizzle-style builders
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to delete rows using the ORM's Drizzle-style `delete()` builder. You'll see basic deletes, returning clauses, paginated execution, async batching, and advanced delete modes like soft and scheduled deletes.
-
 ## Delete Rows
-
-Let's start with a mutation that deletes a user by `id`:
 
 ```ts showLineNumbers title="convex/functions/users.ts"
 import { z } from 'zod';
@@ -149,30 +145,7 @@ A few SQL-only features from Drizzle are not applicable in Convex:
 **Note:** Foreign key actions and RLS policies are enforced at runtime for ORM deletes. Direct `ctx.db.delete(...)` bypasses these checks.
 </Callout>
 
-You now have everything you need to delete data -- hard, soft, and scheduled modes with full cascade support.
-
 ## API Reference
-
-### Safety Limits
-
-The ORM collects matching rows in bounded pages before applying writes. The key defaults are:
-
-- `mutationBatchSize`: `400`
-- `mutationMaxRows`: `10000`
-- `mutationLeafBatchSize`: `1600` (async FK fan-out)
-
-If matched rows exceed `mutationMaxRows`, the delete throws. You can customize these values in your schema:
-
-```ts showLineNumbers {2-3}
-export default defineSchema({ users, posts }, {
-  defaults: {
-    mutationBatchSize: 200,
-    mutationMaxRows: 5000,
-  },
-});
-```
-
-For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
 
 ### Async Batched Delete Behaviors
 

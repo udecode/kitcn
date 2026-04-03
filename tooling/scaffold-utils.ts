@@ -197,10 +197,20 @@ const createPackableLocalResendPackageDir = () => {
   const packageJson = readJson<WorkspacePackageJson>(
     path.join(LOCAL_RESEND_PACKAGE_DIR, 'package.json')
   );
+  const {
+    prepack: _prepack,
+    postpack: _postpack,
+    prepare: _prepare,
+    prepublishOnly: _prepublishOnly,
+    ...scripts
+  } = packageJson.scripts ?? {};
   if (packageJson.dependencies?.kitcn) {
     packageJson.dependencies.kitcn = getLocalInstallSpec();
   }
-  writeJson(packageJsonPath, packageJson);
+  writeJson(packageJsonPath, {
+    ...packageJson,
+    scripts: Object.keys(scripts).length > 0 ? scripts : undefined,
+  });
 
   return packageDir;
 };
@@ -245,7 +255,7 @@ export const runLocalCliSteps = async (
 export const generateFreshApp = async (params: {
   backend: TemplateBackend;
   generatedAppName: string;
-  initTemplate: 'next' | 'vite';
+  initTemplate: 'next' | 'start' | 'vite';
   localCliPath?: string;
   projectRoot?: string;
   runCommand?: typeof run;

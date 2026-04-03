@@ -5,8 +5,6 @@ description: Insert, update, and delete operations with Drizzle-style builders
 
 import { InfoIcon, CheckCircle } from "lucide-react"
 
-In this guide, we'll cover how to write data with the ORM -- inserting rows, updating fields, and deleting documents. You'll use familiar Drizzle-style builders while the ORM handles constraint enforcement, foreign key cascades, and batching under the hood.
-
 ## Dedicated Pages
 
 Each mutation type has its own detailed page:
@@ -27,7 +25,7 @@ Each mutation type has its own detailed page:
 
 All mutation examples assume you attached ORM to `ctx.orm` once in your context (see [Quickstart](/docs/quickstart#orm-setup)).
 
-Here's a typical import block for mutation handlers:
+Typical import block for mutation handlers:
 
 ```ts showLineNumbers title="convex/functions/users.ts"
 import { z } from 'zod';
@@ -38,7 +36,7 @@ import { users } from '../schema';
 
 ## Shared Concepts
 
-Before diving into each mutation type, let's cover the concepts that apply across `insert`, `update`, and `delete`.
+Concepts that apply across `insert`, `update`, and `delete`.
 
 ### Returning
 
@@ -85,68 +83,6 @@ For more on `allowFullScan` and index compilation, see [Querying Data](/docs/orm
 </Callout>
 
 The ORM enforces runtime limits on how many rows a single mutation can touch. See [API Reference -- Safety Limits](#safety-limits) for defaults and override syntax.
-
-## Insert
-
-Here's a basic insert that creates a new user:
-
-```ts showLineNumbers title="convex/functions/users.ts"
-export const createUser = publicMutation
-  .input(z.object({ name: z.string(), email: z.string().email() }))
-  .mutation(async ({ ctx, input }) => {
-    await ctx.orm.insert(users).values({
-      name: input.name,
-      email: input.email,
-    });
-  });
-```
-
-### Upsert (onConflict)
-
-You can handle conflicts with `onConflictDoUpdate`:
-
-```ts showLineNumbers
-await ctx.orm
-  .insert(users)
-  .values({ email: 'ada@example.com', name: 'Ada' })
-  .onConflictDoUpdate({
-    target: users.email,
-    set: { name: 'Ada Lovelace' },
-  });
-```
-
-For more options including `onConflictDoNothing` and multi-row inserts, see [Insert](/docs/orm/insert).
-
-## Update
-
-Here's a basic update that renames a user by `id`:
-
-```ts showLineNumbers title="convex/functions/users.ts"
-export const updateUserName = publicMutation
-  .input(z.object({ userId: z.string(), newName: z.string() }))
-  .mutation(async ({ ctx, input }) => {
-    await ctx.orm
-      .update(users)
-      .set({ name: input.newName })
-      .where(eq(users.id, input.userId));
-  });
-```
-
-For paginated updates, async batching, and more, see [Update](/docs/orm/update).
-
-## Delete
-
-Here's a basic delete that removes a user by `id`:
-
-```ts showLineNumbers title="convex/functions/users.ts"
-export const deleteUser = publicMutation
-  .input(z.object({ userId: z.string() }))
-  .mutation(async ({ ctx, input }) => {
-    await ctx.orm.delete(users).where(eq(users.id, input.userId));
-  });
-```
-
-For soft deletes, scheduled deletes, and async batching, see [Delete](/docs/orm/delete).
 
 ## Paginated Mutation Batches
 
@@ -206,8 +142,6 @@ To force all rows to be processed in a single transaction (no scheduling), opt i
 - **Global default:** `defineSchema(..., { defaults: { mutationExecutionMode: 'sync' } })`
 
 Sync mode throws if matched rows exceed `mutationMaxRows`.
-
-You now have all the building blocks for writing data. Dive into the sub-pages below for detailed coverage of each mutation type.
 
 ## API Reference
 

@@ -5,24 +5,9 @@ description: Define tables, relations, and type-safe schemas with the ORM
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to define your database schema. You'll master table definitions with `convexTable`, relation wiring with `.relations(...)`, indexes for performance, and runtime guardrails to keep your queries safe.
-
-## Overview
-
-Here's how the ORM maps to Drizzle concepts:
-
-| Feature | Drizzle | ORM |
-|---|---|---|
-| Table definition | `pgTable()` | `convexTable()` |
-| Relations | `defineRelations()` | `.relations()` |
-| Type inference | Automatic | Automatic |
-| Field types | Column builders | Column builders |
-
-Let's start with the basics.
-
 ## Table Definition
 
-Define tables using `convexTable()` with Drizzle-style column builders. Here's a `users` table with name, email, age, and admin fields:
+Define tables using `convexTable()` with Drizzle-style column builders:
 
 ```ts title="convex/schema.ts" showLineNumbers {3-7}
 import { convexTable, text, integer, id } from 'kitcn/orm';
@@ -70,7 +55,7 @@ const users = convexTable('users', {
 
 ### Table-Level Delete Defaults
 
-You can configure default delete semantics per table with `deletion(...)`. Here's how to set up scheduled deletion with a 60-second delay:
+You can configure default delete semantics per table with `deletion(...)`:
 
 ```ts showLineNumbers {7}
 import { convexTable, deletion, integer, text } from 'kitcn/orm';
@@ -89,24 +74,6 @@ Available modes:
 - `deletion('hard')` -- permanent delete
 - `deletion('soft')` -- mark as deleted, keep data
 - `deletion('scheduled', { delayMs? })` -- soft delete, then hard delete after delay
-
-### Column Builder Types
-
-Here's the full mapping of TypeScript types to column builders:
-
-| TypeScript Type | Builder |
-|---|---|
-| `string` \| `null` | `text()` |
-| `string` | `text().notNull()` |
-| `number` \| `null` | `integer()` |
-| `number` | `integer().notNull()` |
-| `boolean` \| `null` | `boolean()` |
-| `boolean` | `boolean().notNull()` |
-| `bigint` \| `null` | `bigint()` |
-| `Id<'users'>` \| `null` | `id('users')` |
-| `Id<'users'>` | `id('users').notNull()` |
-| `number[]` \| `null` | `vector(1536)` |
-| `number[]` | `vector(1536).notNull()` |
 
 See [Column Types](/docs/orm/schema/column-types) for the full ORM builder reference and Drizzle mapping notes.
 
@@ -143,7 +110,7 @@ Plugin relation composition follows the same model:
 
 ## Schema Options
 
-`defineSchema` accepts Convex schema options plus ORM runtime guardrail options. Here's the simplest usage:
+`defineSchema` accepts Convex schema options plus ORM runtime guardrail options:
 
 ```ts showLineNumbers
 import { defineSchema } from 'kitcn/orm';
@@ -166,7 +133,7 @@ Strict guardrails cover relation indexes, relation fan-out cardinality, predicat
 
 ## Indexes
 
-Add indexes for fields you filter or sort by. Here's how to add an index on `authorId`:
+Add indexes for fields you filter or sort by:
 
 ```ts showLineNumbers {7}
 import { convexTable, text, id, index } from 'kitcn/orm';
@@ -200,7 +167,7 @@ const posts = convexTable(
 
 ### Vector Indexes
 
-For vector similarity search, use `vectorIndex` with a `vector(dimensions)` field. Here's how to set up an embedding-based search:
+For vector similarity search, use `vectorIndex` with a `vector(dimensions)` field:
 
 ```ts showLineNumbers {9-13}
 import { convexTable, id, vector, vectorIndex } from 'kitcn/orm';
@@ -228,8 +195,6 @@ Use `vector(dimensions)` for embedding fields.
 
 ## Constraints And Defaults
 
-Here's how constraints and defaults work in the ORM:
-
 - Defaults set with `.default(...)` and `$defaultFn(...)` are applied by ORM inserts
 - `$onUpdateFn(...)` columns are applied on updates (and can also fill missing values on insert)
 - `unique()` and column `.unique()` are enforced at runtime (ORM mutations only)
@@ -242,16 +207,12 @@ Here's how constraints and defaults work in the ORM:
 
 ## Common Gotchas
 
-Here's a quick reference for common schema issues:
-
 | Issue | Fix |
 |---|---|
 | Defining `id` manually | Convex creates `id` automatically |
 | Fields unexpectedly nullable | Use `.notNull()` |
 | Relations not loading | Define both sides or use explicit `from`/`to` |
 | Slow ordering | Add `index('...').on(t.field)` for the primary `orderBy` field |
-
-You now have a fully defined schema with tables, relations, indexes, and guardrails. From here, you can start querying data or set up mutations.
 
 ## API Reference
 
@@ -276,8 +237,6 @@ export default defineSchema({ users, posts }, {
 });
 ```
 
-Here's what each option does:
-
 - `defaults.defaultLimit` -- used when `findMany()` is non-paginated and `limit` is omitted. No implicit built-in fallback is applied when this is unset.
 - `defaults.relationFanOutMaxKeys` -- maximum unique relation lookup keys allowed per relation-load step before fail-fast. Built-in fallback: `1000`.
 - `defaults.mutationBatchSize` -- page size used to collect rows for `update()`/`delete()`. Built-in fallback: `400`.
@@ -294,7 +253,7 @@ Here's what each option does:
 
 ### Strict Policy (Guardrails)
 
-Strict guardrails cover relation indexes, relation fan-out cardinality, predicate `where()`, and unbounded `update`/`delete`. Here's the full behavior matrix:
+Strict guardrails cover relation indexes, relation fan-out cardinality, predicate `where()`, and unbounded `update`/`delete`:
 
 | Area | Current (2026-02-06) | Strict `true` | Strict `false` |
 |---|---|---|---|

@@ -16,7 +16,7 @@ export function KitcnLatestCommandTabs({
       {packageManagers.map((packageManager) => (
         <Tab key={packageManager} value={packageManager}>
           <CodeBlock className="my-0">
-            <Pre>
+            <Pre className="px-4">
               <code
                 className={`language-bash package-manager-${packageManager}`}
               >

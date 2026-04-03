@@ -13,6 +13,10 @@ describe('init-next-package-json.template', () => {
     );
 
     expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        '@opentelemetry/api': '1.9.0',
+        superjson: '2.2.6',
+      },
       scripts: {
         dev: 'next dev --turbopack',
         'convex:dev': 'kitcn dev',
@@ -39,6 +43,10 @@ describe('init-next-package-json.template', () => {
     );
 
     expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        '@opentelemetry/api': '1.9.0',
+        superjson: '2.2.6',
+      },
       scripts: {
         codegen: 'some-other-generator',
         'convex:codegen': 'kitcn codegen',
@@ -65,6 +73,10 @@ describe('init-next-package-json.template', () => {
     );
 
     expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        '@opentelemetry/api': '1.9.0',
+        superjson: '2.2.6',
+      },
       scripts: {
         'typecheck:convex': 'tsc --noEmit --project convex/tsconfig.json',
       },
@@ -83,6 +95,10 @@ describe('init-next-package-json.template', () => {
     );
 
     expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        '@opentelemetry/api': '1.9.0',
+        superjson: '2.2.6',
+      },
       devDependencies: {
         '@concavejs/cli': 'latest',
         '@types/bun': 'latest',

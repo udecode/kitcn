@@ -5,11 +5,7 @@ description: Update rows with Drizzle-style builders
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to update rows using the ORM's Drizzle-style `update()` builder. You'll see basic updates, returning clauses, paginated execution, and async batching for large workloads.
-
 ## Basic Update
-
-Let's start with a mutation that renames a user by `id`:
 
 ```ts showLineNumbers title="convex/functions/users.ts"
 import { z } from 'zod';
@@ -55,7 +51,7 @@ The ORM collects matching rows in bounded pages before applying writes. See [API
 
 For large workloads that exceed safety limits, you can process updates page-by-page. This follows Convex's batching pattern and avoids one large transaction.
 
-Here's how to process updates across multiple pages. This requires an index on the filtered field:
+Process updates across multiple pages (requires an index on the filtered field):
 
 ```ts showLineNumbers
 // Schema: index('by_role').on(t.role) on users table
@@ -119,30 +115,7 @@ A few SQL-only features from Drizzle are not applicable in Convex:
 **Note:** Unique constraints, foreign keys, and RLS policies are enforced at runtime for ORM mutations. Direct native Convex writes like `ctx.db.patch(...)` bypass these checks (and are intentionally not exposed on `ctx.orm`).
 </Callout>
 
-You now have everything you need to update data, from simple field changes to large-scale async batching.
-
 ## API Reference
-
-### Safety Limits
-
-The ORM collects matching rows in bounded pages before applying writes. The key defaults are:
-
-- `mutationBatchSize`: `400`
-- `mutationMaxRows`: `10000`
-- `mutationLeafBatchSize`: `1600` (async FK fan-out)
-
-If matched rows exceed `mutationMaxRows`, the update throws. You can customize these values in your schema:
-
-```ts showLineNumbers {2-3}
-export default defineSchema({ users, posts }, {
-  defaults: {
-    mutationBatchSize: 200,
-    mutationMaxRows: 5000,
-  },
-});
-```
-
-For the full list of configurable defaults, see [Schema Definition -- Runtime Defaults](/docs/orm/schema#runtime-defaults).
 
 ### Async Batched Update Behaviors
 

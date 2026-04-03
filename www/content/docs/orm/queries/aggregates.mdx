@@ -7,8 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore two ORM-native aggregation paths. **Scalar metrics** give you counts, sums, and averages through `aggregateIndex`. **Ranked access** gives you leaderboards, random picks, and ordered pagination through `rankIndex` + `rank()`.
-
 ## Scalar Metrics
 
 The easiest way to aggregate. Declare an `aggregateIndex` on your table, and the ORM handles everything — no triggers, no manual maintenance.
@@ -19,7 +17,7 @@ The easiest way to aggregate. Declare an `aggregateIndex` on your table, and the
 
 ### Declaring Aggregate Indexes
 
-We'll start by telling the ORM what we want to aggregate. Add `aggregateIndex` to your table definition:
+Add `aggregateIndex` to your table definition:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {3}
 const users = convexTable('users', { orgId: text().notNull(), status: text(), email: text() }, (t) => [
@@ -62,7 +60,7 @@ After deploying, the CLI runs `aggregateBackfill` automatically. Wait for `aggre
 
 ### `count()`
 
-Now you can count rows efficiently:
+Count rows efficiently:
 
 ```ts showLineNumbers {1-2,4-6,8-13}
 // Total users (native count syscall; no aggregateIndex required)
@@ -237,7 +235,7 @@ For leaderboards, random picks, and ordered pagination, use `rankIndex` in schem
 
 ### Declaring `rankIndex`
 
-We'll start by declaring a leaderboard index on a table:
+Declare a leaderboard index on a table:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers
 const scores = convexTable(
@@ -262,11 +260,11 @@ const scores = convexTable(
 );
 ```
 
-`partitionBy(...)` replaces old "namespace" behavior. Each unique partition value gets its own ranked set.
+`partitionBy(...)` scopes each ranked set to a unique partition value — for example, one leaderboard per game.
 
 ### Ranked Queries
 
-Now let's query rankings. Call `rank()` with the index name and a `where` clause that covers the partition fields:
+Call `rank()` with the index name and a `where` clause that covers the partition fields:
 
 ```ts showLineNumbers
 const leaderboard = ctx.orm.query.scores.rank('leaderboard', {
@@ -468,8 +466,6 @@ const page = await ctx.orm.query.todos
   .distinct({ fields: ['status'] })
   .paginate({ cursor: null, limit: 100 });
 ```
-
-That's it — you now have O(1) counts, Prisma-style aggregates, and O(log n) ranked access, all without scanning a single row.
 
 ## Next Steps
 

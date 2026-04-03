@@ -7,20 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll learn how to define cRPC procedures. You'll master input validation with Zod, output schemas, handler methods, and pagination - the building blocks for all your backend logic.
-
-## Overview
-
-Procedures are the core building blocks of cRPC. Each procedure chains together:
-
-| Component | Method | Purpose |
-|-----------|--------|---------|
-| Input | `.input()` | Validate arguments with Zod |
-| Output | `.output()` | Validate return values (optional) |
-| Handler | `.query()` / `.mutation()` / `.action()` | Execute server logic |
-
-Let's explore each component.
-
 ## Input Validation
 
 Use `.input()` to define and validate procedure arguments. The schema runs before your handler, catching invalid data early.
@@ -121,8 +107,6 @@ export const getById = publicQuery
 Output validation is recommended when using [static code generation](https://docs.convex.dev/production/project-configuration#using-static-code-generation-beta).
 
 ## Handler Methods
-
-Now let's look at the three handler types. Each serves a different purpose.
 
 ### Queries
 
@@ -296,98 +280,6 @@ export const backfillData = privateMutation
 <Callout icon={<InfoIcon />}>
   **Note:** These builders use `.internal()` under the hood. You can also call `.internal()` on any builder if needed.
 </Callout>
-
-## Complete Example
-
-Here's a full CRUD example showing all the patterns together:
-
-```ts title="convex/functions/user.ts" showLineNumbers
-import { z } from 'zod';
-import { eq } from 'kitcn/orm';
-import { publicQuery, publicMutation } from '../lib/crpc';
-import { user } from './schema';
-
-// Define reusable schema
-const userSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-});
-
-export const list = publicQuery.query(async ({ ctx }) => {
-  return ctx.orm.query.user.findMany({ limit: 100 });
-});
-
-export const getById = publicQuery
-  .input(z.object({ id: z.string() }))
-  .query(async ({ ctx, input }) => {
-    return ctx.orm.query.user.findFirst({ where: { id: input.id } });
-  });
-
-export const create = publicMutation
-  .input(userSchema)
-  .output(z.string())
-  .mutation(async ({ ctx, input }) => {
-    const [row] = await ctx.orm
-      .insert(user)
-      .values(input)
-      .returning({ id: user.id });
-    return row.id;
-  });
-
-export const update = publicMutation
-  .input(userSchema.partial().extend({ id: z.string() }))
-  .mutation(async ({ ctx, input }) => {
-    const { id, ...data } = input;
-    await ctx.orm.update(user).set(data).where(eq(user.id, id));
-  });
-```
-
-## Migrate from Convex
-
-cRPC uses Zod for validation instead of Convex's `v` validators. See [Zod vs Convex Validators](#zod-vs-convex-validators) in API Reference for the full mapping table.
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- Export functions as named exports
-- Queries for reads, mutations for writes, actions for side effects
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```ts showLineNumbers
-    import { query } from 'convex/server';
-    import { v } from 'convex/values';
-
-    export const getById = query({
-      args: { id: v.id('user') },
-      handler: async (ctx, args) => {
-        return ctx.db.get(args.id);
-      },
-    });
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```ts showLineNumbers {5-7}
-    import { z } from 'zod';
-    import { publicQuery } from '../lib/crpc';
-
-    export const getById = publicQuery
-      .input(z.object({ id: z.string() }))
-      .query(async ({ ctx, input }) => {
-        return ctx.orm.query.user.findFirst({ where: { id: input.id } });
-      });
-    ```
-  </CompareItem>
-</Compare>
-
-Key differences:
-- Fluent builder API instead of object config
-- Zod validation instead of `v` validators
-- `{ ctx, input }` destructured params instead of `(ctx, args)`
-- Use `z.string()` for IDs at procedure boundaries (`zid()` only for explicit schema `id()` column mapping)
 
 ## Next Steps
 

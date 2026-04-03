@@ -43,6 +43,10 @@ describe('tooling/scenarios', () => {
       mode: 'test',
       target: 'next-auth',
     });
+    expect(parseScenarioArgs(['test', 'start-auth'])).toEqual({
+      mode: 'test',
+      target: 'start-auth',
+    });
 
     expect(parseScenarioArgs(['dev', 'next-auth'])).toEqual({
       mode: 'dev',
@@ -74,6 +78,8 @@ describe('tooling/scenarios', () => {
     expect(resolveScenarioProofPath('next')).toBe('runtime');
     expect(resolveScenarioProofPath('create-convex-bare')).toBe('runtime');
     expect(resolveScenarioProofPath('next-auth')).toBe('auth-demo');
+    expect(resolveScenarioProofPath('start')).toBe('runtime');
+    expect(resolveScenarioProofPath('start-auth')).toBe('auth-demo');
     expect(resolveScenarioProofPath('vite-auth')).toBe('auth-runtime');
     expect(resolveScenarioProofPath('convex-next-all')).toBe('check');
     expect(resolveScenarioProofPath('create-convex-nextjs-shadcn-auth')).toBe(
@@ -118,6 +124,31 @@ describe('tooling/scenarios', () => {
       runScenarioRuntimeProofFn: mock(async (_scenarioKey, params) => {
         calls.push('runtime');
         await params.afterReadyFn?.('next-auth');
+      }) as never,
+      runAuthSmokeFn: mock(async () => {
+        calls.push('auth');
+      }) as never,
+      runAuthE2EFn: mock(async () => {
+        calls.push('e2e');
+      }) as never,
+    });
+
+    expect(calls).toEqual(['prepare', 'runtime', 'auth', 'e2e']);
+  });
+
+  test('runScenarioTest runs auth smoke and e2e for start-auth', async () => {
+    const calls: string[] = [];
+
+    await runScenarioTest('start-auth' as never, {
+      checkScenarioFn: mock(async () => {
+        calls.push('check');
+      }) as never,
+      prepareScenarioFn: mock(async () => {
+        calls.push('prepare');
+      }) as never,
+      runScenarioRuntimeProofFn: mock(async (_scenarioKey, params) => {
+        calls.push('runtime');
+        await params.afterReadyFn?.('start-auth' as never);
       }) as never,
       runAuthSmokeFn: mock(async () => {
         calls.push('auth');

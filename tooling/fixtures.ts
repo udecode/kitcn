@@ -173,7 +173,7 @@ export const parseTemplateArgs = (
   const [mode, ...rest] = argv;
   if (mode !== 'sync' && mode !== 'check') {
     throw new Error(
-      'Usage: bun tooling/fixtures.ts <sync|check> [all|next|next-auth|vite|vite-auth] [--backend <convex|concave>]'
+      'Usage: bun tooling/fixtures.ts <sync|check> [all|next|next-auth|start|start-auth|vite|vite-auth] [--backend <convex|concave>]'
     );
   }
 

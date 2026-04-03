@@ -7,28 +7,11 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll set up cRPC's React integration. You'll learn to configure TanStack Query with Convex's real-time WebSocket subscriptions, create the provider hierarchy, and understand how caching works with push-based updates.
-
-## Overview
-
-cRPC's client integrates TanStack Query with Convex's real-time WebSocket subscriptions:
-
-| Feature | Benefit |
-|---------|---------|
-| Real-time sync | WebSocket subscriptions update TanStack Query cache |
-| Familiar API | TanStack Query hooks, caching, and devtools |
-| Auth-aware | Skips queries when unauthenticated |
-| SSR support | Singleton helpers ensure consistent instances |
-
-Let's set it up.
-
 ## Installation
 
 First, install the required packages:
 
-```bash
-bun add kitcn @tanstack/react-query
-```
+<PackageInstallTabs packages="kitcn @tanstack/react-query" />
 
 ## Create the cRPC Context
 
@@ -79,7 +62,7 @@ See [createCRPCContext returns](#createcrpccontext) in the API Reference.
 
 ## Create a QueryClient
 
-Now let's configure TanStack QueryClient for Convex real-time. cRPC sets `staleTime: Infinity` and `refetch*: false` on each query automatically (Convex handles freshness via WebSocket):
+cRPC sets `staleTime: Infinity` and `refetch*: false` on each query automatically (Convex handles freshness via WebSocket):
 
 ```ts title="src/lib/convex/query-client.ts" showLineNumbers {11-16,23-30,40-55}
 import {
@@ -274,68 +257,6 @@ Key differences from "Without Auth":
 
 See [Auth Server](/docs/auth/server) for backend configuration.
 
-## Migrate from Convex
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- `ConvexReactClient` for WebSocket connection
-- Real-time data synchronization
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```tsx showLineNumbers
-    import { ConvexProvider, ConvexReactClient } from 'convex/react';
-
-    const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
-    <ConvexProvider client={convex}>
-      {children}
-    </ConvexProvider>
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```tsx showLineNumbers {1-8,10-11,13-20}
-    import { QueryClientProvider } from '@tanstack/react-query';
-    import {
-      ConvexReactClient,
-      getQueryClientSingleton,
-      getConvexQueryClientSingleton,
-    } from 'kitcn/react';
-    import { CRPCProvider } from '@/lib/convex/crpc';
-
-    const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
-    const queryClient = getQueryClientSingleton(createQueryClient);
-    const convexQueryClient = getConvexQueryClientSingleton({
-      convex,
-      queryClient,
-    });
-
-    <QueryClientProvider client={queryClient}>
-      <CRPCProvider
-        convexClient={convex}
-        convexQueryClient={convexQueryClient}
-      >
-        {children}
-      </CRPCProvider>
-    </QueryClientProvider>
-    ```
-  </CompareItem>
-</Compare>
-
-Key differences:
-
-| Feature | Description |
-|---------|-------------|
-| TanStack QueryClient | Manages caching and devtools |
-| ConvexQueryClient | Bridges WebSocket updates to TanStack Query |
-| Singleton helpers | Ensure SSR compatibility |
-| Auth-aware handling | `ConvexAuthProvider` for authenticated apps |
-
 ## Next Steps
 
 <Cards>
@@ -435,29 +356,3 @@ Unlike traditional REST APIs that use polling, Convex pushes updates via WebSock
 | `refetchOnMount` | `false` | No need to refetch - subscription provides latest data |
 | `refetchOnWindowFocus` | `false` | WebSocket already pushed any changes |
 
-#### Subscription Lifecycle
-
-WebSocket subscriptions are **decoupled** from cache retention. Here's the flow:
-
-```
-Mount ──► Subscribe to WebSocket ──► Receive updates ──► Unmount
-                                                            │
-                                                   Wait unsubscribeDelay (3s)
-                                                            │
-                                              ┌─────────────┴─────────────┐
-                                              │                           │
-                                        Re-mount in time           Delay expires
-                                              │                           │
-                                     Cancel unsubscribe              Unsubscribe
-                                     (subscription stays)       (free server resources)
-                                                                          │
-                                                                  Cache data persists
-                                                                     (gcTime: 5 min)
-                                                                          │
-                                                        ┌─────────────────┴─────────────────┐
-                                                        │                                   │
-                                                 Re-mount in time                    gcTime expires
-                                                        │                                   │
-                                                 Instant cached data              Cache cleared
-                                                 + new subscription               (fresh fetch)
-```

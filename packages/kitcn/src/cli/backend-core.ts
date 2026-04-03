@@ -78,10 +78,16 @@ import { INIT_REACT_CONVEX_PROVIDER_TEMPLATE } from './registry/init/react/init-
 import { renderInitReactEnvLocalTemplate } from './registry/init/react/init-react-env-local.template.js';
 import { renderInitReactPackageJsonTemplate } from './registry/init/react/init-react-package-json.template.js';
 import { INIT_REACT_PROVIDERS_TEMPLATE } from './registry/init/react/init-react-providers.template.js';
+import { INIT_START_CONVEX_PROVIDER_TEMPLATE } from './registry/init/start/init-start-convex-provider.template.js';
+import { INIT_START_CRPC_TEMPLATE } from './registry/init/start/init-start-crpc.template.js';
+import { INIT_START_MESSAGES_PAGE_TEMPLATE } from './registry/init/start/init-start-messages-page.template.js';
+import { INIT_START_ROOT_TEMPLATE } from './registry/init/start/init-start-root.template.js';
+import { INIT_START_ROUTER_TEMPLATE } from './registry/init/start/init-start-router.template.js';
 import { AUTH_CONVEX_PROVIDER_TEMPLATE } from './registry/items/auth/auth-convex-provider.template.js';
 import { renderAuthCrpcTemplate } from './registry/items/auth/auth-crpc.template.js';
 import { AUTH_NEXT_SERVER_TEMPLATE } from './registry/items/auth/auth-next-server.template.js';
 import { AUTH_REACT_CONVEX_PROVIDER_TEMPLATE } from './registry/items/auth/auth-react-convex-provider.template.js';
+import { AUTH_START_CONVEX_PROVIDER_TEMPLATE } from './registry/items/auth/auth-start-convex-provider.template.js';
 import {
   createPlanFile,
   getCrpcFilePath,
@@ -152,6 +158,7 @@ const MISSING_BACKFILL_FUNCTION_RE =
   /could not find function|function .* was not found|unknown function/i;
 const GITIGNORE_RUNTIME_ENTRIES = ['.convex/', '.concave/'] as const;
 const TS_EXTENSION_RE = /\.ts$/;
+const LEADING_SLASHES_RE = /^\/+/;
 const AGGREGATE_STATE_RELATIVE_PATH = join(
   '.convex',
   'kitcn',
@@ -449,7 +456,7 @@ Options:
   --yes, -y         Deterministic non-interactive mode
   --json            Machine-readable command output`;
 
-const SUPPORTED_INIT_TEMPLATES = ['next', 'vite'] as const;
+const SUPPORTED_INIT_TEMPLATES = ['next', 'start', 'vite'] as const;
 const REACT_APP_MOUNT_RE = /<App\s*\/>/;
 
 const DOCS_BASE_URL = 'https://kitcn.vercel.app/docs';
@@ -1600,9 +1607,158 @@ function buildInitReactOwnedScaffoldFiles(
   ] as const;
 }
 
+function buildInitStartOwnedScaffoldFiles(
+  context: ReactScaffoldContext,
+  functionsDirRelative: string,
+  backend: CliBackend,
+  includeDemoFiles: boolean
+): readonly InitOwnedTemplateScaffoldFile[] {
+  const rootPrefix = context.usesSrc ? 'src' : '';
+  const files: InitOwnedTemplateScaffoldFile[] = [
+    {
+      kind: 'config',
+      relativePath: 'package.json',
+      requiresExplicitOverwrite: false,
+      content: ({ existingContent }) =>
+        renderInitReactPackageJsonTemplate(existingContent, {
+          backend,
+          functionsDirRelative,
+        }),
+      createReason:
+        'Create baseline package.json scripts for the Start scaffold.',
+      updateReason: 'Update package.json scripts for the Start scaffold.',
+      skipReason: 'package.json scripts already match the Start scaffold.',
+    },
+    {
+      kind: 'env',
+      relativePath: '.env.local',
+      requiresExplicitOverwrite: false,
+      content: ({ existingContent }) =>
+        renderInitReactEnvLocalTemplate(existingContent),
+      createReason: 'Create baseline .env.local for the Start scaffold.',
+      updateReason: 'Update baseline .env.local for the Start scaffold.',
+      skipReason: '.env.local already matches the Start scaffold.',
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.componentsDir}/providers.tsx`,
+      requiresExplicitOverwrite: true,
+      content: INIT_REACT_PROVIDERS_TEMPLATE,
+      createReason: `Create baseline ${context.componentsDir}/providers.tsx for the Start scaffold.`,
+      updateReason: `Update ${context.componentsDir}/providers.tsx for the Start scaffold.`,
+      skipReason: `${context.componentsDir}/providers.tsx already matches the Start scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.convexClientDir}/query-client.ts`,
+      requiresExplicitOverwrite: true,
+      content: INIT_NEXT_QUERY_CLIENT_TEMPLATE,
+      createReason: `Create baseline ${context.convexClientDir}/query-client.ts for the Start scaffold.`,
+      updateReason: `Update ${context.convexClientDir}/query-client.ts for the Start scaffold.`,
+      skipReason: `${context.convexClientDir}/query-client.ts already matches the Start scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.convexClientDir}/crpc.tsx`,
+      requiresExplicitOverwrite: true,
+      content: INIT_START_CRPC_TEMPLATE,
+      createReason: `Create baseline ${context.convexClientDir}/crpc.tsx for the Start scaffold.`,
+      updateReason: `Update ${context.convexClientDir}/crpc.tsx for the Start scaffold.`,
+      skipReason: `${context.convexClientDir}/crpc.tsx already matches the Start scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.convexClientDir}/convex-provider.tsx`,
+      requiresExplicitOverwrite: true,
+      content: INIT_START_CONVEX_PROVIDER_TEMPLATE,
+      preserveManagedContent: [AUTH_START_CONVEX_PROVIDER_TEMPLATE],
+      createReason: `Create baseline ${context.convexClientDir}/convex-provider.tsx for the Start scaffold.`,
+      updateReason: `Update ${context.convexClientDir}/convex-provider.tsx for the Start scaffold.`,
+      skipReason: `${context.convexClientDir}/convex-provider.tsx already matches the Start scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: trimLeadingSlashes(posix.join(rootPrefix, 'router.tsx')),
+      requiresExplicitOverwrite: true,
+      content: INIT_START_ROUTER_TEMPLATE,
+      createReason: `Create baseline ${trimLeadingSlashes(posix.join(rootPrefix, 'router.tsx'))} for the Start scaffold.`,
+      updateReason: `Update ${trimLeadingSlashes(posix.join(rootPrefix, 'router.tsx'))} for the Start scaffold.`,
+      skipReason: `${trimLeadingSlashes(posix.join(rootPrefix, 'router.tsx'))} already matches the Start scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: trimLeadingSlashes(
+        posix.join(rootPrefix, 'routes', '__root.tsx')
+      ),
+      requiresExplicitOverwrite: false,
+      content: INIT_START_ROOT_TEMPLATE,
+      createReason: `Create baseline ${trimLeadingSlashes(posix.join(rootPrefix, 'routes', '__root.tsx'))} for the Start scaffold.`,
+      updateReason: `Update ${trimLeadingSlashes(posix.join(rootPrefix, 'routes', '__root.tsx'))} for the Start scaffold.`,
+      skipReason: `${trimLeadingSlashes(posix.join(rootPrefix, 'routes', '__root.tsx'))} already matches the Start scaffold.`,
+    },
+    {
+      kind: 'config',
+      relativePath: join(functionsDirRelative, 'tsconfig.json'),
+      managedBaselineContent:
+        getManagedConvexTsconfigBaselines(functionsDirRelative),
+      requiresExplicitOverwrite: true,
+      content: ({ existingContent }) =>
+        typeof existingContent === 'string'
+          ? patchInitConvexTsconfigContent(
+              existingContent,
+              functionsDirRelative
+            )
+          : renderInitConvexTsconfigTemplate(functionsDirRelative),
+      createReason: `Create ${join(functionsDirRelative, 'tsconfig.json')} for kitcn functions.`,
+      updateReason: `Patch ${join(functionsDirRelative, 'tsconfig.json')} for kitcn functions.`,
+      skipReason: `${join(functionsDirRelative, 'tsconfig.json')} already matches the kitcn functions project.`,
+    },
+  ];
+
+  if (includeDemoFiles) {
+    files.push(
+      {
+        kind: 'scaffold',
+        relativePath: trimLeadingSlashes(
+          posix.join(rootPrefix, 'routes', 'index.tsx')
+        ),
+        requiresExplicitOverwrite: false,
+        content: INIT_START_MESSAGES_PAGE_TEMPLATE,
+        createReason: `Create ${trimLeadingSlashes(posix.join(rootPrefix, 'routes', 'index.tsx'))} as the minimal kitcn demo route.`,
+        updateReason: `Update ${trimLeadingSlashes(posix.join(rootPrefix, 'routes', 'index.tsx'))} for the kitcn demo route.`,
+        skipReason: `${trimLeadingSlashes(posix.join(rootPrefix, 'routes', 'index.tsx'))} already matches the kitcn demo route.`,
+      },
+      {
+        kind: 'schema',
+        relativePath: `${functionsDirRelative}/schema.ts`,
+        requiresExplicitOverwrite: true,
+        content: INIT_NEXT_SCHEMA_TEMPLATE,
+        createReason: `Create ${functionsDirRelative}/schema.ts with the minimal kitcn demo schema.`,
+        updateReason: `Update ${functionsDirRelative}/schema.ts with the minimal kitcn demo schema.`,
+        skipReason: `${functionsDirRelative}/schema.ts already matches the kitcn demo schema.`,
+      },
+      {
+        kind: 'scaffold',
+        relativePath: `${functionsDirRelative}/messages.ts`,
+        requiresExplicitOverwrite: true,
+        content: renderInitNextMessagesTemplate(functionsDirRelative),
+        createReason: `Create ${functionsDirRelative}/messages.ts for the kitcn demo route.`,
+        updateReason: `Update ${functionsDirRelative}/messages.ts for the kitcn demo route.`,
+        skipReason: `${functionsDirRelative}/messages.ts already matches the kitcn demo route.`,
+      }
+    );
+  }
+
+  return files;
+}
+
 function detectImportQuote(source: string): '"' | "'" {
   const match = source.match(INIT_NEXT_IMPORT_QUOTE_RE);
   return match?.[1] === "'" ? "'" : '"';
+}
+
+function trimLeadingSlashes(value: string): string {
+  return value.replace(LEADING_SLASHES_RE, '');
 }
 
 function detectStatementTerminator(source: string): ';' | '' {
@@ -1711,6 +1867,51 @@ function patchInitTsconfigContent(
         strictFunctionTypes: false,
         paths,
       },
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function patchInitStartTsconfigContent(
+  source: string,
+  context: Pick<ProjectScaffoldContext, 'tsconfigAliasPath' | 'usesSrc'>
+): string {
+  const parsedResult = ts.parseConfigFileTextToJson('tsconfig.json', source);
+  if (parsedResult.error || parsedResult.config === undefined) {
+    throw new Error(
+      'Could not patch tsconfig.json: expected valid JSON or JSONC scaffold output.'
+    );
+  }
+  const parsed: unknown = parsedResult.config;
+
+  if (!isPlainObject(parsed)) {
+    throw new Error(
+      'Could not patch tsconfig.json: expected a top-level JSON object.'
+    );
+  }
+
+  const compilerOptions = isPlainObject(parsed.compilerOptions)
+    ? { ...parsed.compilerOptions }
+    : {};
+  const paths = isPlainObject(compilerOptions.paths)
+    ? { ...compilerOptions.paths }
+    : {};
+
+  if (!('@/*' in paths)) {
+    paths['@/*'] = [context.tsconfigAliasPath];
+  }
+  paths['@convex/*'] = ['./convex/shared/*'];
+
+  return `${JSON.stringify(
+    {
+      ...parsed,
+      compilerOptions: {
+        ...compilerOptions,
+        strictFunctionTypes: false,
+        paths,
+      },
+      ...(context.usesSrc ? { include: ['src'] } : {}),
     },
     null,
     2
@@ -1936,6 +2137,13 @@ function patchInitReactViteConfigContent(source: string): string {
     return source.endsWith('\n') ? source : `${source}\n`;
   }
 
+  if (
+    source.includes('viteTsConfigPaths(') ||
+    source.includes('tsConfigPaths(')
+  ) {
+    return source.endsWith('\n') ? source : `${source}\n`;
+  }
+
   if (!source.includes('alias: {')) {
     throw new Error(
       'Could not patch vite.config.ts: expected a resolve.alias block.'
@@ -2064,10 +2272,13 @@ function buildInitReactRootTsconfigPlanFile(
     kind: 'config',
     filePath,
     requiresExplicitOverwrite: false,
-    content: patchInitTsconfigContent(
-      fs.readFileSync(filePath, 'utf8'),
-      context
-    ),
+    content:
+      context.framework === 'tanstack-start'
+        ? patchInitStartTsconfigContent(
+            fs.readFileSync(filePath, 'utf8'),
+            context
+          )
+        : patchInitTsconfigContent(fs.readFileSync(filePath, 'utf8'), context),
     updateReason:
       'Patch tsconfig.json to keep the app alias and add @convex/*.',
     createReason:
@@ -2246,11 +2457,18 @@ function buildTemplateInitializationPlanFiles(params: {
           params.backend,
           params.includeDemoFiles
         )
-      : buildInitReactOwnedScaffoldFiles(
-          projectContext,
-          params.functionsDirRelative,
-          params.backend
-        );
+      : projectContext.framework === 'tanstack-start'
+        ? buildInitStartOwnedScaffoldFiles(
+            projectContext,
+            params.functionsDirRelative,
+            params.backend,
+            params.includeDemoFiles
+          )
+        : buildInitReactOwnedScaffoldFiles(
+            projectContext,
+            params.functionsDirRelative,
+            params.backend
+          );
 
   const plannedOwnedFiles = ownedFiles.map((file) => {
     const filePath = resolve(process.cwd(), file.relativePath);
@@ -2293,6 +2511,14 @@ function buildTemplateInitializationPlanFiles(params: {
       buildInitNextComponentsJsonPlanFile(projectContext),
       ...(eslintConfigPlanFile ? [eslintConfigPlanFile] : []),
       buildInitNextLayoutPlanFile(projectContext),
+    ];
+  }
+
+  if (projectContext.framework === 'tanstack-start') {
+    return [
+      ...plannedOwnedFiles,
+      buildInitReactRootTsconfigPlanFile(projectContext),
+      ...buildInitReactViteConfigPlanFile(projectContext),
     ];
   }
 
@@ -2754,7 +2980,7 @@ export async function runInitCommandFlow(params: {
   if (wantsFreshScaffold) {
     if (!template) {
       throw new Error(
-        'Fresh app scaffolding requires `kitcn init -t <next|vite>`.'
+        'Fresh app scaffolding requires `kitcn init -t <next|start|vite>`.'
       );
     }
     if (existingProjectContext) {
@@ -2788,7 +3014,7 @@ export async function runInitCommandFlow(params: {
 
   if (!existingProjectContext) {
     throw new Error(
-      'Could not detect a supported app scaffold. Use `kitcn init -t <next|vite>` for a fresh app.'
+      'Could not detect a supported app scaffold. Use `kitcn init -t <next|start|vite>` for a fresh app.'
     );
   }
 
@@ -3722,6 +3948,9 @@ export async function runConvexInitIfNeeded(params: {
 
   const shouldUseAnonymousAgentMode =
     params.yes && !hasRemoteConvexInitTargetArgs(params.targetArgs);
+  const agentModeOverride = shouldUseAnonymousAgentMode
+    ? 'anonymous'
+    : params.env?.CONVEX_AGENT_MODE;
   const result = normalizeConvexCommandResult(
     await params.execaFn(
       params.backendAdapter.command,
@@ -3734,9 +3963,9 @@ export async function runConvexInitIfNeeded(params: {
         cwd: process.cwd(),
         env: createBackendCommandEnv({
           ...params.env,
-          CONVEX_AGENT_MODE: shouldUseAnonymousAgentMode
-            ? 'anonymous'
-            : params.env?.CONVEX_AGENT_MODE,
+          ...(agentModeOverride
+            ? { CONVEX_AGENT_MODE: agentModeOverride }
+            : {}),
         }),
         reject: false,
         stdio: 'pipe',
@@ -5441,7 +5670,7 @@ export async function run(
 
   if (command === 'create') {
     throw new Error(
-      'Removed `kitcn create`. Use `kitcn init -t <next|vite>` for fresh app scaffolding.'
+      'Removed `kitcn create`. Use `kitcn init -t <next|start|vite>` for fresh app scaffolding.'
     );
   }
 

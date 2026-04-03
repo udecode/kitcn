@@ -7,19 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll set up cRPC in your Convex backend. You'll learn to initialize cRPC, create procedure builders, add middleware, customize context, and organize your files.
-
-## Overview
-
-cRPC gives you a fluent, type-safe API for building Convex procedures. Instead of defining procedures with object config, you chain methods to build them. This makes it easy to add validation, middleware, and reusable patterns.
-
-| Feature | Benefit |
-|---------|---------|
-| Fluent builder API | Chain `.input()`, `.output()`, `.use()` for readable code |
-| Zod validation | Runtime type checking with great error messages |
-| Middleware system | Reusable auth, rate limiting, logging |
-| Procedure variants | `publicQuery`, `authMutation`, `adminQuery` patterns |
-
 ## Generate Runtime
 
 Start `kitcn dev` — this runs Convex and watches for changes, regenerating runtime files automatically:
@@ -290,31 +277,6 @@ crpc.user.list.queryOptions({ limit: 10 })
 // File: convex/functions/session.ts, export: getByToken
 crpc.session.getByToken.queryOptions({ token: 'abc' })
 ```
-
-## Migrate from Convex
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- Import `query`, `mutation`, `action` from `convex/server`
-- File-based organization in `convex/functions/`
-- Export functions as named exports
-
-### What's new
-
-Key differences:
-- Fluent builder API instead of object config
-- Zod validation instead of `v` validators
-- `{ ctx, input }` destructured params
-- Reusable procedure variants with built-in middleware
-
-## Next Step
-
-<Cards>
-  <Card title="CLI Registry" href="/docs/cli/registry" />
-  <Card title="Auth Server" href="/docs/auth/server" />
-</Cards>
 
 ## Next Steps
 

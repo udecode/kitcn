@@ -12,7 +12,7 @@ import {
   Shield,
 } from 'lucide-react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { CopyButton } from '@/components/copy-button';
 import { getLatestKitcnCommands } from '@/lib/kitcn-commands';
 
@@ -382,8 +382,33 @@ const steps = [
   },
 ];
 
+const homeTemplateOptions = [
+  {
+    label: 'next',
+    command: 'init -t next',
+  },
+  {
+    label: 'start',
+    command: 'init -t start',
+  },
+  {
+    label: 'vite',
+    command: 'init -t vite',
+  },
+  {
+    label: 'react',
+    command: 'init',
+  },
+] as const;
+
 function Hero() {
-  const initCommand = getLatestKitcnCommands('init -t next --yes').npm;
+  const [selectedTemplate, setSelectedTemplate] = useState<
+    (typeof homeTemplateOptions)[number]['label']
+  >('next');
+  const selectedOption =
+    homeTemplateOptions.find(({ label }) => label === selectedTemplate) ??
+    homeTemplateOptions[0];
+  const initCommand = getLatestKitcnCommands(selectedOption.command).npm;
 
   return (
     <section className="flex flex-col items-center px-6 pt-20 pb-8 text-center md:pt-32 md:pb-12">
@@ -396,10 +421,38 @@ function Hero() {
 
       <div className="mt-8 w-full max-w-2xl overflow-hidden rounded-2xl border border-fd-border">
         <div className="border-fd-border border-b bg-[#282a36] px-4 py-3">
-          <div className="flex gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-[#ff5555]/80" />
-            <div className="h-3 w-3 rounded-full bg-[#f1fa8c]/80" />
-            <div className="h-3 w-3 rounded-full bg-[#50fa7b]/80" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex gap-1.5">
+              <div className="h-3 w-3 rounded-full bg-[#ff5555]/80" />
+              <div className="h-3 w-3 rounded-full bg-[#f1fa8c]/80" />
+              <div className="h-3 w-3 rounded-full bg-[#50fa7b]/80" />
+            </div>
+            <div
+              aria-label="Template picker"
+              className="inline-flex rounded-full border border-white/10 bg-white/5 p-1"
+              role="tablist"
+            >
+              {homeTemplateOptions.map(({ label }) => {
+                const isSelected = label === selectedTemplate;
+
+                return (
+                  <button
+                    aria-selected={isSelected}
+                    className={`rounded-full px-3 py-1 font-medium text-xs capitalize transition ${
+                      isSelected
+                        ? 'bg-white/15 text-white'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                    key={label}
+                    onClick={() => setSelectedTemplate(label)}
+                    role="tab"
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
         <div className="relative">

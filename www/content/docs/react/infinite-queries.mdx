@@ -7,21 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore infinite queries in cRPC. You'll learn to implement cursor-based pagination with real-time updates, prefetch first pages, handle loading states with placeholders, and set up infinite scroll.
-
-## Overview
-
-`useInfiniteQuery` provides cursor-based pagination with real-time updates:
-
-| Feature | Benefit |
-|---------|---------|
-| Cursor-based | Efficient pagination with stable cursors |
-| Real-time | Each page maintains WebSocket subscription |
-| Server-defined limits | Page size from `.paginated(limit)` |
-| Prefetching | First-page prefetch for instant navigation |
-
-Let's see how it works.
-
 ```tsx showLineNumbers {1,7-9,14}
 import { useInfiniteQuery } from 'kitcn/react';
 import { useCRPC } from '@/lib/crpc';
@@ -235,74 +220,6 @@ const { data } = useInfiniteQuery(
 );
 ```
 
-## Migrate from Convex
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- Cursor-based pagination model
-- Real-time updates via WebSocket
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```tsx showLineNumbers
-    import { usePaginatedQuery } from 'convex/react';
-    import { api } from '@convex/_generated/api';
-
-    const { results, status, loadMore } = usePaginatedQuery(
-      api.session.list,
-      { userId },
-      { initialNumItems: 20 }
-    );
-
-    // Check status
-    if (status === 'LoadingFirstPage') return <Loading />;
-
-    // Load more
-    <button onClick={() => loadMore(20)}>Load more</button>
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```tsx showLineNumbers {1-2,5-7,10,13}
-    import { useInfiniteQuery } from 'kitcn/react';
-    import { useCRPC } from '@/lib/crpc';
-
-    const crpc = useCRPC();
-
-    // limit comes from server's .paginated(20)
-    const { data, hasNextPage, isLoading, fetchNextPage } = useInfiniteQuery(
-      crpc.session.list.infiniteQueryOptions({ userId })
-    );
-
-    // Check status
-    if (isLoading) return <Loading />;
-
-    // Load more (optional: pass lower value)
-    <button onClick={() => fetchNextPage()}>Load more</button>
-    ```
-  </CompareItem>
-</Compare>
-
-**Key differences:**
-
-| Before | After |
-|--------|-------|
-| `results` | `data` (same flattened array) |
-| `status === 'LoadingFirstPage'` | `isLoading` |
-| `status === 'CanLoadMore'` | `hasNextPage` |
-| `status === 'LoadingMore'` | `isFetchingNextPage` |
-| `loadMore(n)` | `fetchNextPage(n)` (optional, uses server limit) |
-| Manual limit | Server-defined via `.paginated(20)` |
-| No prefetching | `queryClient.prefetchQuery()` support |
-
-Additional benefits:
-- `placeholderData` option for skeleton UIs
-- `skipUnauth` option for auth-aware queries
-- Page splitting handled automatically
-
 ## Next Steps
 
 <Cards>
@@ -334,61 +251,3 @@ Here's what `useInfiniteQuery` returns:
 
 Extends TanStack Query's `UseQueryResult`.
 
-### How It Works
-
-#### Pagination State Persistence
-
-Pagination state is stored in `queryClient` for scroll restoration across navigations:
-
-```
-Mount ──► Check queryClient for existing state
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-     State found         Not found
-          │                   │
-    Restore pages        Create initial state
-    Resume subscriptions Subscribe to first page
-          │                   │
-          └─────────┬─────────┘
-                    │
-            Navigate away
-                    │
-        ┌───────────┴───────────┐
-        │                       │
-   State persists          Subscriptions close
-   in queryClient          (after unsubscribeDelay)
-        │                       │
-        └───────────┬───────────┘
-                    │
-             Navigate back
-                    │
-          Instant cached data
-          + re-subscribe to pages
-```
-
-#### Per-Page Subscriptions
-
-Each page maintains its own WebSocket subscription:
-
-```
-Page 0 ──► WebSocket subscription ──► Real-time updates
-Page 1 ──► WebSocket subscription ──► Real-time updates
-Page 2 ──► WebSocket subscription ──► Real-time updates
-               │
-               └─ All pages update independently
-```
-
-#### Automatic Error Recovery
-
-The system handles errors gracefully:
-
-```
-InvalidCursor error ──► Reset pagination state
-                        Start fresh from page 0
-                        New subscriptions
-
-Page too large ──► splitCursor returned
-                   Automatically split page
-                   Maintain continuity
-```

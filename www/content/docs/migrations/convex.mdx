@@ -26,9 +26,7 @@ Let's migrate step by step.
 
 ## Step 1: Install
 
-```bash showLineNumbers
-bun add kitcn @tanstack/react-query zod
-```
+<PackageInstallTabs packages="kitcn @tanstack/react-query zod" />
 
 ## Step 2: Server Setup
 
@@ -441,7 +439,7 @@ export const { CRPCProvider, useCRPC, useCRPCClient } = createCRPCContext({
 ### Generate Metadata
 
 ```bash showLineNumbers
-bunx kitcn dev
+npx kitcn dev
 ```
 
 ## Step 7: Migrate Client Hooks

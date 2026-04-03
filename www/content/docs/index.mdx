@@ -37,6 +37,7 @@ kitcn integrates Convex for realtime data, TanStack Query for caching, and Bette
 | `kitcn/auth/config` | Convex auth config provider | `auth` |
 | `kitcn/auth/http` | Auth HTTP helpers | `auth` |
 | `kitcn/auth/nextjs` | Better Auth Next.js adapter | `server`, `next` |
+| `kitcn/auth/start` | Better Auth TanStack Start adapter | `auth` |
 | `kitcn/ratelimit` | Rate limiting plugin | `orm` |
 
 `server`, `orm`, and `auth` are standalone foundations — everything else builds on one or more. You can use `server` or `auth` without `orm`, `orm` and `plugins` without `server`.
@@ -73,14 +74,14 @@ const { data: posts } = useQuery(crpc.posts.list.queryOptions({ limit: 10 }));
 
 ## For AI Agents
 
-If you're an AI agent integrating kitcn, **ask the user to select their stack before starting**. Use your `AskUserQuestion` tool (or equivalent) to let them pick:
+Ask the user to select their stack before starting:
 
 ### Required Choices
 
 | Feature | Options | Default |
 |---------|---------|---------|
 | **Bootstrap** | CLI (`kitcn init` / `add`), Docs by section | CLI |
-| **React Framework** | Next.js App Router, TanStack Start, Other | Next.js App Router |
+| **React Framework** | Next.js App Router, TanStack Start, Vite | Next.js App Router |
 | **Database** | ORM (`ctx.orm`) | ORM |
 
 ### Optional Features
@@ -97,30 +98,34 @@ If you're an AI agent integrating kitcn, **ask the user to select their stack be
 | **RLS** | Yes, No | Runtime row-level access control |
 | **Auth plugins** | admin, organizations, polar, none | Only when required by product |
 
-### After Selection
+### CLI Bootstrap
 
-**CLI bootstrap:**
-1. Run `kitcn init -t next --yes` for the shortest fresh local Convex path.
-2. Add only the features you chose with `kitcn add <plugin>`:
-   - `kitcn add auth`
-   - `kitcn add ratelimit`
-   - `kitcn add resend`
-3. On backend `convex`, `init` and `dev` run `convex init` before kitcn codegen.
-4. Use `kitcn verify` for a one-shot local runtime proof in the current app. Run it with any long-running local backend process stopped first. Use `kitcn dev --bootstrap` when you specifically want one-shot local setup. During local Convex dev, `convex/.env` edits auto-sync. `kitcn add auth --yes` also finishes local auth bootstrap in one pass. Use `kitcn env push` for `--prod`, `--rotate`, or explicit repair against an active deployment.
-5. Use `kitcn insights` when you need the upstream Convex insights view from the same CLI entrypoint.
-6. Local auth setup assumes `http://localhost:3000` for the app. If you move the app to another port, update `.env.local` `NEXT_PUBLIC_SITE_URL`, `convex/.env` `SITE_URL`, and the app dev script before running smoke or auth flows.
+1. Scaffold:
+   - Next.js: `npx kitcn@latest init -t next --yes`
+   - TanStack Start: `npx kitcn@latest init -t start --yes`
+   - Vite: `npx kitcn@latest init -t vite --yes`
+2. Add features with `kitcn add <plugin>`:
+   - `npx kitcn add auth --yes`
+   - `npx kitcn add ratelimit --yes`
+   - `npx kitcn add resend --yes`
+3. Run: `npx kitcn dev` (runs `convex init` + codegen + watchers)
+4. Verify: `npx kitcn verify` (one-shot local runtime proof, stop `kitcn dev` first)
+5. Env: `npx kitcn env push` for `--prod`, `--rotate`, or explicit repair. During local dev, `convex/.env` edits auto-sync.
+6. Local auth assumes `http://localhost:3000`. If you change the port, update `.env.local` `NEXT_PUBLIC_SITE_URL` and `convex/.env` `SITE_URL`.
 
-**Docs-by-section approach:**
-1. Follow [Quickstart](/docs/quickstart) for initial setup
-2. Read individual docs for each feature needed
-3. Use [CLI Registry](/docs/cli/registry) as the bootstrap reference
-4. Confirm deployment/bootstrap is configured before relying on generated imports
+### Docs-by-Section Bootstrap
+
+1. Follow [Quickstart](/docs/quickstart)
+2. Read individual docs for each feature
+3. Use [CLI Registry](/docs/cli/registry) as the command reference
+4. Confirm deployment/bootstrap before relying on generated imports
 
 ### Quick Reference by Stack
 
 | Stack | Key Docs |
 |-------|----------|
-| Next.js + Better Auth | [CLI Registry](/docs/cli/registry), [Next.js Setup](/docs/nextjs), [Auth Server](/docs/auth/server) |
+| Next.js + Auth | [Quickstart](/docs/quickstart), [Next.js](/docs/nextjs), [Auth Server](/docs/auth/server) |
+| TanStack Start + Auth | [TanStack Start](/docs/tanstack-start), [Auth Server](/docs/auth/server) |
 | Vite + No Auth | [React Setup](/docs/react), [Server Setup](/docs/server/setup) |
 | Any + Custom Auth | [Server Setup](/docs/server/setup), [Middlewares](/docs/server/middlewares) |
 

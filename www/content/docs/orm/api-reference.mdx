@@ -189,14 +189,14 @@ Per-query delete mode methods still take precedence: `.hard()`, `.soft()`, `.sch
 
 ### `vector()`
 
-```ts
+```ts showLineNumbers
 vector(1536)
 vector('embedding', 768)
 ```
 
 ### `discriminator()`
 
-```ts
+```ts showLineNumbers
 discriminator({
   as: 'details',   // optional alias, defaults to "details"
   variants: {
@@ -215,7 +215,7 @@ Schema-first discriminated union. Variant fields become nullable physical column
 
 ### `arrayOf()` / `objectOf()` / `unionOf()`
 
-```ts
+```ts showLineNumbers
 arrayOf(text().notNull())
 objectOf({
   actor: text().notNull(),
@@ -228,7 +228,7 @@ objectOf(unionOf(text().notNull(), integer().notNull()).notNull())
 
 ### `custom()` / `json()`
 
-```ts
+```ts showLineNumbers
 custom(v.object({ type: v.string(), data: v.any() }))
 json<{ tags: string[] }>()
 ```
@@ -270,7 +270,7 @@ values. When omitted, `withCheck` falls back to `using`.
 
 ### `rlsRole()`
 
-```ts
+```ts showLineNumbers
 rlsRole('admin', { createRole: true }).existing();
 ```
 
@@ -318,7 +318,7 @@ Pass `vectorSearch` when you want ORM `findMany({ vectorSearch })` support.
 
 `db.system` exposes raw Convex system-table reads for `_storage` and `_scheduled_functions`.
 
-```ts
+```ts showLineNumbers
 await db.system.get(jobId);
 await db.system.query('_scheduled_functions').collect();
 await db.system.query('_storage').take(20);
@@ -465,7 +465,7 @@ const page = await db.query.messages
 
 Composition stage output is inferred in order:
 
-```ts
+```ts showLineNumbers
 const page = await db.query.messages
   .select()
   .map(async (m) => ({ ...m, preview: m.body.slice(0, 120) }))
@@ -477,7 +477,7 @@ page.page[0].preview; // string
 
 `flatMap` infers relation-targeted output:
 
-```ts
+```ts showLineNumbers
 const expanded = await db.query.users
   .select()
   .flatMap('posts', { includeParent: false })
@@ -503,7 +503,7 @@ const page = await db.query.messages.findMany({
 
 `pageByKey` returns:
 
-```ts
+```ts showLineNumbers
 {
   page: T[];
   indexKeys: (Value | undefined)[][];
@@ -549,7 +549,7 @@ Use this mode when you need deterministic key boundaries (explicit adjacency con
 
 ### `insert()`
 
-```ts
+```ts showLineNumbers
 await db.insert(users).values({ name: 'Ada', email: 'ada@example.com' });
 ```
 
@@ -701,7 +701,7 @@ isNotNull(field)
 
 ## Type Helpers
 
-```ts
+```ts showLineNumbers
 InferSelectModel<typeof users>
 InferInsertModel<typeof users>
 users.$inferSelect
@@ -710,7 +710,7 @@ users.$inferInsert
 
 ## Introspection Helpers
 
-```ts
+```ts showLineNumbers
 getTableColumns(users) // includes id/createdAt
 getTableConfig(users)  // indexes/unique/fks/rls/checks
 ```
@@ -721,3 +721,12 @@ getTableConfig(users)  // indexes/unique/fks/rls/checks
 - String operators are post‑fetch
 - `extras` are computed post‑fetch
 - `findMany({ cursor, limit })` uses the first `orderBy` field for cursor ordering
+
+## Next Steps
+
+<Cards>
+  <Card title="Schema" href="/docs/orm/schema" />
+  <Card title="Queries" href="/docs/orm/queries" />
+  <Card title="Mutations" href="/docs/orm/mutations" />
+  <Card title="RLS" href="/docs/orm/rls" />
+</Cards>

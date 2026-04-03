@@ -39,6 +39,7 @@ export default defineConfig([
       'auth/http/index': 'src/auth-http/index.ts',
       'auth/index': 'src/auth/index.ts',
       'auth/nextjs/index': 'src/auth-nextjs/index.ts',
+      'auth/start/index': 'src/auth-start/index.ts',
       'crpc/index': 'src/crpc/index.ts',
       'ratelimit/index': 'src/ratelimit/index.ts',
       'plugins/index': 'src/plugins/index.ts',

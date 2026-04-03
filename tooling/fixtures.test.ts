@@ -36,9 +36,14 @@ describe('tooling/fixtures', () => {
       mode: 'check',
       target: 'next-auth',
     });
+    expect(parseTemplateArgs(['check', 'start-auth'])).toEqual({
+      backend: 'concave',
+      mode: 'check',
+      target: 'start-auth',
+    });
 
     expect(() => parseTemplateArgs(['prepare'])).toThrow(
-      'Usage: bun tooling/fixtures.ts <sync|check> [all|next|next-auth|vite|vite-auth] [--backend <convex|concave>]'
+      'Usage: bun tooling/fixtures.ts <sync|check> [all|next|next-auth|start|start-auth|vite|vite-auth] [--backend <convex|concave>]'
     );
   });
 
@@ -62,6 +67,8 @@ describe('tooling/fixtures', () => {
     expect(TEMPLATE_DEFINITIONS['next-auth'].validation.lint).toBe(true);
     expect(TEMPLATE_DEFINITIONS.vite.validation.lint).toBe(false);
     expect(TEMPLATE_DEFINITIONS['vite-auth'].validation.lint).toBe(false);
+    expect(TEMPLATE_DEFINITIONS.start.validation.lint).toBe(false);
+    expect(TEMPLATE_DEFINITIONS['start-auth'].validation.lint).toBe(false);
   });
 
   test('normalizeTemplateSnapshot strips .env.local from committed templates', () => {

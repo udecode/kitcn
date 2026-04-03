@@ -7,21 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll master error handling in cRPC. You'll learn to throw typed errors with error codes, use helper functions, and handle common error scenarios like authorization failures and rate limits.
-
-## Overview
-
-cRPC provides `CRPCError`, a typed error class that extends Convex's `ConvexError` with tRPC-style error codes and HTTP status mapping.
-
-| Feature | Benefit |
-|---------|---------|
-| Typed error codes | Consistent error handling across your app |
-| HTTP status mapping | Automatic status codes for HTTP endpoints |
-| Error chaining | Preserve original error with `cause` |
-| Helper functions | Type guards and status code utilities |
-
-Let's explore how to use them.
-
 ## Throwing Errors
 
 The basic pattern is simple - import `CRPCError` and throw it with a code:
@@ -190,45 +175,6 @@ if (input.startDate > input.endDate) {
   });
 }
 ```
-
-## Migrate from Convex
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- Errors are thrown in procedures
-- Errors propagate to the client
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```ts showLineNumbers
-    import { ConvexError } from 'convex/values';
-
-    throw new ConvexError('Post not found');
-    // or
-    throw new ConvexError({ message: 'Post not found' });
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```ts showLineNumbers {1,3-6}
-    import { CRPCError } from 'kitcn/server';
-
-    throw new CRPCError({
-      code: 'NOT_FOUND',
-      message: 'Post not found',
-    });
-    ```
-  </CompareItem>
-</Compare>
-
-Key differences:
-- Typed error codes instead of free-form messages
-- HTTP status code mapping for API responses
-- `cause` parameter for error chaining
-- Helper functions for error handling
 
 ## Next Steps
 

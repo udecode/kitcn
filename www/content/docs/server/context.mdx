@@ -7,22 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore the context object - the gateway to everything your procedures need. You'll learn about base context properties, how to extend context with middleware, and how actions differ from queries and mutations.
-
-## Overview
-
-Context (`ctx`) is passed to every procedure handler. It provides access to Convex features and any data added by middleware.
-
-| Property | Available In | Purpose |
-|----------|--------------|---------|
-| `ctx.orm` | Queries, Mutations | Database access (the ORM) |
-| `ctx.auth` | All | Authentication info |
-| `ctx.storage` | All | File storage |
-| `ctx.scheduler` | Mutations | Schedule functions |
-| `ctx.runQuery` / `ctx.runMutation` | Actions | Call other procedures |
-
-Let's explore each one.
-
 ## Base Context
 
 Every procedure receives the base Convex context. Here's what you get out of the box:
@@ -152,53 +136,6 @@ export const processAndSave = publicAction
 <Callout icon={<InfoIcon />}>
   **Note:** Actions can't access the database directly. Module runtime callers (like `createUserCaller(ctx)`) dispatch root calls via `ctx.runQuery` / `ctx.runMutation`, action calls via `caller.actions.*` (which uses `ctx.runAction`), and scheduling via `caller.schedule.*` (which uses `ctx.scheduler`).
 </Callout>
-
-## Migrate from Convex
-
-If you're coming from vanilla Convex or convex-helpers, here's what changes.
-
-### What stays the same
-
-Base context properties work identically:
-- `ctx.orm` - Database access (queries + mutations)
-- `ctx.auth` - Authentication
-- `ctx.storage` - File storage
-- `ctx.scheduler` - Scheduler (mutations + actions)
-- `ctx.runQuery` / `ctx.runMutation` / `ctx.runAction` - Call procedures (actions only)
-
-### What's new
-
-cRPC's `.use()` middleware replaces convex-helpers' `customQuery`/`customMutation`:
-
-<Compare>
-  <CompareItem title="Before (convex-helpers)">
-    ```ts showLineNumbers
-    import { customQuery, customCtx } from 'convex-helpers/server/customFunctions';
-
-    const userQuery = customQuery(query,
-      customCtx(async (ctx) => {
-        const user = await getUser(ctx);
-        if (!user) throw new Error('Authentication required');
-        return { user };
-      })
-    );
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```ts showLineNumbers {2-5}
-    const userQuery = c.query.use(async ({ ctx, next }) => {
-      const user = await getUser(ctx);
-      if (!user) throw new CRPCError({ code: 'UNAUTHORIZED' });
-      return next({ ctx: { ...ctx, user } });
-    });
-    ```
-  </CompareItem>
-</Compare>
-
-Key differences:
-- Call `next({ ctx })` instead of returning context directly
-- Use `CRPCError` for typed errors
-- Chain multiple `.use()` calls for composable middleware
 
 ## Next Steps
 

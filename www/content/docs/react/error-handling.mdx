@@ -7,19 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore client-side error handling in cRPC. You'll learn to handle server errors from procedures, work with client-side auth errors, and set up global error handling.
-
-## Overview
-
-cRPC provides typed error handling on the client:
-
-| Error Source | Description |
-|--------------|-------------|
-| Server errors | `CRPCError` thrown in procedures, arrives as `ConvexError` with `error.data` |
-| Client errors | `CRPCClientError` generated client-side (e.g., unauthorized query skip) |
-
-Let's explore each one.
-
 ## Server Errors
 
 When a procedure throws `CRPCError`, it arrives on the client as a `ConvexError`. Access the message via `error.data`:
@@ -130,50 +117,6 @@ const queryClient = new QueryClient({
 <Callout icon={<InfoIcon />}>
 **Tip:** Use global error handling for logging and analytics. Handle specific errors in component callbacks for user-facing messages.
 </Callout>
-
-## Migrate from Convex
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- Errors propagate from server to client
-- ConvexError structure
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```tsx showLineNumbers
-    try {
-      await mutation(args);
-    } catch (error) {
-      if (error instanceof ConvexError) {
-        console.log(error.data); // unknown shape
-      }
-    }
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```tsx showLineNumbers {1-4}
-    mutation.mutate(args, {
-      onError: (error) => {
-        toast.error(error.data?.message ?? 'Failed');
-      },
-    });
-    ```
-  </CompareItem>
-</Compare>
-
-**Key differences:**
-
-| Feature | Description |
-|---------|-------------|
-| TanStack Query states | `isError`, `error` available on queries |
-| Typed callbacks | `onError` in `mutationOptions` |
-| Consistent access | `error.data?.message` pattern |
-| Client errors | `CRPCClientError` for auth failures |
-| Global handling | Via `QueryCache` in QueryClient |
 
 ## Next Steps
 
