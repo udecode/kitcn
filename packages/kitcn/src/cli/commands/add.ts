@@ -447,6 +447,16 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
     presetTemplateIds,
     availableTemplateIds: allTemplates.map((template) => template.id),
   });
+  const selectableTemplateIds =
+    selectionSource === 'lockfile'
+      ? [...new Set([...existingTemplateIds, ...presetTemplateIds])]
+      : presetTemplateIds;
+  const selectableTemplates = resolveTemplatesByIdOrThrow(
+    pluginDescriptor,
+    allTemplates,
+    selectableTemplateIds,
+    'add selection prompt'
+  );
   const scaffoldRoots = resolvePluginScaffoldRoots(
     effectiveFunctionsDir,
     pluginDescriptor,
@@ -458,7 +468,7 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
       ? await promptForScaffoldTemplateSelection(
           promptAdapter,
           pluginDescriptor,
-          allTemplates,
+          selectableTemplates,
           defaultTemplateIds,
           scaffoldRoots
         )
