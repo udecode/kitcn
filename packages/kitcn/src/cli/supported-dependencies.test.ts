@@ -8,6 +8,7 @@ import {
   OPENTELEMETRY_API_INSTALL_SPEC,
   PINNED_HONO_INSTALL_SPEC,
   PINNED_TANSTACK_REACT_QUERY_INSTALL_SPEC,
+  PINNED_ZOD_INSTALL_SPEC,
   resolveSupportedDependencyInstallSpec,
   SUPPORTED_DEPENDENCY_VERSIONS,
 } from './supported-dependencies';
@@ -34,6 +35,9 @@ describe('cli/supported-dependencies', () => {
     );
     expect(BASELINE_DEPENDENCY_INSTALL_SPECS).toContain(
       PINNED_HONO_INSTALL_SPEC
+    );
+    expect(BASELINE_DEPENDENCY_INSTALL_SPECS).toContain(
+      PINNED_ZOD_INSTALL_SPEC
     );
     expect(BETTER_AUTH_INSTALL_SPEC).toBe(
       `better-auth@${SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact}`
