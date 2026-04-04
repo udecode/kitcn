@@ -306,27 +306,82 @@ export const resolveAddTemplateDefaults = (params: {
 export const promptForScaffoldTemplateSelection = async (
   promptAdapter: PromptAdapter,
   descriptor: PluginDescriptor,
-  allTemplates: readonly ScaffoldTemplate[],
-  presetTemplateIds: readonly string[],
+  selectableTemplates: readonly ScaffoldTemplate[],
+  initialTemplateIds: readonly string[],
   roots: ResolvedScaffoldRoots
 ): Promise<string[]> => {
+  const resolveTemplateRootDir = (template: ScaffoldTemplate) => {
+    if (template.target === 'lib') {
+      return roots.libRootDir;
+    }
+    if (template.target === 'app') {
+      return roots.appRootDir ?? roots.functionsRootDir;
+    }
+    if (template.target === 'client-lib') {
+      return roots.clientLibRootDir ?? roots.functionsRootDir;
+    }
+    return roots.functionsRootDir;
+  };
+
+  const resolveTemplateLabel = (template: ScaffoldTemplate) =>
+    normalizePath(
+      relative(
+        process.cwd(),
+        join(resolveTemplateRootDir(template), template.path)
+      )
+    );
+
+  const preferredTemplateIds = new Set(
+    initialTemplateIds
+      .map((templateId) => templateId.trim())
+      .filter((templateId) => templateId.length > 0)
+  );
+  const optionsByLabel = new Map<string, ScaffoldTemplate>();
+  for (const template of selectableTemplates) {
+    const label = resolveTemplateLabel(template);
+    const existing = optionsByLabel.get(label);
+    if (!existing) {
+      optionsByLabel.set(label, template);
+      continue;
+    }
+
+    const existingPreferred = preferredTemplateIds.has(existing.id);
+    const nextPreferred = preferredTemplateIds.has(template.id);
+    if (nextPreferred && !existingPreferred) {
+      optionsByLabel.set(label, template);
+    }
+  }
+
+  const optionTemplateById = new Map(
+    [...optionsByLabel.values()].map(
+      (template) => [template.id, template] as const
+    )
+  );
+  const templateById = new Map(
+    selectableTemplates.map((template) => [template.id, template] as const)
+  );
+  const normalizedInitialTemplateIds = [
+    ...new Set(
+      initialTemplateIds.flatMap((templateId) => {
+        const template = templateById.get(templateId.trim());
+        if (!template) {
+          return [];
+        }
+        const selectedTemplate = optionsByLabel.get(
+          resolveTemplateLabel(template)
+        );
+        return selectedTemplate ? [selectedTemplate.id] : [];
+      })
+    ),
+  ].filter((templateId) => optionTemplateById.has(templateId));
+
   const selected = await promptAdapter.multiselect({
     message: `Select scaffold files for plugin "${descriptor.key}". Space to toggle. Enter to submit.`,
-    options: allTemplates.map((template) => ({
+    options: [...optionsByLabel.entries()].map(([label, template]) => ({
       value: template.id,
-      label: normalizePath(
-        relative(
-          process.cwd(),
-          join(
-            template.target === 'lib'
-              ? roots.libRootDir
-              : roots.functionsRootDir,
-            template.path
-          )
-        )
-      ),
+      label,
     })),
-    initialValues: presetTemplateIds,
+    initialValues: normalizedInitialTemplateIds,
     required: true,
   });
 
