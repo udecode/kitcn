@@ -7,10 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll take the fastest happy path: scaffold a fresh Next.js app
-with the CLI, run the first local Convex bootstrap in the same command, and
-walk through the starter messages demo from schema to client.
-
 <Callout icon={<InfoIcon />}>
 If you want the full command map, start with
 [/docs/cli/registry](/docs/cli/registry). This guide stays on the shortest
@@ -25,8 +21,6 @@ app is running, you can move deeper into the ORM guides and migration docs.
 
 ## 1. Scaffold A Fresh App
 
-Let's start with an empty directory and let the CLI own the bootstrap.
-
 ```bash showLineNumbers
 mkdir my-app
 cd my-app
@@ -38,6 +32,9 @@ cd my-app
 baseline in one pass. That includes the backend files, client providers, local
 env scaffolding, and a tiny messages demo so you have something real to run
 immediately.
+
+Fresh TanStack Start and Vite starters are also available through
+`kitcn init -t start --yes` and `kitcn init -t vite --yes`.
 
 Here are the key files the quickstart uses:
 
@@ -56,15 +53,14 @@ instead. That adoption path is documented in
 
 ## 2. Run The App
 
-Now let's start the backend for real and open the Next.js app in a second
-terminal.
+Start the backend and open the Next.js app in a second terminal.
 
 ```bash title="terminal 1" showLineNumbers
-bunx kitcn dev
+npx kitcn dev
 ```
 
 ```bash title="terminal 2" showLineNumbers
-bun dev
+npm run dev
 ```
 
 Open [http://localhost:3000/convex](http://localhost:3000/convex). You should
@@ -85,11 +81,9 @@ so you do not have to guess what failed.
 
 ## 3. Read The Starter Backend
 
-Now that the app is running, let's trace the files you just bootstrapped.
-
 ### Schema
 
-We'll start with the starter schema. It is intentionally tiny.
+The starter schema is intentionally tiny.
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {1-7}
 import { convexTable, defineSchema, text } from 'kitcn/orm';
@@ -111,7 +105,7 @@ quickstart in schema noise.
 
 ### Procedures
 
-Next, let's look at the starter procedures.
+The starter procedures:
 
 ```ts title="convex/functions/messages.ts" showLineNumbers {5-17,19-30}
 import { z } from 'zod';
@@ -184,7 +178,7 @@ The client side is just as small.
 
 ### React cRPC context
 
-We'll start with the generated client context:
+The generated client context:
 
 ```tsx title="lib/convex/crpc.tsx" showLineNumbers {1-6}
 import { api } from '@convex/api';
@@ -201,7 +195,7 @@ turns that into typed TanStack Query helpers for your React app.
 
 ### Demo page
 
-Now let's look at the starter page you just opened:
+The starter page:
 
 ```tsx title="app/convex/page.tsx" showLineNumbers {9-18,34-47,58-74}
 'use client';
@@ -265,9 +259,6 @@ This is the starter loop you will reuse everywhere:
 - the UI handles loading, error, and success states in the same file
 
 ## 5. What To Build Next
-
-You now have a running kitcn app, a local deployment, generated API
-types, and one live page wired end to end. That's the real starting point.
 
 From here, pick the next seam you actually need:
 

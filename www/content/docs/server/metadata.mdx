@@ -7,22 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore procedure metadata - a way to configure behavior per-procedure. You'll learn to define typed metadata, access it in middleware, and use common patterns like auth levels, roles, and rate limiting.
-
-## Overview
-
-Procedure metadata lets you attach typed configuration to individual procedures. Middleware reads this metadata to customize behavior - checking roles, applying rate limits, or enforcing auth requirements.
-
-| Feature | Purpose |
-|---------|---------|
-| Type-safe metadata | Define `Meta` type for autocomplete and validation |
-| Per-procedure config | Set different metadata on each procedure |
-| Middleware access | Read `meta` in middleware to customize logic |
-| Default values | Set `defaultMeta` for all procedures |
-| Shallow merging | Chain `.meta()` calls to build up configuration |
-
-Let's explore each one.
-
 ## Client Metadata (Codegen)
 
 The CLI generates `convex/shared/api.ts` automatically. Each public procedure leaf includes metadata plus a `functionRef`:
@@ -60,7 +44,7 @@ export const api = {
 
 ## Define Meta Type
 
-Let's start by defining your meta type. Chain `.meta<{ ... }>()` during [initialization](/docs/server/setup):
+Chain `.meta<{ ... }>()` during [initialization](/docs/server/setup):
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {3-7,11}
 import { initCRPC } from 'kitcn/server';
@@ -261,40 +245,6 @@ export const debugQuery = publicQuery
   .meta({ dev: true })
   .query(async ({ ctx }) => { ... });
 ```
-
-## Migrate from Convex
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- Custom behavior per procedure
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    No built-in metadata system. You'd need to implement custom patterns.
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```ts showLineNumbers {1,5,8-9}
-    const c = initCRPC
-      .dataModel<DataModel>()
-      .meta<{ role?: 'admin' }>()
-      .create();
-
-    export const adminQuery = authQuery
-      .meta({ role: 'admin' })
-      .use(roleMiddleware);
-    ```
-  </CompareItem>
-</Compare>
-
-Key differences:
-- Type-safe metadata with `Meta` type
-- Middleware accesses `meta` parameter
-- Chain `.meta()` calls with shallow merge
-- `defaultMeta` for default values
 
 ## Next Steps
 

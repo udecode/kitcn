@@ -177,9 +177,7 @@ From here, choose the path that matches how you want to migrate the auth files.
 
 Install `kitcn`.
 
-```bash
-bun add kitcn
-```
+<PackageInstallTabs packages="kitcn" />
 
 ### Update auth.config.ts
 
@@ -1032,7 +1030,7 @@ export function SignOutButton() {
 
 Generated runtime can be disabled when `<functionsDir>/auth.ts` is missing or lacks a default export. `functionsDir` comes from `convex.json.functions` (default: `convex`), so scaffolded kitcn apps use `convex/functions/auth.ts`.
 
-```ts
+```ts showLineNumbers
 import { defineAuth } from './generated/auth';
 
 export default defineAuth(() => ({
@@ -1050,7 +1048,7 @@ npx kitcn codegen
 
 Use the kitcn auth scaffold command for your mode:
 
-```bash
+```bash showLineNumbers
 npx kitcn add auth --yes
 npx kitcn add auth --schema --yes
 ```

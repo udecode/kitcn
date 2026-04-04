@@ -31,7 +31,7 @@ type InitDeps = Partial<RunDeps> & {
 export const INIT_HELP_TEXT = `Usage: kitcn init [options]
 
 Options:
-  --template, -t    App template ("next" or "vite") for fresh app scaffolding
+  --template, -t    App template ("next", "start", or "vite") for fresh app scaffolding
   --cwd             Target directory (or parent when used with --name)
   --name            Project name when scaffolding a fresh app
   --prod            Forward to \`convex init\`

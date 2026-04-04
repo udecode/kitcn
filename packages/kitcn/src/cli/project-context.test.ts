@@ -46,4 +46,20 @@ describe('cli/project-context', () => {
       })
     );
   });
+
+  test('resolveProjectScaffoldContext prefers the explicit start template over generic vite detection', () => {
+    const viteLikeDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-project-context-start-template-')
+    );
+    writeShadcnViteApp(viteLikeDir);
+
+    expect(
+      resolveProjectScaffoldContext({ cwd: viteLikeDir, template: 'start' })
+    ).toEqual(
+      expect.objectContaining({
+        framework: 'tanstack-start',
+        mode: 'react',
+      })
+    );
+  });
 });

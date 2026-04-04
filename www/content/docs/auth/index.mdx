@@ -7,34 +7,9 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore kitcn's integration with Better Auth. You'll learn the key concepts, understand the architecture, and see what components are available for both server and client.
-
-## Overview
-
-kitcn integrates [Better Auth](https://better-auth.com) with Convex:
-
-| Feature | Description |
-|---------|-------------|
-| Convex as database adapter | Store auth data in Convex tables |
-| Type-safe triggers | Hooks for user/session lifecycle events |
-| React hooks | `useAuth` and conditional rendering |
-| Next.js integration | Server-side caller with JWT caching |
-
-Let's understand the key concepts.
+kitcn integrates [Better Auth](https://better-auth.com) with Convex.
 
 ## Key Concepts
-
-### Local vs Legacy Component Installation
-
-| Approach | Schema Location | Database Access |
-|----------|-----------------|-----------------|
-| Legacy component adapter | Component schema | Via `ctx.runQuery`/`ctx.runMutation` |
-| **Local** (`kitcn/auth`) | Your app schema | ORM (`ctx.orm`) |
-
-kitcn uses the **local approach**:
-- Auth tables live in your app schema
-- Triggers can directly access and modify your app tables
-- Single transaction for complex operations
 
 ### Context-Aware Adapter
 
@@ -50,7 +25,7 @@ Use generated `getAuth(ctx)`; generated runtime handles context-aware adapter se
 
 ## Authentication Flow
 
-Let's understand how authentication works. Every request - whether from SSR or client - goes through the same two-step validation process:
+Every request - whether from SSR or client - goes through the same two-step validation process:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -113,7 +88,7 @@ Both SSR and client requests go through the same two-step validation above. The 
 
 ### All Auth States
 
-Here's what happens in each scenario. Note how Step 1 (JWT) and Step 2 (Session) interact:
+What happens in each scenario (note how Step 1 and Step 2 interact):
 
 | Scenario | Step 1: JWT | Step 2: Session | Result | User Experience |
 |----------|-------------|-----------------|--------|-----------------|
@@ -193,134 +168,15 @@ The client uses a **60-second leeway** when checking expiration to prevent edge 
 
 ## Request Flows
 
-Now let's see exactly what happens for SSR and client requests. This is useful for debugging.
+Both SSR and client requests follow the same two-step validation. The difference is transport.
 
-### SSR Flow (HTTP Prefetching)
+**SSR (HTTP):** Read JWT from cookie (cached by default) → HTTP to Convex → validate JWT → session lookup → query executes → response cached in TanStack Query → client hydrates with prefetched data.
 
-When you call `caller.posts.list()` on the server:
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  SSR REQUEST (server-side data fetching)                                 │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  1. Get JWT Token                                                        │
-│     ┌─────────────────────────────────────────────────────────────────┐ │
-│     │ JWT Caching ENABLED (default)                                   │ │
-│     │   ├─ Check cookie for cached JWT                                │ │
-│     │   ├─ If valid & not expired → use cached token (0ms)            │ │
-│     │   └─ If missing/expired → fetch fresh token from auth endpoint  │ │
-│     └─────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  2. HTTP Request to Convex (fetchQuery)                                  │
-│     Server → Convex backend with JWT in Authorization header             │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  3. Token Validation (Step 1 from above)                                 │
-│     ┌─────────────────────────────────────────────────────────────────┐ │
-│     │ Static JWKS (recommended)                                       │ │
-│     │   ├─ Parse JWT claims                                           │ │
-│     │   └─ Verify signature using embedded keys                       │ │
-│     │   ADDED LATENCY: ~0ms                                           │ │
-│     └─────────────────────────────────────────────────────────────────┘ │
-│     ┌─────────────────────────────────────────────────────────────────┐ │
-│     │ Dynamic JWKS (not recommended)                                  │ │
-│     │   ├─ Fetch OIDC discovery ← +50-200ms network call              │ │
-│     │   ├─ Fetch JWKS keys     ← +50-200ms network call               │ │
-│     │   └─ Verify signature                                           │ │
-│     │   ADDED LATENCY: +100-400ms per request                         │ │
-│     └─────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  4. Session Lookup (Step 2 from above)                                   │
-│     Query: session.id = sessionId AND expiresAt > now                  │
-│     ├─ Session valid → ✅ Query executes                                │
-│     └─ Session invalid → ❌ 401 Unauthorized                            │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  5. Query Executes & Response                                            │
-│     Data cached in TanStack Query, rendered to HTML                      │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  6. Hydration (fire-and-forget preloading)                               │
-│     ├─ HTML sent to browser with dehydrated query cache                 │
-│     ├─ Client hydrates with prefetched data (instant render)            │
-│     └─ WebSocket subscribes for real-time updates                       │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Client Flow (WebSocket)
-
-When you use `useCRPC().posts.list.useQuery()` in client components:
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  PAGE LOAD / NAVIGATION                                                  │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  1. WebSocket Connection                                                 │
-│     Browser → Convex backend (establishes persistent connection)         │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  2. Auth Handshake (⚠️ BLOCKING - queries wait here)                     │
-│     ┌─────────────────────────────────────────────────────────────────┐ │
-│     │ Unlike REST APIs where queries start immediately, Convex        │ │
-│     │ WebSocket requires auth validation BEFORE any query can run.    │ │
-│     └─────────────────────────────────────────────────────────────────┘ │
-│     Client sends session token → Convex validates JWT                   │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  3. Token Validation (Step 1 from above)                                 │
-│     ┌─────────────────────────────────────────────────────────────────┐ │
-│     │ Static JWKS (recommended)                                       │ │
-│     │   └─ Instant validation, no network calls                       │ │
-│     └─────────────────────────────────────────────────────────────────┘ │
-│     ┌─────────────────────────────────────────────────────────────────┐ │
-│     │ Dynamic JWKS (not recommended)                                  │ │
-│     │   └─ +100-400ms delay before ANY query can run                  │ │
-│     └─────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  4. Session Lookup (Step 2 from above)                                   │
-│     Same as SSR: validates session exists and isn't expired              │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  5. Identity Cached → Queries Unblocked                                  │
-│     All pending queries now execute instantly                            │
-│     useQuery(crpc.posts.list.queryOptions()) → runs                      │
-│     useQuery(crpc.user.me.queryOptions())    → runs                      │
-│     ... navigate to other pages → all queries instant                    │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+**Client (WebSocket):** Establish persistent connection → auth handshake (blocking) → validate JWT → session lookup → identity cached → all pending queries unblock.
 
 <Callout icon={<InfoIcon />}>
-**Key difference from REST APIs:** REST queries fire immediately and validate auth inline. Convex WebSocket queries are **blocked until the auth handshake completes**. With Static JWKS, this handshake is instant. With Dynamic JWKS, it adds 100-400ms blocking time on page load.
+**Key difference from REST:** Convex WebSocket queries are **blocked until the auth handshake completes**. With Static JWKS, the handshake is instant. With Dynamic JWKS, it adds 100-400ms blocking time on page load.
 </Callout>
-
-That's the complete authentication flow. You now understand how JWT validation (Step 1) and session lookup (Step 2) work together - and why revoking a session immediately invalidates access, even with a valid JWT.
 
 ## Next Steps
 

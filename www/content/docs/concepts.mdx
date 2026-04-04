@@ -17,18 +17,6 @@ import { InfoIcon } from "lucide-react"
 | **Plugins** | Cross-cutting features that span schema, runtime, and client |
 | **File Structure** | Organized `functions/`, `lib/`, `shared/` directories |
 
-## The Problem
-
-Convex is reactive and everything syncs in real-time. But as your app grows, friction builds up — manually wiring TanStack Query hooks, copy-pasting auth checks into every function, adding rate limiting boilerplate.
-
-**kitcn solves this.** Convex's reactive database + TanStack Query's DX:
-
-- **tRPC-style API** — Fluent builder with full type inference
-- **TanStack Query Native** — `useQuery`, `useMutation`, DevTools
-- **Real-time by Default** — WebSocket subscriptions, no extra setup
-- **End-to-end Type Safety** — Schema to components, everything typed
-- **Middleware Chains** — Auth, rate limiting, custom context
-
 ## cRPC Builder
 
 Chain methods to build procedures with validation, middleware, and type inference:
@@ -75,8 +63,6 @@ const authQuery = c.query.use(async ({ ctx, next }) => {
   return next({ ctx: { ...ctx, user, userId: user.id } });
 });
 ```
-
-_Define once, use everywhere. Need admin-only? Extend `authQuery` with a role check._
 
 ## Execution Model
 

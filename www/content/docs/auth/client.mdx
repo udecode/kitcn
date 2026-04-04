@@ -7,21 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore client-side authentication with kitcn. You'll learn to implement sign in/out flows, use auth state hooks, and render components conditionally based on authentication state.
-
-## Overview
-
-Client-side auth utilities for React components:
-
-| Feature | Description |
-|---------|-------------|
-| Sign in/out mutations | TanStack Query hooks for auth flows |
-| Auth state hooks | `useAuth`, `useAuthGuard`, `useMaybeAuth`, `useIsAuth` |
-| Conditional rendering | `Authenticated`, `Unauthenticated`, `MaybeAuthenticated` |
-| Provider callbacks | Handle unauthorized queries/mutations |
-
-Let's start with setup.
-
 ## Setup
 
 Create an auth client with mutation hooks:
@@ -436,65 +421,14 @@ function App() {
 
 ## Auth Flow
 
-Let's understand how the SSR → client hydration flow works:
+SSR → client hydration: `getToken()` reads cookie → prefetch queries with token → pass `initialToken` to client → `ConvexAuthProvider` mounts with token → Convex validates JWT → `AuthStateSync` updates `isAuthenticated` → `HydrationBoundary` hydrates prefetched data.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              SERVER (RSC)                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. caller.getToken()                                                        │
-│     └─> Reads Better Auth session cookie                                     │
-│     └─> Returns JWT token (or undefined)                                     │
-│                                                                              │
-│  2. prefetch(crpc.user.getCurrentUser.queryOptions())                        │
-│     └─> Fetches user data via HTTP with token in Authorization header        │
-│     └─> Stores result in server QueryClient                                  │
-│                                                                              │
-│  3. <AppConvexProvider token={token}>                                     │
-│     └─> Passes token to client as initialToken prop                          │
-│                                                                              │
-│  4. <HydrateClient>                                                          │
-│     └─> Dehydrates QueryClient state for client hydration                    │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT (Hydration)                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  5. ConvexAuthProvider mount                                                 │
-│     └─> AuthProvider sets initial store: token, expiresAt                    │
-│     └─> isLoading: true, isAuthenticated: false (waiting for Convex)         │
-│                                                                              │
-│  6. ConvexProviderWithAuth                                                   │
-│     └─> Calls useAuth().fetchAccessToken with cached token                   │
-│     └─> Convex backend validates JWT                                         │
-│                                                                              │
-│  7. AuthStateSync (inside ConvexProviderWithAuth)                            │
-│     └─> useConvexAuth() returns { isLoading: true, isAuthenticated: false }  │
-│     └─> Defensive: isLoading = true (has token but not yet authenticated)    │
-│                                                                              │
-│  8. Convex validates token                                                   │
-│     └─> useConvexAuth() returns { isLoading: false, isAuthenticated: true }  │
-│     └─> AuthStateSync syncs to store                                         │
-│                                                                              │
-│  9. HydrationBoundary                                                        │
-│     └─> Hydrates client QueryClient with prefetched data                     │
-│     └─> useQuery(crpc.user.getCurrentUser.queryOptions()) → instant data     │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Key Points
-
-| Point | Description |
-|-------|-------------|
+| Concept | Detail |
+|---------|--------|
 | Token flows server → client | Via `initialToken` prop |
-| Instant hydration | Prefetched queries hydrate immediately - no loading spinner |
+| Instant hydration | Prefetched queries hydrate immediately — no loading spinner |
 | Defensive isLoading | Prevents `UNAUTHORIZED` errors during hydration race |
-| Two sources sync together | Better Auth (cookie-based) and Convex (WebSocket-based) |
+| Two sources sync | Better Auth (cookie-based) and Convex (WebSocket-based) |
 
 ## React Native / @convex-dev/auth Users
 
@@ -513,3 +447,11 @@ function App() {
 ```
 
 This enables `skipUnauth` queries, `useAuth`, and conditional rendering components to work with `@convex-dev/auth`.
+
+## Next Steps
+
+<Cards>
+  <Card title="Auth Server" href="/docs/auth/server" />
+  <Card title="Auth Plugins" href="/docs/auth/plugins" />
+  <Card title="Middlewares" href="/docs/server/middlewares" />
+</Cards>

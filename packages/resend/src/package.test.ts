@@ -1,6 +1,7 @@
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -20,8 +21,15 @@ describe('@kitcn/resend packaging', () => {
       `.dist-backup-${process.pid}-${Date.now()}`
     );
     const packDir = mkdtempSync(path.join(os.tmpdir(), 'kitcn-resend-pack-'));
+    const hadOriginalDist = existsSync(distDir);
+    const hadOriginalIndexJs = existsSync(path.join(distDir, 'index.js'));
+    const hadOriginalIndexDts = existsSync(path.join(distDir, 'index.d.ts'));
 
-    renameSync(distDir, backupDir);
+    if (hadOriginalDist) {
+      renameSync(distDir, backupDir);
+    } else {
+      mkdirSync(backupDir, { recursive: true });
+    }
 
     try {
       const pack = Bun.spawnSync({
@@ -76,15 +84,21 @@ describe('@kitcn/resend packaging', () => {
       );
     } finally {
       rmSync(distDir, { force: true, recursive: true });
-      cpSync(backupDir, distDir, { recursive: true });
+      if (hadOriginalDist) {
+        cpSync(backupDir, distDir, { recursive: true });
+      }
       rmSync(backupDir, { force: true, recursive: true });
       rmSync(packDir, { force: true, recursive: true });
     }
 
-    expect(existsSync(path.join(distDir, 'index.js'))).toBe(true);
-    expect(existsSync(path.join(distDir, 'index.d.ts'))).toBe(true);
-    expect(readFileSync(path.join(distDir, 'index.js'), 'utf8')).toContain(
-      'definePlugin("resend"'
+    expect(existsSync(path.join(distDir, 'index.js'))).toBe(hadOriginalIndexJs);
+    expect(existsSync(path.join(distDir, 'index.d.ts'))).toBe(
+      hadOriginalIndexDts
     );
+    if (hadOriginalIndexJs) {
+      expect(readFileSync(path.join(distDir, 'index.js'), 'utf8')).toContain(
+        'definePlugin("resend"'
+      );
+    }
   });
 });

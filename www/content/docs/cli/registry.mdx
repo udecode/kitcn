@@ -16,6 +16,7 @@ Use this table when you want the blunt version:
 | Goal | Command |
 | ---- | ------- |
 | Start a new Next.js app | `kitcn init -t next --yes` |
+| Start a new TanStack Start app | `kitcn init -t start --yes` |
 | Start a new Vite app | `kitcn init -t vite --yes` |
 | Adopt the current supported app | `kitcn init --yes` |
 | Add a capability | `kitcn add <plugin>` |
@@ -30,12 +31,13 @@ We'll start with `init`, because it owns bootstrap in both directions.
 
 ### Scaffold a fresh app
 
-Pass `-t next` or `-t vite` when you want kitcn to create the app shell
+Pass `-t next`, `-t start`, or `-t vite` when you want kitcn to create the app shell
 and patch its integration layer in one pass.
 
 <KitcnLatestCommandTabs
   commands={[
     'init -t next --yes',
+    'init -t start --yes',
     'init -t vite --yes',
     'init -t next --yes --cwd apps --name web',
     '--backend concave init -t next --yes',

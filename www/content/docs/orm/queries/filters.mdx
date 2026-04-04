@@ -7,22 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore advanced querying in Convex. You'll learn to implement full-text search with relevance scoring, use predicate `where` for complex filtering (with explicit `.withIndex(...)`), and combine multiple queries with UNION and JOIN patterns.
-
-## Overview
-
-Convex provides querying capabilities beyond basic filtering:
-
-| Feature | Description |
-|---------|-------------|
-| Full-text search | Search string fields with relevance scoring |
-| Predicate filters | Complex filtering with explicit `.withIndex(...)` |
-| UNION patterns | Combine multiple queries into one paginated result |
-| JOIN patterns | Paginate through related documents |
-| DISTINCT | Get unique values efficiently |
-
-Let's explore each one.
-
 ## Filtering + Pagination Compatibility
 
 Pagination and filtering are tightly coupled. For the full compatibility matrix, see [API Reference](#api-reference) below.
@@ -90,7 +74,7 @@ Full-text search enables searching string fields with relevance scoring. Each se
 
 ### Schema Definition
 
-Let's start by adding search indexes to your schema. Use the naming pattern `search_<searchField>`:
+Add search indexes to your schema using the naming pattern `search_<searchField>`:
 
 ```ts title="convex/functions/schema.ts" showLineNumbers {8-12,14-16}
 import { convexTable, defineSchema, searchIndex, text } from 'kitcn/orm';
@@ -121,7 +105,7 @@ export default defineSchema(tables, { strict: false });
 
 ### Basic Search
 
-Now let's implement a basic search query:
+Basic search query:
 
 ```ts title="convex/functions/articles.ts" showLineNumbers {7-11}
 import { z } from 'zod';
@@ -281,7 +265,7 @@ export const searchCharacters = publicQuery
 
 ## Search vs Predicate `where`
 
-Understanding when to use each approach is critical. Here's a comparison:
+Comparison:
 
 | Feature | Search | Predicate `where` |
 |---------|--------|-------------------|
@@ -421,18 +405,6 @@ const page1 = await db.query.messages
 - Use selective index ranges for predicate `where` and cap reads with `maxScan`
 
 ## Best Practices
-
-Here are key practices to follow when using filters and search.
-
-1. **Create appropriate indexes** - Each search field needs its own search index
-2. **Limit results** - Always use `limit` or cursor pagination (`cursor` + `limit`)
-3. **Use filterFields** - Pre-filter with equality before text search
-4. **Bound predicate scans** - Use explicit `.withIndex(...)` and cap reads with `maxScan`
-5. **Normalize search terms** - Consider lowercase for consistent matching
-6. **Handle empty queries** - Decide behavior when search query is empty
-7. **Prefer cursor pagination** - Use `findMany({ cursor: null, limit: 20 })` for large lists
-
-That's it. You now have all the tools for full-text search, predicate filtering, and advanced query composition in the ORM.
 
 ## API Reference
 

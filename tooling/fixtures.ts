@@ -53,6 +53,7 @@ const FIXTURE_PACKAGE_PATHS = {
   'kitcn/auth/generated': 'src/auth/generated.ts',
   'kitcn/auth/http': 'src/auth-http/index.ts',
   'kitcn/auth/nextjs': 'src/auth-nextjs/index.ts',
+  'kitcn/auth/start': 'src/auth-start/index.ts',
   'kitcn/crpc': 'src/crpc/index.ts',
   'kitcn/orm': 'src/orm/index.ts',
   'kitcn/plugins': 'src/plugins/index.ts',
@@ -173,7 +174,7 @@ export const parseTemplateArgs = (
   const [mode, ...rest] = argv;
   if (mode !== 'sync' && mode !== 'check') {
     throw new Error(
-      'Usage: bun tooling/fixtures.ts <sync|check> [all|next|next-auth|vite|vite-auth] [--backend <convex|concave>]'
+      'Usage: bun tooling/fixtures.ts <sync|check> [all|next|next-auth|start|start-auth|vite|vite-auth] [--backend <convex|concave>]'
     );
   }
 

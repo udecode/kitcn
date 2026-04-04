@@ -17,9 +17,7 @@ links:
 
 ## 1. Install
 
-```bash showLineNumbers
-bun add @kitcn/resend
-```
+<PackageInstallTabs packages="@kitcn/resend" />
 
 ## 2. Scaffold User-Owned Files
 
@@ -63,9 +61,7 @@ npx kitcn codegen
 
 If you scaffold `email.tsx`, install React Email deps:
 
-```bash showLineNumbers
-bun add @react-email/components @react-email/render react-email react react-dom
-```
+<PackageInstallTabs packages="@react-email/components @react-email/render react-email react react-dom" />
 
 ## 5. Configure Middleware Once
 
@@ -166,3 +162,11 @@ export { default } from '../lib/plugins/resend/crons';
 - `handleEmailEvent`
 - `cleanupOldEmails`
 - `cleanupAbandonedEmails`
+
+## Next Steps
+
+<Cards>
+  <Card title="Plugins" href="/docs/plugins" />
+  <Card title="Rate Limiting" href="/docs/plugins/ratelimit" />
+  <Card title="Scheduling" href="/docs/server/scheduling" />
+</Cards>

@@ -3,12 +3,16 @@ import { dirname, join, resolve } from 'node:path';
 import type { execa } from 'execa';
 import {
   getPackageNameFromInstallSpec,
+  OPENTELEMETRY_API_INSTALL_SPEC,
   resolveSupportedDependencyInstallSpec,
 } from '../supported-dependencies.js';
 import type {
   PluginDependencyInstallResult,
   PluginDescriptor,
 } from '../types.js';
+
+const BUN_LOCK_PATH = 'bun.lock';
+const BETTER_AUTH_CORE_LOCK_MARKER = '@better-auth/core';
 
 const findNearestPackageJsonPath = (startDir: string): string | undefined => {
   let current = resolve(startDir);
@@ -56,6 +60,57 @@ const resolvePackageJsonInstallTarget = () => {
         >)
       : null,
   };
+};
+
+export const resolveBunPeerWarningPreinstallSpecs = () => {
+  const { packageJsonPath, packageJson } = resolvePackageJsonInstallTarget();
+  if (!packageJsonPath || !packageJson) {
+    return [];
+  }
+
+  const hasKitcnManagedRuntime =
+    hasDependency(packageJson, 'kitcn') ||
+    hasDependency(packageJson, 'better-auth') ||
+    hasDependency(packageJson, '@convex-dev/better-auth');
+  if (!hasKitcnManagedRuntime) {
+    return [];
+  }
+
+  if (
+    hasDependency(
+      packageJson,
+      getPackageNameFromInstallSpec(OPENTELEMETRY_API_INSTALL_SPEC)
+    )
+  ) {
+    return [];
+  }
+
+  const bunLockPath = join(dirname(packageJsonPath), BUN_LOCK_PATH);
+  if (!fs.existsSync(bunLockPath)) {
+    return [];
+  }
+
+  const bunLockSource = fs.readFileSync(bunLockPath, 'utf8');
+  if (!bunLockSource.includes(BETTER_AUTH_CORE_LOCK_MARKER)) {
+    return [];
+  }
+
+  return [OPENTELEMETRY_API_INSTALL_SPEC];
+};
+
+const applyBunPeerWarningPreinstall = async (execaFn: typeof execa) => {
+  const dependencySpecs = resolveBunPeerWarningPreinstallSpecs();
+  if (dependencySpecs.length === 0) {
+    return [];
+  }
+
+  const { packageJsonPath } = resolvePackageJsonInstallTarget();
+  await execaFn('bun', ['add', ...dependencySpecs], {
+    cwd: dirname(packageJsonPath!),
+    stdio: 'inherit',
+  });
+
+  return dependencySpecs;
 };
 
 export const inspectPluginDependencyInstall = async (params: {
@@ -113,9 +168,12 @@ export const applyDependencyHintsInstall = async (
   dependencyHints: readonly string[],
   execaFn: typeof execa
 ) => {
-  const missingDependencyHints = resolveMissingDependencyHints(dependencyHints);
+  const preinstalledSpecs = await applyBunPeerWarningPreinstall(execaFn);
+  const missingDependencyHints = resolveMissingDependencyHints(
+    dependencyHints
+  ).filter((dependencyHint) => !preinstalledSpecs.includes(dependencyHint));
   if (missingDependencyHints.length === 0) {
-    return [];
+    return preinstalledSpecs;
   }
 
   const { packageJsonPath } = resolvePackageJsonInstallTarget();
@@ -124,16 +182,19 @@ export const applyDependencyHintsInstall = async (
     stdio: 'inherit',
   });
 
-  return missingDependencyHints;
+  return [...preinstalledSpecs, ...missingDependencyHints];
 };
 
 export const applyPlanningDependencyInstall = async (
   dependencySpecs: readonly string[],
   execaFn: typeof execa
 ) => {
-  const missingDependencySpecs = resolveMissingDependencyHints(dependencySpecs);
+  const preinstalledSpecs = await applyBunPeerWarningPreinstall(execaFn);
+  const missingDependencySpecs = resolveMissingDependencyHints(
+    dependencySpecs
+  ).filter((dependencySpec) => !preinstalledSpecs.includes(dependencySpec));
   if (missingDependencySpecs.length === 0) {
-    return [];
+    return preinstalledSpecs;
   }
 
   const { packageJsonPath } = resolvePackageJsonInstallTarget();
@@ -142,7 +203,7 @@ export const applyPlanningDependencyInstall = async (
     stdio: 'inherit',
   });
 
-  return missingDependencySpecs;
+  return [...preinstalledSpecs, ...missingDependencySpecs];
 };
 
 export const applyPluginDependencyInstall = async (
@@ -152,6 +213,7 @@ export const applyPluginDependencyInstall = async (
   if (install.skipped || !install.packageName || !install.packageJsonPath) {
     return install;
   }
+  await applyBunPeerWarningPreinstall(execaFn);
   const packageSpec = install.packageSpec ?? install.packageName;
 
   await execaFn('bun', ['add', packageSpec], {

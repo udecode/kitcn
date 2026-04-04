@@ -20,7 +20,11 @@ import {
 import { getPluginCatalogEntry } from './registry/index';
 import { RESEND_SCHEMA_TEMPLATE } from './registry/items/resend/resend-schema.template';
 import { BETTER_AUTH_INSTALL_SPEC } from './supported-dependencies';
-import { writeShadcnNextApp, writeShadcnViteApp } from './test-utils';
+import {
+  writeShadcnNextApp,
+  writeShadcnStartApp,
+  writeShadcnViteApp,
+} from './test-utils';
 
 const TS_EXTENSION_RE = /\.ts$/;
 const INLINE_BATCH_EMAIL_SCHEMA_OUTPUT_RE =
@@ -669,7 +673,7 @@ describe('cli/cli', () => {
         loadCliConfig: loadConfigStub as any,
       })
     ).rejects.toThrow(
-      'Removed `kitcn create`. Use `kitcn init -t <next|vite>` for fresh app scaffolding.'
+      'Removed `kitcn create`. Use `kitcn init -t <next|start|vite>` for fresh app scaffolding.'
     );
     expect(execaStub).not.toHaveBeenCalled();
   });
@@ -1066,7 +1070,7 @@ describe('cli/cli', () => {
           loadCliConfig: loadConfigStub as any,
         })
       ).rejects.toThrow(
-        'Could not detect a supported app scaffold. Use `kitcn init -t <next|vite>` for a fresh app.'
+        'Could not detect a supported app scaffold. Use `kitcn init -t <next|start|vite>` for a fresh app.'
       );
       expect(
         (
@@ -1825,15 +1829,6 @@ describe('cli/cli', () => {
         execaStub.mock.calls as unknown as unknown[],
         BETTER_AUTH_INSTALL_SPEC
       );
-      expectDependencyInstallCall(
-        execaStub.mock.calls as unknown as unknown[],
-        '@opentelemetry/api@1.9.0'
-      );
-      expectDependencyInstallOrder(
-        execaStub.mock.calls as unknown as unknown[],
-        '@opentelemetry/api@1.9.0',
-        BETTER_AUTH_INSTALL_SPEC
-      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -1937,6 +1932,131 @@ describe('cli/cli', () => {
       expect(schemaSource).toContain('user: userTable,');
       expect(schemaSource).not.toContain('kitcn-managed');
       expect(schemaSource).not.toContain('authExtension()');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add auth --yes --no-codegen) patches the start baseline with minimal auth scaffolding', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-cli-add-auth-start-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
+          const cwdFlagIndex = args.indexOf('--cwd');
+          const nameFlagIndex = args.indexOf('--name');
+          const baseDir =
+            cwdFlagIndex >= 0 && args[cwdFlagIndex + 1]
+              ? args[cwdFlagIndex + 1]!
+              : dir;
+          const projectName =
+            nameFlagIndex >= 0 ? args[nameFlagIndex + 1]! : path.basename(dir);
+          writeShadcnStartApp(path.join(baseDir, projectName));
+          return { exitCode: 0 } as any;
+        }
+        if (args[0] === '/fake/convex/main.js' && args[1] === 'codegen') {
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const initExitCode = await run(['init', '-t', 'start', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+      expect(initExitCode).toBe(0);
+
+      const exitCode = await run(['add', 'auth', '--yes', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'auth.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'auth.config.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'auth-client.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'auth-server.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'server.ts'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'src', 'routes', 'auth.tsx'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'routes', 'api', 'auth', '$.ts'))
+      ).toBe(true);
+
+      const providerSource = fs.readFileSync(
+        path.join(dir, 'src', 'lib', 'convex', 'convex-provider.tsx'),
+        'utf8'
+      );
+      expect(providerSource).toContain('ConvexAuthProvider');
+      expect(providerSource).toContain('ConvexReactClient');
+      expect(providerSource).toContain(
+        "import { authClient } from '@/lib/convex/auth-client';"
+      );
+
+      const authClientSource = fs.readFileSync(
+        path.join(dir, 'src', 'lib', 'convex', 'auth-client.ts'),
+        'utf8'
+      );
+      expect(authClientSource).toContain('window.location.origin');
+      expect(authClientSource).toContain('import.meta.env.VITE_SITE_URL');
+
+      const authServerSource = fs.readFileSync(
+        path.join(dir, 'src', 'lib', 'convex', 'auth-server.ts'),
+        'utf8'
+      );
+      expect(authServerSource).toContain(
+        "import { convexBetterAuthReactStart } from 'kitcn/auth/start';"
+      );
+
+      const serverSource = fs.readFileSync(
+        path.join(dir, 'src', 'lib', 'convex', 'server.ts'),
+        'utf8'
+      );
+      expect(serverSource).toContain('createCallerFactory');
+      expect(serverSource).toContain('@tanstack/react-start/server');
+      expect(serverSource).toContain(
+        "import { getToken } from '@/lib/convex/auth-server';"
+      );
+
+      const routeSource = fs.readFileSync(
+        path.join(dir, 'src', 'routes', 'api', 'auth', '$.ts'),
+        'utf8'
+      );
+      expect(routeSource).toContain("createFileRoute('/api/auth/$' as never)");
+      expect(routeSource).toContain(
+        "import { handler } from '@/lib/convex/auth-server';"
+      );
+
+      const authPageSource = fs.readFileSync(
+        path.join(dir, 'src', 'routes', 'auth.tsx'),
+        'utf8'
+      );
+      expect(authPageSource).toContain("createFileRoute('/auth' as never)");
+      expect(authPageSource).not.toContain('callbackURL');
     } finally {
       process.chdir(oldCwd);
     }
@@ -2354,7 +2474,7 @@ describe('cli/cli', () => {
           loadCliConfig: loadConfigStub as any,
         })
       ).rejects.toThrow(
-        'Auth scaffolding requires a supported app baseline. Run `kitcn init --yes` in a supported app, or bootstrap one with `kitcn init -t <next|vite>` first.'
+        'Auth scaffolding requires a supported app baseline. Run `kitcn init --yes` in a supported app, or bootstrap one with `kitcn init -t <next|start|vite>` first.'
       );
     } finally {
       process.chdir(oldCwd);

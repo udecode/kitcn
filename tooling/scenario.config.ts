@@ -3,6 +3,8 @@ import type { TemplateBackend, TemplateKey } from './template.config';
 export const SCENARIO_KEYS = [
   'next',
   'next-auth',
+  'start',
+  'start-auth',
   'vite',
   'vite-auth',
   'convex-next-auth-bootstrap',
@@ -38,7 +40,7 @@ type ScenarioSource =
     }
   | {
       kind: 'fresh';
-      template: 'next' | 'vite';
+      template: 'next' | 'start' | 'vite';
     }
   | {
       kind: 'template';
@@ -84,6 +86,30 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
     source: {
       kind: 'template',
       template: 'next-auth',
+    },
+  },
+  start: {
+    check: false,
+    label: 'start',
+    setup: [],
+    validation: {
+      lint: true,
+    },
+    source: {
+      kind: 'template',
+      template: 'start',
+    },
+  },
+  'start-auth': {
+    check: false,
+    label: 'start + auth',
+    setup: [],
+    validation: {
+      lint: true,
+    },
+    source: {
+      kind: 'template',
+      template: 'start-auth',
     },
   },
   vite: {

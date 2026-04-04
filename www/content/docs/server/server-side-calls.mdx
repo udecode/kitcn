@@ -7,19 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-This guide covers how to call cRPC procedures from server-side code. You'll learn to set up the caller factory, configure authentication, and invoke procedures directly without HTTP overhead.
-
-## Overview
-
-| Feature | Benefit |
-|---------|---------|
-| **Direct Calls** | No HTTP roundtrip, direct function invocation |
-| **Type Safety** | Full TypeScript inference for inputs and outputs |
-| **Auth Integration** | Built-in token management with Better Auth |
-| **Unified Syntax** | Same `ctx.caller.x.y()` pattern as client-side |
-
-Let's explore the setup and usage patterns.
-
 ## Environment Setup
 
 The caller requires the Convex **site URL** (for HTTP actions), which is different from the real-time URL.
@@ -175,43 +162,6 @@ const ctx = await createContext({ headers: request.headers });
 const data = await ctx.caller.user.list({});
 ```
 
-## Migrate from Convex
-
-### What stays the same
-
-- Server-side data fetching concept
-- Full type safety for procedure calls
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```ts title="src/app/api/users/route.ts" showLineNumbers
-    import { fetchQuery, fetchMutation } from 'convex/nextjs';
-    import { api } from '@convex/_generated/api';
-
-    const users = await fetchQuery(api.user.list, {});
-    const id = await fetchMutation(api.user.create, { name: 'John', email: 'john@example.com' });
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```ts title="src/app/api/users/route.ts" showLineNumbers {4-6}
-    import { createContext } from '@/lib/convex/server';
-
-    const ctx = await createContext({ headers });
-    const users = await ctx.caller.user.list({});
-    const id = await ctx.caller.user.create({ name: 'John', email: 'john@example.com' });
-    ```
-  </CompareItem>
-</Compare>
-
-Key differences:
-
-- Unified proxy syntax matching client-side usage
-- `ctx.isAuthenticated` for auth state
-- `createCallerFactory` for reusable context creation
-- Built-in auth/token management
-
 ## API Reference
 
 ### Call Matrix
@@ -261,6 +211,6 @@ type ConvexContext<TApi> = {
 ## Next Steps
 
 <Cards>
-  <Card title="Metadata" href="/docs/server/apidata" />
+  <Card title="Metadata" href="/docs/server/metadata" />
   <Card title="RSC" href="/docs/nextjs/rsc" />
 </Cards>

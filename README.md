@@ -2,8 +2,6 @@
 
 Type-safe Convex framework with a tRPC-style server API, Drizzle-style ORM, and TanStack Query client integration.
 
-> Note: `better-convex` has been renamed to `kitcn`.
-
 ## Docs
 
 [kitcn.dev](https://kitcn.dev)
@@ -15,18 +13,16 @@ Type-safe Convex framework with a tRPC-style server API, Drizzle-style ORM, and 
 - React + TanStack Query integration with real-time updates (`kitcn/react`)
 - Next.js server helpers for RSC/auth (`kitcn/auth/nextjs`, `kitcn/rsc`)
 - Better Auth adapter utilities (`kitcn/auth`, `kitcn/auth/client`, `kitcn/auth/config`, `kitcn/auth/http`)
-- CLI metadata/codegen/runtime analysis helpers (`kitcn` bin)
+- Rate limiting plugin (`kitcn/ratelimit`)
+- CLI with codegen, registry, runtime analysis (`kitcn` bin)
 
 ## Quick Start
 
 ```bash
-bun add convex kitcn zod @tanstack/react-query
+npx kitcn@latest init -t next --yes
 ```
 
-Then follow:
-
-- [Quickstart](https://kitcn.dev/docs/quickstart)
-- [Templates](https://kitcn.dev/docs/templates)
+Then follow the [Quickstart](https://kitcn.dev/docs/quickstart).
 
 ## Local Dev
 
@@ -39,8 +35,4 @@ bun run lint
 
 ## Example App
 
-The canonical reference app lives in:
-
-- [example](./example)
-
-It demonstrates current best-practice usage across auth, cRPC, ORM, HTTP routes, and TanStack Query.
+The canonical reference app lives in [example](./example). It demonstrates current best-practice usage across auth, cRPC, ORM, HTTP routes, and TanStack Query.

@@ -9,6 +9,7 @@ import {
   createDefaultConfig,
   writePackageJson,
   writeShadcnNextApp,
+  writeShadcnStartApp,
   writeShadcnViteApp,
 } from '../test-utils';
 import {
@@ -86,12 +87,13 @@ describe('cli/commands/init', () => {
     );
   });
 
-  test('resolveSupportedInitTemplate allows next and vite', () => {
+  test('resolveSupportedInitTemplate allows next, start, and vite', () => {
     expect(resolveSupportedInitTemplate('next')).toBe('next');
+    expect(resolveSupportedInitTemplate('start')).toBe('start');
     expect(resolveSupportedInitTemplate('vite')).toBe('vite');
     expect(resolveSupportedInitTemplate(undefined)).toBeUndefined();
     expect(() => resolveSupportedInitTemplate('nope')).toThrow(
-      'Unsupported init template "nope". Expected one of: next, vite.'
+      'Unsupported init template "nope". Expected one of: next, start, vite.'
     );
   });
 
@@ -305,6 +307,80 @@ describe('cli/commands/init', () => {
           )
         )
       ).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand scaffolds the start baseline with -t start', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-create-command-start-')
+    );
+    const expectedProjectDir = path.join(tmpDir, 'apps', 'web');
+    const expectedShadcnCwd = path.join(fs.realpathSync(tmpDir), 'apps');
+    const execaStub = mock(async (_cmd: string, args: string[]) => {
+      if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
+        const cwdFlagIndex = args.indexOf('--cwd');
+        const nameFlagIndex = args.indexOf('--name');
+        const baseDir =
+          cwdFlagIndex >= 0 && args[cwdFlagIndex + 1]
+            ? args[cwdFlagIndex + 1]!
+            : tmpDir;
+        const projectName =
+          nameFlagIndex >= 0 && args[nameFlagIndex + 1]
+            ? args[nameFlagIndex + 1]!
+            : 'web';
+        writeShadcnStartApp(path.join(baseDir, projectName));
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+      return { exitCode: 0, stdout: '', stderr: '' } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(
+        ['init', '-t', 'start', '--yes', '--cwd', 'apps', '--name', 'web'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+      expect(exitCode).toBe(0);
+      const shadcnCall = execaStub.mock.calls.find((call) =>
+        (
+          call as unknown as [string, string[], Record<string, unknown>]
+        )[1]?.includes(INIT_SHADCN_PACKAGE_SPEC)
+      ) as [string, string[], Record<string, unknown>] | undefined;
+      expect(shadcnCall?.[1]?.slice(0, 8)).toEqual([
+        INIT_SHADCN_PACKAGE_SPEC,
+        'init',
+        '--template',
+        'start',
+        '--cwd',
+        expectedShadcnCwd,
+        '--name',
+        'web',
+      ]);
+      expect(
+        fs.existsSync(path.join(expectedProjectDir, 'src', 'router.tsx'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(expectedProjectDir, 'src', 'routes', '__root.tsx')
+        )
+      ).toBe(true);
+      expect(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'src', 'routes', '__root.tsx'),
+          'utf8'
+        )
+      ).toContain('<Providers>');
     } finally {
       process.chdir(originalCwd);
     }
@@ -861,6 +937,40 @@ describe('cli/commands/init', () => {
       expect(exitCode).toBe(0);
       expect(fs.readFileSync(crpcPath, 'utf8')).toBe(
         'export const customCrpc = true;\n'
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand --yes skips changed Start root route without --overwrite', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-skip-start-root-')
+    );
+    writeShadcnStartApp(tmpDir);
+    const rootRoutePath = path.join(tmpDir, 'src', 'routes', '__root.tsx');
+    fs.mkdirSync(path.dirname(rootRoutePath), { recursive: true });
+    fs.writeFileSync(rootRoutePath, 'export const customStartRoot = true;\n');
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(fs.readFileSync(rootRoutePath, 'utf8')).toBe(
+        'export const customStartRoot = true;\n'
       );
     } finally {
       process.chdir(originalCwd);
@@ -1432,7 +1542,7 @@ describe('cli/commands/init', () => {
           loadCliConfig: loadConfigStub as any,
         })
       ).rejects.toThrow(
-        'Could not detect a supported app scaffold. Use `kitcn init -t <next|vite>` for a fresh app.'
+        'Could not detect a supported app scaffold. Use `kitcn init -t <next|start|vite>` for a fresh app.'
       );
       expect(execaStub).not.toHaveBeenCalled();
     } finally {

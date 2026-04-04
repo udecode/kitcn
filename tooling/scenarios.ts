@@ -590,7 +590,7 @@ export const resolveScenarioProofPath = (
   if (BOOTSTRAP_CHECK_SCENARIOS.has(scenarioKey)) {
     return 'check';
   }
-  if (scenarioKey === 'next-auth') {
+  if (scenarioKey === 'next-auth' || scenarioKey === 'start-auth') {
     return 'auth-demo';
   }
   if (scenarioKey === 'vite-auth') {

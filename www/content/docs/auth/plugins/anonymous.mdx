@@ -7,8 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore anonymous authentication with kitcn. You'll learn to configure guest sessions, let users browse without signing up, and seamlessly link anonymous accounts to real ones — migrating their data along the way.
-
 ## Overview
 
 Anonymous auth built on [Better Auth's anonymous plugin](https://www.better-auth.com/docs/plugins/anonymous):
@@ -22,8 +20,6 @@ Anonymous auth built on [Better Auth's anonymous plugin](https://www.better-auth
 | Account linking | Upgrade anonymous users to real accounts |
 | Data migration callback | Copy domain data during the linking process |
 | Source user deletion | Automatically clean up anonymous records after linking |
-
-Let's set up anonymous auth step by step.
 
 ## Prerequisites
 
@@ -93,8 +89,6 @@ export const authClient = createAuthClient({
 });
 ```
 
-That's it for client setup — `anonymousClient()` doesn't require any configuration.
-
 ## 3. Schema
 
 Add the `isAnonymous` field to your user table so you can distinguish guest users from real accounts:
@@ -113,7 +107,7 @@ Better Auth sets `isAnonymous` to `true` when creating anonymous users and clear
 
 ## Anonymous Sign-In
 
-Now let's use anonymous auth. Call `authClient.signIn.anonymous()` to create a guest session:
+Call `authClient.signIn.anonymous()` to create a guest session:
 
 ```ts showLineNumbers
 await authClient.signIn.anonymous({

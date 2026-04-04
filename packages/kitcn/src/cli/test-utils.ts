@@ -378,6 +378,230 @@ export function writeShadcnViteApp(
   );
 }
 
+export function writeShadcnStartApp(dir: string) {
+  const srcDir = path.join(dir, 'src');
+  const routesDir = path.join(srcDir, 'routes');
+  const libDir = path.join(srcDir, 'lib');
+
+  fs.mkdirSync(routesDir, { recursive: true });
+  fs.mkdirSync(libDir, { recursive: true });
+  fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
+
+  writePackageJson(dir, {
+    name: 'start-app',
+    private: true,
+    type: 'module',
+    scripts: {
+      dev: 'vite dev --port 3000',
+      build: 'vite build',
+      preview: 'vite preview',
+      test: 'vitest run',
+      lint: 'eslint',
+      format: 'prettier --write "**/*.{ts,tsx,js,jsx}"',
+      typecheck: 'tsc --noEmit',
+    },
+    dependencies: {
+      '@tailwindcss/vite': '^4.1.18',
+      '@tanstack/react-devtools': '^0.7.0',
+      '@tanstack/react-router': '^1.132.0',
+      '@tanstack/react-router-devtools': '^1.132.0',
+      '@tanstack/react-router-ssr-query': '^1.131.7',
+      '@tanstack/react-start': '^1.132.0',
+      '@tanstack/router-plugin': '^1.132.0',
+      nitro: 'latest',
+      react: '^19.2.0',
+      'react-dom': '^19.2.0',
+      tailwindcss: '^4.0.6',
+      'vite-tsconfig-paths': '^5.1.4',
+    },
+    devDependencies: {
+      '@tanstack/devtools-vite': '^0.3.11',
+      '@tanstack/eslint-config': '^0.3.0',
+      '@testing-library/dom': '^10.4.0',
+      '@testing-library/react': '^16.2.0',
+      '@types/node': '^22.10.2',
+      '@types/react': '^19.2.0',
+      '@types/react-dom': '^19.2.0',
+      '@vitejs/plugin-react': '^5.0.4',
+      jsdom: '^27.0.0',
+      prettier: '^3.5.3',
+      'prettier-plugin-tailwindcss': '^0.7.2',
+      typescript: '^5.7.2',
+      vite: '^7.1.7',
+      vitest: '^3.0.5',
+      'web-vitals': '^5.1.0',
+    },
+  });
+
+  fs.writeFileSync(
+    path.join(dir, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          baseUrl: '.',
+          paths: {
+            '@/*': ['./src/*'],
+          },
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'components.json'),
+    `${JSON.stringify(
+      {
+        $schema: 'https://ui.shadcn.com/schema.json',
+        style: 'base-nova',
+        rsc: false,
+        tsx: true,
+        tailwind: {
+          config: '',
+          css: 'src/styles.css',
+          baseColor: 'neutral',
+          cssVariables: true,
+          prefix: '',
+        },
+        aliases: {
+          components: '@/components',
+          utils: '@/lib/utils',
+          ui: '@/components/ui',
+          lib: '@/lib',
+          hooks: '@/hooks',
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(path.join(dir, 'eslint.config.js'), 'export default [];\n');
+
+  fs.writeFileSync(
+    path.join(dir, 'vite.config.ts'),
+    `import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+import tsConfigPaths from "vite-tsconfig-paths";
+import path from "node:path";
+
+export default defineConfig({
+  plugins: [tsConfigPaths(), tanstackStart(), react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+});
+`
+  );
+
+  fs.writeFileSync(
+    path.join(srcDir, 'lib', 'utils.ts'),
+    'export function cn(...classes: Array<string | false | null | undefined>) {\n  return classes.filter(Boolean).join(" ")\n}\n'
+  );
+
+  fs.writeFileSync(
+    path.join(srcDir, 'styles.css'),
+    '@import "tailwindcss";\n\n@theme inline {\n  --shadcn-shell: 1;\n}\n'
+  );
+
+  fs.writeFileSync(
+    path.join(srcDir, 'router.tsx'),
+    `import { createRouter as createTanStackRouter } from "@tanstack/react-router";
+import { routeTree } from "./routeTree.gen";
+
+export function getRouter() {
+  const router = createTanStackRouter({
+    routeTree,
+    scrollRestoration: true,
+    defaultPreload: "intent",
+    defaultPreloadStaleTime: 0,
+  });
+
+  return router;
+}
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: ReturnType<typeof getRouter>;
+  }
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(srcDir, 'routeTree.gen.ts'),
+    'export const routeTree = {} as never;\n'
+  );
+
+  fs.writeFileSync(
+    path.join(routesDir, '__root.tsx'),
+    `import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import appCss from "../styles.css?url";
+
+export const Route = createRootRoute({
+  head: () => ({
+    meta: [
+      {
+        charSet: "utf-8",
+      },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1",
+      },
+      {
+        title: "TanStack Start Starter",
+      },
+    ],
+    links: [
+      {
+        rel: "stylesheet",
+        href: appCss,
+      },
+    ],
+  }),
+  component: RootComponent,
+  shellComponent: RootDocument,
+});
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+function RootComponent() {
+  return <div>root</div>;
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(routesDir, 'index.tsx'),
+    `import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/")({
+  component: App,
+});
+
+function App() {
+  return <main>shadcn start</main>;
+}
+`
+  );
+}
+
 export function writeMinimalSchema(dir: string, source?: string) {
   const schemaSource =
     source ??

@@ -40,6 +40,8 @@ export function renderInitConvexTsconfigTemplate(
         forceConsistentCasingInFileNames: true,
         isolatedModules: true,
         skipLibCheck: true,
+        noUnusedLocals: false,
+        noUnusedParameters: false,
         noEmit: true,
         jsx: 'react-jsx',
         lib: ['esnext', 'dom'],

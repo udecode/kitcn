@@ -17,7 +17,7 @@ We'll build a todo API with full CRUD operations. The API has typed endpoints fo
   **Note:** For real-time subscriptions, use [queries and mutations](/docs/server/procedures) instead - they're reactive and handle caching automatically via WebSocket. HTTP endpoints are best for REST APIs consumed by external clients, or when you need standard HTTP semantics.
 </Callout>
 
-```tsx title="components/todo-list.tsx"
+```tsx showLineNumbers title="components/todo-list.tsx"
 'use client';
 
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
@@ -329,9 +329,7 @@ export const httpRouter = router({
 
 The HTTP router uses [Hono](https://hono.dev/) for routing and middleware. This provides CORS handling, middleware chains, and a clean API for building HTTP endpoints.
 
-```bash
-bun add hono
-```
+<PackageInstallTabs packages="hono" />
 
 ```ts title="convex/functions/http.ts" showLineNumbers {1-6,8-18,20-24}
 import { authMiddleware } from 'kitcn/auth/http';
@@ -610,7 +608,7 @@ The client uses a structured input format that separates concerns clearly. All o
 
 The HTTP proxy is automatically available when you set up cRPC.
 
-```tsx title="lib/convex/crpc.tsx"
+```tsx showLineNumbers title="lib/convex/crpc.tsx"
 import { api } from '@convex/api';
 import { createCRPCContext } from 'kitcn/react';
 
@@ -626,7 +624,7 @@ If you customize wire serialization, pass `transformer` here too. `Date` stays a
 
 Use `queryOptions` with TanStack Query's `useQuery` or `useSuspenseQuery`.
 
-```tsx title="components/todo-list.tsx" showLineNumbers {8-10}
+```tsx showLineNumbers title="components/todo-list.tsx" showLineNumbers {8-10}
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useCRPC } from '@/lib/convex/crpc';
 
@@ -774,7 +772,7 @@ export function CreateTodo() {
 
 For typed file uploads, define a `.form()` schema on your endpoint:
 
-```ts title="convex/routers/files.ts"
+```ts showLineNumbers title="convex/routers/files.ts"
 export const upload = authRoute
   .post('/api/files/upload')
   .form(z.object({

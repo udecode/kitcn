@@ -5,11 +5,7 @@ description: Insert rows with Drizzle-style builders
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to insert rows into your Convex tables using the ORM's Drizzle-style `insert()` builder. You'll see single inserts, multi-row inserts, returning clauses, and upsert patterns.
-
 ## Basic Insert
-
-Let's start with a simple mutation that inserts a single user:
 
 ```ts showLineNumbers title="convex/functions/users.ts"
 import { z } from 'zod';
@@ -28,7 +24,7 @@ export const createUser = publicMutation
 
 If you need the insert type for a table, you can infer it from the table definition:
 
-```ts
+```ts showLineNumbers
 type NewUser = typeof users.$inferInsert;
 ```
 
@@ -114,8 +110,6 @@ The ORM enforces unique constraints, foreign keys, and RLS policies at runtime f
 <Callout icon={<InfoIcon />}>
 **Note:** Direct `ctx.db.insert(...)` bypasses these checks. Use `ctx.orm` to get full constraint enforcement.
 </Callout>
-
-That's it. You now have everything you need to insert data - from simple single-row inserts to conflict-handling upserts.
 
 ## Next Steps
 

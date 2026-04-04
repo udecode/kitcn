@@ -130,8 +130,6 @@ tables change, rerun the same preset command. It does not support `--schema`.
 
 ## HTTP Routes
 
-Now we'll expose Better Auth's endpoints via HTTP.
-
 - Without Hono: use Convex `httpRouter` + `registerRoutes` (no Hono required).
 - With Hono or custom middleware chains: use Hono + `authMiddleware`.
 
@@ -241,7 +239,7 @@ own the flow.
 
 See [CLI Backend](/docs/cli/backend#env) for more options.
 
-That's it for the basic setup! Your auth is now configured. To rotate keys later (this invalidates all tokens):
+To rotate keys later (this invalidates all tokens):
 
 ```bash
 npx kitcn env push --rotate

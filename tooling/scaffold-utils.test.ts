@@ -27,10 +27,12 @@ test('getLocalResendInstallSpec packs resend with a package manifest', () => {
     ) as {
       name: string;
       peerDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
     };
 
     expect(packageJson.name).toBe('@kitcn/resend');
     expect(packageJson.peerDependencies?.kitcn).toBe('>=0.11.0 <1');
+    expect(packageJson.scripts?.prepack).toBeUndefined();
   } finally {
     rmSync(extractDir, { force: true, recursive: true });
   }

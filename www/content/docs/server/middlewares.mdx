@@ -7,25 +7,9 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll master middleware for reusable backend logic. You'll learn to check authentication, transform context, log requests, and chain multiple middleware together.
-
-## Overview
-
-Middleware wraps procedure invocation. It runs before (and optionally after) your handler, letting you:
-
-| Use Case | What It Does |
-|----------|--------------|
-| Authentication | Check if user is logged in |
-| Authorization | Check if user has permission |
-| Context Extension | Add `user`, `userId` to context |
-| Rate Limiting | Throttle requests |
-| Logging | Track request duration |
-
-The key rule: middleware must call `next()` and return its result.
+Middleware wraps procedure invocation. It runs before (and optionally after) your handler. The key rule: middleware must call `next()` and return its result.
 
 ## Authorization
-
-Let's start with the most common use case - checking if a user is authorized before the procedure runs.
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {2-6,7-9}
 export const authQuery = c.query.use(async ({ ctx, next }) => {
@@ -55,8 +39,6 @@ export const myPosts = authQuery
 ## Middleware Signature
 
 Every middleware receives an object — see [Middleware Parameters](#middleware-parameters) in API Reference for the full property list.
-
-Here's the basic pattern:
 
 ```ts showLineNumbers {2-5}
 .use(async ({ ctx, meta, next, input }) => {
@@ -297,49 +279,6 @@ export const publicMutation = c.mutation.use(ratelimit.middleware());
 ### Logging
 
 See `logMiddleware` in [Reusable Middleware](#reusable-middleware) above.
-
-## Migrate from Convex
-
-If you're coming from convex-helpers, here's what changes.
-
-### What stays the same
-
-- Middleware runs before the handler
-- Can transform context and add properties
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (convex-helpers)">
-    ```ts showLineNumbers
-    import { customQuery, customCtx } from 'convex-helpers/server/customFunctions';
-
-    const authQuery = customQuery(query,
-      customCtx(async (ctx) => {
-        const user = await getUser(ctx);
-        if (!user) throw new Error('Unauthorized');
-        return { user };
-      })
-    );
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```ts showLineNumbers {2-4}
-    const authQuery = c.query.use(async ({ ctx, next }) => {
-      const user = await getUser(ctx);
-      if (!user) throw new CRPCError({ code: 'UNAUTHORIZED' });
-      return next({ ctx: { ...ctx, user } });
-    });
-    ```
-  </CompareItem>
-</Compare>
-
-Key differences:
-- Call `next({ ctx })` instead of returning context directly
-- Use `CRPCError` for typed errors with codes
-- Chain multiple `.use()` calls for composable middleware
-- Access `meta` for procedure-level configuration
-- Use `c.middleware()` for standalone, reusable middleware
 
 ## Next Steps
 

@@ -7,20 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore type inference in cRPC. You'll learn to extract input and output types from your API for use in components, utilities, and type-safe operations.
-
-## Overview
-
-cRPC provides type inference utilities similar to tRPC:
-
-| Type | Description |
-|------|-------------|
-| `ApiOutputs` | Return types of all procedures |
-| `ApiInputs` | Input/argument types of all procedures |
-| `Api` | Generated API type |
-
-Let's set it up.
-
 ## Usage
 
 Access nested procedure types using bracket notation:
@@ -91,46 +77,6 @@ type ProjectSettings = ApiOutputs['project']['settings']['get'];
 <Callout icon={<InfoIcon />}>
 **Tip:** Use `[number]` to extract the item type from array return types.
 </Callout>
-
-## Migrate from Convex
-
-If you're coming from vanilla Convex, here's what changes.
-
-### What stays the same
-
-- Type inference from function definitions
-- Full TypeScript support
-
-### What's new
-
-<Compare>
-  <CompareItem title="Before (vanilla Convex)">
-    ```tsx showLineNumbers
-    import type { FunctionReturnType, FunctionArgs } from 'convex/server';
-    import { api } from '@convex/_generated/api';
-
-    type User = FunctionReturnType<typeof api.user.get>;
-    type GetUserArgs = FunctionArgs<typeof api.user.get>;
-    ```
-  </CompareItem>
-  <CompareItem title="After (cRPC)">
-    ```tsx showLineNumbers {1,3-4}
-    import type { ApiInputs, ApiOutputs } from '@convex/api';
-
-    type User = ApiOutputs['user']['get'];
-    type GetUserArgs = ApiInputs['user']['get'];
-    ```
-  </CompareItem>
-</Compare>
-
-**Key differences:**
-
-| Feature | Description |
-|---------|-------------|
-| Bracket notation | Cleaner than `typeof api.path` |
-| Centralized types | All definitions in one file |
-| Consistent pattern | Same across all procedures |
-| Nested namespaces | Works with deep nesting |
 
 ## Next Steps
 

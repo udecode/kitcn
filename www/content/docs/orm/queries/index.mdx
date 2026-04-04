@@ -5,13 +5,11 @@ description: Query tables with findMany, findFirst, filtering, and relation load
 
 import { InfoIcon, AlertTriangle } from "lucide-react"
 
-In this guide, we'll learn how to query your Convex database with the ORM. You'll master `findMany()`, `findFirst()`, filtering with `where`, ordering, pagination, full-text search, vector search, and eager relation loading with `with:`.
-
 ## Setup
 
 These examples assume you attached ORM to `ctx.orm` once in your context (see [/docs/quickstart#orm-setup](/docs/quickstart#orm-setup)):
 
-```ts title="convex/queries.ts"
+```ts showLineNumbers title="convex/queries.ts"
 await ctx.orm.query.users.findMany({ limit: 10 });
 ```
 
@@ -19,7 +17,7 @@ await ctx.orm.query.users.findMany({ limit: 10 });
 
 ### findMany
 
-Use `findMany()` to retrieve multiple rows. Here's a simple query that fetches up to 50 users:
+Use `findMany()` to retrieve multiple rows:
 
 ```ts title="convex/functions/users.ts" showLineNumbers
 import { publicQuery } from '../lib/crpc';
@@ -97,11 +95,11 @@ For scalable paths, prefer index-compiled filters and index-first query design.
 
 ### Core Operators
 
-Here's the full set of comparison and logical operators you can use in `where`. For the complete operator list, see [API Reference](#core-operators-reference) below.
+For the complete operator list, see [API Reference](/docs/orm/api-reference).
 
 ### String Operators
 
-The ORM supports familiar string matching operators. Most run post-fetch, but a few can leverage indexes. For the full operator list, see [API Reference](#string-operators-reference) below.
+The ORM supports familiar string matching operators. Most run post-fetch, but a few can leverage indexes. For the full operator list, see [API Reference](/docs/orm/api-reference).
 
 For large datasets, prefer indexed filters first. `startsWith` and `like('prefix%')` use index ranges when the field is indexed. `between` and `notBetween` are also index-compiled when the field is indexed.
 
@@ -125,7 +123,7 @@ See [Aggregates](/docs/orm/queries/aggregates) for full API, index declarations,
 
 ### Full-Scan Operators and Workarounds
 
-These operators are post-fetch. In the typed API, they currently require explicit `.withIndex(...)` so scan scope is deliberate. For the full list with scalable workarounds for each, see [API Reference](#full-scan-operators-and-workarounds-reference) below.
+These operators are post-fetch. In the typed API, they currently require explicit `.withIndex(...)` so scan scope is deliberate. For the full list with scalable workarounds for each, see [API Reference](/docs/orm/api-reference).
 
 ### Logical Filters
 
@@ -304,7 +302,7 @@ Use this decision matrix to pick the right approach and avoid accidental full sc
 
 ## Relation Loading With `with:`
 
-Eager-load related data to avoid N+1 queries. Here's how to load each user's recent posts:
+Eager-load related data to avoid N+1 queries:
 
 ```ts showLineNumbers {2-7}
 const users = await db.query.users.findMany({
@@ -384,8 +382,6 @@ Extras are computed in JavaScript after fetching documents (and after `with:` re
 
 ## Common Gotchas
 
-Here's a quick reference for the most frequent issues:
-
 | Issue | Fix |
 |---|---|
 | `where` callback fails | Return a filter expression: `where: (table, { eq }) => eq(table.field, value)` |
@@ -393,60 +389,6 @@ Here's a quick reference for the most frequent issues:
 | Slow ordering | Add an index on the primary `orderBy` field |
 | `columns` doesn't reduce reads | Projection is post-fetch |
 | Relations not loading | Ensure relations are defined on both sides (or explicit `from`/`to`) |
-
-You now know how to query, filter, paginate, search, and eager-load relations with the ORM.
-
-## API Reference
-
-### Core Operators Reference
-
-The full set of comparison and logical operators available in `where`:
-
-| Operator | Example | Description |
-|---|---|---|
-| `eq` | `{ role: 'admin' }` or `{ role: { eq: 'admin' } }` | Equals |
-| `ne` | `{ role: { ne: 'banned' } }` | Not equal (index-compiled when indexed) |
-| `gt` | `{ age: { gt: 18 } }` | Greater than |
-| `gte` | `{ age: { gte: 18 } }` | Greater than or equal |
-| `lt` | `{ age: { lt: 65 } }` | Less than |
-| `lte` | `{ age: { lte: 65 } }` | Less than or equal |
-| `between` | `{ age: { between: [18, 65] } }` | Inclusive range (`>= min` and `<= max`) |
-| `notBetween` | `{ age: { notBetween: [18, 65] } }` | Strict outside range (`< min` or `> max`) |
-| `in` | `{ role: { in: ['admin', 'member'] } }` | Value in array (index-compiled when indexed) |
-| `notIn` | `{ role: { notIn: ['banned'] } }` | Value not in array (index-compiled when indexed) |
-| `isNull` | `{ role: { isNull: true } }` | Null/undefined (index-compiled when indexed) |
-| `isNotNull` | `{ email: { isNotNull: true } }` | Not null/undefined (index-compiled when indexed) |
-| `AND` | `{ AND: [ ... ] }` | Logical AND |
-| `OR` | `{ OR: [ ... ] }` | Logical OR (same-field equality OR is index-compiled) |
-| `NOT` | `{ NOT: { ... } }` | Logical NOT |
-
-### String Operators Reference
-
-String matching operators. Most run post-fetch; a few can leverage indexes:
-
-| Operator | Example | Notes |
-|---|---|---|
-| `like` | `{ title: { like: '%JavaScript%' } }` | Post-fetch, except `'prefix%'` is index-compiled when indexed |
-| `ilike` | `{ title: { ilike: '%javascript%' } }` | Post-fetch |
-| `notLike` | `{ title: { notLike: '%draft%' } }` | Post-fetch |
-| `notIlike` | `{ title: { notIlike: '%draft%' } }` | Post-fetch |
-| `startsWith` | `{ title: { startsWith: 'Intro' } }` | Index range when indexed |
-| `endsWith` | `{ title: { endsWith: 'Guide' } }` | Post-fetch |
-| `contains` | `{ title: { contains: 'ORM' } }` | Post-fetch |
-
-### Full-Scan Operators and Workarounds Reference
-
-These operators are post-fetch. In the typed API, they currently require explicit `.withIndex(...)` so scan scope is deliberate. Scalable workarounds for each:
-
-| Operator | Scalable workaround |
-|---|---|
-| `arrayContains`, `arrayContained`, `arrayOverlaps` | Use an inverted/join table keyed by each element and query that index first |
-| `contains` | Use `withSearchIndex` or maintain a tokenized denormalized field/table |
-| `endsWith` | Store a reversed value column (for example `reversedEmail`) and use `startsWith` on that indexed column |
-| `ilike`, `notIlike` | Store a normalized lowercase column and query with `startsWith`/`like('prefix%')` where possible |
-| `notLike` | Use an indexed positive pre-filter, then apply `notLike` post-fetch |
-| `NOT` (general) | Rewrite to positive indexable predicates when possible; otherwise use `.withIndex(...)` and cap cursor scans with `maxScan` |
-| callback `where` + `predicate(...)` | Use `.withIndex(name, range?)`; add `maxScan` (cursor pagination only) to cap scan cost |
 
 ## Next Steps
 

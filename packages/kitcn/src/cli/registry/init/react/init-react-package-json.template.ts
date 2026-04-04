@@ -1,3 +1,5 @@
+import { SUPPORTED_DEPENDENCY_VERSIONS } from '../../../supported-dependencies.js';
+
 type ProjectPackageJson = {
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
@@ -22,6 +24,7 @@ const getInitReactConvexTypecheckScript = (
 ) => `tsc --noEmit --project ${functionsDirRelative}/tsconfig.json`;
 
 const INIT_REACT_PACKAGE_JSON_DEPENDENCIES = {
+  '@opentelemetry/api': SUPPORTED_DEPENDENCY_VERSIONS.opentelemetryApi.exact,
   superjson: '2.2.6',
 } as const;
 

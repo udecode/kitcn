@@ -27,6 +27,7 @@
     "./auth/generated": "./dist/auth/generated/index.js",
     "./auth/http": "./dist/auth/http/index.js",
     "./auth/nextjs": "./dist/auth/nextjs/index.js",
+    "./auth/start": "./dist/auth/start/index.js",
     "./crpc": "./dist/crpc/index.js",
     "./orm": "./dist/orm/index.js",
     "./plugins": "./dist/plugins/index.js",

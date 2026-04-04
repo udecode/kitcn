@@ -11,6 +11,7 @@ import { INIT_HTTP_TEMPLATE } from '../../init/init-http.template.js';
 import { INIT_NEXT_CONVEX_PROVIDER_TEMPLATE } from '../../init/next/init-next-convex-provider.template.js';
 import { INIT_NEXT_SERVER_TEMPLATE } from '../../init/next/init-next-server.template.js';
 import { INIT_REACT_CONVEX_PROVIDER_TEMPLATE } from '../../init/react/init-react-convex-provider.template.js';
+import { INIT_START_CONVEX_PROVIDER_TEMPLATE } from '../../init/start/init-start-convex-provider.template.js';
 import {
   createPlanFile,
   getCrpcFilePath,
@@ -28,6 +29,7 @@ import {
   AUTH_CONVEX_CLIENT_TEMPLATE,
   AUTH_CONVEX_REACT_CLIENT_TEMPLATE,
   AUTH_REACT_CLIENT_TEMPLATE,
+  AUTH_START_CLIENT_TEMPLATE,
 } from './auth-client.template.js';
 import {
   AUTH_CONFIG_TEMPLATE,
@@ -40,6 +42,11 @@ import { AUTH_NEXT_SERVER_TEMPLATE } from './auth-next-server.template.js';
 import { AUTH_PAGE_TEMPLATE } from './auth-page.template.js';
 import { AUTH_REACT_CONVEX_PROVIDER_TEMPLATE } from './auth-react-convex-provider.template.js';
 import { AUTH_CONVEX_SCHEMA_TEMPLATE } from './auth-schema.template.js';
+import { AUTH_START_CONVEX_PROVIDER_TEMPLATE } from './auth-start-convex-provider.template.js';
+import { AUTH_START_PAGE_TEMPLATE } from './auth-start-page.template.js';
+import { AUTH_START_ROUTE_TEMPLATE } from './auth-start-route.template.js';
+import { AUTH_START_SERVER_TEMPLATE } from './auth-start-server.template.js';
+import { AUTH_START_SERVER_CALL_TEMPLATE } from './auth-start-server-call.template.js';
 import {
   loadAuthOptionsFromDefinition,
   loadDefaultManagedAuthOptions,
@@ -284,18 +291,37 @@ app.use(
 }
 
 function buildAuthProviderPlanFile(params: PluginRegistryBuildPlanFilesParams) {
-  if (!params.roots.projectContext) {
+  const projectContext = params.roots.projectContext;
+  if (!projectContext) {
     throw new Error(
-      'Auth scaffolding requires a supported app baseline. Run `kitcn init --yes` in a supported app, or bootstrap one with `kitcn init -t <next|vite>` first.'
+      'Auth scaffolding requires a supported app baseline. Run `kitcn init --yes` in a supported app, or bootstrap one with `kitcn init -t <next|start|vite>` first.'
     );
+  }
+
+  if (projectContext.framework === 'tanstack-start') {
+    const providerPath = resolve(
+      process.cwd(),
+      projectContext.convexClientDir,
+      'convex-provider.tsx'
+    );
+
+    return createPlanFile({
+      kind: 'scaffold',
+      filePath: providerPath,
+      content: AUTH_START_CONVEX_PROVIDER_TEMPLATE,
+      managedBaselineContent: INIT_START_CONVEX_PROVIDER_TEMPLATE,
+      createReason: 'Create auth-aware kitcn provider for the app scaffold.',
+      updateReason: 'Update kitcn provider with auth-aware client wiring.',
+      skipReason: 'kitcn provider already matches the auth scaffold.',
+    });
   }
 
   const providerPath = resolve(
     process.cwd(),
-    params.roots.projectContext.convexClientDir,
+    projectContext.convexClientDir,
     'convex-provider.tsx'
   );
-  const isNextApp = params.roots.projectContext.mode === 'next-app';
+  const isNextApp = projectContext.mode === 'next-app';
 
   return createPlanFile({
     kind: 'scaffold',
@@ -361,6 +387,115 @@ function buildAuthNextRoutePlanFile(
     createReason: 'Create the Next auth proxy route.',
     updateReason: 'Update the Next auth proxy route.',
     skipReason: 'The Next auth proxy route already exists.',
+  });
+}
+
+function buildAuthStartServerPlanFile(
+  params: PluginRegistryBuildPlanFilesParams
+) {
+  const projectContext = params.roots.projectContext;
+  if (!projectContext || projectContext.framework !== 'tanstack-start') {
+    throw new Error(
+      'Auth scaffolding requires a supported TanStack Start shell.'
+    );
+  }
+
+  const serverPath = resolve(
+    process.cwd(),
+    projectContext.convexClientDir,
+    'auth-server.ts'
+  );
+
+  return createPlanFile({
+    kind: 'scaffold',
+    filePath: serverPath,
+    content: AUTH_START_SERVER_TEMPLATE,
+    createReason: 'Create auth-aware Start server helpers.',
+    updateReason: 'Update Start server helpers with auth route support.',
+    skipReason: 'Start server helpers already include auth route support.',
+  });
+}
+
+function buildAuthStartRoutePlanFile(
+  params: PluginRegistryBuildPlanFilesParams
+) {
+  const projectContext = params.roots.projectContext;
+  if (!projectContext || projectContext.framework !== 'tanstack-start') {
+    throw new Error(
+      'Auth scaffolding requires a supported TanStack Start shell.'
+    );
+  }
+
+  const routePath = resolve(
+    process.cwd(),
+    projectContext.usesSrc ? 'src' : '',
+    'routes',
+    'api',
+    'auth',
+    '$.ts'
+  );
+
+  return createPlanFile({
+    kind: 'scaffold',
+    filePath: routePath,
+    content: AUTH_START_ROUTE_TEMPLATE,
+    createReason: 'Create the Start auth proxy route.',
+    updateReason: 'Update the Start auth proxy route.',
+    skipReason: 'The Start auth proxy route already exists.',
+  });
+}
+
+function buildAuthStartServerCallPlanFile(
+  params: PluginRegistryBuildPlanFilesParams
+) {
+  const projectContext = params.roots.projectContext;
+  if (!projectContext || projectContext.framework !== 'tanstack-start') {
+    throw new Error(
+      'Auth scaffolding requires a supported TanStack Start shell.'
+    );
+  }
+
+  const serverPath = resolve(
+    process.cwd(),
+    projectContext.convexClientDir,
+    'server.ts'
+  );
+
+  return createPlanFile({
+    kind: 'scaffold',
+    filePath: serverPath,
+    content: AUTH_START_SERVER_CALL_TEMPLATE,
+    createReason: 'Create auth-aware Start server caller helpers.',
+    updateReason: 'Update Start server caller helpers with auth token wiring.',
+    skipReason:
+      'Start server caller helpers already include auth token wiring.',
+  });
+}
+
+function buildAuthStartPagePlanFile(
+  params: PluginRegistryBuildPlanFilesParams
+) {
+  const projectContext = params.roots.projectContext;
+  if (!projectContext || projectContext.framework !== 'tanstack-start') {
+    throw new Error(
+      'Auth scaffolding requires a supported TanStack Start shell.'
+    );
+  }
+
+  const pagePath = resolve(
+    process.cwd(),
+    projectContext.usesSrc ? 'src' : '',
+    'routes',
+    'auth.tsx'
+  );
+
+  return createPlanFile({
+    kind: 'scaffold',
+    filePath: pagePath,
+    content: AUTH_START_PAGE_TEMPLATE,
+    createReason: 'Create the Start auth demo route.',
+    updateReason: 'Update the Start auth demo route.',
+    skipReason: 'The Start auth demo route already exists.',
   });
 }
 
@@ -623,6 +758,25 @@ export const authRegistryItem = defineInternalRegistryItem({
           return templates;
         }
 
+        if (roots.projectContext.framework === 'tanstack-start') {
+          return templates
+            .filter(
+              (template) =>
+                template.id !== 'auth-page' &&
+                template.id !== 'auth-page-convex'
+            )
+            .map((template) => {
+              if (template.id === 'auth-client') {
+                return {
+                  ...template,
+                  content: AUTH_START_CLIENT_TEMPLATE,
+                };
+              }
+
+              return template;
+            });
+        }
+
         return templates
           .filter(
             (template) =>
@@ -665,6 +819,13 @@ export const authRegistryItem = defineInternalRegistryItem({
           files.push(
             buildAuthNextServerPlanFile(params),
             buildAuthNextRoutePlanFile(params)
+          );
+        } else if (roots.projectContext?.framework === 'tanstack-start') {
+          files.push(
+            buildAuthStartServerPlanFile(params),
+            buildAuthStartRoutePlanFile(params),
+            buildAuthStartServerCallPlanFile(params),
+            buildAuthStartPagePlanFile(params)
           );
         }
 

@@ -7,21 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll set up `kitcn/ratelimit` with an Upstash-parity API, Convex-first storage, and a UI-friendly hook.
-
-We'll keep it practical: a local ratelimit plugin, middleware wiring, algorithm choices, and client-side button disabling with live countdowns.
-
-## Approach
-
-We'll build this in four steps so you can ship quickly and keep things maintainable:
-
-1. Scaffold the local schema extension so internal storage tables exist.
-2. Add one local ratelimit plugin that owns buckets and policy.
-3. Wire that plugin into middleware so handlers stay focused.
-4. Add optional client-side UX with `useRatelimit()` for disabled states and retry timers.
-
-We'll end with a full API reference so you can tune behavior without guesswork.
-
 ## Why this package
 
 `kitcn/ratelimit` is designed as a hard cutover from component-driven APIs.
@@ -36,15 +21,13 @@ We'll end with a full API reference so you can tune behavior without guesswork.
 
 ## Install
 
-```bash
-bun add kitcn
-```
+<PackageInstallTabs packages="kitcn" />
 
 ## Scaffold the starter (required)
 
 Rate limiting is opt-in, so scaffold the full starter once:
 
-```bash
+```bash showLineNumbers
 npx kitcn add ratelimit
 ```
 
@@ -237,8 +220,6 @@ Ratelimit.fixedWindow(100, MINUTE);        // 60_000 ms
 Ratelimit.slidingWindow(50, 30 * SECOND);  // 30_000 ms
 Ratelimit.tokenBucket(10, HOUR, 100);      // 3_600_000 ms
 ```
-
-Done. You now have deterministic, application-layer limits with one API surface.
 
 ## Add a client-side limiter UX
 

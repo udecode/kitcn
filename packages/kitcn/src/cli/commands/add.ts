@@ -489,6 +489,9 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
       throw new Error(AUTH_SCHEMA_ONLY_MISSING_ERROR);
     }
   }
+  if (rawConvexAuthPreset && !addArgs.dryRun) {
+    assertRawConvexAuthDeploymentReady();
+  }
   if (!addArgs.dryRun) {
     await applyPlanningDependencyInstall(
       pluginDescriptor.planningDependencies ?? [],
@@ -549,10 +552,6 @@ export const handleAddCommand = async (argv: string[], deps: AddDeps = {}) => {
       logger.write(formatPlanSummary(plan));
     }
     return 0;
-  }
-
-  if (rawConvexAuthPreset) {
-    assertRawConvexAuthDeploymentReady();
   }
 
   const applyResult = await applyPluginInstallPlanFiles(plan.files, {

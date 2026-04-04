@@ -318,20 +318,22 @@ export function resolveProjectScaffoldContext(
   } = {}
 ): ProjectScaffoldContext | null {
   const cwd = params.cwd ?? process.cwd();
-  const detectedFramework =
-    detectProjectFramework(cwd) ??
-    (params.template === 'next'
+  const templateFramework =
+    params.template === 'next'
       ? 'next-app'
-      : params.template === 'vite'
-        ? 'vite'
-        : null);
+      : params.template === 'start'
+        ? 'tanstack-start'
+        : params.template === 'vite'
+          ? 'vite'
+          : null;
+  const detectedFramework = templateFramework ?? detectProjectFramework(cwd);
 
   if (!detectedFramework) {
     if (params.allowMissing) {
       return null;
     }
     throw new Error(
-      'Could not detect a supported app scaffold. Supported modes currently start from `next` or `vite`.'
+      'Could not detect a supported app scaffold. Supported modes currently start from `next`, `start`, or `vite`.'
     );
   }
 

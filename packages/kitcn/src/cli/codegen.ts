@@ -539,6 +539,18 @@ export { defineMigration } from 'kitcn/orm';
 `;
 }
 
+function writeFileIfChanged(filePath: string, content: string) {
+  if (fs.existsSync(filePath)) {
+    const existingContent = fs.readFileSync(filePath, 'utf8');
+    if (existingContent === content) {
+      return false;
+    }
+  }
+
+  fs.writeFileSync(filePath, content);
+  return true;
+}
+
 function ensureGeneratedSupportPlaceholders(
   functionsDir: string,
   options?: { includeAuth?: boolean }
@@ -553,17 +565,17 @@ function ensureGeneratedSupportPlaceholders(
   const includeAuth = options?.includeAuth ?? true;
 
   if (!fs.existsSync(serverOutputFile)) {
-    fs.writeFileSync(serverOutputFile, emitGeneratedServerPlaceholderFile());
+    writeFileIfChanged(serverOutputFile, emitGeneratedServerPlaceholderFile());
     createdPlaceholderFiles.push(serverOutputFile);
   }
 
   if (includeAuth && !fs.existsSync(authOutputFile)) {
-    fs.writeFileSync(authOutputFile, emitGeneratedAuthPlaceholderFile());
+    writeFileIfChanged(authOutputFile, emitGeneratedAuthPlaceholderFile());
     createdPlaceholderFiles.push(authOutputFile);
   }
 
   if (!fs.existsSync(migrationsHelperOutputFile)) {
-    fs.writeFileSync(
+    writeFileIfChanged(
       migrationsHelperOutputFile,
       emitGeneratedMigrationsPlaceholderFile()
     );
@@ -616,7 +628,7 @@ function ensureGeneratedRuntimePlaceholders(
       runtimeExportNames.get(moduleName) ??
       getModuleRuntimeExportNames(moduleName);
     fs.mkdirSync(path.dirname(runtimeOutputFile), { recursive: true });
-    fs.writeFileSync(
+    writeFileIfChanged(
       runtimeOutputFile,
       emitGeneratedRuntimePlaceholderFile(exportNames)
     );
@@ -1986,7 +1998,7 @@ ${optionalTypeExports}
     if (!fs.existsSync(outputDirname)) {
       fs.mkdirSync(outputDirname, { recursive: true });
     }
-    fs.writeFileSync(outputFile, output);
+    writeFileIfChanged(outputFile, output);
   } else {
     fs.rmSync(outputFile, { force: true });
   }
@@ -2003,7 +2015,7 @@ ${optionalTypeExports}
     fs.mkdirSync(generatedOutputDirname, { recursive: true });
   }
 
-  fs.writeFileSync(serverOutputFile, serverOutput);
+  writeFileIfChanged(serverOutputFile, serverOutput);
   fs.rmSync(ormOutputFile, { force: true });
   fs.rmSync(crpcOutputFile, { force: true });
 
@@ -2012,7 +2024,7 @@ ${optionalTypeExports}
     functionsDir,
     hasRelationsMetadata
   );
-  fs.writeFileSync(migrationsHelperOutputFile, migrationsOutput);
+  writeFileIfChanged(migrationsHelperOutputFile, migrationsOutput);
   fs.rmSync(legacyGeneratedMigrationsOutputFile, { force: true });
   fs.rmSync(legacyGeneratedMigrationsRuntimeOutputFile, { force: true });
   fs.rmSync(legacyGeneratedMigrationsUnderscoreOutputFile, { force: true });
@@ -2024,7 +2036,7 @@ ${optionalTypeExports}
       hasOrmSchema,
       authContract
     );
-    fs.writeFileSync(authOutputFile, authOutput);
+    writeFileIfChanged(authOutputFile, authOutput);
   } else {
     fs.rmSync(authOutputFile, { force: true });
   }
@@ -2082,7 +2094,7 @@ ${optionalTypeExports}
       runtimeExportNames
     );
     fs.mkdirSync(path.dirname(runtimeOutputFile), { recursive: true });
-    fs.writeFileSync(runtimeOutputFile, runtimeOutput);
+    writeFileIfChanged(runtimeOutputFile, runtimeOutput);
     runtimeOutputFiles.push(runtimeOutputFile);
   }
   const runtimeOutputFileSet = new Set(runtimeOutputFiles);

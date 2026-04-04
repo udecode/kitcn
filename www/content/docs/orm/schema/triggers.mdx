@@ -7,6 +7,8 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
+In this guide, you'll learn how to use triggers — schema-level hooks that run automatically on insert, update, and delete. Triggers let you normalize payloads before writes, fire audit events after writes, update aggregates, and cancel writes based on business rules.
+
 Triggers are declared once in `schema.ts` and wired automatically when you chain `.triggers(...)` on the default schema export.
 
 ## Overview
@@ -22,7 +24,7 @@ Define them on the schema chain with `.triggers({ ... })`.
 
 ## API Shape
 
-```ts title="convex/functions/schema.ts"
+```ts showLineNumbers title="convex/functions/schema.ts"
 export default defineSchema({ todos })
   .relations(() => ({
     todos: {},
@@ -54,7 +56,7 @@ For hook signatures and return types, see [API Reference](#api-reference) below.
 
 ## Setup In Schema
 
-```ts title="convex/functions/schema.ts"
+```ts showLineNumbers title="convex/functions/schema.ts"
 import {
   convexTable,
   defineSchema,
@@ -108,7 +110,7 @@ Trigger definitions are schema-level only. `convexTable(..., extraConfig)` no lo
 
 ### Validation + Cancellation
 
-```ts title="convex/functions/schema.ts"
+```ts showLineNumbers title="convex/functions/schema.ts"
 export default defineSchema({ users })
   .relations(() => ({
     users: {},
@@ -131,7 +133,7 @@ export default defineSchema({ users })
 
 ### Payload Mutation
 
-```ts title="convex/functions/schema.ts"
+```ts showLineNumbers title="convex/functions/schema.ts"
 export default defineSchema({ users })
   .relations(() => ({
     users: {},
@@ -152,7 +154,7 @@ export default defineSchema({ users })
 
 ### Change Auditing
 
-```ts title="convex/functions/schema.ts"
+```ts showLineNumbers title="convex/functions/schema.ts"
 export default defineSchema({ teams })
   .relations(() => ({
     teams: {},
@@ -215,7 +217,7 @@ Context (`ctx`) includes:
 
 Bypass all trigger hooks for a block of operations. Useful for bulk resets, migrations, and data seeding where triggers would interfere or cause infinite recursion.
 
-```ts
+```ts showLineNumbers
 await ctx.orm.withoutTriggers(async (orm) => {
   // These writes skip all before/after/change hooks
   await orm.delete(todosTable).allowFullScan();
@@ -231,3 +233,11 @@ The callback receives a trigger-free ORM instance scoped to the same transaction
 2. Trigger errors fail the mutation.
 3. Recursive writes are queued deterministically.
 4. `ctx.innerDb` bypasses recursive dispatch (low-level; prefer `withoutTriggers` for most cases).
+
+## Next Steps
+
+<Cards>
+  <Card title="Aggregates" href="/docs/orm/queries/aggregates" />
+  <Card title="Migrations" href="/docs/orm/migrations" />
+  <Card title="RLS" href="/docs/orm/rls" />
+</Cards>

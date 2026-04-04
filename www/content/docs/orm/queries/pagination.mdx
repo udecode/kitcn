@@ -72,7 +72,7 @@ const page2 = await db.query.posts.findMany({
 
 Return shape:
 
-```ts
+```ts showLineNumbers
 {
   page: T[];
   continueCursor: string | null;
@@ -199,7 +199,7 @@ const second = await db.query.messages.findMany({
 
 Return shape:
 
-```ts
+```ts showLineNumbers
 {
   page: T[];
   indexKeys: (Value | undefined)[][];
@@ -217,11 +217,11 @@ These combinations are rejected:
 - `maxScan` without cursor mode.
 - `pageByKey` with `cursor`, `offset`, `search`, `vectorSearch`, or `select()` composition.
 
-## Migration from `db.stream()`
+## Stream-to-ORM Mapping
 
-If you previously used stream helpers directly, map them to `findMany` like this:
+Here's how streaming patterns map to ORM equivalents:
 
-| Previous pattern | New pattern |
+| Stream pattern | ORM equivalent |
 |---|---|
 | `db.stream().query(...).filterWith(...).paginate(...)` | `select().filter(...).paginate({ cursor, limit })` |
 | `mergedStream([...], fields)` | `select().union([...]).interleaveBy(fields).paginate({ cursor, limit })` |

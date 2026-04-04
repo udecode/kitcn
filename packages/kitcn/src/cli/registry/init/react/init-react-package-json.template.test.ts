@@ -10,6 +10,10 @@ describe('init-react-package-json.template', () => {
     );
 
     expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        '@opentelemetry/api': '1.9.0',
+        superjson: '2.2.6',
+      },
       scripts: {
         codegen: 'kitcn codegen',
         'convex:dev': 'kitcn dev',
@@ -35,6 +39,10 @@ describe('init-react-package-json.template', () => {
     );
 
     expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        '@opentelemetry/api': '1.9.0',
+        superjson: '2.2.6',
+      },
       scripts: {
         'typecheck:convex': 'tsc --noEmit --project convex/tsconfig.json',
       },
@@ -53,6 +61,10 @@ describe('init-react-package-json.template', () => {
     );
 
     expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        '@opentelemetry/api': '1.9.0',
+        superjson: '2.2.6',
+      },
       devDependencies: {
         '@concavejs/cli': 'latest',
         '@types/bun': 'latest',

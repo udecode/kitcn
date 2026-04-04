@@ -7,8 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll set up kitcn with Better Auth for Next.js App Router. You'll configure environment variables, create the caller factory, set up the client provider, and prepare RSC helpers for server-side rendering.
-
 ## Overview
 
 Setting up kitcn with Next.js involves these components:
@@ -20,8 +18,6 @@ Setting up kitcn with Next.js involves these components:
 | API route handler | Better Auth API routes |
 | RSC helpers | Prefetching and hydration utilities |
 
-Let's set it up.
-
 <Callout icon={<InfoIcon />}>
 **Prerequisite:** Complete [Auth Server](/docs/auth/server) first to configure your Convex backend.
 </Callout>
@@ -30,9 +26,7 @@ Let's set it up.
 
 First, install the required packages:
 
-```bash
-bun add kitcn better-auth@1.5.3 @tanstack/react-query superjson
-```
+<PackageInstallTabs packages="kitcn better-auth@1.5.3 @tanstack/react-query superjson" />
 
 <Callout icon={<InfoIcon />}>
 **Note:** Complete [React Setup](/docs/react) first to create your `query-client.ts` with `hydrationConfig`.
@@ -156,8 +150,6 @@ export const { GET, POST } = handler;
 ```
 
 ## RSC Setup
-
-Now let's create the RSC helpers file:
 
 ```tsx title="src/lib/convex/rsc.tsx" showLineNumbers {1,14-15,17-18,21-23,26,29,32-33,36-37,43,50-54}
 import 'server-only';

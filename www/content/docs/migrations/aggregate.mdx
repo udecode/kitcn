@@ -345,7 +345,7 @@ npx kitcn aggregate rebuild --prod
 
 Each rank query result item has:
 
-```ts
+```ts showLineNumbers
 {
   id: string;       // document _id
   key: unknown;     // decoded sort key (single value or array if multi-column)
@@ -368,3 +368,11 @@ These `@convex-dev/aggregate` features have no direct ORM equivalent:
 | Negative `at(-1)` offsets | Not yet supported; use `max()` for last item |
 | `bounds` with `id` tie-breaker | Not supported; use cursor pagination |
 | `order: "desc"` on reads | Declare direction in `rankIndex(...).orderBy({ column, direction: 'desc' })` |
+
+## Next Steps
+
+<Cards>
+  <Card title="Aggregates" href="/docs/orm/queries/aggregates" />
+  <Card title="ORM Schema" href="/docs/orm/schema" />
+  <Card title="Migrations" href="/docs/orm/migrations" />
+</Cards>

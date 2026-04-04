@@ -7,8 +7,6 @@ links:
 
 import { InfoIcon } from "lucide-react"
 
-In this guide, we'll explore payments and subscriptions with kitcn and Polar. You'll learn to configure the Polar plugin, handle checkout flows, manage subscriptions, and process webhooks for billing events.
-
 ## Overview
 
 Payment and subscription system with [Better Auth's Polar plugin](https://www.better-auth.com/docs/plugins/polar):
@@ -21,8 +19,6 @@ Payment and subscription system with [Better Auth's Polar plugin](https://www.be
 | Usage billing | Event-based metering |
 | Webhooks | Real-time billing events |
 
-Let's set up Polar integration step by step.
-
 ## Prerequisites
 
 - [Auth Server](/docs/auth/server) configured
@@ -31,9 +27,7 @@ Let's set up Polar integration step by step.
 
 ## 1. Install Dependencies
 
-```bash showLineNumbers
-bun add @polar-sh/better-auth @polar-sh/sdk buffer
-```
+<PackageInstallTabs packages="@polar-sh/better-auth @polar-sh/sdk buffer" />
 
 ## 2. Server Configuration
 
@@ -444,7 +438,7 @@ Function examples use the ORM (`ctx.orm`).
 
 ### Customer Management
 
-```ts title="convex/functions/polarCustomer.ts" showLineNumbers {1,3-8,11-18,20-31,34-37,39-52}
+```ts title="convex/functions/polarCustomer.ts" showLineNumbers {1,3-8,11-18,20-31}
 import '../lib/polar-polyfills';
 
 import { CRPCError } from 'kitcn/server';
@@ -461,7 +455,7 @@ export const createCustomer = privateAction
       userId: z.string(),
     })
   )
-  
+
   .action(async ({ input: args }) => {
     const polar = getPolarClient();
 
@@ -477,156 +471,16 @@ export const createCustomer = privateAction
 
     return null;
   });
-
-// Link Polar customer ID to user (called from webhook)
-export const updateUserPolarCustomerId = privateMutation
-  .input(
-    z.object({
-      customerId: z.string(),
-      userId: z.string(),
-    })
-  )
-  
-  .mutation(async ({ ctx, input: args }) => {
-    const targetUser = await ctx.orm.query.user.findFirst({
-      where: { id: args.userId },
-    });
-    if (!targetUser) throw new CRPCError({ code: 'NOT_FOUND', message: 'User not found' });
-
-    // Check for duplicate customer IDs
-    const existingUser = await ctx.orm.query.user.findFirst({
-      where: { customerId: args.customerId },
-    });
-
-    if (existingUser && existingUser.id !== args.userId) {
-      throw new CRPCError({
-        code: 'CONFLICT',
-        message: `Another user already has Polar customer ID ${args.customerId}`,
-      });
-    }
-
-    await ctx.orm
-      .update(user)
-      .set({ customerId: args.customerId })
-      .where(eq(user.id, targetUser.id));
-    return null;
-  });
 ```
 
-### Subscription Management
+Build additional subscription management functions (create, update, cancel, resume) following this pattern. The key conventions:
 
-```ts title="convex/functions/polarSubscription.ts" showLineNumbers {1,3-8,11-22,25-35,38-48,51-70,73-92}
-import '../lib/polar-polyfills';
+- Use `privateMutation` for webhook-triggered writes (subscription create/update)
+- Use `privateQuery` for internal reads (get active subscription)
+- Use `authAction` for user-facing operations that call the Polar SDK (cancel/resume)
+- Use callers to bridge between actions and queries/mutations
 
-import { CRPCError } from 'kitcn/server';
-import { z } from 'zod';
-import { authAction, privateMutation, privateQuery } from '../lib/crpc';
-import { getPolarClient } from '../lib/polar-client';
-import { createPolarSubscriptionCaller } from './generated/polarSubscription.runtime';
-
-// Create subscription (called from webhook)
-export const createSubscription = privateMutation
-  .input(z.object({ subscription: subscriptionSchema }))
-  
-  .mutation(async ({ ctx, input: args }) => {
-    const existing = await ctx.orm.query.subscriptions.findFirst({
-      where: { subscriptionId: args.subscription.subscriptionId },
-    });
-
-    if (existing) {
-      throw new CRPCError({
-        code: 'CONFLICT',
-        message: `Subscription ${args.subscription.subscriptionId} already exists`,
-      });
-    }
-
-    await ctx.orm.insert(subscriptions).values(args.subscription);
-    return null;
-  });
-
-// Update subscription (called from webhook)
-export const updateSubscription = privateMutation
-  .input(z.object({ subscription: subscriptionSchema }))
-  .output(z.object({ updated: z.boolean() }))
-  .mutation(async ({ ctx, input: args }) => {
-    const existing = await ctx.orm.query.subscriptions.findFirst({
-      where: { subscriptionId: args.subscription.subscriptionId },
-    });
-
-    if (!existing) {
-      return { updated: false };
-    }
-
-    await ctx.orm
-      .update(subscriptions)
-      .set(args.subscription)
-      .where(eq(subscriptions.id, existing.id));
-    return { updated: true };
-  });
-
-// Get active subscription for user
-export const getActiveSubscription = privateQuery
-  .input(z.object({ userId: z.string() }))
-  .output(z.object({ subscriptionId: z.string() }).nullable())
-  .query(async ({ ctx, input: args }) => {
-    const subscription = await ctx.orm.query.subscriptions.findFirst({
-      where: { userId: args.userId, status: 'active' },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!subscription) return null;
-
-    return { subscriptionId: subscription.subscriptionId };
-  });
-
-// Cancel subscription (user action)
-export const cancelSubscription = authAction
-  .output(z.object({ success: z.boolean() }))
-  .action(async ({ ctx }) => {
-    const polar = getPolarClient();
-
-    const caller = createPolarSubscriptionCaller(ctx);
-    const subscription = await caller.getActiveSubscription({ userId: ctx.userId! });
-
-    if (!subscription) {
-      throw new CRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'No active subscription found',
-      });
-    }
-
-    await polar.subscriptions.update({
-      id: subscription.subscriptionId,
-      subscriptionUpdate: { cancelAtPeriodEnd: true },
-    });
-
-    return { success: true };
-  });
-
-// Resume subscription (user action)
-export const resumeSubscription = authAction
-  .output(z.object({ success: z.boolean() }))
-  .action(async ({ ctx }) => {
-    const polar = getPolarClient();
-
-    const caller = createPolarSubscriptionCaller(ctx);
-    const subscription = await caller.getActiveSubscription({ userId: ctx.userId! });
-
-    if (!subscription) {
-      throw new CRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'No active subscription found',
-      });
-    }
-
-    await polar.subscriptions.update({
-      id: subscription.subscriptionId,
-      subscriptionUpdate: { cancelAtPeriodEnd: false },
-    });
-
-    return { success: true };
-  });
-```
+See the [example app](https://github.com/nichochar/kitcn/tree/main/example) for complete subscription CRUD implementations.
 
 ## Customer Deletion Sync
 
@@ -715,7 +569,7 @@ const isPremium = !!subscription;
 
 All events are passed to `webhooks({ secret, ...handlers })` inside the `use: []` array of the `polar()` plugin.
 
-```ts title="convex/functions/auth.ts"
+```ts showLineNumbers title="convex/functions/auth.ts"
 webhooks({
   secret: process.env.POLAR_WEBHOOK_SECRET!,
 

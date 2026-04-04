@@ -3,6 +3,8 @@ export type TemplateBackend = 'convex' | 'concave';
 export const TEMPLATE_KEYS = [
   'next',
   'next-auth',
+  'start',
+  'start-auth',
   'vite',
   'vite-auth',
 ] as const;
@@ -10,7 +12,7 @@ export const TEMPLATE_KEYS = [
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
 export type TemplateDefinition = {
-  initTemplate: 'next' | 'vite';
+  initTemplate: 'next' | 'start' | 'vite';
   label: string;
   setup: ReadonlyArray<readonly string[]>;
   successMessage: string;
@@ -37,6 +39,26 @@ export const TEMPLATE_DEFINITIONS: Record<TemplateKey, TemplateDefinition> = {
       'fixtures/next-auth matches fresh `kitcn init -t next && kitcn add auth` output.',
     validation: {
       lint: true,
+    },
+  },
+  start: {
+    initTemplate: 'start',
+    label: 'start',
+    setup: [],
+    successMessage:
+      'fixtures/start matches fresh `kitcn init -t start` output.',
+    validation: {
+      lint: false,
+    },
+  },
+  'start-auth': {
+    initTemplate: 'start',
+    label: 'start + auth',
+    setup: [['add', 'auth', '--yes']],
+    successMessage:
+      'fixtures/start-auth matches fresh `kitcn init -t start && kitcn add auth` output.',
+    validation: {
+      lint: false,
     },
   },
   vite: {
