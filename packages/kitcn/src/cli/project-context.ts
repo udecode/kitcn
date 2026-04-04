@@ -318,15 +318,15 @@ export function resolveProjectScaffoldContext(
   } = {}
 ): ProjectScaffoldContext | null {
   const cwd = params.cwd ?? process.cwd();
-  const detectedFramework =
-    detectProjectFramework(cwd) ??
-    (params.template === 'next'
+  const templateFramework =
+    params.template === 'next'
       ? 'next-app'
       : params.template === 'start'
         ? 'tanstack-start'
         : params.template === 'vite'
           ? 'vite'
-          : null);
+          : null;
+  const detectedFramework = templateFramework ?? detectProjectFramework(cwd);
 
   if (!detectedFramework) {
     if (params.allowMissing) {

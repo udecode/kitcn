@@ -375,6 +375,12 @@ describe('cli/commands/init', () => {
           path.join(expectedProjectDir, 'src', 'routes', '__root.tsx')
         )
       ).toBe(true);
+      expect(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'src', 'routes', '__root.tsx'),
+          'utf8'
+        )
+      ).toContain('<Providers>');
     } finally {
       process.chdir(originalCwd);
     }

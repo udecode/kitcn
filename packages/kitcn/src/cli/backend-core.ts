@@ -2901,7 +2901,7 @@ async function runScaffoldCommandFlow(params: {
       template: params.template,
     });
     const applyResult = await applyPluginInstallPlanFiles(initPlan.files, {
-      overwrite: Boolean(params.overwrite),
+      overwrite: Boolean(params.overwrite) || params.template !== undefined,
       yes: params.yes || Boolean(params.defaults),
       promptAdapter: params.promptAdapter,
     });
