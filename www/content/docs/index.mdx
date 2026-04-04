@@ -111,7 +111,7 @@ Ask the user to select their stack before starting:
 3. Run: `npx kitcn dev` (runs `convex init` + codegen + watchers)
 4. Verify: `npx kitcn verify` (one-shot local runtime proof, stop `kitcn dev` first)
 5. Env: `npx kitcn env push` for `--prod`, `--rotate`, or explicit repair. During local dev, `convex/.env` edits auto-sync.
-6. Local auth assumes `http://localhost:3000`. If you change the port, update `.env.local` `NEXT_PUBLIC_SITE_URL` and `convex/.env` `SITE_URL`.
+6. Local auth assumes `http://localhost:3000`. If you change the port, update `SITE_URL` in `convex/.env` and the matching client env var (`NEXT_PUBLIC_SITE_URL` for Next.js, `VITE_SITE_URL` for Start/Vite).
 
 ### Docs-by-Section Bootstrap
 

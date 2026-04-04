@@ -46,7 +46,7 @@ const ids = await ctx.orm
   .returning({ id: users.id });
 ```
 
-The ORM collects matching rows in bounded pages before applying writes. See [API Reference -- Safety Limits](#safety-limits) for defaults and override syntax.
+The ORM collects matching rows in bounded pages before applying writes. See [Mutations](/docs/orm/mutations) for safety limit defaults and override syntax.
 
 ## Paginated Delete Execution
 

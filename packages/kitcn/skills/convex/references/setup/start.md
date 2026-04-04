@@ -105,4 +105,3 @@ Use the docs pattern from `tanstack-start.mdx` for:
 
 - `src/routes/__root.tsx` shell/provider wiring
 - `src/lib/convex/convex-provider.tsx`
-- router setup in `src/router.tsx`

@@ -402,9 +402,8 @@ const homeTemplateOptions = [
 ] as const;
 
 function Hero() {
-  const [selectedTemplate, setSelectedTemplate] = useState<
-    (typeof homeTemplateOptions)[number]['label']
-  >('next');
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<(typeof homeTemplateOptions)[number]['label']>('next');
   const selectedOption =
     homeTemplateOptions.find(({ label }) => label === selectedTemplate) ??
     homeTemplateOptions[0];

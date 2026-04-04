@@ -95,11 +95,11 @@ For scalable paths, prefer index-compiled filters and index-first query design.
 
 ### Core Operators
 
-For the complete operator list, see [API Reference](#core-operators-reference) below.
+For the complete operator list, see [API Reference](/docs/orm/api-reference).
 
 ### String Operators
 
-The ORM supports familiar string matching operators. Most run post-fetch, but a few can leverage indexes. For the full operator list, see [API Reference](#string-operators-reference) below.
+The ORM supports familiar string matching operators. Most run post-fetch, but a few can leverage indexes. For the full operator list, see [API Reference](/docs/orm/api-reference).
 
 For large datasets, prefer indexed filters first. `startsWith` and `like('prefix%')` use index ranges when the field is indexed. `between` and `notBetween` are also index-compiled when the field is indexed.
 
@@ -123,7 +123,7 @@ See [Aggregates](/docs/orm/queries/aggregates) for full API, index declarations,
 
 ### Full-Scan Operators and Workarounds
 
-These operators are post-fetch. In the typed API, they currently require explicit `.withIndex(...)` so scan scope is deliberate. For the full list with scalable workarounds for each, see [API Reference](#full-scan-operators-and-workarounds-reference) below.
+These operators are post-fetch. In the typed API, they currently require explicit `.withIndex(...)` so scan scope is deliberate. For the full list with scalable workarounds for each, see [API Reference](/docs/orm/api-reference).
 
 ### Logical Filters
 

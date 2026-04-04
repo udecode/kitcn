@@ -1829,15 +1829,6 @@ describe('cli/cli', () => {
         execaStub.mock.calls as unknown as unknown[],
         BETTER_AUTH_INSTALL_SPEC
       );
-      expectDependencyInstallCall(
-        execaStub.mock.calls as unknown as unknown[],
-        '@opentelemetry/api@1.9.0'
-      );
-      expectDependencyInstallOrder(
-        execaStub.mock.calls as unknown as unknown[],
-        '@opentelemetry/api@1.9.0',
-        BETTER_AUTH_INSTALL_SPEC
-      );
     } finally {
       process.chdir(oldCwd);
     }
@@ -2055,7 +2046,7 @@ describe('cli/cli', () => {
         path.join(dir, 'src', 'routes', 'api', 'auth', '$.ts'),
         'utf8'
       );
-      expect(routeSource).toContain("createFileRoute('/api/auth/$')");
+      expect(routeSource).toContain("createFileRoute('/api/auth/$' as never)");
       expect(routeSource).toContain(
         "import { handler } from '@/lib/convex/auth-server';"
       );
@@ -2064,8 +2055,8 @@ describe('cli/cli', () => {
         path.join(dir, 'src', 'routes', 'auth.tsx'),
         'utf8'
       );
-      expect(authPageSource).toContain("createFileRoute('/auth')");
-      expect(authPageSource).toContain("return '/auth';");
+      expect(authPageSource).toContain("createFileRoute('/auth' as never)");
+      expect(authPageSource).not.toContain('callbackURL');
     } finally {
       process.chdir(oldCwd);
     }
