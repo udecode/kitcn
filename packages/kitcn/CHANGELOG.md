@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.12.8
+
+### Patch Changes
+
+- [#152](https://github.com/udecode/kitcn/pull/152) [`92dd2bc`](https://github.com/udecode/kitcn/commit/92dd2bcf1ce35c1eb34315b88f025c7ee360a9a1) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix interactive scaffold selection so duplicate file paths are shown once and the active preset stays selected.
+  - Fix generated auth demo pages so sign-in and sign-up stay on the signed-in view instead of bouncing back to the auth route.
+
 ## 0.12.7
 
 ### Patch Changes
