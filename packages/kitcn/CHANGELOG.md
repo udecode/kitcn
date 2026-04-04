@@ -1,5 +1,19 @@
 # kitcn
 
+## 0.12.6
+
+### Patch Changes
+
+- [#148](https://github.com/udecode/kitcn/pull/148) [`8c59d89`](https://github.com/udecode/kitcn/commit/8c59d892f5fdfc12448aee35d86f286378e61aa6) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+
+  - Add `kitcn init -t start` for fresh TanStack Start apps.
+  - Add `kitcn/auth/start` and Start-specific auth scaffolding for `kitcn add auth`.
+
+  ## Patches
+
+  - Fix generated file rewrites so unchanged codegen output does not trigger
+    repeated TanStack Start reloads during local development.
+
 ## 0.12.5
 
 ## 0.12.4
