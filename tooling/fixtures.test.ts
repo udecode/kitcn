@@ -150,11 +150,20 @@ describe('tooling/fixtures', () => {
         readFileSync(path.join(templateDir, 'tsconfig.json'), 'utf8')
       ).toContain('"kitcn/server": [');
       expect(
+        readFileSync(path.join(templateDir, 'tsconfig.json'), 'utf8')
+      ).toContain('"kitcn/auth/start": [');
+      expect(
         readFileSync(
           path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
           'utf8'
         )
       ).toContain('packages/kitcn/src/server/index.ts');
+      expect(
+        readFileSync(
+          path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
+          'utf8'
+        )
+      ).toContain('../../../../packages/kitcn/src/auth-start/index.ts');
       expect(
         readFileSync(
           path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),

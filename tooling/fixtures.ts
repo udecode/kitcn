@@ -53,6 +53,7 @@ const FIXTURE_PACKAGE_PATHS = {
   'kitcn/auth/generated': 'src/auth/generated.ts',
   'kitcn/auth/http': 'src/auth-http/index.ts',
   'kitcn/auth/nextjs': 'src/auth-nextjs/index.ts',
+  'kitcn/auth/start': 'src/auth-start/index.ts',
   'kitcn/crpc': 'src/crpc/index.ts',
   'kitcn/orm': 'src/orm/index.ts',
   'kitcn/plugins': 'src/plugins/index.ts',

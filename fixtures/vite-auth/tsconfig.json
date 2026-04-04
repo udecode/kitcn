@@ -38,6 +38,9 @@
       "kitcn/auth/nextjs": [
         "../../packages/kitcn/src/auth-nextjs/index.ts"
       ],
+      "kitcn/auth/start": [
+        "../../packages/kitcn/src/auth-start/index.ts"
+      ],
       "kitcn/crpc": [
         "../../packages/kitcn/src/crpc/index.ts"
       ],
