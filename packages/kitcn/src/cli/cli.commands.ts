@@ -1775,7 +1775,8 @@ describe('cli/cli', () => {
         path.join(dir, 'app', 'auth', 'page.tsx'),
         'utf8'
       );
-      expect(authPageSource).toContain("return '/auth';");
+      expect(authPageSource).not.toContain("return '/auth';");
+      expect(authPageSource).not.toContain('callbackURL:');
       expect(authPageSource).not.toContain('NEXT_PUBLIC_SITE_URL');
 
       const schemaSource = fs.readFileSync(
@@ -2856,6 +2857,29 @@ describe('cli/cli', () => {
       getAggregateBackfillDeploymentKey(['--preview-name=feature-123'])
     ).toBe('preview:feature-123');
     expect(getAggregateBackfillDeploymentKey([])).toBe('local');
+  });
+
+  test('getAggregateBackfillDeploymentKey resolves remote env-file targets', () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-cli-dev-env-file-target-')
+    );
+    const remoteEnvPath = path.join(dir, '.env.remote');
+    const localEnvPath = path.join(dir, '.env.local');
+    fs.writeFileSync(
+      remoteEnvPath,
+      'CONVEX_DEPLOYMENT=dev:remote-app\nNEXT_PUBLIC_CONVEX_URL=https://example.convex.cloud\n'
+    );
+    fs.writeFileSync(
+      localEnvPath,
+      'CONVEX_DEPLOYMENT=local:demo\nNEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+
+    expect(
+      getAggregateBackfillDeploymentKey(['--env-file', '.env.remote'], dir)
+    ).toBe('deployment-env:dev:remote-app');
+    expect(
+      getAggregateBackfillDeploymentKey(['--env-file', '.env.local'], dir)
+    ).toBe('local');
   });
 
   test('getDevAggregateBackfillStatePath lives under .convex', () => {
@@ -6375,7 +6399,7 @@ describe('cli/cli', () => {
       expect(calls.length).toBe(3);
       expect(calls[0]).toEqual({
         cmd: 'node',
-        args: ['/fake/convex/main.js', 'init', '--env-file', '.env.agent'],
+        args: ['/fake/convex/main.js', 'init'],
         opts: {
           cwd: process.cwd(),
           env: expect.objectContaining({
@@ -6390,7 +6414,7 @@ describe('cli/cli', () => {
         force: true,
         sharedDir: 'out',
         silent: true,
-        targetArgs: ['--env-file', '.env.agent'],
+        targetArgs: [],
       });
 
       expect(calls[1].cmd).toBe('bun');

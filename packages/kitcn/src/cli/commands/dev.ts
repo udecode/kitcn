@@ -13,6 +13,8 @@ import {
   extractBackfillCliOptions,
   extractConcaveRunTargetArgs,
   extractMigrationCliOptions,
+  getAggregateBackfillDeploymentKey,
+  hasRemoteConvexDeploymentEnv,
   isConvexDevPreRunConflictFlag,
   parseArgs,
   type RunDeps,
@@ -660,6 +662,82 @@ export function resolveConcaveLocalSiteUrl(cwd = process.cwd()): string {
   );
 }
 
+export function resolveImplicitConvexRemoteDeploymentEnv(
+  cwd = process.cwd()
+): Record<string, string | undefined> | null {
+  const envLocalPath = join(cwd, '.env.local');
+  if (!fs.existsSync(envLocalPath)) {
+    return null;
+  }
+
+  const parsed = parseEnv(fs.readFileSync(envLocalPath, 'utf8'));
+  if (!hasRemoteConvexDeploymentEnv(parsed)) {
+    return null;
+  }
+
+  return {
+    CONVEX_DEPLOYMENT: parsed.CONVEX_DEPLOYMENT,
+    CONVEX_DEPLOY_KEY: parsed.CONVEX_DEPLOY_KEY,
+    CONVEX_SELF_HOSTED_URL: parsed.CONVEX_SELF_HOSTED_URL,
+    CONVEX_SELF_HOSTED_ADMIN_KEY: parsed.CONVEX_SELF_HOSTED_ADMIN_KEY,
+  };
+}
+
+function resolveConvexEnvFileCommandEnv(
+  args: string[],
+  cwd = process.cwd()
+): Record<string, string | undefined> | null {
+  let envFilePath: string | null = null;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--env-file') {
+      envFilePath = args[i + 1] ?? null;
+      break;
+    }
+    if (arg.startsWith('--env-file=')) {
+      envFilePath = arg.slice('--env-file='.length) || null;
+      break;
+    }
+  }
+
+  if (!envFilePath) {
+    return null;
+  }
+
+  const resolvedPath = resolve(cwd, envFilePath);
+  if (!fs.existsSync(resolvedPath)) {
+    return null;
+  }
+
+  const parsed = parseEnv(fs.readFileSync(resolvedPath, 'utf8'));
+  return {
+    CONVEX_DEPLOYMENT: parsed.CONVEX_DEPLOYMENT,
+    CONVEX_DEPLOY_KEY: parsed.CONVEX_DEPLOY_KEY,
+    CONVEX_SELF_HOSTED_URL: parsed.CONVEX_SELF_HOSTED_URL,
+    CONVEX_SELF_HOSTED_ADMIN_KEY: parsed.CONVEX_SELF_HOSTED_ADMIN_KEY,
+  };
+}
+
+function stripConvexEnvFileTargetArgs(args: string[]): string[] {
+  const nextArgs: string[] = [];
+  let skipNext = false;
+  for (const arg of args) {
+    if (skipNext) {
+      skipNext = false;
+      continue;
+    }
+    if (arg === '--env-file') {
+      skipNext = true;
+      continue;
+    }
+    if (arg.startsWith('--env-file=')) {
+      continue;
+    }
+    nextArgs.push(arg);
+  }
+  return nextArgs;
+}
+
 export const resolveWatcherCommand = (
   currentFilename = __filename,
   currentDir = __dirname
@@ -992,6 +1070,20 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
   assertNoRemovedDevPreRunFlag(config.dev.args);
   const { bootstrap, remainingArgs: convexDevArgs } =
     extractDevBootstrapCliFlag([...config.dev.args, ...devCommandArgs]);
+  const explicitConvexTargetArgs = extractBackendRunTargetArgs(
+    'convex',
+    convexDevArgs
+  );
+  const explicitConvexCommandEnv =
+    resolveConvexEnvFileCommandEnv(convexDevArgs);
+  const implicitConvexCommandEnv =
+    backend === 'convex' &&
+    explicitConvexTargetArgs.length === 0 &&
+    explicitConvexCommandEnv === null
+      ? resolveImplicitConvexRemoteDeploymentEnv()
+      : null;
+  const effectiveConvexCommandEnv =
+    explicitConvexCommandEnv ?? implicitConvexCommandEnv;
   const preRunFunction = config.dev.preRun;
   if (bootstrap && backend !== 'convex') {
     throw new Error(
@@ -1045,7 +1137,9 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
       : 'filtered';
   const targetArgs =
     concaveLocalDevContract?.targetArgs ??
-    extractBackendRunTargetArgs(backend, convexDevArgs);
+    stripConvexEnvFileTargetArgs(
+      extractBackendRunTargetArgs(backend, convexDevArgs)
+    );
   const trimSegments = resolveCodegenTrimSegments(config);
   const localNodeEnvOverrides =
     backend === 'convex'
@@ -1054,7 +1148,16 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
         })
       : {};
 
-  if (!bootstrap && backend === 'convex' && !debug) {
+  if (
+    !bootstrap &&
+    backend === 'convex' &&
+    !debug &&
+    getAggregateBackfillDeploymentKey(
+      targetArgs,
+      process.cwd(),
+      effectiveConvexCommandEnv ?? undefined
+    ) === 'local'
+  ) {
     logger.info('Bootstrapping local Convex...');
   }
 
@@ -1088,7 +1191,10 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     execaFn,
     backendAdapter,
     echoOutput: false,
-    env: localNodeEnvOverrides,
+    env: {
+      ...localNodeEnvOverrides,
+      ...effectiveConvexCommandEnv,
+    },
     targetArgs,
   });
   if (convexInitResult.exitCode !== 0) {
@@ -1111,6 +1217,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
   ) {
     await syncEnvFn({
       authSyncMode: authEnvState.installed ? 'prepare' : 'skip',
+      commandEnv: effectiveConvexCommandEnv ?? undefined,
       force: true,
       sharedDir,
       silent: true,
@@ -1155,6 +1262,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
       cwd: process.cwd(),
       env: createBackendCommandEnv({
         ...localNodeEnvOverrides,
+        ...effectiveConvexCommandEnv,
         ...concaveLocalDevContract?.backendEnv,
       }),
       reject: false,
@@ -1180,6 +1288,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
             runTask: () =>
               syncEnvFn({
                 authSyncMode: 'complete',
+                commandEnv: effectiveConvexCommandEnv ?? undefined,
                 force: true,
                 sharedDir,
                 silent: true,
@@ -1206,6 +1315,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
         backendAdapter,
         backfillConfig: devBackfillConfig,
         functionsDir,
+        env: effectiveConvexCommandEnv ?? undefined,
         targetArgs,
         signal: backfillAbortController.signal,
       });
@@ -1254,6 +1364,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
       await authEnvSyncPromise;
       await syncEnvFn({
         authSyncMode: 'auto',
+        commandEnv: effectiveConvexCommandEnv ?? undefined,
         force: true,
         sharedDir,
         silent: true,
@@ -1296,6 +1407,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
             runMigrationFlow({
               execaFn,
               backendAdapter,
+              env: effectiveConvexCommandEnv ?? undefined,
               migrationConfig: devMigrationConfig,
               targetArgs,
               signal: backfillAbortController.signal,
@@ -1334,6 +1446,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
               execaFn,
               backendAdapter,
               backfillConfig: devBackfillConfig,
+              env: effectiveConvexCommandEnv ?? undefined,
               mode: 'resume',
               targetArgs,
               signal: backfillAbortController.signal,

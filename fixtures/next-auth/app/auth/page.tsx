@@ -33,16 +33,11 @@ export default function AuthPage() {
   const isPending =
     signIn.isPending || signUp.isPending || signOut.isPending;
 
-  function getCallbackURL() {
-    return '/auth';
-  }
-
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (mode === 'signup') {
       signUp.mutate({
-        callbackURL: getCallbackURL(),
         email,
         name,
         password,
@@ -51,7 +46,6 @@ export default function AuthPage() {
     }
 
     signIn.mutate({
-      callbackURL: getCallbackURL(),
       email,
       password,
     });
