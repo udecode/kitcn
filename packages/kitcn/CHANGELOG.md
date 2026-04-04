@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.12.7
+
+### Patch Changes
+
+- [#150](https://github.com/udecode/kitcn/pull/150) [`9fb1adf`](https://github.com/udecode/kitcn/commit/9fb1adf3a8f9bb7b54ba4dd42c809c9b54ba7e31) Thanks [@zbeyens](https://github.com/zbeyens)! - - Pin the scaffolded Zod install to the supported Zod 4 line so npm
+  `kitcn init -t start` resolves without the peer conflict hit during release
+  validation.
+
 ## 0.12.6
 
 ### Patch Changes
