@@ -7,8 +7,13 @@ links:
 
 import { InfoIcon } from "lucide-react";
 
-## 1. Scaffold
+In this guide, we'll scaffold a fresh TanStack Start app with kitcn, layer in
+auth with the CLI, and then walk through the generated files so you know what
+the scaffold actually wrote. This page stays on the CLI path first. The file
+snippets later in the guide are reference output, not a separate manual install
+flow.
 
+## 1. Scaffold
 ```bash showLineNumbers
 mkdir my-app
 cd my-app
@@ -30,9 +35,10 @@ cd my-app
 
 ## 2. Add Auth
 
-```bash
-npx kitcn add auth --yes
-```
+Next, we'll add auth on top of the generated baseline. Keep using the published
+CLI runner for your package manager here as well.
+
+<KitcnLatestCommandTabs commands="add auth --yes" />
 
 This scaffolds the auth layer on top of the baseline:
 
@@ -47,15 +53,34 @@ This scaffolds the auth layer on top of the baseline:
 
 ## 3. Run
 
-```bash title="terminal 1"
-npx kitcn dev
-```
+Open two terminals. In the first terminal, start the backend with the published
+CLI runner for your package manager:
+
+<KitcnLatestCommandTabs commands="dev" />
+
+In the second terminal, start the app with your package manager's dev script:
 
 ```bash title="terminal 2"
 npm run dev
+# or pnpm dev
+# or yarn dev
+# or bun run dev
 ```
 
-## 4. Key Files
+The TanStack Start app serves on `http://localhost:3000` by default. `kitcn dev`
+starts the local Convex backend and keeps codegen up to date while you work.
+
+## 4. Generated Files
+
+The rest of this page is a reference for the files `kitcn add auth --yes`
+generates. We'll start with the auth client and server helpers, then move
+through the route and provider wiring.
+
+<Callout icon={<InfoIcon />}>
+**Important:** If you are following the CLI path, you should not need to type
+these files by hand. Use them to verify the scaffold output or to understand
+what each generated file is responsible for.
+</Callout>
 
 ### Auth Client
 

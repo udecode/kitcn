@@ -1,5 +1,8 @@
 ## 8.B TanStack Start
 
+CLI-first flow: scaffold the app, run `kitcn add auth --yes`, then treat the
+files below as the generated reference output. They are not a separate manual
+install path.
 ### 8.B.1 Auth client + auth server helpers
 
 **Create:** `src/lib/convex/auth-client.ts`
