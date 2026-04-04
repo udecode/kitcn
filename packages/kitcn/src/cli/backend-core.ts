@@ -1690,7 +1690,7 @@ function buildInitStartOwnedScaffoldFiles(
       relativePath: trimLeadingSlashes(
         posix.join(rootPrefix, 'routes', '__root.tsx')
       ),
-      requiresExplicitOverwrite: false,
+      requiresExplicitOverwrite: true,
       content: INIT_START_ROOT_TEMPLATE,
       createReason: `Create baseline ${trimLeadingSlashes(posix.join(rootPrefix, 'routes', '__root.tsx'))} for the Start scaffold.`,
       updateReason: `Update ${trimLeadingSlashes(posix.join(rootPrefix, 'routes', '__root.tsx'))} for the Start scaffold.`,

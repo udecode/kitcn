@@ -937,6 +937,40 @@ describe('cli/commands/init', () => {
     }
   });
 
+  test('handleInitCommand --yes skips changed Start root route without --overwrite', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-skip-start-root-')
+    );
+    writeShadcnStartApp(tmpDir);
+    const rootRoutePath = path.join(tmpDir, 'src', 'routes', '__root.tsx');
+    fs.mkdirSync(path.dirname(rootRoutePath), { recursive: true });
+    fs.writeFileSync(rootRoutePath, 'export const customStartRoot = true;\n');
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(fs.readFileSync(rootRoutePath, 'utf8')).toBe(
+        'export const customStartRoot = true;\n'
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test('handleInitCommand --yes --overwrite replaces changed scaffold files', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-init-command-overwrite-custom-crpc-')
