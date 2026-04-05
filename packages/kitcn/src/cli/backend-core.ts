@@ -835,6 +835,7 @@ const CONVEX_DEPLOYMENT_ENV_KEYS = [
   'CONVEX_SELF_HOSTED_URL',
   'CONVEX_SELF_HOSTED_ADMIN_KEY',
 ] as const;
+const LOCAL_CONVEX_DEPLOYMENT_PREFIXES = ['local:', 'anonymous:'] as const;
 
 export function createBackendCommandEnv(
   overrides?: Record<string, string | undefined>
@@ -847,6 +848,63 @@ export function createBackendCommandEnv(
     ...clearedDeploymentEnv,
     ...overrides,
   };
+}
+
+export function hasRemoteConvexDeploymentEnv(
+  env: Record<string, string | undefined>
+): boolean {
+  const deployment = env.CONVEX_DEPLOYMENT?.trim();
+  if (
+    deployment &&
+    !LOCAL_CONVEX_DEPLOYMENT_PREFIXES.some((prefix) =>
+      deployment.startsWith(prefix)
+    )
+  ) {
+    return true;
+  }
+
+  return Boolean(
+    env.CONVEX_DEPLOY_KEY?.trim() ||
+      env.CONVEX_SELF_HOSTED_URL?.trim() ||
+      env.CONVEX_SELF_HOSTED_ADMIN_KEY?.trim()
+  );
+}
+
+function readConvexTargetEnvFile(
+  args: string[],
+  cwd = process.cwd()
+): Record<string, string> | null {
+  const envFile = readOptionalCliFlagValue(args, '--env-file');
+  if (!envFile) {
+    return null;
+  }
+
+  const envFilePath = resolve(cwd, envFile);
+  if (!fs.existsSync(envFilePath)) {
+    return null;
+  }
+
+  return parseDotEnv(fs.readFileSync(envFilePath, 'utf8'));
+}
+
+function resolveRemoteConvexDeploymentKey(
+  env: Record<string, string | undefined>
+): string | null {
+  if (!hasRemoteConvexDeploymentEnv(env)) {
+    return null;
+  }
+
+  const deployment = env.CONVEX_DEPLOYMENT?.trim();
+  if (deployment) {
+    return `deployment-env:${deployment}`;
+  }
+
+  const selfHostedUrl = env.CONVEX_SELF_HOSTED_URL?.trim();
+  if (selfHostedUrl) {
+    return `self-hosted-env:${selfHostedUrl}`;
+  }
+
+  return 'remote-env';
 }
 
 async function withLocalConvexEnv<T>(
@@ -3499,7 +3557,11 @@ function writeAggregateFingerprintState(
   fs.renameSync(tmpPath, statePath);
 }
 
-export function getAggregateBackfillDeploymentKey(args: string[]): string {
+export function getAggregateBackfillDeploymentKey(
+  args: string[],
+  cwd = process.cwd(),
+  env?: Record<string, string | undefined>
+): string {
   if (args.includes('--prod')) {
     return 'prod';
   }
@@ -3512,6 +3574,19 @@ export function getAggregateBackfillDeploymentKey(args: string[]): string {
   const previewName = readOptionalCliFlagValue(args, '--preview-name');
   if (previewName) {
     return `preview:${previewName}`;
+  }
+
+  const envKey = env ? resolveRemoteConvexDeploymentKey(env) : null;
+  if (envKey) {
+    return envKey;
+  }
+
+  const envFileVars = readConvexTargetEnvFile(args, cwd);
+  if (envFileVars) {
+    const envFileKey = resolveRemoteConvexDeploymentKey(envFileVars);
+    if (envFileKey) {
+      return envFileKey;
+    }
   }
 
   return 'local';
@@ -3913,17 +3988,6 @@ function didConvexInitCreateConfiguration(output: string) {
   return CONVEX_INIT_CREATED_CONFIG_RE.test(output);
 }
 
-function hasRemoteConvexInitTargetArgs(targetArgs?: string[]) {
-  return (
-    targetArgs?.some(
-      (arg) =>
-        arg === '--prod' ||
-        arg === '--preview-name' ||
-        arg === '--deployment-name'
-    ) ?? false
-  );
-}
-
 export async function runConvexInitIfNeeded(params: {
   execaFn: typeof execa;
   backendAdapter: BackendAdapter;
@@ -3947,7 +4011,12 @@ export async function runConvexInitIfNeeded(params: {
   }
 
   const shouldUseAnonymousAgentMode =
-    params.yes && !hasRemoteConvexInitTargetArgs(params.targetArgs);
+    params.yes &&
+    getAggregateBackfillDeploymentKey(
+      params.targetArgs ?? [],
+      process.cwd(),
+      params.env
+    ) === 'local';
   const agentModeOverride = shouldUseAnonymousAgentMode
     ? 'anonymous'
     : params.env?.CONVEX_AGENT_MODE;
@@ -4898,6 +4967,7 @@ export async function runBackendFunction(
   targetArgs: string[],
   options?: {
     echoOutput?: boolean;
+    env?: Record<string, string | undefined>;
   }
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const result = await execaFn(
@@ -4911,7 +4981,7 @@ export async function runBackendFunction(
     ],
     {
       cwd: process.cwd(),
-      env: createBackendCommandEnv(),
+      env: createBackendCommandEnv(options?.env),
       reject: false,
       stdio: 'pipe',
     }
@@ -4941,6 +5011,7 @@ export async function runAggregateBackfillFlow(params: {
   backfillConfig: AggregateBackfillConfig;
   mode: 'resume' | 'rebuild';
   targetArgs: string[];
+  env?: Record<string, string | undefined>;
   signal?: AbortSignal;
   context: 'deploy' | 'dev' | 'aggregate';
 }): Promise<number> {
@@ -4950,6 +5021,7 @@ export async function runAggregateBackfillFlow(params: {
     backfillConfig,
     mode,
     targetArgs,
+    env,
     signal,
     context,
   } = params;
@@ -4972,6 +5044,7 @@ export async function runAggregateBackfillFlow(params: {
     targetArgs,
     {
       echoOutput: false,
+      env,
     }
   );
 
@@ -5061,6 +5134,7 @@ export async function runAggregateBackfillFlow(params: {
       targetArgs,
       {
         echoOutput: false,
+        env,
       }
     );
     if (statusResult.exitCode !== 0) {
@@ -5307,6 +5381,7 @@ export async function runMigrationFlow(params: {
   backendAdapter: BackendAdapter;
   migrationConfig: MigrationConfig;
   targetArgs: string[];
+  env?: Record<string, string | undefined>;
   signal?: AbortSignal;
   context: 'deploy' | 'dev' | 'migration';
   direction: 'up' | 'down';
@@ -5318,6 +5393,7 @@ export async function runMigrationFlow(params: {
     backendAdapter,
     migrationConfig,
     targetArgs,
+    env,
     signal,
     context,
     direction,
@@ -5342,6 +5418,7 @@ export async function runMigrationFlow(params: {
     targetArgs,
     {
       echoOutput: false,
+      env,
     }
   );
 
@@ -5439,6 +5516,7 @@ export async function runMigrationFlow(params: {
       targetArgs,
       {
         echoOutput: false,
+        env,
       }
     );
     if (statusResult.exitCode !== 0) {
@@ -5520,6 +5598,7 @@ export async function runDevSchemaBackfillIfNeeded(params: {
   backfillConfig: AggregateBackfillConfig;
   functionsDir: string;
   targetArgs: string[];
+  env?: Record<string, string | undefined>;
   signal: AbortSignal;
 }): Promise<number> {
   const {
@@ -5528,6 +5607,7 @@ export async function runDevSchemaBackfillIfNeeded(params: {
     backfillConfig,
     functionsDir,
     targetArgs,
+    env,
     signal,
   } = params;
   const fingerprint = await computeAggregateIndexFingerprint(functionsDir);
@@ -5535,7 +5615,11 @@ export async function runDevSchemaBackfillIfNeeded(params: {
     return 0;
   }
 
-  const deploymentKey = getAggregateBackfillDeploymentKey(targetArgs);
+  const deploymentKey = getAggregateBackfillDeploymentKey(
+    targetArgs,
+    process.cwd(),
+    env
+  );
   const statePath = getDevAggregateBackfillStatePath();
   const state = readAggregateFingerprintState(statePath);
   const existing = state.entries[deploymentKey];
@@ -5553,6 +5637,7 @@ export async function runDevSchemaBackfillIfNeeded(params: {
     },
     mode: 'resume',
     targetArgs,
+    env,
     signal,
     context: 'dev',
   });

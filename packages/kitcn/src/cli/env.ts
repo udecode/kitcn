@@ -12,6 +12,7 @@ import { logger } from './utils/logger.js';
 
 export interface PushOptions {
   authSyncMode?: 'auto' | 'prepare' | 'complete' | 'skip';
+  commandEnv?: Record<string, string | undefined>;
   force?: boolean;
   fromFilePath?: string;
   rotate?: boolean;
@@ -22,6 +23,7 @@ export interface PushOptions {
 }
 
 export interface PullOptions {
+  commandEnv?: Record<string, string | undefined>;
   outFilePath?: string;
   targetArgs?: string[];
 }
@@ -32,7 +34,11 @@ type CommandResult = {
   stdout: string;
 };
 
-type RunCommand = (args: string[], cwd: string) => Promise<CommandResult>;
+type RunCommand = (
+  args: string[],
+  cwd: string,
+  env?: Record<string, string | undefined>
+) => Promise<CommandResult>;
 
 type PushEnvDeps = {
   runCommand?: RunCommand;
@@ -65,8 +71,9 @@ const CONVEX_MANAGED_ENV_KEYS = new Set([
 
 const defaultRunCommand: RunCommand = async (
   args: string[],
-  cwd: string
-): Promise<CommandResult> => runLocalConvexCommand(args, { cwd });
+  cwd: string,
+  env?: Record<string, string | undefined>
+): Promise<CommandResult> => runLocalConvexCommand(args, { cwd, env });
 
 export const generateAuthSecret = () => randomBytes(32).toString('base64url');
 
@@ -184,9 +191,10 @@ const ensureAuthSecret = (params: {
 const runConvexCommand = async (
   runCommand: RunCommand,
   cwd: string,
-  args: string[]
+  args: string[],
+  env?: Record<string, string | undefined>
 ) => {
-  const result = await runCommand(args, cwd);
+  const result = await runCommand(args, cwd, env);
   if (result.exitCode !== 0) {
     throw new Error(formatConvexCommandFailure(args, result));
   }
@@ -290,6 +298,7 @@ export async function pushEnv(
   const rotate = options.rotate ?? false;
   const silent = options.silent ?? false;
   const targetArgs = options.targetArgs ?? [];
+  const commandEnv = options.commandEnv;
   const runCommand = deps.runCommand ?? defaultRunCommand;
   const secretGenerator = deps.secretGenerator ?? defaultSecretGenerator;
   const envPath = path.join(cwd, 'convex', '.env');
@@ -331,7 +340,8 @@ export async function pushEnv(
           envFilePath: tempEnvPath,
           force,
           targetArgs,
-        })
+        }),
+        commandEnv
       );
       return true;
     } finally {
@@ -386,20 +396,22 @@ export async function pushEnv(
     });
     ensureManagedAuthSecret();
     if (rotate) {
-      await runConvexCommand(runCommand, cwd, [
-        'run',
-        AUTH_ROTATE_KEYS_FUNCTION,
-        ...targetArgs,
-      ]);
+      await runConvexCommand(
+        runCommand,
+        cwd,
+        ['run', AUTH_ROTATE_KEYS_FUNCTION, ...targetArgs],
+        commandEnv
+      );
       if (!silent) {
         logger.info('Rotated auth keys.');
       }
     }
-    const jwksResult = await runConvexCommand(runCommand, cwd, [
-      'run',
-      AUTH_JWKS_FUNCTION,
-      ...targetArgs,
-    ]);
+    const jwksResult = await runConvexCommand(
+      runCommand,
+      cwd,
+      ['run', AUTH_JWKS_FUNCTION, ...targetArgs],
+      commandEnv
+    );
     nextVars.JWKS = parseConvexRunValue(jwksResult.stdout);
     await finalizePush();
     return;
@@ -420,21 +432,23 @@ export async function pushEnv(
   }
 
   if (rotate) {
-    await runConvexCommand(runCommand, cwd, [
-      'run',
-      AUTH_ROTATE_KEYS_FUNCTION,
-      ...targetArgs,
-    ]);
+    await runConvexCommand(
+      runCommand,
+      cwd,
+      ['run', AUTH_ROTATE_KEYS_FUNCTION, ...targetArgs],
+      commandEnv
+    );
     if (!silent) {
       logger.info('Rotated auth keys.');
     }
   }
 
-  const jwksResult = await runConvexCommand(runCommand, cwd, [
-    'run',
-    AUTH_JWKS_FUNCTION,
-    ...targetArgs,
-  ]);
+  const jwksResult = await runConvexCommand(
+    runCommand,
+    cwd,
+    ['run', AUTH_JWKS_FUNCTION, ...targetArgs],
+    commandEnv
+  );
   nextVars.JWKS = parseConvexRunValue(jwksResult.stdout);
   await finalizePush();
 }
@@ -446,11 +460,13 @@ export async function pullEnv(
   const cwd = process.cwd();
   const runCommand = deps.runCommand ?? defaultRunCommand;
   const targetArgs = options.targetArgs ?? [];
-  const result = await runConvexCommand(runCommand, cwd, [
-    'env',
-    'list',
-    ...targetArgs,
-  ]);
+  const commandEnv = options.commandEnv;
+  const result = await runConvexCommand(
+    runCommand,
+    cwd,
+    ['env', 'list', ...targetArgs],
+    commandEnv
+  );
 
   if (options.outFilePath) {
     const outputPath = path.resolve(cwd, options.outFilePath);

@@ -9,6 +9,7 @@ import {
   resolveConcaveLocalDevContract,
   resolveConcaveLocalSiteUrl,
   resolveDevStartupRetryDelayMs,
+  resolveImplicitConvexRemoteDeploymentEnv,
   resolveSupportedLocalNodeEnvOverrides,
   resolveWatcherCommand,
   runDevStartupRetryLoop,
@@ -201,6 +202,36 @@ describe('cli/commands/dev', () => {
 
     expect(resolveConcaveLocalSiteUrl(viteDir)).toBe('http://localhost:4020');
     expect(resolveConcaveLocalSiteUrl(emptyDir)).toBe('http://localhost:3000');
+  });
+
+  test('resolveImplicitConvexRemoteDeploymentEnv reads remote deployment env from .env.local only', () => {
+    const remoteDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-implicit-remote-')
+    );
+    const localDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-implicit-local-')
+    );
+    const emptyDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-implicit-empty-')
+    );
+
+    fs.writeFileSync(
+      path.join(remoteDir, '.env.local'),
+      'CONVEX_DEPLOYMENT=dev:remote-app\nNEXT_PUBLIC_CONVEX_URL=https://example.convex.cloud\n'
+    );
+    fs.writeFileSync(
+      path.join(localDir, '.env.local'),
+      'CONVEX_DEPLOYMENT=local:demo\nNEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+
+    expect(resolveImplicitConvexRemoteDeploymentEnv(remoteDir)).toEqual({
+      CONVEX_DEPLOYMENT: 'dev:remote-app',
+      CONVEX_DEPLOY_KEY: undefined,
+      CONVEX_SELF_HOSTED_ADMIN_KEY: undefined,
+      CONVEX_SELF_HOSTED_URL: undefined,
+    });
+    expect(resolveImplicitConvexRemoteDeploymentEnv(localDir)).toBeNull();
+    expect(resolveImplicitConvexRemoteDeploymentEnv(emptyDir)).toBeNull();
   });
 
   test('resolveConcaveLocalDevContract defaults concave dev to Convex local ports', () => {
@@ -581,6 +612,215 @@ describe('cli/commands/dev', () => {
     } finally {
       process.chdir(oldCwd);
       stderrSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand uses remote .env.local deployment targets instead of local bootstrap defaults', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-remote-env-local-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'CONVEX_DEPLOYMENT=dev:remote-app\nNEXT_PUBLIC_CONVEX_URL=https://example.convex.cloud\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPersistentProcess();
+    const execaCalls: Array<{ cmd: string; args: string[]; opts?: any }> = [];
+    const execaStub = mock((cmd: string, args: string[], opts?: any): any => {
+      execaCalls.push({ cmd, args, opts });
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+    const infoMessages: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoMessages.push(args.join(' '));
+    };
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(['dev', '--once'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      } as any);
+
+      await waitFor(() => execaCalls.some(({ args }) => args[1] === 'dev'));
+
+      convexProcess.emitStdout('13:35:25 Convex functions ready! (1.22s)\n');
+      convexProcess.resolveExit({ exitCode: 0 });
+
+      const exitCode = await runPromise;
+
+      expect(exitCode).toBe(0);
+      expect(execaCalls).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            args: ['/fake/convex/main.js', 'init'],
+            opts: expect.objectContaining({
+              env: expect.objectContaining({
+                CONVEX_DEPLOYMENT: 'dev:remote-app',
+              }),
+            }),
+          }),
+          expect.objectContaining({
+            args: ['/fake/convex/main.js', 'dev', '--once'],
+            opts: expect.objectContaining({
+              env: expect.objectContaining({
+                CONVEX_DEPLOYMENT: 'dev:remote-app',
+              }),
+            }),
+          }),
+        ])
+      );
+      expect(syncEnvStub).not.toHaveBeenCalled();
+      expect(
+        infoMessages.some((line) => line.includes('Bootstrapping local Convex'))
+      ).toBe(false);
+    } finally {
+      console.info = originalInfo;
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand keeps explicit --env-file targets for convex dev and reuses their deployment env internally', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-explicit-env-file-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+    fs.writeFileSync(
+      path.join(dir, '.env.agent'),
+      'CONVEX_DEPLOYMENT=dev:explicit-remote\nNEXT_PUBLIC_CONVEX_URL=https://example.convex.cloud\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPersistentProcess();
+    const execaCalls: Array<{ cmd: string; args: string[]; opts?: any }> = [];
+    const execaStub = mock((cmd: string, args: string[], opts?: any): any => {
+      execaCalls.push({ cmd, args, opts });
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        args: ['--env-file', '.env.agent'],
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(['dev', '--once'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      } as any);
+
+      await waitFor(() => execaCalls.some(({ args }) => args[1] === 'dev'));
+
+      convexProcess.emitStdout('13:35:25 Convex functions ready! (1.22s)\n');
+      convexProcess.resolveExit({ exitCode: 0 });
+
+      const exitCode = await runPromise;
+
+      expect(exitCode).toBe(0);
+      expect(execaCalls).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            args: ['/fake/convex/main.js', 'init'],
+            opts: expect.objectContaining({
+              env: expect.objectContaining({
+                CONVEX_DEPLOYMENT: 'dev:explicit-remote',
+              }),
+            }),
+          }),
+          expect.objectContaining({
+            args: [
+              '/fake/convex/main.js',
+              'dev',
+              '--env-file',
+              '.env.agent',
+              '--once',
+            ],
+            opts: expect.objectContaining({
+              env: expect.objectContaining({
+                CONVEX_DEPLOYMENT: 'dev:explicit-remote',
+              }),
+            }),
+          }),
+        ])
+      );
+      expect(syncEnvStub).toHaveBeenCalledWith({
+        authSyncMode: 'skip',
+        commandEnv: expect.objectContaining({
+          CONVEX_DEPLOYMENT: 'dev:explicit-remote',
+        }),
+        force: true,
+        sharedDir: 'convex/shared',
+        silent: true,
+        targetArgs: [],
+      });
+    } finally {
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
     }
   });
 
