@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.12.9
+
+### Patch Changes
+
+- [#154](https://github.com/udecode/kitcn/pull/154) [`4681298`](https://github.com/udecode/kitcn/commit/46812983553da242a7ee478fc2ec7d024ca018cc) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn dev` so projects with a remote Convex deployment in `.env.local` keep using that remote target instead of falling back to local Convex.
+
 ## 0.12.8
 
 ### Patch Changes
