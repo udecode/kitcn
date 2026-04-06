@@ -9,6 +9,7 @@ import {
   createDefaultConfig,
   writePackageJson,
   writeShadcnNextApp,
+  writeShadcnNextMonorepoApp,
   writeShadcnStartApp,
   writeShadcnViteApp,
 } from '../test-utils';
@@ -307,6 +308,94 @@ describe('cli/commands/init', () => {
           )
         )
       ).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand patches shadcn monorepo next output inside apps/web', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-create-command-next-monorepo-')
+    );
+    const expectedProjectDir = path.join(tmpDir, 'web');
+    const expectedAppDir = path.join(expectedProjectDir, 'apps', 'web');
+    const execaStub = mock(async (_cmd: string, args: string[], opts?: any) => {
+      if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
+        const cwdFlagIndex = args.indexOf('--cwd');
+        const nameFlagIndex = args.indexOf('--name');
+        const baseDir =
+          cwdFlagIndex >= 0 && args[cwdFlagIndex + 1]
+            ? args[cwdFlagIndex + 1]!
+            : tmpDir;
+        const projectName =
+          nameFlagIndex >= 0 && args[nameFlagIndex + 1]
+            ? args[nameFlagIndex + 1]!
+            : 'web';
+        writeShadcnNextMonorepoApp(path.join(baseDir, projectName));
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+      return { exitCode: 0, stdout: '', stderr: '', ...opts } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(
+        ['init', '-t', 'next', '--yes', '--name', 'web'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(fs.existsSync(path.join(expectedAppDir, 'components.json'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(
+          path.join(expectedAppDir, 'convex', 'functions', 'schema.ts')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(expectedProjectDir, 'components.json'))
+      ).toBe(false);
+
+      const appPackageJson = JSON.parse(
+        fs.readFileSync(path.join(expectedAppDir, 'package.json'), 'utf8')
+      ) as {
+        scripts?: Record<string, string>;
+      };
+      expect(appPackageJson.scripts?.['convex:dev']).toBe('kitcn dev');
+      expect(appPackageJson.scripts?.codegen).toBe('kitcn codegen');
+
+      const rootPackageJson = JSON.parse(
+        fs.readFileSync(path.join(expectedProjectDir, 'package.json'), 'utf8')
+      ) as {
+        scripts?: Record<string, string>;
+      };
+      expect(rootPackageJson.scripts?.['convex:dev']).toBeUndefined();
+      expect(rootPackageJson.scripts?.codegen).toBeUndefined();
+
+      const componentsJson = JSON.parse(
+        fs.readFileSync(path.join(expectedAppDir, 'components.json'), 'utf8')
+      ) as {
+        tailwind?: { css?: string };
+      };
+      expect(componentsJson.tailwind?.css).toBe('app/globals.css');
+
+      const dependencyInstallCall = execaStub.mock.calls.find((call) => {
+        const [cmd] = call as unknown as [string, string[]];
+        return cmd === 'pnpm';
+      }) as [string, string[], { cwd?: string }] | undefined;
+      expect(fs.realpathSync(dependencyInstallCall?.[2]?.cwd ?? '')).toBe(
+        fs.realpathSync(expectedAppDir)
+      );
     } finally {
       process.chdir(originalCwd);
     }

@@ -182,6 +182,106 @@ export function writeShadcnNextApp(
   );
 }
 
+export function writeShadcnNextMonorepoApp(dir: string) {
+  const appDir = path.join(dir, 'apps', 'web');
+  const uiDir = path.join(dir, 'packages', 'ui');
+
+  writeShadcnNextApp(appDir);
+
+  fs.mkdirSync(uiDir, { recursive: true });
+
+  writePackageJson(dir, {
+    name: 'next-monorepo',
+    private: true,
+    version: '0.0.1',
+    packageManager: 'pnpm@9.0.6',
+    scripts: {
+      build: 'turbo build',
+      dev: 'turbo dev',
+      lint: 'turbo lint',
+      format: 'turbo format',
+      typecheck: 'turbo typecheck',
+    },
+    devDependencies: {
+      '@workspace/eslint-config': 'workspace:*',
+      '@workspace/typescript-config': 'workspace:*',
+      prettier: '^3.8.1',
+      'prettier-plugin-tailwindcss': '^0.7.2',
+      turbo: '^2.8.8',
+      typescript: '5.9.3',
+    },
+  });
+
+  fs.writeFileSync(
+    path.join(dir, 'pnpm-workspace.yaml'),
+    'packages:\n  - apps/*\n  - packages/*\n'
+  );
+  fs.writeFileSync(
+    path.join(dir, 'turbo.json'),
+    `${JSON.stringify({ $schema: 'https://turbo.build/schema.json' }, null, 2)}\n`
+  );
+
+  const appPackageJsonPath = path.join(appDir, 'package.json');
+  const appPackageJson = JSON.parse(
+    fs.readFileSync(appPackageJsonPath, 'utf8')
+  ) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  fs.writeFileSync(
+    appPackageJsonPath,
+    `${JSON.stringify(
+      {
+        ...appPackageJson,
+        dependencies: {
+          ...(appPackageJson.dependencies ?? {}),
+          '@workspace/ui': 'workspace:*',
+        },
+        devDependencies: {
+          ...(appPackageJson.devDependencies ?? {}),
+          '@workspace/eslint-config': 'workspace:^',
+          '@workspace/typescript-config': 'workspace:*',
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(appDir, 'components.json'),
+    `${JSON.stringify(
+      {
+        $schema: 'https://ui.shadcn.com/schema.json',
+        style: 'radix-nova',
+        rsc: true,
+        tsx: true,
+        tailwind: {
+          config: '',
+          css: '../../packages/ui/src/styles/globals.css',
+          baseColor: 'neutral',
+          cssVariables: true,
+        },
+        aliases: {
+          components: '@/components',
+          hooks: '@/hooks',
+          lib: '@/lib',
+          utils: '@workspace/ui/lib/utils',
+          ui: '@workspace/ui/components',
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  writePackageJson(uiDir, {
+    name: '@workspace/ui',
+    private: true,
+    version: '0.0.1',
+  });
+}
+
 export function writeShadcnViteApp(
   dir: string,
   params: { usesSrc?: boolean } = {}
