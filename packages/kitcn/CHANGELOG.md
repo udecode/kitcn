@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.12.12
+
+### Patch Changes
+
+- [#163](https://github.com/udecode/kitcn/pull/163) [`38ffd3c`](https://github.com/udecode/kitcn/commit/38ffd3c3843cc4549fd6366190b43977e23d34c0) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Add `kitcn auth jwks` for manual static JWKS export and key rotation when a
+    deployment cannot use the Convex-only `env push` flow.
+
 ## 0.12.11
 
 ### Patch Changes
