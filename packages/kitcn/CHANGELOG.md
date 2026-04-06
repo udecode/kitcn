@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.12.10
+
+### Patch Changes
+
+- [#157](https://github.com/udecode/kitcn/pull/157) [`bb038d8`](https://github.com/udecode/kitcn/commit/bb038d880902ef3c2b7388161945dd067073c08f) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix auth-bound React Query data so guest, sign-in, and account-switch transitions do not keep stale cached user data.
+
 ## 0.12.9
 
 ### Patch Changes
