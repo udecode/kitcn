@@ -82,6 +82,7 @@ import { isConvexQuery } from '../internal/query-key';
 import type { AuthStore } from './auth-store';
 
 const isServer = typeof window === 'undefined';
+type TanstackQuery = ReturnType<QueryCache['getAll']>[number];
 
 // ============================================================================
 // Type Guards for Query Key Format
@@ -201,7 +202,7 @@ export class ConvexQueryClient {
     {
       watch: Watch<unknown>;
       unsubscribe: () => void;
-      queryKey: ['convexQuery', string, Record<string, unknown>];
+      queryKey: QueryKey;
     }
   >;
 
@@ -261,6 +262,46 @@ export class ConvexQueryClient {
 
     sub.unsubscribe();
     delete this.subscriptions[queryHash];
+  }
+
+  private isAuthBoundQuery(query: TanstackQuery) {
+    const meta = query.meta as ConvexQueryMeta | undefined;
+    return meta?.authType === 'required' || meta?.authType === 'optional';
+  }
+
+  private subscribeQuery(query: TanstackQuery) {
+    if (this.subscriptions[query.queryHash]) {
+      return;
+    }
+
+    const meta = query.meta as ConvexQueryMeta | undefined;
+    if (meta?.subscribe === false) {
+      return;
+    }
+    if (query.getObserversCount() === 0) {
+      return;
+    }
+    if (this.shouldSkipSubscription(meta?.authType)) {
+      return;
+    }
+
+    const [, funcName, args] = query.queryKey;
+    const watch = this.convexClient.watchQuery(
+      funcName as unknown as FunctionReference<'query'>,
+      this.transformer.input.serialize(args) as FunctionArgs<
+        FunctionReference<'query'>
+      >
+    );
+
+    const unsubscribe = watch.onUpdate(() => {
+      this.onUpdateQueryKeyHash(query.queryHash);
+    });
+
+    this.subscriptions[query.queryHash] = {
+      queryKey: query.queryKey,
+      watch: watch as Watch<unknown>,
+      unsubscribe,
+    };
   }
 
   /** Update auth store (for HMR where jotai store may reset) */
@@ -399,6 +440,28 @@ export class ConvexQueryClient {
     }
   }
 
+  async resetAuthQueries() {
+    const authQueries = this.queryClient
+      .getQueryCache()
+      .getAll()
+      .filter((query) => this.isAuthBoundQuery(query));
+
+    for (const query of authQueries) {
+      this.cancelPendingUnsubscribe(query.queryHash);
+      this.unsubscribeQueryByHash(query.queryHash);
+    }
+
+    await this.queryClient.resetQueries({
+      predicate: (query) => this.isAuthBoundQuery(query),
+    });
+
+    for (const query of this.queryClient.getQueryCache().getAll()) {
+      if (this.isAuthBoundQuery(query)) {
+        this.subscribeQuery(query);
+      }
+    }
+  }
+
   /**
    * Batch update all subscriptions.
    * Called internally when Convex client reconnects.
@@ -529,42 +592,7 @@ export class ConvexQueryClient {
 
         // Query added to cache → create Convex subscription
         case 'added': {
-          // Skip subscription if meta.subscribe === false (one-off query mode)
-          const meta = event.query.meta as ConvexQueryMeta | undefined;
-          if (meta?.subscribe === false) {
-            break;
-          }
-
-          const [, funcName, args] = event.query.queryKey;
-
-          // Skip subscription if query has no observers
-          if (event.query.getObserversCount() === 0) {
-            break;
-          }
-
-          // Skip subscription while auth is loading or unauthenticated (for required)
-          if (this.shouldSkipSubscription(meta?.authType)) {
-            break;
-          }
-
-          // Create WebSocket subscription via Convex watchQuery
-          const watch = this.convexClient.watchQuery(
-            funcName as unknown as FunctionReference<'query'>,
-            this.transformer.input.serialize(args) as FunctionArgs<
-              FunctionReference<'query'>
-            >
-          );
-
-          // Update TanStack cache when Convex pushes new data
-          const unsubscribe = watch.onUpdate(() => {
-            this.onUpdateQueryKeyHash(event.query.queryHash);
-          });
-
-          this.subscriptions[event.query.queryHash] = {
-            queryKey: event.query.queryKey,
-            watch: watch as Watch<unknown>,
-            unsubscribe,
-          };
+          this.subscribeQuery(event.query);
           break;
         }
 
@@ -572,48 +600,9 @@ export class ConvexQueryClient {
         case 'observerAdded': {
           // Cancel any pending unsubscribe (handles React StrictMode double-mount)
           this.cancelPendingUnsubscribe(event.query.queryHash);
-
-          // Skip if already subscribed
-          if (this.subscriptions[event.query.queryHash]) {
-            break;
+          if ((event.query.options as any).enabled !== false) {
+            this.subscribeQuery(event.query);
           }
-
-          // Skip subscription if query is disabled
-          if ((event.query.options as any).enabled === false) {
-            break;
-          }
-
-          // Skip subscription if meta.subscribe === false
-          const meta = event.query.meta as ConvexQueryMeta | undefined;
-          if (meta?.subscribe === false) {
-            break;
-          }
-
-          const [, funcName, args] = event.query.queryKey;
-
-          // Skip subscription while auth is loading or unauthenticated (for required)
-          if (this.shouldSkipSubscription(meta?.authType)) {
-            break;
-          }
-
-          // Create WebSocket subscription via Convex watchQuery
-          const watch = this.convexClient.watchQuery(
-            funcName as unknown as FunctionReference<'query'>,
-            this.transformer.input.serialize(args) as FunctionArgs<
-              FunctionReference<'query'>
-            >
-          );
-
-          // Update TanStack cache when Convex pushes new data
-          const unsubscribe = watch.onUpdate(() => {
-            this.onUpdateQueryKeyHash(event.query.queryHash);
-          });
-
-          this.subscriptions[event.query.queryHash] = {
-            queryKey: event.query.queryKey,
-            watch: watch as Watch<unknown>,
-            unsubscribe,
-          };
           break;
         }
 
@@ -670,37 +659,7 @@ export class ConvexQueryClient {
             break;
           }
 
-          // Skip subscription if meta.subscribe === false
-          const meta = event.query.meta as ConvexQueryMeta | undefined;
-          if (meta?.subscribe === false) {
-            break;
-          }
-
-          const [, funcName, args] = event.query.queryKey;
-
-          // Skip subscription while auth is loading or unauthenticated (for required)
-          if (this.shouldSkipSubscription(meta?.authType)) {
-            break;
-          }
-
-          // Create WebSocket subscription via Convex watchQuery
-          const watch = this.convexClient.watchQuery(
-            funcName as unknown as FunctionReference<'query'>,
-            this.transformer.input.serialize(args) as FunctionArgs<
-              FunctionReference<'query'>
-            >
-          );
-
-          // Update TanStack cache when Convex pushes new data
-          const unsubscribe = watch.onUpdate(() => {
-            this.onUpdateQueryKeyHash(event.query.queryHash);
-          });
-
-          this.subscriptions[event.query.queryHash] = {
-            queryKey: event.query.queryKey,
-            watch: watch as Watch<unknown>,
-            unsubscribe,
-          };
+          this.subscribeQuery(event.query);
           break;
         }
       }

@@ -49,10 +49,10 @@ describe('tooling/auth-e2e', () => {
       'await page.getByRole("button", { name: "Sign out" }).click();'
     );
     expect(script).toContain(
-      'await page.getByText("Signed in").waitFor({ timeout: 10000 });'
+      'await page.getByText("Signed in").waitFor({ timeout: 20000 });'
     );
     expect(script).toContain(
-      'await page.getByText("Auth demo").waitFor({ timeout: 10000 });'
+      'await page.getByText("Auth demo").waitFor({ timeout: 20000 });'
     );
     expect(script).toContain(
       'console.log(JSON.stringify({ url: page.url(), email: "e2e@example.com" }));'

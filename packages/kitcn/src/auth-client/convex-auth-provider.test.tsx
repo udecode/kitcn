@@ -344,6 +344,59 @@ describe('ConvexAuthProvider', () => {
     });
   });
 
+  test('keeps a cached JWT when a later token refresh returns null', async () => {
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    const firstJwt = makeJwt(7200);
+    const convexToken = mock(async () => ({ data: { token: firstJwt } }));
+
+    const authClient = {
+      useSession: () => ({
+        data: { session: { id: 'session-1' } },
+        isPending: false,
+      }),
+      convex: { token: convexToken },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+    };
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ConvexAuthProvider authClient={authClient as any} client={client as any}>
+        {children}
+      </ConvexAuthProvider>
+    );
+
+    const { result } = renderHook(
+      () => ({
+        fetchAccessToken: useFetchAccessToken(),
+        store: useAuthStore(),
+      }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      const fetched = await result.current.fetchAccessToken!({
+        forceRefreshToken: true,
+      });
+      expect(fetched).toBe(firstJwt);
+    });
+
+    convexToken.mockImplementationOnce(async () => ({ data: {} }));
+
+    await act(async () => {
+      const fetched = await result.current.fetchAccessToken!({
+        forceRefreshToken: true,
+      });
+      expect(fetched).toBe(firstJwt);
+    });
+
+    expect(result.current.store.get('token')).toBe(firstJwt);
+  });
+
   test('deduplicates concurrent token fetches', async () => {
     const client = {
       setAuth: () => {},

@@ -73,12 +73,13 @@ describe('createAuthMutations', () => {
     return { client: new QueryClient(), meta: undefined } as any;
   }
 
-  test('signOut: sets isAuthenticated=false, unsubscribes auth queries, and clears auth state after success', async () => {
+  test('signOut: sets isAuthenticated=false, resets auth queries, and clears auth state after success', async () => {
     const unsubscribeAuthQueries = mock(() => {});
+    const resetAuthQueries = mock(() => {});
     useConvexQueryClientSpy = spyOn(
       contextModule,
       'useConvexQueryClient'
-    ).mockReturnValue({ unsubscribeAuthQueries } as any);
+    ).mockReturnValue({ resetAuthQueries, unsubscribeAuthQueries } as any);
 
     const authClient = {
       signOut: mock(async (_args: unknown) => ({ ok: true })),
@@ -111,6 +112,7 @@ describe('createAuthMutations', () => {
     });
 
     expect(unsubscribeAuthQueries).toHaveBeenCalledTimes(1);
+    expect(resetAuthQueries).toHaveBeenCalledTimes(1);
     expect(authClient.signOut).toHaveBeenCalledTimes(1);
     expect(authClient.signOut).toHaveBeenCalledWith({ reason: 'logout' });
 
@@ -156,10 +158,11 @@ describe('createAuthMutations', () => {
   });
 
   test('signIn(email): seeds the auth store from a returned token', async () => {
+    const resetAuthQueries = mock(() => {});
     useConvexQueryClientSpy = spyOn(
       contextModule,
       'useConvexQueryClient'
-    ).mockReturnValue(null as any);
+    ).mockReturnValue({ resetAuthQueries } as any);
 
     const authClient = {
       signOut: mock(async () => ({})),
@@ -194,14 +197,17 @@ describe('createAuthMutations', () => {
     });
 
     expect(result.current.store.get('token')).toBe('returned-sign-in-token');
+    expect(result.current.store.get('isAuthenticated')).toBe(true);
     expect(authClient.signIn.email).toHaveBeenCalledTimes(1);
+    expect(resetAuthQueries).toHaveBeenCalledTimes(1);
   });
 
   test('signUp(email): seeds the auth store from a returned token', async () => {
+    const resetAuthQueries = mock(() => {});
     useConvexQueryClientSpy = spyOn(
       contextModule,
       'useConvexQueryClient'
-    ).mockReturnValue(null as any);
+    ).mockReturnValue({ resetAuthQueries } as any);
 
     const authClient = {
       signOut: mock(async () => ({})),
@@ -235,6 +241,7 @@ describe('createAuthMutations', () => {
     });
 
     expect(result.current.store.get('token')).toBe('returned-sign-up-token');
+    expect(result.current.store.get('isAuthenticated')).toBe(true);
     expect(authClient.signUp.email).toHaveBeenCalledTimes(1);
     expect(authClient.signUp.email).toHaveBeenCalledWith({
       email: 'a@b.com',
@@ -243,6 +250,7 @@ describe('createAuthMutations', () => {
         disableSignal: true,
       },
     });
+    expect(resetAuthQueries).toHaveBeenCalledTimes(1);
   });
 
   test('signUp(email): hydrates Better Auth session state from the returned bearer token', async () => {

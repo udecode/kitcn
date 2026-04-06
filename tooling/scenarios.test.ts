@@ -111,7 +111,7 @@ describe('tooling/scenarios', () => {
     expect(calls).toEqual(['check']);
   });
 
-  test('runScenarioTest runs auth smoke and e2e for next-auth', async () => {
+  test('runScenarioTest runs auth smoke only for next-auth', async () => {
     const calls: string[] = [];
 
     await runScenarioTest('next-auth', {
@@ -133,10 +133,10 @@ describe('tooling/scenarios', () => {
       }) as never,
     });
 
-    expect(calls).toEqual(['prepare', 'runtime', 'auth', 'e2e']);
+    expect(calls).toEqual(['prepare', 'runtime', 'auth']);
   });
 
-  test('runScenarioTest runs auth smoke and e2e for start-auth', async () => {
+  test('runScenarioTest runs auth smoke only for start-auth', async () => {
     const calls: string[] = [];
 
     await runScenarioTest('start-auth' as never, {
@@ -158,7 +158,7 @@ describe('tooling/scenarios', () => {
       }) as never,
     });
 
-    expect(calls).toEqual(['prepare', 'runtime', 'auth', 'e2e']);
+    expect(calls).toEqual(['prepare', 'runtime', 'auth']);
   });
 
   test('runScenarioTest skips browser auth for vite-auth', async () => {

@@ -249,6 +249,7 @@ export function createAuthMutations<T extends AuthClient>(
         authStoreApi.set('token', null);
         authStoreApi.set('expiresAt', null);
         authStoreApi.set('sessionSyncGraceUntil', null);
+        await convexQueryClient?.resetAuthQueries();
         return res;
       },
     };
@@ -256,6 +257,7 @@ export function createAuthMutations<T extends AuthClient>(
 
   const useSignInSocialMutationOptions = ((options) => {
     const authStoreApi = useAuthStore();
+    const convexQueryClient = useConvexQueryClient();
 
     return {
       ...options,
@@ -269,6 +271,8 @@ export function createAuthMutations<T extends AuthClient>(
         seedReturnedToken(authStoreApi, res);
         await hydrateReturnedSession(authClient, res);
         await ensureAuth(authStoreApi);
+        authStoreApi.set('isAuthenticated', true);
+        await convexQueryClient?.resetAuthQueries();
         return res;
       },
     };
@@ -276,6 +280,7 @@ export function createAuthMutations<T extends AuthClient>(
 
   const useSignInMutationOptions = ((options) => {
     const authStoreApi = useAuthStore();
+    const convexQueryClient = useConvexQueryClient();
 
     return {
       ...options,
@@ -289,6 +294,8 @@ export function createAuthMutations<T extends AuthClient>(
         seedReturnedToken(authStoreApi, res);
         await hydrateReturnedSession(authClient, res);
         await ensureAuth(authStoreApi);
+        authStoreApi.set('isAuthenticated', true);
+        await convexQueryClient?.resetAuthQueries();
         return res;
       },
     };
@@ -296,6 +303,7 @@ export function createAuthMutations<T extends AuthClient>(
 
   const useSignUpMutationOptions = ((options) => {
     const authStoreApi = useAuthStore();
+    const convexQueryClient = useConvexQueryClient();
 
     return {
       ...options,
@@ -309,6 +317,8 @@ export function createAuthMutations<T extends AuthClient>(
         seedReturnedToken(authStoreApi, res);
         await hydrateReturnedSession(authClient, res);
         await ensureAuth(authStoreApi);
+        authStoreApi.set('isAuthenticated', true);
+        await convexQueryClient?.resetAuthQueries();
         return res;
       },
     };

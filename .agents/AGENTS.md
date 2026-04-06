@@ -38,6 +38,7 @@
 - After any `init -t` template or scaffold change, you must rerun `bun run fixtures:sync` and `bun run fixtures:check`. No exceptions.
 - For manual runtime, never run committed `fixtures/**` in place. Materialize a tmp app with `bun run scenario:prepare <name>` and run it from `tmp/scenarios/<name>/project`, or use `bun run scenario:dev <name>`.
 - Use @.agents/rules/scenarios.mdc for fixture and scenario runtime proof. It owns when to stop at `scenario:dev`, when to add `test:auth` or `test:e2e`, and when `scenario:check` is the only honest lane.
+- Default `bun check` must not depend on auth browser E2E. Treat `test:e2e` as an auth-specific lane only. Run it when the diff touches auth runtime/client/provider/query-invalidation surfaces or auth demo scaffolds.
 - If `bun run fixtures:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers first: `pkill -f 'convex/bin/main.js codegen' || true; pkill -f 'convex/bin/main.js dev' || true; pkill -f '@esbuild/.*/bin/esbuild --service' || true`, then rerun sync once. If `ps` still shows an esbuild worker stuck in `U` state after `kill -9`, stop bullshitting and reboot — that machine state is wedged.
 - After every template/scaffold change, verify with `bun run fixtures:sync`, `bun run fixtures:check`, and prepared scenario apps under `tmp/scenarios/**`. Do not touch `example/` unless the user explicitly asks.
 - Prefer inline Zod schemas when used once; extract constants only when reused.
