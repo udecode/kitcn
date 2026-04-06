@@ -1,9 +1,13 @@
 import {
   compileAggregateQueryPlan,
   compileCountQueryPlan,
+  readCountFromBuckets,
+  serializeCountKeyParts,
 } from './aggregate-index/runtime';
 import { integer } from './builders/number';
 import { text } from './builders/text';
+import { textEnum } from './builders/text-enum';
+import { timestamp } from './builders/timestamp';
 import { fieldRef, isNotNull, isNull } from './filter-expression';
 import { aggregateIndex } from './indexes';
 import { GelRelationalQuery } from './query';
@@ -32,6 +36,22 @@ describe('GelRelationalQuery nullish filter compilation', () => {
         .sum(t.dueDate),
     ]
   );
+  const workflowRuns = convexTable(
+    'workflow_runs_query_mode_test',
+    {
+      status: textEnum([
+        'queued',
+        'running',
+        'completed',
+        'failed',
+        'canceled',
+      ]).notNull(),
+      updatedAt: timestamp({ mode: 'string' }).notNull(),
+    },
+    (t) => [
+      aggregateIndex('all_runs_by_status_updated').on(t.status, t.updatedAt),
+    ]
+  );
 
   const createQuery = (table: any = users) =>
     new (GelRelationalQuery as any)(
@@ -42,6 +62,48 @@ describe('GelRelationalQuery nullish filter compilation', () => {
       {},
       'many'
     );
+
+  const createBucketDb = (rows: Array<Record<string, unknown>>) => ({
+    query() {
+      return {
+        withIndex(_name: string, apply: (q: any) => any) {
+          const filters: Array<{
+            field: string;
+            operator: 'eq' | 'gte' | 'lt';
+            value: unknown;
+          }> = [];
+          const query = {
+            eq(field: string, value: unknown) {
+              filters.push({ field, operator: 'eq', value });
+              return query;
+            },
+            gte(field: string, value: unknown) {
+              filters.push({ field, operator: 'gte', value });
+              return query;
+            },
+            lt(field: string, value: unknown) {
+              filters.push({ field, operator: 'lt', value });
+              return query;
+            },
+            collect: async () =>
+              rows.filter((row) =>
+                filters.every((filter) => {
+                  const rowValue = row[filter.field];
+                  if (filter.operator === 'eq') {
+                    return rowValue === filter.value;
+                  }
+                  if (filter.operator === 'gte') {
+                    return rowValue >= filter.value;
+                  }
+                  return rowValue < filter.value;
+                })
+              ),
+          };
+          return apply(query);
+        },
+      };
+    },
+  });
 
   it('compiles isNull() to (field == null OR field == undefined)', () => {
     const expr = isNull(fieldRef<any>('deletedAt') as any) as any;
@@ -275,5 +337,36 @@ describe('GelRelationalQuery nullish filter compilation', () => {
       fieldName: '_creationTime',
       prefixFields: ['userId', 'deletionTime'],
     });
+  });
+
+  it('normalizes string-mode timestamp ranges before reading aggregate buckets', async () => {
+    const from = '2026-03-06T00:00:00.000Z';
+    const to = '2026-04-06T00:00:00.000Z';
+    const matchingUpdatedAt = Date.parse('2026-03-15T00:00:00.000Z');
+    const plan = compileCountQueryPlan(
+      { table: workflowRuns, name: workflowRuns.tableName, relations: {} },
+      {
+        status: 'completed',
+        updatedAt: { gte: from, lte: to },
+      }
+    );
+    const db = createBucketDb([
+      {
+        _id: 'bucket-1',
+        tableKey: 'workflow_runs_query_mode_test',
+        indexName: 'all_runs_by_status_updated',
+        keyHash: serializeCountKeyParts(['completed', matchingUpdatedAt]),
+        keyParts: ['completed', matchingUpdatedAt],
+        count: 4,
+        sumValues: {},
+        nonNullCountValues: {},
+      },
+    ]);
+
+    await expect(readCountFromBuckets(db as any, plan)).resolves.toBe(4);
+    expect(plan.rangeConstraint?.comparisons).toEqual([
+      { operator: 'gte', value: Date.parse(from) },
+      { operator: 'lte', value: Date.parse(to) },
+    ]);
   });
 });

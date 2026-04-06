@@ -3,6 +3,7 @@ import type {
   GenericDatabaseWriter,
 } from 'convex/server';
 import type { GenericId, Value } from 'convex/values';
+import { normalizeTemporalComparableValue } from '../mutation-utils';
 import { Columns } from '../symbols';
 import {
   INTERNAL_CREATION_TIME_FIELD,
@@ -307,6 +308,30 @@ const withFieldConstraint = (
   return next;
 };
 
+const normalizeAggregateComparableValue = (
+  tableConfig: TableRelationalConfig,
+  fieldName: string,
+  value: unknown
+): unknown => {
+  if (fieldName === INTERNAL_CREATION_TIME_FIELD) {
+    if (value instanceof Date) {
+      return value.getTime();
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) =>
+        entry instanceof Date ? entry.getTime() : entry
+      );
+    }
+    return value;
+  }
+
+  return normalizeTemporalComparableValue(
+    tableConfig.table as any,
+    fieldName,
+    value
+  );
+};
+
 const pushConstraint = (
   target: ConstraintMap,
   fieldName: string,
@@ -401,6 +426,7 @@ const normalizeConstraints = (
 };
 
 const parseFieldFilter = (
+  tableConfig: TableRelationalConfig,
   fieldName: string,
   value: unknown,
   target: ConstraintMap,
@@ -408,7 +434,9 @@ const parseFieldFilter = (
   methodName: string
 ): void => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    pushConstraint(target, fieldName, [value]);
+    pushConstraint(target, fieldName, [
+      normalizeAggregateComparableValue(tableConfig, fieldName, value),
+    ]);
     return;
   }
 
@@ -431,7 +459,14 @@ const parseFieldFilter = (
       );
     }
     for (const entry of andEntries) {
-      parseFieldFilter(fieldName, entry, target, codes, methodName);
+      parseFieldFilter(
+        tableConfig,
+        fieldName,
+        entry,
+        target,
+        codes,
+        methodName
+      );
     }
   }
 
@@ -439,7 +474,9 @@ const parseFieldFilter = (
 
   if (Object.hasOwn(filter, 'eq')) {
     hasRecognizedOperator = true;
-    pushConstraint(target, fieldName, [filter.eq]);
+    pushConstraint(target, fieldName, [
+      normalizeAggregateComparableValue(tableConfig, fieldName, filter.eq),
+    ]);
   }
 
   if (Object.hasOwn(filter, 'in')) {
@@ -452,7 +489,15 @@ const parseFieldFilter = (
         `field '${fieldName}'.in must be an array.`
       );
     }
-    pushConstraint(target, fieldName, inValues);
+    pushConstraint(
+      target,
+      fieldName,
+      normalizeAggregateComparableValue(
+        tableConfig,
+        fieldName,
+        inValues
+      ) as unknown[]
+    );
   }
 
   if (Object.hasOwn(filter, 'isNull')) {
@@ -489,7 +534,11 @@ const parseFieldFilter = (
     }
     pushRangeComparison(target, fieldName, {
       operator,
-      value: boundValue,
+      value: normalizeAggregateComparableValue(
+        tableConfig,
+        fieldName,
+        boundValue
+      ),
     });
   }
 
@@ -583,7 +632,14 @@ const parseFiniteOrBranch = (options: {
         `filter field '${key}' is not recognized.`
       );
     }
-    parseFieldFilter(normalizedKey, value, constraints, codes, methodName);
+    parseFieldFilter(
+      tableConfig,
+      normalizedKey,
+      value,
+      constraints,
+      codes,
+      methodName
+    );
   }
 
   normalizeConstraints(constraints, codes, methodName);
@@ -838,7 +894,14 @@ const parseWhereObject = (
 
     const normalizedKey = normalizeFilterFieldName(tableConfig, key);
     if (columnNames.has(normalizedKey)) {
-      parseFieldFilter(normalizedKey, value, target, codes, methodName);
+      parseFieldFilter(
+        tableConfig,
+        normalizedKey,
+        value,
+        target,
+        codes,
+        methodName
+      );
       continue;
     }
 
