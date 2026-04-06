@@ -612,6 +612,8 @@ bunx kitcn codegen
 bunx kitcn env push
 bunx kitcn env push --prod
 bunx kitcn env push --rotate
+bunx kitcn auth jwks
+bunx kitcn auth jwks --rotate
 # deploy with automatic aggregate backfill:
 bunx kitcn deploy --prod
 # aggregate index management:
@@ -623,7 +625,9 @@ bunx kitcn analyze
 
 On backend `convex`, `kitcn dev` watches `convex/.env` during a local
 dev session and auto-pushes later edits. Keep `env push` for `--prod`,
-`--rotate`, or explicit repair against an already active deployment.
+`--rotate`, or explicit repair against an already active deployment. Use
+`auth jwks` when you need a manual static `JWKS` payload, especially on backend
+`concave`.
 
 ### 11.2 Phase A gate: non-auth baseline (required before auth work)
 

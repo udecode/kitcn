@@ -5572,6 +5572,68 @@ describe('cli/cli', () => {
     expect(execaStub).not.toHaveBeenCalled();
   });
 
+  test('run(auth jwks) delegates to the auth command and does not passthrough', async () => {
+    const infoLines: string[] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => {
+      infoLines.push(args.map(String).join(' '));
+    };
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-auth-command-'));
+    fs.mkdirSync(path.join(dir, 'convex', 'functions', 'generated'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`,
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'auth.ts'),
+      'export default {};\n',
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex', 'functions', 'generated', 'auth.ts'),
+      'export {};\n',
+      'utf8'
+    );
+
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(
+        async () =>
+          ({
+            exitCode: 0,
+            stdout: JSON.stringify('jwks-json'),
+            stderr: '',
+          }) as any
+      );
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['auth', 'jwks'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(infoLines).toEqual(['JWKS=jwks-json']);
+      expect(execaStub).toHaveBeenCalledTimes(1);
+      expect(generateMetaStub).not.toHaveBeenCalled();
+      expect(syncEnvStub).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(oldCwd);
+      console.info = originalInfo;
+    }
+  });
+
   test('run(data) passes through to concave when backend is concave', async () => {
     const concaveCliPath = path.join(
       fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-concave-cli-')),

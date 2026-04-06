@@ -173,6 +173,38 @@ On backend `concave`, `kitcn env ...` fails clearly because Concave has no upstr
 
 Unknown commands on backend `convex` pass straight through to the Convex CLI, so `kitcn insights` opens the same insights surface as `convex insights`.
 
+## auth
+
+Manual auth runtime helpers:
+
+```bash showLineNumbers
+# Print a paste-ready JWKS env line
+npx kitcn auth jwks
+
+# Rotate auth keys, then print a fresh JWKS env line
+npx kitcn auth jwks --rotate
+
+# Machine-readable output
+npx kitcn auth jwks --json
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--rotate` | Rotate auth keys before fetching JWKS |
+| `--json` | Emit `{ jwks, envLine, ... }` JSON instead of a shell-ready line |
+
+`kitcn auth jwks` runs the generated auth runtime and prints a manual static
+`JWKS` payload. Use it when you want static JWKS without going through
+`kitcn env push`, especially on backend `concave` where `kitcn env` has no
+upstream env command to wrap.
+
+Target flags are forwarded to the backend `run` seam:
+
+- Convex: `--prod`, `--deployment-name`, `--preview-name`, `--env-file`, `--component`
+- Concave: `--url`, `--port`, `--component`
+
 ## deploy
 
 ```bash showLineNumbers

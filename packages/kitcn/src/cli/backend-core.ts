@@ -426,6 +426,15 @@ const DOCS_HELP_TEXT = `Usage: kitcn docs <topic...> [options]
 Options:
   --json            Machine-readable docs link output`;
 
+const AUTH_HELP_TEXT = `Usage: kitcn auth jwks [options]
+
+Commands:
+  jwks                       Print a manual JWKS env payload from the auth runtime
+
+Options:
+  --rotate                   Rotate auth keys before fetching JWKS
+  --json                     Machine-readable output`;
+
 const CODEGEN_HELP_TEXT = `Usage: kitcn codegen [options]
 
 Options:
@@ -626,6 +635,7 @@ Commands:
   view [plugin]                Inspect a plugin install plan without writing
   info                         Inspect project + installed plugin state
   docs <topic...>              Show docs links for CLI and plugins
+  auth                         Auth runtime helpers
   env                          Manage Convex environment variables
   deploy                       Deploy with migrations/backfill flows
   migrate                      Migration lifecycle commands
@@ -663,6 +673,10 @@ function printCommandHelp(
   }
   if (command === 'docs') {
     logger.write(DOCS_HELP_TEXT);
+    return;
+  }
+  if (command === 'auth') {
+    logger.write(AUTH_HELP_TEXT);
     return;
   }
   if (command === 'codegen') {
@@ -4958,7 +4972,7 @@ function isMissingBackfillFunctionOutput(output: string): boolean {
   return MISSING_BACKFILL_FUNCTION_RE.test(output);
 }
 
-function parseBackendRunJson<T>(stdout: string): T {
+export function parseBackendRunJson<T>(stdout: string): T {
   const trimmed = stdout.trim();
   if (trimmed.length === 0) {
     return [] as T;
@@ -5793,6 +5807,7 @@ export async function run(
       command === 'view' ||
       command === 'info' ||
       command === 'docs' ||
+      command === 'auth' ||
       command === 'codegen' ||
       command === 'dev') &&
     hasHelpFlag(restArgs)

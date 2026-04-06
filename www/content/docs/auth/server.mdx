@@ -474,7 +474,7 @@ convex({
 })
 ```
 
-Use `kitcn env push` to sync the static `JWKS` value:
+Use the auth/JWKS helpers that match your backend:
 
 ```bash
 # Sync local deployment env, including JWKS
@@ -485,9 +485,21 @@ npx kitcn env push --prod
 
 # Rotate auth keys, then push fresh JWKS
 npx kitcn env push --rotate
+
+# Print a manual JWKS env payload
+npx kitcn auth jwks
+
+# Rotate auth keys, then print a fresh manual JWKS payload
+npx kitcn auth jwks --rotate
 ```
 
-See [CLI env commands](/docs/cli/backend#env) for the full target/repair flow.
+Use `kitcn env push` on backend `convex`.
+
+Use `kitcn auth jwks` when you need a manual static `JWKS` payload, including
+backend `concave` where `kitcn env` has no upstream env command to wrap.
+
+See [CLI env commands](/docs/cli/backend#env) and
+[CLI auth helpers](/docs/cli/backend#auth) for the full target/repair flow.
 
 See [Authentication Flow](/docs/auth#authentication-flow) to understand why this matters.
 

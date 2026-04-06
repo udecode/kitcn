@@ -206,8 +206,10 @@ Local Convex:
 Remote / repair:
 1. Use `npx kitcn env push` when the target deployment is already active.
 2. Use `npx kitcn env push --prod` for production sync.
+3. Use `npx kitcn auth jwks` when you need a manual static `JWKS` payload, including backend `concave`.
 
 Key rotation: `npx kitcn env push --rotate` (invalidates all tokens).
+Manual rotation/export: `npx kitcn auth jwks --rotate`.
 
 ---
 
