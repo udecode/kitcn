@@ -272,7 +272,15 @@ Repair / remote sync:
 bunx kitcn env push
 ```
 
-Use this for `--prod` or explicit repair against an already active deployment.
+Use this to sync static `JWKS` onto the target deployment too.
+
+```bash
+bunx kitcn env push --prod
+bunx kitcn env push --rotate
+```
+
+Use `--prod` for production and `--rotate` when you want fresh keys plus fresh
+`JWKS`. See `/docs/cli/backend#env` for the full env command surface.
 
 Rotate later:
 
