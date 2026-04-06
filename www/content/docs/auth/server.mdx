@@ -474,6 +474,21 @@ convex({
 })
 ```
 
+Use `kitcn env push` to sync the static `JWKS` value:
+
+```bash
+# Sync local deployment env, including JWKS
+npx kitcn env push
+
+# Sync production deployment env, including JWKS
+npx kitcn env push --prod
+
+# Rotate auth keys, then push fresh JWKS
+npx kitcn env push --rotate
+```
+
+See [CLI env commands](/docs/cli/backend#env) for the full target/repair flow.
+
 See [Authentication Flow](/docs/auth#authentication-flow) to understand why this matters.
 
 #### Custom Base Path
