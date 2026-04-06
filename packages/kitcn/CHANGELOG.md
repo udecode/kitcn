@@ -1,5 +1,20 @@
 # kitcn
 
+## 0.12.11
+
+### Patch Changes
+
+- [#166](https://github.com/udecode/kitcn/pull/166) [`3a95ffb`](https://github.com/udecode/kitcn/commit/3a95ffbf86872dbd29dbe806c1a48a10189ce611) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn init -t next` monorepo scaffolds so the Next overlay targets the real app root under `apps/*` and uses the workspace package manager instead of assuming a single-app root layout.
+
+- [#163](https://github.com/udecode/kitcn/pull/163) [`38ffd3c`](https://github.com/udecode/kitcn/commit/38ffd3c3843cc4549fd6366190b43977e23d34c0) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix Concave local `kitcn dev` schema watches so `schema.ts` edits rerun fresh codegen and refresh generated schema outputs without a manual `kitcn codegen`.
+  - Fix `count()` and aggregate range filters on `timestamp({ mode: "string" })`
+    aggregateIndex suffix fields so stored millis buckets match ISO-string
+    filters instead of silently returning zero.
+
 ## 0.12.10
 
 ### Patch Changes
