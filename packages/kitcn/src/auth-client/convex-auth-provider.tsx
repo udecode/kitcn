@@ -128,13 +128,22 @@ function ConvexAuthProviderInner({
   sessionRef.current = session;
   isPendingRef.current = isPending;
 
-  const getCachedJwt = useCallback(() => {
-    const cachedToken = authStore.get('token');
-    if (!cachedToken || decodeJwtExp(cachedToken) === null) {
-      return null;
-    }
-    return cachedToken;
-  }, [authStore]);
+  const getCachedJwt = useCallback(
+    (minTimeRemainingMs = 0) => {
+      const cachedToken = authStore.get('token');
+      if (!cachedToken) {
+        return null;
+      }
+
+      const expiresAt = decodeJwtExp(cachedToken);
+      if (expiresAt === null || expiresAt <= Date.now() + minTimeRemainingMs) {
+        return null;
+      }
+
+      return cachedToken;
+    },
+    [authStore]
+  );
 
   // Clear token when session becomes null (logout)
   // This can't be inside fetchAccessToken because it's not called after logout
@@ -261,11 +270,11 @@ function ConvexAuthProviderInner({
       // - If not pending (confirmed no session), clear cache
       if (!hasSession) {
         if (currentIsPending || hasSessionSyncGrace) {
-          const cachedToken = authStore.get('token');
+          const cachedJwt = getCachedJwt();
 
           if (!forceRefreshToken) {
-            if (cachedToken && decodeJwtExp(cachedToken) !== null) {
-              return cachedToken;
+            if (cachedJwt) {
+              return cachedJwt;
             }
 
             return fetchFreshToken();
@@ -276,14 +285,10 @@ function ConvexAuthProviderInner({
           // During hydration, keep a cached JWT on transient forced-refresh failure.
           // Convex asked for a fresh token, but dropping auth to null here can
           // briefly flip to unauthenticated before Better Auth session settles.
-          if (
-            !freshToken &&
-            cachedToken &&
-            decodeJwtExp(cachedToken) !== null
-          ) {
-            authStore.set('token', cachedToken);
-            authStore.set('expiresAt', decodeJwtExp(cachedToken));
-            return cachedToken;
+          if (!freshToken && cachedJwt) {
+            authStore.set('token', cachedJwt);
+            authStore.set('expiresAt', decodeJwtExp(cachedJwt));
+            return cachedJwt;
           }
 
           return freshToken;

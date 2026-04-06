@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import {
+  decodeJwtExp,
   useAuth,
   useAuthStore,
   useFetchAccessToken,
@@ -395,6 +396,57 @@ describe('ConvexAuthProvider', () => {
     });
 
     expect(result.current.store.get('token')).toBe(firstJwt);
+  });
+
+  test('does not fall back to an expired cached JWT when refresh returns null', async () => {
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    const expiredJwt = makeJwt(-60);
+    const convexToken = mock(async () => ({ data: {} }));
+
+    const authClient = {
+      useSession: () => ({
+        data: { session: { id: 'session-1' } },
+        isPending: false,
+      }),
+      convex: { token: convexToken },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+    };
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ConvexAuthProvider authClient={authClient as any} client={client as any}>
+        {children}
+      </ConvexAuthProvider>
+    );
+
+    const { result } = renderHook(
+      () => ({
+        fetchAccessToken: useFetchAccessToken(),
+        store: useAuthStore(),
+      }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.store.set('token', expiredJwt);
+      result.current.store.set('expiresAt', decodeJwtExp(expiredJwt));
+    });
+
+    let fetched: string | null = 'placeholder';
+    await act(async () => {
+      fetched = await result.current.fetchAccessToken!({
+        forceRefreshToken: true,
+      });
+    });
+
+    expect(fetched as string | null).toBeNull();
+    expect(result.current.store.get('token')).toBeNull();
+    expect(result.current.store.get('expiresAt')).toBeNull();
   });
 
   test('deduplicates concurrent token fetches', async () => {

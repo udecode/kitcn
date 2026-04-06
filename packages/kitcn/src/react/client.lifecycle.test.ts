@@ -169,10 +169,18 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
       'viewer:optional',
       { scope: 'me' },
     ] as const;
+    const disabledOptionalKey = [
+      'convexQuery',
+      'viewer:optional-disabled',
+      { scope: 'me' },
+    ] as const;
     const publicKey = ['convexQuery', 'messages:list', {}] as const;
 
     queryClient.setQueryData(requiredKey as any, { email: 'account-1' });
     queryClient.setQueryData(optionalKey as any, { email: 'guest' });
+    queryClient.setQueryData(disabledOptionalKey as any, {
+      email: 'disabled-guest',
+    });
     queryClient.setQueryData(publicKey as any, { ok: true });
 
     const requiredObserver = new QueryObserver(queryClient as any, {
@@ -188,6 +196,14 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
       queryKey: optionalKey,
     });
     const unsubOptional = optionalObserver.subscribe(() => {});
+
+    const disabledOptionalObserver = new QueryObserver(queryClient as any, {
+      enabled: false,
+      meta: { authType: 'optional' },
+      queryFn: async () => ({ ok: true }),
+      queryKey: disabledOptionalKey,
+    });
+    const unsubDisabledOptional = disabledOptionalObserver.subscribe(() => {});
 
     const publicObserver = new QueryObserver(queryClient as any, {
       queryFn: async () => ({ ok: true }),
@@ -207,11 +223,15 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
     expect(queryClient.getQueryData(optionalKey as any)).not.toEqual({
       email: 'guest',
     });
+    expect(queryClient.getQueryData(disabledOptionalKey as any)).not.toEqual({
+      email: 'disabled-guest',
+    });
     expect(queryClient.getQueryData(publicKey as any)).toEqual({ ok: true });
     expect(Object.keys(client.subscriptions).length).toBe(3);
 
     unsubRequired();
     unsubOptional();
+    unsubDisabledOptional();
     unsubPublic();
   });
 
