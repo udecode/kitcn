@@ -14,6 +14,7 @@ import {
 import { ADD_HELP_TEXT, handleAddCommand } from './commands/add.js';
 import { handleAggregateCommand } from './commands/aggregate.js';
 import { handleAnalyzeCommand } from './commands/analyze.js';
+import { AUTH_HELP_TEXT, handleAuthCommand } from './commands/auth.js';
 import { CODEGEN_HELP_TEXT, handleCodegenCommand } from './commands/codegen.js';
 import { handleDeployCommand } from './commands/deploy.js';
 import {
@@ -63,6 +64,7 @@ const COMMAND_HELP: Record<string, string> = {
   view: VIEW_HELP_TEXT,
   info: INFO_HELP_TEXT,
   docs: DOCS_HELP_TEXT,
+  auth: AUTH_HELP_TEXT,
   dev: DEV_HELP_TEXT,
   verify: VERIFY_HELP_TEXT,
   codegen: CODEGEN_HELP_TEXT,
@@ -76,6 +78,7 @@ const COMMAND_HANDLERS = {
   view: handleViewCommand,
   info: handleInfoCommand,
   docs: handleDocsCommand,
+  auth: handleAuthCommand,
   verify: handleVerifyCommand,
   codegen: handleCodegenCommand,
   env: handleEnvCommand,
@@ -128,6 +131,7 @@ Commands:
   view [plugin]                Inspect a plugin install plan without writing
   info                         Inspect project + installed plugin state
   docs <topic...>              Show docs links for CLI and plugins
+  auth                         Auth runtime helpers
   env                          Manage Convex environment variables
   deploy                       Deploy with migrations/backfill flows
   migrate                      Migration lifecycle commands

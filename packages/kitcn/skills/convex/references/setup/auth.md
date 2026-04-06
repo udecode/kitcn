@@ -277,10 +277,16 @@ Use this to sync static `JWKS` onto the target deployment too.
 ```bash
 bunx kitcn env push --prod
 bunx kitcn env push --rotate
+
+# Manual static JWKS payload, including backend concave
+bunx kitcn auth jwks
+bunx kitcn auth jwks --rotate
 ```
 
 Use `--prod` for production and `--rotate` when you want fresh keys plus fresh
-`JWKS`. See `/docs/cli/backend#env` for the full env command surface.
+`JWKS`. `kitcn auth jwks` prints a manual `JWKS=...` line when you need to set
+the env value yourself instead of using `env push`. See `/docs/cli/backend#env`
+and `/docs/cli/backend#auth` for the full command surface.
 
 Rotate later:
 

@@ -8,3 +8,5 @@
 - Fix `count()` and aggregate range filters on `timestamp({ mode: "string" })`
   aggregateIndex suffix fields so stored millis buckets match ISO-string
   filters instead of silently returning zero.
+- Add `kitcn auth jwks` for manual static JWKS export and key rotation when a
+  deployment cannot use the Convex-only `env push` flow.

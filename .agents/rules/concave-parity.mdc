@@ -211,6 +211,38 @@ Delete when:
   can rely on, and
 - `parseBackendRunJson(...)` no longer needs the trailing-block fallback
 
+### 6. Manual static JWKS export command
+
+Convex has an env CLI seam, so `kitcn env push` can fetch and sync static
+`JWKS`.
+
+Concave still has no equivalent upstream env command surface. That means auth
+runtime parity exists, but env-management parity does not.
+
+kitcn workaround:
+
+- expose `kitcn auth jwks`
+- expose `kitcn auth jwks --rotate`
+- print a manual `JWKS=...` payload instead of inventing fake env passthrough
+
+Code locations:
+
+- `packages/kitcn/src/cli/commands/auth.ts`
+- `packages/kitcn/src/cli/commands/auth.test.ts`
+- `packages/kitcn/src/cli/cli.ts`
+- `packages/kitcn/src/cli/cli.commands.ts`
+
+Why it exists:
+
+- users still need a manual static `JWKS` path on backend `concave`
+- `kitcn env` is correctly Convex-only today
+
+Delete when:
+
+- Concave exposes a stable env management seam kitcn can wrap directly, or
+- kitcn ships a real cross-backend env abstraction and no longer needs a
+  JWKS-specific manual helper
+
 ## Removed Bandaids
 
 ### Internal runtime execution via `/api/execute`
@@ -256,22 +288,6 @@ Why it died:
   override used to force
 
 ## Watchlist: Known Gaps Without a kitcn Bandaid
-
-### No env command parity
-
-Current repo truth:
-
-- kitcn can wrap/pass through Convex env commands
-- Concave has no equivalent upstream env command surface
-
-Current location:
-
-- `.claude/skills/concave/concave.mdc`
-
-Meaning:
-
-- do not invent fake env passthrough parity on our side unless the user asks
-  for that product cut explicitly
 
 ### `staticDataModel` mismatch
 
