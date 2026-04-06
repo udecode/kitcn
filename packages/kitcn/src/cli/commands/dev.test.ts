@@ -899,6 +899,16 @@ describe('cli/commands/dev', () => {
         targetOrigin: 'http://127.0.0.1:3210',
       });
       expect(calls).toHaveLength(2);
+      expect(calls[0]).toEqual(
+        expect.objectContaining({
+          cmd: 'bun',
+          opts: expect.objectContaining({
+            env: expect.objectContaining({
+              KITCN_BACKEND: 'concave',
+            }),
+          }),
+        })
+      );
       expect(calls[1]).toEqual(
         expect.objectContaining({
           cmd: 'bun',

@@ -2,7 +2,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { getWatchRoots, shouldIgnoreWatchPath, startWatcher } from './watcher';
+import {
+  getWatchRoots,
+  runWatcherCodegen,
+  shouldIgnoreWatchPath,
+  startWatcher,
+} from './watcher';
+
+const CLI_TS_RE = /\/cli\.ts$/;
 
 describe('cli/watcher', () => {
   test('getWatchRoots includes the functions dir and sibling routers dir', () => {
@@ -20,6 +27,13 @@ describe('cli/watcher', () => {
     expect(
       shouldIgnoreWatchPath(
         '/repo/convex/generated/auth.ts',
+        functionsDir,
+        outputFile
+      )
+    ).toBe(true);
+    expect(
+      shouldIgnoreWatchPath(
+        '/repo/convex/_generated/api.d.ts',
         functionsDir,
         outputFile
       )
@@ -48,6 +62,158 @@ describe('cli/watcher', () => {
         outputFile
       )
     ).toBe(false);
+  });
+
+  test('runWatcherCodegen uses full codegen flow for concave backend', async () => {
+    const generateMetaStub = mock(async () => {});
+    const execaStub = mock(async () => ({
+      exitCode: 0,
+      stderr: '',
+      stdout: '',
+    }));
+    const loadCliConfigStub = mock(() => ({
+      backend: 'concave' as const,
+      codegen: {
+        args: ['--typecheck'],
+        debug: false,
+        scope: 'all' as const,
+        trimSegments: ['plugins'],
+      },
+    }));
+
+    await runWatcherCodegen(
+      {
+        backendArg: 'concave',
+        configPath: 'custom.json',
+        debug: true,
+        scope: 'orm',
+        sharedDir: 'out',
+        trimSegments: ['plugins', 'generated'],
+      },
+      {
+        resolveRunDeps: () =>
+          ({
+            execa: execaStub as never,
+            generateMeta: generateMetaStub as never,
+            loadCliConfig: loadCliConfigStub as never,
+            syncEnv: mock(async () => {}) as never,
+          }) as never,
+        resolveConfiguredBackendFn: (() => 'concave') as never,
+      }
+    );
+
+    expect(loadCliConfigStub).toHaveBeenCalledWith('custom.json');
+    expect(generateMetaStub).not.toHaveBeenCalled();
+    expect(execaStub).toHaveBeenCalledWith(
+      'bun',
+      [
+        expect.stringMatching(CLI_TS_RE),
+        'codegen',
+        '--backend',
+        'concave',
+        '--scope',
+        'orm',
+        '--api',
+        'out',
+        '--config',
+        'custom.json',
+        '--debug',
+      ],
+      expect.objectContaining({
+        cwd: process.cwd(),
+        reject: false,
+        stdio: 'pipe',
+      })
+    );
+  });
+
+  test('runWatcherCodegen keeps generateMeta-only flow for convex backend', async () => {
+    const generateMetaStub = mock(async () => {});
+    const execaStub = mock(async () => ({
+      exitCode: 0,
+      stderr: '',
+      stdout: '',
+    }));
+    const loadCliConfigStub = mock(() => ({
+      backend: 'convex' as const,
+      codegen: {
+        args: [],
+        debug: false,
+        scope: 'all' as const,
+        trimSegments: ['plugins'],
+      },
+    }));
+
+    await runWatcherCodegen(
+      {
+        backendArg: 'convex',
+        debug: true,
+        scope: 'orm',
+        sharedDir: 'out',
+        trimSegments: ['plugins', 'generated'],
+      },
+      {
+        resolveRunDeps: () =>
+          ({
+            execa: execaStub as never,
+            generateMeta: generateMetaStub as never,
+            loadCliConfig: loadCliConfigStub as never,
+            syncEnv: mock(async () => {}) as never,
+          }) as never,
+        resolveConfiguredBackendFn: (() => 'convex') as never,
+      }
+    );
+
+    expect(generateMetaStub).toHaveBeenCalledWith('out', {
+      debug: true,
+      scope: 'orm',
+      silent: true,
+      trimSegments: ['plugins', 'generated'],
+    });
+    expect(execaStub).not.toHaveBeenCalled();
+  });
+
+  test('startWatcher uses watcher codegen flow when backend env is concave', async () => {
+    const previousBackend = process.env.KITCN_BACKEND;
+    process.env.KITCN_BACKEND = 'concave';
+
+    const generateMetaStub = mock(async () => {});
+    const runWatcherCodegenStub = mock(async () => {});
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const watcher = {
+      on(event: string, cb: (...args: unknown[]) => void) {
+        handlers[event] = cb;
+        return watcher;
+      },
+    };
+
+    try {
+      await startWatcher({
+        debounceMs: 10,
+        watch: () => watcher,
+        generateMeta: generateMetaStub as never,
+        getConvexConfig: (() => ({
+          functionsDir: '/repo/convex',
+          outputFile: '/repo/out/api.ts',
+        })) as never,
+        runWatcherCodegen: runWatcherCodegenStub as never,
+      });
+
+      handlers.change?.();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(runWatcherCodegenStub).toHaveBeenCalledWith({
+        backendArg: 'concave',
+        configPath: undefined,
+        debug: false,
+        scope: 'all',
+        sharedDir: undefined,
+        trimSegments: undefined,
+      });
+      expect(generateMetaStub).not.toHaveBeenCalled();
+    } finally {
+      process.env.KITCN_BACKEND = previousBackend;
+    }
   });
 
   test('startWatcher debounces add/change/unlink events and calls generateMeta', async () => {
