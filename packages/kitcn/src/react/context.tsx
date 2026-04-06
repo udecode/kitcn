@@ -7,13 +7,25 @@
  */
 
 import type { ConvexReactClient } from 'convex/react';
-import { createContext, type ReactNode, useContext, useMemo } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import type { HttpClientError } from '../crpc/http-types';
 import type { DataTransformerOptions } from '../crpc/transformer';
 import type { FnMeta, Meta } from '../crpc/types';
 import type { CRPCHttpRouter, HttpRouterRecord } from '../server/http-router';
 import { buildMetaIndex } from '../shared/meta-utils';
-import { useAuthStore, useFetchAccessToken } from './auth-store';
+import {
+  decodeJwtExp,
+  useAuthStore,
+  useAuthValue,
+  useFetchAccessToken,
+} from './auth-store';
 import type { ConvexQueryClient } from './client';
 import type { CRPCClient, VanillaCRPCClient } from './crpc-types';
 import {
@@ -168,8 +180,35 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
     convexQueryClient: ConvexQueryClient;
   }) {
     const authStore = useAuthStore();
+    const token = useAuthValue('token');
+    const isAuthenticated = useAuthValue('isAuthenticated');
+    const previousAuthRef = useRef<{
+      isAuthenticated: boolean;
+      token: string | null;
+    } | null>(null);
     // Get fetchAccessToken from context (immediately available, no race condition)
     const fetchAccessToken = useFetchAccessToken();
+
+    useEffect(() => {
+      const previous = previousAuthRef.current;
+      const tokenReady = token === null || decodeJwtExp(token) !== null;
+      previousAuthRef.current = {
+        isAuthenticated,
+        token,
+      };
+
+      if (!previous) {
+        return;
+      }
+
+      if (
+        tokenReady &&
+        (previous.token !== token ||
+          previous.isAuthenticated !== isAuthenticated)
+      ) {
+        void convexQueryClient.resetAuthQueries();
+      }
+    }, [convexQueryClient, isAuthenticated, token]);
 
     // Create HTTP proxy inside component with authStore access
     const httpProxy = useMemo(() => {

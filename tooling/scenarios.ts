@@ -14,7 +14,6 @@ import {
   KITCN_INSTALL_SPEC_ENV,
   KITCN_RESEND_INSTALL_SPEC_ENV,
 } from '../packages/kitcn/src/cli/supported-dependencies';
-import { runAuthE2E } from './auth-e2e';
 import { runAuthSchemaStress } from './auth-schema-stress';
 import { runAuthSmoke } from './auth-smoke';
 import {
@@ -1126,7 +1125,6 @@ export const runScenarioTest = async (
     checkScenarioFn?: typeof checkScenario;
     runScenarioRuntimeProofFn?: typeof runScenarioRuntimeProof;
     runAuthSmokeFn?: typeof runAuthSmoke;
-    runAuthE2EFn?: typeof runAuthE2E;
   } = {}
 ) => {
   const proofPath = resolveScenarioProofPath(scenarioKey);
@@ -1152,7 +1150,6 @@ export const runScenarioTest = async (
         proofPath === 'auth-demo'
           ? async (readyScenarioKey) => {
               await (params.runAuthSmokeFn ?? runAuthSmoke)([readyScenarioKey]);
-              await (params.runAuthE2EFn ?? runAuthE2E)([readyScenarioKey]);
             }
           : undefined,
     }

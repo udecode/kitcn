@@ -45,7 +45,10 @@ bun run test:e2e -- <name|url>
 
 `test:auth` and `test:e2e` assume the scenario is already running.
 `scenario:test` wraps the proof matrix below.
-`test:runtime` runs `scenario:test -- all` and is the full runtime gate.
+`test:runtime` runs `scenario:test -- all` and is the default non-browser
+runtime gate.
+`test:e2e` is a separate auth browser lane and should be run only when auth
+surfaces changed.
 
 ## Proof Matrix
 
@@ -75,22 +78,26 @@ Or:
 Use this path for:
 
 - `next-auth`
+- `start-auth`
 
 Run:
 
-1. `bun run scenario:prepare -- next-auth`
-2. `bun run scenario:dev -- next-auth`
-3. `bun run test:auth -- next-auth`
-4. `bun run test:e2e -- next-auth`
-5. Stop.
+1. `bun run scenario:prepare -- <next-auth|start-auth>`
+2. `bun run scenario:dev -- <next-auth|start-auth>`
+3. `bun run test:auth -- <next-auth|start-auth>`
+4. Stop.
 
 Or:
 
-1. `bun run scenario:test -- next-auth`
+1. `bun run scenario:test -- <next-auth|start-auth>`
 
 Why:
 
-- `next-auth` is the only scenario with a real auth browser surface today.
+- `scenario:test -- <next-auth|start-auth>` proves runtime + auth smoke only.
+- Browser auth proof belongs to the explicit `test:e2e` lane:
+  1. `bun run scenario:prepare -- <next-auth|start-auth>`
+  2. `bun run scenario:dev -- <next-auth|start-auth>`
+  3. `bun run test:e2e -- <next-auth|start-auth>`
 
 ### Auth backend proof without browser auth
 
@@ -156,19 +163,26 @@ Otherwise, reuse the prepared app.
 
 ## Examples
 
-### `next-auth`
+### `next-auth` or `start-auth`
 
 ```bash
 bun run scenario:prepare -- next-auth
 bun run scenario:dev -- next-auth
 bun run test:auth -- next-auth
-bun run test:e2e -- next-auth
 ```
 
 Short path:
 
 ```bash
 bun run scenario:test -- next-auth
+```
+
+Browser lane:
+
+```bash
+bun run scenario:prepare -- next-auth
+bun run scenario:dev -- next-auth
+bun run test:e2e -- next-auth
 ```
 
 ### `vite-auth`

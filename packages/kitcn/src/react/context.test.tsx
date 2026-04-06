@@ -15,6 +15,7 @@ import * as vanillaClientModule from './vanilla-client';
 describe('createCRPCContext', () => {
   let useAuthStoreSpy: ReturnType<typeof spyOn>;
   let useFetchAccessTokenSpy: ReturnType<typeof spyOn>;
+  let useAuthValueSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
     useAuthStoreSpy = spyOn(authStoreModule, 'useAuthStore').mockImplementation(
@@ -27,11 +28,15 @@ describe('createCRPCContext', () => {
       authStoreModule,
       'useFetchAccessToken'
     ).mockImplementation(() => null);
+    useAuthValueSpy = spyOn(authStoreModule, 'useAuthValue').mockImplementation(
+      () => null as any
+    );
   });
 
   afterEach(() => {
     useAuthStoreSpy.mockRestore();
     useFetchAccessTokenSpy.mockRestore();
+    useAuthValueSpy.mockRestore();
   });
 
   test('useCRPC/useCRPCClient throw when used outside CRPCProvider', () => {
@@ -217,5 +222,59 @@ describe('createCRPCContext', () => {
       createOptionsProxySpy.mockRestore();
       createVanillaProxySpy.mockRestore();
     }
+  });
+
+  test('resets auth queries only when auth transitions reach a real JWT or logout null', () => {
+    const api = {} as any;
+    const convexClient = {} as any;
+    const convexQueryClient = {
+      resetAuthQueries: mock(async () => {}),
+    } as any;
+
+    let authState = {
+      isAuthenticated: false,
+      token: null as string | null,
+    };
+    useAuthValueSpy.mockImplementation(
+      ((key: 'token' | 'isAuthenticated') => authState[key]) as any
+    );
+
+    const { CRPCProvider } = createCRPCContext({ api });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <CRPCProvider
+        convexClient={convexClient}
+        convexQueryClient={convexQueryClient}
+      >
+        {children}
+      </CRPCProvider>
+    );
+
+    const jwt = `a.${Buffer.from(
+      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })
+    ).toString('base64')}.b`;
+
+    const hook = renderHook(() => useMeta(), { wrapper });
+    expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
+
+    authState = {
+      isAuthenticated: false,
+      token: 'opaque-session-token',
+    };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
+
+    authState = {
+      isAuthenticated: true,
+      token: jwt,
+    };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(1);
+
+    authState = {
+      isAuthenticated: false,
+      token: null,
+    };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(2);
   });
 });

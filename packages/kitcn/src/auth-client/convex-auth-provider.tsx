@@ -128,6 +128,14 @@ function ConvexAuthProviderInner({
   sessionRef.current = session;
   isPendingRef.current = isPending;
 
+  const getCachedJwt = useCallback(() => {
+    const cachedToken = authStore.get('token');
+    if (!cachedToken || decodeJwtExp(cachedToken) === null) {
+      return null;
+    }
+    return cachedToken;
+  }, [authStore]);
+
   // Clear token when session becomes null (logout)
   // This can't be inside fetchAccessToken because it's not called after logout
   useEffect(() => {
@@ -191,12 +199,26 @@ function ConvexAuthProviderInner({
               return jwt;
             }
 
+            const cachedJwt = getCachedJwt();
+            if (cachedJwt) {
+              authStore.set('expiresAt', decodeJwtExp(cachedJwt));
+              authStore.set('sessionSyncGraceUntil', null);
+              return cachedJwt;
+            }
+
             authStore.set('token', null);
             authStore.set('expiresAt', null);
             authStore.set('sessionSyncGraceUntil', null);
             return null;
           })
           .catch((error: unknown) => {
+            const cachedJwt = getCachedJwt();
+            if (cachedJwt) {
+              authStore.set('expiresAt', decodeJwtExp(cachedJwt));
+              authStore.set('sessionSyncGraceUntil', null);
+              return cachedJwt;
+            }
+
             authStore.set('token', null);
             authStore.set('expiresAt', null);
             authStore.set('sessionSyncGraceUntil', null);
@@ -213,9 +235,10 @@ function ConvexAuthProviderInner({
       const fetchFreshTokenForced = async () => {
         // For forced refresh, if we only have an in-flight request and it
         // resolves null, retry once immediately instead of returning null.
+        const cachedJwt = getCachedJwt();
         if (pendingTokenRef.current) {
           const token = await pendingTokenRef.current;
-          if (token) {
+          if (token && (!cachedJwt || token !== cachedJwt)) {
             return token;
           }
         }
@@ -299,7 +322,7 @@ function ConvexAuthProviderInner({
     },
     // Stable deps - authStore/authClient rarely change
     // session/isPending accessed via refs to prevent callback recreation
-    [authStore, authClient]
+    [authStore, authClient, getCachedJwt]
   );
 
   // Create useAuth hook for ConvexProviderWithAuth

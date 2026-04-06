@@ -105,14 +105,14 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
 
     const requiredObserver = new QueryObserver(queryClient as any, {
       meta: { authType: 'required' },
-      queryFn: async () => ({ ok: true }),
+      queryFn: async () => ({ email: 'fresh-required' }),
       queryKey: requiredKey,
     });
     const unsubRequired = requiredObserver.subscribe(() => {});
 
     const optionalObserver = new QueryObserver(queryClient as any, {
       meta: { authType: 'optional' },
-      queryFn: async () => ({ ok: true }),
+      queryFn: async () => ({ email: 'fresh-optional' }),
       queryKey: optionalKey,
     });
     const unsubOptional = optionalObserver.subscribe(() => {});
@@ -127,6 +127,92 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
 
     unsubRequired();
     unsubOptional();
+  });
+
+  test('resetAuthQueries clears cached required/optional auth data and unsubscribes active subscriptions', async () => {
+    const ConvexQueryClient = await getClientConvexQueryClient('reset-auth');
+
+    const unsubCalls: Record<string, number> = {
+      required: 0,
+      optional: 0,
+    };
+    const convexClient = {
+      watchQuery: (fn: unknown) => {
+        const name = String(fn);
+        const bucket = name.includes('required')
+          ? 'required'
+          : name.includes('optional')
+            ? 'optional'
+            : 'optional';
+        return {
+          localQueryResult: () => undefined,
+          onUpdate: () => () => {
+            unsubCalls[bucket]++;
+          },
+        };
+      },
+    };
+
+    const queryClient = new QueryClient();
+    const client = new ConvexQueryClient(convexClient, {
+      queryClient,
+      unsubscribeDelay: 0,
+    });
+
+    const requiredKey = [
+      'convexQuery',
+      'viewer:required',
+      { scope: 'me' },
+    ] as const;
+    const optionalKey = [
+      'convexQuery',
+      'viewer:optional',
+      { scope: 'me' },
+    ] as const;
+    const publicKey = ['convexQuery', 'messages:list', {}] as const;
+
+    queryClient.setQueryData(requiredKey as any, { email: 'account-1' });
+    queryClient.setQueryData(optionalKey as any, { email: 'guest' });
+    queryClient.setQueryData(publicKey as any, { ok: true });
+
+    const requiredObserver = new QueryObserver(queryClient as any, {
+      meta: { authType: 'required' },
+      queryFn: async () => ({ ok: true }),
+      queryKey: requiredKey,
+    });
+    const unsubRequired = requiredObserver.subscribe(() => {});
+
+    const optionalObserver = new QueryObserver(queryClient as any, {
+      meta: { authType: 'optional' },
+      queryFn: async () => ({ ok: true }),
+      queryKey: optionalKey,
+    });
+    const unsubOptional = optionalObserver.subscribe(() => {});
+
+    const publicObserver = new QueryObserver(queryClient as any, {
+      queryFn: async () => ({ ok: true }),
+      queryKey: publicKey,
+    });
+    const unsubPublic = publicObserver.subscribe(() => {});
+
+    expect(Object.keys(client.subscriptions).length).toBe(3);
+
+    await client.resetAuthQueries();
+
+    expect(unsubCalls.required).toBe(1);
+    expect(unsubCalls.optional).toBe(1);
+    expect(queryClient.getQueryData(requiredKey as any)).not.toEqual({
+      email: 'account-1',
+    });
+    expect(queryClient.getQueryData(optionalKey as any)).not.toEqual({
+      email: 'guest',
+    });
+    expect(queryClient.getQueryData(publicKey as any)).toEqual({ ok: true });
+    expect(Object.keys(client.subscriptions).length).toBe(3);
+
+    unsubRequired();
+    unsubOptional();
+    unsubPublic();
   });
 
   test('onUpdateQueryKeyHash does not overwrite existing data with null/undefined subscription values', async () => {

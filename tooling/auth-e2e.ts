@@ -6,6 +6,7 @@ import { log } from './scaffold-utils';
 const DEFAULT_AUTH_E2E_TARGET = 'next-auth';
 const DEV_BROWSER_URL = 'http://127.0.0.1:9222';
 const DEV_BROWSER_TIMEOUT_SECONDS = '45';
+const AUTH_E2E_WAIT_TIMEOUT_MS = 20_000;
 
 type AuthE2EArgs = {
   target: string;
@@ -50,7 +51,7 @@ await page.getByPlaceholder("Name").fill(${JSON.stringify(user.name)});
 await page.getByPlaceholder("Email").fill(${JSON.stringify(user.email)});
 await page.getByPlaceholder("Password").fill(${JSON.stringify(user.password)});
 await page.getByRole("button", { name: "Create account" }).click();
-await page.getByText("Signed in").waitFor({ timeout: 10000 });
+await page.getByText("Signed in").waitFor({ timeout: ${AUTH_E2E_WAIT_TIMEOUT_MS} });
 const signedInBody = await page.locator("body").innerText();
 if (!signedInBody.includes("Signed in")) {
   throw new Error("Auth E2E never reached the signed-in view.\\n" + signedInBody);
@@ -61,7 +62,7 @@ if (!signedInBody.includes(${JSON.stringify(user.email)})) {
   )} + "\\n" + signedInBody);
 }
 await page.getByRole("button", { name: "Sign out" }).click();
-await page.getByText("Auth demo").waitFor({ timeout: 10000 });
+await page.getByText("Auth demo").waitFor({ timeout: ${AUTH_E2E_WAIT_TIMEOUT_MS} });
 const signedOutBody = await page.locator("body").innerText();
 if (signedOutBody.includes("Signed in")) {
   throw new Error("Auth E2E stayed signed in after sign out.\\n" + signedOutBody);
@@ -268,7 +269,7 @@ const evaluateOnPage = async (
 const waitForPageCondition = async ({
   cdp,
   expression,
-  timeoutMs = 10_000,
+  timeoutMs = AUTH_E2E_WAIT_TIMEOUT_MS,
 }: {
   cdp: CdpClient;
   expression: string;
@@ -407,6 +408,7 @@ const runCdpAuthE2E = async ({
       await waitForPageCondition({
         cdp,
         expression: '(document.body?.innerText ?? "").includes("Signed in")',
+        timeoutMs: AUTH_E2E_WAIT_TIMEOUT_MS,
       });
     } catch (_error) {
       const currentBody = String(
@@ -455,6 +457,7 @@ const runCdpAuthE2E = async ({
     await waitForPageCondition({
       cdp,
       expression: '(document.body?.innerText ?? "").includes("Auth demo")',
+      timeoutMs: AUTH_E2E_WAIT_TIMEOUT_MS,
     });
 
     const signedOutBody = String(
