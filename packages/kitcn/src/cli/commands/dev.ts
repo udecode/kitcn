@@ -1239,7 +1239,9 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     cwd: process.cwd(),
     env: {
       ...createCommandEnv(localNodeEnvOverrides),
+      KITCN_BACKEND: backend,
       KITCN_API_OUTPUT_DIR: sharedDir || '',
+      ...(parsed.configPath ? { KITCN_CONFIG_PATH: parsed.configPath } : {}),
       KITCN_DEBUG: debug ? '1' : '',
       KITCN_CODEGEN_SCOPE: 'all',
       KITCN_CODEGEN_TRIM_SEGMENTS: JSON.stringify(trimSegments),

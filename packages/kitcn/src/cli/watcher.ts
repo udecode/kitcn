@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveConfiguredBackend, resolveRunDeps } from './backend-core.js';
 import { generateMeta, getConvexConfig } from './codegen.js';
+import type { CliBackend } from './config.js';
 import { logger } from './utils/logger.js';
 
 type WatcherLike = {
@@ -13,10 +15,47 @@ type WatchOptions = {
   ignored: (watchedPath: string) => boolean;
 };
 
+type WatcherCodegenParams = {
+  backendArg?: CliBackend;
+  configPath?: string;
+  debug: boolean;
+  scope: 'all' | 'auth' | 'orm';
+  sharedDir?: string;
+  trimSegments?: string[];
+};
+
+type WatcherCodegenDeps = {
+  resolveConfiguredBackendFn?: typeof resolveConfiguredBackend;
+  resolveRunDeps?: typeof resolveRunDeps;
+};
+
 export function getWatchRoots(functionsDir: string): string[] {
   // Watch the real roots. chokidar v5 dropped glob support.
   const convexDir = path.dirname(functionsDir);
   return [functionsDir, path.join(convexDir, 'routers')];
+}
+
+function parseWatcherBackendEnv(
+  value: string | undefined
+): CliBackend | undefined {
+  if (value === 'convex' || value === 'concave') {
+    return value;
+  }
+  return undefined;
+}
+
+function resolveWatcherCliCommand(
+  currentFilename = fileURLToPath(import.meta.url)
+) {
+  const currentDir = path.dirname(currentFilename);
+  const isTs = currentFilename.endsWith('.ts');
+
+  return {
+    cliPath: isTs
+      ? path.join(currentDir, 'cli.ts')
+      : path.join(currentDir, 'cli.mjs'),
+    runtime: isTs ? 'bun' : 'node',
+  };
 }
 
 function parseTrimSegmentsEnv(value: string | undefined): string[] | undefined {
@@ -63,6 +102,7 @@ export function shouldIgnoreWatchPath(
   const normalizedPath = path.resolve(watchedPath);
   const normalizedFunctionsDir = path.resolve(functionsDir);
   const normalizedOutputFile = path.resolve(outputFile);
+  const convexGeneratedDir = path.join(normalizedFunctionsDir, '_generated');
   const generatedDir = path.join(normalizedFunctionsDir, 'generated');
   const generatedFile = path.join(normalizedFunctionsDir, 'generated.ts');
 
@@ -71,6 +111,13 @@ export function shouldIgnoreWatchPath(
   }
 
   if (normalizedPath === generatedFile) {
+    return true;
+  }
+
+  if (
+    normalizedPath === convexGeneratedDir ||
+    normalizedPath.startsWith(`${convexGeneratedDir}${path.sep}`)
+  ) {
     return true;
   }
 
@@ -84,7 +131,68 @@ export function shouldIgnoreWatchPath(
   return normalizedPath.endsWith('.runtime.ts');
 }
 
+export async function runWatcherCodegen(
+  params: WatcherCodegenParams,
+  deps: WatcherCodegenDeps = {}
+) {
+  const resolveRunDepsFn = deps.resolveRunDeps ?? resolveRunDeps;
+  const resolveConfiguredBackendFn =
+    deps.resolveConfiguredBackendFn ?? resolveConfiguredBackend;
+  const {
+    execa: execaFn,
+    generateMeta: generateMetaFn,
+    loadCliConfig: loadCliConfigFn,
+  } = resolveRunDepsFn();
+  const config = loadCliConfigFn(params.configPath);
+  const backend = resolveConfiguredBackendFn({
+    backendArg: params.backendArg,
+    config,
+  });
+
+  if (backend !== 'concave') {
+    await generateMetaFn(params.sharedDir, {
+      debug: params.debug,
+      silent: true,
+      scope: params.scope,
+      trimSegments: params.trimSegments,
+    });
+    return;
+  }
+
+  const { cliPath, runtime } = resolveWatcherCliCommand();
+  const args = [
+    cliPath,
+    'codegen',
+    '--backend',
+    'concave',
+    '--scope',
+    params.scope,
+  ];
+  if (params.sharedDir) {
+    args.push('--api', params.sharedDir);
+  }
+  if (params.configPath) {
+    args.push('--config', params.configPath);
+  }
+  if (params.debug) {
+    args.push('--debug');
+  }
+
+  const result = await execaFn(runtime, args, {
+    cwd: process.cwd(),
+    reject: false,
+    stdio: 'pipe',
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Watcher codegen failed with exit code ${result.exitCode}.\n${`${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim()}`
+    );
+  }
+}
+
 export async function startWatcher(opts?: {
+  backend?: CliBackend;
+  configPath?: string;
   sharedDir?: string;
   debug?: boolean;
   scope?: 'all' | 'auth' | 'orm';
@@ -93,7 +201,11 @@ export async function startWatcher(opts?: {
   watch?: (patterns: string[], options: WatchOptions) => WatcherLike;
   generateMeta?: typeof generateMeta;
   getConvexConfig?: typeof getConvexConfig;
+  runWatcherCodegen?: typeof runWatcherCodegen;
 }): Promise<WatcherLike> {
+  const backendArg =
+    opts?.backend ?? parseWatcherBackendEnv(process.env.KITCN_BACKEND);
+  const configPath = opts?.configPath ?? process.env.KITCN_CONFIG_PATH;
   const sharedDir =
     opts?.sharedDir ?? (process.env.KITCN_API_OUTPUT_DIR || undefined);
   const debug = opts?.debug ?? process.env.KITCN_DEBUG === '1';
@@ -107,6 +219,7 @@ export async function startWatcher(opts?: {
   const debounceMs = opts?.debounceMs ?? 100;
   const resolveConfig = opts?.getConvexConfig ?? getConvexConfig;
   const runGenerateMeta = opts?.generateMeta ?? generateMeta;
+  const runWatchCodegen = opts?.runWatcherCodegen ?? runWatcherCodegen;
 
   const { functionsDir, outputFile } = resolveConfig(sharedDir);
   const watchRoots = getWatchRoots(functionsDir);
@@ -149,7 +262,18 @@ export async function startWatcher(opts?: {
 
     generateMetaInFlight = true;
     try {
-      await runGenerateMeta(sharedDir, createGenerateOptions());
+      if (backendArg || configPath) {
+        await runWatchCodegen({
+          backendArg,
+          configPath,
+          debug,
+          scope,
+          sharedDir,
+          trimSegments,
+        });
+      } else {
+        await runGenerateMeta(sharedDir, createGenerateOptions());
+      }
       logger.success('Convex api updated');
     } catch (error) {
       logger.error('Watch codegen error:', error);
