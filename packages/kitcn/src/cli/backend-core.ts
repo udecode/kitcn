@@ -2590,39 +2590,84 @@ function buildTemplateInitializationPlanFiles(params: {
 }
 
 function detectPackageManager(projectDir: string): PackageManager {
-  const packageJsonPath = join(projectDir, 'package.json');
-  if (fs.existsSync(packageJsonPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
-        packageManager?: unknown;
-      };
-      if (typeof pkg.packageManager === 'string') {
-        if (pkg.packageManager.startsWith('bun@')) return 'bun';
-        if (pkg.packageManager.startsWith('pnpm@')) return 'pnpm';
-        if (pkg.packageManager.startsWith('yarn@')) return 'yarn';
-        if (pkg.packageManager.startsWith('npm@')) return 'npm';
+  let current = resolve(projectDir);
+  while (true) {
+    const packageJsonPath = join(current, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
+          packageManager?: unknown;
+        };
+        if (typeof pkg.packageManager === 'string') {
+          if (pkg.packageManager.startsWith('bun@')) return 'bun';
+          if (pkg.packageManager.startsWith('pnpm@')) return 'pnpm';
+          if (pkg.packageManager.startsWith('yarn@')) return 'yarn';
+          if (pkg.packageManager.startsWith('npm@')) return 'npm';
+        }
+      } catch {
+        // ignore invalid package.json here; later reads will fail loudly if needed
       }
-    } catch {
-      // ignore invalid package.json here; later reads will fail loudly if needed
+    }
+
+    if (
+      fs.existsSync(join(current, 'bun.lock')) ||
+      fs.existsSync(join(current, 'bun.lockb'))
+    ) {
+      return 'bun';
+    }
+    if (
+      fs.existsSync(join(current, 'pnpm-lock.yaml')) ||
+      fs.existsSync(join(current, 'pnpm-workspace.yaml'))
+    ) {
+      return 'pnpm';
+    }
+    if (fs.existsSync(join(current, 'yarn.lock'))) {
+      return 'yarn';
+    }
+    if (fs.existsSync(join(current, 'package-lock.json'))) {
+      return 'npm';
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return 'bun';
+}
+
+function resolveShadcnScaffoldProjectDir(
+  projectDir: string,
+  template?: string
+): string {
+  if (template !== 'next') {
+    return projectDir;
+  }
+
+  const appsDir = join(projectDir, 'apps');
+  if (!fs.existsSync(appsDir)) {
+    return projectDir;
+  }
+
+  for (const entry of fs.readdirSync(appsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const candidateDir = join(appsDir, entry.name);
+    if (
+      fs.existsSync(join(candidateDir, 'package.json')) &&
+      fs.existsSync(join(candidateDir, 'components.json')) &&
+      (fs.existsSync(join(candidateDir, 'app')) ||
+        fs.existsSync(join(candidateDir, 'src', 'app')))
+    ) {
+      return candidateDir;
     }
   }
 
-  if (
-    fs.existsSync(join(projectDir, 'bun.lock')) ||
-    fs.existsSync(join(projectDir, 'bun.lockb'))
-  ) {
-    return 'bun';
-  }
-  if (fs.existsSync(join(projectDir, 'pnpm-lock.yaml'))) {
-    return 'pnpm';
-  }
-  if (fs.existsSync(join(projectDir, 'yarn.lock'))) {
-    return 'yarn';
-  }
-  if (fs.existsSync(join(projectDir, 'package-lock.json'))) {
-    return 'npm';
-  }
-  return 'bun';
+  return projectDir;
 }
 
 function buildDependencyInstallPlan(
@@ -2940,7 +2985,12 @@ async function runScaffoldCommandFlow(params: {
     });
   }
 
-  return withWorkingDirectory(params.projectDir, async () => {
+  const scaffoldProjectDir = resolveShadcnScaffoldProjectDir(
+    params.projectDir,
+    params.template
+  );
+
+  return withWorkingDirectory(scaffoldProjectDir, async () => {
     const config = params.loadCliConfigFn(params.configPath);
     const backend = resolveConfiguredBackend({
       backendArg: params.backendArg,
@@ -2997,7 +3047,7 @@ async function runScaffoldCommandFlow(params: {
 
     return {
       backend,
-      cwd: params.projectDir,
+      cwd: scaffoldProjectDir,
       created: applyResult.created,
       updated: applyResult.updated,
       skipped: applyResult.skipped,
