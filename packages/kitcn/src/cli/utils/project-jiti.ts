@@ -15,13 +15,14 @@ const JITI_EXPORT_CONDITION_PRIORITY = [
   'require',
 ] as const;
 
-const SERVER_PARSER_SHIM_SOURCE = `const createProcedureBuilder = () => {
-  const createMiddleware = (handler = undefined) => ({
-    _handler: handler,
-    pipe(nextHandler) {
-      return createMiddleware(nextHandler);
-    },
-  });
+const SERVER_PARSER_SHIM_SOURCE = `const createMiddleware = (handler = undefined) => ({
+  _handler: handler,
+  pipe(nextHandler) {
+    return createMiddleware(nextHandler);
+  },
+});
+
+const createProcedureBuilder = () => {
   const builder = {
     internal() {
       return builder;
@@ -212,6 +213,9 @@ const ensureServerParserShim = (cwd: string): string => {
   return shimPath;
 };
 
+export const getProjectServerParserShimPath = (cwd = process.cwd()) =>
+  ensureServerParserShim(cwd);
+
 export const createProjectJiti = (cwd = process.cwd()) =>
   createJiti(cwd, {
     interopDefault: true,
@@ -219,6 +223,6 @@ export const createProjectJiti = (cwd = process.cwd()) =>
     alias: {
       ...buildLocalPackageExportAliases(cwd, 'kitcn'),
       ...buildLocalPackageExportAliases(cwd, 'convex'),
-      'kitcn/server': ensureServerParserShim(cwd),
+      'kitcn/server': getProjectServerParserShimPath(cwd),
     },
   });

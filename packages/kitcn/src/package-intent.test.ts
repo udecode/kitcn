@@ -245,4 +245,65 @@ describe('package intent metadata', () => {
       rmSync(installDir, { force: true, recursive: true });
     }
   });
+
+  test('packed backend-core keeps the direct kitcn/server parse shim rewrite', () => {
+    const packDir = mkdtempSync(path.join(os.tmpdir(), 'kitcn-pack-'));
+
+    try {
+      const realPack = Bun.spawnSync({
+        cmd: ['npm', 'pack', '--json'],
+        cwd: packageDir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: {
+          ...process.env,
+          npm_config_pack_destination: packDir,
+        },
+      });
+
+      expect(realPack.exitCode).toBe(0);
+
+      const [packedResult] = JSON.parse(
+        new TextDecoder().decode(realPack.stdout)
+      ) as Array<{
+        filename: string;
+      }>;
+
+      const tarballPath = path.join(packDir, packedResult.filename);
+      const list = Bun.spawnSync({
+        cmd: ['tar', '-tzf', tarballPath],
+        cwd: packageDir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+      });
+
+      expect(list.exitCode).toBe(0);
+
+      const backendCorePath = new TextDecoder()
+        .decode(list.stdout)
+        .split('\n')
+        .find((entry) => /^package\/dist\/backend-core-.*\.mjs$/.test(entry));
+
+      expect(backendCorePath).toBeDefined();
+
+      const extract = Bun.spawnSync({
+        cmd: ['tar', '-xOf', tarballPath, backendCorePath!],
+        cwd: packageDir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+      });
+
+      expect(extract.exitCode).toBe(0);
+
+      const backendCoreSource = new TextDecoder().decode(extract.stdout);
+
+      expect(backendCoreSource).toContain('getProjectServerParserShimPath');
+      expect(backendCoreSource).toContain('kitcn-parse.ts');
+      expect(backendCoreSource).toContain('kitcn/server');
+    } finally {
+      rmSync(packDir, { force: true, recursive: true });
+    }
+  });
 });

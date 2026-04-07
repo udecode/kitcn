@@ -5,7 +5,10 @@ import { getSchemaRelations, getSchemaTriggers } from '../orm/schema';
 import { OrmSchemaOptions } from '../orm/symbols';
 import { isValidConvexFile } from '../shared/meta-utils';
 import { logger } from './utils/logger.js';
-import { createProjectJiti } from './utils/project-jiti.js';
+import {
+  createProjectJiti,
+  getProjectServerParserShimPath,
+} from './utils/project-jiti.js';
 
 /**
  * Generate api.ts with cRPC metadata and client-facing public API refs.
@@ -503,6 +506,13 @@ export type MutationCtx = ServerMutationCtx;
 export type ActionCtx = ServerActionCtx;
 export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
+const createMiddleware = (handler?: unknown) => ({
+  _handler: handler,
+  pipe(nextHandler?: unknown) {
+    return createMiddleware(nextHandler);
+  },
+});
+
 const createProcedureBuilder = () => {
   const builder = {
     internal() {
@@ -529,6 +539,9 @@ const createProcedureBuilder = () => {
     action(handler?: unknown) {
       return handler ?? builder;
     },
+    middleware(handler?: unknown) {
+      return createMiddleware(handler);
+    },
   };
 
   return builder;
@@ -544,12 +557,16 @@ export const initCRPC = {
   context() {
     return this;
   },
+  middleware(handler?: unknown) {
+    return createMiddleware(handler);
+  },
   create() {
     return {
       query: createProcedureBuilder(),
       mutation: createProcedureBuilder(),
       action: createProcedureBuilder(),
       httpAction: createProcedureBuilder(),
+      middleware: createMiddleware,
       router: (record = {}) => record,
     };
   },
@@ -1628,17 +1645,35 @@ async function parseModuleRuntime(
   httpRoutes: HttpRoutes;
   procedures: ProcedureMeta[];
 }> {
+  const source = fs.readFileSync(filePath, 'utf8');
+  const rewrittenSource = source.replaceAll(
+    /from\s+(['"])kitcn\/server\1/g,
+    `from ${JSON.stringify(
+      normalizeImportPath(getProjectServerParserShimPath())
+    )}`
+  );
+  const importPath =
+    rewrittenSource === source
+      ? filePath
+      : (() => {
+          const tempFilePath = `${filePath}.kitcn-parse.ts`;
+          fs.writeFileSync(tempFilePath, rewrittenSource, 'utf8');
+          return tempFilePath;
+        })();
   const result: ModuleMeta = {};
   const httpRoutes: HttpRoutes = {};
   const procedures: ProcedureMeta[] = [];
   const isHttp = filePath.endsWith('http.ts');
 
   // Use jiti to import TypeScript files
-  const module = await jitiInstance.import(filePath);
+  const module = await jitiInstance.import(importPath);
 
   if (!module || typeof module !== 'object') {
     if (isHttp) {
       logger.error('  http.ts: module is empty or not an object');
+    }
+    if (importPath !== filePath) {
+      fs.rmSync(importPath, { force: true });
     }
     return { meta: null, httpRoutes: {}, procedures: [] };
   }
@@ -1704,6 +1739,10 @@ async function parseModuleRuntime(
         }
       }
     }
+  }
+
+  if (importPath !== filePath) {
+    fs.rmSync(importPath, { force: true });
   }
 
   return {
