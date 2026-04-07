@@ -1,5 +1,16 @@
 # kitcn
 
+## 0.12.16
+
+### Patch Changes
+
+- [#177](https://github.com/udecode/kitcn/pull/177) [`2c7ff80`](https://github.com/udecode/kitcn/commit/2c7ff80b571147183316115e86df53f2dc1269d6) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix shared `c.middleware()` auth chains so mutation procedures keep mutation
+    writer types like `ctx.db.insert`.
+  - Improve shared middleware docs so mutation-only middleware uses
+    `c.middleware<MutationCtx>(...)` instead of a query-only workaround.
+
 ## 0.12.15
 
 ### Patch Changes
