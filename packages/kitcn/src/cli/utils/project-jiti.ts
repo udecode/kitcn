@@ -83,7 +83,8 @@ export class CRPCError extends Error {
   }
 }
 
-export const createEnv = ({ schema }) => ({ schema });
+export const createEnv = ({ schema }) => () =>
+  typeof schema?.parse === "function" ? schema.parse(process.env) : process.env;
 export const createHttpRouter = (_app, httpRouter) => httpRouter ?? {};
 export const createCallerFactory = () => () => ({});
 export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
