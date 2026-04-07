@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.12.15
+
+### Patch Changes
+
+- [`a0037ff`](https://github.com/udecode/kitcn/commit/a0037ff26d46749f60788548cb73bf81404fbbc8) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix the remaining `bunx --bun kitcn@latest init -t start --yes` bootstrap
+    codegen failure when scaffolded files import `kitcn/server`.
+
 ## 0.12.14
 
 ### Patch Changes
