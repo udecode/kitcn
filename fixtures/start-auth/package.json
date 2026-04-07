@@ -21,7 +21,7 @@
     "nitro": "latest",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "shadcn": "^4.1.2",
+    "shadcn": "latest",
     "superjson": "^2.2.6",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.0.6",

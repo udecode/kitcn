@@ -89,6 +89,7 @@ describe('tooling/fixtures', () => {
             },
             dependencies: {
               kitcn: '^0.11.0',
+              shadcn: '^4.2.0',
             },
           },
           null,
@@ -142,6 +143,7 @@ describe('tooling/fixtures', () => {
       };
 
       expect(packageJson.scripts?.dev).toBe('next dev --turbopack --port 3005');
+      expect(packageJson.dependencies?.shadcn).toBe('latest');
       expect(existsSync(path.join(templateDir, '.env.local'))).toBe(false);
       expect(
         readFileSync(path.join(getEnvDir, 'get-env.ts'), 'utf8')
