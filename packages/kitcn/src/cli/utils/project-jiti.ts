@@ -70,7 +70,7 @@ export const initCRPC = {
       query: createProcedureBuilder(),
       mutation: createProcedureBuilder(),
       action: createProcedureBuilder(),
-      httpAction: undefined,
+      httpAction: createProcedureBuilder(),
       router: (record = {}) => record,
     };
   },
