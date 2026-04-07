@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.12.13
+
+### Patch Changes
+
+- [#170](https://github.com/udecode/kitcn/pull/170) [`437eff4`](https://github.com/udecode/kitcn/commit/437eff4f19222867dafc278f8f39aef9a81d4647) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `bunx --bun kitcn init -t start --yes` bootstrap parsing so scaffolded
+    backend files resolve against the project install instead of the Bun cache,
+    and preserve anonymous local Convex mode for follow-up `kitcn dev` runs.
+
 ## 0.12.12
 
 ### Patch Changes
