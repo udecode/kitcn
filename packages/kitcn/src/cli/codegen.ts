@@ -503,6 +503,13 @@ export type MutationCtx = ServerMutationCtx;
 export type ActionCtx = ServerActionCtx;
 export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
+const createMiddleware = (handler?: unknown) => ({
+  _handler: handler,
+  pipe(nextHandler?: unknown) {
+    return createMiddleware(nextHandler);
+  },
+});
+
 const createProcedureBuilder = () => {
   const builder = {
     internal() {
@@ -529,6 +536,9 @@ const createProcedureBuilder = () => {
     action(handler?: unknown) {
       return handler ?? builder;
     },
+    middleware(handler?: unknown) {
+      return createMiddleware(handler);
+    },
   };
 
   return builder;
@@ -544,12 +554,16 @@ export const initCRPC = {
   context() {
     return this;
   },
+  middleware(handler?: unknown) {
+    return createMiddleware(handler);
+  },
   create() {
     return {
       query: createProcedureBuilder(),
       mutation: createProcedureBuilder(),
       action: createProcedureBuilder(),
       httpAction: createProcedureBuilder(),
+      middleware: createMiddleware,
       router: (record = {}) => record,
     };
   },

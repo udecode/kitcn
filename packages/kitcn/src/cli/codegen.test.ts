@@ -3346,6 +3346,114 @@ export default createHttpRouter({}, router({}));
     }
   });
 
+  test('generateMeta resolves auth-style c.middleware().pipe() scaffold chains under a bun-style cache path', async () => {
+    const dir = mkTempDir();
+    try {
+      writeFile(
+        path.join(dir, 'convex.json'),
+        `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'convex', 'package.json'),
+        JSON.stringify({
+          name: 'convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'convex', 'server.js'),
+        `export const queryGeneric = () => ({})
+export const mutationGeneric = () => ({})
+export const actionGeneric = () => ({})
+export const internalQueryGeneric = () => ({})
+export const internalMutationGeneric = () => ({})
+export const internalActionGeneric = () => ({})
+export const GenericActionCtx = {};
+export const GenericDataModel = {};
+export const GenericMutationCtx = {};
+export const GenericQueryCtx = {};
+`.trim()
+      );
+
+      const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-cache-'));
+      writeFile(
+        path.join(cacheDir, 'package.json'),
+        JSON.stringify({
+          name: 'kitcn',
+          type: 'module',
+          exports: {
+            './server': './dist/server/index.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(cacheDir, 'dist', 'server', 'index.js'),
+        `
+        export { queryGeneric as initCRPC } from 'convex/server';
+        export const createHttpRouter = (_app, httpRouter) => httpRouter ?? {};
+        export const CRPCError = class extends Error {};
+        export const createEnv = ({ schema }) => () => schema?.parse?.(process.env) ?? process.env;
+        `.trim()
+      );
+      fs.mkdirSync(path.join(dir, 'node_modules'), { recursive: true });
+      fs.symlinkSync(cacheDir, path.join(dir, 'node_modules', 'kitcn'));
+
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'schema.ts'),
+        'export default {};'
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'http.ts'),
+        `
+        import { CRPCError } from 'kitcn/server';
+        import type { QueryCtx } from './generated/server';
+        import { initCRPC } from './generated/server';
+
+        const c = initCRPC
+          .meta<{ auth?: 'required' }>()
+          .create();
+
+        const requireAuth = c.middleware(async ({ ctx, next }) => {
+          if (!(ctx as QueryCtx)) {
+            throw new CRPCError({ code: 'UNAUTHORIZED', message: 'No ctx' });
+          }
+
+          return next({ ctx });
+        });
+
+        export const authRoute = c.httpAction.use(requireAuth.pipe(({ next }) => next({})));
+        export default authRoute;
+        `.trim()
+      );
+
+      const result = Bun.spawnSync(
+        [
+          'bun',
+          '--cwd',
+          path.join(process.cwd(), 'packages', 'kitcn'),
+          '-e',
+          'import { generateMeta } from "./src/cli/codegen.ts"; process.chdir(process.argv[1]); await generateMeta(undefined, { silent: true }); console.log("OK");',
+          dir,
+        ],
+        {
+          cwd: process.cwd(),
+          stderr: 'pipe',
+          stdout: 'pipe',
+        }
+      );
+
+      expect(result.exitCode).toBe(0);
+    } finally {
+      fs.rmSync(path.join(dir, 'node_modules', 'kitcn'), {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   test('generateMeta still logs unexpected http.ts parse failures', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
