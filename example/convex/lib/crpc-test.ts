@@ -19,6 +19,7 @@ import {
 } from '../functions/generated/projects.runtime';
 import {
   type ActionCtx,
+  initCRPC,
   type MutationCtx,
   type QueryCtx,
 } from '../functions/generated/server';
@@ -1315,6 +1316,27 @@ export const middleware_chained_use_auth = authQuery
     const step1: boolean = ctx.step1;
     const step2: string = ctx.step2;
     return { userId, step1, step2 };
+  });
+
+// 22.13b Shared c.middleware() should preserve mutation writer ctx on generated initCRPC
+const middlewareRegression = initCRPC.create();
+
+const shared_auth_middleware = middlewareRegression.middleware(
+  async ({ ctx, next }) =>
+    next({
+      ctx: {
+        ...ctx,
+        user: { id: 'user_1' },
+        userId: 'user_1',
+      },
+    })
+);
+
+export const middleware_shared_mutation_writer = middlewareRegression.mutation
+  .use(shared_auth_middleware)
+  .mutation(async ({ ctx }) => {
+    const insert: MutationCtx['db']['insert'] = ctx.db.insert;
+    return { insert: !!insert, userId: ctx.user.id };
   });
 
 // 22.14 Error: Chained .use() - accessing property from later middleware

@@ -47,6 +47,7 @@ import type {
   IntersectIfDefined,
   MiddlewareBuilder,
   MiddlewareFunction,
+  MiddlewareNext,
   MiddlewareResult,
   Overwrite,
   UnsetMarker,
@@ -270,7 +271,12 @@ async function executeMiddlewares(
   let currentInput = input;
 
   // Create next function for this middleware (tRPC-compatible signature)
-  const next = async (opts?: { ctx?: unknown; input?: unknown }) => {
+  const next: MiddlewareNext<any, any> = async <
+    TNextContext extends object = Record<string, never>,
+  >(opts?: {
+    ctx?: TNextContext;
+    input?: unknown;
+  }) => {
     const nextCtx = opts?.ctx ?? ctx;
     const nextInput = opts?.input ?? currentInput;
     // Track input modification
@@ -285,7 +291,7 @@ async function executeMiddlewares(
       getRawInput,
       index + 1
     );
-    return result;
+    return result as MiddlewareResult<any>;
   };
 
   // Execute current middleware with input and getRawInput

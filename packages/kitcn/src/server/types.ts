@@ -74,19 +74,56 @@ export type MiddlewareResult<TContext> = {
 /** Function to get raw input before validation */
 export type GetRawInputFn = () => Promise<unknown>;
 
+type CurrentMiddlewareContext<TContext, TContextOverridesIn> = Simplify<
+  Overwrite<TContext, TContextOverridesIn>
+>;
+
+type ChangedKeys<TCurrent, TNext> = {
+  [K in keyof TNext]: K extends keyof TCurrent
+    ? [TNext[K]] extends [TCurrent[K]]
+      ? [TCurrent[K]] extends [TNext[K]]
+        ? never
+        : K
+      : K
+    : K;
+}[keyof TNext];
+
+type ContextOverridesFromNext<TCurrent, TNext> = TNext extends object
+  ? Simplify<Pick<TNext, ChangedKeys<TCurrent, TNext>>> extends infer TDiff
+    ? keyof TDiff extends never
+      ? UnsetMarker
+      : TDiff
+    : never
+  : TNext;
+
 /**
  * Next function overloads - key to automatic context and input inference
  * Matches tRPC's pattern: can modify context, input, or both
  */
-export type MiddlewareNext<TContextOverridesIn> = {
-  /** Continue without modification - passes through existing overrides */
-  (): Promise<MiddlewareResult<TContextOverridesIn>>;
-  /** Continue with modified context and/or input */
-  <$ContextOverride>(opts: {
-    ctx?: $ContextOverride;
-    input?: unknown;
-  }): Promise<MiddlewareResult<$ContextOverride>>;
-};
+/**
+ * Continue middleware execution with optional ctx/input changes.
+ * When ctx includes the current context plus extra fields, only the delta is
+ * carried forward as middleware overrides.
+ */
+export type MiddlewareNext<TContext, TContextOverridesIn> = <
+  TNextContext extends object = CurrentMiddlewareContext<
+    TContext,
+    TContextOverridesIn
+  >,
+>(opts?: {
+  ctx?: TNextContext;
+  input?: unknown;
+}) => Promise<
+  MiddlewareResult<
+    Overwrite<
+      TContextOverridesIn,
+      ContextOverridesFromNext<
+        CurrentMiddlewareContext<TContext, TContextOverridesIn>,
+        TNextContext
+      >
+    >
+  >
+>;
 
 /**
  * Middleware function signature with input access (tRPC-compatible)
@@ -104,11 +141,11 @@ export type MiddlewareFunction<
   $ContextOverridesOut,
   TInputOut = unknown,
 > = (opts: {
-  ctx: Simplify<Overwrite<TContext, TContextOverridesIn>>;
+  ctx: CurrentMiddlewareContext<TContext, TContextOverridesIn>;
   meta: TMeta;
   input: TInputOut;
   getRawInput: GetRawInputFn;
-  next: MiddlewareNext<TContextOverridesIn>;
+  next: MiddlewareNext<TContext, TContextOverridesIn>;
 }) => Promise<MiddlewareResult<$ContextOverridesOut>>;
 
 /** Stored middleware with type info erased for runtime */
