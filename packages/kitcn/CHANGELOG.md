@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.12.14
+
+### Patch Changes
+
+- [`a5974eb`](https://github.com/udecode/kitcn/commit/a5974ebf70ce984aab6098ffad397c9b116fa7b9) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix the remaining `bunx --bun kitcn@latest init -t start --yes` bootstrap
+    parse failure by inlining a bootstrap-safe generated server stub for the real
+    nested scaffold chain.
+
 ## 0.12.13
 
 ### Patch Changes
