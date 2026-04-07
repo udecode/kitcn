@@ -174,14 +174,63 @@ const INIT_GENERATED_SERVER_STUB_TEMPLATE = `import type {
   GenericMutationCtx,
   GenericQueryCtx,
 } from 'convex/server';
-import { initCRPC as baseInitCRPC } from 'kitcn/server';
 
 export type QueryCtx = GenericQueryCtx<GenericDataModel>;
 export type MutationCtx = GenericMutationCtx<GenericDataModel>;
 export type ActionCtx = GenericActionCtx<GenericDataModel>;
 export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
-export const initCRPC = baseInitCRPC;
+const createProcedureBuilder = () => {
+  const builder = {
+    internal() {
+      return builder;
+    },
+    use() {
+      return builder;
+    },
+    meta() {
+      return builder;
+    },
+    input() {
+      return builder;
+    },
+    output() {
+      return builder;
+    },
+    query(handler?: unknown) {
+      return handler ?? builder;
+    },
+    mutation(handler?: unknown) {
+      return handler ?? builder;
+    },
+    action(handler?: unknown) {
+      return handler ?? builder;
+    },
+  };
+
+  return builder;
+};
+
+export const initCRPC = {
+  meta() {
+    return this;
+  },
+  dataModel() {
+    return this;
+  },
+  context() {
+    return this;
+  },
+  create() {
+    return {
+      query: createProcedureBuilder(),
+      mutation: createProcedureBuilder(),
+      action: createProcedureBuilder(),
+      httpAction: createProcedureBuilder(),
+      router: (record = {}) => record,
+    };
+  },
+};
 `;
 const INIT_LOCAL_BOOTSTRAP_READY_RE = /(Convex|Concave) functions ready!/i;
 const CONVEX_INIT_CREATED_CONFIG_RE =
