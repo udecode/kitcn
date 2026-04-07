@@ -19,7 +19,6 @@ import {
 } from '@clack/prompts';
 import { parse as parseDotEnv } from 'dotenv';
 import { execa } from 'execa';
-import { createJiti } from 'jiti';
 import { getTableConfig } from '../orm/introspection.js';
 import { getSchemaRelations } from '../orm/schema.js';
 import { runAnalyze } from './analyze.js';
@@ -140,6 +139,7 @@ import {
 } from './utils/dry-run-formatter.js';
 import { highlighter } from './utils/highlighter.js';
 import { logger } from './utils/logger.js';
+import { createProjectJiti } from './utils/project-jiti.js';
 import { createSpinner } from './utils/spinner.js';
 import { createTypeScriptProxy } from './utils/typescript-runtime.js';
 
@@ -850,6 +850,21 @@ const CONVEX_DEPLOYMENT_ENV_KEYS = [
   'CONVEX_SELF_HOSTED_ADMIN_KEY',
 ] as const;
 const LOCAL_CONVEX_DEPLOYMENT_PREFIXES = ['local:', 'anonymous:'] as const;
+const LOCAL_CONVEX_DEPLOYMENT_VALUES = ['anonymous-agent'] as const;
+
+function isLocalConvexDeploymentValue(deployment: string | undefined): boolean {
+  if (!deployment) {
+    return false;
+  }
+  return (
+    LOCAL_CONVEX_DEPLOYMENT_VALUES.includes(
+      deployment as (typeof LOCAL_CONVEX_DEPLOYMENT_VALUES)[number]
+    ) ||
+    LOCAL_CONVEX_DEPLOYMENT_PREFIXES.some((prefix) =>
+      deployment.startsWith(prefix)
+    )
+  );
+}
 
 export function createBackendCommandEnv(
   overrides?: Record<string, string | undefined>
@@ -868,12 +883,7 @@ export function hasRemoteConvexDeploymentEnv(
   env: Record<string, string | undefined>
 ): boolean {
   const deployment = env.CONVEX_DEPLOYMENT?.trim();
-  if (
-    deployment &&
-    !LOCAL_CONVEX_DEPLOYMENT_PREFIXES.some((prefix) =>
-      deployment.startsWith(prefix)
-    )
-  ) {
+  if (deployment && !isLocalConvexDeploymentValue(deployment)) {
     return true;
   }
 
@@ -3540,10 +3550,7 @@ async function computeAggregateIndexFingerprint(
     return null;
   }
 
-  const jiti = createJiti(process.cwd(), {
-    interopDefault: true,
-    moduleCache: false,
-  });
+  const jiti = createProjectJiti();
   const schemaModule = await jiti.import(schemaPath);
   if (!schemaModule || typeof schemaModule !== 'object') {
     return null;

@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createJiti } from 'jiti';
 import { getSchemaRelations, getSchemaTriggers } from '../orm/schema';
 import { OrmSchemaOptions } from '../orm/symbols';
 import { isValidConvexFile } from '../shared/meta-utils';
 import { logger } from './utils/logger.js';
+import { createProjectJiti } from './utils/project-jiti.js';
 
 /**
  * Generate api.ts with cRPC metadata and client-facing public API refs.
@@ -664,10 +664,7 @@ async function resolveSchemaMetadataForCodegen(
     };
   }
 
-  const jitiInstance = createJiti(process.cwd(), {
-    interopDefault: true,
-    moduleCache: false,
-  });
+  const jitiInstance = createProjectJiti();
 
   try {
     const schemaModule = await jitiInstance.import(schemaPath);
@@ -1575,7 +1572,7 @@ function isCRPCHttpRouter(value: unknown): value is {
  */
 async function parseModuleRuntime(
   filePath: string,
-  jitiInstance: ReturnType<typeof createJiti>
+  jitiInstance: ReturnType<typeof createProjectJiti>
 ): Promise<{
   meta: ModuleMeta | null;
   httpRoutes: HttpRoutes;
@@ -1776,10 +1773,7 @@ export async function generateMeta(
 
     try {
       // Create jiti instance for importing TypeScript files
-      const jitiInstance = createJiti(process.cwd(), {
-        interopDefault: true,
-        moduleCache: false,
-      });
+      const jitiInstance = createProjectJiti();
 
       const files = listFilesRecursive(functionsDir).filter(
         (file) => file.endsWith('.ts') && isValidConvexFile(file)

@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import { join } from 'node:path';
-import { createJiti } from 'jiti';
 import { OrmSchemaExtensions } from '../../orm/symbols.js';
 import type {
   PluginLockfile,
@@ -8,6 +7,7 @@ import type {
   PluginRootSchemaOwnership,
   SupportedPlugin,
 } from '../types.js';
+import { createProjectJiti } from '../utils/project-jiti.js';
 import { isSupportedPluginKey } from './index.js';
 import { normalizeLockfileScaffoldPath } from './path-utils.js';
 
@@ -251,10 +251,7 @@ export const resolveSchemaInstalledPlugins = async (
     return [];
   }
 
-  const jiti = createJiti(process.cwd(), {
-    interopDefault: true,
-    moduleCache: false,
-  });
+  const jiti = createProjectJiti();
   try {
     const schemaModule = await jiti.import(schemaPath);
     const schemaValue =
