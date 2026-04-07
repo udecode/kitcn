@@ -683,6 +683,24 @@ export function resolveImplicitConvexRemoteDeploymentEnv(
   };
 }
 
+export function resolveImplicitConvexAnonymousAgentMode(
+  cwd = process.cwd()
+): 'anonymous' | undefined {
+  const envLocalPath = join(cwd, '.env.local');
+  if (!fs.existsSync(envLocalPath)) {
+    return;
+  }
+
+  const parsed = parseEnv(fs.readFileSync(envLocalPath, 'utf8'));
+  const deployment = parsed.CONVEX_DEPLOYMENT?.trim();
+  if (
+    deployment === 'anonymous-agent' ||
+    deployment?.startsWith('anonymous:')
+  ) {
+    return 'anonymous';
+  }
+}
+
 function resolveConvexEnvFileCommandEnv(
   args: string[],
   cwd = process.cwd()
@@ -1082,6 +1100,13 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     explicitConvexCommandEnv === null
       ? resolveImplicitConvexRemoteDeploymentEnv()
       : null;
+  const implicitConvexAgentMode =
+    backend === 'convex' &&
+    explicitConvexTargetArgs.length === 0 &&
+    !explicitConvexCommandEnv?.CONVEX_AGENT_MODE &&
+    !implicitConvexCommandEnv?.CONVEX_AGENT_MODE
+      ? resolveImplicitConvexAnonymousAgentMode()
+      : undefined;
   const effectiveConvexCommandEnv =
     explicitConvexCommandEnv ?? implicitConvexCommandEnv;
   const preRunFunction = config.dev.preRun;
@@ -1194,6 +1219,9 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     env: {
       ...localNodeEnvOverrides,
       ...effectiveConvexCommandEnv,
+      ...(implicitConvexAgentMode
+        ? { CONVEX_AGENT_MODE: implicitConvexAgentMode }
+        : {}),
     },
     targetArgs,
   });
@@ -1265,6 +1293,9 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
       env: createBackendCommandEnv({
         ...localNodeEnvOverrides,
         ...effectiveConvexCommandEnv,
+        ...(implicitConvexAgentMode
+          ? { CONVEX_AGENT_MODE: implicitConvexAgentMode }
+          : {}),
         ...concaveLocalDevContract?.backendEnv,
       }),
       reject: false,

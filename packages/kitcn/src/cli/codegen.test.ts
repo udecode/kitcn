@@ -3141,6 +3141,101 @@ describe('cli/codegen', () => {
     }
   });
 
+  test('generateMeta resolves scaffold imports when local kitcn install is symlinked into a bun-style cache path', async () => {
+    const dir = mkTempDir();
+    try {
+      writeFile(
+        path.join(dir, 'convex.json'),
+        `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'convex', 'package.json'),
+        JSON.stringify({
+          name: 'convex',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'convex', 'server.js'),
+        `export const queryGeneric = () => ({})
+export const mutationGeneric = () => ({})
+export const actionGeneric = () => ({})
+export const internalQueryGeneric = () => ({})
+export const internalMutationGeneric = () => ({})
+export const internalActionGeneric = () => ({})
+`.trim()
+      );
+
+      const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-cache-'));
+      writeFile(
+        path.join(cacheDir, 'package.json'),
+        JSON.stringify({
+          name: 'kitcn',
+          type: 'module',
+          exports: {
+            './server': './dist/server/index.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(cacheDir, 'dist', 'server', 'index.js'),
+        `
+        export { queryGeneric as initCRPC } from 'convex/server';
+        export const createHttpRouter = () => ({});
+        `.trim()
+      );
+      fs.mkdirSync(path.join(dir, 'node_modules'), { recursive: true });
+      fs.symlinkSync(cacheDir, path.join(dir, 'node_modules', 'kitcn'));
+
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'http.ts'),
+        `
+        import { createHttpRouter } from 'kitcn/server';
+        export default createHttpRouter({}, {});
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'messages.ts'),
+        `
+        import { initCRPC } from 'kitcn/server';
+        export const list = initCRPC;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'schema.ts'),
+        'export default {};'
+      );
+
+      const result = Bun.spawnSync(
+        [
+          'bun',
+          '--cwd',
+          path.join(process.cwd(), 'packages', 'kitcn'),
+          '-e',
+          'import { generateMeta, getConvexConfig } from "./src/cli/codegen.ts"; process.chdir(process.argv[1]); await generateMeta(undefined, { silent: true }); console.log(getConvexConfig().outputFile);',
+          dir,
+        ],
+        {
+          cwd: process.cwd(),
+          stderr: 'pipe',
+          stdout: 'pipe',
+        }
+      );
+
+      expect(result.exitCode).toBe(0);
+      const outputFile = result.stdout.toString().trim();
+      expect(fs.existsSync(outputFile)).toBe(true);
+    } finally {
+      fs.rmSync(path.join(dir, 'node_modules', 'kitcn'), {
+        force: true,
+        recursive: true,
+      });
+    }
+  });
+
   test('generateMeta still logs unexpected http.ts parse failures', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

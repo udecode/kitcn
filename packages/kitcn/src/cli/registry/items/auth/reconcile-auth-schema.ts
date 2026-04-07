@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BetterAuthOptions } from 'better-auth/minimal';
-import { createJiti } from 'jiti';
 import type * as tsType from 'typescript';
 import { getAuthConfigProvider } from '../../../../auth/auth-config';
 import { createSchema } from '../../../../auth/create-schema';
 import { createSchemaExtensionOrm } from '../../../../auth/create-schema-orm';
+import { createProjectJiti } from '../../../utils/project-jiti.js';
 import { createTypeScriptProxy } from '../../../utils/typescript-runtime.js';
 import type { RootSchemaTableUnit } from '../../schema-ownership.js';
 
@@ -346,10 +346,7 @@ export const loadAuthOptionsFromDefinition = async (
     }
 
     try {
-      const jiti = createJiti(importPath, {
-        interopDefault: true,
-        moduleCache: false,
-      });
+      const jiti = createProjectJiti();
       const authModule = await jiti.import(importPath);
       const authDefinition =
         authModule && typeof authModule === 'object'

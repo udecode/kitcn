@@ -2857,6 +2857,11 @@ describe('cli/cli', () => {
       getAggregateBackfillDeploymentKey(['--preview-name=feature-123'])
     ).toBe('preview:feature-123');
     expect(getAggregateBackfillDeploymentKey([])).toBe('local');
+    expect(
+      getAggregateBackfillDeploymentKey([], process.cwd(), {
+        CONVEX_DEPLOYMENT: 'anonymous-agent',
+      })
+    ).toBe('local');
   });
 
   test('getAggregateBackfillDeploymentKey resolves remote env-file targets', () => {

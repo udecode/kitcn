@@ -9,6 +9,7 @@ import {
   resolveConcaveLocalDevContract,
   resolveConcaveLocalSiteUrl,
   resolveDevStartupRetryDelayMs,
+  resolveImplicitConvexAnonymousAgentMode,
   resolveImplicitConvexRemoteDeploymentEnv,
   resolveSupportedLocalNodeEnvOverrides,
   resolveWatcherCommand,
@@ -232,6 +233,18 @@ describe('cli/commands/dev', () => {
     });
     expect(resolveImplicitConvexRemoteDeploymentEnv(localDir)).toBeNull();
     expect(resolveImplicitConvexRemoteDeploymentEnv(emptyDir)).toBeNull();
+  });
+
+  test('resolveImplicitConvexAnonymousAgentMode detects anonymous-agent in .env.local', () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-anonymous-agent-')
+    );
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'CONVEX_DEPLOYMENT=anonymous-agent\n'
+    );
+
+    expect(resolveImplicitConvexAnonymousAgentMode(dir)).toBe('anonymous');
   });
 
   test('resolveConcaveLocalDevContract defaults concave dev to Convex local ports', () => {
@@ -709,6 +722,97 @@ describe('cli/commands/dev', () => {
       ).toBe(false);
     } finally {
       console.info = originalInfo;
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
+    }
+  });
+
+  test('handleDevCommand preserves anonymous agent mode for anonymous-agent local deployments', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-anonymous-agent-local-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'CONVEX_DEPLOYMENT=anonymous-agent\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPersistentProcess();
+    const calls: Array<{ cmd: string; args: string[]; opts?: any }> = [];
+
+    const execaStub = mock((cmd: string, args: string[], opts?: any): any => {
+      calls.push({ cmd, args, opts });
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (args[1] === 'init') {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(['dev', '--once'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+      await waitFor(() => calls.some(({ args }) => args[1] === 'dev'));
+
+      convexProcess.emitStdout('13:35:25 Convex functions ready! (1.22s)\n');
+      convexProcess.resolveExit({ exitCode: 0 });
+
+      const exitCode = await runPromise;
+
+      expect(exitCode).toBe(0);
+      expect(calls[0]).toMatchObject({
+        cmd: 'node',
+        args: ['/fake/convex/main.js', 'init'],
+        opts: {
+          env: expect.objectContaining({
+            CONVEX_AGENT_MODE: 'anonymous',
+          }),
+        },
+      });
+      expect(calls[2]).toMatchObject({
+        cmd: 'node',
+        args: ['/fake/convex/main.js', 'dev', '--once'],
+        opts: {
+          env: expect.objectContaining({
+            CONVEX_AGENT_MODE: 'anonymous',
+          }),
+        },
+      });
+    } finally {
       process.chdir(oldCwd);
       onSpy.mockRestore();
     }

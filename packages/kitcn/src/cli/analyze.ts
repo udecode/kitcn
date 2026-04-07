@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { type BuildResult, build, type Plugin } from 'esbuild';
-import { createJiti } from 'jiti';
 import { isColorEnabled } from './utils/highlighter.js';
+import { createProjectJiti } from './utils/project-jiti.js';
 
 const MB = 1024 * 1024;
 
@@ -480,7 +480,7 @@ const getNativeHandlerExportNames = (source: string): string[] => {
 
 const listConvexHandlerExports = async (
   entryPoint: string,
-  jitiInstance: ReturnType<typeof createJiti>
+  jitiInstance: ReturnType<typeof createProjectJiti>
 ): Promise<string[]> => {
   const exportNames = new Set<string>();
   const source = fs.readFileSync(entryPoint, 'utf8');
@@ -519,10 +519,7 @@ const scanHandlerExportsByEntry = async (
   (globalThis as Record<string, unknown>).__KITCN_CODEGEN__ = true;
 
   try {
-    const jitiInstance = createJiti(process.cwd(), {
-      interopDefault: true,
-      moduleCache: false,
-    });
+    const jitiInstance = createProjectJiti();
 
     const results = await Promise.all(
       entryPoints.map(async (entryPoint) => ({
