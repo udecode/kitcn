@@ -150,20 +150,18 @@ export const authMutation = c.mutation
   .use(roleMiddleware);
 ```
 
-For middleware that needs ORM write methods, apply it directly to the mutation chain:
+Shared middleware keeps mutation writer types when you apply it to a mutation chain.
+If the middleware itself performs writes, make it mutation-only:
 
-```ts showLineNumbers {2,7-9}
-// ❌ Shared middleware loses mutation-specific methods
-const writeMiddleware = c.middleware(async ({ ctx, next }) => {
-  await ctx.orm.insert(logs).values({ ... }); // Error: insert doesn't exist
+```ts showLineNumbers {1-2,5-7}
+import type { MutationCtx } from '../functions/generated/server';
+
+const writeMiddleware = c.middleware<MutationCtx>(async ({ ctx, next }) => {
+  await ctx.orm.insert(logs).values({ ... });
   return next({ ctx });
 });
 
-// ✅ Apply directly to mutation chain
-export const authMutation = c.mutation.use(async ({ ctx, next }) => {
-  await ctx.orm.insert(logs).values({ ... }); // Works!
-  return next({ ctx });
-});
+export const authMutation = c.mutation.use(writeMiddleware);
 ```
 
 ## Reusable Middleware

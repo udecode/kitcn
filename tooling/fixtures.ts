@@ -65,6 +65,10 @@ const FIXTURE_PACKAGE_PATHS = {
   'kitcn/solid': 'src/solid/index.ts',
 } as const;
 
+const VOLATILE_FIXTURE_DEPENDENCY_SPECS = {
+  shadcn: 'latest',
+} as const;
+
 const normalizeTemplatePackageJson = (
   packageJson: WorkspacePackageJson,
   templateKey: TemplateKey
@@ -72,6 +76,11 @@ const normalizeTemplatePackageJson = (
   dependencies: {
     ...packageJson.dependencies,
     kitcn: 'workspace:*',
+    ...Object.fromEntries(
+      Object.entries(VOLATILE_FIXTURE_DEPENDENCY_SPECS).filter(
+        ([dependencyName]) => packageJson.dependencies?.[dependencyName]
+      )
+    ),
   },
   devDependencies: packageJson.devDependencies,
   name: getFixturePackageName(templateKey),

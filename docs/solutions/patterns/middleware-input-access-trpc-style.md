@@ -47,7 +47,7 @@ export type MiddlewareFunction<
   meta: TMeta;
   input: TInputOut;           // NEW
   getRawInput: GetRawInputFn; // NEW
-  next: MiddlewareNext<TContextOverridesIn>;
+  next: MiddlewareNext<TContext, TContextOverridesIn>;
 }) => Promise<MiddlewareResult<$ContextOverridesOut>>;
 ```
 
@@ -79,11 +79,22 @@ async function executeMiddlewares(
   const middleware = middlewares[index];
   let currentInput = input;
 
-  const next = async (opts?: { ctx?: unknown; input?: unknown }) => {
+  const next: MiddlewareNext<any, any> = async <
+    TNextContext extends object = Record<string, never>,
+  >(
+    opts?: { ctx?: TNextContext; input?: unknown }
+  ) => {
     const nextCtx = opts?.ctx ?? ctx;
     const nextInput = opts?.input ?? currentInput;
     if (opts?.input !== undefined) currentInput = opts.input;
-    return executeMiddlewares(middlewares, nextCtx, meta, nextInput, getRawInput, index + 1);
+    return (await executeMiddlewares(
+      middlewares,
+      nextCtx,
+      meta,
+      nextInput,
+      getRawInput,
+      index + 1
+    )) as MiddlewareResult<any>;
   };
 
   const result = await middleware({ ctx, meta, input, getRawInput, next });

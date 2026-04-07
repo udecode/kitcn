@@ -227,7 +227,8 @@ Builder rules that matter:
 1. Build `public`, `optional`, `auth`, and `private` procedure families once in `convex/lib/crpc.ts`.
 2. `.meta(...)` is client-visible via generated API metadata. Never put secrets there.
 3. Resolve session/user once in middleware. Do not re-fetch auth state in every procedure.
-4. Keep deeper auth/runtime edge cases in `references/setup/server.md` and `references/features/auth*.md`.
+4. Shared `c.middleware()` chains preserve mutation writer types on mutation procedures. If the middleware itself performs writes, type it as mutation-only with `c.middleware<MutationCtx>(...)`.
+5. Keep deeper auth/runtime edge cases in `references/setup/server.md` and `references/features/auth*.md`.
 
 ### 3) Query + Mutation Procedure Template
 
