@@ -16,6 +16,12 @@ const JITI_EXPORT_CONDITION_PRIORITY = [
 ] as const;
 
 const SERVER_PARSER_SHIM_SOURCE = `const createProcedureBuilder = () => {
+  const createMiddleware = (handler = undefined) => ({
+    _handler: handler,
+    pipe(nextHandler) {
+      return createMiddleware(nextHandler);
+    },
+  });
   const builder = {
     internal() {
       return builder;
@@ -50,6 +56,9 @@ const SERVER_PARSER_SHIM_SOURCE = `const createProcedureBuilder = () => {
         _handler: handler,
       };
     },
+    middleware(handler) {
+      return createMiddleware(handler);
+    },
   };
 
   return builder;
@@ -65,12 +74,16 @@ export const initCRPC = {
   context() {
     return this;
   },
+  middleware(handler) {
+    return createMiddleware(handler);
+  },
   create() {
     return {
       query: createProcedureBuilder(),
       mutation: createProcedureBuilder(),
       action: createProcedureBuilder(),
       httpAction: createProcedureBuilder(),
+      middleware: createMiddleware,
       router: (record = {}) => record,
     };
   },
