@@ -980,17 +980,39 @@ function resolveRemoteConvexDeploymentKey(
   return 'remote-env';
 }
 
-async function withLocalConvexEnv<T>(
+function getLocalCodegenEnvVars(
   sharedDir: string,
+  backend: CliBackend
+): Record<string, string> {
+  const { functionsDir } = getConvexConfig(sharedDir);
+  const rootEnvPath = join(process.cwd(), '.env');
+  const backendEnvPath = join(functionsDir, '..', '.env');
+  const envPaths =
+    backend === 'concave'
+      ? [backendEnvPath, rootEnvPath]
+      : [rootEnvPath, backendEnvPath];
+
+  const mergedEnv: Record<string, string> = {};
+  for (const envPath of envPaths) {
+    if (!fs.existsSync(envPath)) {
+      continue;
+    }
+    Object.assign(mergedEnv, parseDotEnv(fs.readFileSync(envPath, 'utf8')));
+  }
+
+  return mergedEnv;
+}
+
+export async function withLocalCodegenEnv<T>(
+  sharedDir: string,
+  backend: CliBackend,
   fn: () => Promise<T>
 ): Promise<T> {
-  const { functionsDir } = getConvexConfig(sharedDir);
-  const envPath = join(functionsDir, '..', '.env');
-  if (!fs.existsSync(envPath)) {
+  const envVars = getLocalCodegenEnvVars(sharedDir, backend);
+  if (Object.keys(envVars).length === 0) {
     return fn();
   }
 
-  const envVars = parseDotEnv(fs.readFileSync(envPath, 'utf8'));
   const previousValues = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(envVars)) {
     previousValues.set(key, process.env[key]);
@@ -1008,15 +1030,6 @@ async function withLocalConvexEnv<T>(
       }
     }
   }
-}
-
-function getLocalConvexEnvVars(sharedDir: string): Record<string, string> {
-  const { functionsDir } = getConvexConfig(sharedDir);
-  const envPath = join(functionsDir, '..', '.env');
-  if (!fs.existsSync(envPath)) {
-    return {};
-  }
-  return parseDotEnv(fs.readFileSync(envPath, 'utf8'));
 }
 
 function parseAddCommandArgs(args: string[]): AddCommandArgs {
@@ -3959,7 +3972,10 @@ export async function runConfiguredCodegenDetailed(params: {
     resolvedRuntimeAdapter.publicName,
     convexCodegenArgs
   );
-  const localConvexEnv = getLocalConvexEnvVars(sharedDir);
+  const localCodegenEnv = getLocalCodegenEnvVars(
+    sharedDir,
+    resolvedRuntimeAdapter.publicName
+  );
   const shouldAutoSyncLocalAuthEnv =
     autoSyncLocalAuthEnv &&
     resolvedRuntimeAdapter.publicName === 'convex' &&
@@ -3985,13 +4001,17 @@ export async function runConfiguredCodegenDetailed(params: {
     }
   }
 
-  await withLocalConvexEnv(sharedDir, async () => {
-    await generateMetaFn(sharedDir, {
-      debug,
-      scope: scope ?? 'all',
-      trimSegments,
-    });
-  });
+  await withLocalCodegenEnv(
+    sharedDir,
+    resolvedRuntimeAdapter.publicName,
+    async () => {
+      await generateMetaFn(sharedDir, {
+        debug,
+        scope: scope ?? 'all',
+        trimSegments,
+      });
+    }
+  );
 
   const result = await execaFn(
     resolvedRuntimeAdapter.command,
@@ -4000,7 +4020,7 @@ export async function runConfiguredCodegenDetailed(params: {
       stdio,
       cwd: process.cwd(),
       env: createBackendCommandEnv({
-        ...localConvexEnv,
+        ...localCodegenEnv,
         ...env,
       }),
       reject: false,
@@ -4201,7 +4221,10 @@ async function runLocalConvexBootstrapForInit(params: {
   sharedDir: string;
   env?: Record<string, string | undefined>;
 }): Promise<InitBootstrapResult> {
-  const localConvexEnv = getLocalConvexEnvVars(params.sharedDir);
+  const localConvexEnv = getLocalCodegenEnvVars(
+    params.sharedDir,
+    params.runtimeAdapter.publicName
+  );
   const bootstrapProcess = params.execaFn(
     params.runtimeAdapter.command,
     [...params.runtimeAdapter.argsPrefix, ...params.args],
@@ -4394,13 +4417,17 @@ async function runInitializationCodegen(params: {
             )
           );
         }
-        await withLocalConvexEnv(params.sharedDir, async () => {
-          await params.generateMetaFn(params.sharedDir, {
-            debug: params.debug,
-            scope: params.config.codegen.scope ?? 'all',
-            trimSegments: resolveCodegenTrimSegments(params.config),
-          });
-        });
+        await withLocalCodegenEnv(
+          params.sharedDir,
+          runtimeAdapter.publicName,
+          async () => {
+            await params.generateMetaFn(params.sharedDir, {
+              debug: params.debug,
+              scope: params.config.codegen.scope ?? 'all',
+              trimSegments: resolveCodegenTrimSegments(params.config),
+            });
+          }
+        );
         await params.syncEnvFn({
           authSyncMode: 'complete',
           force: true,

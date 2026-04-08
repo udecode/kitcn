@@ -3346,6 +3346,157 @@ export default createHttpRouter({}, router({}));
     }
   });
 
+  test('generateMeta resolves tsconfig path aliases during module parsing', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'convex.json'),
+        `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
+      );
+      writeFile(
+        path.join(dir, 'tsconfig.json'),
+        `${JSON.stringify(
+          {
+            compilerOptions: {
+              baseUrl: '.',
+              paths: {
+                '@/*': ['./*'],
+              },
+            },
+          },
+          null,
+          2
+        )}\n`
+      );
+      writeFile(
+        path.join(dir, 'lib', 'crpc.ts'),
+        `
+        export const publicQuery = {
+          query(handler: unknown) {
+            return {
+              _crpcMeta: {
+                type: 'query',
+              },
+              _handler: handler,
+            };
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'internal', 'dialpad.ts'),
+        `
+        import { publicQuery } from '@/lib/crpc';
+
+        export const list = publicQuery.query(async () => []);
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'http.ts'),
+        'export default {};'
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'schema.ts'),
+        'export default {};'
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).resolves.toBe(
+        undefined
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta resolves tsconfig path aliases when parse-time kitcn/server rewriting is active', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeFile(
+        path.join(dir, 'node_modules', 'kitcn', 'package.json'),
+        JSON.stringify({
+          name: 'kitcn',
+          type: 'module',
+          exports: {
+            './server': './server.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'kitcn', 'server.js'),
+        `
+        export const createEnv = ({ schema }) => () =>
+          typeof schema?.parse === 'function' ? schema.parse(process.env) : process.env;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex.json'),
+        `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
+      );
+      writeFile(
+        path.join(dir, 'tsconfig.json'),
+        `${JSON.stringify(
+          {
+            compilerOptions: {
+              baseUrl: '.',
+              paths: {
+                '@/*': ['./*'],
+              },
+            },
+          },
+          null,
+          2
+        )}\n`
+      );
+      writeFile(
+        path.join(dir, 'lib', 'crpc.ts'),
+        `
+        export const publicQuery = {
+          query(handler: unknown) {
+            return {
+              _crpcMeta: {
+                type: 'query',
+              },
+              _handler: handler,
+            };
+          },
+        };
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'internal', 'dialpad.ts'),
+        `
+        import { createEnv } from 'kitcn/server';
+        import { publicQuery } from '@/lib/crpc';
+
+        const getEnv = createEnv({ schema: undefined });
+        void getEnv;
+
+        export const list = publicQuery.query(async () => []);
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'http.ts'),
+        'export default {};'
+      );
+      writeFile(
+        path.join(dir, 'convex', 'functions', 'schema.ts'),
+        'export default {};'
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).resolves.toBe(
+        undefined
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta still logs unexpected http.ts parse failures', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

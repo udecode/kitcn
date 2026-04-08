@@ -3104,6 +3104,60 @@ describe('cli/cli', () => {
     }
   });
 
+  test('run(codegen) loads root .env for concave parse-time env', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-cli-codegen-concave-root-env-')
+    );
+    const oldCwd = process.cwd();
+    const originalSecret = process.env.SECRET;
+    const fakeConcaveCliPath = path.join(dir, 'concave.mjs');
+    writePackageJson(dir);
+    fs.mkdirSync(path.join(dir, 'convex', 'functions'), {
+      recursive: true,
+    });
+    fs.writeFileSync(fakeConcaveCliPath, 'export {};\n');
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      JSON.stringify({ functions: 'convex/functions' })
+    );
+    fs.writeFileSync(path.join(dir, '.env'), 'SECRET=from-root-env\n');
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {
+      expect(process.env.SECRET).toBe('from-root-env');
+    });
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      backend: 'concave' as const,
+    }));
+
+    process.chdir(dir);
+    try {
+      const exitCode = await run(['--backend', 'concave', 'codegen'], {
+        realConvex: '/fake/convex/main.js',
+        realConcave: fakeConcaveCliPath,
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(generateMetaStub).toHaveBeenCalled();
+      expect(process.env.SECRET).toBe(originalSecret);
+    } finally {
+      process.chdir(oldCwd);
+      if (originalSecret === undefined) {
+        process.env.SECRET = undefined;
+      } else {
+        process.env.SECRET = originalSecret;
+      }
+    }
+  });
+
   test('run(add resend) scaffolds resend integration files without invoking convex CLI', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-cli-add-'));
     const oldCwd = process.cwd();

@@ -8,6 +8,7 @@
  */
 
 /* biome-ignore-all lint: type test file with intentional expressions */
+import { requireActionCtx } from 'kitcn/server';
 import { z } from 'zod';
 import {
   createAuthCaller,
@@ -64,7 +65,7 @@ export const public_query_input = publicQuery
   .input(z.object({ id: z.string() }))
   .query(async ({ ctx, input }) => {
     const id: string = input.id;
-    return ctx.orm.query.user.findFirst({ where: { id: id } });
+    return ctx.orm.query.user.findFirst({ where: { id } });
   });
 
 // 1.3 query - with output
@@ -230,7 +231,7 @@ export const publicOrAuth_query_input = optionalAuthQuery
   .input(z.object({ id: z.string() }))
   .query(async ({ ctx, input }) => {
     const id: string = input.id;
-    return ctx.orm.query.user.findFirst({ where: { id: id } });
+    return ctx.orm.query.user.findFirst({ where: { id } });
   });
 
 // 4.3 paginated().query()
@@ -1058,7 +1059,7 @@ export const http_no_input = publicRoute
 // Section 20: HTTP Client Type Tests
 // ============================================================================
 
-import { type InferHttpInput, type InferHttpOutput } from 'kitcn/crpc';
+import type { InferHttpInput, InferHttpOutput } from 'kitcn/crpc';
 
 // 20.1 InferHttpInput - POST with body
 type _InputPostInput = InferHttpInput<typeof http_post_input>;
@@ -1395,6 +1396,16 @@ generatedActionCaller.schedule.now.rotateKeys;
 generatedActionCaller.schedule.now.findOne;
 // @ts-expect-error action caller excludes actions on root
 generatedActionCaller.rotateKeys;
+
+declare const generatedMutationOrActionCtx: MutationCtx | ActionCtx;
+const generatedUnionCaller = createAuthCaller(generatedMutationOrActionCtx);
+generatedUnionCaller.schedule.now.create;
+// @ts-expect-error action namespace requires a narrowed ActionCtx
+generatedUnionCaller.actions.rotateKeys;
+const narrowedGeneratedActionCaller = createAuthCaller(
+  requireActionCtx(generatedMutationOrActionCtx)
+);
+narrowedGeneratedActionCaller.actions.rotateKeys;
 
 type _generatedQueryCallerListInput = Parameters<
   typeof projectsQueryCaller.list

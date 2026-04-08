@@ -28,6 +28,7 @@ import {
   runDevSchemaBackfillIfNeeded,
   runMigrationFlow,
   trackProcess,
+  withLocalCodegenEnv,
 } from '../backend-core.js';
 import { stripConvexCommandNoise } from '../convex-command.js';
 import { resolveAuthEnvState } from '../env.js';
@@ -1253,11 +1254,13 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     });
   }
 
-  await generateMetaFn(sharedDir, {
-    debug,
-    silent: true,
-    scope: 'all',
-    trimSegments,
+  await withLocalCodegenEnv(sharedDir, backend, async () => {
+    await generateMetaFn(sharedDir, {
+      debug,
+      silent: true,
+      scope: 'all',
+      trimSegments,
+    });
   });
 
   const { runtime, watcherPath } = resolveWatcherCommand();

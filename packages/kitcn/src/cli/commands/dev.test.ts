@@ -1037,6 +1037,93 @@ describe('cli/commands/dev', () => {
     }
   });
 
+  test('handleDevCommand loads root .env for concave parse-time env', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-concave-root-env-')
+    );
+    const oldCwd = process.cwd();
+    const originalSecret = process.env.SECRET;
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    const concaveCliPath = path.join(dir, 'concave.mjs');
+    fs.writeFileSync(concaveCliPath, 'export {};\n');
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
+    );
+    fs.writeFileSync(path.join(dir, '.env'), 'SECRET=from-root-env\n');
+
+    const watcher = createPendingProcess();
+
+    const concaveProcess = createPersistentProcess();
+    const siteProxy: any = {
+      killed: false,
+      kill: mock(() => {
+        siteProxy.killed = true;
+      }),
+    };
+    const startLocalSiteProxyStub = mock(async () => siteProxy);
+
+    const execaStub = mock((cmd: string, args: string[]): any => {
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcher.process;
+      }
+      return concaveProcess.process;
+    });
+    const generateMetaStub = mock(async () => {
+      expect(process.env.SECRET).toBe('from-root-env');
+    });
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      backend: 'concave' as const,
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+    try {
+      const exitPromise = handleDevCommand(['--backend', 'concave', 'dev'], {
+        realConvex: '/fake/convex/main.js',
+        realConcave: concaveCliPath,
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+        resolveConcaveLocalSiteUrl: () => 'http://localhost:3000',
+        startLocalSiteProxy: startLocalSiteProxyStub as any,
+      } as any);
+
+      concaveProcess.emitStdout('Concave functions ready!\n');
+      concaveProcess.endStdout();
+      concaveProcess.endStderr();
+      concaveProcess.resolveExit({ exitCode: 0 });
+      watcher.resolveExit({ exitCode: 0 });
+
+      const exitCode = await exitPromise;
+      expect(exitCode).toBe(0);
+      expect(generateMetaStub).toHaveBeenCalled();
+      expect(process.env.SECRET).toBe(originalSecret);
+      expect(siteProxy.kill).toHaveBeenCalledWith('SIGTERM');
+    } finally {
+      process.chdir(oldCwd);
+      if (originalSecret === undefined) {
+        process.env.SECRET = undefined;
+      } else {
+        process.env.SECRET = originalSecret;
+      }
+      onSpy.mockRestore();
+    }
+  });
+
   test('handleDevCommand prepares auth env before startup and completes auth env sync before returning', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-dev-auth-env-sync-')

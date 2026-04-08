@@ -174,6 +174,17 @@ What each caller context can invoke via `create<Module>Caller(ctx)`:
 | `MutationCtx` | ✅ | ✅ | ❌ | ❌ | ✅ |
 | `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
 
+If `ctx` is typed as a union like `MutationCtx | ActionCtx`, the caller keeps
+only the common safe surface. That means `caller.schedule.*` stays available,
+but `caller.actions.*` requires narrowing first:
+
+```ts showLineNumbers {1,4}
+import { requireActionCtx } from 'kitcn/server';
+
+const caller = createJobsCaller(requireActionCtx(ctx));
+await caller.actions.reindex({ force: true });
+```
+
 ### createCallerFactory
 
 Creates a caller factory with token management and retry logic.

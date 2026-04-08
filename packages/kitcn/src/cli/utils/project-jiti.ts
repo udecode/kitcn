@@ -1,6 +1,47 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { createJiti } from 'jiti';
+
+const require = createRequire(import.meta.url);
+
+type TypeScriptModule = {
+  findConfigFile: (
+    searchPath: string,
+    fileExists: (fileName: string) => boolean,
+    configName: string
+  ) => string | undefined;
+  parseJsonConfigFileContent: (
+    json: unknown,
+    host: {
+      readDirectory: (...args: any[]) => string[];
+      fileExists: (path: string) => boolean;
+      readFile: (path: string) => string | undefined;
+      useCaseSensitiveFileNames: boolean;
+      trace?: (s: string) => void;
+      onUnRecoverableConfigFileDiagnostic?: (diagnostic: unknown) => void;
+    },
+    basePath: string
+  ) => {
+    options: {
+      baseUrl?: string;
+      paths?: Record<string, string[]>;
+    };
+  };
+  readConfigFile: (
+    fileName: string,
+    readFile: (path: string) => string | undefined
+  ) => {
+    config: unknown;
+    error?: unknown;
+  };
+  sys: {
+    fileExists: (path: string) => boolean;
+    readFile: (path: string) => string | undefined;
+    readDirectory: (...args: any[]) => string[];
+    useCaseSensitiveFileNames: boolean;
+  };
+};
 
 type JitiExportTarget =
   | string
@@ -213,6 +254,73 @@ const ensureServerParserShim = (cwd: string): string => {
   return shimPath;
 };
 
+const trimTsconfigWildcardSuffix = (value: string) =>
+  value.endsWith('/*') ? value.slice(0, -2) : value;
+
+const loadTypeScript = (): TypeScriptModule | null => {
+  try {
+    return require('typescript') as TypeScriptModule;
+  } catch {
+    return null;
+  }
+};
+
+const buildTsconfigPathAliases = (cwd: string): Record<string, string> => {
+  const typescript = loadTypeScript();
+  if (!typescript) {
+    return {};
+  }
+  const configPath = typescript.findConfigFile(
+    cwd,
+    fs.existsSync,
+    'tsconfig.json'
+  );
+  if (!configPath) {
+    return {};
+  }
+
+  const readResult = typescript.readConfigFile(
+    configPath,
+    typescript.sys.readFile
+  );
+  if (readResult.error) {
+    return {};
+  }
+
+  const parsedConfig = typescript.parseJsonConfigFileContent(
+    readResult.config,
+    typescript.sys,
+    path.dirname(configPath)
+  );
+  const baseUrl =
+    typeof parsedConfig.options.baseUrl === 'string' &&
+    parsedConfig.options.baseUrl.length > 0
+      ? parsedConfig.options.baseUrl
+      : path.dirname(configPath);
+  const paths = parsedConfig.options.paths;
+  if (!paths) {
+    return {};
+  }
+
+  const aliases: Record<string, string> = {};
+  for (const [specifier, targets] of Object.entries(paths)) {
+    const firstTarget = targets[0];
+    if (!firstTarget) {
+      continue;
+    }
+
+    const aliasKey = trimTsconfigWildcardSuffix(specifier);
+    const aliasTarget = trimTsconfigWildcardSuffix(firstTarget);
+    if (!aliasKey || aliasKey === '*') {
+      continue;
+    }
+
+    aliases[aliasKey] = path.resolve(baseUrl, aliasTarget);
+  }
+
+  return aliases;
+};
+
 export const getProjectServerParserShimPath = (cwd = process.cwd()) =>
   ensureServerParserShim(cwd);
 
@@ -221,6 +329,7 @@ export const createProjectJiti = (cwd = process.cwd()) =>
     interopDefault: true,
     moduleCache: false,
     alias: {
+      ...buildTsconfigPathAliases(cwd),
       ...buildLocalPackageExportAliases(cwd, 'kitcn'),
       ...buildLocalPackageExportAliases(cwd, 'convex'),
       'kitcn/server': getProjectServerParserShimPath(cwd),
