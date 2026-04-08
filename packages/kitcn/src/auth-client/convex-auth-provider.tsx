@@ -136,6 +136,25 @@ const syncSessionAtom = (authClient: AuthClient, sessionData: unknown) => {
   });
 };
 
+const clearSessionAtom = (authClient: AuthClient) => {
+  const sessionAtom = authClient.$store?.atoms?.session;
+  if (
+    typeof sessionAtom?.get !== 'function' ||
+    typeof sessionAtom.set !== 'function'
+  ) {
+    return;
+  }
+
+  const current = sessionAtom.get();
+  sessionAtom.set({
+    data: null,
+    error: null,
+    isPending: false,
+    isRefetching: false,
+    refetch: current?.refetch ?? (async () => {}),
+  });
+};
+
 /**
  * Unified auth provider for Convex + Better Auth.
  * Handles token sync, HMR persistence, and auth callbacks.
@@ -283,6 +302,7 @@ function ConvexAuthProviderInner({
         }
 
         clearAuthSessionFallback();
+        clearSessionAtom(authClient);
         authStore.set('token', null);
         authStore.set('expiresAt', null);
         authStore.set('sessionSyncGraceUntil', null);
@@ -293,6 +313,7 @@ function ConvexAuthProviderInner({
         }
 
         clearAuthSessionFallback();
+        clearSessionAtom(authClient);
         authStore.set('token', null);
         authStore.set('expiresAt', null);
         authStore.set('sessionSyncGraceUntil', null);

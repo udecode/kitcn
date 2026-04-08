@@ -169,7 +169,8 @@ const AGGREGATE_STATE_VERSION = 1;
 export const INIT_SHADCN_PACKAGE_SPEC = 'shadcn@4.0.1';
 const INIT_LOCAL_BOOTSTRAP_TIMEOUT_MS = 30_000;
 const LOCAL_BACKEND_NOT_RUNNING_RE = /Local backend isn't running/i;
-const INIT_GENERATED_SERVER_STUB_TEMPLATE = `import type {
+const INIT_GENERATED_SERVER_STUB_TEMPLATE = `// @ts-nocheck
+import type {
   GenericActionCtx,
   GenericDataModel,
   GenericMutationCtx,

@@ -37,6 +37,12 @@ const createProcedureBuilder = (state = {}) => {
     input() {
       return createProcedureBuilder(state);
     },
+    params() {
+      return createProcedureBuilder(state);
+    },
+    searchParams() {
+      return createProcedureBuilder(state);
+    },
     paginated(options = undefined) {
       return createProcedureBuilder({
         ...state,
@@ -50,6 +56,27 @@ const createProcedureBuilder = (state = {}) => {
       });
     },
     output() {
+      return createProcedureBuilder(state);
+    },
+    form() {
+      return createProcedureBuilder(state);
+    },
+    route() {
+      return createProcedureBuilder(state);
+    },
+    get() {
+      return createProcedureBuilder(state);
+    },
+    post() {
+      return createProcedureBuilder(state);
+    },
+    put() {
+      return createProcedureBuilder(state);
+    },
+    patch() {
+      return createProcedureBuilder(state);
+    },
+    delete() {
       return createProcedureBuilder(state);
     },
     query(handler = undefined) {

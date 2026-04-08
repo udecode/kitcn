@@ -419,6 +419,70 @@ describe('ConvexAuthProvider', () => {
     });
   });
 
+  test('clears seeded session atom when persisted token recheck fails', async () => {
+    window.sessionStorage.setItem(
+      'kitcn.auth.session-token',
+      'persisted-session-token'
+    );
+    window.sessionStorage.setItem(
+      'kitcn.auth.session-data',
+      JSON.stringify({
+        session: { id: 'session-1' },
+        user: { email: 'persisted@example.com' },
+      })
+    );
+
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    const sessionAtomState = {
+      data: null as unknown,
+      error: null as unknown,
+      isPending: false,
+      isRefetching: false,
+      refetch: async () => {},
+    };
+    const sessionAtom = {
+      get: () => sessionAtomState,
+      set: mock((value: typeof sessionAtomState) => {
+        sessionAtomState.data = value.data;
+        sessionAtomState.error = value.error;
+        sessionAtomState.isPending = value.isPending;
+        sessionAtomState.isRefetching = value.isRefetching;
+        sessionAtomState.refetch = value.refetch;
+      }),
+    };
+
+    const authClient = {
+      $store: { atoms: { session: sessionAtom } },
+      useSession: () => ({ data: null, isPending: false }),
+      $fetch: mock(async () => ({ data: null })),
+      convex: { token: mock(async () => ({ data: { token: makeJwt(7200) } })) },
+      updateSession: () => {},
+      crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+    };
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ConvexAuthProvider authClient={authClient as any} client={client as any}>
+        {children}
+      </ConvexAuthProvider>
+    );
+
+    renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1300));
+    });
+
+    expect(sessionAtomState.data).toBeNull();
+    expect(
+      window.sessionStorage.getItem('kitcn.auth.session-token')
+    ).toBeNull();
+    expect(window.sessionStorage.getItem('kitcn.auth.session-data')).toBeNull();
+  });
+
   test('keeps a cached JWT when a later token refresh returns null', async () => {
     const client = {
       setAuth: () => {},
