@@ -980,7 +980,7 @@ function resolveRemoteConvexDeploymentKey(
   return 'remote-env';
 }
 
-function getLocalCodegenEnvVars(
+function getLocalParseEnvVars(
   sharedDir: string,
   backend: CliBackend
 ): Record<string, string> {
@@ -1003,12 +1003,32 @@ function getLocalCodegenEnvVars(
   return mergedEnv;
 }
 
+function getLocalBackendEnvVars(
+  sharedDir: string,
+  backend: CliBackend
+): Record<string, string> {
+  const { functionsDir } = getConvexConfig(sharedDir);
+  const rootEnvPath = join(process.cwd(), '.env');
+  const backendEnvPath = join(functionsDir, '..', '.env');
+  const envPaths = backend === 'concave' ? [backendEnvPath, rootEnvPath] : [backendEnvPath];
+
+  const mergedEnv: Record<string, string> = {};
+  for (const envPath of envPaths) {
+    if (!fs.existsSync(envPath)) {
+      continue;
+    }
+    Object.assign(mergedEnv, parseDotEnv(fs.readFileSync(envPath, 'utf8')));
+  }
+
+  return mergedEnv;
+}
+
 export async function withLocalCodegenEnv<T>(
   sharedDir: string,
   backend: CliBackend,
   fn: () => Promise<T>
 ): Promise<T> {
-  const envVars = getLocalCodegenEnvVars(sharedDir, backend);
+  const envVars = getLocalParseEnvVars(sharedDir, backend);
   if (Object.keys(envVars).length === 0) {
     return fn();
   }
@@ -3972,7 +3992,7 @@ export async function runConfiguredCodegenDetailed(params: {
     resolvedRuntimeAdapter.publicName,
     convexCodegenArgs
   );
-  const localCodegenEnv = getLocalCodegenEnvVars(
+  const localBackendEnv = getLocalBackendEnvVars(
     sharedDir,
     resolvedRuntimeAdapter.publicName
   );
@@ -4020,7 +4040,7 @@ export async function runConfiguredCodegenDetailed(params: {
       stdio,
       cwd: process.cwd(),
       env: createBackendCommandEnv({
-        ...localCodegenEnv,
+        ...localBackendEnv,
         ...env,
       }),
       reject: false,
@@ -4221,7 +4241,7 @@ async function runLocalConvexBootstrapForInit(params: {
   sharedDir: string;
   env?: Record<string, string | undefined>;
 }): Promise<InitBootstrapResult> {
-  const localConvexEnv = getLocalCodegenEnvVars(
+  const localConvexEnv = getLocalBackendEnvVars(
     params.sharedDir,
     params.runtimeAdapter.publicName
   );
