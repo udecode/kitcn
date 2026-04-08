@@ -3,7 +3,7 @@
  *
  * Extends ConvexError with typed error codes and HTTP status mapping.
  */
-import { ConvexError } from 'convex/values';
+import { ConvexError, type Value } from 'convex/values';
 
 // =============================================================================
 // Error Codes (from tRPC)
@@ -69,10 +69,14 @@ export const CRPC_ERROR_CODE_TO_HTTP: Record<CRPCErrorCode, number> = {
 // CRPCError Class
 // =============================================================================
 
-type CRPCErrorData = {
+type CRPCErrorBaseData = {
   code: CRPCErrorCode;
   message: string;
 };
+
+export type CRPCErrorData<
+  TData extends Record<string, Value | undefined> = Record<string, never>,
+> = CRPCErrorBaseData & TData;
 
 /** Extract Error from unknown cause (from tRPC) */
 function getCauseFromUnknown(cause: unknown): Error | undefined {
@@ -100,7 +104,9 @@ function getCauseFromUnknown(cause: unknown): Error | undefined {
  * });
  * ```
  */
-export class CRPCError extends ConvexError<CRPCErrorData> {
+export class CRPCError<
+  TData extends Record<string, Value | undefined> = Record<string, never>,
+> extends ConvexError<CRPCErrorData<TData>> {
   readonly code: CRPCErrorCode;
   override readonly cause?: Error;
 
@@ -108,11 +114,16 @@ export class CRPCError extends ConvexError<CRPCErrorData> {
     code: CRPCErrorCode;
     message?: string;
     cause?: unknown;
+    data?: TData;
   }) {
     const cause = getCauseFromUnknown(opts.cause);
     const message = opts.message ?? cause?.message ?? opts.code;
 
-    super({ code: opts.code, message });
+    super({
+      ...(opts.data ?? ({} as TData)),
+      code: opts.code,
+      message,
+    });
 
     this.name = 'CRPCError';
     this.code = opts.code;

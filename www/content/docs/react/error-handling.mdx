@@ -9,14 +9,19 @@ import { InfoIcon } from "lucide-react"
 
 ## Server Errors
 
-When a procedure throws `CRPCError`, it arrives on the client as a `ConvexError`. Access the message via `error.data`:
+When a procedure throws `CRPCError`, it arrives on the client as a `ConvexError`. Access the built-in fields and any custom payload via `error.data`:
 
-```tsx showLineNumbers {2,5}
+```tsx showLineNumbers {2,5-6}
 // Server throws:
-throw new CRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
+throw new CRPCError({
+  code: 'CONFLICT',
+  message: 'Domain already exists',
+  data: { existingSiteId: 'site_123' },
+});
 
 // Client receives:
-error.data?.message // 'Post not found'
+error.data?.message // 'Domain already exists'
+error.data?.existingSiteId // 'site_123'
 ```
 
 ### Query Errors
@@ -63,7 +68,12 @@ When using try/catch:
 try {
   await mutation.mutateAsync(data);
 } catch (err) {
-  const error = err as Error & { data?: { message?: string } };
+  const error = err as Error & {
+    data?: {
+      message?: string;
+      existingSiteId?: string;
+    };
+  };
   toast.error(error.data?.message ?? 'Operation failed');
 }
 ```
