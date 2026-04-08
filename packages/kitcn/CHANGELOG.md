@@ -1,5 +1,23 @@
 # kitcn
 
+## 0.12.18
+
+### Patch Changes
+
+- [#183](https://github.com/udecode/kitcn/pull/183) [`40db401`](https://github.com/udecode/kitcn/commit/40db401bc93a9eb1ed7f2398445ba0cebc0a5b28) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn codegen` parse-time cRPC builder stubs so `.paginated()` chains
+    after `.input()` keep working and preserve pagination metadata.
+  - Fix TanStack Start auth reloads so `createAuthMutations()` persists the
+    returned Better Auth session token/data and `ConvexAuthProvider` restores the
+    signed-in state after a page refresh.
+
+- [#183](https://github.com/udecode/kitcn/pull/183) [`1218930`](https://github.com/udecode/kitcn/commit/1218930db83b112a43dca074d457ed76c9d4f4c7) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Support custom structured `data` payloads on `CRPCError` so conflict and
+    validation handlers can return client-readable metadata alongside the built-in
+    error code and message.
+
 ## 0.12.17
 
 ### Patch Changes
