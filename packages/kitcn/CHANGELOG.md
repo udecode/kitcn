@@ -1,5 +1,16 @@
 # kitcn
 
+## 0.12.17
+
+### Patch Changes
+
+- [#179](https://github.com/udecode/kitcn/pull/179) [`4d2158b`](https://github.com/udecode/kitcn/commit/4d2158b09b4a316df96b4597e9c999517d7a44f8) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn codegen` module parsing so project `tsconfig.json` path aliases
+    like `@/lib/crpc` resolve during codegen.
+  - Fix `kitcn dev` and `kitcn codegen` parse-time env loading so Concave apps
+    can read required values from the project root `.env`.
+
 ## 0.12.16
 
 ### Patch Changes
