@@ -157,7 +157,11 @@ export const sendWelcomeEmail = publicAction
 
 ## In-Process Procedure Composition
 
-When one procedure needs to call another, use the module runtime factory from `convex/functions/generated/<module>.runtime.ts` (for example `createTeamsCaller(ctx)`). This gives you a type-safe proxy with full autocomplete — no more manually choosing between `ctx.runQuery`, `ctx.runMutation`, `ctx.runAction`, and `ctx.scheduler`.
+When one procedure needs to call another, use the module runtime factory from
+`convex/functions/generated/<module>.runtime.ts`.
+
+- `create<Module>Handler(ctx)` is the default in queries and mutations
+- `create<Module>Caller(ctx)` is for actions and HTTP routes
 
 <Callout icon={<InfoIcon />}>
   Runtime modules export module-named factories:
@@ -167,14 +171,14 @@ When one procedure needs to call another, use the module runtime factory from `c
 ```ts title="convex/functions/teams.ts" showLineNumbers {3,7-9}
 import { z } from 'zod';
 import { privateQuery } from '../lib/crpc';
-import { createTeamsCaller } from './generated/teams.runtime';
+import { createTeamsHandler } from './generated/teams.runtime';
 
 export const getProjectAndOwner = privateQuery
   .input(z.object({ projectId: z.string() }))
   .query(async ({ ctx, input }) => {
-    const caller = createTeamsCaller(ctx);
-    const project = await caller.getProject({ projectId: input.projectId });
-    const owner = await caller.getOwner({ id: project.ownerId });
+    const handler = createTeamsHandler(ctx);
+    const project = await handler.getProject({ projectId: input.projectId });
+    const owner = await handler.getOwner({ id: project.ownerId });
     return { project, owner };
   });
 ```
