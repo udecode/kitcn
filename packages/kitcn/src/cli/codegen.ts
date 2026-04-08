@@ -4,6 +4,7 @@ import path from 'node:path';
 import { getSchemaRelations, getSchemaTriggers } from '../orm/schema';
 import { OrmSchemaOptions } from '../orm/symbols';
 import { isValidConvexFile } from '../shared/meta-utils';
+import { CRPC_BUILDER_STUB_SOURCE } from './utils/crpc-builder-stub.js';
 import { logger } from './utils/logger.js';
 import {
   createProjectJiti,
@@ -506,72 +507,7 @@ export type MutationCtx = ServerMutationCtx;
 export type ActionCtx = ServerActionCtx;
 export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
-const createMiddleware = (handler?: unknown) => ({
-  _handler: handler,
-  pipe(nextHandler?: unknown) {
-    return createMiddleware(nextHandler);
-  },
-});
-
-const createProcedureBuilder = () => {
-  const builder = {
-    internal() {
-      return builder;
-    },
-    use() {
-      return builder;
-    },
-    meta() {
-      return builder;
-    },
-    input() {
-      return builder;
-    },
-    output() {
-      return builder;
-    },
-    query(handler?: unknown) {
-      return handler ?? builder;
-    },
-    mutation(handler?: unknown) {
-      return handler ?? builder;
-    },
-    action(handler?: unknown) {
-      return handler ?? builder;
-    },
-    middleware(handler?: unknown) {
-      return createMiddleware(handler);
-    },
-  };
-
-  return builder;
-};
-
-export const initCRPC = {
-  meta() {
-    return this;
-  },
-  dataModel() {
-    return this;
-  },
-  context() {
-    return this;
-  },
-  middleware(handler?: unknown) {
-    return createMiddleware(handler);
-  },
-  create() {
-    return {
-      query: createProcedureBuilder(),
-      mutation: createProcedureBuilder(),
-      action: createProcedureBuilder(),
-      httpAction: createProcedureBuilder(),
-      middleware: createMiddleware,
-      router: (record = {}) => record,
-    };
-  },
-};
-export const httpAction = createProcedureBuilder();
+${CRPC_BUILDER_STUB_SOURCE}
 
 export function withOrm<Ctx>(ctx: Ctx): Ctx {
   return ctx;

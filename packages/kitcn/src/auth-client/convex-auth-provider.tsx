@@ -12,6 +12,13 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { CRPCClientError, defaultIsUnauthorized } from '../crpc/error';
 import {
+  clearAuthSessionFallback,
+  readAuthSessionFallbackData,
+  readAuthSessionFallbackToken,
+  writeAuthSessionFallbackData,
+} from '../react/auth-session-fallback';
+import {
+  AUTH_SESSION_SYNC_GRACE_MS,
   AuthProvider,
   decodeJwtExp,
   FetchAccessTokenContext,
@@ -24,6 +31,16 @@ import {
 export type { AuthClient } from '@convex-dev/better-auth/react';
 
 import type { AuthClient } from '@convex-dev/better-auth/react';
+
+type AuthClientFetch = AuthClient & {
+  $fetch?: (
+    path: string,
+    options?: {
+      credentials?: RequestCredentials;
+      headers?: Record<string, string>;
+    }
+  ) => Promise<{ data?: unknown } | null | undefined>;
+};
 
 type IConvexReactClient = {
   setAuth(fetchToken: AuthTokenFetcher): void;
@@ -58,6 +75,65 @@ const hasActiveSessionData = (session: unknown) => {
     return false;
   }
   return Boolean((session as { session?: unknown }).session);
+};
+
+const wait = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const getSessionFromPersistedToken = async (
+  authClient: AuthClientFetch,
+  token: string
+) => {
+  await wait(250);
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const result = authClient.$fetch
+      ? await authClient.$fetch('/get-session', {
+          credentials: 'omit',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+      : await authClient.getSession?.({
+          fetchOptions: {
+            credentials: 'omit',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        });
+
+    if (result?.data) {
+      return result.data;
+    }
+
+    if (attempt < 9) {
+      await wait(100);
+    }
+  }
+
+  return null;
+};
+
+const syncSessionAtom = (authClient: AuthClient, sessionData: unknown) => {
+  const sessionAtom = authClient.$store?.atoms?.session;
+  if (
+    typeof sessionAtom?.get !== 'function' ||
+    typeof sessionAtom.set !== 'function'
+  ) {
+    return;
+  }
+
+  const current = sessionAtom.get();
+  sessionAtom.set({
+    data: sessionData,
+    error: null,
+    isPending: false,
+    isRefetching: false,
+    refetch: current?.refetch ?? (async () => {}),
+  });
 };
 
 /**
@@ -163,6 +239,69 @@ function ConvexAuthProviderInner({
       authStore.set('sessionSyncGraceUntil', null);
     }
   }, [session, isPending, authStore]);
+
+  useEffect(() => {
+    if (hasActiveSessionData(session) || isPending || authStore.get('token')) {
+      return;
+    }
+
+    const persistedToken = readAuthSessionFallbackToken();
+    const persistedSessionData = readAuthSessionFallbackData();
+    if (
+      !persistedToken ||
+      (typeof authClient.getSession !== 'function' &&
+        typeof (authClient as AuthClientFetch).$fetch !== 'function')
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    authStore.set('token', persistedToken);
+    authStore.set('expiresAt', decodeJwtExp(persistedToken));
+    authStore.set(
+      'sessionSyncGraceUntil',
+      Date.now() + AUTH_SESSION_SYNC_GRACE_MS
+    );
+    if (persistedSessionData) {
+      syncSessionAtom(authClient, persistedSessionData);
+    }
+
+    void getSessionFromPersistedToken(
+      authClient as AuthClientFetch,
+      persistedToken
+    )
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (result) {
+          syncSessionAtom(authClient, result);
+          writeAuthSessionFallbackData(result);
+          return;
+        }
+
+        clearAuthSessionFallback();
+        authStore.set('token', null);
+        authStore.set('expiresAt', null);
+        authStore.set('sessionSyncGraceUntil', null);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        clearAuthSessionFallback();
+        authStore.set('token', null);
+        authStore.set('expiresAt', null);
+        authStore.set('sessionSyncGraceUntil', null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session, isPending, authStore, authClient]);
 
   // Stable fetchAccessToken - only recreated when authStore/authClient change (rare)
   // Reads session/isPending from refs to avoid dependency on changing objects

@@ -3346,6 +3346,55 @@ export default createHttpRouter({}, router({}));
     }
   });
 
+  test('generateMeta parses query chains that call paginated() after input()', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'crpc.ts'),
+        `
+        import { initCRPC } from '../generated/server';
+
+        const c = initCRPC.meta<{}>().create();
+
+        export const publicQuery = c.query;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'messages.ts'),
+        `
+        import { publicQuery } from './lib/crpc';
+
+        const schema = {} as any;
+
+        export const listConversations = publicQuery
+          .input(schema)
+          .paginated({ limit: 40, item: schema })
+          .query(async () => ({
+            continueCursor: null,
+            isDone: true,
+            page: [],
+          }));
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).resolves.toBe(
+        undefined
+      );
+
+      const generatedApi = fs.readFileSync(
+        path.join(dir, 'convex', 'shared', 'api.ts'),
+        'utf-8'
+      );
+      expect(generatedApi).toContain('{ limit: 40, type: "query" }');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta resolves tsconfig path aliases during module parsing', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

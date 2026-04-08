@@ -7,7 +7,11 @@
  */
 
 import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
-
+import {
+  clearAuthSessionFallback,
+  writeAuthSessionFallbackData,
+  writeAuthSessionFallbackToken,
+} from './auth-session-fallback';
 import type { AuthStore } from './auth-store';
 import {
   AUTH_SESSION_SYNC_GRACE_MS,
@@ -83,6 +87,9 @@ const seedReturnedToken = (store: AuthStore, value: unknown) => {
   store.set('token', token);
   store.set('expiresAt', decodeJwtExp(token));
   store.set('sessionSyncGraceUntil', Date.now() + AUTH_SESSION_SYNC_GRACE_MS);
+  if (decodeJwtExp(token) === null) {
+    writeAuthSessionFallbackToken(token);
+  }
 };
 
 type AnyFn = (...args: any[]) => Promise<any>;
@@ -165,6 +172,7 @@ const hydrateReturnedSession = async (
 
   if (session?.data) {
     syncSessionAtom(authClient, session.data);
+    writeAuthSessionFallbackData(session.data);
   }
 };
 
@@ -249,6 +257,7 @@ export function createAuthMutations<T extends AuthClient>(
         authStoreApi.set('token', null);
         authStoreApi.set('expiresAt', null);
         authStoreApi.set('sessionSyncGraceUntil', null);
+        clearAuthSessionFallback();
         await convexQueryClient?.resetAuthQueries();
         return res;
       },

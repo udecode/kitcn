@@ -57,8 +57,13 @@ describe('isAuthMutationError', () => {
 describe('createAuthMutations', () => {
   let useConvexQueryClientSpy: ReturnType<typeof spyOn>;
 
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
   afterEach(() => {
     useConvexQueryClientSpy?.mockRestore();
+    window.sessionStorage.clear();
   });
 
   function makeWrapper(initialValues?: Record<string, unknown>) {
@@ -98,6 +103,8 @@ describe('createAuthMutations', () => {
       { wrapper }
     );
 
+    window.sessionStorage.setItem('kitcn.auth.session-token', 'session-token');
+
     (authClient.signOut as any).mockImplementation(async (args: unknown) => ({
       ok: true,
       args,
@@ -118,6 +125,9 @@ describe('createAuthMutations', () => {
 
     expect(result.current.store.get('isAuthenticated')).toBe(false);
     expect(result.current.store.get('token')).toBeNull();
+    expect(
+      window.sessionStorage.getItem('kitcn.auth.session-token')
+    ).toBeNull();
     expect(result.current.store.get('expiresAt')).toBeNull();
   });
 
@@ -242,6 +252,9 @@ describe('createAuthMutations', () => {
 
     expect(result.current.store.get('token')).toBe('returned-sign-up-token');
     expect(result.current.store.get('isAuthenticated')).toBe(true);
+    expect(window.sessionStorage.getItem('kitcn.auth.session-token')).toBe(
+      'returned-sign-up-token'
+    );
     expect(authClient.signUp.email).toHaveBeenCalledTimes(1);
     expect(authClient.signUp.email).toHaveBeenCalledWith({
       email: 'a@b.com',
