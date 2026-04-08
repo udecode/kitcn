@@ -22,6 +22,30 @@ describe('server/error', () => {
     expect(err.cause).toBe(cause);
   });
 
+  test('CRPCError merges custom structured data into error.data', () => {
+    const err = new CRPCError({
+      code: 'CONFLICT',
+      message: 'Domain already exists',
+      data: {
+        existingSiteId: 'site_123',
+        normalizedDomain: 'example.com',
+      },
+    });
+    const existingSiteId: string = err.data.existingSiteId;
+    const normalizedDomain: string = err.data.normalizedDomain;
+
+    expect(err.code).toBe('CONFLICT');
+    expect(err.data).toEqual({
+      code: 'CONFLICT',
+      message: 'Domain already exists',
+      existingSiteId: 'site_123',
+      normalizedDomain: 'example.com',
+    });
+    expect(err.message).toBe('Domain already exists');
+    expect(existingSiteId).toBe('site_123');
+    expect(normalizedDomain).toBe('example.com');
+  });
+
   test('CRPCError falls back to cause.message when message is omitted', () => {
     const err = new CRPCError({
       code: 'INTERNAL_SERVER_ERROR',

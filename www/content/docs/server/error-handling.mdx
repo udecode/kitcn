@@ -29,6 +29,23 @@ new CRPCError({
   code: CRPCErrorCode;  // Required - see table below
   message?: string;     // Optional, defaults to code
   cause?: unknown;      // Optional, original error
+  data?: Record<string, unknown>; // Optional, must be Convex-serializable
+});
+```
+
+### With Custom Data
+
+Attach small Convex-serializable metadata when the client needs more than a
+message:
+
+```ts showLineNumbers {2-8}
+throw new CRPCError({
+  code: 'CONFLICT',
+  message: 'This domain already exists.',
+  data: {
+    normalizedDomain,
+    existingSiteId,
+  },
 });
 ```
 

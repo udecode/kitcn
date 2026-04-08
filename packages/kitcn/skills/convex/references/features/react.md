@@ -418,11 +418,21 @@ Each page maintains its own WebSocket subscription. Auto-recovers on `InvalidCur
 
 ### Server Errors
 
-`CRPCError` thrown server-side → arrives as `ConvexError` on client. Access via `error.data`:
+`CRPCError` thrown server-side → arrives as `ConvexError` on client. Access
+the built-in fields and any custom payload via `error.data`:
 
 ```ts
-// Server: throw new CRPCError({ code: 'NOT_FOUND', message: 'Post not found' });
+// Server:
+throw new CRPCError({
+  code: 'CONFLICT',
+  message: 'Domain already exists',
+  data: { existingSiteId: 'site_123' },
+});
+
 // Client:
+error.data?.message; // 'Domain already exists'
+error.data?.existingSiteId; // 'site_123'
+
 const { error, isError } = useQuery(crpc.posts.get.queryOptions({ id }));
 if (isError) toast.error(error.data?.message ?? 'Something went wrong');
 
@@ -430,7 +440,12 @@ if (isError) toast.error(error.data?.message ?? 'Something went wrong');
 crpc.posts.create.mutationOptions({ onError: (error) => toast.error(error.data?.message ?? 'Failed') });
 
 // Try/catch:
-const error = err as Error & { data?: { message?: string } };
+const error = err as Error & {
+  data?: {
+    message?: string;
+    existingSiteId?: string;
+  };
+};
 ```
 
 ### Client Errors

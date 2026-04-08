@@ -1010,7 +1010,8 @@ function getLocalBackendEnvVars(
   const { functionsDir } = getConvexConfig(sharedDir);
   const rootEnvPath = join(process.cwd(), '.env');
   const backendEnvPath = join(functionsDir, '..', '.env');
-  const envPaths = backend === 'concave' ? [backendEnvPath, rootEnvPath] : [backendEnvPath];
+  const envPaths =
+    backend === 'concave' ? [backendEnvPath, rootEnvPath] : [backendEnvPath];
 
   const mergedEnv: Record<string, string> = {};
   for (const envPath of envPaths) {
