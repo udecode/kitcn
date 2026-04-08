@@ -317,6 +317,9 @@ Use this map consistently:
 5. `CONFLICT`: duplicate or conflicting write.
 6. `TOO_MANY_REQUESTS`: rate limit.
 7. `INTERNAL_SERVER_ERROR`: unexpected failures only.
+8. Add small custom `data` payloads on `CRPCError` when the client needs
+   domain metadata like conflicting ids. Read them on the client from
+   `error.data`.
 
 Required tests:
 

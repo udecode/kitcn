@@ -1221,6 +1221,27 @@ describe('cli/codegen', () => {
         'utf8'
       );
       expect(serverGenerated).toContain('export const initCRPC =');
+      expect(
+        fs.readFileSync(
+          path.join(oldCwd, 'packages', 'kitcn', 'src', 'cli', 'codegen.ts'),
+          'utf8'
+        )
+      ).toContain('return `// @ts-nocheck');
+      expect(
+        fs.readFileSync(
+          path.join(
+            oldCwd,
+            'packages',
+            'kitcn',
+            'src',
+            'cli',
+            'backend-core.ts'
+          ),
+          'utf8'
+        )
+      ).toContain(
+        'const INIT_GENERATED_SERVER_STUB_TEMPLATE = `// @ts-nocheck'
+      );
     } finally {
       console.error = originalError;
       process.chdir(oldCwd);
@@ -3343,6 +3364,92 @@ export default createHttpRouter({}, router({}));
         force: true,
         recursive: true,
       });
+    }
+  });
+
+  test('generateMeta parses query chains that call paginated() after input()', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'crpc.ts'),
+        `
+        import { initCRPC } from '../generated/server';
+
+        const c = initCRPC.meta<{}>().create();
+
+        export const publicQuery = c.query;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'messages.ts'),
+        `
+        import { publicQuery } from './lib/crpc';
+
+        const schema = {} as any;
+
+        export const listConversations = publicQuery
+          .input(schema)
+          .paginated({ limit: 40, item: schema })
+          .query(async () => ({
+            continueCursor: null,
+            isDone: true,
+            page: [],
+          }));
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).resolves.toBe(
+        undefined
+      );
+
+      const generatedApi = fs.readFileSync(
+        path.join(dir, 'convex', 'shared', 'api.ts'),
+        'utf-8'
+      );
+      expect(generatedApi).toContain('{ limit: 40, type: "query" }');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta parses scaffolded http route chains from generated/server placeholders', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'crpc.ts'),
+        `
+        import { initCRPC } from '../generated/server';
+
+        const c = initCRPC.meta<{}>().create();
+
+        export const publicRoute = c.httpAction;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'routes.ts'),
+        `
+        import { publicRoute } from './lib/crpc';
+
+        export const authRoute = publicRoute
+          .use(async ({ next }) => next())
+          .post('/api/auth/demo')
+          .mutation(async () => ({ ok: true }));
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).resolves.toBe(
+        undefined
+      );
+    } finally {
+      process.chdir(oldCwd);
     }
   });
 

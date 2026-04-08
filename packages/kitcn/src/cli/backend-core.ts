@@ -131,6 +131,7 @@ import {
   KITCN_INSTALL_SPEC_ENV,
 } from './supported-dependencies.js';
 import { isContentEquivalent } from './utils/content-compare.js';
+import { CRPC_BUILDER_STUB_SOURCE } from './utils/crpc-builder-stub.js';
 import {
   formatPlanDiff as formatPlanDiffOutput,
   formatPlanSummary as formatPlanSummaryOutput,
@@ -168,7 +169,8 @@ const AGGREGATE_STATE_VERSION = 1;
 export const INIT_SHADCN_PACKAGE_SPEC = 'shadcn@4.0.1';
 const INIT_LOCAL_BOOTSTRAP_TIMEOUT_MS = 30_000;
 const LOCAL_BACKEND_NOT_RUNNING_RE = /Local backend isn't running/i;
-const INIT_GENERATED_SERVER_STUB_TEMPLATE = `import type {
+const INIT_GENERATED_SERVER_STUB_TEMPLATE = `// @ts-nocheck
+import type {
   GenericActionCtx,
   GenericDataModel,
   GenericMutationCtx,
@@ -180,57 +182,7 @@ export type MutationCtx = GenericMutationCtx<GenericDataModel>;
 export type ActionCtx = GenericActionCtx<GenericDataModel>;
 export type GenericCtx = QueryCtx | MutationCtx | ActionCtx;
 
-const createProcedureBuilder = () => {
-  const builder = {
-    internal() {
-      return builder;
-    },
-    use() {
-      return builder;
-    },
-    meta() {
-      return builder;
-    },
-    input() {
-      return builder;
-    },
-    output() {
-      return builder;
-    },
-    query(handler?: unknown) {
-      return handler ?? builder;
-    },
-    mutation(handler?: unknown) {
-      return handler ?? builder;
-    },
-    action(handler?: unknown) {
-      return handler ?? builder;
-    },
-  };
-
-  return builder;
-};
-
-export const initCRPC = {
-  meta() {
-    return this;
-  },
-  dataModel() {
-    return this;
-  },
-  context() {
-    return this;
-  },
-  create() {
-    return {
-      query: createProcedureBuilder(),
-      mutation: createProcedureBuilder(),
-      action: createProcedureBuilder(),
-      httpAction: createProcedureBuilder(),
-      router: (record = {}) => record,
-    };
-  },
-};
+${CRPC_BUILDER_STUB_SOURCE}
 `;
 const INIT_LOCAL_BOOTSTRAP_READY_RE = /(Convex|Concave) functions ready!/i;
 const CONVEX_INIT_CREATED_CONFIG_RE =
@@ -1010,7 +962,8 @@ function getLocalBackendEnvVars(
   const { functionsDir } = getConvexConfig(sharedDir);
   const rootEnvPath = join(process.cwd(), '.env');
   const backendEnvPath = join(functionsDir, '..', '.env');
-  const envPaths = backend === 'concave' ? [backendEnvPath, rootEnvPath] : [backendEnvPath];
+  const envPaths =
+    backend === 'concave' ? [backendEnvPath, rootEnvPath] : [backendEnvPath];
 
   const mergedEnv: Record<string, string> = {};
   for (const envPath of envPaths) {

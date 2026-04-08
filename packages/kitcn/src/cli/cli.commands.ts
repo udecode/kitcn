@@ -3177,11 +3177,13 @@ describe('cli/cli', () => {
       'CONVEX_DEPLOYMENT=prod:remote-deployment\nSECRET=from-root-env\n'
     );
 
-    const execaStub = mock(async (_cmd: string, _args: string[], opts?: any) => {
-      expect(opts?.env?.CONVEX_DEPLOYMENT).toBeUndefined();
-      expect(opts?.env?.SECRET).toBeUndefined();
-      return { exitCode: 0, stdout: '', stderr: '' } as any;
-    });
+    const execaStub = mock(
+      async (_cmd: string, _args: string[], opts?: any) => {
+        expect(opts?.env?.CONVEX_DEPLOYMENT).toBeUndefined();
+        expect(opts?.env?.SECRET).toBeUndefined();
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+    );
     const generateMetaStub = mock(async () => {
       expect(process.env.SECRET).toBe('from-root-env');
     });

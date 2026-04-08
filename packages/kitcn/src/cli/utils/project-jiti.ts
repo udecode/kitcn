@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { createJiti } from 'jiti';
+import { CRPC_BUILDER_STUB_SOURCE } from './crpc-builder-stub.js';
 
 const require = createRequire(import.meta.url);
 
@@ -56,80 +57,7 @@ const JITI_EXPORT_CONDITION_PRIORITY = [
   'require',
 ] as const;
 
-const SERVER_PARSER_SHIM_SOURCE = `const createMiddleware = (handler = undefined) => ({
-  _handler: handler,
-  pipe(nextHandler) {
-    return createMiddleware(nextHandler);
-  },
-});
-
-const createProcedureBuilder = () => {
-  const builder = {
-    internal() {
-      return builder;
-    },
-    use() {
-      return builder;
-    },
-    meta() {
-      return builder;
-    },
-    input() {
-      return builder;
-    },
-    output() {
-      return builder;
-    },
-    query(handler) {
-      return {
-        _crpcMeta: { type: "query" },
-        _handler: handler,
-      };
-    },
-    mutation(handler) {
-      return {
-        _crpcMeta: { type: "mutation" },
-        _handler: handler,
-      };
-    },
-    action(handler) {
-      return {
-        _crpcMeta: { type: "action" },
-        _handler: handler,
-      };
-    },
-    middleware(handler) {
-      return createMiddleware(handler);
-    },
-  };
-
-  return builder;
-};
-
-export const initCRPC = {
-  meta() {
-    return this;
-  },
-  dataModel() {
-    return this;
-  },
-  context() {
-    return this;
-  },
-  middleware(handler) {
-    return createMiddleware(handler);
-  },
-  create() {
-    return {
-      query: createProcedureBuilder(),
-      mutation: createProcedureBuilder(),
-      action: createProcedureBuilder(),
-      httpAction: createProcedureBuilder(),
-      middleware: createMiddleware,
-      router: (record = {}) => record,
-    };
-  },
-};
+const SERVER_PARSER_SHIM_SOURCE = `${CRPC_BUILDER_STUB_SOURCE}
 
 export class CRPCError extends Error {
   constructor(options = {}) {
