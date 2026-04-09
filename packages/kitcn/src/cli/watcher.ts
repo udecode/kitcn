@@ -1,6 +1,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveConfiguredBackend, resolveRunDeps } from './backend-core.js';
+import {
+  resolveConfiguredBackend,
+  resolveRunDeps,
+  withLocalCodegenEnv,
+} from './backend-core.js';
 import { generateMeta, getConvexConfig } from './codegen.js';
 import type { CliBackend } from './config.js';
 import { logger } from './utils/logger.js';
@@ -150,11 +154,13 @@ export async function runWatcherCodegen(
   });
 
   if (backend !== 'concave') {
-    await generateMetaFn(params.sharedDir, {
-      debug: params.debug,
-      silent: true,
-      scope: params.scope,
-      trimSegments: params.trimSegments,
+    await withLocalCodegenEnv(params.sharedDir, backend, async () => {
+      await generateMetaFn(params.sharedDir, {
+        debug: params.debug,
+        silent: true,
+        scope: params.scope,
+        trimSegments: params.trimSegments,
+      });
     });
     return;
   }

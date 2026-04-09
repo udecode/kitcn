@@ -11,7 +11,7 @@
     "convex": "1.33.0",
     "hono": "4.12.9",
     "kitcn": "workspace:*",
-    "lucide-react": "^1.7.0",
+    "lucide-react": "^1.8.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "shadcn": "latest",
