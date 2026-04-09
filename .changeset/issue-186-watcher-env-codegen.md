@@ -11,3 +11,6 @@
   automatically through app `generated/server`; `.name("module:function")`
   overrides when needed, and HTTP routes expose route method and path
   automatically.
+- Add `requireSchedulerCtx()` for mutation-or-action scheduling flows so auth
+  callbacks and other generic ctx paths can enqueue work without lying about
+  action context.

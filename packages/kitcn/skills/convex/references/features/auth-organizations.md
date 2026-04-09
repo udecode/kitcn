@@ -11,7 +11,7 @@ See [Better Auth Organization Plugin](https://www.better-auth.com/docs/plugins/o
 ```ts
 // convex/functions/auth.ts
 import { organization } from "better-auth/plugins";
-import type { ActionCtx } from "./generated/server";
+import { requireSchedulerCtx } from "kitcn/server";
 import { defineAuth } from "./generated/auth";
 
 export default defineAuth((ctx) => ({
@@ -28,12 +28,13 @@ export default defineAuth((ctx) => ({
       invitationExpiresIn: 48 * 60 * 60, // 48 hours
       teams: { enabled: true, maximumTeams: 10 },
       sendInvitationEmail: async (data) => {
+        const schedulerCtx = requireSchedulerCtx(ctx);
         const inviterName = data.inviter.user.name || "Team Admin";
         const organizationName = data.organization.name;
         const roleSuffix = data.role ? ` as ${data.role}` : "";
         const acceptUrl = `${process.env.SITE_URL!}/w/${data.organization.slug}?invite=${data.id}`;
 
-        await (ctx as ActionCtx).scheduler.runAfter(
+        await schedulerCtx.scheduler.runAfter(
           0,
           internal.plugins.email.sendTemplatedEmail,
           {
@@ -50,6 +51,10 @@ export default defineAuth((ctx) => ({
   ],
 }));
 ```
+
+`sendInvitationEmail` can run from mutation-driven auth flows. Use
+`requireSchedulerCtx(ctx)` when you need scheduling. Do not narrow to
+`ActionCtx` unless the callback truly runs only inside an action.
 
 ## Client Config
 
