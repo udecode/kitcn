@@ -52,6 +52,13 @@ describe('cli/watcher', () => {
         outputFile
       )
     ).toBe(true);
+    expect(
+      shouldIgnoreWatchPath(
+        '/repo/convex/functions/foo.ts.kitcn-parse.ts',
+        functionsDir,
+        outputFile
+      )
+    ).toBe(true);
     expect(shouldIgnoreWatchPath(outputFile, functionsDir, outputFile)).toBe(
       true
     );
