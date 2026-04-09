@@ -3,6 +3,10 @@
 CLI-first flow: scaffold the app, run `kitcn add auth --yes`, then treat the
 files below as the generated reference output. They are not a separate manual
 install path.
+
+After changing plugins or auth fields in `<functionsDir>/auth.ts`, refresh
+auth-owned schema blocks with `bunx kitcn add auth --schema --yes`. Keep
+`bunx kitcn dev` running as the local Convex + codegen loop.
 ### 8.B.1 Auth client + auth server helpers
 
 **Create:** `src/lib/convex/auth-client.ts`

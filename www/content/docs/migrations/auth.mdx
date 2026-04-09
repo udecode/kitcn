@@ -833,14 +833,22 @@ export default async function RootLayout({ children }) {
 
 ## TanStack Start Migration
 
-For TanStack Start, follow Steps 1-9 above for core auth migration. This section covers framework-specific setup.
+For TanStack Start, follow Steps 1-3 above for the core auth migration. This
+section only covers the framework-specific wiring.
+
+<Callout icon={<InfoIcon />}>
+TanStack Start uses the default kitcn auth flow: run `npx kitcn add auth --yes`
+once, use `npx kitcn add auth --schema --yes` after auth table changes in
+`<functionsDir>/auth.ts`, and keep `npx kitcn dev` as the local Convex + codegen
+loop. There is no separate `auth:generate` step on this path.
+</Callout>
 
 ### Server Setup
 
-Create server-side auth helpers using `@convex-dev/better-auth`:
+Create server-side auth helpers using `kitcn/auth/start`:
 
 ```ts showLineNumbers title="src/lib/auth-server.ts"
-import { convexBetterAuthReactStart } from '@convex-dev/better-auth/react-start';
+import { convexBetterAuthReactStart } from 'kitcn/auth/start';
 
 export const { handler, getToken } = convexBetterAuthReactStart({
   convexUrl: import.meta.env.VITE_CONVEX_URL!,
