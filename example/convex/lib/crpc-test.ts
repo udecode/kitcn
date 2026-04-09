@@ -18,6 +18,7 @@ import {
   createProjectsCaller,
   createProjectsHandler,
 } from '../functions/generated/projects.runtime';
+import { createSeedCaller } from '../functions/generated/seed.runtime';
 import {
   type ActionCtx,
   initCRPC,
@@ -46,6 +47,13 @@ type _DebugHttpActionDef = typeof publicRoute._def;
 // Force TypeScript to show the actual type by causing an error
 // @ts-expect-error - intentional for debugging type
 const _forceError: string = publicRoute;
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
+type Expect<T extends true> = T;
 
 // ============================================================================
 // Section 1: publicQuery - All Methods
@@ -1412,6 +1420,36 @@ const narrowedGeneratedSchedulerCaller = createAuthCaller(
 narrowedGeneratedSchedulerCaller.schedule.now.rotateKeys;
 // @ts-expect-error scheduler narrowing still does not unlock action namespace
 narrowedGeneratedSchedulerCaller.actions.rotateKeys;
+
+const seedActionCaller = createSeedCaller({} as ActionCtx);
+seedActionCaller.seedUsers;
+seedActionCaller.generateSamplesBatch;
+seedActionCaller.actions.generateSamples;
+seedActionCaller.schedule.now.generateSamplesBatch;
+type _seedUsersCallableNotAny = Expect<
+  Equal<false, IsAny<typeof seedActionCaller.seedUsers>>
+>;
+type _seedUsersOutput = Awaited<ReturnType<typeof seedActionCaller.seedUsers>>;
+type _seedUsersOutputNotAny = Expect<Equal<false, IsAny<_seedUsersOutput>>>;
+type _seedUsersOutputShape = Expect<Equal<_seedUsersOutput, string[]>>;
+type _generateSamplesBatchCallableNotAny = Expect<
+  Equal<false, IsAny<typeof seedActionCaller.generateSamplesBatch>>
+>;
+type _generateSamplesBatchOutput = Awaited<
+  ReturnType<typeof seedActionCaller.generateSamplesBatch>
+>;
+type _generateSamplesBatchOutputNotAny = Expect<
+  Equal<false, IsAny<_generateSamplesBatchOutput>>
+>;
+type _generateSamplesBatchOutputShape = Expect<
+  Equal<_generateSamplesBatchOutput, { created: number; todosCreated: number }>
+>;
+type _generateSamplesActionCallableNotAny = Expect<
+  Equal<false, IsAny<typeof seedActionCaller.actions.generateSamples>>
+>;
+type _scheduledGenerateSamplesBatchCallableNotAny = Expect<
+  Equal<false, IsAny<typeof seedActionCaller.schedule.now.generateSamplesBatch>>
+>;
 
 type _generatedQueryCallerListInput = Parameters<
   typeof projectsQueryCaller.list
