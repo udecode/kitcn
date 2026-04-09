@@ -1,5 +1,27 @@
 # kitcn
 
+## 0.12.19
+
+### Patch Changes
+
+- [#187](https://github.com/udecode/kitcn/pull/187) [`269966e`](https://github.com/udecode/kitcn/commit/269966eddf9c2a3407e284c86ef3becca9ff441a) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn dev` watcher codegen so Convex parse-time imports read local env
+    values from `.env` and `convex/.env`, matching the initial codegen path.
+  - Ignore watcher-owned `*.kitcn-parse.ts` temp files during `kitcn dev` so
+    parse-time source rewrites do not retrigger codegen in a save loop.
+  - Fix `kitcn codegen` so parse-time imports skip helper `.ts` files that do not
+    define procedures, and support transitive `.tsx` imports like React Email
+    templates.
+  - Add server-only middleware procedure info for logging and tracing. Standard
+    `export const` queries, mutations, and actions infer `module:function`
+    automatically through app `generated/server`; `.name("module:function")`
+    overrides when needed, and HTTP routes expose route method and path
+    automatically.
+  - Add `requireSchedulerCtx()` for mutation-or-action scheduling flows so auth
+    callbacks and other generic ctx paths can enqueue work without lying about
+    action context.
+
 ## 0.12.18
 
 ### Patch Changes
