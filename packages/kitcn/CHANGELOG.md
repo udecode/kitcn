@@ -1,5 +1,18 @@
 # kitcn
 
+## 0.12.20
+
+### Patch Changes
+
+- [#193](https://github.com/udecode/kitcn/pull/193) [`db4b2a9`](https://github.com/udecode/kitcn/commit/db4b2a9c0e7ba4bf2fe52eba2f6d00c6c82bf605) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Improve mutation-driven action-caller guidance so `requireActionCtx()` points
+    scheduler-capable flows to `requireSchedulerCtx()` and `caller.schedule.*`.
+  - Fix server-side call docs so mutation-or-action callbacks schedule actions
+    instead of showing an invalid direct action call path.
+  - Improve React error-handling docs to recommend `error.data?.message` and a
+    global mutation toast pattern with `meta.errorMessage`.
+
 ## 0.12.19
 
 ### Patch Changes
