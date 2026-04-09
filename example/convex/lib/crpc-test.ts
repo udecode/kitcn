@@ -8,7 +8,7 @@
  */
 
 /* biome-ignore-all lint: type test file with intentional expressions */
-import { requireActionCtx } from 'kitcn/server';
+import { requireActionCtx, requireSchedulerCtx } from 'kitcn/server';
 import { z } from 'zod';
 import {
   createAuthCaller,
@@ -1406,6 +1406,12 @@ const narrowedGeneratedActionCaller = createAuthCaller(
   requireActionCtx(generatedMutationOrActionCtx)
 );
 narrowedGeneratedActionCaller.actions.rotateKeys;
+const narrowedGeneratedSchedulerCaller = createAuthCaller(
+  requireSchedulerCtx(generatedMutationOrActionCtx)
+);
+narrowedGeneratedSchedulerCaller.schedule.now.rotateKeys;
+// @ts-expect-error scheduler narrowing still does not unlock action namespace
+narrowedGeneratedSchedulerCaller.actions.rotateKeys;
 
 type _generatedQueryCallerListInput = Parameters<
   typeof projectsQueryCaller.list

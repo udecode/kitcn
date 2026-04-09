@@ -1,6 +1,6 @@
 import { admin, anonymous, organization, username } from 'better-auth/plugins';
 import { convex } from 'kitcn/auth';
-import { requireActionCtx } from 'kitcn/server';
+import { requireSchedulerCtx } from 'kitcn/server';
 import { getEnv } from '../lib/get-env';
 import {
   AUTH_DEMO_ANON_EMAIL_DOMAIN,
@@ -70,13 +70,13 @@ export default defineAuth((ctx) => {
           },
         },
         sendInvitationEmail: async (data) => {
-          const actionCtx = requireActionCtx(ctx);
+          const schedulerCtx = requireSchedulerCtx(ctx);
           const inviterName = data.inviter.user.name || 'Team Admin';
           const organizationName = data.organization.name;
           const roleSuffix = data.role ? ` as ${data.role}` : '';
           const acceptUrl = `${env.SITE_URL}/w/${data.organization.slug}?invite=${data.id}`;
 
-          await actionCtx.scheduler.runAfter(
+          await schedulerCtx.scheduler.runAfter(
             0,
             internal.plugins.email.sendTemplatedEmail,
             {

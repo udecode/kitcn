@@ -4,10 +4,12 @@ import {
   isMutationCtx,
   isQueryCtx,
   isRunMutationCtx,
+  isSchedulerCtx,
   requireActionCtx,
   requireMutationCtx,
   requireQueryCtx,
   requireRunMutationCtx,
+  requireSchedulerCtx,
 } from './context-utils';
 
 describe('server/context-utils', () => {
@@ -20,6 +22,7 @@ describe('server/context-utils', () => {
   const actionCtx = {
     runAction: async () => null,
     runMutation: async () => null,
+    scheduler: {},
   } as unknown as GenericCtx;
 
   test('detects query, mutation, action and runMutation contexts', () => {
@@ -35,6 +38,10 @@ describe('server/context-utils', () => {
     expect(isRunMutationCtx(mutationCtx)).toBe(true);
     expect(isRunMutationCtx(actionCtx)).toBe(true);
     expect(isRunMutationCtx(queryCtx)).toBe(false);
+
+    expect(isSchedulerCtx(mutationCtx)).toBe(true);
+    expect(isSchedulerCtx(actionCtx)).toBe(true);
+    expect(isSchedulerCtx(queryCtx)).toBe(false);
   });
 
   test('require helpers return valid contexts', () => {
@@ -42,6 +49,8 @@ describe('server/context-utils', () => {
     expect(() => requireMutationCtx(mutationCtx)).not.toThrow();
     expect(() => requireActionCtx(actionCtx)).not.toThrow();
     expect(() => requireRunMutationCtx(actionCtx)).not.toThrow();
+    expect(() => requireSchedulerCtx(actionCtx)).not.toThrow();
+    expect(() => requireSchedulerCtx(mutationCtx)).not.toThrow();
   });
 
   test('require helpers throw on invalid contexts', () => {
@@ -52,6 +61,9 @@ describe('server/context-utils', () => {
     expect(() => requireActionCtx(queryCtx)).toThrow('Action context required');
     expect(() => requireRunMutationCtx(queryCtx)).toThrow(
       'Mutation or action context required'
+    );
+    expect(() => requireSchedulerCtx(queryCtx)).toThrow(
+      'Mutation or action context with scheduler required'
     );
   });
 });

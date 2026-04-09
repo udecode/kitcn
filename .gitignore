@@ -98,3 +98,4 @@ yarn-error.log*
 .convex/
 .concave/
 .worktrees
+.omx/
