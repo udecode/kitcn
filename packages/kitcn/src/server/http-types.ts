@@ -60,6 +60,7 @@ export interface HttpProcedureBuilderDef<
   middlewares: AnyMiddleware[];
   outputSchema?: z.ZodTypeAny;
   paramsSchema?: z.ZodTypeAny;
+  procedureName?: string;
   querySchema?: z.ZodTypeAny;
   route?: HttpRouteDefinition<TMethod>;
 }

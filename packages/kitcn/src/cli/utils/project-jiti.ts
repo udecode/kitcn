@@ -80,6 +80,7 @@ export const createApiLeaf = (fnOrRoot, pathOrMeta, maybeMeta) => {
 export const createGeneratedFunctionReference = (name) => ({
   [Symbol.for("functionName")]: name,
 });
+export const registerProcedureNameLookup = () => {};
 export const typedProcedureResolver = (_functionRef, resolver) => resolver;
 export const createGeneratedRegistryRuntime = () => ({
   getCallerFactory() {

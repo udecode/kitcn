@@ -41,6 +41,7 @@ import {
   type HttpRouterRecord,
 } from './http-router';
 import type { HttpActionConstructor, HttpMethod } from './http-types';
+import { inferProcedureNameFromCallsite } from './procedure-name';
 import type {
   AnyMiddleware,
   GetRawInputFn,
@@ -48,6 +49,7 @@ import type {
   MiddlewareBuilder,
   MiddlewareFunction,
   MiddlewareNext,
+  MiddlewareProcedureInfo,
   MiddlewareResult,
   Overwrite,
   UnsetMarker,
@@ -247,11 +249,36 @@ type MiddlewareExecutionResult = MiddlewareResult<unknown> & {
   input: unknown;
 };
 
+const FUNCTION_NAME_SYMBOL = Symbol.for('functionName');
+
+const resolveProcedureInfo = (
+  type: 'query' | 'mutation' | 'action',
+  procedureName: string | undefined,
+  procedureFn: unknown
+): MiddlewareProcedureInfo => {
+  const symbolName =
+    procedureFn &&
+    typeof procedureFn === 'object' &&
+    typeof (procedureFn as Record<PropertyKey, unknown>)[
+      FUNCTION_NAME_SYMBOL
+    ] === 'string'
+      ? ((procedureFn as Record<PropertyKey, unknown>)[
+          FUNCTION_NAME_SYMBOL
+        ] as string)
+      : undefined;
+
+  return {
+    type,
+    name: symbolName ?? procedureName,
+  };
+};
+
 /** Execute middleware chain recursively with input access */
 async function executeMiddlewares(
   middlewares: AnyMiddleware[],
   ctx: unknown,
   meta: unknown,
+  procedure: MiddlewareProcedureInfo,
   input: unknown,
   getRawInput: GetRawInputFn,
   index = 0
@@ -287,6 +314,7 @@ async function executeMiddlewares(
       middlewares,
       nextCtx,
       meta,
+      procedure,
       nextInput,
       getRawInput,
       index + 1
@@ -298,6 +326,7 @@ async function executeMiddlewares(
   const result = await middleware({
     ctx: ctx as any,
     meta,
+    procedure,
     input,
     getRawInput,
     next,
@@ -470,6 +499,7 @@ type ProcedureBuilderDef<TMeta = object> = {
   inputSchemas: Record<string, any>[];
   outputSchema?: z.ZodTypeAny;
   meta?: TMeta;
+  procedureName?: string;
   functionConfig: InternalFunctionConfig;
   /** Whether this procedure uses internal function (not exposed to clients) */
   isInternal?: boolean;
@@ -692,6 +722,14 @@ export class ProcedureBuilder<
     };
   }
 
+  /** Set server-only procedure name for middleware/logging */
+  protected _name(value: string): ProcedureBuilderDef<TMeta> {
+    return {
+      ...this._def,
+      procedureName: value,
+    };
+  }
+
   // ===========================================================================
   // Private Methods
   // ===========================================================================
@@ -712,8 +750,14 @@ export class ProcedureBuilder<
       | typeof zCustomAction,
     fnType: 'query' | 'mutation' | 'action'
   ) {
-    const { middlewares, outputSchema, meta, functionConfig, isInternal } =
-      this._def;
+    const {
+      middlewares,
+      outputSchema,
+      meta,
+      procedureName,
+      functionConfig,
+      isInternal,
+    } = this._def;
     const mergedInput = this._getMergedInput() as
       | Record<string, z.ZodTypeAny>
       | undefined;
@@ -738,8 +782,11 @@ export class ProcedureBuilder<
       : Record<string, never>;
     const shouldValidateOutputWithZod =
       !!outputSchema && returnsSchema !== outputSchema;
+    const resolvedProcedureName =
+      procedureName ?? inferProcedureNameFromCallsite();
 
-    const fn = customFunction({
+    let fn!: Record<string, unknown>;
+    fn = customFunction({
       args: typedArgs,
       ...(typedReturnsSchema ? { returns: typedReturnsSchema } : {}),
       handler: async (ctx: any, rawInput: any) => {
@@ -752,11 +799,17 @@ export class ProcedureBuilder<
         const getRawInput: GetRawInputFn = async () => parsedInput;
 
         try {
+          const procedure = resolveProcedureInfo(
+            fnType,
+            resolvedProcedureName,
+            fn
+          );
           // Execute middleware chain with input access
           const result = await executeMiddlewares(
             middlewares,
             ctx,
             meta,
+            procedure,
             parsedInput,
             getRawInput
           );
@@ -867,6 +920,21 @@ export class QueryProcedureBuilder<
     TMeta
   > {
     return new QueryProcedureBuilder(this._meta(value));
+  }
+
+  /** Set a server-only procedure name for middleware/logging */
+  name(
+    value: string
+  ): QueryProcedureBuilder<
+    TBaseCtx,
+    TContext,
+    TContextOverrides,
+    TInput,
+    TClientInput,
+    TOutput,
+    TMeta
+  > {
+    return new QueryProcedureBuilder(this._name(value));
   }
 
   /** Define input schema (chainable - schemas are merged) */
@@ -1067,6 +1135,20 @@ export class MutationProcedureBuilder<
     return new MutationProcedureBuilder(this._meta(value));
   }
 
+  /** Set a server-only procedure name for middleware/logging */
+  name(
+    value: string
+  ): MutationProcedureBuilder<
+    TBaseCtx,
+    TContext,
+    TContextOverrides,
+    TInput,
+    TOutput,
+    TMeta
+  > {
+    return new MutationProcedureBuilder(this._name(value));
+  }
+
   /** Define input schema (chainable - schemas are merged) */
   input<TNewInput extends z.ZodObject<any>>(
     schema: TNewInput
@@ -1201,6 +1283,20 @@ export class ActionProcedureBuilder<
     TMeta
   > {
     return new ActionProcedureBuilder(this._meta(value));
+  }
+
+  /** Set a server-only procedure name for middleware/logging */
+  name(
+    value: string
+  ): ActionProcedureBuilder<
+    TBaseCtx,
+    TContext,
+    TContextOverrides,
+    TInput,
+    TOutput,
+    TMeta
+  > {
+    return new ActionProcedureBuilder(this._name(value));
   }
 
   /** Define input schema (chainable - schemas are merged) */

@@ -182,6 +182,40 @@ describe('server/http-builder', () => {
     await expect(resp.json()).resolves.toEqual({ name: 'alice' });
   });
 
+  test('http middleware receives automatic procedure route info', async () => {
+    const seen: unknown[] = [];
+    const http = createHttpProcedureBuilder({
+      base: (handler) => handler as any,
+      createContext: () => ({}) as any,
+      meta: {},
+    });
+
+    const proc = http
+      .get('/todos/:id')
+      .use(async ({ ctx, procedure, next }) => {
+        seen.push(procedure);
+        return next({ ctx });
+      })
+      .params(z.object({ id: z.string() }))
+      .query(async ({ params }) => ({ id: params.id }));
+
+    const resp = await (proc as any)(
+      {},
+      new Request('https://example.com/todos/123')
+    );
+
+    expect(resp.status).toBe(200);
+    await expect(resp.json()).resolves.toEqual({ id: '123' });
+    expect(seen).toEqual([
+      {
+        method: 'GET',
+        name: 'GET /todos/:id',
+        path: '/todos/:id',
+        type: 'httpAction',
+      },
+    ]);
+  });
+
   test('procedure parses multipart form data via .form()', async () => {
     const http = createHttpProcedureBuilder({
       base: (handler) => handler as any,

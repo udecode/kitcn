@@ -41,7 +41,7 @@ export const myPosts = authQuery
 Every middleware receives an object — see [Middleware Parameters](#middleware-parameters) in API Reference for the full property list.
 
 ```ts showLineNumbers {2-5}
-.use(async ({ ctx, meta, next, input }) => {
+.use(async ({ ctx, meta, procedure, next, input }) => {
   // Do something before
   const result = await next({ ctx });
   // Do something after (optional)
@@ -109,6 +109,15 @@ export const adminQuery = authQuery
   .use(roleMiddleware);
 ```
 
+## Procedure Info
+
+Middleware also receives a server-only `procedure` object for logging and tracing.
+
+- `procedure.type` is always available.
+- Standard `export const` queries, mutations, and actions infer `procedure.name` automatically when they are built from your app `generated/server` helper, which is the normal setup path.
+- Use `.name('module:function')` to override the inferred name or cover unusual export shapes.
+- HTTP routes derive `procedure.name`, `procedure.method`, and `procedure.path` from the route automatically.
+
 ## Chaining Middleware
 
 Chain multiple `.use()` calls to compose behavior. They execute in order:
@@ -170,17 +179,22 @@ Create standalone middleware with `c.middleware()` for reuse across your codebas
 
 ```ts title="convex/lib/crpc.ts" showLineNumbers {2-6,9-15}
 // Standalone middleware
-const logMiddleware = c.middleware(async ({ ctx, next }) => {
+const logMiddleware = c.middleware(async ({ ctx, procedure, next }) => {
   const start = Date.now();
-  const result = await next({ ctx });
-  console.log(`Request took ${Date.now() - start}ms`);
-  return result;
+  try {
+    return await next({ ctx });
+  } finally {
+    console.log(`[${procedure.name ?? procedure.type}] ${Date.now() - start}ms`);
+  }
 });
 
-// Plugin-owned middleware
-import { ratelimit } from './plugins/ratelimit/plugin';
-
-export const publicMutation = c.mutation.use(ratelimit.middleware());
+export const myPosts = c.query
+  .use(logMiddleware)
+  .query(async ({ ctx }) => {
+    return ctx.orm.query.posts.findMany({
+      limit: 50,
+    });
+  });
 ```
 
 ### Extending with `.pipe()`

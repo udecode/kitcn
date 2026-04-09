@@ -13,6 +13,19 @@ export type UnsetMarker = { readonly __brand: 'UnsetMarker' };
 /** Marker to enforce middleware returns next() result */
 export type MiddlewareMarker = { readonly __brand: 'MiddlewareMarker' };
 
+export type MiddlewareProcedureType =
+  | 'query'
+  | 'mutation'
+  | 'action'
+  | 'httpAction';
+
+export type MiddlewareProcedureInfo = {
+  readonly type: MiddlewareProcedureType;
+  readonly name?: string;
+  readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  readonly path?: string;
+};
+
 // =============================================================================
 // Type Utilities
 // =============================================================================
@@ -143,6 +156,7 @@ export type MiddlewareFunction<
 > = (opts: {
   ctx: CurrentMiddlewareContext<TContext, TContextOverridesIn>;
   meta: TMeta;
+  procedure: MiddlewareProcedureInfo;
   input: TInputOut;
   getRawInput: GetRawInputFn;
   next: MiddlewareNext<TContext, TContextOverridesIn>;

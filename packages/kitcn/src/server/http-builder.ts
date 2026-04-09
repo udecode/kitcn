@@ -19,6 +19,7 @@ import type {
   GetRawInputFn,
   MiddlewareBuilder,
   MiddlewareFunction,
+  MiddlewareProcedureInfo,
   Overwrite,
   UnsetMarker,
 } from './types';
@@ -296,6 +297,21 @@ export interface HttpProcedureBuilder<
     >
   ): HttpProcedure<TInput, TOutput, TParams, TQuery, TMethod, TForm>;
 
+  /** Set a server-only procedure name for middleware/logging */
+  name(
+    value: string
+  ): HttpProcedureBuilder<
+    TInitialCtx,
+    TCtx,
+    TInput,
+    TOutput,
+    TParams,
+    TQuery,
+    TMeta,
+    TMethod,
+    TForm
+  >;
+
   /** Define response schema */
   output<TSchema extends z.ZodTypeAny>(
     schema: TSchema
@@ -465,6 +481,21 @@ function createNewHttpBuilder(
   return createHttpBuilder({ ...def1, ...def2 });
 }
 
+function resolveHttpProcedureInfo(
+  def: AnyHttpProcedureBuilderDef
+): MiddlewareProcedureInfo {
+  const route = def.route;
+
+  return {
+    type: 'httpAction',
+    name:
+      def.procedureName ??
+      (route ? `${route.method} ${route.path}` : undefined),
+    method: route?.method,
+    path: route?.path,
+  };
+}
+
 /** Internal method to create the HTTP procedure */
 function createProcedure(
   def: AnyHttpProcedureBuilderDef,
@@ -476,6 +507,8 @@ function createProcedure(
       'Route must be defined before action. Use .route(path, method) first.'
     );
   }
+
+  const middlewareProcedure = resolveHttpProcedureInfo(def);
 
   /**
    * Hono-compatible handler function.
@@ -512,6 +545,7 @@ function createProcedure(
       for (const middleware of def.middlewares) {
         const result = await middleware({
           ctx: ctx as any,
+          procedure: middlewareProcedure,
           input: currentInput,
           getRawInput,
           next: async (opts?: any) => {
@@ -736,6 +770,12 @@ function createHttpBuilder(
     meta(value: any) {
       return createNewHttpBuilder(def, {
         meta: def.meta ? { ...def.meta, ...value } : value,
+      });
+    },
+
+    name(value: string) {
+      return createNewHttpBuilder(def, {
+        procedureName: value,
       });
     },
 
