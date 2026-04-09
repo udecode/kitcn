@@ -6,6 +6,8 @@
 
 - Fix `kitcn dev` watcher codegen so Convex parse-time imports read local env
   values from `.env` and `convex/.env`, matching the initial codegen path.
+- Ignore watcher-owned `*.kitcn-parse.ts` temp files during `kitcn dev` so
+  parse-time source rewrites do not retrigger codegen in a save loop.
 - Add server-only middleware procedure info for logging and tracing. Standard
   `export const` queries, mutations, and actions infer `module:function`
   automatically through app `generated/server`; `.name("module:function")`

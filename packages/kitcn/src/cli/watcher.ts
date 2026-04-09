@@ -132,7 +132,10 @@ export function shouldIgnoreWatchPath(
     return true;
   }
 
-  return normalizedPath.endsWith('.runtime.ts');
+  return (
+    normalizedPath.endsWith('.runtime.ts') ||
+    normalizedPath.endsWith('.kitcn-parse.ts')
+  );
 }
 
 export async function runWatcherCodegen(
