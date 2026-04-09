@@ -17,7 +17,6 @@ const HINTS_KEY = '__KITCN_PROCEDURE_NAME_HINTS__';
 const PATH_SEPARATOR_RE = /\\/g;
 const TRIM_SLASHES_RE = /^\/+|\/+$/g;
 const PACKAGE_FRAME_MARKERS = ['/node_modules/kitcn/', '/packages/kitcn/'];
-const currentModulePath = normalizePath(decodeFileName(import.meta.url));
 
 function decodeFileName(value: string): string {
   if (!value.startsWith('file://')) {
@@ -108,10 +107,7 @@ type SourceLocation = {
 
 function isPackageFrame(filePath: string): boolean {
   const normalized = normalizePath(filePath);
-  return (
-    normalized === currentModulePath ||
-    PACKAGE_FRAME_MARKERS.some((marker) => normalized.includes(marker))
-  );
+  return PACKAGE_FRAME_MARKERS.some((marker) => normalized.includes(marker));
 }
 
 function captureCallsite(): SourceLocation | undefined {

@@ -10,6 +10,7 @@ import {
 import {
   createGeneratedFunctionReference,
   initCRPC as baseInitCRPC,
+  registerProcedureNameLookup,
 } from 'kitcn/server';
 import type { DataModel } from '../_generated/dataModel';
 import type {
@@ -29,6 +30,11 @@ const ormFunctions: OrmFunctions = {
   resetChunk: createGeneratedFunctionReference<"mutation", "internal", unknown>("generated/server:resetChunk"),
 };
 const ormSchema = schema;
+
+registerProcedureNameLookup(
+  {},
+  "convex/functions"
+);
 
 export const orm = createOrm({
   schema: ormSchema,
