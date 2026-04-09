@@ -350,7 +350,9 @@ Key client defaults/deltas:
 5. For pagination, use `useInfiniteQuery` from `kitcn/react`.
 6. Prefer typed `queryKey(...)` helpers for cache read/write/fetch ops instead of manual keys.
 7. For kitcn auth flows, prefer `createAuthMutations(...)` wrappers (not raw auth client calls) to avoid logout race errors. Raw Convex preset keeps the plain auth client path.
-8. Full client/RSC depth lives in `references/features/react.md`.
+8. For mutation toasts, prefer `error.data?.message` over `error.message`; `data.message` is the clean `CRPCError` payload.
+9. Prefer one global `QueryClient` mutation `onError` toast with `mutation.meta.errorMessage` / `skipErrorToast` rather than copy-pasting `onError` in every component.
+10. Full client/RSC depth lives in `references/features/react.md`.
 
 ### 8) RSC Patterns (Next.js)
 
