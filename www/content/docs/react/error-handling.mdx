@@ -50,6 +50,10 @@ const mutation = useMutation(
 );
 ```
 
+Prefer `error.data?.message` before `error.message`. `data.message` is the
+clean app-level message from `CRPCError`. `error.message` can include noisier
+transport details.
+
 Or use `toast.promise` for a cleaner pattern:
 
 ```tsx showLineNumbers {1-5}
@@ -58,6 +62,57 @@ toast.promise(mutation.mutateAsync(data), {
   success: 'Created!',
   error: (e) => e.data?.message ?? 'Failed',
 });
+```
+
+If most mutations should toast the same way, move that to your `QueryClient`
+and keep components lean:
+
+```tsx showLineNumbers {12-27}
+import { QueryCache, QueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => {
+      if (isCRPCClientError(error)) {
+        console.log(`[CRPC] ${error.code}:`, error.functionName);
+      }
+    },
+  }),
+  defaultOptions: {
+    mutations: {
+      onError: (err, _variables, _context, mutation) => {
+        const error = err as Error & { data?: { message?: string } };
+        const meta = mutation.meta as
+          | { errorMessage?: string; skipErrorToast?: boolean }
+          | undefined;
+
+        if (meta?.skipErrorToast) return;
+
+        toast.error(
+          error.data?.message ??
+            meta?.errorMessage ??
+            error.message ??
+            'Something went wrong'
+        );
+      },
+    },
+  },
+});
+```
+
+Then set a fallback message per mutation without repeating `onError`:
+
+```tsx showLineNumbers {2}
+const sendMessage = useMutation(
+  crpc.messages.sendMessage.mutationOptions({
+    meta: { errorMessage: 'Failed to send message' },
+    onSuccess: () => {
+      setDraft('');
+      toast.success('Message sent');
+    },
+  })
+);
 ```
 
 ### Type-safe Error Access
@@ -109,9 +164,10 @@ if (isCRPCErrorCode(error, 'UNAUTHORIZED')) {
 
 Handle errors globally in the QueryClient:
 
-```tsx showLineNumbers {5-10}
+```tsx showLineNumbers {5-26}
 import { QueryCache, QueryClient } from '@tanstack/react-query';
 import { isCRPCClientError } from 'kitcn/crpc';
+import { toast } from 'sonner';
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -121,11 +177,30 @@ const queryClient = new QueryClient({
       }
     },
   }),
+  defaultOptions: {
+    mutations: {
+      onError: (err, _variables, _context, mutation) => {
+        const error = err as Error & { data?: { message?: string } };
+        const meta = mutation.meta as
+          | { errorMessage?: string; skipErrorToast?: boolean }
+          | undefined;
+
+        if (meta?.skipErrorToast) return;
+
+        toast.error(
+          error.data?.message ??
+            meta?.errorMessage ??
+            error.message ??
+            'Something went wrong'
+        );
+      },
+    },
+  },
 });
 ```
 
 <Callout icon={<InfoIcon />}>
-**Tip:** Use global error handling for logging and analytics. Handle specific errors in component callbacks for user-facing messages.
+**Tip:** Use global mutation error handling for user-facing fallback toasts. Keep per-mutation `onError` only for custom flows that genuinely need bespoke behavior.
 </Callout>
 
 ## Next Steps
