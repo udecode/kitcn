@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getSchemaRelations, getSchemaTriggers } from '../orm/schema';
 import { OrmSchemaOptions } from '../orm/symbols';
-import { isValidConvexFile } from '../shared/meta-utils';
+import {
+  hasPotentialCodegenExports,
+  isValidConvexFile,
+} from '../shared/meta-utils';
 import { CRPC_BUILDER_STUB_SOURCE } from './utils/crpc-builder-stub.js';
 import { logger } from './utils/logger.js';
 import {
@@ -1944,6 +1947,12 @@ export async function generateMeta(
       const files = listFilesRecursive(functionsDir).filter(
         (file) => file.endsWith('.ts') && isValidConvexFile(file)
       );
+      const parseCandidateFiles = files.filter((file) =>
+        hasPotentialCodegenExports(
+          fs.readFileSync(path.join(functionsDir, file), 'utf8'),
+          file
+        )
+      );
       const existingRuntimeFilesBeforeParse = new Set(
         listGeneratedRuntimeFiles(functionsDir)
       );
@@ -1964,7 +1973,7 @@ export async function generateMeta(
         placeholderRuntimeExportNames
       );
 
-      for (const file of files) {
+      for (const file of parseCandidateFiles) {
         const filePath = path.join(functionsDir, file);
         // Use path (minus .ts) as namespace key: 'items/queries' for nested files
         const moduleName = file.replace(TS_EXTENSION_RE, '');

@@ -3460,6 +3460,136 @@ export default createHttpRouter({}, router({}));
     }
   });
 
+  test('generateMeta parses modules that import tsx files', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'node_modules', 'react', 'package.json'),
+        JSON.stringify({
+          name: 'react',
+          type: 'module',
+          exports: {
+            './jsx-runtime': './jsx-runtime.js',
+            './jsx-dev-runtime': './jsx-dev-runtime.js',
+          },
+        })
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'react', 'jsx-runtime.js'),
+        `
+        export const Fragment = Symbol.for('react.fragment');
+        export const jsx = (type, props) => ({ type, props });
+        export const jsxs = jsx;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'node_modules', 'react', 'jsx-dev-runtime.js'),
+        `
+        export const Fragment = Symbol.for('react.fragment');
+        export const jsxDEV = (type, props) => ({ type, props });
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'email-otp.tsx'),
+        `
+        export function EmailOtp(props: { code: string }) {
+          return <div>{props.code}</div>;
+        }
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'resend.ts'),
+        `
+        import { EmailOtp } from './lib/email-otp';
+
+        void EmailOtp;
+
+        export const sendOtp = {
+          _crpcMeta: {
+            type: 'action',
+          },
+        };
+        `.trim()
+      );
+
+      const result = Bun.spawnSync(
+        [
+          'bun',
+          '--cwd',
+          path.join(oldCwd, 'packages', 'kitcn'),
+          '-e',
+          'import { generateMeta } from "./src/cli/codegen.ts"; process.chdir(process.argv[1]); await generateMeta(undefined, { silent: true });',
+          dir,
+        ],
+        {
+          cwd: oldCwd,
+          env: {
+            ...process.env,
+            JITI_TRY_NATIVE: '0',
+          },
+          stderr: 'pipe',
+          stdout: 'pipe',
+        }
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr.toString()).toBe('');
+
+      const generatedApi = fs.readFileSync(
+        path.join(dir, 'convex', 'shared', 'api.ts'),
+        'utf-8'
+      );
+      expect(generatedApi).toContain('sendOtp');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta skips non-procedure helper ts files even if importing them would fail', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'test.setup.ts'),
+        `
+        ({} as Record<string, never>).glob();
+
+        export const testSetup = true;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'test.call-tracking.ts'),
+        `
+        ({} as Record<string, never>).glob();
+
+        export const testCallTracking = true;
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).resolves.toBe(
+        undefined
+      );
+
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'test.setup.runtime.ts')
+        )
+      ).toBe(false);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'test.call-tracking.runtime.ts')
+        )
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta parses scaffolded http route chains from generated/server placeholders', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

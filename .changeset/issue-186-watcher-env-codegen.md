@@ -8,6 +8,9 @@
   values from `.env` and `convex/.env`, matching the initial codegen path.
 - Ignore watcher-owned `*.kitcn-parse.ts` temp files during `kitcn dev` so
   parse-time source rewrites do not retrigger codegen in a save loop.
+- Fix `kitcn codegen` so parse-time imports skip helper `.ts` files that do not
+  define procedures, and support transitive `.tsx` imports like React Email
+  templates.
 - Add server-only middleware procedure info for logging and tracing. Standard
   `export const` queries, mutations, and actions infer `module:function`
   automatically through app `generated/server`; `.name("module:function")`
