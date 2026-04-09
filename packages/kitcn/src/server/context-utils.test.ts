@@ -59,6 +59,9 @@ describe('server/context-utils', () => {
       'Mutation context required'
     );
     expect(() => requireActionCtx(queryCtx)).toThrow('Action context required');
+    expect(() => requireActionCtx(mutationCtx)).toThrow(
+      'Use requireSchedulerCtx(ctx) with caller.schedule.*.'
+    );
     expect(() => requireRunMutationCtx(queryCtx)).toThrow(
       'Mutation or action context required'
     );

@@ -70,6 +70,11 @@ export const requireActionCtx = <DataModel extends GenericDataModel>(
   ctx: GenericCtx<DataModel>
 ): GenericActionCtx<DataModel> => {
   if (!isActionCtx(ctx)) {
+    if (isSchedulerCtx(ctx)) {
+      throw new Error(
+        'Action context required. This ctx can schedule work but cannot call action procedures directly. Use requireSchedulerCtx(ctx) with caller.schedule.*.'
+      );
+    }
     throw new Error('Action context required');
   }
   return ctx;
