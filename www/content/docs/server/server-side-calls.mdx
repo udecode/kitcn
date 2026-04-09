@@ -178,14 +178,19 @@ What each caller context can invoke via `create<Module>Caller(ctx)`:
 | `ActionCtx` | ✅ | ✅ | ❌ | ✅ | ✅ |
 
 If `ctx` is already typed as `ActionCtx`, call the generated caller directly.
-Only widen-narrow unions like `MutationCtx | ActionCtx` need help:
+Use `caller.actions.*` only from a real action context.
+If the flow can run from a mutation or generic scheduler-capable callback, do
+not force `requireActionCtx(ctx)` just to reach an action. Schedule it instead:
 
 ```ts showLineNumbers {1,4}
-import { requireActionCtx } from 'kitcn/server';
+import { requireSchedulerCtx } from 'kitcn/server';
 
-const caller = createJobsCaller(requireActionCtx(ctx));
-await caller.actions.reindex({ force: true });
+const caller = createJobsCaller(requireSchedulerCtx(ctx));
+await caller.schedule.now.reindex({ force: true });
 ```
+
+Only use `requireActionCtx(ctx)` when the callback truly runs in `ActionCtx`
+and you need `caller.actions.*`.
 
 ### createCallerFactory
 

@@ -15,13 +15,22 @@ Investigate report: `create<Module>Caller(requireActionCtx(ctx))` throws
 
 ## Planned fix
 
-1. Add a helper that narrows `GenericCtx` to a scheduler-capable
-   mutation-or-action ctx.
-2. Add tests for that helper.
-3. Update public exports test.
-4. Replace broken auth example/docs to use the scheduler helper instead of
-   `ActionCtx` / `requireActionCtx`.
-5. If `packages/kitcn` changes, update the active unreleased changeset.
+1. Keep the runtime rule: mutation ctx cannot call actions directly.
+2. Improve `requireActionCtx(ctx)` so mutation-like misuse points at
+   `requireSchedulerCtx(ctx)` + `caller.schedule.*`.
+3. Replace broken docs/examples that force `requireActionCtx(ctx)` in
+   mutation-capable flows.
+4. Sync the Convex skill docs with the same rule.
+5. Update the active unreleased changeset because `packages/kitcn` changed.
+
+## Outcome
+
+- `requireActionCtx(ctx)` now gives a scheduler-specific hint when the passed
+  ctx can schedule work but cannot call actions directly.
+- Server docs now show `requireSchedulerCtx(ctx)` + `caller.schedule.now.*`
+  for mutation-or-action flows instead of the broken direct action example.
+- Convex skill docs now match the public docs.
+- Active unreleased changeset updated.
 
 ## Verification
 

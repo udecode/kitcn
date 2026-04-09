@@ -208,6 +208,16 @@ await caller.schedule.after(5000).reindex({ force: true });
 await caller.schedule.at(Date.now() + 60_000).reindex({ force: true });
 ```
 
+`caller.actions.*` is action-only. If a callback can run from mutation or
+action context, keep the seam honest and schedule the action:
+
+```ts title="convex/functions/jobs.ts" showLineNumbers {1,4}
+import { requireSchedulerCtx } from 'kitcn/server';
+
+const caller = createJobsCaller(requireSchedulerCtx(ctx));
+await caller.schedule.now.reindex({ force: true });
+```
+
 <Callout icon={<InfoIcon />}>
   **Note:** In actions, each `create<Module>Caller(ctx)` call runs as a separate Convex transaction. Prefer aggregating related reads/writes into a single internal query/mutation when consistency matters.
 </Callout>
