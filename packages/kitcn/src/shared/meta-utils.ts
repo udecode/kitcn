@@ -135,6 +135,13 @@ const EXCLUDED_FILES = new Set([
   'convex.config.ts',
   'auth.config.ts',
 ]);
+const EXPORTED_CONST_CAPTURE_REGEX = /export\s+const\s+([a-zA-Z_$][\w$]*)\s*=/g;
+const CHAINED_PROCEDURE_CAPTURE_REGEX = /\.\s*(?:query|mutation|action)\s*\(/;
+const EXPORTED_NATIVE_HANDLER_CAPTURE_REGEX =
+  /export\s+const\s+([a-zA-Z_$][\w$]*)\s*=\s*(?:[\w$]+\.)?(?:query|mutation|action|internalQuery|internalMutation|internalAction)\s*\(/g;
+const EXPORTED_ORM_API_DESTRUCTURE_CAPTURE_REGEX =
+  /export\s+const\s*\{([^}]+)\}\s*=\s*orm\.api\s*\(\s*\)\s*;?/g;
+const DIRECT_CODEGEN_META_CAPTURE_REGEX = /\b_crpc(?:Meta|HttpRoute)\b/;
 
 /**
  * Check if a file path should be included in meta generation.
@@ -156,6 +163,50 @@ export function isValidConvexFile(file: string): boolean {
   if (EXCLUDED_FILES.has(basename)) return false;
 
   return true;
+}
+
+export function hasPotentialCodegenExports(
+  source: string,
+  filePath?: string
+): boolean {
+  const normalizedFilePath = filePath?.replace(/\\/g, '/');
+
+  if (
+    normalizedFilePath === 'http.ts' ||
+    normalizedFilePath?.endsWith('/http.ts')
+  ) {
+    return true;
+  }
+
+  if (DIRECT_CODEGEN_META_CAPTURE_REGEX.test(source)) {
+    return true;
+  }
+
+  if (
+    Array.from(source.matchAll(EXPORTED_NATIVE_HANDLER_CAPTURE_REGEX)).length
+  ) {
+    return true;
+  }
+
+  if (
+    Array.from(source.matchAll(EXPORTED_ORM_API_DESTRUCTURE_CAPTURE_REGEX))
+      .length
+  ) {
+    return true;
+  }
+
+  const exportConstMatches = Array.from(
+    source.matchAll(EXPORTED_CONST_CAPTURE_REGEX)
+  );
+  for (const [index, match] of exportConstMatches.entries()) {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = exportConstMatches[index + 1]?.index ?? source.length;
+    if (CHAINED_PROCEDURE_CAPTURE_REGEX.test(source.slice(start, end))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

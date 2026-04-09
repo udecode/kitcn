@@ -256,6 +256,9 @@ export const getProjectServerParserShimPath = (cwd = process.cwd()) =>
 export const createProjectJiti = (cwd = process.cwd()) =>
   createJiti(cwd, {
     interopDefault: true,
+    jsx: {
+      runtime: 'automatic',
+    },
     moduleCache: false,
     alias: {
       ...buildTsconfigPathAliases(cwd),
