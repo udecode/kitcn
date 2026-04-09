@@ -173,6 +173,76 @@ describe('cli/watcher', () => {
     expect(execaStub).not.toHaveBeenCalled();
   });
 
+  test('runWatcherCodegen loads convex/.env for convex parse-time env', async () => {
+    const dir = await mkdtemp(
+      path.join(tmpdir(), 'kitcn-watcher-convex-local-env-')
+    );
+    const oldCwd = process.cwd();
+    const originalSecret = process.env.MY_SECRET;
+
+    await mkdir(path.join(dir, 'convex', 'functions'), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(dir, 'convex.json'),
+      JSON.stringify({ functions: 'convex/functions' })
+    );
+    await writeFile(
+      path.join(dir, 'convex', '.env'),
+      'MY_SECRET=watcher-env\n'
+    );
+
+    const generateMetaStub = mock(async () => {
+      expect(process.env.MY_SECRET).toBe('watcher-env');
+    });
+    const execaStub = mock(async () => ({
+      exitCode: 0,
+      stderr: '',
+      stdout: '',
+    }));
+    const loadCliConfigStub = mock(() => ({
+      backend: 'convex' as const,
+      codegen: {
+        args: [],
+        debug: false,
+        scope: 'all' as const,
+      },
+    }));
+
+    process.chdir(dir);
+    try {
+      await runWatcherCodegen(
+        {
+          backendArg: 'convex',
+          debug: false,
+          scope: 'all',
+        },
+        {
+          resolveRunDeps: () =>
+            ({
+              execa: execaStub as never,
+              generateMeta: generateMetaStub as never,
+              loadCliConfig: loadCliConfigStub as never,
+              syncEnv: mock(async () => {}) as never,
+            }) as never,
+          resolveConfiguredBackendFn: (() => 'convex') as never,
+        }
+      );
+
+      expect(generateMetaStub).toHaveBeenCalled();
+      expect(process.env.MY_SECRET).toBe(originalSecret);
+      expect(execaStub).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(oldCwd);
+      if (originalSecret === undefined) {
+        process.env.MY_SECRET = undefined;
+      } else {
+        process.env.MY_SECRET = originalSecret;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test('startWatcher uses watcher codegen flow when backend env is concave', async () => {
     const previousBackend = process.env.KITCN_BACKEND;
     process.env.KITCN_BACKEND = 'concave';

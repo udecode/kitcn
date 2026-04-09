@@ -933,7 +933,7 @@ function resolveRemoteConvexDeploymentKey(
 }
 
 function getLocalParseEnvVars(
-  sharedDir: string,
+  sharedDir: string | undefined,
   backend: CliBackend
 ): Record<string, string> {
   const { functionsDir } = getConvexConfig(sharedDir);
@@ -956,7 +956,7 @@ function getLocalParseEnvVars(
 }
 
 function getLocalBackendEnvVars(
-  sharedDir: string,
+  sharedDir: string | undefined,
   backend: CliBackend
 ): Record<string, string> {
   const { functionsDir } = getConvexConfig(sharedDir);
@@ -977,7 +977,7 @@ function getLocalBackendEnvVars(
 }
 
 export async function withLocalCodegenEnv<T>(
-  sharedDir: string,
+  sharedDir: string | undefined,
   backend: CliBackend,
   fn: () => Promise<T>
 ): Promise<T> {
