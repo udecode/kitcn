@@ -14,4 +14,5 @@ export * from './http-types';
 export * from './infer';
 export * from './lazy-caller';
 export * from './procedure-caller';
+export * from './procedure-name';
 export * from './types';

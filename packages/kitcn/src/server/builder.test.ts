@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   actionGeneric,
   internalActionGeneric,
@@ -11,6 +15,21 @@ import { z } from 'zod';
 import { encodeWire } from '../crpc/transformer';
 import { initCRPC } from './builder';
 import { CRPCError } from './error';
+
+function getLocationForMarker(source: string, marker: string) {
+  const index = source.indexOf(marker);
+  if (index < 0) {
+    throw new Error(`Missing marker: ${marker}`);
+  }
+
+  const before = source.slice(0, index);
+  const lines = before.split('\n');
+
+  return {
+    column: (lines.at(-1)?.length ?? 0) + 1,
+    line: lines.length,
+  };
+}
 
 describe('server/builder', () => {
   test('create() with no args exposes full procedure surface', () => {
@@ -71,6 +90,176 @@ describe('server/builder', () => {
       userId: 'u1',
       x: 2,
     });
+  });
+
+  test('middleware receives procedure info from server-only procedure name', async () => {
+    const seen: unknown[] = [];
+    const c = initCRPC
+      .context({
+        query: () => ({ userId: null as string | null }),
+      })
+      .create({
+        query: queryGeneric,
+        internalQuery: internalQueryGeneric,
+      } as any);
+
+    const fn = c.query
+      .name('posts:list')
+      .use(async ({ ctx, procedure, next }) => {
+        seen.push(procedure);
+        return next({ ctx });
+      })
+      .query(async () => 'ok');
+
+    await expect((fn as any)._handler({}, {})).resolves.toBe('ok');
+    expect(seen).toEqual([{ type: 'query', name: 'posts:list' }]);
+    expect((fn as any)._crpcMeta).not.toHaveProperty('name');
+  });
+
+  test('middleware infers procedure info from exported module path by default', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-procedure-name-'));
+    const functionsDir = path.join(dir, 'convex', 'functions');
+    const filePath = path.join(functionsDir, 'posts.ts');
+    const serverUrl = pathToFileURL(
+      path.join(process.cwd(), 'packages/kitcn/src/server/index.ts')
+    ).href;
+    const source = `
+      import { queryGeneric, internalQueryGeneric } from 'convex/server';
+      import { initCRPC } from './generated/server';
+
+      export const seen = [];
+
+      const c = initCRPC
+        .context({
+          query: () => ({ userId: null }),
+        })
+        .create({
+          query: queryGeneric,
+          internalQuery: internalQueryGeneric,
+        });
+
+      export const list = c.query
+        .use(async ({ ctx, procedure, next }) => {
+          seen.push(procedure);
+          return next({ ctx });
+        })
+        .query(async () => 'ok');
+      `;
+    const location = getLocationForMarker(source, ".query(async () => 'ok')");
+
+    fs.mkdirSync(functionsDir, { recursive: true });
+    fs.mkdirSync(path.join(functionsDir, 'generated'), { recursive: true });
+    fs.symlinkSync(
+      path.join(process.cwd(), 'node_modules'),
+      path.join(dir, 'node_modules'),
+      'dir'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'convex.json'),
+      `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
+    );
+    fs.writeFileSync(
+      path.join(functionsDir, 'generated', 'server.ts'),
+      `
+      import {
+        initCRPC as baseInitCRPC,
+        registerProcedureNameLookup,
+      } from ${JSON.stringify(serverUrl)};
+
+      registerProcedureNameLookup(
+        {
+          'posts.ts': [
+            {
+              column: ${location.column},
+              line: ${location.line},
+              name: 'posts:list',
+            },
+          ],
+        },
+        'convex/functions'
+      );
+
+      export const initCRPC = baseInitCRPC;
+      `
+    );
+    fs.writeFileSync(filePath, source);
+
+    const mod = await import(`${pathToFileURL(filePath).href}?t=${Date.now()}`);
+
+    await expect((mod as any).list._handler({}, {})).resolves.toBe('ok');
+    expect((mod as any).seen).toEqual([{ type: 'query', name: 'posts:list' }]);
+  });
+
+  test('middleware infers procedure info with default convex root when convex.json is absent', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-procedure-name-default-root-')
+    );
+    const functionsDir = path.join(dir, 'convex');
+    const filePath = path.join(functionsDir, 'posts.ts');
+    const serverUrl = pathToFileURL(
+      path.join(process.cwd(), 'packages/kitcn/src/server/index.ts')
+    ).href;
+    const source = `
+      import { queryGeneric, internalQueryGeneric } from 'convex/server';
+      import { initCRPC } from './generated/server';
+
+      export const seen = [];
+
+      const c = initCRPC
+        .context({
+          query: () => ({ userId: null }),
+        })
+        .create({
+          query: queryGeneric,
+          internalQuery: internalQueryGeneric,
+        });
+
+      export const list = c.query
+        .use(async ({ ctx, procedure, next }) => {
+          seen.push(procedure);
+          return next({ ctx });
+        })
+        .query(async () => 'ok');
+      `;
+    const location = getLocationForMarker(source, ".query(async () => 'ok')");
+
+    fs.mkdirSync(functionsDir, { recursive: true });
+    fs.mkdirSync(path.join(functionsDir, 'generated'), { recursive: true });
+    fs.symlinkSync(
+      path.join(process.cwd(), 'node_modules'),
+      path.join(dir, 'node_modules'),
+      'dir'
+    );
+    fs.writeFileSync(
+      path.join(functionsDir, 'generated', 'server.ts'),
+      `
+      import {
+        initCRPC as baseInitCRPC,
+        registerProcedureNameLookup,
+      } from ${JSON.stringify(serverUrl)};
+
+      registerProcedureNameLookup(
+        {
+          'posts.ts': [
+            {
+              column: ${location.column},
+              line: ${location.line},
+              name: 'posts:list',
+            },
+          ],
+        },
+        'convex'
+      );
+
+      export const initCRPC = baseInitCRPC;
+      `
+    );
+    fs.writeFileSync(filePath, source);
+
+    const mod = await import(`${pathToFileURL(filePath).href}?t=${Date.now()}`);
+
+    await expect((mod as any).list._handler({}, {})).resolves.toBe('ok');
+    expect((mod as any).seen).toEqual([{ type: 'query', name: 'posts:list' }]);
   });
 
   test('input schemas are merged when chained', async () => {

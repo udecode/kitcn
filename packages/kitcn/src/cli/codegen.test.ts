@@ -64,6 +64,7 @@ function writeScopedFixture(dir: string) {
     export const createGeneratedFunctionReference = (name) => ({
       [Symbol.for("functionName")]: name,
     });
+    export const registerProcedureNameLookup = () => {};
     export { initCRPC };
     `.trim()
   );
@@ -186,6 +187,48 @@ describe('cli/codegen', () => {
         'type ProcedureCallerRegistry = typeof procedureRegistry;'
       );
       expect(generatedRuntime).not.toContain('_generated/api.js');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta emits server-side procedure name lookup registration', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'crpc.ts'),
+        `
+        import { initCRPC } from '../generated/server';
+
+        const c = initCRPC.meta<{}>().create();
+
+        export const publicQuery = c.query;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        import { publicQuery } from './lib/crpc';
+
+        export const list = publicQuery.query(async () => []);
+        `.trim()
+      );
+
+      await generateMeta(undefined, { silent: true });
+
+      const generatedServer = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'server.ts'),
+        'utf-8'
+      );
+
+      expect(generatedServer).toContain('registerProcedureNameLookup');
+      expect(generatedServer).toContain('"convex"');
+      expect(generatedServer).toContain('"todos.ts"');
+      expect(generatedServer).toContain('"todos:list"');
     } finally {
       process.chdir(oldCwd);
     }
@@ -3307,6 +3350,7 @@ export const GenericQueryCtx = {};
         export const createHttpRouter = (_app, httpRouter) => httpRouter ?? {};
         export const CRPCError = class extends Error {};
         export const createEnv = ({ schema }) => () => schema?.parse?.(process.env) ?? process.env;
+        export const registerProcedureNameLookup = () => {};
         `.trim()
       );
       fs.mkdirSync(path.join(dir, 'node_modules'), { recursive: true });
