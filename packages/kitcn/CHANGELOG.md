@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.12.25
+
+### Patch Changes
+
+- [`c1bc1a0`](https://github.com/udecode/kitcn/commit/c1bc1a046e71af2b311a3568fa397b57093138b1) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix raw TanStack Start auth adoption reruns so `http.ts` import detection
+    respects both quote styles and `registerRoutes(http, getAuth, ...)`
+    typechecks without casts.
+
 ## 0.12.24
 
 ### Patch Changes
