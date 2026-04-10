@@ -4145,6 +4145,7 @@ export async function runConvexInitIfNeeded(params: {
         'disable',
         '--codegen',
         'disable',
+        ...(params.targetArgs ?? []),
       ]
     : [
         ...params.backendAdapter.argsPrefix,

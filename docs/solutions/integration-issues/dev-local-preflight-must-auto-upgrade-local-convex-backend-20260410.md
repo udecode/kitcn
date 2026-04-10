@@ -63,7 +63,8 @@ Keep the `runConvexInitIfNeeded(...)` seam, but swap the upstream command for
 local targets.
 
 For local Convex deployments, stop calling `convex init`. Use the hidden
-upstream preflight lane instead:
+upstream preflight lane instead, and keep any non-deployment target args that
+still matter locally, such as `--component`:
 
 ```text
 convex dev --local --once --skip-push --local-force-upgrade --typecheck disable --codegen disable
@@ -94,6 +95,7 @@ const commandArgs = shouldUseLocalDevPreflight
       "disable",
       "--codegen",
       "disable",
+      ...(params.targetArgs ?? []),
     ]
   : [...params.backendAdapter.argsPrefix, "init", ...(params.targetArgs ?? [])];
 ```
@@ -110,8 +112,10 @@ flags instead of `init`.
 Once local preflight moves to that lane:
 
 1. local target detection stays in one place
-2. remote targets still use normal `convex init`
-3. local anonymous dev no longer blocks on upgrade confirmation
+2. local-only target args like `--component` stay aligned between preflight and
+   the later runtime command
+3. remote targets still use normal `convex init`
+4. local anonymous dev no longer blocks on upgrade confirmation
 
 ## Prevention
 

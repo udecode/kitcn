@@ -846,6 +846,99 @@ describe('cli/commands/dev', () => {
     }
   });
 
+  test('handleDevCommand preserves component target args in local upgrade preflight', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-local-component-target-')
+    );
+    const oldCwd = process.cwd();
+    const onSpy = spyOn(process, 'on').mockImplementation(() => process as any);
+    fs.mkdirSync(path.join(dir, 'convex', 'shared'), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(dir, 'convex', '.env'),
+      'SITE_URL=http://localhost:3000\n'
+    );
+
+    const watcherProcess = createPendingProcess();
+    const convexProcess = createPersistentProcess();
+    const calls: Array<{ cmd: string; args: string[]; opts?: any }> = [];
+
+    const execaStub = mock((cmd: string, args: string[], opts?: any): any => {
+      calls.push({ cmd, args, opts });
+      if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
+        return watcherProcess.process;
+      }
+      if (isLocalUpgradePreflightCommand(args)) {
+        return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
+      }
+      return convexProcess.process;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => ({
+      ...createDefaultConfig(),
+      dev: {
+        ...createDefaultConfig().dev,
+        aggregateBackfill: {
+          ...createDefaultConfig().dev.aggregateBackfill,
+          enabled: 'off' as const,
+        },
+        migrations: {
+          ...createDefaultConfig().dev.migrations,
+          enabled: 'off' as const,
+        },
+      },
+    }));
+
+    process.chdir(dir);
+
+    try {
+      const runPromise = handleDevCommand(
+        ['dev', '--once', '--component', 'plugins'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+      await waitFor(() => calls.some(({ args }) => isRuntimeDevCommand(args)));
+
+      convexProcess.emitStdout('13:35:25 Convex functions ready! (1.22s)\n');
+      convexProcess.resolveExit({ exitCode: 0 });
+
+      const exitCode = await runPromise;
+
+      expect(exitCode).toBe(0);
+      expect(calls[0]?.args).toEqual([
+        '/fake/convex/main.js',
+        'dev',
+        '--local',
+        '--once',
+        '--skip-push',
+        '--local-force-upgrade',
+        '--typecheck',
+        'disable',
+        '--codegen',
+        'disable',
+        '--component',
+        'plugins',
+      ]);
+      expect(calls[2]?.args).toEqual([
+        '/fake/convex/main.js',
+        'dev',
+        '--once',
+        '--component',
+        'plugins',
+      ]);
+    } finally {
+      process.chdir(oldCwd);
+      onSpy.mockRestore();
+    }
+  });
+
   test('handleDevCommand keeps explicit --env-file targets for convex dev and reuses their deployment env internally', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-dev-explicit-env-file-')
