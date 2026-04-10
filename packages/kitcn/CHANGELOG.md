@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.12.22
+
+### Patch Changes
+
+- [`998ee69`](https://github.com/udecode/kitcn/commit/998ee69335c3e8f4b86333b15c14d0965a3aaae9) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn dev` so local Convex preflight uses `convex init` by default, and only falls back to the upgrade-capable local dev lane when older local backends require it.
+  - Improve auth and backend docs so Convex and Concave env/JWKS flows are split into explicit backend lanes.
+
 ## 0.12.21
 
 ### Patch Changes
