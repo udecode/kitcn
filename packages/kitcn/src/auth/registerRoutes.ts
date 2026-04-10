@@ -22,7 +22,7 @@ type AuthRouteContract = {
   handler: (request: Request) => Promise<Response>;
   options: {
     basePath?: string;
-    baseURL?: string;
+    baseURL?: unknown;
     trustedOrigins?: TrustedOriginsOption;
   };
 };

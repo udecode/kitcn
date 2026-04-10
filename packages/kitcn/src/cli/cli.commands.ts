@@ -2606,6 +2606,83 @@ describe('cli/cli', () => {
     }
   });
 
+  test('run(add auth --preset convex --yes) does not duplicate raw start http imports when the file uses double quotes', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-cli-add-auth-convex-start-rerun-')
+    );
+    const oldCwd = process.cwd();
+    writeRawConvexStartApp(dir);
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'CONVEX_DEPLOYMENT=local:demo\nVITE_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (args[0] === '/fake/convex/main.js' && args[1] === 'codegen') {
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      await run(['add', 'auth', '--preset', 'convex', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+
+      const httpPath = path.join(dir, 'convex', 'http.ts');
+      const httpSource = fs
+        .readFileSync(httpPath, 'utf8')
+        .replaceAll("'kitcn/auth/http'", '"kitcn/auth/http"')
+        .replaceAll("'./generated/auth'", '"./generated/auth"');
+      fs.writeFileSync(httpPath, httpSource, 'utf8');
+      const nodeModulesDir = path.join(dir, 'node_modules');
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.symlinkSync(
+        path.join(oldCwd, 'packages', 'kitcn'),
+        path.join(nodeModulesDir, 'kitcn')
+      );
+      fs.symlinkSync(
+        path.join(oldCwd, 'node_modules', 'better-auth'),
+        path.join(nodeModulesDir, 'better-auth')
+      );
+      fs.symlinkSync(
+        path.join(oldCwd, 'node_modules', 'zod'),
+        path.join(nodeModulesDir, 'zod')
+      );
+
+      const exitCode = await run(
+        ['add', 'auth', '--preset', 'convex', '--yes', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+
+      const nextHttpSource = fs.readFileSync(httpPath, 'utf8');
+      expect(nextHttpSource.match(/kitcn\/auth\/http/g)?.length).toBe(1);
+      expect(nextHttpSource.match(/\.\/generated\/auth/g)?.length).toBe(1);
+      expect(
+        nextHttpSource.match(/registerRoutes\(http,\s*getAuth,\s*\{/g)?.length
+      ).toBe(1);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('run(add ratelimit/auth/resend --yes --no-codegen) keeps auth in root schema and other plugins in one ordered extend call', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-cli-add-plugin-stack-')

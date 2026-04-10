@@ -141,6 +141,25 @@ describe('registerRoutes', () => {
     expect(http.lookup('/auth/session', 'POST')).not.toBe(null);
   });
 
+  test('accepts auth factories whose baseURL is a non-string config shape', () => {
+    const http = httpRouter();
+    const getAuth = () => ({
+      handler: async () => new Response('ok'),
+      options: {
+        basePath: '/api/auth',
+        baseURL: {
+          pathname: '/api/auth',
+        },
+      },
+      $context: Promise.resolve({ options: { trustedOrigins: [] } }),
+    });
+
+    registerRoutes(http as any, getAuth, { cors: false });
+
+    expect(http.lookup('/api/auth/session', 'GET')).not.toBe(null);
+    expect(http.lookup('/api/auth/session', 'POST')).not.toBe(null);
+  });
+
   test('when cors is enabled, registers preflight OPTIONS and strips trailing wildcards from trusted origins', async () => {
     const http = httpRouter();
     const authHandler = mock(async () => new Response('ok'));

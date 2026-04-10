@@ -59,6 +59,9 @@ const INIT_HTTP_API_USE_BLOCK_RE =
   /app\.use\(\s*['"]\/api\/\*['"][\s\S]*?\);\n?/;
 const AUTH_CONVEX_HTTP_CALL_RE = /registerRoutes\(http,\s*getAuth,\s*\{/;
 const AUTH_CONVEX_HTTP_ROUTER_RE = /const\s+http\s*=\s*httpRouter\(\);?/;
+const AUTH_CONVEX_HTTP_IMPORT_RE = /from\s+['"]kitcn\/auth\/http['"]/;
+const AUTH_CONVEX_HTTP_GET_AUTH_IMPORT_RE =
+  /from\s+['"]\.\/generated\/auth['"]/;
 const AUTH_CONVEX_SCHEMA_CALL_RE = /defineSchema\(\s*\{/;
 const AUTH_CONVEX_APP_IMPORT_RE = /import App from ['"][^'"]+['"];?/;
 const AUTH_CONVEX_PROVIDER_IMPORT_RE =
@@ -542,10 +545,10 @@ registerRoutes(http, getAuth, {
 export default http;
 `;
 
-  if (!source.includes("from 'kitcn/auth/http'")) {
+  if (!AUTH_CONVEX_HTTP_IMPORT_RE.test(source)) {
     source = `import { registerRoutes } from 'kitcn/auth/http';\n${source}`;
   }
-  if (!source.includes("from './generated/auth'")) {
+  if (!AUTH_CONVEX_HTTP_GET_AUTH_IMPORT_RE.test(source)) {
     source = `import { getAuth } from './generated/auth';\n${source}`;
   }
   if (!AUTH_CONVEX_HTTP_CALL_RE.test(source)) {
