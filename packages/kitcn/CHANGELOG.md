@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.12.23
+
+### Patch Changes
+
+- [#200](https://github.com/udecode/kitcn/pull/200) [`7531fc9`](https://github.com/udecode/kitcn/commit/7531fc90d77b12b2e0815b8775ccecab3134784e) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix React auth hooks so `useAuth()` and `useSafeConvexAuth()` stay loading
+    while a cached session token is still syncing to Convex, which prevents a
+    brief signed-out flash before the signed-in state settles.
+
 ## 0.12.22
 
 ### Patch Changes
