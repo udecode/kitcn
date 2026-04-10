@@ -61,8 +61,10 @@ const AUTH_CONVEX_HTTP_CALL_RE = /registerRoutes\(http,\s*getAuth,\s*\{/;
 const AUTH_CONVEX_HTTP_ROUTER_RE = /const\s+http\s*=\s*httpRouter\(\);?/;
 const AUTH_CONVEX_SCHEMA_CALL_RE = /defineSchema\(\s*\{/;
 const AUTH_CONVEX_APP_IMPORT_RE = /import App from ['"][^'"]+['"];?/;
-const AUTH_CONVEX_NEXT_PROVIDER_IMPORT_RE =
-  /import\s+\{\s*ConvexProvider,\s*ConvexReactClient\s*\}\s+from\s+'convex\/react';/;
+const AUTH_CONVEX_PROVIDER_IMPORT_RE =
+  /import\s+\{\s*ConvexProvider,\s*ConvexReactClient\s*\}\s+from\s+['"]convex\/react['"];?/;
+const AUTH_PROVIDER_REACT_NODE_IMPORT_RE =
+  /import\s+type\s+\{\s*ReactNode\s*\}\s+from\s+['"]react['"];?/;
 const AUTH_CONVEX_NEXT_PROVIDER_RETURN_RE =
   /<ConvexProvider client=\{convex\}>[\s\S]*?<\/ConvexProvider>/;
 const AUTH_CONVEX_REACT_PROVIDER_OPEN_RE = /<ConvexProvider client=\{convex\}>/;
@@ -590,6 +592,35 @@ function buildAuthConvexSchemaPlanFile(
   });
 }
 
+function patchAuthConvexProviderSource(source: string) {
+  let nextSource = source;
+
+  if (!nextSource.includes("from 'kitcn/auth/client'")) {
+    nextSource = nextSource.replace(
+      AUTH_CONVEX_PROVIDER_IMPORT_RE,
+      "import { ConvexAuthProvider } from 'kitcn/auth/client';\nimport { ConvexReactClient } from 'convex/react';"
+    );
+  }
+  if (
+    !nextSource.includes(
+      "import { authClient } from '@/lib/convex/auth-client';"
+    )
+  ) {
+    nextSource = nextSource.replace(
+      AUTH_PROVIDER_REACT_NODE_IMPORT_RE,
+      "import type { ReactNode } from 'react';\nimport { authClient } from '@/lib/convex/auth-client';"
+    );
+  }
+  if (!nextSource.includes('<ConvexAuthProvider')) {
+    nextSource = nextSource.replace(
+      AUTH_CONVEX_NEXT_PROVIDER_RETURN_RE,
+      '<ConvexAuthProvider authClient={authClient} client={convex}>{children}</ConvexAuthProvider>'
+    );
+  }
+
+  return nextSource;
+}
+
 function buildAuthConvexNextProviderPlanFile(
   params: PluginRegistryBuildPlanFilesParams
 ) {
@@ -612,26 +643,7 @@ function buildAuthConvexNextProviderPlanFile(
   }
 
   let source = fs.readFileSync(providerPath, 'utf8');
-  if (!source.includes("from 'kitcn/auth/client'")) {
-    source = source.replace(
-      AUTH_CONVEX_NEXT_PROVIDER_IMPORT_RE,
-      "import { ConvexAuthProvider } from 'kitcn/auth/client';\nimport { ConvexReactClient } from 'convex/react';"
-    );
-  }
-  if (
-    !source.includes("import { authClient } from '@/lib/convex/auth-client';")
-  ) {
-    source = source.replace(
-      "import type { ReactNode } from 'react';",
-      "import type { ReactNode } from 'react';\nimport { authClient } from '@/lib/convex/auth-client';"
-    );
-  }
-  if (!source.includes('<ConvexAuthProvider')) {
-    source = source.replace(
-      AUTH_CONVEX_NEXT_PROVIDER_RETURN_RE,
-      '<ConvexAuthProvider authClient={authClient} client={convex}>{children}</ConvexAuthProvider>'
-    );
-  }
+  source = patchAuthConvexProviderSource(source);
 
   return createPlanFile({
     kind: 'scaffold',
@@ -640,6 +652,41 @@ function buildAuthConvexNextProviderPlanFile(
     createReason: 'Create auth-aware Convex client provider.',
     updateReason: 'Update Convex client provider with auth.',
     skipReason: 'Convex client provider already includes auth.',
+  });
+}
+
+function buildAuthConvexStartProviderPlanFile(
+  params: PluginRegistryBuildPlanFilesParams
+) {
+  const projectContext = params.roots.projectContext;
+  if (!projectContext || projectContext.framework !== 'tanstack-start') {
+    throw new Error(
+      'Auth preset "convex" requires a supported TanStack Start app shell.'
+    );
+  }
+
+  const providerPath = resolve(
+    process.cwd(),
+    projectContext.convexClientDir,
+    'convex-provider.tsx'
+  );
+  if (!fs.existsSync(providerPath)) {
+    throw new Error(
+      'Auth preset "convex" for TanStack Start expects src/lib/convex/convex-provider.tsx.'
+    );
+  }
+
+  const source = patchAuthConvexProviderSource(
+    fs.readFileSync(providerPath, 'utf8')
+  );
+
+  return createPlanFile({
+    kind: 'scaffold',
+    filePath: providerPath,
+    content: source,
+    createReason: 'Create auth-aware Start provider.',
+    updateReason: 'Update Start provider with auth.',
+    skipReason: 'Start provider already includes auth.',
   });
 }
 
@@ -698,9 +745,15 @@ function buildAuthConvexReactEntryPlanFile(
 function buildAuthConvexProviderPlanFile(
   params: PluginRegistryBuildPlanFilesParams
 ) {
-  return params.roots.projectContext?.mode === 'next-app'
-    ? buildAuthConvexNextProviderPlanFile(params)
-    : buildAuthConvexReactEntryPlanFile(params);
+  const projectContext = params.roots.projectContext;
+  if (projectContext?.mode === 'next-app') {
+    return buildAuthConvexNextProviderPlanFile(params);
+  }
+  if (projectContext?.framework === 'tanstack-start') {
+    return buildAuthConvexStartProviderPlanFile(params);
+  }
+
+  return buildAuthConvexReactEntryPlanFile(params);
 }
 
 export const authRegistryItem = defineInternalRegistryItem({
@@ -770,6 +823,12 @@ export const authRegistryItem = defineInternalRegistryItem({
                 return {
                   ...template,
                   content: AUTH_START_CLIENT_TEMPLATE,
+                };
+              }
+              if (template.id === 'auth-client-convex') {
+                return {
+                  ...template,
+                  content: AUTH_CONVEX_REACT_CLIENT_TEMPLATE,
                 };
               }
 

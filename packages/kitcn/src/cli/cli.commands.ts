@@ -311,6 +311,172 @@ export default defineSchema({
   );
 }
 
+function writeRawConvexStartApp(dir: string) {
+  fs.mkdirSync(path.join(dir, 'src', 'components'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'src', 'lib', 'convex'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'src', 'routes'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'convex'), { recursive: true });
+
+  writePackageJson(dir, {
+    name: 'raw-start-convex-app',
+    private: true,
+    type: 'module',
+    dependencies: {
+      '@tanstack/react-router': '^1.132.0',
+      '@tanstack/react-start': '^1.132.0',
+      convex: '^1.33.0',
+      react: '^19.2.4',
+      'react-dom': '^19.2.4',
+    },
+    devDependencies: {
+      '@vitejs/plugin-react': '^5.0.4',
+      vite: '^7.2.4',
+      'vite-tsconfig-paths': '^5.1.4',
+    },
+  });
+
+  fs.writeFileSync(
+    path.join(dir, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          baseUrl: '.',
+          jsx: 'react-jsx',
+          paths: {
+            '@/*': ['./src/*'],
+          },
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'components.json'),
+    `${JSON.stringify(
+      {
+        tailwind: {
+          css: 'src/styles.css',
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'vite.config.ts'),
+    `import path from 'node:path';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+import tsConfigPaths from 'vite-tsconfig-paths';
+
+export default defineConfig({
+  plugins: [tsConfigPaths(), tanstackStart(), react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+});
+`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'src', 'router.tsx'),
+    `import { createRouter as createTanStackRouter } from '@tanstack/react-router';
+import { routeTree } from './routeTree.gen';
+
+export function getRouter() {
+  return createTanStackRouter({
+    routeTree,
+  });
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'src', 'components', 'providers.tsx'),
+    `import type { ReactNode } from 'react';
+
+import { AppConvexProvider } from '@/lib/convex/convex-provider';
+
+export function Providers({ children }: { children: ReactNode }) {
+  return <AppConvexProvider>{children}</AppConvexProvider>;
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'src', 'lib', 'convex', 'convex-provider.tsx'),
+    `'use client';
+
+import { ConvexProvider, ConvexReactClient } from 'convex/react';
+import type { ReactNode } from 'react';
+
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL!);
+
+export function AppConvexProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'src', 'routes', '__root.tsx'),
+    `import { Outlet, createRootRoute } from '@tanstack/react-router';
+
+import { Providers } from '@/components/providers';
+
+export const Route = createRootRoute({
+  component: RootComponent,
+});
+
+function RootComponent() {
+  return (
+    <Providers>
+      <Outlet />
+    </Providers>
+  );
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'src', 'routes', 'index.tsx'),
+    `import { createFileRoute } from '@tanstack/react-router';
+
+export const Route = createFileRoute('/' as never)({
+  component: HomePage,
+});
+
+function HomePage() {
+  return <main>raw start convex</main>;
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'convex', 'schema.ts'),
+    `import { defineSchema, defineTable } from 'convex/server';
+import { v } from 'convex/values';
+
+export default defineSchema({
+  messages: defineTable({
+    author: v.string(),
+    body: v.string(),
+  }),
+});
+`
+  );
+}
+
 async function withCiTty<T>(callback: () => Promise<T>): Promise<T> {
   const stdinDescriptor = Object.getOwnPropertyDescriptor(
     process.stdin,
@@ -2312,6 +2478,117 @@ describe('cli/cli', () => {
         'import.meta.env.VITE_CONVEX_SITE_URL!'
       );
       expect(authClientSource).not.toContain('createAuthMutations');
+      expect(
+        execaStub.mock.calls.some((call) => {
+          const [, args] = call as unknown as [string, string[]];
+          return args[0] === '/fake/convex/main.js' && args[1] === 'codegen';
+        })
+      ).toBe(true);
+      expect(syncEnvStub).toHaveBeenCalledWith({
+        authSyncMode: 'auto',
+        force: true,
+        sharedDir: 'convex/shared',
+        targetArgs: [],
+      });
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add auth --preset convex --yes) adopts a raw start convex app without kitcn baseline churn', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-cli-add-auth-convex-start-')
+    );
+    const oldCwd = process.cwd();
+    writeRawConvexStartApp(dir);
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'CONVEX_DEPLOYMENT=local:demo\nVITE_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (args[0] === '/fake/convex/main.js' && args[1] === 'codegen') {
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(
+        ['add', 'auth', '--preset', 'convex', '--yes'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(fs.existsSync(path.join(dir, 'kitcn.json'))).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'crpc.tsx'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'auth-client.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'auth-server.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'server.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'routes', 'api', 'auth', '$.ts'))
+      ).toBe(false);
+      expect(fs.existsSync(path.join(dir, 'src', 'routes', 'auth.tsx'))).toBe(
+        false
+      );
+
+      const providerSource = fs.readFileSync(
+        path.join(dir, 'src', 'lib', 'convex', 'convex-provider.tsx'),
+        'utf8'
+      );
+      expect(providerSource).toContain('ConvexAuthProvider');
+      expect(providerSource).toContain(
+        "import { authClient } from '@/lib/convex/auth-client';"
+      );
+      expect(providerSource).not.toContain('QueryClientProvider');
+      expect(providerSource).not.toContain('CRPCProvider');
+
+      const authClientSource = fs.readFileSync(
+        path.join(dir, 'src', 'lib', 'convex', 'auth-client.ts'),
+        'utf8'
+      );
+      expect(authClientSource).toContain(
+        'import.meta.env.VITE_CONVEX_SITE_URL!'
+      );
+      expect(authClientSource).not.toContain('createAuthMutations');
+
+      const httpSource = fs.readFileSync(
+        path.join(dir, 'convex', 'http.ts'),
+        'utf8'
+      );
+      expect(httpSource).toContain('registerRoutes(http, getAuth, {');
+      expect(httpSource).toContain('allowedOrigins: [process.env.SITE_URL!]');
+      expect(httpSource).not.toContain('authMiddleware');
+      expect(httpSource).not.toContain('createHttpRouter');
+
+      const schemaSource = fs.readFileSync(
+        path.join(dir, 'convex', 'schema.ts'),
+        'utf8'
+      );
+      expect(schemaSource).toContain(
+        "import { authSchema } from './authSchema';"
+      );
+      expect(schemaSource).toContain('...authSchema,');
+      expect(schemaSource).not.toContain('authExtension()');
       expect(
         execaStub.mock.calls.some((call) => {
           const [, args] = call as unknown as [string, string[]];
