@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.12.21
+
+### Patch Changes
+
+- [`96d5572`](https://github.com/udecode/kitcn/commit/96d55722434c09f7acbfbc8b89efc22f9e24768f) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Improve TanStack Start auth migration docs and clarify the `kitcn add auth --schema --yes` schema refresh flow.
+  - Fix the Next.js auth proxy so POST auth errors return the upstream response instead of crashing with a 500.
+  - Fix `kitcn dev` local bootstrap so older local Convex backends auto-upgrade without hanging on a non-interactive prompt, and preserve local component targeting during preflight.
+
 ## 0.12.20
 
 ### Patch Changes
