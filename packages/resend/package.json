@@ -1,6 +1,6 @@
 {
   "name": "@kitcn/resend",
-  "version": "0.12.23",
+  "version": "0.12.24",
   "description": "kitcn Resend plugin",
   "type": "module",
   "sideEffects": false,
