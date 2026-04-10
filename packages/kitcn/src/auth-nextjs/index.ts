@@ -10,13 +10,23 @@ import { type GetTokenOptions, getToken } from '@convex-dev/better-auth/utils';
 import { defaultIsUnauthorized } from '../crpc/error';
 import { createCallerFactory } from '../server/caller-factory';
 
-const handler = (request: Request, siteUrl: string) => {
+const handler = async (request: Request, siteUrl: string) => {
   const requestUrl = new URL(request.url);
   const nextUrl = `${siteUrl}${requestUrl.pathname}${requestUrl.search}`;
-  const newRequest = new Request(nextUrl, request);
-  newRequest.headers.set('accept-encoding', 'application/json');
-  newRequest.headers.set('host', new URL(siteUrl).host);
-  return fetch(newRequest, { method: request.method, redirect: 'manual' });
+  const headers = new Headers(request.headers);
+  headers.set('accept-encoding', 'application/json');
+  headers.set('host', new URL(siteUrl).host);
+  const body =
+    request.method !== 'GET' && request.method !== 'HEAD'
+      ? await request.arrayBuffer()
+      : undefined;
+
+  return fetch(nextUrl, {
+    body,
+    headers,
+    method: request.method,
+    redirect: 'manual',
+  });
 };
 
 const nextJsHandler = (siteUrl: string) => ({

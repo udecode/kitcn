@@ -4,12 +4,15 @@ describe('convexBetterAuth', () => {
   test('creates GET/POST handlers that rewrite request URL to convex site', async () => {
     const originalFetch = globalThis.fetch;
     const calls: Array<{
-      request: Request;
+      input: RequestInfo | URL;
       init?: RequestInit;
     }> = [];
 
-    globalThis.fetch = (async (request: Request, init?: RequestInit) => {
-      calls.push({ init, request });
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      calls.push({ init, input });
       return new Response('ok');
     }) as typeof fetch;
 
@@ -23,28 +26,34 @@ describe('convexBetterAuth', () => {
         new Request('https://example.com/path?a=1', { method: 'GET' })
       );
       await result.handler.POST(
-        new Request('https://example.com/other?b=2', { method: 'POST' })
+        new Request('https://example.com/other?b=2', {
+          body: JSON.stringify({ email: 'user@example.com' }),
+          headers: {
+            'content-type': 'application/json',
+          },
+          method: 'POST',
+        })
       );
 
       expect(calls).toHaveLength(2);
 
-      expect(calls[0]?.request.url).toBe('https://my-app.convex.site/path?a=1');
-      expect(calls[0]?.request.headers.get('accept-encoding')).toBe(
-        'application/json'
-      );
-      expect(calls[0]?.request.headers.get('host')).toBe('my-app.convex.site');
-      expect(calls[0]?.init).toMatchObject({
-        method: 'GET',
-        redirect: 'manual',
-      });
+      expect(calls[0]?.input).toBe('https://my-app.convex.site/path?a=1');
+      expect(calls[0]?.init?.method).toBe('GET');
+      expect(calls[0]?.init?.redirect).toBe('manual');
+      const getHeaders = new Headers(calls[0]?.init?.headers);
+      expect(getHeaders.get('accept-encoding')).toBe('application/json');
+      expect(getHeaders.get('host')).toBe('my-app.convex.site');
+      expect(calls[0]?.init?.body).toBeUndefined();
 
-      expect(calls[1]?.request.url).toBe(
-        'https://my-app.convex.site/other?b=2'
-      );
-      expect(calls[1]?.init).toMatchObject({
-        method: 'POST',
-        redirect: 'manual',
-      });
+      expect(calls[1]?.input).toBe('https://my-app.convex.site/other?b=2');
+      expect(calls[1]?.init?.method).toBe('POST');
+      expect(calls[1]?.init?.redirect).toBe('manual');
+      const postHeaders = new Headers(calls[1]?.init?.headers);
+      expect(postHeaders.get('accept-encoding')).toBe('application/json');
+      expect(postHeaders.get('host')).toBe('my-app.convex.site');
+      await expect(
+        new Response(calls[1]?.init?.body as BodyInit).text()
+      ).resolves.toBe(JSON.stringify({ email: 'user@example.com' }));
     } finally {
       globalThis.fetch = originalFetch;
     }
