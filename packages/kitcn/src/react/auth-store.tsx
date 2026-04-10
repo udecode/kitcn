@@ -124,7 +124,11 @@ export function useSafeConvexAuth(): ConvexAuthResult {
   // Check kitcn AuthProvider first
   if (authStore.store) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useConvexAuth();
+    const isAuthenticated = useAuthValue('isAuthenticated');
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const isLoading = useAuthValue('isLoading');
+
+    return { isAuthenticated, isLoading };
   }
 
   // Check ConvexAuthBridge (provides value directly - no conditional hook needed)
@@ -192,11 +196,12 @@ export const useAuth = () => {
       };
     }
 
-    // Use Convex SDK's auth state directly
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { isLoading, isAuthenticated } = useConvexAuth();
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const token = useAuthValue('token');
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const isAuthenticated = useAuthValue('isAuthenticated');
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const isLoading = useAuthValue('isLoading');
 
     return {
       hasSession: !!token,
