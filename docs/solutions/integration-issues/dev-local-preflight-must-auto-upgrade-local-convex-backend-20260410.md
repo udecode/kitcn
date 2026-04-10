@@ -59,12 +59,16 @@ This deployment is using an older version of the Convex backend. Upgrade now?
 
 ## Solution
 
-Keep the `runConvexInitIfNeeded(...)` seam, but swap the upstream command for
-local targets.
+Keep the `runConvexInitIfNeeded(...)` seam, but stop using the hidden local
+`convex dev` lane as the default path.
 
-For local Convex deployments, stop calling `convex init`. Use the hidden
-upstream preflight lane instead, and keep any non-deployment target args that
-still matter locally, such as `--component`:
+For local Convex deployments:
+
+1. try normal `convex init` first
+2. only fall back to the hidden local `convex dev` preflight when `convex init`
+   fails on the older-backend upgrade prompt
+3. keep any non-deployment target args that still matter locally, such as
+   `--component`
 
 ```text
 convex dev --local --once --skip-push --local-force-upgrade --typecheck disable --codegen disable
@@ -83,48 +87,72 @@ const shouldUseLocalDevPreflight =
     params.env
   ) === "local";
 
-const commandArgs = shouldUseLocalDevPreflight
-  ? [
-      ...params.backendAdapter.argsPrefix,
-      "dev",
-      "--local",
-      "--once",
-      "--skip-push",
-      "--local-force-upgrade",
-      "--typecheck",
-      "disable",
-      "--codegen",
-      "disable",
-      ...(params.targetArgs ?? []),
-    ]
-  : [...params.backendAdapter.argsPrefix, "init", ...(params.targetArgs ?? [])];
+const initCommandArgs = [
+  ...params.backendAdapter.argsPrefix,
+  "init",
+  ...(params.targetArgs ?? []),
+];
+
+let result = await runCommand(initCommandArgs);
+
+if (
+  shouldUseLocalDevPreflight &&
+  result.exitCode !== 0 &&
+  isLocalBackendUpgradePrompt(`${result.stdout}\n${result.stderr}`)
+) {
+  result = await runCommand([
+    ...params.backendAdapter.argsPrefix,
+    "dev",
+    "--local",
+    "--once",
+    "--skip-push",
+    "--local-force-upgrade",
+    "--typecheck",
+    "disable",
+    "--codegen",
+    "disable",
+    ...(params.targetArgs ?? []),
+  ]);
+}
 ```
 
 ## Why This Works
 
-The bug was not "anonymous mode got lost." The bug was "we picked the only
-upstream command that cannot force a local backend upgrade in non-interactive
-mode."
+The upgrade fix was right, but the first cut was too broad.
 
-Upstream Convex already has a path for this. It is just hidden behind `dev`
-flags instead of `init`.
+The hidden local `convex dev` preflight solves one real Convex bug: older local
+backends that need an interactive upgrade confirmation. But it is worse than
+`convex init` in another real state: a stale raw `npx convex dev` process that
+survived Ctrl-C.
 
-Once local preflight moves to that lane:
+In that stale-process state:
 
-1. local target detection stays in one place
+- `convex init` still succeeds
+- the hidden local `convex dev --local --once --skip-push ...` lane fails with
+  a fake `port 3210` conflict
+
+So the durable fix is not "always use hidden dev." It is "use hidden dev only
+for the specific upgrade-prompt failure that `convex init` cannot handle."
+
+That keeps both behaviors:
+
+1. normal local preflight still uses the safer upstream `convex init`
 2. local-only target args like `--component` stay aligned between preflight and
    the later runtime command
 3. remote targets still use normal `convex init`
-4. local anonymous dev no longer blocks on upgrade confirmation
+4. older local backends still get an upgrade-capable fallback
+5. `npx convex dev` -> Ctrl-C -> `kitcn dev` no longer trips the hidden-dev
+   regression
 
 ## Prevention
 
-- Do not assume `convex init` and `convex dev --once --skip-push` are
-  interchangeable for non-interactive local flows.
+- Do not assume `convex init` and hidden local `convex dev --once --skip-push`
+  are interchangeable for non-interactive local flows.
 - When an upstream CLI has hidden recovery flags, reproduce the real command
   directly before adding local glue around the symptom.
-- Keep one regression test on `handleDevCommand(...)` proving anonymous local
-  dev uses the local-upgrade preflight lane.
+- Keep one regression test proving normal local dev stays on `convex init`.
+- Keep one regression test proving the upgrade prompt falls back to the hidden
+  local `convex dev` lane.
 - Keep at least one live repro on the built CLI, not just helper-level tests.
 
 ## Related Issues

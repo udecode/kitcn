@@ -203,13 +203,16 @@ Local Convex:
 2. While `kitcn dev` is running on backend `convex`, later edits to `convex/.env` auto-sync.
 3. For the normal local path, `SITE_URL` should stay on `http://localhost:3000`.
 
-Remote / repair:
+Convex remote / repair:
 1. Use `npx kitcn env push` when the target deployment is already active.
 2. Use `npx kitcn env push --prod` for production sync.
-3. Use `npx kitcn auth jwks` when you need a manual static `JWKS` payload, including backend `concave`.
+3. Use `npx kitcn env push --rotate` when you want fresh keys plus fresh `JWKS`.
+4. `kitcn env push` writes deployment env for you. No manual copy step.
 
-Key rotation: `npx kitcn env push --rotate` (invalidates all tokens).
-Manual rotation/export: `npx kitcn auth jwks --rotate`.
+Concave manual lane:
+1. Use `npx kitcn --backend concave auth jwks` when you need a manual static `JWKS` payload.
+2. Use `npx kitcn --backend concave auth jwks --rotate` when you need rotation plus export.
+3. `kitcn auth jwks` only prints `JWKS=...`. Save that value into env yourself.
 
 ---
 

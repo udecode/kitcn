@@ -102,6 +102,8 @@ Plugin note:
 
 Manage environment variables:
 
+### Convex backend
+
 ```bash showLineNumbers {2,5,8,11,14,17,20}
 # Push all vars from convex/.env
 npx kitcn env push
@@ -145,15 +147,31 @@ Target options:
 | `--preview-name <name>` | Target a named preview deployment |
 | `--env-file <path>` | Use an env file to resolve the target deployment |
 
-`kitcn env push` reads `convex/.env` by default, filters Convex-managed variables, then pushes one batch update through `convex env set --from-file`. If auth scaffold is installed, it also ensures `BETTER_AUTH_SECRET` exists locally, fetches `JWKS` with `convex run generated/auth:getLatestJwks`, and includes both in the push payload. With `--rotate`, it runs `convex run generated/auth:rotateKeys` first, then pushes the fresh `JWKS`.
+`kitcn env push` reads `convex/.env` by default, filters Convex-managed
+variables, then pushes one batch update through `convex env set --from-file`.
+If auth scaffold is installed, it also ensures `BETTER_AUTH_SECRET` exists
+locally, fetches `JWKS` with `convex run generated/auth:getLatestJwks`, and
+includes both in the push payload. With `--rotate`, it runs
+`convex run generated/auth:rotateKeys` first, then pushes the fresh `JWKS`.
 
-On backend `convex`, `kitcn dev` handles the local auth bootstrap flow and watches `convex/.env` for later local edits. `kitcn dev --bootstrap` is the one-shot local setup version of that flow. `kitcn verify` is the one-shot local runtime proof. `kitcn add auth --yes` reuses the same local bootstrap path when it needs generated auth runtime and JWKS. Use `kitcn env push` for `--prod`, `--rotate`, or explicit repair against an already active deployment.
+On backend `convex`, `kitcn dev` handles the local auth bootstrap flow and
+watches `convex/.env` for later local edits. `kitcn dev --bootstrap` is the
+one-shot local setup version of that flow. `kitcn verify` is the one-shot local
+runtime proof. `kitcn add auth --yes` reuses the same local bootstrap path when
+it needs generated auth runtime and JWKS. Use `kitcn env push` for `--prod`,
+`--rotate`, or explicit repair against an already active deployment.
 
-If `--from-file` is omitted and stdin is piped, `kitcn env push` reads the piped payload instead of `convex/.env`.
+`kitcn env push` writes the target deployment env for you. You do not need to
+copy command output into env by hand.
 
-`kitcn env pull` wraps `convex env list` and preserves the exact payload format, so you can print it or write it to disk unchanged.
+If `--from-file` is omitted and stdin is piped, `kitcn env push` reads the
+piped payload instead of `convex/.env`.
 
-All env commands forward Convex deployment-target args such as `--prod`, `--deployment-name`, `--preview-name`, and `--env-file`.
+`kitcn env pull` wraps `convex env list` and preserves the exact payload
+format, so you can print it or write it to disk unchanged.
+
+All env commands forward Convex deployment-target args such as `--prod`,
+`--deployment-name`, `--preview-name`, and `--env-file`.
 
 Other env commands stay aligned with Convex:
 
@@ -165,17 +183,30 @@ npx kitcn env remove <name>
 ```
 
 `kitcn env set` keeps Convex 1.33 behavior for interactive values,
-`--from-file`, and stdin input. `kitcn env pull` gives you the same
-robust export format, so `env pull --out <path>` and `env set --from-file <path>`
+`--from-file`, and stdin input. `kitcn env pull` gives you the same robust
+export format, so `env pull --out <path>` and `env set --from-file <path>`
 round-trip cleanly.
 
-On backend `concave`, `kitcn env ...` fails clearly because Concave has no upstream env command.
+Unknown commands on backend `convex` pass straight through to the Convex CLI,
+so `kitcn insights` opens the same insights surface as `convex insights`.
 
-Unknown commands on backend `convex` pass straight through to the Convex CLI, so `kitcn insights` opens the same insights surface as `convex insights`.
+### Concave backend
+
+For manual JWKS export on Concave:
+
+```bash showLineNumbers
+npx kitcn --backend concave auth jwks --url http://localhost:3210
+npx kitcn --backend concave auth jwks --rotate --url http://localhost:3210
+```
+
+`kitcn auth jwks` only prints `JWKS=...`. You must save that value into env
+yourself.
 
 ## auth
 
 Manual auth runtime helpers:
+
+### Convex backend
 
 ```bash showLineNumbers
 # Print a paste-ready JWKS env line
@@ -188,22 +219,49 @@ npx kitcn auth jwks --rotate
 npx kitcn auth jwks --json
 ```
 
-Options:
+Use this when you want a manual static `JWKS` payload without going through
+`kitcn env push`, or when you want machine-readable output.
+
+This command prints the payload. It does not update env by itself.
+
+Convex target flags are forwarded to the backend `run` seam:
+
+- `--prod`
+- `--deployment-name <name>`
+- `--preview-name <name>`
+- `--env-file <path>`
+- `--component <name>`
+
+### Concave backend
+
+```bash showLineNumbers
+# Print a paste-ready JWKS env line from the local default runtime
+npx kitcn --backend concave auth jwks --url http://localhost:3210
+
+# Rotate auth keys, then print a fresh JWKS env line
+npx kitcn --backend concave auth jwks --rotate --url http://localhost:3210
+
+# Machine-readable output
+npx kitcn --backend concave auth jwks --json --url http://localhost:3210
+```
+
+On backend `concave`, this is the manual JWKS sync path.
+
+This command only prints `JWKS=...`. Save that value into your deployment env
+yourself.
+
+Concave target flags are forwarded to the backend `run` seam:
+
+- `--url <url>`
+- `--port <port>`
+- `--component <name>`
+
+Shared options:
 
 | Flag | Description |
 |------|-------------|
 | `--rotate` | Rotate auth keys before fetching JWKS |
 | `--json` | Emit `{ jwks, envLine, ... }` JSON instead of a shell-ready line |
-
-`kitcn auth jwks` runs the generated auth runtime and prints a manual static
-`JWKS` payload. Use it when you want static JWKS without going through
-`kitcn env push`, especially on backend `concave` where `kitcn env` has no
-upstream env command to wrap.
-
-Target flags are forwarded to the backend `run` seam:
-
-- Convex: `--prod`, `--deployment-name`, `--preview-name`, `--env-file`, `--component`
-- Concave: `--url`, `--port`, `--component`
 
 ## deploy
 

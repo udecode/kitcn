@@ -602,6 +602,8 @@ app owns an `init.ts` preflight.
 
 CLI commands:
 
+Convex lane:
+
 ```bash
 bunx kitcn dev
 # deterministic one-shot local runtime proof:
@@ -623,11 +625,19 @@ bunx kitcn aggregate backfill --prod
 bunx kitcn analyze
 ```
 
+Concave lane:
+
+```bash
+bunx kitcn --backend concave auth jwks --url http://localhost:3210
+bunx kitcn --backend concave auth jwks --rotate --url http://localhost:3210
+```
+
 On backend `convex`, `kitcn dev` watches `convex/.env` during a local
 dev session and auto-pushes later edits. Keep `env push` for `--prod`,
-`--rotate`, or explicit repair against an already active deployment. Use
-`auth jwks` when you need a manual static `JWKS` payload, especially on backend
-`concave`.
+`--rotate`, or explicit repair against an already active deployment.
+
+On backend `concave`, `kitcn env` is not the right seam. Use `auth jwks`
+for manual static `JWKS` export instead.
 
 ### 11.2 Phase A gate: non-auth baseline (required before auth work)
 

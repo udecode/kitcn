@@ -256,6 +256,8 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ```
 
+### Convex lane
+
 Local Convex:
 
 ```bash
@@ -277,24 +279,32 @@ Use this to sync static `JWKS` onto the target deployment too.
 ```bash
 bunx kitcn env push --prod
 bunx kitcn env push --rotate
-
-# Manual static JWKS payload, including backend concave
-bunx kitcn auth jwks
-bunx kitcn auth jwks --rotate
 ```
 
 Use `--prod` for production and `--rotate` when you want fresh keys plus fresh
-`JWKS`. `kitcn auth jwks` prints a manual `JWKS=...` line when you need to set
-the env value yourself instead of using `env push`. See `/docs/cli/backend#env`
-and `/docs/cli/backend#auth` for the full command surface.
+`JWKS`.
 
-Rotate later:
+`kitcn env push` writes the target deployment env for you. No manual copy step.
+
+### Concave lane
+
+Concave has no `kitcn env` wrapper. Export a manual `JWKS=...` line from the
+target backend, then set that env manually:
 
 ```bash
-bunx kitcn env push --rotate
+bunx kitcn --backend concave auth jwks --url http://localhost:3210
+bunx kitcn --backend concave auth jwks --rotate --url http://localhost:3210
 ```
 
+Use `--url`, `--port`, or `--component` to target the right Concave runtime.
+See `/docs/cli/backend#env` and `/docs/cli/backend#auth` for the full command
+surface.
+
+`kitcn auth jwks` only prints `JWKS=...`. Save that value into env yourself.
+
 ### 6.7 Production bootstrap notes
+
+#### Convex lane
 
 First prod deploy requires JWKS initialization:
 
@@ -302,6 +312,17 @@ First prod deploy requires JWKS initialization:
 bunx convex deploy --prod
 bunx kitcn env push --prod
 ```
+
+#### Concave lane
+
+Concave has no `kitcn env push --prod` flow. Export a static JWKS payload from
+the deployed backend, then set the printed `JWKS=...` line manually:
+
+```bash
+bunx kitcn --backend concave auth jwks --url https://your-concave-backend.example.com
+```
+
+Again: printed payload only. You still need to set the env manually.
 
 ### 6.9 Upgrade `convex/lib/crpc.ts` to auth-aware builders (only after Section 11.2 passes)
 

@@ -232,18 +232,34 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
+For local auth env sync, use the lane that matches your backend.
+
+### Convex backend
+
 For local Convex, no extra bootstrap command is needed after that.
 `kitcn init --yes`, `kitcn dev`, and
 `kitcn add auth --yes` already drive the local auth bootstrap when they
 own the flow.
-
-See [CLI Backend](/docs/cli/backend#env) for more options.
 
 To rotate keys later (this invalidates all tokens):
 
 ```bash
 npx kitcn env push --rotate
 ```
+
+### Concave backend
+
+Concave has no `kitcn env push` wrapper. Export a fresh JWKS payload from the
+running backend, then update your env manually:
+
+```bash
+npx kitcn --backend concave auth jwks --rotate --url http://localhost:3210
+```
+
+Use `--url`, `--port`, or `--component` to target the Concave runtime you
+actually want.
+
+See [CLI Backend](/docs/cli/backend#env) for the full backend split.
 
 ## Framework Integration
 
@@ -360,17 +376,24 @@ Social providers (optional):
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 
+The auto-generated `JWKS` and `BETTER_AUTH_SECRET` behavior above describes the
+Convex backend. On Concave, `kitcn env push` does not exist, so treat env sync as
+manual and use `kitcn auth jwks` only for `JWKS` export.
+
 ## Production Deployment
 
-Your first production deployment will fail authentication because JWKS isn't set yet. Don't worry - here's how to fix it:
+Production auth sync splits by backend too.
+
+### Convex backend
+
+Your first Convex production deployment will fail authentication because `JWKS`
+isn't set yet. That's expected.
 
 **1. Deploy your app to production**
 
 ```bash
 npx convex deploy --prod
 ```
-
-Authentication will fail at this point - that's expected.
 
 **2. Sync auth env**
 
@@ -380,23 +403,55 @@ Run from your local machine with Convex CLI authenticated:
 npx kitcn env push --prod
 ```
 
-This pushes `convex/.env`, generates `BETTER_AUTH_SECRET` when missing, fetches `JWKS`, and writes the full batch to the production deployment.
+This pushes `convex/.env`, generates `BETTER_AUTH_SECRET` when missing, fetches
+`JWKS`, and writes the full batch to the production deployment.
+
+You do not need to copy the output into env yourself. `kitcn env push --prod`
+updates the target deployment env for you.
 
 **3. Verify authentication works**
 
-Test a protected endpoint or sign in through your app. Authentication should now succeed.
+Test a protected endpoint or sign in through your app. Authentication should
+now succeed.
 
 <Callout icon={<InfoIcon />}>
 **Troubleshooting:** If you see "Invalid token signature" errors after deployment, re-run `kitcn env push --prod`.
 </Callout>
 
+### Concave backend
+
+Concave has no `kitcn env push --prod` flow. Export a static JWKS payload from
+the target backend, then set the printed `JWKS=...` line in your deployment
+platform manually:
+
+```bash
+npx kitcn --backend concave auth jwks --url https://your-concave-backend.example.com
+```
+
+Use the same backend target your app will actually hit. The command supports
+`--url`, `--port`, and `--component`.
+
+Yes, you need to save that printed `JWKS=...` value into env yourself. `kitcn
+auth jwks` only prints the payload; it does not update deployment env for you.
+
 ## Key Rotation
 
-Need to rotate signing keys? Maybe for security compliance or after a suspected compromise:
+Need to rotate signing keys? Maybe for security compliance or after a suspected
+compromise:
+
+### Convex backend
 
 ```bash
 npx kitcn env push --rotate --prod
 ```
+
+### Concave backend
+
+```bash
+npx kitcn --backend concave auth jwks --rotate --url https://your-concave-backend.example.com
+```
+
+After that, update the deployed `JWKS` env manually with the printed value.
 
 <Callout icon={<InfoIcon />}>
 **Warning:** Key rotation invalidates all existing tokens. All users will be logged out and must re-authenticate. Plan rotations during low-traffic periods.
@@ -474,7 +529,9 @@ convex({
 })
 ```
 
-Use the auth/JWKS helpers that match your backend:
+Use the auth/JWKS helpers that match your backend.
+
+### Convex backend
 
 ```bash
 # Sync local deployment env, including JWKS
@@ -485,18 +542,27 @@ npx kitcn env push --prod
 
 # Rotate auth keys, then push fresh JWKS
 npx kitcn env push --rotate
+```
 
+### Concave backend
+
+```bash
 # Print a manual JWKS env payload
-npx kitcn auth jwks
+npx kitcn --backend concave auth jwks --url http://localhost:3210
 
 # Rotate auth keys, then print a fresh manual JWKS payload
-npx kitcn auth jwks --rotate
+npx kitcn --backend concave auth jwks --rotate --url http://localhost:3210
 ```
 
 Use `kitcn env push` on backend `convex`.
 
-Use `kitcn auth jwks` when you need a manual static `JWKS` payload, including
-backend `concave` where `kitcn env` has no upstream env command to wrap.
+It writes the target deployment env for you, so there is no separate manual
+copy step.
+
+Use `kitcn auth jwks` on backend `concave`, where `kitcn env` has no upstream
+env command to wrap.
+
+It only prints `JWKS=...`, so you must save that value into env yourself.
 
 See [CLI env commands](/docs/cli/backend#env) and
 [CLI auth helpers](/docs/cli/backend#auth) for the full target/repair flow.

@@ -46,14 +46,8 @@ const LEGACY_GENERATED_CONVEX_TSCONFIG_TEMPLATE = `{
 }
 `;
 
-function isLocalInitPreflightCommand(args: string[]): boolean {
-  return (
-    args[0] === '/fake/convex/main.js' &&
-    args[1] === 'dev' &&
-    args.includes('--local') &&
-    args.includes('--skip-push') &&
-    args.includes('--local-force-upgrade')
-  );
+function isConvexInitCommand(args: string[]): boolean {
+  return args[0] === '/fake/convex/main.js' && args[1] === 'init';
 }
 
 function isRuntimeBootstrapDevCommand(args: string[]): boolean {
@@ -273,7 +267,7 @@ describe('cli/commands/init', () => {
       expect(shadcnCall?.[1]).toContain('--yes');
       const convexInitCall = execaStub.mock.calls.find((call) => {
         const [, args] = call as unknown as [string, string[]];
-        return isLocalInitPreflightCommand(args);
+        return isConvexInitCommand(args);
       }) as [string, string[], Record<string, unknown>] | undefined;
       expect(convexInitCall).toBeDefined();
       expect(convexInitCall?.[1]).not.toContain('--yes');
@@ -1584,7 +1578,7 @@ describe('cli/commands/init', () => {
         expect(opts?.env?.SITE_URL).toBe('http://localhost:3000');
         return { exitCode: 0, stdout: '', stderr: '' } as any;
       }
-      if (isLocalInitPreflightCommand(args)) {
+      if (isConvexInitCommand(args)) {
         bootstrapEvents.push('preflight');
         expect(opts?.env?.DEPLOY_ENV).toBeUndefined();
         expect(opts?.env?.SITE_URL).toBeUndefined();
@@ -1987,7 +1981,7 @@ describe('cli/commands/init', () => {
           stderr: 'nope',
         } as any;
       }
-      if (isLocalInitPreflightCommand(args)) {
+      if (isConvexInitCommand(args)) {
         return { exitCode: 0, stdout: '', stderr: '' } as any;
       }
       if (isRuntimeBootstrapDevCommand(args)) {

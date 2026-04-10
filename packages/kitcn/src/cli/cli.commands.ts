@@ -38,14 +38,8 @@ const SHADCN_LAYOUT_PROVIDERS_RE =
   /ThemeProvider>\s*<Providers>\{children\}<\/Providers>\s*<\/ThemeProvider>/s;
 const WATCHER_TS_RE = /\/watcher\.ts$/;
 
-function isLocalPreflightDevArgs(args: string[]): boolean {
-  return (
-    args[0] === '/fake/convex/main.js' &&
-    args[1] === 'dev' &&
-    args.includes('--local') &&
-    args.includes('--skip-push') &&
-    args.includes('--local-force-upgrade')
-  );
+function isConvexInitArgs(args: string[]): boolean {
+  return args[0] === '/fake/convex/main.js' && args[1] === 'init';
 }
 
 function createDefaultConfig() {
@@ -892,12 +886,12 @@ describe('cli/cli', () => {
       expect(
         execaStub.mock.calls.some((call) => {
           const [, args] = call as unknown as [string, string[]];
-          return isLocalPreflightDevArgs(args);
+          return isConvexInitArgs(args);
         })
       ).toBe(true);
       const convexInitCall = execaStub.mock.calls.find((call) => {
         const [, args] = call as unknown as [string, string[]];
-        return isLocalPreflightDevArgs(args);
+        return isConvexInitArgs(args);
       }) as
         | [string, string[], { env?: Record<string, string | undefined> }]
         | undefined;
@@ -6542,7 +6536,7 @@ describe('cli/cli', () => {
       const execaStub = mock((cmd: string, args: string[], opts?: any): any => {
         calls.push({ cmd, args, opts });
         if (cmd === 'bun') return watcherProcess;
-        if (isLocalPreflightDevArgs(args)) {
+        if (isConvexInitArgs(args)) {
           return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
         }
         return convexProcess;
@@ -6577,18 +6571,7 @@ describe('cli/cli', () => {
       expect(calls.length).toBe(3);
       expect(calls[0]).toMatchObject({
         cmd: 'node',
-        args: [
-          '/fake/convex/main.js',
-          'dev',
-          '--local',
-          '--once',
-          '--skip-push',
-          '--local-force-upgrade',
-          '--typecheck',
-          'disable',
-          '--codegen',
-          'disable',
-        ],
+        args: ['/fake/convex/main.js', 'init'],
         opts: {
           cwd: process.cwd(),
           env: expect.objectContaining({
@@ -6682,7 +6665,7 @@ describe('cli/cli', () => {
       const execaStub = mock((cmd: string, args: string[], opts?: any): any => {
         calls.push({ cmd, args, opts });
         if (cmd === 'bun') return watcherProcess;
-        if (isLocalPreflightDevArgs(args)) {
+        if (isConvexInitArgs(args)) {
           return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
         }
         return convexProcess;
@@ -6716,18 +6699,7 @@ describe('cli/cli', () => {
       expect(exitCode).toBe(0);
       expect(calls[0]).toMatchObject({
         cmd: 'node',
-        args: [
-          '/fake/convex/main.js',
-          'dev',
-          '--local',
-          '--once',
-          '--skip-push',
-          '--local-force-upgrade',
-          '--typecheck',
-          'disable',
-          '--codegen',
-          'disable',
-        ],
+        args: ['/fake/convex/main.js', 'init'],
         opts: {
           cwd: process.cwd(),
           env: expect.objectContaining({
