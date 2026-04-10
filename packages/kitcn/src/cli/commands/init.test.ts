@@ -46,6 +46,24 @@ const LEGACY_GENERATED_CONVEX_TSCONFIG_TEMPLATE = `{
 }
 `;
 
+function isLocalInitPreflightCommand(args: string[]): boolean {
+  return (
+    args[0] === '/fake/convex/main.js' &&
+    args[1] === 'dev' &&
+    args.includes('--local') &&
+    args.includes('--skip-push') &&
+    args.includes('--local-force-upgrade')
+  );
+}
+
+function isRuntimeBootstrapDevCommand(args: string[]): boolean {
+  return (
+    args[0] === '/fake/convex/main.js' &&
+    args[1] === 'dev' &&
+    !args.includes('--skip-push')
+  );
+}
+
 describe('cli/commands/init', () => {
   test('parseInitCommandArgs supports template, cwd, name, defaults, overwrite, yes, json, and Convex target args', () => {
     expect(
@@ -255,7 +273,7 @@ describe('cli/commands/init', () => {
       expect(shadcnCall?.[1]).toContain('--yes');
       const convexInitCall = execaStub.mock.calls.find((call) => {
         const [, args] = call as unknown as [string, string[]];
-        return args[0] === '/fake/convex/main.js' && args[1] === 'init';
+        return isLocalInitPreflightCommand(args);
       }) as [string, string[], Record<string, unknown>] | undefined;
       expect(convexInitCall).toBeDefined();
       expect(convexInitCall?.[1]).not.toContain('--yes');
@@ -1560,10 +1578,16 @@ describe('cli/commands/init', () => {
             "✖ Local backend isn't running. (it's not listening at http://127.0.0.1:3210)",
         } as any;
       }
-      if (args[0] === '/fake/convex/main.js' && args[1] === 'dev') {
+      if (isRuntimeBootstrapDevCommand(args)) {
         bootstrapEvents.push('dev');
         expect(opts?.env?.DEPLOY_ENV).toBe('development');
         expect(opts?.env?.SITE_URL).toBe('http://localhost:3000');
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+      if (isLocalInitPreflightCommand(args)) {
+        bootstrapEvents.push('preflight');
+        expect(opts?.env?.DEPLOY_ENV).toBeUndefined();
+        expect(opts?.env?.SITE_URL).toBeUndefined();
         return { exitCode: 0, stdout: '', stderr: '' } as any;
       }
       return { exitCode: 0, stdout: '', stderr: '' } as any;
@@ -1597,6 +1621,7 @@ describe('cli/commands/init', () => {
       expect(exitCode).toBe(0);
       expect(syncEnvCalls).toEqual(['prepare', 'complete']);
       expect(bootstrapEvents).toEqual([
+        'preflight',
         'codegen',
         'sync:prepare',
         'dev',
@@ -1907,7 +1932,7 @@ describe('cli/commands/init', () => {
           stderr: 'nope',
         } as any;
       }
-      if (args[0] === '/fake/convex/main.js' && args[1] === 'dev') {
+      if (isRuntimeBootstrapDevCommand(args)) {
         return {
           exitCode: 1,
           stdout: '',
@@ -1962,7 +1987,10 @@ describe('cli/commands/init', () => {
           stderr: 'nope',
         } as any;
       }
-      if (args[0] === '/fake/convex/main.js' && args[1] === 'dev') {
+      if (isLocalInitPreflightCommand(args)) {
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+      if (isRuntimeBootstrapDevCommand(args)) {
         return {
           exitCode: 1,
           stdout: '',
@@ -1997,7 +2025,7 @@ describe('cli/commands/init', () => {
       expect(
         execaStub.mock.calls.some((call) => {
           const [, args] = call as unknown as [string, string[]];
-          return args[0] === '/fake/convex/main.js' && args[1] === 'dev';
+          return isRuntimeBootstrapDevCommand(args);
         })
       ).toBe(false);
       expect(
