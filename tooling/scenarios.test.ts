@@ -85,6 +85,7 @@ describe('tooling/scenarios', () => {
     expect(resolveScenarioProofPath('create-convex-nextjs-shadcn-auth')).toBe(
       'check'
     );
+    expect(resolveScenarioProofPath('raw-start-auth-adoption')).toBe('check');
   });
 
   test('runScenarioTest uses check for bootstrap-heavy convex scenarios', async () => {
@@ -469,6 +470,7 @@ describe('tooling/scenarios', () => {
       'convex-vite-auth-bootstrap',
       'convex-next-all',
       'create-convex-nextjs-shadcn-auth',
+      'raw-start-auth-adoption',
     ]);
     expect(SCENARIO_DEFINITIONS['convex-next-all']).toMatchObject({
       backend: 'convex',
@@ -499,6 +501,26 @@ describe('tooling/scenarios', () => {
       source: {
         kind: 'fixture',
         fixture: 'create-convex-nextjs-shadcn',
+      },
+      validation: {
+        beforeCheck: [
+          ['convex', 'init'],
+          ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes'],
+        ],
+        lint: false,
+      },
+    });
+    expect(SCENARIO_DEFINITIONS['raw-start-auth-adoption']).toEqual({
+      backend: 'convex',
+      check: false,
+      env: {
+        CONVEX_AGENT_MODE: 'anonymous',
+      },
+      label: 'raw start auth adoption',
+      setup: [],
+      source: {
+        kind: 'fixture',
+        fixture: 'raw-start-auth-adoption',
       },
       validation: {
         beforeCheck: [

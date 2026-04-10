@@ -11,6 +11,7 @@ export const SCENARIO_KEYS = [
   'convex-vite-auth-bootstrap',
   'convex-next-all',
   'create-convex-nextjs-shadcn-auth',
+  'raw-start-auth-adoption',
   'create-convex-bare',
   'create-convex-nextjs-shadcn',
   'create-convex-react-vite-shadcn',
@@ -29,6 +30,7 @@ export const FULL_CONVEX_SCENARIO_KEYS = [
   'convex-vite-auth-bootstrap',
   'convex-next-all',
   'create-convex-nextjs-shadcn-auth',
+  'raw-start-auth-adoption',
 ] as const;
 
 export type ScenarioKey = (typeof SCENARIO_KEYS)[number];
@@ -211,6 +213,26 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
     source: {
       kind: 'fixture',
       fixture: 'create-convex-nextjs-shadcn',
+    },
+  },
+  'raw-start-auth-adoption': {
+    backend: 'convex',
+    check: false,
+    env: {
+      CONVEX_AGENT_MODE: 'anonymous',
+    },
+    label: 'raw start auth adoption',
+    setup: [],
+    validation: {
+      beforeCheck: [
+        ['convex', 'init'],
+        ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes'],
+      ],
+      lint: false,
+    },
+    source: {
+      kind: 'fixture',
+      fixture: 'raw-start-auth-adoption',
     },
   },
   'create-convex-bare': {

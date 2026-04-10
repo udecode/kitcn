@@ -98,6 +98,7 @@ const BOOTSTRAP_CHECK_SCENARIOS = new Set<ScenarioKey>([
   'convex-vite-auth-bootstrap',
   'convex-next-all',
   'create-convex-nextjs-shadcn-auth',
+  'raw-start-auth-adoption',
 ]);
 
 const isPortAvailable = (port: number) =>
