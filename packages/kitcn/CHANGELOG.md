@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.12.24
+
+### Patch Changes
+
+- [#202](https://github.com/udecode/kitcn/pull/202) [`10c2dc4`](https://github.com/udecode/kitcn/commit/10c2dc4f6de34fd7aaf1ac7bb6c964d7e63fcd3d) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Support `kitcn add auth --preset convex --yes` on TanStack Start apps
+    without falling through the Vite `main.tsx` patch path.
+
 ## 0.12.23
 
 ### Patch Changes
