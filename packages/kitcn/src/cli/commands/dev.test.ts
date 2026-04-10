@@ -95,6 +95,19 @@ function createPersistentProcess() {
   };
 }
 
+function isLocalUpgradePreflightCommand(args: string[]): boolean {
+  return (
+    args[1] === 'dev' &&
+    args.includes('--local') &&
+    args.includes('--skip-push') &&
+    args.includes('--local-force-upgrade')
+  );
+}
+
+function isRuntimeDevCommand(args: string[]): boolean {
+  return args[1] === 'dev' && !args.includes('--skip-push');
+}
+
 async function waitFor(
   predicate: () => boolean,
   timeoutMs = 2000
@@ -409,7 +422,7 @@ describe('cli/commands/dev', () => {
       if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
         return watcherProcess.process;
       }
-      if (args[1] === 'init') {
+      if (isLocalUpgradePreflightCommand(args)) {
         return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
       }
       return convexProcess.process;
@@ -445,7 +458,7 @@ describe('cli/commands/dev', () => {
       await waitFor(() =>
         execaStub.mock.calls.some((call) => {
           const [, args] = call as unknown as [string, string[]];
-          return args[1] === 'dev';
+          return isRuntimeDevCommand(args);
         })
       );
 
@@ -510,7 +523,7 @@ describe('cli/commands/dev', () => {
       if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
         return watcherProcess.process;
       }
-      if (args[1] === 'init') {
+      if (isLocalUpgradePreflightCommand(args)) {
         return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
       }
       return convexProcess.process;
@@ -550,7 +563,7 @@ describe('cli/commands/dev', () => {
       await waitFor(() =>
         execaStub.mock.calls.some((call) => {
           const [, args] = call as unknown as [string, string[]];
-          return args[1] === 'dev';
+          return isRuntimeDevCommand(args);
         })
       );
 
@@ -578,7 +591,7 @@ describe('cli/commands/dev', () => {
     }
   });
 
-  test('handleDevCommand prints failing convex init output before returning', async () => {
+  test('handleDevCommand prints failing local preflight output before returning', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-dev-init-failure-output-')
     );
@@ -592,7 +605,7 @@ describe('cli/commands/dev', () => {
     }) as typeof process.stderr.write);
 
     const execaStub = mock((_cmd: string, args: string[], _opts?: any): any => {
-      if (args[1] === 'init') {
+      if (isLocalUpgradePreflightCommand(args)) {
         return Promise.resolve({
           exitCode: 1,
           stdout: '',
@@ -727,7 +740,7 @@ describe('cli/commands/dev', () => {
     }
   });
 
-  test('handleDevCommand preserves anonymous agent mode for anonymous-agent local deployments', async () => {
+  test('handleDevCommand uses local upgrade preflight for anonymous local deployments', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-dev-anonymous-agent-local-')
     );
@@ -742,7 +755,7 @@ describe('cli/commands/dev', () => {
     );
     fs.writeFileSync(
       path.join(dir, '.env.local'),
-      'CONVEX_DEPLOYMENT=anonymous-agent\n'
+      'CONVEX_DEPLOYMENT=anonymous:anonymous-agent\n'
     );
 
     const watcherProcess = createPendingProcess();
@@ -754,7 +767,11 @@ describe('cli/commands/dev', () => {
       if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
         return watcherProcess.process;
       }
-      if (args[1] === 'init') {
+      if (
+        args[1] === 'dev' &&
+        args.includes('--skip-push') &&
+        args.includes('--local-force-upgrade')
+      ) {
         return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
       }
       return convexProcess.process;
@@ -796,7 +813,18 @@ describe('cli/commands/dev', () => {
       expect(exitCode).toBe(0);
       expect(calls[0]).toMatchObject({
         cmd: 'node',
-        args: ['/fake/convex/main.js', 'init'],
+        args: [
+          '/fake/convex/main.js',
+          'dev',
+          '--local',
+          '--once',
+          '--skip-push',
+          '--local-force-upgrade',
+          '--typecheck',
+          'disable',
+          '--codegen',
+          'disable',
+        ],
         opts: {
           env: expect.objectContaining({
             CONVEX_AGENT_MODE: 'anonymous',
@@ -1191,7 +1219,7 @@ describe('cli/commands/dev', () => {
       if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
         return watcherProcess;
       }
-      if (args[1] === 'init') {
+      if (isLocalUpgradePreflightCommand(args)) {
         return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
       }
       return convexProcess;
@@ -1328,7 +1356,7 @@ describe('cli/commands/dev', () => {
       if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
         throw new Error('bootstrap should not start watcher');
       }
-      if (args[1] === 'init') {
+      if (isLocalUpgradePreflightCommand(args)) {
         return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
       }
       return convexProcess.process;
@@ -1380,6 +1408,26 @@ describe('cli/commands/dev', () => {
 
       expect(exitCode).toBe(0);
       expect(calls).toHaveLength(2);
+      expect(calls[0]).toEqual({
+        cmd: 'node',
+        args: [
+          '/fake/convex/main.js',
+          'dev',
+          '--local',
+          '--once',
+          '--skip-push',
+          '--local-force-upgrade',
+          '--typecheck',
+          'disable',
+          '--codegen',
+          'disable',
+        ],
+        opts: expect.objectContaining({
+          cwd: process.cwd(),
+          reject: false,
+          stdio: 'pipe',
+        }),
+      });
       expect(calls[1]).toEqual({
         cmd: 'node',
         args: [
@@ -1466,7 +1514,7 @@ describe('cli/commands/dev', () => {
       if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
         return watcherProcess.process;
       }
-      if (args[1] === 'init') {
+      if (isLocalUpgradePreflightCommand(args)) {
         return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
       }
       return convexProcess.process;
@@ -1513,7 +1561,7 @@ describe('cli/commands/dev', () => {
         () =>
           execaStub.mock.calls.some((call) => {
             const [, args] = call as unknown as [string, string[]];
-            return args[1] === 'dev';
+            return isRuntimeDevCommand(args);
           }),
         2000
       );
@@ -1571,7 +1619,7 @@ describe('cli/commands/dev', () => {
       if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
         return watcherProcess.process;
       }
-      if (args[1] === 'init') {
+      if (isLocalUpgradePreflightCommand(args)) {
         return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
       }
       if (args.includes('generated/server:aggregateBackfill')) {
@@ -1678,7 +1726,7 @@ describe('cli/commands/dev', () => {
       if (cmd === 'bun' && (args[0] as string).endsWith('/watcher.ts')) {
         return watcherProcess.process;
       }
-      if (args[1] === 'init') {
+      if (isLocalUpgradePreflightCommand(args)) {
         return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });
       }
       return convexProcess.process;
@@ -1715,7 +1763,7 @@ describe('cli/commands/dev', () => {
         () =>
           execaStub.mock.calls.some((call) => {
             const [, args] = call as unknown as [string, string[]];
-            return args[1] === 'dev';
+            return isRuntimeDevCommand(args);
           }),
         2000
       );

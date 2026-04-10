@@ -4123,36 +4123,44 @@ export async function runConvexInitIfNeeded(params: {
     };
   }
 
-  const shouldUseAnonymousAgentMode =
-    params.yes &&
+  const shouldUseLocalDevPreflight =
     getAggregateBackfillDeploymentKey(
       params.targetArgs ?? [],
       process.cwd(),
       params.env
     ) === 'local';
+  const shouldUseAnonymousAgentMode = params.yes && shouldUseLocalDevPreflight;
   const agentModeOverride = shouldUseAnonymousAgentMode
     ? 'anonymous'
     : params.env?.CONVEX_AGENT_MODE;
-  const result = normalizeConvexCommandResult(
-    await params.execaFn(
-      params.backendAdapter.command,
-      [
+  const commandArgs = shouldUseLocalDevPreflight
+    ? [
+        ...params.backendAdapter.argsPrefix,
+        'dev',
+        '--local',
+        '--once',
+        '--skip-push',
+        '--local-force-upgrade',
+        '--typecheck',
+        'disable',
+        '--codegen',
+        'disable',
+      ]
+    : [
         ...params.backendAdapter.argsPrefix,
         'init',
         ...(params.targetArgs ?? []),
-      ],
-      {
-        cwd: process.cwd(),
-        env: createBackendCommandEnv({
-          ...params.env,
-          ...(agentModeOverride
-            ? { CONVEX_AGENT_MODE: agentModeOverride }
-            : {}),
-        }),
-        reject: false,
-        stdio: 'pipe',
-      }
-    )
+      ];
+  const result = normalizeConvexCommandResult(
+    await params.execaFn(params.backendAdapter.command, commandArgs, {
+      cwd: process.cwd(),
+      env: createBackendCommandEnv({
+        ...params.env,
+        ...(agentModeOverride ? { CONVEX_AGENT_MODE: agentModeOverride } : {}),
+      }),
+      reject: false,
+      stdio: 'pipe',
+    })
   );
   if (params.echoOutput !== false || result.exitCode !== 0) {
     writeConvexCommandOutput(result);
