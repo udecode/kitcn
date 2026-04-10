@@ -88,20 +88,47 @@ describe('useSafeConvexAuth / useAuth', () => {
     }
   });
 
-  test('useAuth (kitcn AuthProvider): hasSession reflects token and reads auth state from Convex', () => {
+  test('useAuth (kitcn AuthProvider): hasSession reflects token and reads auth state from the synced store', () => {
+    const wrapper = makeAuthWrapper({
+      token: 'tok',
+      isAuthenticated: false,
+      isLoading: true,
+    });
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    expect(result.current).toEqual({
+      hasSession: true,
+      isAuthenticated: false,
+      isLoading: true,
+    });
+  });
+
+  test('kitcn AuthProvider keeps loading while store says token is still syncing', () => {
     const useConvexAuthSpy = spyOn(
       convexReact,
       'useConvexAuth'
     ).mockReturnValue({
       isAuthenticated: false,
-      isLoading: true,
+      isLoading: false,
     } as any);
 
     try {
-      const wrapper = makeAuthWrapper({ token: 'tok' });
-      const { result } = renderHook(() => useAuth(), { wrapper });
+      const wrapper = makeAuthWrapper({
+        token: 'tok',
+        isAuthenticated: false,
+        isLoading: true,
+      });
 
-      expect(result.current).toEqual({
+      const { result: safeAuth } = renderHook(() => useSafeConvexAuth(), {
+        wrapper,
+      });
+      expect(safeAuth.current).toEqual({
+        isAuthenticated: false,
+        isLoading: true,
+      });
+
+      const { result: auth } = renderHook(() => useAuth(), { wrapper });
+      expect(auth.current).toEqual({
         hasSession: true,
         isAuthenticated: false,
         isLoading: true,
@@ -122,48 +149,33 @@ describe('useAuthGuard', () => {
   }
 
   test('calls onMutationUnauthorized and returns true when unauthenticated', () => {
-    const useConvexAuthSpy = spyOn(
-      convexReact,
-      'useConvexAuth'
-    ).mockReturnValue({
+    const onMutationUnauthorized = mock(() => {});
+    const wrapper = makeAuthWrapper({
+      token: 'tok',
       isAuthenticated: false,
       isLoading: false,
-    } as any);
+      onMutationUnauthorized,
+    });
 
-    try {
-      const onMutationUnauthorized = mock(() => {});
-      const wrapper = makeAuthWrapper({ token: 'tok', onMutationUnauthorized });
+    const { result } = renderHook(() => useAuthGuard(), { wrapper });
 
-      const { result } = renderHook(() => useAuthGuard(), { wrapper });
-
-      expect(result.current()).toBe(true);
-      expect(onMutationUnauthorized).toHaveBeenCalledTimes(1);
-    } finally {
-      useConvexAuthSpy.mockRestore();
-    }
+    expect(result.current()).toBe(true);
+    expect(onMutationUnauthorized).toHaveBeenCalledTimes(1);
   });
 
   test('runs callback and returns false/undefined when authenticated', () => {
-    const useConvexAuthSpy = spyOn(
-      convexReact,
-      'useConvexAuth'
-    ).mockReturnValue({
+    const wrapper = makeAuthWrapper({
+      token: 'tok',
       isAuthenticated: true,
       isLoading: false,
-    } as any);
+    });
+    const callback = mock(() => {});
 
-    try {
-      const wrapper = makeAuthWrapper({ token: 'tok' });
-      const callback = mock(() => {});
+    const { result } = renderHook(() => useAuthGuard(), { wrapper });
 
-      const { result } = renderHook(() => useAuthGuard(), { wrapper });
-
-      expect(result.current()).toBe(false);
-      expect(result.current(callback as any)).toBeUndefined();
-      expect(callback).toHaveBeenCalledTimes(1);
-    } finally {
-      useConvexAuthSpy.mockRestore();
-    }
+    expect(result.current()).toBe(false);
+    expect(result.current(callback as any)).toBeUndefined();
+    expect(callback).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -223,48 +235,36 @@ describe('Auth Components', () => {
   });
 
   test('Authenticated renders children only when authenticated', () => {
-    const useConvexAuthSpy = spyOn(
-      convexReact,
-      'useConvexAuth'
-    ).mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-    } as any);
+    const { queryByTestId } = render(
+      <Authenticated>
+        <div data-testid="x">X</div>
+      </Authenticated>,
+      {
+        wrapper: makeAuthWrapper({
+          token: 'tok',
+          isAuthenticated: true,
+          isLoading: false,
+        }),
+      }
+    );
 
-    try {
-      const { queryByTestId } = render(
-        <Authenticated>
-          <div data-testid="x">X</div>
-        </Authenticated>,
-        { wrapper: makeAuthWrapper({ token: 'tok' }) }
-      );
-
-      expect(queryByTestId('x')).not.toBeNull();
-    } finally {
-      useConvexAuthSpy.mockRestore();
-    }
+    expect(queryByTestId('x')).not.toBeNull();
   });
 
   test('Unauthenticated renders children only when not loading and not authenticated', () => {
-    const useConvexAuthSpy = spyOn(
-      convexReact,
-      'useConvexAuth'
-    ).mockReturnValue({
-      isAuthenticated: false,
-      isLoading: false,
-    } as any);
+    const { queryByTestId } = render(
+      <Unauthenticated>
+        <div data-testid="x">X</div>
+      </Unauthenticated>,
+      {
+        wrapper: makeAuthWrapper({
+          token: 'tok',
+          isAuthenticated: false,
+          isLoading: false,
+        }),
+      }
+    );
 
-    try {
-      const { queryByTestId } = render(
-        <Unauthenticated>
-          <div data-testid="x">X</div>
-        </Unauthenticated>,
-        { wrapper: makeAuthWrapper({ token: 'tok' }) }
-      );
-
-      expect(queryByTestId('x')).not.toBeNull();
-    } finally {
-      useConvexAuthSpy.mockRestore();
-    }
+    expect(queryByTestId('x')).not.toBeNull();
   });
 });
