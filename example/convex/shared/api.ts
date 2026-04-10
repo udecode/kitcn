@@ -135,23 +135,6 @@ export const api = {
   },
   http: undefined as unknown as typeof httpRouter,
   _http: {
-    'examples.allCombinedExample': { path: "/api/examples/items/:id/tags", method: "POST" },
-    'examples.inputExample': { path: "/api/examples/items", method: "POST" },
-    'examples.paramsExample': { path: "/api/examples/items/:id", method: "GET" },
-    'examples.paramsInputExample': { path: "/api/examples/items/:id", method: "PATCH" },
-    'examples.paramsSearchParamsExample': { path: "/api/examples/items/:id/history", method: "GET" },
-    'examples.redirectExample': { path: "/api/old-path", method: "GET" },
-    'examples.searchExample': { path: "/api/examples/search", method: "GET" },
-    'examples.uploadExample': { path: "/api/examples/upload", method: "POST" },
-    'examples.webhook': { path: "/webhooks/example", method: "POST" },
-    health: { path: "/api/health", method: "GET" },
-    resendWebhook: { path: "/resend-webhook", method: "POST" },
-    'todos.create': { path: "/api/todos", method: "POST" },
-    'todos.delete': { path: "/api/todos/:id", method: "DELETE" },
-    'todos.download': { path: "/api/todos/export/:format", method: "GET" },
-    'todos.get': { path: "/api/todos/:id", method: "GET" },
-    'todos.list': { path: "/api/todos", method: "GET" },
-    'todos.update': { path: "/api/todos/:id", method: "PATCH" },
   },
 } as const;
 
