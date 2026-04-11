@@ -302,6 +302,7 @@ describe('package intent metadata', () => {
       expect(backendCoreSource).toContain('getProjectServerParserShimPath');
       expect(backendCoreSource).toContain('kitcn-parse.ts');
       expect(backendCoreSource).toContain('kitcn/server');
+      expect(backendCoreSource).toContain('tryNative: false');
     } finally {
       rmSync(packDir, { force: true, recursive: true });
     }

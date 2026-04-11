@@ -260,6 +260,9 @@ export const createProjectJiti = (cwd = process.cwd()) =>
       runtime: 'automatic',
     },
     moduleCache: false,
+    // Bun-native import bypasses Jiti aliasing for transitive project files.
+    // Parse-time CLI imports need Jiti in the loop end-to-end.
+    tryNative: false,
     alias: {
       ...buildTsconfigPathAliases(cwd),
       ...buildLocalPackageExportAliases(cwd, 'kitcn'),
