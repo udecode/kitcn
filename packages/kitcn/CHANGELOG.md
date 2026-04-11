@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.12.26
+
+### Patch Changes
+
+- [`897a06b`](https://github.com/udecode/kitcn/commit/897a06b9e6ee5289ccf507d6c878d377ecfb1475) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix raw auth reruns so `http.ts` import detection respects both quote styles,
+    and `registerRoutes(http, getAuth, ...)` accepts Better Auth route contracts
+    without a type cast.
+
 ## 0.12.25
 
 ### Patch Changes
