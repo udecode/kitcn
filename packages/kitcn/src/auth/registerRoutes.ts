@@ -1,17 +1,12 @@
 /** biome-ignore-all lint/suspicious/noConsole: lib */
+import type { BaseURLConfig, BetterAuthOptions } from 'better-auth';
 import { type HttpRouter, httpActionGeneric } from 'convex/server';
 import { corsRouter } from '../internal/upstream/server/cors';
 import { toAuthErrorResponse } from './error-response';
 
 import type { GetAuth } from './types';
 
-type TrustedOriginsOption =
-  | (string | null | undefined)[]
-  | ((
-      request?: Request
-    ) =>
-      | (string | null | undefined)[]
-      | Promise<(string | null | undefined)[]>);
+type TrustedOriginsOption = BetterAuthOptions['trustedOrigins'];
 
 type AuthRouteContract = {
   $context: Promise<{
@@ -22,7 +17,7 @@ type AuthRouteContract = {
   handler: (request: Request) => Promise<Response>;
   options: {
     basePath?: string;
-    baseURL?: unknown;
+    baseURL?: BaseURLConfig;
     trustedOrigins?: TrustedOriginsOption;
   };
 };
