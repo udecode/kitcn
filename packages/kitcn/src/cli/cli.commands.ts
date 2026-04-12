@@ -2370,9 +2370,7 @@ describe('cli/cli', () => {
         path.join(dir, 'lib', 'convex', 'auth-client.ts'),
         'utf8'
       );
-      expect(authClientSource).toContain(
-        'process.env.NEXT_PUBLIC_CONVEX_SITE_URL!'
-      );
+      expect(authClientSource).toContain('process.env.NEXT_PUBLIC_SITE_URL!');
       expect(authClientSource).not.toContain('createAuthMutations');
 
       const schemaSource = fs.readFileSync(
@@ -2474,9 +2472,7 @@ describe('cli/cli', () => {
         path.join(dir, 'src', 'lib', 'convex', 'auth-client.ts'),
         'utf8'
       );
-      expect(authClientSource).toContain(
-        'import.meta.env.VITE_CONVEX_SITE_URL!'
-      );
+      expect(authClientSource).toContain('import.meta.env.VITE_SITE_URL!');
       expect(authClientSource).not.toContain('createAuthMutations');
       expect(
         execaStub.mock.calls.some((call) => {
@@ -2566,9 +2562,7 @@ describe('cli/cli', () => {
         path.join(dir, 'src', 'lib', 'convex', 'auth-client.ts'),
         'utf8'
       );
-      expect(authClientSource).toContain(
-        'import.meta.env.VITE_CONVEX_SITE_URL!'
-      );
+      expect(authClientSource).toContain('import.meta.env.VITE_SITE_URL!');
       expect(authClientSource).not.toContain('createAuthMutations');
 
       const httpSource = fs.readFileSync(
@@ -2678,6 +2672,84 @@ describe('cli/cli', () => {
       expect(
         nextHttpSource.match(/registerRoutes\(http,\s*getAuth,\s*\{/g)?.length
       ).toBe(1);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('run(add auth --preset convex --yes) preserves a user-edited raw start auth client on rerun', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-cli-add-auth-convex-start-auth-client-')
+    );
+    const oldCwd = process.cwd();
+    writeRawConvexStartApp(dir);
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'CONVEX_DEPLOYMENT=local:demo\nVITE_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (args[0] === '/fake/convex/main.js' && args[1] === 'codegen') {
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      await run(['add', 'auth', '--preset', 'convex', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+
+      const authClientPath = path.join(
+        dir,
+        'src',
+        'lib',
+        'convex',
+        'auth-client.ts'
+      );
+      const editedAuthClientSource = `${fs.readFileSync(authClientPath, 'utf8')}
+// user plugin
+`;
+      fs.writeFileSync(authClientPath, editedAuthClientSource, 'utf8');
+      const nodeModulesDir = path.join(dir, 'node_modules');
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.symlinkSync(
+        path.join(oldCwd, 'packages', 'kitcn'),
+        path.join(nodeModulesDir, 'kitcn')
+      );
+      fs.symlinkSync(
+        path.join(oldCwd, 'node_modules', 'better-auth'),
+        path.join(nodeModulesDir, 'better-auth')
+      );
+      fs.symlinkSync(
+        path.join(oldCwd, 'node_modules', 'zod'),
+        path.join(nodeModulesDir, 'zod')
+      );
+
+      const exitCode = await run(
+        ['add', 'auth', '--preset', 'convex', '--yes', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(fs.readFileSync(authClientPath, 'utf8')).toBe(
+        editedAuthClientSource
+      );
     } finally {
       process.chdir(oldCwd);
     }

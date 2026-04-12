@@ -13,6 +13,7 @@ type AuthSchemaTemplateId = 'auth-schema' | 'auth-schema-convex';
 type UserOwnedAuthTemplateId =
   | 'auth-config'
   | 'auth-config-convex'
+  | 'auth-client-convex'
   | 'auth-runtime'
   | 'auth-runtime-convex';
 
@@ -30,6 +31,7 @@ const AUTH_SCHEMA_TEMPLATE_IDS = new Set<AuthSchemaTemplateId>([
 const USER_OWNED_AUTH_TEMPLATE_IDS = new Set<UserOwnedAuthTemplateId>([
   'auth-config',
   'auth-config-convex',
+  'auth-client-convex',
   'auth-runtime',
   'auth-runtime-convex',
 ]);
