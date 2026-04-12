@@ -1,5 +1,19 @@
 # kitcn
 
+## 0.12.27
+
+### Patch Changes
+
+- [#206](https://github.com/udecode/kitcn/pull/206) [`7edbb5e`](https://github.com/udecode/kitcn/commit/7edbb5e3e445ed7331a4cc19ec795900ccb9ca52) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `bunx --bun kitcn init -t start --yes` so Bun-native parse-time imports
+    no longer bypass project aliases and crash first-run codegen on scaffolded
+    Start files.
+  - Fix raw auth reruns so `http.ts` import detection respects both quote styles,
+    `registerRoutes(http, getAuth, ...)` accepts Better Auth route contracts
+    without a type cast, and raw auth clients keep the app `SITE_URL` while
+    preserving user-edited raw `auth-client.ts` files on reruns.
+
 ## 0.12.26
 
 ### Patch Changes
