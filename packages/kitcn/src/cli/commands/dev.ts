@@ -212,7 +212,6 @@ export function filterDevStartupLine(
   }
   if (
     line.includes('Finished running function "init"') ||
-    line.includes('CONVEX_AGENT_MODE=anonymous mode is in beta') ||
     line.includes('Convex AI files are not installed.') ||
     line.includes('Preparing Convex functions...') ||
     line.includes('Bundling component schemas and implementations') ||
@@ -684,24 +683,6 @@ export function resolveImplicitConvexRemoteDeploymentEnv(
   };
 }
 
-export function resolveImplicitConvexAnonymousAgentMode(
-  cwd = process.cwd()
-): 'anonymous' | undefined {
-  const envLocalPath = join(cwd, '.env.local');
-  if (!fs.existsSync(envLocalPath)) {
-    return;
-  }
-
-  const parsed = parseEnv(fs.readFileSync(envLocalPath, 'utf8'));
-  const deployment = parsed.CONVEX_DEPLOYMENT?.trim();
-  if (
-    deployment === 'anonymous-agent' ||
-    deployment?.startsWith('anonymous:')
-  ) {
-    return 'anonymous';
-  }
-}
-
 function resolveConvexEnvFileCommandEnv(
   args: string[],
   cwd = process.cwd()
@@ -1101,13 +1082,6 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     explicitConvexCommandEnv === null
       ? resolveImplicitConvexRemoteDeploymentEnv()
       : null;
-  const implicitConvexAgentMode =
-    backend === 'convex' &&
-    explicitConvexTargetArgs.length === 0 &&
-    !explicitConvexCommandEnv?.CONVEX_AGENT_MODE &&
-    !implicitConvexCommandEnv?.CONVEX_AGENT_MODE
-      ? resolveImplicitConvexAnonymousAgentMode()
-      : undefined;
   const effectiveConvexCommandEnv =
     explicitConvexCommandEnv ?? implicitConvexCommandEnv;
   const preRunFunction = config.dev.preRun;
@@ -1126,7 +1100,7 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     convexDevArgs.some((arg) => isConvexDevPreRunConflictFlag(arg))
   ) {
     throw new Error(
-      '`dev.preRun` cannot be combined with Convex dev run flags (`--run`, `--run-sh`, `--run-component`).'
+      '`dev.preRun` cannot be combined with Convex dev run flags (`--run`, `--start`, `--run-sh`, `--run-component`).'
     );
   }
 
@@ -1220,9 +1194,6 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
     env: {
       ...localNodeEnvOverrides,
       ...effectiveConvexCommandEnv,
-      ...(implicitConvexAgentMode
-        ? { CONVEX_AGENT_MODE: implicitConvexAgentMode }
-        : {}),
     },
     targetArgs,
   });
@@ -1296,9 +1267,6 @@ export const handleDevCommand = async (argv: string[], deps?: DevDeps) => {
       env: createBackendCommandEnv({
         ...localNodeEnvOverrides,
         ...effectiveConvexCommandEnv,
-        ...(implicitConvexAgentMode
-          ? { CONVEX_AGENT_MODE: implicitConvexAgentMode }
-          : {}),
         ...concaveLocalDevContract?.backendEnv,
       }),
       reject: false,

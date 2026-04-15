@@ -17,7 +17,7 @@ import {
 
 describe('cli/supported-dependencies', () => {
   test('extracts package names from install specs', () => {
-    expect(getPackageNameFromInstallSpec('convex@1.33.0')).toBe('convex');
+    expect(getPackageNameFromInstallSpec('convex@1.35.1')).toBe('convex');
     expect(getPackageNameFromInstallSpec('better-auth@1.5.3')).toBe(
       'better-auth'
     );
@@ -56,7 +56,7 @@ describe('cli/supported-dependencies', () => {
     expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.range).toBe(
       `^${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`
     );
-    expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum).toBe('>=1.33');
+    expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum).toBe('>=1.35');
   });
 
   test('resolves local install spec overrides for supported packages', () => {

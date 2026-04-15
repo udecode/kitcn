@@ -11,25 +11,11 @@ const DIST_CLI_PATH = path.join(
   'cli.mjs'
 );
 
-const createAnonymousRunCommand = (
-  cmd: string[],
-  cwd: string,
-  options: Parameters<typeof run>[2] = {}
-) =>
-  run(cmd, cwd, {
-    ...options,
-    env: {
-      CONVEX_AGENT_MODE: 'anonymous',
-      ...options.env,
-    },
-  });
-
 export const runNodeEnvSmoke = async () => {
   const { generatedAppDir, tempRoot } = await generateFreshApp({
     backend: 'convex',
     generatedAppName: 'node-env-smoke',
     initTemplate: 'vite',
-    runCommand: createAnonymousRunCommand,
   });
 
   try {
@@ -47,11 +33,11 @@ export const runNodeEnvSmoke = async () => {
       ].join('\n')
     );
 
-    await createAnonymousRunCommand(
+    await run(
       ['node', DIST_CLI_PATH, '--backend', 'convex', 'env', 'push'],
       generatedAppDir
     );
-    await createAnonymousRunCommand(
+    await run(
       [
         'node',
         DIST_CLI_PATH,

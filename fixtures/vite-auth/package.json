@@ -8,7 +8,7 @@
     "better-auth": "1.5.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "convex": "1.33.0",
+    "convex": "1.35.1",
     "hono": "4.12.9",
     "kitcn": "workspace:*",
     "lucide-react": "^1.8.0",

@@ -292,10 +292,6 @@ const createScenarioRunCommand = (
   if (!scenarioEnv) {
     return baseRunCommand;
   }
-  const scenarioHome =
-    scenarioEnv.CONVEX_AGENT_MODE === 'anonymous'
-      ? path.join(PROJECT_ROOT, 'tmp', 'scenario-homes', scenarioKey)
-      : undefined;
 
   return (
     cmd: string[],
@@ -306,11 +302,6 @@ const createScenarioRunCommand = (
       ...options,
       env: {
         ...CLEARED_CONVEX_ENV,
-        ...(scenarioHome
-          ? {
-              HOME: scenarioHome,
-            }
-          : {}),
         ...scenarioEnv,
         ...options.env,
       },
@@ -326,19 +317,9 @@ const resolveScenarioProcessEnv = (scenarioKey: ScenarioKey) => {
     };
   }
 
-  const scenarioHome =
-    scenarioEnv.CONVEX_AGENT_MODE === 'anonymous'
-      ? path.join(PROJECT_ROOT, 'tmp', 'scenario-homes', scenarioKey)
-      : undefined;
-
   return {
     ...process.env,
     ...CLEARED_CONVEX_ENV,
-    ...(scenarioHome
-      ? {
-          HOME: scenarioHome,
-        }
-      : {}),
     ...scenarioEnv,
   };
 };

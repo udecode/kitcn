@@ -72,7 +72,7 @@ describe('cli/commands/verify', () => {
     ).rejects.toThrow('`kitcn verify` is only supported for backend convex.');
   });
 
-  test('handleVerifyCommand injects anonymous agent mode and restores local state when no configured local deployment exists', async () => {
+  test('handleVerifyCommand relies on Convex non-interactive anonymous default and restores local state', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-verify-command-local-')
     );
@@ -95,7 +95,7 @@ describe('cli/commands/verify', () => {
         return watcherProcess;
       }
       if (args[1] === 'init') {
-        expect(opts?.env?.CONVEX_AGENT_MODE).toBe('anonymous');
+        expect(opts?.env?.CONVEX_AGENT_MODE).toBeUndefined();
         expect(fs.existsSync(path.join(dir, '.convex', 'original.txt'))).toBe(
           false
         );
@@ -105,7 +105,7 @@ describe('cli/commands/verify', () => {
       }
       if (args[1] === 'dev') {
         expect(args).toContain('--once');
-        expect(opts?.env?.CONVEX_AGENT_MODE).toBe('anonymous');
+        expect(opts?.env?.CONVEX_AGENT_MODE).toBeUndefined();
         return convexProcess;
       }
       return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' });

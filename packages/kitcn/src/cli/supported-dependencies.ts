@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const EXACT_VERSION_RE = /^(\d+)\.(\d+)\.\d+$/;
-const SUPPORTED_CONVEX_VERSION = '1.33.0';
+const SUPPORTED_CONVEX_VERSION = '1.35.1';
 const SUPPORTED_BETTER_AUTH_VERSION = '1.5.3';
 const SUPPORTED_HONO_VERSION = '4.12.9';
 const SUPPORTED_OPENTELEMETRY_API_VERSION = '1.9.0';

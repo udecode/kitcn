@@ -453,8 +453,8 @@ describe('tooling/scenarios', () => {
       'convex'
     );
     expect(
-      SCENARIO_DEFINITIONS['convex-next-auth-bootstrap'].env?.CONVEX_AGENT_MODE
-    ).toBe('anonymous');
+      SCENARIO_DEFINITIONS['convex-next-auth-bootstrap'].env
+    ).toBeUndefined();
     expect(
       SCENARIO_DEFINITIONS['convex-next-auth-bootstrap'].validation.beforeCheck
     ).toEqual([['init', '--yes', '--json']]);
@@ -475,9 +475,6 @@ describe('tooling/scenarios', () => {
     expect(SCENARIO_DEFINITIONS['convex-next-all']).toMatchObject({
       backend: 'convex',
       check: true,
-      env: {
-        CONVEX_AGENT_MODE: 'anonymous',
-      },
       label: 'convex next all',
       setup: [
         ['add', 'ratelimit', '--yes', '--no-codegen'],
@@ -493,9 +490,6 @@ describe('tooling/scenarios', () => {
     expect(SCENARIO_DEFINITIONS['create-convex-nextjs-shadcn-auth']).toEqual({
       backend: 'convex',
       check: false,
-      env: {
-        CONVEX_AGENT_MODE: 'anonymous',
-      },
       label: 'create-convex nextjs-shadcn auth adoption',
       setup: [],
       source: {
@@ -513,9 +507,6 @@ describe('tooling/scenarios', () => {
     expect(SCENARIO_DEFINITIONS['raw-start-auth-adoption']).toEqual({
       backend: 'convex',
       check: false,
-      env: {
-        CONVEX_AGENT_MODE: 'anonymous',
-      },
       label: 'raw start auth adoption',
       setup: [],
       source: {
@@ -845,7 +836,7 @@ describe('tooling/scenarios', () => {
     }
   });
 
-  test('runScenarioDev injects anonymous agent mode for raw create-convex fixtures and bypasses upstream raw dev for bare apps', async () => {
+  test('runScenarioDev bypasses upstream raw dev for bare create-convex apps', async () => {
     const rootDir = `/tmp/kitcn-scenario-create-convex-dev-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`;
@@ -886,12 +877,8 @@ describe('tooling/scenarios', () => {
     expect(calls[0]).toMatchObject({
       cmd: buildLocalCliCommand(['dev'], { backend: 'concave' }),
       cwd: projectDir,
-      options: {
-        env: expect.objectContaining({
-          CONVEX_AGENT_MODE: 'anonymous',
-        }),
-      },
     });
+    expect(calls[0]?.options).toBeUndefined();
   });
 
   test('runScenarioDev bypasses raw create-convex predev and uses dev:frontend plus convex:dev when available', async () => {
