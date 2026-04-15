@@ -138,8 +138,9 @@ const AUTH_CONVEX_FILES = [
     target: 'functions',
     content: AUTH_CONVEX_TEMPLATE,
     requires: ['auth-config-convex'],
-    dependencyHintMessage: 'Auth runtime depends on OpenTelemetry API.',
-    dependencyHints: [OPENTELEMETRY_API_INSTALL_SPEC],
+    dependencyHintMessage:
+      'Auth runtime depends on OpenTelemetry API and kitcn runtime helpers.',
+    dependencyHints: [OPENTELEMETRY_API_INSTALL_SPEC, 'kitcn'],
   }),
   createRegistryFile({
     id: 'auth-client-convex',

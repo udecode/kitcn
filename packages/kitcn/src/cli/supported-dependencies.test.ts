@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
 import {
   BASELINE_DEPENDENCY_INSTALL_SPECS,
   BETTER_AUTH_INSTALL_SPEC,
@@ -9,6 +10,7 @@ import {
   PINNED_HONO_INSTALL_SPEC,
   PINNED_TANSTACK_REACT_QUERY_INSTALL_SPEC,
   PINNED_ZOD_INSTALL_SPEC,
+  resolveScaffoldInstallSpec,
   resolveSupportedDependencyInstallSpec,
   SUPPORTED_DEPENDENCY_VERSIONS,
 } from './supported-dependencies';
@@ -72,5 +74,16 @@ describe('cli/supported-dependencies', () => {
     expect(
       resolveSupportedDependencyInstallSpec('better-auth@1.5.3', env)
     ).toBe('better-auth@1.5.3');
+  });
+
+  test('pins scaffold kitcn installs to the current package version', () => {
+    const packageJson = JSON.parse(
+      fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+    ) as { version: string };
+
+    expect(resolveScaffoldInstallSpec({})).toBe(`kitcn@${packageJson.version}`);
+    expect(resolveSupportedDependencyInstallSpec('kitcn', {})).toBe(
+      `kitcn@${packageJson.version}`
+    );
   });
 });
