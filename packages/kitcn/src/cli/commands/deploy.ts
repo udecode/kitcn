@@ -4,6 +4,7 @@ import {
   extractBackendRunTargetArgs,
   extractBackfillCliOptions,
   extractMigrationCliOptions,
+  getConvexDeploymentCommandEnv,
   parseArgs,
   type RunDeps,
   resolveBackfillConfig,
@@ -44,13 +45,15 @@ export const handleDeployCommand = async (
     overrides: deployBackfillOverrides,
   } = extractBackfillCliOptions(deployArgsWithoutMigrationFlags);
   const deployArgs = [...config.deploy.args, ...deployCommandArgs];
+  const deployCommandEnv =
+    backend === 'convex' ? getConvexDeploymentCommandEnv() : undefined;
   const deployResult = await execaFn(
     backendAdapter.command,
     [...backendAdapter.argsPrefix, 'deploy', ...deployArgs],
     {
       stdio: 'inherit',
       cwd: process.cwd(),
-      env: createBackendCommandEnv(),
+      env: createBackendCommandEnv(deployCommandEnv),
       reject: false,
     }
   );
@@ -73,6 +76,7 @@ export const handleDeployCommand = async (
     backendAdapter,
     migrationConfig,
     targetArgs,
+    env: deployCommandEnv,
     context: 'deploy',
     direction: 'up',
   });
@@ -86,6 +90,7 @@ export const handleDeployCommand = async (
     backfillConfig,
     mode: 'resume',
     targetArgs,
+    env: deployCommandEnv,
     context: 'deploy',
   });
 };

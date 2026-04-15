@@ -2220,7 +2220,10 @@ describe('cli/cli', () => {
         path.join(dir, 'src', 'routes', 'api', 'auth', '$.ts'),
         'utf8'
       );
-      expect(routeSource).toContain("createFileRoute('/api/auth/$' as never)");
+      expect(routeSource).toContain("createFileRoute('/api/auth/$')");
+      expect(routeSource).toContain(
+        'routeTree.gen.ts is refreshed by TanStack Router during dev/build'
+      );
       expect(routeSource).toContain(
         "import { handler } from '@/lib/convex/auth-server';"
       );
@@ -2229,7 +2232,10 @@ describe('cli/cli', () => {
         path.join(dir, 'src', 'routes', 'auth.tsx'),
         'utf8'
       );
-      expect(authPageSource).toContain("createFileRoute('/auth' as never)");
+      expect(authPageSource).toContain("createFileRoute('/auth')");
+      expect(authPageSource).toContain(
+        'routeTree.gen.ts is refreshed by TanStack Router during dev/build'
+      );
       expect(authPageSource).not.toContain('callbackURL');
     } finally {
       process.chdir(oldCwd);
@@ -4124,7 +4130,7 @@ describe('cli/cli', () => {
       expect(ratelimitPluginSource).not.toContain('tag/create:free');
       expectDependencyInstallCall(
         execaStub.mock.calls as unknown as unknown[],
-        'kitcn'
+        resolveScaffoldInstallSpec({})
       );
       expect(generateMetaStub).not.toHaveBeenCalled();
     } finally {
@@ -6337,6 +6343,80 @@ describe('cli/cli', () => {
     expect(calls).toEqual([
       { cmd: 'node', args: ['/fake/convex/main.js', 'deploy', '--prod'] },
     ]);
+  });
+
+  test('run(deploy) passes ambient Convex deployment env through deploy flow', async () => {
+    const deploymentEnvKeys = [
+      'CONVEX_DEPLOYMENT',
+      'CONVEX_DEPLOY_KEY',
+      'CONVEX_SELF_HOSTED_URL',
+      'CONVEX_SELF_HOSTED_ADMIN_KEY',
+    ] as const;
+    const originalEnv = Object.fromEntries(
+      deploymentEnvKeys.map((key) => [key, process.env[key]])
+    );
+    const callEnvs: Array<Record<string, string | undefined> | undefined> = [];
+
+    process.env.CONVEX_DEPLOYMENT = 'prod:ci-deploy';
+    process.env.CONVEX_DEPLOY_KEY = 'prod:key';
+    process.env.CONVEX_SELF_HOSTED_URL = 'https://convex.example.com';
+    process.env.CONVEX_SELF_HOSTED_ADMIN_KEY = 'admin:key';
+
+    try {
+      const execaStub = mock(
+        async (
+          _cmd: string,
+          args: string[],
+          opts?: { env?: Record<string, string | undefined> }
+        ) => {
+          callEnvs.push(opts?.env);
+          if (args.includes('generated/server:migrationRun')) {
+            return {
+              exitCode: 0,
+              stdout: '{"status":"noop"}\n',
+              stderr: '',
+            } as any;
+          }
+          if (args.includes('generated/server:aggregateBackfill')) {
+            return {
+              exitCode: 0,
+              stdout: '{"status":"ok"}\n',
+              stderr: '',
+            } as any;
+          }
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+      );
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const exitCode = await run(['deploy'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(callEnvs.length).toBeGreaterThanOrEqual(3);
+      for (const env of callEnvs) {
+        expect(env?.CONVEX_DEPLOYMENT).toBe('prod:ci-deploy');
+        expect(env?.CONVEX_DEPLOY_KEY).toBe('prod:key');
+        expect(env?.CONVEX_SELF_HOSTED_URL).toBe('https://convex.example.com');
+        expect(env?.CONVEX_SELF_HOSTED_ADMIN_KEY).toBe('admin:key');
+      }
+    } finally {
+      for (const key of deploymentEnvKeys) {
+        const value = originalEnv[key];
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
   });
 
   test('run(deploy) uses concave deploy + concave run when backend is concave', async () => {

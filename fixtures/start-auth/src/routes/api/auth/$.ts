@@ -2,7 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { handler } from '@/lib/convex/auth-server';
 
-export const Route = createFileRoute('/api/auth/$' as never)({
+// @ts-ignore routeTree.gen.ts is refreshed by TanStack Router during dev/build.
+export const Route = createFileRoute('/api/auth/$')({
   server: {
     handlers: {
       GET: ({ request }) => handler(request),
