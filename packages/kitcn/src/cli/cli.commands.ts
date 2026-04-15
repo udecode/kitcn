@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveScaffoldInstallSpec } from './backend-core';
 import {
   collectPluginScaffoldTemplates,
   ensureConvexGitignoreEntry,
@@ -19,7 +18,11 @@ import {
 } from './commands/init';
 import { getPluginCatalogEntry } from './registry/index';
 import { RESEND_SCHEMA_TEMPLATE } from './registry/items/resend/resend-schema.template';
-import { BETTER_AUTH_INSTALL_SPEC } from './supported-dependencies';
+import {
+  BETTER_AUTH_INSTALL_SPEC,
+  OPENTELEMETRY_API_INSTALL_SPEC,
+  resolveScaffoldInstallSpec,
+} from './supported-dependencies';
 import {
   writeShadcnNextApp,
   writeShadcnStartApp,
@@ -2573,6 +2576,10 @@ describe('cli/cli', () => {
       expect(httpSource).toContain('allowedOrigins: [process.env.SITE_URL!]');
       expect(httpSource).not.toContain('authMiddleware');
       expect(httpSource).not.toContain('createHttpRouter');
+      expectDependencyInstallCallWithPackages(
+        execaStub.mock.calls as unknown as unknown[],
+        [OPENTELEMETRY_API_INSTALL_SPEC, resolveScaffoldInstallSpec()]
+      );
 
       const schemaSource = fs.readFileSync(
         path.join(dir, 'convex', 'schema.ts'),

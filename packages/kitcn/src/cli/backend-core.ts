@@ -128,8 +128,11 @@ import {
   BASELINE_DEPENDENCY_INSTALL_SPECS,
   getPackageNameFromInstallSpec,
   INIT_TEMPLATE_DEPENDENCY_INSTALL_SPECS,
-  KITCN_INSTALL_SPEC_ENV,
+  resolveScaffoldInstallSpec,
 } from './supported-dependencies.js';
+
+export { resolveScaffoldInstallSpec } from './supported-dependencies.js';
+
 import { isContentEquivalent } from './utils/content-compare.js';
 import { CRPC_BUILDER_STUB_SOURCE } from './utils/crpc-builder-stub.js';
 import {
@@ -146,7 +149,6 @@ import { createTypeScriptProxy } from './utils/typescript-runtime.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-let ownVersion: string | undefined | null;
 const ts = createTypeScriptProxy();
 
 // Resolve real convex CLI binary
@@ -794,54 +796,6 @@ export function createCommandEnv(
     ...process.env,
     ...overrides,
   };
-}
-
-function resolveOwnPackageJsonPath(filePath: string): string {
-  let current = dirname(filePath);
-
-  while (true) {
-    const candidate = join(current, 'package.json');
-    if (fs.existsSync(candidate)) {
-      const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8')) as {
-        name?: string;
-        version?: string;
-      };
-      if (parsed.name === 'kitcn') {
-        return candidate;
-      }
-    }
-
-    const parent = dirname(current);
-    if (parent === current) {
-      throw new Error(`Could not find kitcn package.json from ${filePath}.`);
-    }
-    current = parent;
-  }
-}
-
-function readOwnVersion() {
-  if (ownVersion !== undefined) {
-    return ownVersion ?? undefined;
-  }
-
-  const packageJsonPath = resolveOwnPackageJsonPath(__filename);
-  const parsed = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
-    version?: string;
-  };
-  ownVersion = parsed.version ?? null;
-  return ownVersion ?? undefined;
-}
-
-export function resolveScaffoldInstallSpec(
-  env: Record<string, string | undefined> = process.env
-) {
-  const override = env[KITCN_INSTALL_SPEC_ENV]?.trim();
-  if (override) {
-    return override;
-  }
-
-  const version = readOwnVersion();
-  return version ? `kitcn@${version}` : 'kitcn';
 }
 
 const CONVEX_DEPLOYMENT_ENV_KEYS = [

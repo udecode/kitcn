@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const EXACT_VERSION_RE = /^(\d+)\.(\d+)\.\d+$/;
 const SUPPORTED_CONVEX_VERSION = '1.33.0';
 const SUPPORTED_BETTER_AUTH_VERSION = '1.5.3';
@@ -8,6 +12,8 @@ const SUPPORTED_ZOD_VERSION = '4.3.6';
 
 export const KITCN_INSTALL_SPEC_ENV = 'KITCN_INSTALL_SPEC';
 export const KITCN_RESEND_INSTALL_SPEC_ENV = 'KITCN_RESEND_INSTALL_SPEC';
+
+let ownVersion: string | null | undefined;
 
 export function getMinimumVersionRange(version: string): string {
   const match = EXACT_VERSION_RE.exec(version);
@@ -55,6 +61,10 @@ export function resolveSupportedDependencyInstallSpec(
   spec: string,
   env: Record<string, string | undefined> = process.env
 ) {
+  if (getPackageNameFromInstallSpec(spec) === 'kitcn') {
+    return resolveScaffoldInstallSpec(env);
+  }
+
   const envKey =
     LOCAL_INSTALL_SPEC_ENV_BY_PACKAGE_NAME[
       getPackageNameFromInstallSpec(
@@ -63,6 +73,46 @@ export function resolveSupportedDependencyInstallSpec(
     ];
   const override = envKey ? env[envKey]?.trim() : undefined;
   return override && override.length > 0 ? override : spec;
+}
+
+function readOwnVersion() {
+  if (ownVersion !== undefined) {
+    return ownVersion ?? undefined;
+  }
+
+  let currentDir = dirname(fileURLToPath(import.meta.url));
+  while (true) {
+    const packageJsonPath = join(currentDir, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      const parsed = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
+        name?: string;
+        version?: string;
+      };
+      if (parsed.name === 'kitcn') {
+        ownVersion = parsed.version ?? null;
+        return ownVersion ?? undefined;
+      }
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      ownVersion = null;
+      return undefined;
+    }
+    currentDir = parentDir;
+  }
+}
+
+export function resolveScaffoldInstallSpec(
+  env: Record<string, string | undefined> = process.env
+) {
+  const override = env[KITCN_INSTALL_SPEC_ENV]?.trim();
+  if (override) {
+    return override;
+  }
+
+  const version = readOwnVersion();
+  return version ? `kitcn@${version}` : 'kitcn';
 }
 
 export const SUPPORTED_DEPENDENCY_VERSIONS = {

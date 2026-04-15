@@ -172,17 +172,20 @@ export const applyDependencyHintsInstall = async (
   const missingDependencyHints = resolveMissingDependencyHints(
     dependencyHints
   ).filter((dependencyHint) => !preinstalledSpecs.includes(dependencyHint));
-  if (missingDependencyHints.length === 0) {
+  const installSpecs = missingDependencyHints.map((dependencyHint) =>
+    resolveSupportedDependencyInstallSpec(dependencyHint)
+  );
+  if (installSpecs.length === 0) {
     return preinstalledSpecs;
   }
 
   const { packageJsonPath } = resolvePackageJsonInstallTarget();
-  await execaFn('bun', ['add', ...missingDependencyHints], {
+  await execaFn('bun', ['add', ...installSpecs], {
     cwd: dirname(packageJsonPath),
     stdio: 'inherit',
   });
 
-  return [...preinstalledSpecs, ...missingDependencyHints];
+  return [...preinstalledSpecs, ...installSpecs];
 };
 
 export const applyPlanningDependencyInstall = async (
@@ -193,17 +196,20 @@ export const applyPlanningDependencyInstall = async (
   const missingDependencySpecs = resolveMissingDependencyHints(
     dependencySpecs
   ).filter((dependencySpec) => !preinstalledSpecs.includes(dependencySpec));
-  if (missingDependencySpecs.length === 0) {
+  const installSpecs = missingDependencySpecs.map((dependencySpec) =>
+    resolveSupportedDependencyInstallSpec(dependencySpec)
+  );
+  if (installSpecs.length === 0) {
     return preinstalledSpecs;
   }
 
   const { packageJsonPath } = resolvePackageJsonInstallTarget();
-  await execaFn('bun', ['add', ...missingDependencySpecs], {
+  await execaFn('bun', ['add', ...installSpecs], {
     cwd: dirname(packageJsonPath),
     stdio: 'inherit',
   });
 
-  return [...preinstalledSpecs, ...missingDependencySpecs];
+  return [...preinstalledSpecs, ...installSpecs];
 };
 
 export const applyPluginDependencyInstall = async (
