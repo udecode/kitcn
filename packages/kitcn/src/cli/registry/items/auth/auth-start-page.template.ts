@@ -12,7 +12,8 @@ import {
   useSignUpMutationOptions,
 } from '@/lib/convex/auth-client';
 
-export const Route = createFileRoute('/auth' as never)({
+// @ts-ignore routeTree.gen.ts is refreshed by TanStack Router during dev/build.
+export const Route = createFileRoute('/auth')({
   component: AuthPage,
 });
 

@@ -834,6 +834,14 @@ export function createBackendCommandEnv(
   };
 }
 
+export function getConvexDeploymentCommandEnv(
+  env: Record<string, string | undefined> = process.env
+): Record<string, string | undefined> {
+  return Object.fromEntries(
+    CONVEX_DEPLOYMENT_ENV_KEYS.map((key) => [key, env[key]])
+  ) as Record<string, string | undefined>;
+}
+
 export function hasRemoteConvexDeploymentEnv(
   env: Record<string, string | undefined>
 ): boolean {
