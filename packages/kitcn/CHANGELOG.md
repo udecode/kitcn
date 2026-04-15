@@ -1,5 +1,16 @@
 # kitcn
 
+## 0.12.28
+
+### Patch Changes
+
+- [#210](https://github.com/udecode/kitcn/pull/210) [`1b3468a`](https://github.com/udecode/kitcn/commit/1b3468a867d62a9b55679170628d5a78c747f156) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix raw Convex auth adoption so `kitcn add auth --preset convex --yes`
+    installs `kitcn` before codegen and local bootstrap.
+  - Fix `kitcn deploy` so CI deployment env vars reach Convex deploy, migrations,
+    and aggregate backfill.
+
 ## 0.12.27
 
 ### Patch Changes
