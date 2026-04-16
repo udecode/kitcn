@@ -1,6 +1,7 @@
 import type { BetterAuthClientPlugin } from 'better-auth';
 import type { createAuthClient } from 'better-auth/react';
 import type { convexClient } from '../auth/internal/convex-client';
+
 type ConvexClient = ReturnType<typeof convexClient>;
 type CrossDomainClient = BetterAuthClientPlugin & {
   id: 'cross-domain';
