@@ -9,7 +9,7 @@ Handle $ARGUMENTS.
 Goal: compare `https://github.com/zbeyens/convex-better-auth` with its
 upstream fork, extract every upstream change that matters to kitcn, then
 delegate one coherent implementation slice to
-[$task](/Users/zbeyens/git/better-convex/.agents/skills/task/SKILL.md) so it
+[$task](../skills/task/SKILL.md) so it
 opens the PR.
 
 ## Rules
@@ -40,6 +40,17 @@ gh repo view zbeyens/convex-better-auth \
 ```
 
 If `parent` is missing or ambiguous, stop and ask for the upstream repo.
+
+Before asking, try these fallbacks in order:
+
+```bash
+npm view @convex-dev/better-auth repository homepage --json
+test -d ../convex-better-auth/.git && git -C ../convex-better-auth remote -v
+gh repo view get-convex/better-auth --json nameWithOwner,defaultBranchRef,url
+```
+
+If npm metadata or the local clone clearly point to one upstream repo, use that
+repo and continue instead of stopping.
 
 Use a local clone for navigation, creating it only if missing:
 
@@ -204,7 +215,7 @@ a slow upstream e2e suite unless the user explicitly approves it.
 ## 6. Delegate Through `task`
 
 Load
-[$task](/Users/zbeyens/git/better-convex/.agents/skills/task/SKILL.md) with a
+[$task](../skills/task/SKILL.md) with a
 prompt in this exact shape:
 
 ```md
