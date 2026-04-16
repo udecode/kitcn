@@ -161,6 +161,8 @@ If you want to own the auth tables by hand, use `setup/server.md`.
 
 Import auth route helpers from `kitcn/auth/http`.
 That entrypoint auto-installs the Convex-safe `MessageChannel` polyfill.
+Use `registerRoutesLazy` for plain Convex auth routes so Better Auth does not
+initialize during `convex/http.ts` registration.
 
 ### 7. HTTP Routes
 
@@ -184,6 +186,25 @@ app.use('/api/*', cors({
 }));
 app.use(authMiddleware(getAuth));
 export default createHttpRouter(app, httpRouter);
+```
+
+```ts
+// convex/functions/http.ts - plain Convex option
+import { registerRoutesLazy } from 'kitcn/auth/http';
+import { httpRouter } from 'convex/server';
+import { getAuth } from './generated/auth';
+
+const http = httpRouter();
+
+registerRoutesLazy(http, getAuth, {
+  basePath: '/api/auth',
+  cors: {
+    allowedOrigins: [process.env.SITE_URL!],
+  },
+  trustedOrigins: [process.env.SITE_URL!],
+});
+
+export default http;
 ```
 
 ### 8. Environment Variables

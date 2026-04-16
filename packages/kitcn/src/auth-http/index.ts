@@ -41,4 +41,4 @@ export function installAuthHttpPolyfills(): void {
 installAuthHttpPolyfills();
 
 export { authMiddleware } from '../auth/middleware';
-export { registerRoutes } from '../auth/registerRoutes';
+export { registerRoutes, registerRoutesLazy } from '../auth/registerRoutes';

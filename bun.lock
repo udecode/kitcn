@@ -5,7 +5,7 @@
     "": {
       "name": "kitcn",
       "dependencies": {
-        "@convex-dev/better-auth": "0.11.1",
+        "@convex-dev/better-auth": "0.11.4",
         "@tanstack/query-core": "5.90.20",
         "@tanstack/react-query": "5.95.2",
         "@tanstack/solid-query": "5.90.23",
@@ -125,7 +125,7 @@
       "dependencies": {
         "@babel/parser": "^7.28.4",
         "@clack/prompts": "^0.11.0",
-        "@convex-dev/better-auth": "^0.11.1",
+        "@convex-dev/better-auth": "^0.11.4",
         "chokidar": "^5.0.0",
         "common-tags": "^1.8.2",
         "diff": "^8.0.2",
@@ -377,7 +377,7 @@
 
     "@concavejs/runtime-bun": ["@concavejs/runtime-bun@0.0.1-alpha.14", "", { "dependencies": { "@concavejs/blobstore-bun-fs": "0.0.1-alpha.14", "@concavejs/blobstore-bun-s3": "0.0.1-alpha.14", "@concavejs/core": "0.0.1-alpha.14", "@concavejs/docstore-bun-sqlite": "0.0.1-alpha.14", "@concavejs/runtime-base": "0.0.1-alpha.14", "convex": "^1.33.1" } }, "sha512-YZihihRHcnyWgeiCcTCrbwzb/jXW79ozhpAV037FySggaKGrWZFfWWx6ekOZlelO+R+sbtpm21+bbgpkiRSpkQ=="],
 
-    "@convex-dev/better-auth": ["@convex-dev/better-auth@0.11.1", "", { "dependencies": { "@better-fetch/fetch": "^1.1.18", "common-tags": "^1.8.2", "convex-helpers": "^0.1.95", "jose": "^6.1.0", "remeda": "^2.32.0", "semver": "^7.7.3", "type-fest": "^4.39.1", "zod": "^4.0.0" }, "peerDependencies": { "better-auth": ">=1.5.0 <1.6.0", "convex": "^1.25.0", "react": "^18.3.1 || ^19.0.0" } }, "sha512-12EdVfNMeKB8fnGMsW4NEEkOQ0LW672qnFoA0WDfM3qGBrbySaVZ8B5OZZk+8ZRbeyUwXtVg8oFvtLejEwPRpA=="],
+    "@convex-dev/better-auth": ["@convex-dev/better-auth@0.11.4", "", { "dependencies": { "@better-fetch/fetch": "^1.1.18", "common-tags": "^1.8.2", "convex-helpers": "^0.1.95", "jose": "^6.1.0", "remeda": "^2.32.0", "semver": "^7.7.3", "type-fest": "^4.39.1", "zod": "^4.0.0" }, "peerDependencies": { "better-auth": ">=1.5.0 <1.6.0", "convex": "^1.25.0", "react": "^18.3.1 || ^19.0.0" } }, "sha512-CsRsM7UaQgQKH1mt4z64QOZUfrhZKNsspkpWjlhqLiIz5THfnM2vaSVMQ3GOddcUvw7AgkNCNR3u8C8HjLQEMA=="],
 
     "@convex-dev/react-query": ["@convex-dev/react-query@0.1.0", "", { "peerDependencies": { "@tanstack/react-query": "^5.0.0", "convex": "^1.29.3" } }, "sha512-ULmBZCtAQDUePdBhUv7hj1Yy4QiCelhi6uEIOtMpjW8db6W9CFKvQwLt9heLngccFyMFfAZdOfSrT+cP4AH0Jw=="],
 

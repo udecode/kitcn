@@ -1,7 +1,7 @@
 import { httpRouter } from 'convex/server';
 import { Request as UndiciRequest } from 'undici';
 
-import { registerRoutes } from './registerRoutes';
+import { registerRoutes, registerRoutesLazy } from './registerRoutes';
 
 const unwrapLocation = (response: Response) =>
   response.headers.get('location') ?? response.headers.get('Location');
@@ -32,6 +32,67 @@ const unwrapInvoke = async (
 };
 
 describe('registerRoutes', () => {
+  test('lazy registration avoids constructing auth until a request arrives', async () => {
+    const http = httpRouter();
+    const authHandler = mock(async () => new Response('ok'));
+    const getAuth = mock(() => ({
+      handler: authHandler,
+      options: { basePath: '/custom-auth' },
+      $context: Promise.resolve({ options: { trustedOrigins: [] } }),
+    }));
+
+    registerRoutesLazy(http as any, getAuth as any, {
+      basePath: '/api/auth',
+      cors: false,
+    });
+
+    expect(getAuth).not.toHaveBeenCalled();
+    expect(http.lookup('/api/auth/session', 'GET')).not.toBe(null);
+
+    const authGet = http.lookup('/api/auth/session', 'GET')!;
+    const authRes = await unwrapInvoke(
+      authGet[0],
+      new UndiciRequest('https://example.convex.site/api/auth/session', {
+        method: 'GET',
+      }) as any
+    );
+
+    expect(await authRes.text()).toBe('ok');
+    expect(getAuth).toHaveBeenCalledTimes(1);
+    expect(authHandler).toHaveBeenCalledTimes(1);
+  });
+
+  test('lazy CORS registration can use explicit trusted origins without constructing auth', async () => {
+    const http = httpRouter();
+    const getAuth = mock(() => ({
+      handler: async () => new Response('ok'),
+      options: { basePath: '/api/auth' },
+      $context: Promise.resolve({ options: { trustedOrigins: [] } }),
+    }));
+
+    registerRoutesLazy(http as any, getAuth as any, {
+      cors: true,
+      trustedOrigins: ['https://trusted.example'],
+    });
+
+    expect(getAuth).not.toHaveBeenCalled();
+
+    const optionsMatch = http.lookup('/api/auth/session', 'OPTIONS')!;
+    const optionsRes = await unwrapInvoke(
+      optionsMatch[0],
+      new UndiciRequest('https://example.convex.site/api/auth/session', {
+        headers: { origin: 'https://trusted.example' },
+        method: 'OPTIONS',
+      }) as any
+    );
+
+    expect(optionsRes.status).toBe(204);
+    expect(optionsRes.headers.get('access-control-allow-origin')).toBe(
+      'https://trusted.example'
+    );
+    expect(getAuth).not.toHaveBeenCalled();
+  });
+
   test('registers well-known redirect and GET/POST auth routes when cors is disabled', async () => {
     const previous = process.env.CONVEX_SITE_URL;
     process.env.CONVEX_SITE_URL = 'https://example.convex.site';

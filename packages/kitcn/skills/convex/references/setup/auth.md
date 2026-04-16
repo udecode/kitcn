@@ -198,8 +198,9 @@ Keep all auth reads/writes on ORM table definitions in `convex/functions/schema.
 
 ### 6.5 Register auth HTTP routes
 
-Use `kitcn/auth/http` for `authMiddleware` or `registerRoutes`.
+Use `kitcn/auth/http` for `authMiddleware`, `registerRoutes`, or `registerRoutesLazy`.
 It auto-installs the Convex-safe `MessageChannel` polyfill, so no manual `http-polyfills.ts` file is needed.
+Use `registerRoutesLazy` for plain Convex auth routes when `convex/http.ts` should avoid initializing Better Auth during registration.
 
 **Create:** `convex/functions/http.ts`
 

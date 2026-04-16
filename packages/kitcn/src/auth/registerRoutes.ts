@@ -8,6 +8,25 @@ import type { GetAuth } from './types';
 
 type TrustedOriginsOption = BetterAuthOptions['trustedOrigins'];
 
+type RouteCorsOptions =
+  | {
+      // These values are appended to the default values
+      allowedHeaders?: string[];
+      allowedOrigins?: string[];
+      exposedHeaders?: string[];
+    }
+  | boolean;
+
+type RegisterRoutesOptions = {
+  cors?: RouteCorsOptions;
+  verbose?: boolean;
+};
+
+type RegisterRoutesLazyOptions = RegisterRoutesOptions & {
+  basePath?: string;
+  trustedOrigins?: TrustedOriginsOption;
+};
+
 type AuthRouteContract = {
   $context: Promise<{
     options: {
@@ -20,6 +39,13 @@ type AuthRouteContract = {
     baseURL?: BaseURLConfig;
     trustedOrigins?: TrustedOriginsOption;
   };
+};
+
+type RouteRegistration<Ctx> = {
+  getAuth: GetAuth<Ctx, AuthRouteContract>;
+  getRegistrationAuth: () => AuthRouteContract;
+  path: string;
+  trustedOrigins?: TrustedOriginsOption;
 };
 
 const LOCAL_AUTH_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -72,26 +98,15 @@ const withLocalConvexAuthIp = (request: Request, basePath: string) => {
   });
 };
 
-export const registerRoutes = <Ctx>(
+const registerAuthRoutes = <Ctx>(
   http: HttpRouter,
-  getAuth: GetAuth<Ctx, AuthRouteContract>,
-  opts: {
-    cors?:
-      | {
-          // These values are appended to the default values
-          allowedHeaders?: string[];
-          allowedOrigins?: string[];
-          exposedHeaders?: string[];
-        }
-      | boolean;
-    verbose?: boolean;
-  } = {}
+  registration: RouteRegistration<Ctx>,
+  opts: RegisterRoutesOptions = {}
 ) => {
-  const staticAuth = getAuth({} as any);
-  const path = staticAuth.options.basePath ?? '/api/auth';
+  const { getAuth, getRegistrationAuth, path } = registration;
   const authRequestHandler = httpActionGeneric(async (ctx, request) => {
     if (opts?.verbose) {
-      console.log('options.baseURL', staticAuth.options.baseURL);
+      console.log('options.baseURL', getRegistrationAuth().options.baseURL);
       console.log('request headers', request.headers);
     }
 
@@ -166,7 +181,8 @@ export const registerRoutes = <Ctx>(
     allowedOrigins: async (request) => {
       const resolvedTrustedOrigins =
         trustedOriginsOption ??
-        (await staticAuth.$context).options.trustedOrigins ??
+        registration.trustedOrigins ??
+        (await getRegistrationAuth().$context).options.trustedOrigins ??
         [];
       trustedOriginsOption = resolvedTrustedOrigins;
       const rawOrigins = Array.isArray(resolvedTrustedOrigins)
@@ -198,4 +214,46 @@ export const registerRoutes = <Ctx>(
     method: 'POST',
     pathPrefix: `${path}/`,
   });
+};
+
+export const registerRoutes = <Ctx>(
+  http: HttpRouter,
+  getAuth: GetAuth<Ctx, AuthRouteContract>,
+  opts: RegisterRoutesOptions = {}
+) => {
+  const registrationAuth = getAuth({} as any);
+
+  return registerAuthRoutes(
+    http,
+    {
+      getAuth,
+      getRegistrationAuth: () => registrationAuth,
+      path: registrationAuth.options.basePath ?? '/api/auth',
+    },
+    opts
+  );
+};
+
+export const registerRoutesLazy = <Ctx>(
+  http: HttpRouter,
+  getAuth: GetAuth<Ctx, AuthRouteContract>,
+  opts: RegisterRoutesLazyOptions = {}
+) => {
+  let registrationAuth: AuthRouteContract | undefined;
+  const getRegistrationAuth = () => {
+    registrationAuth ??= getAuth({} as any);
+
+    return registrationAuth;
+  };
+
+  return registerAuthRoutes(
+    http,
+    {
+      getAuth,
+      getRegistrationAuth,
+      path: opts.basePath ?? '/api/auth',
+      trustedOrigins: opts.trustedOrigins,
+    },
+    opts
+  );
 };
