@@ -27,11 +27,6 @@ import {
   useAuthValue,
 } from '../react/auth-store';
 
-// Re-export AuthClient type
-export type { AuthClient } from '@convex-dev/better-auth/react';
-
-import type { AuthClient } from '@convex-dev/better-auth/react';
-
 type AuthClientFetch = AuthClient & {
   $fetch?: (
     path: string,
@@ -40,6 +35,49 @@ type AuthClientFetch = AuthClient & {
       headers?: Record<string, string>;
     }
   ) => Promise<{ data?: unknown } | null | undefined>;
+};
+
+export type AuthClient = {
+  $store?: {
+    atoms?: {
+      session?: {
+        get?: () => {
+          data?: unknown;
+          error?: unknown;
+          isPending?: boolean;
+          isRefetching?: boolean;
+          refetch?: (queryParams?: {
+            query?: Record<string, unknown>;
+          }) => Promise<void>;
+        };
+        set?: (value: {
+          data: unknown;
+          error: unknown;
+          isPending: boolean;
+          isRefetching: boolean;
+          refetch: (queryParams?: {
+            query?: Record<string, unknown>;
+          }) => Promise<void>;
+        }) => void;
+      };
+    };
+  };
+  getSession?: (args?: {
+    fetchOptions?: {
+      credentials?: RequestCredentials;
+      headers?: Record<string, string>;
+    };
+  }) => Promise<{ data?: unknown } | null | undefined>;
+  signOut?: (args?: {
+    fetchOptions?: Record<string, unknown>;
+  }) => Promise<unknown>;
+  useSession: () => {
+    data?: unknown;
+    error?: unknown;
+    isPending: boolean;
+    isRefetching?: boolean;
+    refetch?: () => Promise<void>;
+  };
 };
 
 type IConvexReactClient = {
@@ -573,7 +611,7 @@ function useOTTHandler(authClient: AuthClient) {
           });
         const session = result.data?.session;
 
-        if (session) {
+        if (session && typeof authClient.getSession === 'function') {
           await authClient.getSession({
             fetchOptions: {
               credentials: 'omit',

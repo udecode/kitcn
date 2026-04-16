@@ -28,6 +28,16 @@ registerRoutes(http, getAuth, {
 });
 ```
 
+- Require `better-auth@1.6.5`.
+
+```bash
+# Before
+bun add better-auth@1.5.3
+
+# After
+bun add better-auth@1.6.5
+```
+
 ## Patches
 
 - Let Convex handle anonymous non-interactive local setup without forcing `CONVEX_AGENT_MODE`.
@@ -36,3 +46,4 @@ registerRoutes(http, getAuth, {
 - Improve auth route registration so default Convex auth routes avoid eager Better Auth initialization during startup.
 - Fix Better Auth adapter index matching for composite equality-plus-sort queries.
 - Support `@convex-dev/better-auth@0.11.4`.
+- Support the Better Auth 1.6 client surface in generated auth clients and providers.

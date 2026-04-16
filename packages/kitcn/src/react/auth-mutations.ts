@@ -92,7 +92,24 @@ const seedReturnedToken = (store: AuthStore, value: unknown) => {
   }
 };
 
-type AnyFn = (...args: any[]) => Promise<any>;
+type AnyFn = (...args: unknown[]) => Promise<unknown>;
+type AuthResponse = {
+  data?: unknown;
+  error?: {
+    code?: string;
+    message?: string;
+    status?: number;
+    statusText?: string;
+  };
+};
+
+const toAuthMutationError = (error: AuthResponse['error']) =>
+  new AuthMutationError({
+    code: error?.code,
+    message: error?.message,
+    status: error?.status ?? 500,
+    statusText: error?.statusText ?? 'AUTH_ERROR',
+  });
 type MutationArgsWithFetchOptions = {
   fetchOptions?: Record<string, unknown>;
 };
@@ -123,13 +140,14 @@ type AuthClient = {
     };
   };
   getSession?: AnyFn;
-  signOut: AnyFn;
-  signIn: {
-    social: AnyFn;
-    email: AnyFn;
+  signOut?: AnyFn;
+  signIn?: {
+    anonymous?: AnyFn;
+    social?: AnyFn;
+    email?: AnyFn;
   };
-  signUp: {
-    email: AnyFn;
+  signUp?: {
+    email?: AnyFn;
   };
 };
 
@@ -161,14 +179,14 @@ const hydrateReturnedSession = async (
     return;
   }
 
-  const session = await authClient.getSession({
+  const session = (await authClient.getSession({
     fetchOptions: {
       credentials: 'omit',
       headers: {
         Authorization: `Bearer ${token}`,
       },
     },
-  });
+  })) as AuthResponse;
 
   if (session?.data) {
     syncSessionAtom(authClient, session.data);
@@ -193,24 +211,11 @@ const withDisabledSessionSignal = <T>(
   } as T & MutationArgsWithFetchOptions;
 };
 
-type AuthMutationsResult<T extends AuthClient> = {
-  useSignOutMutationOptions: MutationOptionsHook<
-    Awaited<ReturnType<T['signOut']>>,
-    // biome-ignore lint/suspicious/noConfusingVoidType: allows mutate() or mutate(options)
-    Parameters<T['signOut']>[0] | void
-  >;
-  useSignInSocialMutationOptions: MutationOptionsHook<
-    Awaited<ReturnType<T['signIn']['social']>>,
-    Parameters<T['signIn']['social']>[0]
-  >;
-  useSignInMutationOptions: MutationOptionsHook<
-    Awaited<ReturnType<T['signIn']['email']>>,
-    Parameters<T['signIn']['email']>[0]
-  >;
-  useSignUpMutationOptions: MutationOptionsHook<
-    Awaited<ReturnType<T['signUp']['email']>>,
-    Parameters<T['signUp']['email']>[0]
-  >;
+type AuthMutationsResult = {
+  useSignOutMutationOptions: MutationOptionsHook<unknown, void>;
+  useSignInSocialMutationOptions: MutationOptionsHook<unknown, unknown>;
+  useSignInMutationOptions: MutationOptionsHook<unknown, unknown>;
+  useSignUpMutationOptions: MutationOptionsHook<unknown, unknown>;
 };
 
 /**
@@ -236,23 +241,26 @@ type AuthMutationsResult<T extends AuthClient> = {
  * }));
  * ```
  */
-export function createAuthMutations<T extends AuthClient>(
-  authClient: T
-): AuthMutationsResult<T> {
+export function createAuthMutations(
+  authClient: AuthClient
+): AuthMutationsResult {
   const useSignOutMutationOptions = ((options) => {
     const convexQueryClient = useConvexQueryClient();
     const authStoreApi = useAuthStore();
 
     return {
       ...options,
-      mutationFn: async (args?: Parameters<T['signOut']>[0]) => {
+      mutationFn: async (args?: unknown) => {
+        if (typeof authClient.signOut !== 'function') {
+          throw new Error('Auth client does not expose signOut');
+        }
         // Set isAuthenticated: false BEFORE unsubscribing to prevent re-subscriptions
         // (cache events check shouldSkipSubscription which reads isAuthenticated)
         authStoreApi.set('isAuthenticated', false);
         convexQueryClient?.unsubscribeAuthQueries();
-        const res = await authClient.signOut(args);
+        const res = (await authClient.signOut(args)) as AuthResponse;
         if (res?.error) {
-          throw new AuthMutationError(res.error);
+          throw toAuthMutationError(res.error);
         }
         authStoreApi.set('token', null);
         authStoreApi.set('expiresAt', null);
@@ -262,7 +270,7 @@ export function createAuthMutations<T extends AuthClient>(
         return res;
       },
     };
-  }) as AuthMutationsResult<T>['useSignOutMutationOptions'];
+  }) as AuthMutationsResult['useSignOutMutationOptions'];
 
   const useSignInSocialMutationOptions = ((options) => {
     const authStoreApi = useAuthStore();
@@ -270,12 +278,15 @@ export function createAuthMutations<T extends AuthClient>(
 
     return {
       ...options,
-      mutationFn: async (args: Parameters<T['signIn']['social']>[0]) => {
-        const res = await authClient.signIn.social(
+      mutationFn: async (args: unknown) => {
+        if (typeof authClient.signIn?.social !== 'function') {
+          throw new Error('Auth client does not expose signIn.social');
+        }
+        const res = (await authClient.signIn.social(
           withDisabledSessionSignal(args)
-        );
+        )) as AuthResponse;
         if (res?.error) {
-          throw new AuthMutationError(res.error);
+          throw toAuthMutationError(res.error);
         }
         seedReturnedToken(authStoreApi, res);
         await hydrateReturnedSession(authClient, res);
@@ -285,7 +296,7 @@ export function createAuthMutations<T extends AuthClient>(
         return res;
       },
     };
-  }) as AuthMutationsResult<T>['useSignInSocialMutationOptions'];
+  }) as AuthMutationsResult['useSignInSocialMutationOptions'];
 
   const useSignInMutationOptions = ((options) => {
     const authStoreApi = useAuthStore();
@@ -293,12 +304,15 @@ export function createAuthMutations<T extends AuthClient>(
 
     return {
       ...options,
-      mutationFn: async (args: Parameters<T['signIn']['email']>[0]) => {
-        const res = await authClient.signIn.email(
+      mutationFn: async (args: unknown) => {
+        if (typeof authClient.signIn?.email !== 'function') {
+          throw new Error('Auth client does not expose signIn.email');
+        }
+        const res = (await authClient.signIn.email(
           withDisabledSessionSignal(args)
-        );
+        )) as AuthResponse;
         if (res?.error) {
-          throw new AuthMutationError(res.error);
+          throw toAuthMutationError(res.error);
         }
         seedReturnedToken(authStoreApi, res);
         await hydrateReturnedSession(authClient, res);
@@ -308,7 +322,7 @@ export function createAuthMutations<T extends AuthClient>(
         return res;
       },
     };
-  }) as AuthMutationsResult<T>['useSignInMutationOptions'];
+  }) as AuthMutationsResult['useSignInMutationOptions'];
 
   const useSignUpMutationOptions = ((options) => {
     const authStoreApi = useAuthStore();
@@ -316,12 +330,15 @@ export function createAuthMutations<T extends AuthClient>(
 
     return {
       ...options,
-      mutationFn: async (args: Parameters<T['signUp']['email']>[0]) => {
-        const res = await authClient.signUp.email(
+      mutationFn: async (args: unknown) => {
+        if (typeof authClient.signUp?.email !== 'function') {
+          throw new Error('Auth client does not expose signUp.email');
+        }
+        const res = (await authClient.signUp.email(
           withDisabledSessionSignal(args)
-        );
+        )) as AuthResponse;
         if (res?.error) {
-          throw new AuthMutationError(res.error);
+          throw toAuthMutationError(res.error);
         }
         seedReturnedToken(authStoreApi, res);
         await hydrateReturnedSession(authClient, res);
@@ -331,7 +348,7 @@ export function createAuthMutations<T extends AuthClient>(
         return res;
       },
     };
-  }) as AuthMutationsResult<T>['useSignUpMutationOptions'];
+  }) as AuthMutationsResult['useSignUpMutationOptions'];
 
   return {
     useSignOutMutationOptions,

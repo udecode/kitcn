@@ -10,6 +10,39 @@ import { convexClient } from 'kitcn/auth/client';
 import { createAuthMutations } from 'kitcn/react';
 import { env } from '@/env';
 
+type ExampleAuthClient = ReturnType<typeof createAuthClient> & {
+  getSession: (args?: unknown) => Promise<unknown>;
+  signOut: (args?: unknown) => Promise<unknown>;
+  signIn: {
+    anonymous: (args?: unknown) => Promise<unknown>;
+    email: (args?: unknown) => Promise<unknown>;
+    social: (args?: unknown) => Promise<unknown>;
+  };
+  signUp: {
+    email: (args?: unknown) => Promise<unknown>;
+  };
+  useActiveOrganization: () => unknown;
+  useListOrganizations: () => unknown;
+  useSession: () => {
+    data?: {
+      user?: {
+        email?: string | null;
+        name?: string | null;
+      } | null;
+    } | null;
+    isPending: boolean;
+  };
+  organization: {
+    checkRolePermission: (args: {
+      permissions: unknown;
+      role?: string | null;
+    }) => unknown;
+    listMembers: (args: unknown) => Promise<{
+      error?: { message?: string };
+    }>;
+  };
+};
+
 export const authClient = createAuthClient({
   baseURL: env.NEXT_PUBLIC_SITE_URL,
   sessionOptions: {
@@ -26,7 +59,7 @@ export const authClient = createAuthClient({
     }),
     convexClient(),
   ],
-});
+}) as unknown as ExampleAuthClient;
 
 // Export hooks from the auth client
 export const { useActiveOrganization, useListOrganizations } = authClient;

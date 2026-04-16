@@ -1,12 +1,8 @@
-import type {
-  convexClient,
-  crossDomainClient,
-} from '@convex-dev/better-auth/client/plugins';
 import type { BetterAuthClientPlugin } from 'better-auth';
 import type { createAuthClient } from 'better-auth/solid';
 
-type CrossDomainClient = ReturnType<typeof crossDomainClient>;
-type ConvexClient = ReturnType<typeof convexClient>;
+type CrossDomainClient = BetterAuthClientPlugin;
+type ConvexClient = BetterAuthClientPlugin;
 type PluginsWithCrossDomain = (
   | CrossDomainClient
   | ConvexClient
