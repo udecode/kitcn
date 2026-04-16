@@ -12,8 +12,7 @@ auth-owned schema blocks with `bunx kitcn add auth --schema --yes`. Keep
 **Create:** `src/lib/convex/auth-client.ts`
 
 ```ts
-import { createAuthClient } from "better-auth/react";
-import { convexClient } from "kitcn/auth/client";
+import { convexClient, createAuthClient } from "kitcn/auth/client";
 import { createAuthMutations } from "kitcn/react";
 
 export const authClient = createAuthClient({

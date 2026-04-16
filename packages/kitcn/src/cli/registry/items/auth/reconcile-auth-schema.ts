@@ -47,7 +47,7 @@ const DEFAULT_AUTH_SCHEMA_ENV = {
 const loadGetAuthTables = async () =>
   (await import('better-auth/db')).getAuthTables;
 const loadConvexAuthPlugin = async () =>
-  (await import('@convex-dev/better-auth/plugins')).convex;
+  (await import('../../../../auth/internal/convex-plugin.js')).convex;
 const ts = createTypeScriptProxy();
 
 const withAuthSchemaEnv = async <T>(run: () => Promise<T>): Promise<T> => {

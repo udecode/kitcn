@@ -67,7 +67,7 @@ export type AuthClient = {
       credentials?: RequestCredentials;
       headers?: Record<string, string>;
     };
-  }) => Promise<{ data?: unknown } | null | undefined>;
+  }) => Promise<unknown>;
   signOut?: (args?: {
     fetchOptions?: Record<string, unknown>;
   }) => Promise<unknown>;
@@ -120,6 +120,14 @@ const wait = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
+const readAuthResultData = (result: unknown) => {
+  if (!result || typeof result !== 'object') {
+    return;
+  }
+
+  return (result as { data?: unknown }).data;
+};
+
 const getSessionFromPersistedToken = async (
   authClient: AuthClientFetch,
   token: string
@@ -143,8 +151,9 @@ const getSessionFromPersistedToken = async (
           },
         });
 
-    if (result?.data) {
-      return result.data;
+    const data = readAuthResultData(result);
+    if (data) {
+      return data;
     }
 
     if (attempt < 9) {

@@ -13,8 +13,7 @@ Create an auth client with mutation hooks:
 
 ```ts title="src/lib/convex/auth-client.ts" showLineNumbers {4,8-10,13-17}
 import { inferAdditionalFields } from 'better-auth/client/plugins';
-import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'kitcn/auth/client';
+import { convexClient, createAuthClient } from 'kitcn/auth/client';
 import { createAuthMutations } from 'kitcn/react';
 
 import type { Auth } from '@convex/auth-shared';

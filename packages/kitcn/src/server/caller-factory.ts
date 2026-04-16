@@ -2,7 +2,7 @@
 
 /**
  * Framework-agnostic caller factory.
- * getToken is passed as a parameter - decoupled from @convex-dev/better-auth.
+ * getToken is passed as a parameter so framework auth helpers stay decoupled.
  */
 
 import { fetchAction, fetchMutation, fetchQuery } from 'convex/nextjs';
@@ -29,7 +29,7 @@ type TokenResult = {
   isFresh?: boolean;
 };
 
-// GetToken function signature - matches @convex-dev/better-auth/utils
+// GetToken function signature used by kitcn auth framework helpers.
 type GetTokenFn = (
   siteUrl: string,
   headers: Headers,

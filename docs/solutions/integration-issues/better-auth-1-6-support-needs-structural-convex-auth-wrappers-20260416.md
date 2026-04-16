@@ -1,6 +1,7 @@
 ---
 title: Better Auth 1.6 support needs structural Convex auth wrappers
 date: 2026-04-16
+last_updated: 2026-04-16
 category: integration-issues
 module: auth-client
 problem_type: integration_issue
@@ -19,9 +20,9 @@ tags: [better-auth, auth, convex, wrappers, typecheck]
 
 ## Problem
 
-`kitcn` uses `@convex-dev/better-auth` for the Convex plugin and client plugin,
-but Better Auth `1.6.x` changed enough of the client and plugin type surface
-that the old exported types no longer compose cleanly.
+`kitcn` used the Convex Better Auth package for the Convex plugin and client
+plugin, but Better Auth `1.6.x` changed enough of the client and plugin type
+surface that the old exported types no longer composed cleanly.
 
 Runtime behavior was mostly fine. TypeScript was the part that exploded.
 
@@ -39,6 +40,8 @@ Runtime behavior was mostly fine. TypeScript was the part that exploded.
 - trusting direct re-exports from `@convex-dev/better-auth`
 - expecting Better Auth `1.6.x` to infer the same client shape through the old
   Convex plugin types
+- casting generated app clients through `as unknown as KitcnAuthClient`; that
+  moves package compatibility debt into user code
 
 ## Solution
 
@@ -55,8 +58,12 @@ Key changes:
 - do the same for `ConvexAuthProvider`
 - add a local `mode` field to the auth adapter `where` validator so Better Auth
   `1.6` queries do not fail validation
-- cast generated auth client templates and the example auth client through
-  `unknown` to a stable local interface with the methods the app actually uses
+- re-export a wrapped `createAuthClient` from `kitcn/auth/client` so generated
+  apps get the stable local interface without user-code casts
+- keep the internal compatibility cast inside `kitcn/auth/client` and preserve
+  plugin-specific Better Auth fields around the structural session/action shape
+- vendor the small Convex Better Auth runtime surfaces kitcn uses so package
+  code no longer imports or depends on `@convex-dev/better-auth`
 
 ## Why This Works
 
@@ -64,7 +71,7 @@ The runtime object already had the right methods. The breakage was in the type
 bridge between:
 
 1. Better Auth `1.6.x`
-2. `@convex-dev/better-auth@0.11.4`
+2. kitcn's internal Convex auth helpers
 3. kitcn's wrappers and generated auth client files
 
 By making kitcn depend on structural contracts at the boundaries, we stop
@@ -80,6 +87,8 @@ detail before the app can compile.
    not just the hand-written example app.
 3. Re-run `bun typecheck`, `bun run fixtures:check`, and `bun check` after any
    auth client type widening. The generated apps are the real proof.
+4. Never put dependency-compatibility casts in scaffolded app code. Wrap the
+   unstable dependency boundary in the package API.
 
 ## Related Issues
 

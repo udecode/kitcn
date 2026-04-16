@@ -284,8 +284,7 @@ Default `definePayload` includes all user fields except `id` and `image`, plus `
 ```ts
 // src/lib/convex/auth-client.ts
 import { inferAdditionalFields } from 'better-auth/client/plugins';
-import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'kitcn/auth/client';
+import { convexClient, createAuthClient } from 'kitcn/auth/client';
 import { createAuthMutations } from 'kitcn/react';
 import type { Auth } from '@convex/auth-shared';
 

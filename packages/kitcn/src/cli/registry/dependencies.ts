@@ -70,8 +70,7 @@ export const resolveBunPeerWarningPreinstallSpecs = () => {
 
   const hasKitcnManagedRuntime =
     hasDependency(packageJson, 'kitcn') ||
-    hasDependency(packageJson, 'better-auth') ||
-    hasDependency(packageJson, '@convex-dev/better-auth');
+    hasDependency(packageJson, 'better-auth');
   if (!hasKitcnManagedRuntime) {
     return [];
   }

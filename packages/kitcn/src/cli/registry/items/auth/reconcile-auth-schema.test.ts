@@ -71,16 +71,16 @@ afterEach(() => {
 });
 
 describe('reconcile auth schema', () => {
-  test('keeps the managed convex auth plugin on a lazy import path', () => {
+  test('keeps the managed convex auth plugin on a lazy internal import path', () => {
     const source = fs.readFileSync(
       fileURLToPath(new URL('./reconcile-auth-schema.ts', import.meta.url)),
       'utf8'
     );
 
-    expect(source).not.toContain(
-      "import { convex } from '@convex-dev/better-auth/plugins';"
+    expect(source).not.toContain("import { convex } from '../../../../auth'");
+    expect(source).toContain(
+      "await import('../../../../auth/internal/convex-plugin.js')"
     );
-    expect(source).toContain("await import('@convex-dev/better-auth/plugins')");
   });
 
   test('loads schema-only default managed auth options without local dev host coupling', async () => {

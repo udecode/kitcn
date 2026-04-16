@@ -44,6 +44,7 @@ bun add better-auth@1.6.5
 - Warn when an app pins an older Convex dependency family than kitcn expects.
 - Support Convex `dev --start` as a pre-run conflict flag.
 - Improve auth route registration so default Convex auth routes avoid eager Better Auth initialization during startup.
+- Preserve forwarded host and protocol headers through Next.js, TanStack Start, and Convex auth route proxies.
 - Fix Better Auth adapter index matching and static filtering for composite and case-insensitive queries.
-- Support `@convex-dev/better-auth@0.11.4`.
-- Support the Better Auth 1.6 client surface in generated auth clients and providers.
+- Replace the `@convex-dev/better-auth` runtime dependency with internal kitcn auth helpers.
+- Support the Better Auth 1.6 client surface through `kitcn/auth/client` without requiring casts in app auth clients.

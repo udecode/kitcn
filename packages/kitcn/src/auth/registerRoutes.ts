@@ -50,6 +50,37 @@ const LOCAL_CONVEX_AUTH_IP_PATHS = new Set([
   '/convex/token',
 ]);
 
+const restoreOriginalForwardedHeaders = (request: Request) => {
+  const originalHost = request.headers.get('x-better-auth-forwarded-host');
+  const originalProto = request.headers.get('x-better-auth-forwarded-proto');
+
+  if (!originalHost && !originalProto) {
+    return request;
+  }
+
+  const headers = new Headers(request.headers);
+
+  if (originalHost) {
+    headers.set('x-forwarded-host', originalHost);
+  }
+
+  if (originalProto) {
+    headers.set('x-forwarded-proto', originalProto);
+  }
+
+  const init: RequestInit & { duplex?: 'half' } = {
+    headers,
+    method: request.method,
+  };
+
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    init.body = request.body;
+    init.duplex = 'half';
+  }
+
+  return new Request(request.url, init);
+};
+
 const withLocalConvexAuthIp = (request: Request, basePath: string) => {
   const forwardedFor = request.headers.get('x-forwarded-for');
   if (forwardedFor) {
@@ -106,7 +137,9 @@ const registerAuthRoutes = <Ctx>(
     }
 
     const auth = getAuth(ctx as any);
-    const authRequest = withLocalConvexAuthIp(request, path);
+    const authRequest = restoreOriginalForwardedHeaders(
+      withLocalConvexAuthIp(request, path)
+    );
     let response: Response;
     try {
       response = await auth.handler(authRequest);

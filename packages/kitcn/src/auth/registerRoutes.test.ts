@@ -398,4 +398,41 @@ describe('registerRoutes', () => {
 
     expect(await authRes.text()).toBe('203.0.113.7');
   });
+
+  test('restores preserved forwarded host headers before auth.handler', async () => {
+    const http = httpRouter();
+    const authHandler = mock(async (request: Request) => {
+      return Response.json({
+        host: request.headers.get('x-forwarded-host'),
+        proto: request.headers.get('x-forwarded-proto'),
+      });
+    });
+
+    const getAuth = () => ({
+      handler: authHandler,
+      options: { basePath: '/api/auth' },
+      $context: Promise.resolve({ options: { trustedOrigins: [] } }),
+    });
+
+    registerRoutes(http as any, getAuth as any, { cors: false });
+
+    const authGet = http.lookup('/api/auth/session', 'GET')!;
+    const authRes = await unwrapInvoke(
+      authGet[0],
+      new UndiciRequest('https://deployment.convex.site/api/auth/session', {
+        headers: {
+          'x-better-auth-forwarded-host': 'app.example.com',
+          'x-better-auth-forwarded-proto': 'https',
+          'x-forwarded-host': 'deployment.convex.site',
+          'x-forwarded-proto': 'https',
+        },
+        method: 'GET',
+      }) as any
+    );
+
+    await expect(authRes.json()).resolves.toEqual({
+      host: 'app.example.com',
+      proto: 'https',
+    });
+  });
 });
