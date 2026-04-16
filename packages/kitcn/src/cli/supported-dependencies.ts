@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const EXACT_VERSION_RE = /^(\d+)\.(\d+)\.\d+$/;
+const VERSION_IN_SPEC_RE = /(\d+)\.(\d+)(?:\.\d+)?/;
 const SUPPORTED_CONVEX_VERSION = '1.35.1';
 const SUPPORTED_BETTER_AUTH_VERSION = '1.5.3';
 const SUPPORTED_HONO_VERSION = '4.12.9';
@@ -154,3 +155,99 @@ export const BASELINE_DEPENDENCY_INSTALL_SPECS = [
 ] as const;
 
 export const INIT_TEMPLATE_DEPENDENCY_INSTALL_SPECS = ['superjson'] as const;
+
+const DEPENDENCY_SECTIONS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+] as const;
+
+type PackageJsonWithDependencies = {
+  [key in (typeof DEPENDENCY_SECTIONS)[number]]?: Record<string, string>;
+};
+
+export type SupportedDependencyWarning = {
+  packageName: string;
+  current: string;
+  minimum: string;
+  installSpec: string;
+};
+
+function findNearestPackageJsonPath(cwd: string): string | undefined {
+  let currentDir = cwd;
+  while (true) {
+    const packageJsonPath = join(currentDir, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      return packageJsonPath;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      return undefined;
+    }
+    currentDir = parentDir;
+  }
+}
+
+function readDependencyVersion(
+  packageJson: PackageJsonWithDependencies,
+  packageName: string
+): string | undefined {
+  for (const section of DEPENDENCY_SECTIONS) {
+    const version = packageJson[section]?.[packageName];
+    if (version) {
+      return version;
+    }
+  }
+}
+
+function isVersionSpecBelowMinimum(spec: string, minimum: string): boolean {
+  const specMatch = VERSION_IN_SPEC_RE.exec(spec);
+  const minimumMatch = VERSION_IN_SPEC_RE.exec(minimum);
+  if (!specMatch || !minimumMatch) {
+    return false;
+  }
+
+  const specMajor = Number(specMatch[1]);
+  const specMinor = Number(specMatch[2]);
+  const minimumMajor = Number(minimumMatch[1]);
+  const minimumMinor = Number(minimumMatch[2]);
+
+  return (
+    specMajor < minimumMajor ||
+    (specMajor === minimumMajor && specMinor < minimumMinor)
+  );
+}
+
+export function resolveSupportedDependencyWarnings(
+  cwd = process.cwd()
+): SupportedDependencyWarning[] {
+  const packageJsonPath = findNearestPackageJsonPath(cwd);
+  if (!packageJsonPath) {
+    return [];
+  }
+
+  const packageJson = JSON.parse(
+    fs.readFileSync(packageJsonPath, 'utf8')
+  ) as PackageJsonWithDependencies;
+  const convexVersion = readDependencyVersion(packageJson, 'convex');
+  if (
+    !convexVersion ||
+    !isVersionSpecBelowMinimum(
+      convexVersion,
+      SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum
+    )
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      packageName: 'convex',
+      current: convexVersion,
+      minimum: SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum,
+      installSpec: PINNED_CONVEX_INSTALL_SPEC,
+    },
+  ];
+}

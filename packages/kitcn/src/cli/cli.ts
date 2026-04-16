@@ -31,6 +31,7 @@ import { handleResetCommand } from './commands/reset.js';
 import { handleVerifyCommand, VERIFY_HELP_TEXT } from './commands/verify.js';
 import { handleViewCommand, VIEW_HELP_TEXT } from './commands/view.js';
 import type { CliBackend } from './config.js';
+import { resolveSupportedDependencyWarnings } from './supported-dependencies.js';
 import { handleCliError } from './utils/handle-error.js';
 import { logger } from './utils/logger.js';
 
@@ -45,6 +46,15 @@ const LOCAL_NODE_REEXEC_COMMANDS = new Set([
   'add',
   'codegen',
   'dev',
+  'init',
+  'verify',
+]);
+const DEPENDENCY_WARNING_COMMANDS = new Set([
+  'add',
+  'codegen',
+  'deploy',
+  'dev',
+  'env',
   'init',
   'verify',
 ]);
@@ -190,6 +200,18 @@ const printCommandHelp = (command: string, backend: CliBackend = 'convex') => {
   printRootHelp(backend);
 };
 
+function warnSupportedDependencyIssues(command: string) {
+  if (!DEPENDENCY_WARNING_COMMANDS.has(command)) {
+    return;
+  }
+
+  for (const warning of resolveSupportedDependencyWarnings()) {
+    logger.warn(
+      `⚠️  kitcn expects ${warning.packageName} ${warning.minimum}; found ${warning.current}. Run \`bun add ${warning.installSpec}\` when you can.`
+    );
+  }
+}
+
 const handlePassthroughCommand = async (
   argv: string[],
   deps?: Partial<RunDeps>
@@ -276,6 +298,7 @@ export async function run(argv: string[], deps?: Partial<RunDeps>) {
     if (reexecExitCode !== null) {
       return reexecExitCode;
     }
+    warnSupportedDependencyIssues('dev');
     return handleDevCommand(argv, deps);
   }
   if (VERSION_FLAGS.has(argv[0]!)) {
@@ -329,6 +352,7 @@ export async function run(argv: string[], deps?: Partial<RunDeps>) {
   const handler =
     COMMAND_HANDLERS[parsed.command as keyof typeof COMMAND_HANDLERS] ??
     handlePassthroughCommand;
+  warnSupportedDependencyIssues(parsed.command);
   return handler(argv, deps);
 }
 
