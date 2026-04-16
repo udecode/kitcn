@@ -438,7 +438,8 @@ Now we'll update the client-side auth setup.
   </CompareItem>
   <CompareItem title="After (lib/convex/auth-client.ts)">
     ```ts showLineNumbers title="lib/convex/auth-client.ts" {3,12-16}
-    import { convexClient, createAuthClient } from "kitcn/auth/client";
+    import { createAuthClient } from "better-auth/react";
+    import { convexClient } from "kitcn/auth/client";
     import { createAuthMutations } from "kitcn/react";
 
     export const authClient = createAuthClient({

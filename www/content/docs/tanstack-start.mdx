@@ -85,7 +85,8 @@ what each generated file is responsible for.
 ### Auth Client
 
 ```ts showLineNumbers title="src/lib/convex/auth-client.ts"
-import { convexClient, createAuthClient } from 'kitcn/auth/client';
+import { createAuthClient } from 'better-auth/react';
+import { convexClient } from 'kitcn/auth/client';
 import { createAuthMutations } from 'kitcn/react';
 
 export const authClient = createAuthClient({

@@ -16,9 +16,14 @@ describe('auth client templates', () => {
       AUTH_CONVEX_REACT_CLIENT_TEMPLATE,
     ]) {
       expect(template).toContain(
+        "import { createAuthClient } from 'better-auth/react';"
+      );
+      expect(template).toContain(
+        "import { convexClient } from 'kitcn/auth/client';"
+      );
+      expect(template).not.toContain(
         "import { convexClient, createAuthClient } from 'kitcn/auth/client';"
       );
-      expect(template).not.toContain("from 'better-auth/react'");
       expect(template).not.toContain('KitcnAuthClient');
       expect(template).not.toContain('as unknown as');
     }

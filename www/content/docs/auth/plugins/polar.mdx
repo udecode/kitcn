@@ -154,7 +154,7 @@ export default defineAuth((ctx) => ({
 
 ```ts title="src/lib/convex/auth-client.ts" showLineNumbers {2,6}
 import { polarClient } from '@polar-sh/better-auth';
-import { createAuthClient } from 'kitcn/auth/client';
+import { createAuthClient } from 'better-auth/react';
 
 export const authClient = createAuthClient({
   plugins: [polarClient()],

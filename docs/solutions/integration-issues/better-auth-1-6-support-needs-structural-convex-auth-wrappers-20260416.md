@@ -58,10 +58,10 @@ Key changes:
 - do the same for `ConvexAuthProvider`
 - add a local `mode` field to the auth adapter `where` validator so Better Auth
   `1.6` queries do not fail validation
-- re-export a wrapped `createAuthClient` from `kitcn/auth/client` so generated
-  apps get the stable local interface without user-code casts
-- keep the internal compatibility cast inside `kitcn/auth/client` and preserve
-  plugin-specific Better Auth fields around the structural session/action shape
+- fix `convexClient()` inference so apps can keep importing
+  `createAuthClient` from `better-auth/react` without user-code casts
+- keep the remaining structural compatibility inside kitcn's provider and
+  mutation helper boundaries instead of pushing that debt into app code
 - vendor the small Convex Better Auth runtime surfaces kitcn uses so package
   code no longer imports or depends on `@convex-dev/better-auth`
 
