@@ -42,7 +42,8 @@ bun add better-auth@1.6.5
 
 ```ts
 // Before
-import { convexClient, createAuthClient } from "kitcn/auth/client";
+import { createAuthClient } from "better-auth/react";
+import { convexClient } from "kitcn/auth/client";
 
 // After
 import { createAuthClient } from "better-auth/react";

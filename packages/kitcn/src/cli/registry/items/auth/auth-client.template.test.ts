@@ -7,7 +7,7 @@ import {
 } from './auth-client.template';
 
 describe('auth client templates', () => {
-  test('use the package wrapped auth client without user-code casts', () => {
+  test('use better-auth/react with kitcn convexClient and no user-code casts', () => {
     for (const template of [
       AUTH_CLIENT_TEMPLATE,
       AUTH_REACT_CLIENT_TEMPLATE,

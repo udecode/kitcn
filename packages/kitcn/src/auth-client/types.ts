@@ -1,8 +1,7 @@
 import type { BetterAuthClientPlugin } from 'better-auth';
 import type { BetterAuthClientOptions } from 'better-auth/client';
-import type { createAuthClient } from 'better-auth/solid';
+import type { createAuthClient } from 'better-auth/react';
 import type { convexClient } from '../auth/internal/convex-client';
-
 type ConvexClient = ReturnType<typeof convexClient>;
 type CrossDomainClient = BetterAuthClientPlugin & {
   id: 'cross-domain';
@@ -16,19 +15,28 @@ type CrossDomainClient = BetterAuthClientPlugin & {
     notifySessionSignal: () => void;
   };
 };
-type PluginsWithCrossDomain = (
+
+export type PluginsWithCrossDomain = (
   | CrossDomainClient
   | ConvexClient
   | BetterAuthClientPlugin
 )[];
-type PluginsWithoutCrossDomain = (ConvexClient | BetterAuthClientPlugin)[];
 
-type AuthClientWithPlugins<
+export type PluginsWithoutCrossDomain = (
+  | ConvexClient
+  | BetterAuthClientPlugin
+)[];
+
+export type AuthClientWithPlugins<
   Plugins extends PluginsWithCrossDomain | PluginsWithoutCrossDomain,
 > = ReturnType<
-  typeof createAuthClient<BetterAuthClientOptions & { plugins: Plugins }>
+  typeof createAuthClient<
+    BetterAuthClientOptions & {
+      plugins: Plugins;
+    }
+  >
 >;
 
-export type SolidAuthClient =
+export type AuthClient =
   | AuthClientWithPlugins<PluginsWithCrossDomain>
   | AuthClientWithPlugins<PluginsWithoutCrossDomain>;

@@ -26,6 +26,7 @@ import {
   useAuthStore,
   useAuthValue,
 } from '../react/auth-store';
+import type { AuthClient } from './types';
 
 type AuthClientFetch = AuthClient & {
   $fetch?: (
@@ -35,49 +36,6 @@ type AuthClientFetch = AuthClient & {
       headers?: Record<string, string>;
     }
   ) => Promise<{ data?: unknown } | null | undefined>;
-};
-
-export type AuthClient = {
-  $store?: {
-    atoms?: {
-      session?: {
-        get?: () => {
-          data?: unknown;
-          error?: unknown;
-          isPending?: boolean;
-          isRefetching?: boolean;
-          refetch?: (queryParams?: {
-            query?: Record<string, unknown>;
-          }) => Promise<void>;
-        };
-        set?: (value: {
-          data: unknown;
-          error: unknown;
-          isPending: boolean;
-          isRefetching: boolean;
-          refetch: (queryParams?: {
-            query?: Record<string, unknown>;
-          }) => Promise<void>;
-        }) => void;
-      };
-    };
-  };
-  getSession?: (args?: {
-    fetchOptions?: {
-      credentials?: RequestCredentials;
-      headers?: Record<string, string>;
-    };
-  }) => Promise<unknown>;
-  signOut?: (args?: {
-    fetchOptions?: Record<string, unknown>;
-  }) => Promise<unknown>;
-  useSession: () => {
-    data?: unknown;
-    error?: unknown;
-    isPending: boolean;
-    isRefetching?: boolean;
-    refetch?: () => Promise<void>;
-  };
 };
 
 type IConvexReactClient = {
