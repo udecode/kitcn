@@ -6,41 +6,17 @@ import {
   organizationClient,
 } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient } from 'kitcn/auth/client';
+import { convexClient, type KitcnAuthClient } from 'kitcn/auth/client';
 import { createAuthMutations } from 'kitcn/react';
 import { env } from '@/env';
 
-type ExampleAuthClient = ReturnType<typeof createAuthClient> & {
-  getSession: (args?: unknown) => Promise<unknown>;
-  signOut: (args?: unknown) => Promise<unknown>;
-  signIn: {
+type ExampleAuthClient = KitcnAuthClient & {
+  signIn: KitcnAuthClient['signIn'] & {
     anonymous: (args?: unknown) => Promise<unknown>;
-    email: (args?: unknown) => Promise<unknown>;
-    social: (args?: unknown) => Promise<unknown>;
-  };
-  signUp: {
-    email: (args?: unknown) => Promise<unknown>;
   };
   useActiveOrganization: () => unknown;
   useListOrganizations: () => unknown;
-  useSession: () => {
-    data?: {
-      user?: {
-        email?: string | null;
-        name?: string | null;
-      } | null;
-    } | null;
-    isPending: boolean;
-  };
-  organization: {
-    checkRolePermission: (args: {
-      permissions: unknown;
-      role?: string | null;
-    }) => unknown;
-    listMembers: (args: unknown) => Promise<{
-      error?: { message?: string };
-    }>;
-  };
+  organization: NonNullable<KitcnAuthClient['organization']>;
 };
 
 export const authClient = createAuthClient({
