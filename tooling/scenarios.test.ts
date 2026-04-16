@@ -26,6 +26,7 @@ import {
   resolvePrepareBootstrapSteps,
   resolveScenarioInstallSpecs,
   resolveScenarioKeysForCheck,
+  resolveScenarioProcessEnv,
   resolveScenarioProofPath,
   resolveScenarioStepEnv,
   runScenarioDev,
@@ -456,6 +457,9 @@ describe('tooling/scenarios', () => {
       SCENARIO_DEFINITIONS['convex-next-auth-bootstrap'].env
     ).toBeUndefined();
     expect(
+      SCENARIO_DEFINITIONS['convex-next-auth-bootstrap'].isolateConvexEnv
+    ).toBe(true);
+    expect(
       SCENARIO_DEFINITIONS['convex-next-auth-bootstrap'].validation.beforeCheck
     ).toEqual([['init', '--yes', '--json']]);
     expect(SCENARIO_DEFINITIONS['convex-vite-auth-bootstrap']).toMatchObject({
@@ -475,6 +479,7 @@ describe('tooling/scenarios', () => {
     expect(SCENARIO_DEFINITIONS['convex-next-all']).toMatchObject({
       backend: 'convex',
       check: true,
+      isolateConvexEnv: true,
       label: 'convex next all',
       setup: [
         ['add', 'ratelimit', '--yes', '--no-codegen'],
@@ -490,6 +495,7 @@ describe('tooling/scenarios', () => {
     expect(SCENARIO_DEFINITIONS['create-convex-nextjs-shadcn-auth']).toEqual({
       backend: 'convex',
       check: false,
+      isolateConvexEnv: true,
       label: 'create-convex nextjs-shadcn auth adoption',
       setup: [],
       source: {
@@ -507,6 +513,7 @@ describe('tooling/scenarios', () => {
     expect(SCENARIO_DEFINITIONS['raw-start-auth-adoption']).toEqual({
       backend: 'convex',
       check: false,
+      isolateConvexEnv: true,
       label: 'raw start auth adoption',
       setup: [],
       source: {
@@ -877,8 +884,25 @@ describe('tooling/scenarios', () => {
     expect(calls[0]).toMatchObject({
       cmd: buildLocalCliCommand(['dev'], { backend: 'concave' }),
       cwd: projectDir,
+      options: {
+        env: expect.objectContaining({
+          CONVEX_DEPLOYMENT: undefined,
+          HOME: expect.stringContaining(
+            'tmp/scenario-homes/create-convex-bare'
+          ),
+        }),
+      },
     });
-    expect(calls[0]?.options).toBeUndefined();
+  });
+
+  test('resolveScenarioProcessEnv isolates Convex scenario home for spawned processes', () => {
+    const env = resolveScenarioProcessEnv('create-convex-bare');
+
+    expect(env.CONVEX_DEPLOYMENT).toBeUndefined();
+    expect(env.CONVEX_DEPLOY_KEY).toBeUndefined();
+    expect(env.CONVEX_SELF_HOSTED_URL).toBeUndefined();
+    expect(env.CONVEX_SELF_HOSTED_ADMIN_KEY).toBeUndefined();
+    expect(env.HOME).toContain('tmp/scenario-homes/create-convex-bare');
   });
 
   test('runScenarioDev bypasses raw create-convex predev and uses dev:frontend plus convex:dev when available', async () => {

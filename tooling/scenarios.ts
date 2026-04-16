@@ -284,12 +284,18 @@ const getScenarioBackend = (
   backend?: TemplateBackend
 ) => SCENARIO_DEFINITIONS[scenarioKey].backend ?? backend ?? 'concave';
 
+const getScenarioHome = (scenarioKey: ScenarioKey) =>
+  SCENARIO_DEFINITIONS[scenarioKey].isolateConvexEnv
+    ? path.join(PROJECT_ROOT, 'tmp', 'scenario-homes', scenarioKey)
+    : undefined;
+
 const createScenarioRunCommand = (
   scenarioKey: ScenarioKey,
   baseRunCommand: typeof run
 ) => {
   const scenarioEnv = SCENARIO_DEFINITIONS[scenarioKey].env;
-  if (!scenarioEnv) {
+  const scenarioHome = getScenarioHome(scenarioKey);
+  if (!scenarioEnv && !scenarioHome) {
     return baseRunCommand;
   }
 
@@ -302,24 +308,28 @@ const createScenarioRunCommand = (
       ...options,
       env: {
         ...CLEARED_CONVEX_ENV,
+        ...(scenarioHome ? { HOME: scenarioHome } : {}),
         ...scenarioEnv,
         ...options.env,
       },
     });
 };
 
-const resolveScenarioProcessEnv = (scenarioKey: ScenarioKey) => {
+export const resolveScenarioProcessEnv = (scenarioKey: ScenarioKey) => {
   const scenarioEnv = SCENARIO_DEFINITIONS[scenarioKey].env;
+  const scenarioHome = getScenarioHome(scenarioKey);
   if (!scenarioEnv) {
     return {
       ...process.env,
       ...CLEARED_CONVEX_ENV,
+      ...(scenarioHome ? { HOME: scenarioHome } : {}),
     };
   }
 
   return {
     ...process.env,
     ...CLEARED_CONVEX_ENV,
+    ...(scenarioHome ? { HOME: scenarioHome } : {}),
     ...scenarioEnv,
   };
 };

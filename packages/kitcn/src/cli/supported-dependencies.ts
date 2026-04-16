@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 const EXACT_VERSION_RE = /^(\d+)\.(\d+)\.\d+$/;
 const VERSION_IN_SPEC_RE = /(\d+)\.(\d+)(?:\.\d+)?/;
+const PLAIN_VERSION_SPEC_RE = /^[\^~]?v?\d+\.\d+(?:\.\d+)?$/;
+const UPPER_BOUND_RE = /(?:^|\s)<={0,1}\s*v?(\d+)\.(\d+)(?:\.\d+)?/g;
 const SUPPORTED_CONVEX_VERSION = '1.35.1';
 const SUPPORTED_BETTER_AUTH_VERSION = '1.5.3';
 const SUPPORTED_HONO_VERSION = '4.12.9';
@@ -202,7 +204,41 @@ function readDependencyVersion(
   }
 }
 
-function isVersionSpecBelowMinimum(spec: string, minimum: string): boolean {
+function readInstalledDependencyVersion(
+  packageJsonPath: string,
+  packageName: string
+): string | undefined {
+  const installedPackageJsonPath = join(
+    dirname(packageJsonPath),
+    'node_modules',
+    ...packageName.split('/'),
+    'package.json'
+  );
+  if (!fs.existsSync(installedPackageJsonPath)) {
+    return undefined;
+  }
+  const packageJson = JSON.parse(
+    fs.readFileSync(installedPackageJsonPath, 'utf8')
+  ) as { version?: string };
+  return packageJson.version;
+}
+
+function compareMajorMinor(
+  aMajor: number,
+  aMinor: number,
+  bMajor: number,
+  bMinor: number
+) {
+  if (aMajor !== bMajor) {
+    return aMajor - bMajor;
+  }
+  return aMinor - bMinor;
+}
+
+function isConcreteVersionSpecBelowMinimum(
+  spec: string,
+  minimum: string
+): boolean {
   const specMatch = VERSION_IN_SPEC_RE.exec(spec);
   const minimumMatch = VERSION_IN_SPEC_RE.exec(minimum);
   if (!specMatch || !minimumMatch) {
@@ -215,9 +251,37 @@ function isVersionSpecBelowMinimum(spec: string, minimum: string): boolean {
   const minimumMinor = Number(minimumMatch[2]);
 
   return (
-    specMajor < minimumMajor ||
-    (specMajor === minimumMajor && specMinor < minimumMinor)
+    compareMajorMinor(specMajor, specMinor, minimumMajor, minimumMinor) < 0
   );
+}
+
+function isDeclaredVersionSpecBelowMinimum(
+  spec: string,
+  minimum: string
+): boolean {
+  const normalized = spec.trim();
+  if (PLAIN_VERSION_SPEC_RE.test(normalized)) {
+    return isConcreteVersionSpecBelowMinimum(normalized, minimum);
+  }
+
+  const minimumMatch = VERSION_IN_SPEC_RE.exec(minimum);
+  if (!minimumMatch) {
+    return false;
+  }
+  const minimumMajor = Number(minimumMatch[1]);
+  const minimumMinor = Number(minimumMatch[2]);
+
+  for (const match of normalized.matchAll(UPPER_BOUND_RE)) {
+    const upperMajor = Number(match[1]);
+    const upperMinor = Number(match[2]);
+    if (
+      compareMajorMinor(upperMajor, upperMinor, minimumMajor, minimumMinor) <= 0
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function resolveSupportedDependencyWarnings(
@@ -231,10 +295,31 @@ export function resolveSupportedDependencyWarnings(
   const packageJson = JSON.parse(
     fs.readFileSync(packageJsonPath, 'utf8')
   ) as PackageJsonWithDependencies;
+  const installedConvexVersion = readInstalledDependencyVersion(
+    packageJsonPath,
+    'convex'
+  );
+  if (
+    installedConvexVersion &&
+    isConcreteVersionSpecBelowMinimum(
+      installedConvexVersion,
+      SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum
+    )
+  ) {
+    return [
+      {
+        packageName: 'convex',
+        current: installedConvexVersion,
+        minimum: SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum,
+        installSpec: PINNED_CONVEX_INSTALL_SPEC,
+      },
+    ];
+  }
+
   const convexVersion = readDependencyVersion(packageJson, 'convex');
   if (
     !convexVersion ||
-    !isVersionSpecBelowMinimum(
+    !isDeclaredVersionSpecBelowMinimum(
       convexVersion,
       SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum
     )

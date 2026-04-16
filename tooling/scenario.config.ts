@@ -55,6 +55,7 @@ export type ScenarioDefinition = {
   backend?: TemplateBackend;
   check: boolean;
   env?: Record<string, string>;
+  isolateConvexEnv?: boolean;
   label: string;
   setup: readonly ScenarioStep[];
   source: ScenarioSource;
@@ -141,6 +142,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   'convex-next-auth-bootstrap': {
     backend: 'convex',
     check: true,
+    isolateConvexEnv: true,
     label: 'convex next auth bootstrap',
     setup: [['add', 'auth', '--yes', '--no-codegen']],
     validation: {
@@ -156,6 +158,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   'convex-vite-auth-bootstrap': {
     backend: 'convex',
     check: true,
+    isolateConvexEnv: true,
     label: 'convex vite auth bootstrap',
     setup: [['add', 'auth', '--yes', '--no-codegen']],
     validation: {
@@ -170,6 +173,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   'convex-next-all': {
     backend: 'convex',
     check: true,
+    isolateConvexEnv: true,
     label: 'convex next all',
     setup: [
       ['add', 'ratelimit', '--yes', '--no-codegen'],
@@ -189,6 +193,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   'create-convex-nextjs-shadcn-auth': {
     backend: 'convex',
     check: false,
+    isolateConvexEnv: true,
     label: 'create-convex nextjs-shadcn auth adoption',
     setup: [],
     validation: {
@@ -206,6 +211,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   'raw-start-auth-adoption': {
     backend: 'convex',
     check: false,
+    isolateConvexEnv: true,
     label: 'raw start auth adoption',
     setup: [],
     validation: {
@@ -222,6 +228,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   },
   'create-convex-bare': {
     check: true,
+    isolateConvexEnv: true,
     label: 'create-convex bare runtime',
     setup: [],
     validation: {
@@ -234,6 +241,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   },
   'create-convex-nextjs-shadcn': {
     check: true,
+    isolateConvexEnv: true,
     label: 'create-convex nextjs-shadcn adoption',
     setup: [['init', '--yes', '--json']],
     validation: {
@@ -246,6 +254,7 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
   },
   'create-convex-react-vite-shadcn': {
     check: true,
+    isolateConvexEnv: true,
     label: 'create-convex react-vite-shadcn adoption',
     setup: [['init', '--yes', '--json']],
     validation: {
