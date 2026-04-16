@@ -1,11 +1,7 @@
 /** biome-ignore-all lint/performance/noBarrelFile: package entry */
-import type { BetterAuthClientPlugin } from 'better-auth';
 import type { BetterAuthClientOptions } from 'better-auth/client';
 import { createAuthClient as createBetterAuthClient } from 'better-auth/react';
-import { convexClient as baseConvexClient } from '../auth/internal/convex-client';
-
-type ConvexClientPlugin = ReturnType<typeof baseConvexClient> &
-  BetterAuthClientPlugin;
+export { convexClient } from '../auth/internal/convex-client';
 
 type BetterAuthReactClient<Option extends BetterAuthClientOptions> = ReturnType<
   typeof createBetterAuthClient<Option>
@@ -66,8 +62,4 @@ export const createAuthClient = <
 ): KitcnAuthClient<Option> =>
   createBetterAuthClient(options) as unknown as KitcnAuthClient<Option>;
 
-export const convexClient = ((...args: Parameters<typeof baseConvexClient>) =>
-  baseConvexClient(...args) as ConvexClientPlugin) as (
-  ...args: Parameters<typeof baseConvexClient>
-) => ConvexClientPlugin;
 export * from './convex-auth-provider';

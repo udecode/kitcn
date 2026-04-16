@@ -6,18 +6,9 @@ import {
   organizationClient,
 } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
-import { convexClient, type KitcnAuthClient } from 'kitcn/auth/client';
+import { convexClient } from 'kitcn/auth/client';
 import { createAuthMutations } from 'kitcn/react';
 import { env } from '@/env';
-
-type ExampleAuthClient = KitcnAuthClient & {
-  signIn: KitcnAuthClient['signIn'] & {
-    anonymous: (args?: unknown) => Promise<unknown>;
-  };
-  useActiveOrganization: () => unknown;
-  useListOrganizations: () => unknown;
-  organization: NonNullable<KitcnAuthClient['organization']>;
-};
 
 export const authClient = createAuthClient({
   baseURL: env.NEXT_PUBLIC_SITE_URL,
@@ -35,7 +26,7 @@ export const authClient = createAuthClient({
     }),
     convexClient(),
   ],
-}) as unknown as ExampleAuthClient;
+});
 
 // Export hooks from the auth client
 export const { useActiveOrganization, useListOrganizations } = authClient;
