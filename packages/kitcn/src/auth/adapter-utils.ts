@@ -424,7 +424,10 @@ const filterByWhere = <
           return isGreaterThan(value, w.value);
         }
         case 'gte': {
-          return value === w.value || isGreaterThan(value, w.value);
+          return (
+            comparableValue === comparableWhereValue ||
+            isGreaterThan(value, w.value)
+          );
         }
         case 'in': {
           return (
@@ -438,7 +441,10 @@ const filterByWhere = <
           return isLessThan(value, w.value);
         }
         case 'lte': {
-          return value === w.value || isLessThan(value, w.value);
+          return (
+            comparableValue === comparableWhereValue ||
+            isLessThan(value, w.value)
+          );
         }
         case 'ne': {
           return comparableValue !== comparableWhereValue;
@@ -538,10 +544,11 @@ const generateQuery = (
       // Index used for all eq and range clauses, apply remaining clauses
       // incompatible with Convex statically.
       (w) =>
-        w.operator &&
-        ['contains', 'ends_with', 'ne', 'not_in', 'starts_with'].includes(
-          w.operator
-        )
+        w.mode === 'insensitive' ||
+        (w.operator &&
+          ['contains', 'ends_with', 'ne', 'not_in', 'starts_with'].includes(
+            w.operator
+          ))
     );
   });
 
