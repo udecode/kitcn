@@ -169,18 +169,16 @@ tables change, rerun the same preset command. It does not support `--schema`.
   </Tab>
   <Tab value="Convex">
     ```ts title="convex/functions/http.ts" showLineNumbers {1-4,6-13}
-    import { registerRoutesLazy } from 'kitcn/auth/http';
+    import { registerRoutes } from 'kitcn/auth/http';
     import { httpRouter } from 'convex/server';
     import { getAuth } from './generated/auth';
 
     const http = httpRouter();
 
-    registerRoutesLazy(http, getAuth, {
-      basePath: '/api/auth',
+    registerRoutes(http, getAuth, {
       cors: {
         allowedOrigins: [process.env.SITE_URL!],
       },
-      trustedOrigins: [process.env.SITE_URL!],
     });
 
     export default http;

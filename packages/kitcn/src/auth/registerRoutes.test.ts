@@ -1,7 +1,7 @@
 import { httpRouter } from 'convex/server';
 import { Request as UndiciRequest } from 'undici';
 
-import { registerRoutes, registerRoutesLazy } from './registerRoutes';
+import { registerRoutes } from './registerRoutes';
 
 const unwrapLocation = (response: Response) =>
   response.headers.get('location') ?? response.headers.get('Location');
@@ -32,7 +32,7 @@ const unwrapInvoke = async (
 };
 
 describe('registerRoutes', () => {
-  test('lazy registration avoids constructing auth until a request arrives', async () => {
+  test('does not construct auth until a request arrives', async () => {
     const http = httpRouter();
     const authHandler = mock(async () => new Response('ok'));
     const getAuth = mock(() => ({
@@ -41,7 +41,7 @@ describe('registerRoutes', () => {
       $context: Promise.resolve({ options: { trustedOrigins: [] } }),
     }));
 
-    registerRoutesLazy(http as any, getAuth as any, {
+    registerRoutes(http as any, getAuth as any, {
       basePath: '/api/auth',
       cors: false,
     });
@@ -62,18 +62,17 @@ describe('registerRoutes', () => {
     expect(authHandler).toHaveBeenCalledTimes(1);
   });
 
-  test('lazy CORS registration can use explicit trusted origins without constructing auth', async () => {
+  test('resolves trusted origins lazily from auth context for CORS', async () => {
     const http = httpRouter();
     const getAuth = mock(() => ({
       handler: async () => new Response('ok'),
       options: { basePath: '/api/auth' },
-      $context: Promise.resolve({ options: { trustedOrigins: [] } }),
+      $context: Promise.resolve({
+        options: { trustedOrigins: ['https://trusted.example*'] },
+      }),
     }));
 
-    registerRoutesLazy(http as any, getAuth as any, {
-      cors: true,
-      trustedOrigins: ['https://trusted.example'],
-    });
+    registerRoutes(http as any, getAuth as any, { cors: true });
 
     expect(getAuth).not.toHaveBeenCalled();
 
@@ -90,7 +89,7 @@ describe('registerRoutes', () => {
     expect(optionsRes.headers.get('access-control-allow-origin')).toBe(
       'https://trusted.example'
     );
-    expect(getAuth).not.toHaveBeenCalled();
+    expect(getAuth).toHaveBeenCalledTimes(1);
   });
 
   test('registers well-known redirect and GET/POST auth routes when cors is disabled', async () => {
@@ -193,7 +192,10 @@ describe('registerRoutes', () => {
       $context: Promise.resolve({ options: { trustedOrigins: [] } }),
     });
 
-    registerRoutes(http as any, getAuth as any, { cors: false });
+    registerRoutes(http as any, getAuth as any, {
+      basePath: '/auth',
+      cors: false,
+    });
 
     const lookedUp = http.lookup('/.well-known/openid-configuration', 'GET')!;
     expect(lookedUp[0]).toBe(wellKnownHandler as any);

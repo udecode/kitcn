@@ -18,13 +18,9 @@ type RouteCorsOptions =
   | boolean;
 
 type RegisterRoutesOptions = {
+  basePath?: string;
   cors?: RouteCorsOptions;
   verbose?: boolean;
-};
-
-type RegisterRoutesLazyOptions = RegisterRoutesOptions & {
-  basePath?: string;
-  trustedOrigins?: TrustedOriginsOption;
 };
 
 type AuthRouteContract = {
@@ -45,7 +41,6 @@ type RouteRegistration<Ctx> = {
   getAuth: GetAuth<Ctx, AuthRouteContract>;
   getRegistrationAuth: () => AuthRouteContract;
   path: string;
-  trustedOrigins?: TrustedOriginsOption;
 };
 
 const LOCAL_AUTH_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -181,7 +176,6 @@ const registerAuthRoutes = <Ctx>(
     allowedOrigins: async (request) => {
       const resolvedTrustedOrigins =
         trustedOriginsOption ??
-        registration.trustedOrigins ??
         (await getRegistrationAuth().$context).options.trustedOrigins ??
         [];
       trustedOriginsOption = resolvedTrustedOrigins;
@@ -221,38 +215,20 @@ export const registerRoutes = <Ctx>(
   getAuth: GetAuth<Ctx, AuthRouteContract>,
   opts: RegisterRoutesOptions = {}
 ) => {
-  const registrationAuth = getAuth({} as any);
-
   return registerAuthRoutes(
     http,
     {
       getAuth,
-      getRegistrationAuth: () => registrationAuth,
-      path: registrationAuth.options.basePath ?? '/api/auth',
-    },
-    opts
-  );
-};
+      getRegistrationAuth: (() => {
+        let registrationAuth: AuthRouteContract | undefined;
 
-export const registerRoutesLazy = <Ctx>(
-  http: HttpRouter,
-  getAuth: GetAuth<Ctx, AuthRouteContract>,
-  opts: RegisterRoutesLazyOptions = {}
-) => {
-  let registrationAuth: AuthRouteContract | undefined;
-  const getRegistrationAuth = () => {
-    registrationAuth ??= getAuth({} as any);
+        return () => {
+          registrationAuth ??= getAuth({} as any);
 
-    return registrationAuth;
-  };
-
-  return registerAuthRoutes(
-    http,
-    {
-      getAuth,
-      getRegistrationAuth,
+          return registrationAuth;
+        };
+      })(),
       path: opts.basePath ?? '/api/auth',
-      trustedOrigins: opts.trustedOrigins,
     },
     opts
   );

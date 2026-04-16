@@ -75,13 +75,12 @@ Then classify upstream commits by kitcn impact:
 For the `0.11.4` sync, the selected kitcn slice was:
 
 - bump `@convex-dev/better-auth` to `0.11.4`
-- add `registerRoutesLazy` to `kitcn/auth/http`
-- keep `registerRoutes` eager for existing behavior, while making the lazy
-  helper default to `/api/auth` unless `basePath` is passed
+- make `registerRoutes` lazy by default instead of adding a second public helper
+- require explicit `basePath` only when the auth config uses a non-default path
 - fix adapter composite index lookup to use real Convex field names, not
   underscore-prefixed field names
 - import `JwtOptions` from `better-auth/plugins/jwt`
-- document the lazy route helper in `www` and the packaged Convex skill
+- document the lazy `registerRoutes` behavior in `www` and the packaged Convex skill
 
 ## Why This Works
 
@@ -94,8 +93,8 @@ The upstream range had three distinct classes of change:
    type freshness, and upstream test harness cleanup
 
 Filtering by kitcn's auth surfaces kept the sync small and useful. The lazy
-route helper gives plain Convex auth users a way to avoid Better Auth
-initialization during `convex/http.ts` registration. The adapter index fix
+`registerRoutes` helper now avoids Better Auth initialization during
+`convex/http.ts` registration. The adapter index fix
 prevents full scans when Better Auth queries combine an equality predicate with
 a `sortBy` field on a composite index.
 
