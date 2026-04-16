@@ -1,5 +1,4 @@
 import type { BetterAuthClientPlugin } from 'better-auth';
-import type { BetterAuthClientOptions } from 'better-auth/client';
 import type { createAuthClient } from 'better-auth/solid';
 import type { convexClient } from '../auth/internal/convex-client';
 
@@ -26,7 +25,7 @@ type PluginsWithoutCrossDomain = (ConvexClient | BetterAuthClientPlugin)[];
 type AuthClientWithPlugins<
   Plugins extends PluginsWithCrossDomain | PluginsWithoutCrossDomain,
 > = ReturnType<
-  typeof createAuthClient<BetterAuthClientOptions & { plugins: Plugins }>
+  typeof createAuthClient<BetterAuthClientPlugin & { plugins: Plugins }>
 >;
 
 export type SolidAuthClient =
