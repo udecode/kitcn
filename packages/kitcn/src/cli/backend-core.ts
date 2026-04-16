@@ -4072,7 +4072,6 @@ function isLocalBackendUpgradePrompt(output: string): boolean {
 export async function runConvexInitIfNeeded(params: {
   execaFn: typeof execa;
   backendAdapter: BackendAdapter;
-  yes?: boolean;
   env?: Record<string, string | undefined>;
   echoOutput?: boolean;
   targetArgs?: string[];
@@ -4097,20 +4096,11 @@ export async function runConvexInitIfNeeded(params: {
       process.cwd(),
       params.env
     ) === 'local';
-  const shouldUseAnonymousAgentMode = params.yes && shouldUseLocalDevPreflight;
-  const agentModeOverride = shouldUseAnonymousAgentMode
-    ? 'anonymous'
-    : params.env?.CONVEX_AGENT_MODE;
   const runCommand = async (commandArgs: string[]) =>
     normalizeConvexCommandResult(
       await params.execaFn(params.backendAdapter.command, commandArgs, {
         cwd: process.cwd(),
-        env: createBackendCommandEnv({
-          ...params.env,
-          ...(agentModeOverride
-            ? { CONVEX_AGENT_MODE: agentModeOverride }
-            : {}),
-        }),
+        env: createBackendCommandEnv(params.env),
         reject: false,
         stdio: 'pipe',
       })
@@ -4320,7 +4310,6 @@ async function runInitializationCodegen(params: {
     const initResult = await runConvexInitIfNeeded({
       execaFn: params.execaFn,
       backendAdapter: runtimeAdapter,
-      yes: params.yes,
       targetArgs: params.targetArgs,
     });
     if (initResult.exitCode !== 0) {
@@ -4535,6 +4524,7 @@ type ResetCliOptions = {
 const VALID_BACKFILL_ENABLED = new Set<BackfillEnabled>(['auto', 'on', 'off']);
 const CONVEX_DEV_PRE_RUN_CONFLICT_FLAGS = [
   '--run',
+  '--start',
   '--run-sh',
   '--run-component',
 ] as const;
@@ -5941,7 +5931,7 @@ export async function run(
       convexDevArgs.some((arg) => isConvexDevPreRunConflictFlag(arg))
     ) {
       throw new Error(
-        '`dev.preRun` cannot be combined with Convex dev run flags (`--run`, `--run-sh`, `--run-component`).'
+        '`dev.preRun` cannot be combined with Convex dev run flags (`--run`, `--start`, `--run-sh`, `--run-component`).'
       );
     }
     const backendAdapter = getBackendAdapter();

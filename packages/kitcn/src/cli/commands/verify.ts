@@ -31,24 +31,6 @@ function assertNoVerifyLifecycleFlags(args: string[]) {
   }
 }
 
-async function withAnonymousVerifyAgentMode<T>(run: () => Promise<T>) {
-  const previous = process.env.CONVEX_AGENT_MODE;
-  if (!previous) {
-    process.env.CONVEX_AGENT_MODE = 'anonymous';
-  }
-
-  try {
-    return await run();
-  } finally {
-    if (previous === undefined) {
-      // biome-ignore lint/performance/noDelete: process.env must drop the key; assigning undefined writes the string "undefined"
-      delete process.env.CONVEX_AGENT_MODE;
-    } else {
-      process.env.CONVEX_AGENT_MODE = previous;
-    }
-  }
-}
-
 function hasConfiguredLocalConvexDeployment(cwd = process.cwd()) {
   return fs.existsSync(
     path.join(cwd, '.convex', 'local', 'default', 'config.json')
@@ -127,7 +109,5 @@ export const handleVerifyCommand = async (
     return handleDevCommand(devArgv, deps);
   }
 
-  return withIsolatedLocalConvexState(() =>
-    withAnonymousVerifyAgentMode(() => handleDevCommand(devArgv, deps))
-  );
+  return withIsolatedLocalConvexState(() => handleDevCommand(devArgv, deps));
 };

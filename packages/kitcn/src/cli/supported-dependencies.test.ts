@@ -12,12 +12,13 @@ import {
   PINNED_ZOD_INSTALL_SPEC,
   resolveScaffoldInstallSpec,
   resolveSupportedDependencyInstallSpec,
+  resolveSupportedDependencyWarnings,
   SUPPORTED_DEPENDENCY_VERSIONS,
 } from './supported-dependencies';
 
 describe('cli/supported-dependencies', () => {
   test('extracts package names from install specs', () => {
-    expect(getPackageNameFromInstallSpec('convex@1.33.0')).toBe('convex');
+    expect(getPackageNameFromInstallSpec('convex@1.35.1')).toBe('convex');
     expect(getPackageNameFromInstallSpec('better-auth@1.5.3')).toBe(
       'better-auth'
     );
@@ -56,7 +57,7 @@ describe('cli/supported-dependencies', () => {
     expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.range).toBe(
       `^${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`
     );
-    expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum).toBe('>=1.33');
+    expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum).toBe('>=1.35');
   });
 
   test('resolves local install spec overrides for supported packages', () => {
@@ -74,6 +75,105 @@ describe('cli/supported-dependencies', () => {
     expect(
       resolveSupportedDependencyInstallSpec('better-auth@1.5.3', env)
     ).toBe('better-auth@1.5.3');
+  });
+
+  test('warns when the app pins an older supported peer dependency', () => {
+    const dir = fs.mkdtempSync('/tmp/kitcn-peer-warning-');
+    fs.writeFileSync(
+      `${dir}/package.json`,
+      JSON.stringify({
+        dependencies: {
+          convex: '^1.33.0',
+        },
+      })
+    );
+
+    expect(resolveSupportedDependencyWarnings(dir)).toEqual([
+      {
+        packageName: 'convex',
+        current: '^1.33.0',
+        minimum: '>=1.35',
+        installSpec: `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`,
+      },
+    ]);
+  });
+
+  test('does not warn when the app has the supported Convex family', () => {
+    const dir = fs.mkdtempSync('/tmp/kitcn-peer-current-');
+    fs.writeFileSync(
+      `${dir}/package.json`,
+      JSON.stringify({
+        dependencies: {
+          convex: '^1.35.0',
+        },
+      })
+    );
+
+    expect(resolveSupportedDependencyWarnings(dir)).toEqual([]);
+  });
+
+  test('does not warn for open-ended ranges that can resolve to supported Convex', () => {
+    const dir = fs.mkdtempSync('/tmp/kitcn-peer-range-');
+    fs.writeFileSync(
+      `${dir}/package.json`,
+      JSON.stringify({
+        dependencies: {
+          convex: '>=1.0.0',
+        },
+      })
+    );
+
+    expect(resolveSupportedDependencyWarnings(dir)).toEqual([]);
+  });
+
+  test('warns for upper-bounded ranges below supported Convex', () => {
+    const dir = fs.mkdtempSync('/tmp/kitcn-peer-upper-bound-');
+    fs.writeFileSync(
+      `${dir}/package.json`,
+      JSON.stringify({
+        dependencies: {
+          convex: '<1.35.0',
+        },
+      })
+    );
+
+    expect(resolveSupportedDependencyWarnings(dir)).toEqual([
+      {
+        packageName: 'convex',
+        current: '<1.35.0',
+        minimum: '>=1.35',
+        installSpec: `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`,
+      },
+    ]);
+  });
+
+  test('warns when installed Convex is older than the supported family', () => {
+    const dir = fs.mkdtempSync('/tmp/kitcn-peer-installed-');
+    fs.mkdirSync(`${dir}/node_modules/convex`, { recursive: true });
+    fs.writeFileSync(
+      `${dir}/package.json`,
+      JSON.stringify({
+        dependencies: {
+          convex: '<1.36.0',
+        },
+      })
+    );
+    fs.writeFileSync(
+      `${dir}/node_modules/convex/package.json`,
+      JSON.stringify({
+        name: 'convex',
+        version: '1.34.1',
+      })
+    );
+
+    expect(resolveSupportedDependencyWarnings(dir)).toEqual([
+      {
+        packageName: 'convex',
+        current: '1.34.1',
+        minimum: '>=1.35',
+        installSpec: `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`,
+      },
+    ]);
   });
 
   test('pins scaffold kitcn installs to the current package version', () => {

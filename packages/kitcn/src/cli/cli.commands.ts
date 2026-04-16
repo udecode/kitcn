@@ -136,7 +136,7 @@ function writeRawConvexNextApp(dir: string) {
     name: 'raw-next-convex-app',
     private: true,
     dependencies: {
-      convex: '^1.33.0',
+      convex: '^1.35.1',
       next: '^16.1.5',
       react: '^19.2.4',
       'react-dom': '^19.2.4',
@@ -234,7 +234,7 @@ function writeRawConvexViteApp(dir: string) {
     private: true,
     type: 'module',
     dependencies: {
-      convex: '^1.33.0',
+      convex: '^1.35.1',
       react: '^19.2.4',
       'react-dom': '^19.2.4',
     },
@@ -327,7 +327,7 @@ function writeRawConvexStartApp(dir: string) {
     dependencies: {
       '@tanstack/react-router': '^1.132.0',
       '@tanstack/react-start': '^1.132.0',
-      convex: '^1.33.0',
+      convex: '^1.35.1',
       react: '^19.2.4',
       'react-dom': '^19.2.4',
     },
@@ -7304,7 +7304,7 @@ describe('cli/cli', () => {
         loadCliConfig: loadConfigStub as any,
       })
     ).rejects.toThrow(
-      '`dev.preRun` cannot be combined with Convex dev run flags (`--run`, `--run-sh`, `--run-component`).'
+      '`dev.preRun` cannot be combined with Convex dev run flags (`--run`, `--start`, `--run-sh`, `--run-component`).'
     );
 
     expect(generateMetaStub).not.toHaveBeenCalled();

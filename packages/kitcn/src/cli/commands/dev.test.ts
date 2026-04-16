@@ -9,7 +9,6 @@ import {
   resolveConcaveLocalDevContract,
   resolveConcaveLocalSiteUrl,
   resolveDevStartupRetryDelayMs,
-  resolveImplicitConvexAnonymousAgentMode,
   resolveImplicitConvexRemoteDeploymentEnv,
   resolveSupportedLocalNodeEnvOverrides,
   resolveWatcherCommand,
@@ -255,18 +254,6 @@ describe('cli/commands/dev', () => {
     expect(resolveImplicitConvexRemoteDeploymentEnv(emptyDir)).toBeNull();
   });
 
-  test('resolveImplicitConvexAnonymousAgentMode detects anonymous-agent in .env.local', () => {
-    const dir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'kitcn-dev-anonymous-agent-')
-    );
-    fs.writeFileSync(
-      path.join(dir, '.env.local'),
-      'CONVEX_DEPLOYMENT=anonymous-agent\n'
-    );
-
-    expect(resolveImplicitConvexAnonymousAgentMode(dir)).toBe('anonymous');
-  });
-
   test('resolveConcaveLocalDevContract defaults concave dev to Convex local ports', () => {
     expect(resolveConcaveLocalDevContract([], 'http://localhost:3000')).toEqual(
       {
@@ -367,14 +354,6 @@ describe('cli/commands/dev', () => {
     expect(
       filterDevStartupLine(
         'A minor update is available for Convex (1.33.0 → 1.34.0)'
-      )
-    ).toEqual({
-      kind: 'skip',
-    });
-
-    expect(
-      filterDevStartupLine(
-        'CONVEX_AGENT_MODE=anonymous mode is in beta, functionality may change in the future.'
       )
     ).toEqual({
       kind: 'skip',
@@ -747,7 +726,7 @@ describe('cli/commands/dev', () => {
     }
   });
 
-  test('handleDevCommand prefers convex init for anonymous local deployments when init succeeds', async () => {
+  test('handleDevCommand lets Convex choose anonymous local deployments when init succeeds', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-dev-anonymous-agent-local-')
     );
@@ -825,8 +804,8 @@ describe('cli/commands/dev', () => {
         cmd: 'node',
         args: ['/fake/convex/main.js', 'init'],
         opts: {
-          env: expect.objectContaining({
-            CONVEX_AGENT_MODE: 'anonymous',
+          env: expect.not.objectContaining({
+            CONVEX_AGENT_MODE: expect.any(String),
           }),
         },
       });
@@ -834,8 +813,8 @@ describe('cli/commands/dev', () => {
         cmd: 'node',
         args: ['/fake/convex/main.js', 'dev', '--once'],
         opts: {
-          env: expect.objectContaining({
-            CONVEX_AGENT_MODE: 'anonymous',
+          env: expect.not.objectContaining({
+            CONVEX_AGENT_MODE: expect.any(String),
           }),
         },
       });

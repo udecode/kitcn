@@ -277,7 +277,7 @@ describe('cli/commands/init', () => {
             | { env?: Record<string, string | undefined> }
             | undefined
         )?.env?.CONVEX_AGENT_MODE
-      ).toBe('anonymous');
+      ).toBeUndefined();
       expect(fs.existsSync(path.join(expectedProjectDir, 'package.json'))).toBe(
         true
       );

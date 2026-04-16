@@ -69,7 +69,8 @@ dev boot cleanly right now?
 
 - runs the runtime path through `dev --once`
 - reuses the current local Convex deployment when one is already configured
-- falls back to local anonymous setup for fresh non-interactive Convex verify
+- lets Convex use its non-interactive anonymous local setup when no local
+  deployment is configured
 
 ## codegen
 
@@ -182,10 +183,9 @@ npx kitcn env set <name> <value>
 npx kitcn env remove <name>
 ```
 
-`kitcn env set` keeps Convex 1.33 behavior for interactive values,
-`--from-file`, and stdin input. `kitcn env pull` gives you the same robust
-export format, so `env pull --out <path>` and `env set --from-file <path>`
-round-trip cleanly.
+`kitcn env set` supports interactive values, `--from-file`, and stdin input.
+`kitcn env pull` gives you the same robust export format, so
+`env pull --out <path>` and `env set --from-file <path>` round-trip cleanly.
 
 Unknown commands on backend `convex` pass straight through to the Convex CLI,
 so `kitcn insights` opens the same insights surface as `convex insights`.

@@ -205,7 +205,7 @@ Do not fake generated files.
 Automation/non-interactive path:
 
 1. Run `npx kitcn@latest init --yes` when you want scaffold or adoption plus the one-shot local Convex bootstrap in one command.
-2. Run `bunx kitcn verify` when you want a non-interactive local runtime proof in the current app. Stop any long-running local backend first. It reuses an existing local deployment when one is already configured, and only falls back to anonymous fresh-local setup when it has to.
+2. Run `bunx kitcn verify` when you want a non-interactive local runtime proof in the current app. Stop any long-running local backend first. It reuses an existing local deployment when one is already configured, and lets Convex create anonymous local state when no local deployment is configured.
 3. Confirm the generated runtime exists in `convex/functions/generated/server.ts`.
 4. Then run `bunx kitcn dev` for ongoing codegen/API refresh.
 

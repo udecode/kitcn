@@ -91,9 +91,9 @@ npx kitcn@latest init -t next --yes
 
 Then start the long-running backend with `bunx kitcn dev`, run the
 framework dev server (`bun dev` for the Next starter), and open `/convex` for
-the scaffolded messages demo. In `--yes` mode, kitcn provisions an anonymous
-local Convex deployment when no account is linked yet, so the starter path does
-not stop on a login prompt.
+the scaffolded messages demo. In `--yes` mode, Convex uses anonymous local
+deployment setup when no account is linked yet, so the starter path does not
+stop on a login prompt.
 
 Use the CLI first:
 
@@ -759,7 +759,7 @@ This runbook + references map to the canonical template shape as follows:
 | Symptom                                                                               | Likely Cause                                                                                    | Fix                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@convex/api` not found                                                               | `kitcn dev` not run                                                                     | Run `bunx kitcn dev` and regenerate API metadata                                                                                                                                    |
-| `Cannot prompt for input in non-interactive terminals` during bootstrap               | Convex deployment selection still needs a local choice                                          | Use `bunx kitcn verify` for local proof, or pass `--env-file` / deployment-target args so Convex can resolve the deployment without prompting                                      |
+| `Cannot prompt for input in non-interactive terminals` during bootstrap               | Convex deployment targeting is ambiguous                                                        | Use `bunx kitcn verify` for local proof, or pass `--env-file` / deployment-target args so Convex can resolve the deployment without prompting                                      |
 | Can't find new local backend files under `~/.convex`                                  | Convex now stores new local deployment state per project                                        | Check `.convex/local/default/` in the current project root; treat `~/.convex/**` as legacy storage                                                                                          |
 | `kitcn env push` fails to set auth vars                                       | Target deployment is not active or not initialized                                              | For local proof, run `bunx kitcn verify`. For remote targets, resolve deployment targeting, then rerun `bunx kitcn env push`                                             |
 | `Failed to analyze auth.js` with `Unexpected token` / `map is not a function` on JWKS | Static `JWKS` value is malformed JSON                                                           | Unset/fix `JWKS`; use `getAuthConfigProvider()` fallback or repush with `bunx kitcn env push`                                                                                       |
