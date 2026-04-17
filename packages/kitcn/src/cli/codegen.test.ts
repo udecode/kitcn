@@ -128,9 +128,35 @@ function writeScopedFixture(dir: string) {
 }
 
 function writeRealOrmFixture(dir: string) {
-  const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
-  fs.mkdirSync(path.join(dir, 'node_modules'), { recursive: true });
-  fs.symlinkSync(packageRoot, path.join(dir, 'node_modules', 'kitcn'), 'dir');
+  const kitcnDir = path.join(dir, 'node_modules', 'kitcn');
+  const sourceRoot = fileURLToPath(new URL('../../src', import.meta.url));
+  const repoNodeModules = fileURLToPath(new URL('../../../../node_modules', import.meta.url));
+  fs.mkdirSync(kitcnDir, { recursive: true });
+  writeFile(
+    path.join(kitcnDir, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'kitcn',
+        type: 'module',
+        exports: {
+          './orm': './src/orm/index.ts',
+          './server': './src/server/index.ts',
+        },
+      },
+      null,
+      2
+    )
+  );
+  fs.symlinkSync(
+    sourceRoot,
+    path.join(kitcnDir, 'src'),
+    'dir'
+  );
+  fs.symlinkSync(
+    repoNodeModules,
+    path.join(kitcnDir, 'node_modules'),
+    'dir'
+  );
 }
 
 describe('cli/codegen', () => {
