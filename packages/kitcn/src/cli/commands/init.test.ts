@@ -487,6 +487,77 @@ describe('cli/commands/init', () => {
     }
   });
 
+  test('handleInitCommand stops with custom preset guidance when shadcn exits without a scaffold', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-start-custom-preset-')
+    );
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      await expect(
+        handleInitCommand(['init', '-t', 'start', '--yes'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow(
+        'Shadcn exited without creating a supported local scaffold. This usually means you chose the Custom preset. Run the generated shadcn command from ui.shadcn.com in . then re-run `kitcn init --yes` to adopt it.'
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand stops with custom preset guidance when shadcn creates an empty staged project', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-start-custom-empty-')
+    );
+    const execaStub = mock(async (_cmd: string, args: string[]) => {
+      if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
+        const cwdFlagIndex = args.indexOf('--cwd');
+        const nameFlagIndex = args.indexOf('--name');
+        const baseDir =
+          cwdFlagIndex >= 0 && args[cwdFlagIndex + 1]
+            ? args[cwdFlagIndex + 1]!
+            : tmpDir;
+        const projectName =
+          nameFlagIndex >= 0 && args[nameFlagIndex + 1]
+            ? args[nameFlagIndex + 1]!
+            : path.basename(tmpDir);
+        fs.mkdirSync(path.join(baseDir, projectName), { recursive: true });
+      }
+      return { exitCode: 0, stdout: '', stderr: '' } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      await expect(
+        handleInitCommand(['init', '-t', 'start', '--yes'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow(
+        'Shadcn exited without creating a supported local scaffold. This usually means you chose the Custom preset. Run the generated shadcn command from ui.shadcn.com in . then re-run `kitcn init --yes` to adopt it.'
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test('handleInitCommand scaffolds into the current empty directory with -t next', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-init-command-next-current-dir-')
