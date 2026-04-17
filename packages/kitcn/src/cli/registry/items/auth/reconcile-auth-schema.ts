@@ -8,6 +8,7 @@ import { createSchemaExtensionOrm } from '../../../../auth/create-schema-orm';
 import { createProjectJiti } from '../../../utils/project-jiti.js';
 import { createTypeScriptProxy } from '../../../utils/typescript-runtime.js';
 import type { RootSchemaTableUnit } from '../../schema-ownership.js';
+import { DEFAULT_MANAGED_AUTH_EXTENSION_TEMPLATE } from './auth-schema.template.js';
 
 type AuthSchemaTemplateId = 'auth-schema' | 'auth-schema-convex';
 type UserOwnedAuthTemplateId =
@@ -285,6 +286,33 @@ export const renderManagedAuthSchemaUnits = async ({
       outputPath: 'convex/lib/plugins/auth/schema.ts',
     })
   );
+
+export const renderDefaultManagedAuthSchemaUnits = () =>
+  parseRootSchemaUnitsFromExtension(DEFAULT_MANAGED_AUTH_EXTENSION_TEMPLATE);
+
+export const resolveManagedAuthSchemaUnits = async ({
+  authDefinitionPath,
+  loadAuthOptions = loadAuthOptionsFromDefinition,
+  renderManagedUnits = renderManagedAuthSchemaUnits,
+}: {
+  authDefinitionPath: string;
+  loadAuthOptions?: (
+    authDefinitionPath: string
+  ) => Promise<BetterAuthOptions | null>;
+  renderManagedUnits?: (params: {
+    authOptions: BetterAuthOptions;
+  }) => Promise<RootSchemaTableUnit[]>;
+}) => {
+  const authOptions = await loadAuthOptions(authDefinitionPath);
+
+  if (!authOptions) {
+    return renderDefaultManagedAuthSchemaUnits();
+  }
+
+  return renderManagedUnits({
+    authOptions,
+  });
+};
 
 export const loadDefaultManagedAuthConfigProvider = async () =>
   withAuthSchemaEnv(async () => getAuthConfigProvider());
