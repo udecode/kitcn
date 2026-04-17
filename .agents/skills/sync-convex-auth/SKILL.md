@@ -1,0 +1,285 @@
+---
+description: Sync kitcn against upstream `convex-better-auth` changes. Use when asked to run `sync-convex-auth`, compare `zbeyens/convex-better-auth` with its upstream fork, audit commits the fork is behind on, classify relevance to kitcn auth integration, and delegate one implementation PR through `task`.
+name: sync-convex-auth
+metadata:
+  skiller:
+    source: .agents/rules/sync-convex-auth.mdc
+---
+
+# Sync Convex Auth
+
+Handle $ARGUMENTS.
+
+Goal: compare `https://github.com/zbeyens/convex-better-auth` with its
+upstream fork, extract every upstream change that matters to kitcn, then
+delegate one coherent implementation slice to
+[$task](../skills/task/SKILL.md) so it
+opens the PR.
+
+## Rules
+
+- Use evidence, not vibes. Read commits, changed files, and patches.
+- Treat the fork being behind upstream as signal, not proof. Pull only relevant
+  work into kitcn.
+- Ignore genuinely irrelevant upstream changes. Do not mirror upstream just to
+  feel caught up.
+- Pull all clearly relevant, non-conflicting fixes in the same slice when they
+  share the same kitcn auth surface.
+- Stop and ask the user before importing optional additions where the tradeoff is
+  unclear, especially slow e2e suites, broad fixture rewrites, examples,
+  release plumbing, or dev-only test infrastructure.
+- Prefer deleting kitcn glue over adding more glue when upstream fixed the real
+  problem.
+- If no actionable opportunity exists, stop with the evidence. Do not open a
+  vanity PR.
+
+## 1. Establish Fork, Upstream, And Refs
+
+Use GitHub metadata to discover the upstream parent instead of guessing:
+
+```bash
+gh repo view zbeyens/convex-better-auth \
+  --json nameWithOwner,parent,defaultBranchRef \
+  --jq '{fork: .nameWithOwner, parent: .parent.nameWithOwner, branch: .defaultBranchRef.name}'
+```
+
+If `parent` is missing or ambiguous, stop and ask for the upstream repo.
+
+Before asking, try these fallbacks in order:
+
+```bash
+npm view @convex-dev/better-auth repository homepage --json
+test -d ../convex-better-auth/.git && git -C ../convex-better-auth remote -v
+gh repo view get-convex/better-auth --json nameWithOwner,defaultBranchRef,url
+```
+
+If npm metadata or the local clone clearly point to one upstream repo, use that
+repo and continue instead of stopping.
+
+Use a local clone for navigation, creating it only if missing:
+
+```bash
+test -d ../convex-better-auth/.git || \
+  gh repo clone zbeyens/convex-better-auth ../convex-better-auth
+git -C ../convex-better-auth remote get-url upstream >/dev/null 2>&1 || \
+  git -C ../convex-better-auth remote add upstream https://github.com/<upstream-owner>/<repo-name>.git
+git -C ../convex-better-auth fetch origin --tags
+git -C ../convex-better-auth fetch upstream --tags
+```
+
+Record:
+
+- fork owner/name and default branch
+- upstream owner/name and default branch
+- fork ref and upstream ref being compared
+- behind count
+- ahead count, if any
+- exact commit range
+
+Commands:
+
+```bash
+git -C ../convex-better-auth rev-list --count origin/<fork-branch>..upstream/<upstream-branch>
+git -C ../convex-better-auth rev-list --count upstream/<upstream-branch>..origin/<fork-branch>
+git -C ../convex-better-auth log --oneline --decorate origin/<fork-branch>..upstream/<upstream-branch>
+```
+
+If $ARGUMENTS names a base or target ref, use it as the bound after proving it
+exists.
+
+## 2. Read The Upstream Diff
+
+Start with a file summary:
+
+```bash
+git -C ../convex-better-auth diff --name-status \
+  origin/<fork-branch>..upstream/<upstream-branch>
+```
+
+Then read patches for relevant-looking files:
+
+```bash
+git -C ../convex-better-auth diff \
+  origin/<fork-branch>..upstream/<upstream-branch> -- \
+  src package.json bun.lock tsconfig.json '*.md' \
+  ':!**/dist/**' ':!**/build/**' ':!**/node_modules/**'
+```
+
+Use `gh` compare when it gives cleaner commit/file metadata:
+
+```bash
+gh api \
+  repos/<upstream-owner>/<repo-name>/compare/<fork-owner>:<fork-branch>...<upstream-branch> \
+  --jq '.commits[] | {sha: .sha, message: .commit.message}'
+
+gh api \
+  repos/<upstream-owner>/<repo-name>/compare/<fork-owner>:<fork-branch>...<upstream-branch> \
+  --jq '.files[] | {filename,status,patch}'
+```
+
+If the compare is too large, group by subsystem first, then inspect the patches
+for likely auth-runtime impact.
+
+## 3. Search Kitcn For Affected Auth Surfaces
+
+Search local kitcn integration points:
+
+```bash
+rg -n "@convex-dev/better-auth|convexBetterAuth|getToken|convexClient|convex\\(|BetterAuth|better-auth|auth" \
+  packages www .agents docs tooling fixtures example
+```
+
+Search institutional notes before proposing work:
+
+```bash
+rg -i --files-with-matches \
+  "convex-better-auth|@convex-dev/better-auth|better-auth|auth|react-start|nextjs|jwt|jwks|session|cookie|schema|plugin|getToken" \
+  docs/solutions docs/plans
+```
+
+Read relevant hits, especially notes about:
+
+- `@convex-dev/better-auth` reexports and wrappers
+- `kitcn/auth`, `kitcn/auth-client`, `kitcn/auth-nextjs`, and
+  `kitcn/auth-start`
+- Better Auth and Convex version compatibility
+- token, JWT, JWKS, cookie, and session handling
+- schema generation, plugin reconciliation, and generated auth contracts
+- React, Solid, Next.js, and TanStack Start provider behavior
+- scaffold templates, docs, and `packages/kitcn/skills/convex/**`
+- local hacks that might be obsolete after upstream changes
+
+## 4. Classify Every Upstream Change
+
+Classify each commit or file group:
+
+- `compatibility`: required work to keep kitcn working with upstream auth,
+  Better Auth, Convex, framework, or package changes.
+- `security`: auth correctness or security hardening kitcn should not miss.
+- `bugfix`: upstream fix that maps to a kitcn runtime, provider, token, schema,
+  routing, or scaffold issue.
+- `feature`: new upstream API, helper, framework support, or auth capability
+  kitcn can expose cleanly.
+- `cleanup`: upstream change that lets kitcn delete a workaround, wrapper,
+  fallback, doc warning, copied logic, or special-case patch.
+- `docs`: upstream change that only affects user-facing docs, setup guidance, or
+  skills.
+- `tests`: upstream test coverage or harness changes.
+- `no-op`: interesting upstream change with no kitcn action.
+
+For every non-`no-op`, include:
+
+- commit evidence
+- diff evidence
+- local kitcn files affected
+- expected implementation surface
+- verification command(s)
+- confidence
+
+Use this relevance filter:
+
+- Relevant: runtime auth behavior, package exports kitcn imports or reexports,
+  helpers kitcn wraps, version compatibility, security, framework integration,
+  schema/plugin behavior, generated code contracts, docs/skills users rely on,
+  and cleanup of known kitcn workarounds.
+- Usually irrelevant: upstream release config, repository-only CI, maintainer
+  docs, benchmark harnesses, examples that do not map to kitcn scaffolds, and
+  tests for behavior kitcn neither exposes nor depends on.
+- Ambiguous optional: added test suites, e2e harnesses, examples, fixtures,
+  benchmark tooling, and dev-only utilities. Stop and ask before pulling these
+  in unless they are the direct verification path for a selected required fix.
+
+## 5. Choose One Implementation Slice
+
+Pick the highest-leverage slice using this order:
+
+1. security fix
+2. compatibility breakage
+3. bugfix that affects kitcn users
+4. delete dirty hack made obsolete upstream
+5. agentic or DX improvement for deterministic setup, CLI, or generated output
+6. feature kitcn can expose cleanly
+7. docs or skill-only update
+8. optional tests or examples only after user approval
+
+If several relevant upstream fixes touch the same auth surface and do not
+conflict, delegate them together. If they touch separate surfaces, pick the
+highest-risk slice first.
+
+If the winning slice touches published package code, the delegated task must
+update the active changeset and run `bun --cwd packages/kitcn build`.
+
+If it touches scaffold templates, the delegated task must run
+`bun run fixtures:sync` and `bun run fixtures:check`.
+
+If it touches auth runtime, client, provider, or query invalidation surfaces,
+the delegated task must follow the repo's auth verification lane. Do not import
+a slow upstream e2e suite unless the user explicitly approves it.
+
+## 6. Delegate Through `task`
+
+Load
+[$task](../task/SKILL.md) with a
+prompt in this exact shape:
+
+```md
+Implement this convex-better-auth sync opportunity.
+
+Fork: zbeyens/convex-better-auth
+Upstream: <upstream-owner>/<repo-name>
+Range: <fork-ref>..<upstream-ref>
+Behind: <count> commits
+
+Opportunity: <one-sentence selected slice>
+Class: <security | compatibility | bugfix | cleanup | agentic | feature | docs | tests>
+
+Evidence:
+- Upstream commits: <short commit list or summary>
+- Upstream diff: <refs and files>
+- Kitcn evidence: <local files and docs/solutions notes>
+
+Implementation:
+- <specific files or surfaces to inspect first>
+- <expected code/doc/test shape>
+- <anything explicitly ignored as irrelevant>
+
+Acceptance:
+- <focused tests/checks>
+- <package build if packages/kitcn changes>
+- <fixtures commands if scaffold output changes>
+- open the PR after verification
+
+Do not preserve obsolete auth workarounds if the upstream change removes the
+need for them. Hard cut the hack.
+Do not add optional slow e2e suites, broad examples, or dev-only upstream test
+infrastructure unless the user approved that scope.
+```
+
+Then follow `task` until the PR exists or a real blocker is proven.
+
+## Output
+
+Before delegation, keep the audit terse:
+
+```md
+Fork: zbeyens/convex-better-auth
+Upstream: <upstream-owner>/<repo-name>
+Range: <fork-ref>..<upstream-ref>
+Behind: <count>
+
+| Class | Opportunity | Evidence | Decision |
+| --- | --- | --- | --- |
+| bugfix | ... | ... | selected |
+
+Delegating to task: <selected slice>
+```
+
+If the right choice is ambiguous, stop and ask one pointed question. Example:
+
+```md
+Upstream added a Playwright e2e suite that does not fix a current kitcn bug.
+Do you want that pulled in, or should I ignore it and keep this sync to runtime
+fixes only?
+```
+
+After `task` finishes, use its final handoff format.

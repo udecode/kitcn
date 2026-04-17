@@ -1,6 +1,7 @@
 import {
   checkUniqueFields,
   hasUniqueFields,
+  paginate,
   selectFields,
 } from './adapter-utils';
 
@@ -47,6 +48,240 @@ describe('selectFields', () => {
     expect(await selectFields(doc as any, ['id'])).toEqual({
       _id: 'u1',
     });
+  });
+});
+
+describe('paginate', () => {
+  test('reapplies insensitive equality filters after index selection', async () => {
+    const queryBuilder = {
+      eq: () => queryBuilder,
+    };
+    const db = {
+      query: () => ({
+        withIndex: (
+          _indexName: string,
+          applyRange?: (q: typeof queryBuilder) => unknown
+        ) => {
+          applyRange?.(queryBuilder);
+
+          return {
+            order: () => ({
+              async *[Symbol.asyncIterator]() {
+                yield {
+                  _creationTime: 1,
+                  _id: 'account-1',
+                  email: 'ALICE@example.com',
+                  providerId: 'github',
+                };
+                yield {
+                  _creationTime: 2,
+                  _id: 'account-2',
+                  email: 'bob@example.com',
+                  providerId: 'github',
+                };
+              },
+            }),
+          };
+        },
+      }),
+    };
+
+    const result = await paginate(
+      { db } as any,
+      {
+        tables: {
+          account: {
+            indexes: [
+              {
+                fields: ['providerId'],
+                indexDescriptor: 'by_provider',
+              },
+            ],
+            export: () => ({
+              indexes: [
+                {
+                  fields: ['providerId'],
+                  indexDescriptor: 'by_provider',
+                },
+              ],
+            }),
+          },
+        },
+      } as any,
+      {} as any,
+      {
+        model: 'account',
+        paginationOpts: { cursor: null, numItems: 10 },
+        where: [
+          {
+            field: 'providerId',
+            operator: 'eq',
+            value: 'github',
+          },
+          {
+            field: 'email',
+            mode: 'insensitive',
+            operator: 'eq',
+            value: 'alice@example.com',
+          },
+        ],
+      }
+    );
+
+    expect(result.page).toEqual([
+      {
+        _creationTime: 1,
+        _id: 'account-1',
+        email: 'ALICE@example.com',
+        providerId: 'github',
+      },
+    ]);
+  });
+
+  test('matches insensitive range boundaries with different casing', async () => {
+    const db = {
+      query: () => ({
+        withIndex: () => ({
+          order: () => ({
+            async *[Symbol.asyncIterator]() {
+              yield {
+                _creationTime: 1,
+                _id: 'account-1',
+                email: 'ABC@example.com',
+              };
+              yield {
+                _creationTime: 2,
+                _id: 'account-2',
+                email: 'abd@example.com',
+              };
+            },
+          }),
+        }),
+      }),
+    };
+
+    const result = await paginate(
+      { db } as any,
+      {
+        tables: {
+          account: {
+            indexes: [],
+            export: () => ({
+              indexes: [],
+            }),
+          },
+        },
+      } as any,
+      {} as any,
+      {
+        model: 'account',
+        paginationOpts: { cursor: null, numItems: 10 },
+        where: [
+          {
+            field: 'email',
+            mode: 'insensitive',
+            operator: 'gte',
+            value: 'abc@example.com',
+          },
+          {
+            field: 'email',
+            mode: 'insensitive',
+            operator: 'lte',
+            value: 'abc@example.com',
+          },
+        ],
+      }
+    );
+
+    expect(result.page).toEqual([
+      {
+        _creationTime: 1,
+        _id: 'account-1',
+        email: 'ABC@example.com',
+      },
+    ]);
+  });
+
+  test('uses composite indexes with real field names for eq plus sortBy', async () => {
+    const indexCalls: Array<{ indexName: string }> = [];
+    const rangeCalls: Array<{ field: string; value: unknown }> = [];
+    const queryBuilder = {
+      eq: (field: string, value: unknown) => {
+        rangeCalls.push({ field, value });
+        return queryBuilder;
+      },
+    };
+    const db = {
+      query: () => ({
+        withIndex: (
+          indexName: string,
+          applyRange?: (q: typeof queryBuilder) => unknown
+        ) => {
+          indexCalls.push({ indexName });
+          applyRange?.(queryBuilder);
+
+          return {
+            order: () => ({
+              async *[Symbol.asyncIterator]() {
+                yield {
+                  _creationTime: 1,
+                  _id: 'account-1',
+                  accountId: 'acct_1',
+                  providerId: 'github',
+                };
+              },
+            }),
+          };
+        },
+      }),
+    };
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const result = await paginate(
+        { db } as any,
+        {
+          tables: {
+            account: {
+              indexes: [
+                {
+                  fields: ['providerId', 'accountId'],
+                  indexDescriptor: 'by_provider_account',
+                },
+              ],
+              export: () => ({
+                indexes: [
+                  {
+                    fields: ['providerId', 'accountId'],
+                    indexDescriptor: 'by_provider_account',
+                  },
+                ],
+              }),
+            },
+          },
+        } as any,
+        {} as any,
+        {
+          model: 'account',
+          paginationOpts: { cursor: null, numItems: 10 },
+          sortBy: { direction: 'asc', field: 'accountId' },
+          where: [
+            {
+              field: 'providerId',
+              operator: 'eq',
+              value: 'github',
+            },
+          ],
+        }
+      );
+
+      expect(indexCalls[0]?.indexName).toBe('by_provider_account');
+      expect(rangeCalls).toEqual([{ field: 'providerId', value: 'github' }]);
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(result.page).toHaveLength(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
 

@@ -19,7 +19,7 @@ import {
 describe('cli/supported-dependencies', () => {
   test('extracts package names from install specs', () => {
     expect(getPackageNameFromInstallSpec('convex@1.35.1')).toBe('convex');
-    expect(getPackageNameFromInstallSpec('better-auth@1.5.3')).toBe(
+    expect(getPackageNameFromInstallSpec('better-auth@1.6.5')).toBe(
       'better-auth'
     );
     expect(getPackageNameFromInstallSpec('@scope/pkg@1.2.3')).toBe(
@@ -73,8 +73,8 @@ describe('cli/supported-dependencies', () => {
       'file:/tmp/kitcn-resend.tgz'
     );
     expect(
-      resolveSupportedDependencyInstallSpec('better-auth@1.5.3', env)
-    ).toBe('better-auth@1.5.3');
+      resolveSupportedDependencyInstallSpec('better-auth@1.6.5', env)
+    ).toBe('better-auth@1.6.5');
   });
 
   test('warns when the app pins an older supported peer dependency', () => {

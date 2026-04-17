@@ -7,3 +7,7 @@ declare const http: HttpRouter;
 declare const getAuth: (ctx: unknown) => Auth<BetterAuthOptions>;
 
 registerRoutes(http, getAuth, { cors: false });
+registerRoutes(http, getAuth, {
+  basePath: '/api/auth',
+  cors: false,
+});

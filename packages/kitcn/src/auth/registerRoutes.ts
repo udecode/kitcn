@@ -8,6 +8,21 @@ import type { GetAuth } from './types';
 
 type TrustedOriginsOption = BetterAuthOptions['trustedOrigins'];
 
+type RouteCorsOptions =
+  | {
+      // These values are appended to the default values
+      allowedHeaders?: string[];
+      allowedOrigins?: string[];
+      exposedHeaders?: string[];
+    }
+  | boolean;
+
+type RegisterRoutesOptions = {
+  basePath?: string;
+  cors?: RouteCorsOptions;
+  verbose?: boolean;
+};
+
 type AuthRouteContract = {
   $context: Promise<{
     options: {
@@ -22,12 +37,49 @@ type AuthRouteContract = {
   };
 };
 
+type RouteRegistration<Ctx> = {
+  getAuth: GetAuth<Ctx, AuthRouteContract>;
+  getRegistrationAuth: () => AuthRouteContract;
+  path: string;
+};
+
 const LOCAL_AUTH_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 const LOCAL_CONVEX_AUTH_IP_PATHS = new Set([
   '/convex/.well-known/openid-configuration',
   '/convex/jwks',
   '/convex/token',
 ]);
+
+const restoreOriginalForwardedHeaders = (request: Request) => {
+  const originalHost = request.headers.get('x-better-auth-forwarded-host');
+  const originalProto = request.headers.get('x-better-auth-forwarded-proto');
+
+  if (!originalHost && !originalProto) {
+    return request;
+  }
+
+  const headers = new Headers(request.headers);
+
+  if (originalHost) {
+    headers.set('x-forwarded-host', originalHost);
+  }
+
+  if (originalProto) {
+    headers.set('x-forwarded-proto', originalProto);
+  }
+
+  const init: RequestInit & { duplex?: 'half' } = {
+    headers,
+    method: request.method,
+  };
+
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    init.body = request.body;
+    init.duplex = 'half';
+  }
+
+  return new Request(request.url, init);
+};
 
 const withLocalConvexAuthIp = (request: Request, basePath: string) => {
   const forwardedFor = request.headers.get('x-forwarded-for');
@@ -72,31 +124,22 @@ const withLocalConvexAuthIp = (request: Request, basePath: string) => {
   });
 };
 
-export const registerRoutes = <Ctx>(
+const registerAuthRoutes = <Ctx>(
   http: HttpRouter,
-  getAuth: GetAuth<Ctx, AuthRouteContract>,
-  opts: {
-    cors?:
-      | {
-          // These values are appended to the default values
-          allowedHeaders?: string[];
-          allowedOrigins?: string[];
-          exposedHeaders?: string[];
-        }
-      | boolean;
-    verbose?: boolean;
-  } = {}
+  registration: RouteRegistration<Ctx>,
+  opts: RegisterRoutesOptions = {}
 ) => {
-  const staticAuth = getAuth({} as any);
-  const path = staticAuth.options.basePath ?? '/api/auth';
+  const { getAuth, getRegistrationAuth, path } = registration;
   const authRequestHandler = httpActionGeneric(async (ctx, request) => {
     if (opts?.verbose) {
-      console.log('options.baseURL', staticAuth.options.baseURL);
+      console.log('options.baseURL', getRegistrationAuth().options.baseURL);
       console.log('request headers', request.headers);
     }
 
     const auth = getAuth(ctx as any);
-    const authRequest = withLocalConvexAuthIp(request, path);
+    const authRequest = restoreOriginalForwardedHeaders(
+      withLocalConvexAuthIp(request, path)
+    );
     let response: Response;
     try {
       response = await auth.handler(authRequest);
@@ -166,7 +209,7 @@ export const registerRoutes = <Ctx>(
     allowedOrigins: async (request) => {
       const resolvedTrustedOrigins =
         trustedOriginsOption ??
-        (await staticAuth.$context).options.trustedOrigins ??
+        (await getRegistrationAuth().$context).options.trustedOrigins ??
         [];
       trustedOriginsOption = resolvedTrustedOrigins;
       const rawOrigins = Array.isArray(resolvedTrustedOrigins)
@@ -198,4 +241,28 @@ export const registerRoutes = <Ctx>(
     method: 'POST',
     pathPrefix: `${path}/`,
   });
+};
+
+export const registerRoutes = <Ctx>(
+  http: HttpRouter,
+  getAuth: GetAuth<Ctx, AuthRouteContract>,
+  opts: RegisterRoutesOptions = {}
+) => {
+  return registerAuthRoutes(
+    http,
+    {
+      getAuth,
+      getRegistrationAuth: (() => {
+        let registrationAuth: AuthRouteContract | undefined;
+
+        return () => {
+          registrationAuth ??= getAuth({} as any);
+
+          return registrationAuth;
+        };
+      })(),
+      path: opts.basePath ?? '/api/auth',
+    },
+    opts
+  );
 };

@@ -26,11 +26,7 @@ import {
   useAuthStore,
   useAuthValue,
 } from '../react/auth-store';
-
-// Re-export AuthClient type
-export type { AuthClient } from '@convex-dev/better-auth/react';
-
-import type { AuthClient } from '@convex-dev/better-auth/react';
+import type { AuthClient } from './types';
 
 type AuthClientFetch = AuthClient & {
   $fetch?: (
@@ -82,6 +78,14 @@ const wait = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
+const readAuthResultData = (result: unknown) => {
+  if (!result || typeof result !== 'object') {
+    return;
+  }
+
+  return (result as { data?: unknown }).data;
+};
+
 const getSessionFromPersistedToken = async (
   authClient: AuthClientFetch,
   token: string
@@ -105,8 +109,9 @@ const getSessionFromPersistedToken = async (
           },
         });
 
-    if (result?.data) {
-      return result.data;
+    const data = readAuthResultData(result);
+    if (data) {
+      return data;
     }
 
     if (attempt < 9) {
@@ -573,7 +578,7 @@ function useOTTHandler(authClient: AuthClient) {
           });
         const session = result.data?.session;
 
-        if (session) {
+        if (session && typeof authClient.getSession === 'function') {
           await authClient.getSession({
             fetchOptions: {
               credentials: 'omit',

@@ -43,6 +43,12 @@ describe('convexBetterAuth', () => {
       const getHeaders = new Headers(calls[0]?.init?.headers);
       expect(getHeaders.get('accept-encoding')).toBe('application/json');
       expect(getHeaders.get('host')).toBe('my-app.convex.site');
+      expect(getHeaders.get('x-forwarded-host')).toBe('example.com');
+      expect(getHeaders.get('x-forwarded-proto')).toBe('https');
+      expect(getHeaders.get('x-better-auth-forwarded-host')).toBe(
+        'example.com'
+      );
+      expect(getHeaders.get('x-better-auth-forwarded-proto')).toBe('https');
       expect(calls[0]?.init?.body).toBeUndefined();
 
       expect(calls[1]?.input).toBe('https://my-app.convex.site/other?b=2');
@@ -51,6 +57,12 @@ describe('convexBetterAuth', () => {
       const postHeaders = new Headers(calls[1]?.init?.headers);
       expect(postHeaders.get('accept-encoding')).toBe('application/json');
       expect(postHeaders.get('host')).toBe('my-app.convex.site');
+      expect(postHeaders.get('x-forwarded-host')).toBe('example.com');
+      expect(postHeaders.get('x-forwarded-proto')).toBe('https');
+      expect(postHeaders.get('x-better-auth-forwarded-host')).toBe(
+        'example.com'
+      );
+      expect(postHeaders.get('x-better-auth-forwarded-proto')).toBe('https');
       await expect(
         new Response(calls[1]?.init?.body as BodyInit).text()
       ).resolves.toBe(JSON.stringify({ email: 'user@example.com' }));

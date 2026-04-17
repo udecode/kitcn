@@ -2,13 +2,13 @@
 
 /**
  * Next.js + Better Auth wrapper for Convex caller factory.
- * Uses @convex-dev/better-auth for token management.
  */
 
-import { type GetTokenOptions, getToken } from '@convex-dev/better-auth/utils';
-
+import { type GetTokenOptions, getToken } from '../auth/internal/token';
 import { defaultIsUnauthorized } from '../crpc/error';
 import { createCallerFactory } from '../server/caller-factory';
+
+const TRAILING_COLON_RE = /:$/;
 
 const handler = async (request: Request, siteUrl: string) => {
   const requestUrl = new URL(request.url);
@@ -16,6 +16,16 @@ const handler = async (request: Request, siteUrl: string) => {
   const headers = new Headers(request.headers);
   headers.set('accept-encoding', 'application/json');
   headers.set('host', new URL(siteUrl).host);
+  headers.set('x-forwarded-host', requestUrl.host);
+  headers.set(
+    'x-forwarded-proto',
+    requestUrl.protocol.replace(TRAILING_COLON_RE, '')
+  );
+  headers.set('x-better-auth-forwarded-host', requestUrl.host);
+  headers.set(
+    'x-better-auth-forwarded-proto',
+    requestUrl.protocol.replace(TRAILING_COLON_RE, '')
+  );
   const body =
     request.method !== 'GET' && request.method !== 'HEAD'
       ? await request.arrayBuffer()
@@ -36,6 +46,8 @@ const nextJsHandler = (siteUrl: string) => ({
 
 /** Auth options for server-side calls. */
 type AuthOptions = {
+  /** Better Auth auth route base path. Defaults to `/api/auth`. */
+  basePath?: string;
   /** Enable/disable JWT caching. Default: true */
   jwtCache?: boolean;
   /** Custom function to detect UNAUTHORIZED errors. Default checks code property. */
@@ -91,6 +103,7 @@ export function convexBetterAuth<TApi extends Record<string, unknown>>(
             mutableHeaders.delete('transfer-encoding');
             mutableHeaders.set('accept-encoding', 'identity');
             return getToken(siteUrl, mutableHeaders, {
+              basePath: auth.basePath,
               ...(getTokenOpts as GetTokenOptions),
               jwtCache: {
                 enabled: true,

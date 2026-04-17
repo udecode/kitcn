@@ -200,6 +200,8 @@ Keep all auth reads/writes on ORM table definitions in `convex/functions/schema.
 
 Use `kitcn/auth/http` for `authMiddleware` or `registerRoutes`.
 It auto-installs the Convex-safe `MessageChannel` polyfill, so no manual `http-polyfills.ts` file is needed.
+`registerRoutes` is lazy by default. If the auth config uses a custom base path,
+pass that same `basePath` in the route options.
 
 **Create:** `convex/functions/http.ts`
 

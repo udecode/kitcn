@@ -25,6 +25,7 @@ type AdapterPaginationOptions = PaginationOptions & {
 export const adapterWhereValidator = v.object({
   connector: v.optional(v.union(v.literal('AND'), v.literal('OR'))),
   field: v.string(),
+  mode: v.optional(v.union(v.literal('sensitive'), v.literal('insensitive'))),
   operator: v.optional(
     v.union(
       v.literal('lt'),
@@ -114,6 +115,7 @@ const findIndex = (
     };
     where?: {
       field: string;
+      mode?: 'sensitive' | 'insensitive';
       value: number[] | string[] | boolean | number | string | null;
       connector?: 'AND' | 'OR';
       operator?:
@@ -142,6 +144,7 @@ const findIndex = (
 
   const where = args.where?.filter(
     (w) =>
+      w.mode !== 'insensitive' &&
       (!w.operator ||
         ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'not_in'].includes(
           w.operator
@@ -218,14 +221,10 @@ const findIndex = (
   // We internally use _creationTime in place of Better Auth's createdAt
   const indexFields = indexEqFields
     .map(([field]) => field)
-    .concat(
-      boundField && boundField !== 'createdAt'
-        ? `${indexEqFields.length > 0 ? '_' : ''}${boundField}`
-        : ''
-    )
+    .concat(boundField && boundField !== 'createdAt' ? boundField : '')
     .concat(
       sortField && sortField !== 'createdAt' && boundField !== sortField
-        ? `${indexEqFields.length > 0 || boundField ? '_' : ''}${sortField}`
+        ? sortField
         : ''
     )
     .filter(Boolean);
@@ -369,6 +368,10 @@ const filterByWhere = <
     const value = doc[w.field as keyof typeof doc] as Infer<
       typeof adapterWhereValidator
     >['value'];
+    const normalizeString = (input: string) =>
+      w.mode === 'insensitive' ? input.toLowerCase() : input;
+    const normalizeComparable = (input: typeof value) =>
+      typeof input === 'string' ? normalizeString(input) : input;
     const isLessThan = (val: typeof value, wVal: typeof w.value) => {
       if (wVal === undefined || wVal === null) {
         return false;
@@ -377,7 +380,10 @@ const filterByWhere = <
         return true;
       }
 
-      return val < wVal;
+      return (
+        (normalizeComparable(val) as string | number | boolean) <
+        (normalizeComparable(wVal) as string | number | boolean)
+      );
     };
     const isGreaterThan = (val: typeof value, wVal: typeof w.value) => {
       if (val === undefined || val === null) {
@@ -387,44 +393,75 @@ const filterByWhere = <
         return true;
       }
 
-      return val > wVal;
+      return (
+        (normalizeComparable(val) as string | number | boolean) >
+        (normalizeComparable(wVal) as string | number | boolean)
+      );
     };
     const filter = (w: Infer<typeof adapterWhereValidator>) => {
+      const comparableValue = normalizeComparable(value);
+      const comparableWhereValue = normalizeComparable(w.value);
       switch (w.operator) {
         case 'contains': {
-          return typeof value === 'string' && value.includes(w.value as string);
+          return (
+            typeof comparableValue === 'string' &&
+            typeof comparableWhereValue === 'string' &&
+            comparableValue.includes(comparableWhereValue)
+          );
         }
         case 'ends_with': {
-          return typeof value === 'string' && value.endsWith(w.value as string);
+          return (
+            typeof comparableValue === 'string' &&
+            typeof comparableWhereValue === 'string' &&
+            comparableValue.endsWith(comparableWhereValue)
+          );
         }
         case 'eq':
         case undefined: {
-          return value === w.value;
+          return comparableValue === comparableWhereValue;
         }
         case 'gt': {
           return isGreaterThan(value, w.value);
         }
         case 'gte': {
-          return value === w.value || isGreaterThan(value, w.value);
+          return (
+            comparableValue === comparableWhereValue ||
+            isGreaterThan(value, w.value)
+          );
         }
         case 'in': {
-          return Array.isArray(w.value) && (w.value as any[]).includes(value);
+          return (
+            Array.isArray(w.value) &&
+            (w.value as any[]).some(
+              (candidate) => normalizeComparable(candidate) === comparableValue
+            )
+          );
         }
         case 'lt': {
           return isLessThan(value, w.value);
         }
         case 'lte': {
-          return value === w.value || isLessThan(value, w.value);
+          return (
+            comparableValue === comparableWhereValue ||
+            isLessThan(value, w.value)
+          );
         }
         case 'ne': {
-          return value !== w.value;
+          return comparableValue !== comparableWhereValue;
         }
         case 'not_in': {
-          return Array.isArray(w.value) && !(w.value as any[]).includes(value);
+          return (
+            Array.isArray(w.value) &&
+            !(w.value as any[]).some(
+              (candidate) => normalizeComparable(candidate) === comparableValue
+            )
+          );
         }
         case 'starts_with': {
           return (
-            typeof value === 'string' && value.startsWith(w.value as string)
+            typeof comparableValue === 'string' &&
+            typeof comparableWhereValue === 'string' &&
+            comparableValue.startsWith(comparableWhereValue)
           );
         }
       }
@@ -507,10 +544,11 @@ const generateQuery = (
       // Index used for all eq and range clauses, apply remaining clauses
       // incompatible with Convex statically.
       (w) =>
-        w.operator &&
-        ['contains', 'ends_with', 'ne', 'not_in', 'starts_with'].includes(
-          w.operator
-        )
+        w.mode === 'insensitive' ||
+        (w.operator &&
+          ['contains', 'ends_with', 'ne', 'not_in', 'starts_with'].includes(
+            w.operator
+          ))
     );
   });
 
@@ -557,6 +595,7 @@ export const paginate = async <
   // where clauses as static filters.
   const uniqueWhere = args.where?.find(
     (w) =>
+      w.mode !== 'insensitive' &&
       (!w.operator || w.operator === 'eq') &&
       (isUniqueField(betterAuthSchema, args.model, w.field) ||
         w.field === '_id')
