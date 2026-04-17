@@ -1337,14 +1337,21 @@ export async function createProjectWithShadcn(params: {
   }
 }
 
+function buildMissingShadcnScaffoldMessage(projectDir: string): string {
+  const targetDir = normalizePath(relative(process.cwd(), projectDir) || '.');
+  return [
+    'Shadcn exited without creating a supported local scaffold.',
+    'This usually means you chose the Custom preset.',
+    `Run the generated shadcn command from ui.shadcn.com in ${targetDir} then re-run \`kitcn init --yes\` to adopt it.`,
+  ].join(' ');
+}
+
 function moveStagedProjectIntoExistingDir(params: {
   stagedProjectDir: string;
   targetDir: string;
 }) {
   if (!fs.existsSync(params.stagedProjectDir)) {
-    throw new Error(
-      `shadcn init did not create the staged project at ${params.stagedProjectDir}.`
-    );
+    throw new Error(buildMissingShadcnScaffoldMessage(params.targetDir));
   }
   if (
     !fs.existsSync(params.targetDir) ||
@@ -3010,6 +3017,16 @@ async function runScaffoldCommandFlow(params: {
     params.projectDir,
     params.template
   );
+  if (
+    params.template &&
+    !resolveProjectScaffoldContext({
+      cwd: scaffoldProjectDir,
+      allowMissing: true,
+      allowUnsupported: true,
+    })
+  ) {
+    throw new Error(buildMissingShadcnScaffoldMessage(scaffoldProjectDir));
+  }
 
   return withWorkingDirectory(scaffoldProjectDir, async () => {
     const config = params.loadCliConfigFn(params.configPath);
