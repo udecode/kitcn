@@ -1,6 +1,6 @@
 ---
 title: Auth scaffold peer installs and fixture sync must follow the packaged CLI path
-last_updated: 2026-04-01
+last_updated: 2026-04-17
 category: integration-issues
 tags:
   - auth
@@ -14,6 +14,7 @@ symptoms:
   - auth apps hit `Cannot find package '@opentelemetry/api'`
   - fresh Bun apps can warn during later `kitcn add ...` runs because `bun.lock` already carries Better Auth peers
   - plain non-auth apps can still fail codegen because the packaged CLI bundle imports Better Auth too early
+  - fresh `kitcn add auth` runs can fail before scaffold with `Cannot find package 'better-auth'`
   - `fixtures:sync` can say snapshots are fresh while `fixtures:check` still reports drift
 module: cli-fixtures-auth
 resolved: 2026-03-31
@@ -50,6 +51,10 @@ There were three separate mistakes:
 4. Fresh app baselines still omitted `@opentelemetry/api`, so Bun could keep
    warning on later `bun add` operations even after the auth-specific planning
    fix landed.
+5. First-pass auth schema registration still called
+   `loadDefaultManagedAuthOptions()` when `auth.ts` did not exist yet. That
+   pulled the managed Convex auth plugin into the published CLI before
+   `better-auth` was installed.
 
 ## Solution
 
@@ -74,6 +79,14 @@ Then cut the hot auth import out of the CLI bundle:
   lazy dynamic import that only runs when auth schema reconciliation actually
   happens
 
+Then keep first-pass auth scaffold on a static schema fallback:
+
+- if `convex/functions/auth.ts` is missing, resolve the default managed auth
+  schema from baked extension units instead of calling the Better Auth-backed
+  fallback loader
+- only reach for `loadDefaultManagedAuthOptions()` after auth is already
+  present and the app can legitimately load Better Auth runtime code
+
 Finally, make fixture sync mirror fixture check:
 
 - sync the generated app through the same packaged local install + validation
@@ -84,11 +97,12 @@ Finally, make fixture sync mirror fixture check:
 
 - `bun test packages/kitcn/src/cli/registry/dependencies.test.ts packages/kitcn/src/cli/supported-dependencies.test.ts`
 - `bun test ./packages/kitcn/src/cli/cli.commands.ts --test-name-pattern 'run\\(add auth --yes --no-codegen\\) patches the next baseline with minimal auth scaffolding|run\\(add auth --preset convex --yes\\) adopts a raw next convex app without kitcn baseline churn'`
-- `bun test packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts`
+- `bun test packages/kitcn/src/cli/registry/items/auth/reconcile-auth-schema.test.ts packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts`
 - `bun --cwd packages/kitcn build`
 - fresh packed CLI smoke: `KITCN_INSTALL_SPEC=<tarball> bunx --bun --package <tarball> kitcn init -t next --yes`
 - fresh packed CLI smoke: `bunx kitcn add auth --yes --no-codegen`
 - fresh packed CLI smoke: `bunx kitcn codegen`
+- fresh packed CLI smoke: `node node_modules/kitcn/dist/cli.mjs add auth --yes`
 
 ## Prevention
 
@@ -103,3 +117,5 @@ Finally, make fixture sync mirror fixture check:
 5. If Bun warnings only disappear after manually adding a package once, fix the
    generated app baseline or the CLI preflight. Do not teach users to ignore
    the warning.
+6. First-pass auth scaffold must not require Better Auth runtime code just to
+   compute the default managed schema.

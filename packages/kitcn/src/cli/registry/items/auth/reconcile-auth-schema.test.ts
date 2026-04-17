@@ -10,6 +10,7 @@ import {
   preserveUserOwnedAuthScaffoldFiles,
   reconcileAuthScaffoldFiles,
   renderManagedAuthSchemaFile,
+  resolveManagedAuthSchemaUnits,
 } from './reconcile-auth-schema';
 
 const baseAuthOptions = {
@@ -98,6 +99,23 @@ describe('reconcile auth schema', () => {
 
     expect(content).toContain('export const jwksTable = convexTable(');
     expect(content).toContain('"jwks"');
+  });
+
+  test('uses static default managed auth schema units when auth definition is missing', async () => {
+    const units = await resolveManagedAuthSchemaUnits({
+      authDefinitionPath: '/repo/convex/functions/auth.ts',
+      loadAuthOptions: async () => null,
+      renderManagedUnits: async () => {
+        throw new Error('should not load better-auth-backed schema units');
+      },
+    });
+
+    expect(units.find((unit) => unit.key === 'jwks')?.declaration).toContain(
+      'export const jwksTable = convexTable('
+    );
+    expect(units.find((unit) => unit.key === 'user')?.registration).toContain(
+      'user: userTable'
+    );
   });
 
   test('loads auth options from strict env-backed auth definitions', async () => {

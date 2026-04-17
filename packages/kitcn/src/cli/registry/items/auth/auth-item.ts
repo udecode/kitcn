@@ -49,10 +49,9 @@ import { AUTH_START_SERVER_TEMPLATE } from './auth-start-server.template.js';
 import { AUTH_START_SERVER_CALL_TEMPLATE } from './auth-start-server-call.template.js';
 import {
   loadAuthOptionsFromDefinition,
-  loadDefaultManagedAuthOptions,
   preserveUserOwnedAuthScaffoldFiles,
   reconcileAuthScaffoldFiles,
-  renderManagedAuthSchemaUnits,
+  resolveManagedAuthSchemaUnits,
 } from './reconcile-auth-schema.js';
 
 const INIT_HTTP_API_USE_BLOCK_RE =
@@ -161,9 +160,6 @@ async function buildAuthSchemaRegistrationPlanFile(
   const schemaPath = getSchemaFilePath(params.functionsDir);
   const source = fs.readFileSync(schemaPath, 'utf8');
   const authDefinitionPath = resolve(params.functionsDir, 'auth.ts');
-  const authOptions =
-    (await loadAuthOptionsFromDefinition(authDefinitionPath)) ??
-    (await loadDefaultManagedAuthOptions());
   const authSchemaLock = params.lockfile.plugins.auth?.schema ?? null;
   const result = await reconcileRootSchemaOwnership({
     claimMatchingManaged:
@@ -176,8 +172,9 @@ async function buildAuthSchemaRegistrationPlanFile(
     promptAdapter: params.promptAdapter,
     schemaPath,
     source,
-    tables: await renderManagedAuthSchemaUnits({
-      authOptions,
+    tables: await resolveManagedAuthSchemaUnits({
+      authDefinitionPath,
+      loadAuthOptions: loadAuthOptionsFromDefinition,
     }),
     yes: params.yes,
   });
