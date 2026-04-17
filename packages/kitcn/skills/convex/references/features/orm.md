@@ -75,6 +75,15 @@ parentId: text().references((): AnyColumn => commentsTable.id, {
   onDelete: "cascade",
 });
 
+// Bidirectional CMS revision pointers also work.
+// This shape is valid:
+// - revision.pageLocaleId -> pageLocales.id
+// - pageLocales.currentRevisionId -> pageLocaleRevisions.id
+// - pageLocales.publishedRevisionId -> pageLocaleRevisions.id
+currentRevisionId: id("pageLocaleRevisions").references(
+  () => pageLocaleRevisions.id
+);
+
 // Table-level (foreignKey builder, for non-id references)
 import { foreignKey } from "kitcn/orm";
 (t) => [foreignKey({ columns: [t.userSlug], foreignColumns: [users.slug] })];

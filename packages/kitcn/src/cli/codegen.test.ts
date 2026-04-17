@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getFunctionName } from 'convex/server';
 import { generateMeta, getConvexConfig } from './codegen';
 
@@ -125,6 +125,32 @@ function writeScopedFixture(dir: string) {
     export default {};
     `.trim()
   );
+}
+
+function writeRealOrmFixture(dir: string) {
+  const kitcnDir = path.join(dir, 'node_modules', 'kitcn');
+  const sourceRoot = fileURLToPath(new URL('../../src', import.meta.url));
+  const repoNodeModules = fileURLToPath(
+    new URL('../../../../node_modules', import.meta.url)
+  );
+  fs.mkdirSync(kitcnDir, { recursive: true });
+  writeFile(
+    path.join(kitcnDir, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'kitcn',
+        type: 'module',
+        exports: {
+          './orm': './src/orm/index.ts',
+          './server': './src/server/index.ts',
+        },
+      },
+      null,
+      2
+    )
+  );
+  fs.symlinkSync(sourceRoot, path.join(kitcnDir, 'src'), 'dir');
+  fs.symlinkSync(repoNodeModules, path.join(kitcnDir, 'node_modules'), 'dir');
 }
 
 describe('cli/codegen', () => {
@@ -4151,6 +4177,64 @@ export default createHttpRouter({}, router({}));
       expect(serverSource).toContain(
         'export type QueryCtx = OrmCtx<ServerQueryCtx>;'
       );
+      expect(serverSource).toContain('query: (ctx) => withOrm(ctx),');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta loads cyclic revision-pointer schemas as ORM-backed', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeRealOrmFixture(dir);
+      writeFile(
+        path.join(dir, 'package.json'),
+        JSON.stringify({
+          name: 'issue-218-repro',
+          private: true,
+          type: 'module',
+        })
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        import { convexTable, defineSchema, id, integer, text } from "kitcn/orm";
+
+        export const pageLocales = convexTable("pageLocales", {
+          title: text().notNull(),
+          currentRevisionId: id("pageLocaleRevisions").references(
+            () => pageLocaleRevisions.id
+          ),
+          publishedRevisionId: id("pageLocaleRevisions").references(
+            () => pageLocaleRevisions.id
+          ),
+        });
+
+        export const pageLocaleRevisions = convexTable("pageLocaleRevisions", {
+          pageLocaleId: id("pageLocales")
+            .references(() => pageLocales.id, { onDelete: "cascade" })
+            .notNull(),
+          revisionNumber: integer().notNull(),
+          title: text().notNull(),
+        });
+
+        export const tables = { pageLocales, pageLocaleRevisions };
+        export default defineSchema(tables);
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).resolves.toBe(
+        undefined
+      );
+
+      const serverSource = fs.readFileSync(
+        path.join(dir, 'convex', 'generated', 'server.ts'),
+        'utf8'
+      );
+      expect(serverSource).toContain('import {\n  createOrm,');
       expect(serverSource).toContain('query: (ctx) => withOrm(ctx),');
     } finally {
       process.chdir(oldCwd);
