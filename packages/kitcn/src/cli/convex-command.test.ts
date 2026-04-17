@@ -1,26 +1,55 @@
-import { describe, expect, test } from 'bun:test';
-import { normalizeConvexCommandResult } from './convex-command';
+import { describe, expect, mock, test } from 'bun:test';
+
+const CONVEX_CLI_ENTRY_RE = /convex[\\/]+bin[\\/]main\.js$/;
 
 describe('cli/convex-command', () => {
-  test('normalizeConvexCommandResult strips generic Convex nags from output', () => {
-    const result = normalizeConvexCommandResult({
+  test('runLocalConvexCommand executes the real Convex CLI through node', async () => {
+    const execaStub = mock(async () => ({
       exitCode: 0,
-      stdout: [
-        'Run `npx convex login` at any time to create an account and link this deployment.',
-        'A minor update is available for Convex (1.33.0 → 1.34.0)',
-        'Changelog: https://github.com/get-convex/convex-js/blob/main/CHANGELOG.md#changelog',
-        'real stdout line',
-      ].join('\n'),
-      stderr: [
-        'Run `npx convex login` at any time to create an account and link this deployment.',
-        'real stderr line',
-      ].join('\n'),
-    });
+      stderr: '',
+      stdout: 'ok\n',
+    }));
+
+    mock.module('execa', () => ({
+      execa: execaStub,
+    }));
+
+    const { CLEARED_CONVEX_ENV, runLocalConvexCommand } = await import(
+      './convex-command'
+    );
+
+    const result = await runLocalConvexCommand(
+      ['run', 'generated/auth:getLatestJwks'],
+      {
+        cwd: '/tmp/kitcn-app',
+        env: {
+          FOO: 'bar',
+        },
+      }
+    );
 
     expect(result).toEqual({
       exitCode: 0,
-      stdout: 'real stdout line',
-      stderr: 'real stderr line',
+      stderr: '',
+      stdout: 'ok',
     });
+
+    expect(execaStub).toHaveBeenCalledWith(
+      'node',
+      [
+        expect.stringMatching(CONVEX_CLI_ENTRY_RE),
+        'run',
+        'generated/auth:getLatestJwks',
+      ],
+      expect.objectContaining({
+        cwd: '/tmp/kitcn-app',
+        env: expect.objectContaining({
+          ...CLEARED_CONVEX_ENV,
+          FOO: 'bar',
+        }),
+        reject: false,
+        stdio: 'pipe',
+      })
+    );
   });
 });
