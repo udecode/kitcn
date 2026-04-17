@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.13.2
+
+### Patch Changes
+
+- [`0f1bed4`](https://github.com/udecode/kitcn/commit/0f1bed493208211e3f452420b2756456ed16f5de) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn add auth` in fresh apps so the CLI does not require `better-auth` to be installed before the auth scaffold planner runs.
+
 ## 0.13.1
 
 ### Patch Changes
