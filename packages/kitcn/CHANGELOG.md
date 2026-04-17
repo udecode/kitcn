@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.13.1
+
+### Patch Changes
+
+- [#219](https://github.com/udecode/kitcn/pull/219) [`3ec2d3b`](https://github.com/udecode/kitcn/commit/3ec2d3b4d4049817124dc4fff12162d1fed2b1a5) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix auth env sync and local auth bootstrap so `kitcn add auth`, `kitcn env push`, and `kitcn dev --bootstrap` use the real Convex CLI entrypoint more reliably across runtimes and platforms.
+  - Fix `kitcn init -t <next|start|vite>` custom shadcn preset exits so they stop with a clear rerun instruction instead of crashing while patching scaffold files.
+  - Improve `kitcn init -t <next|start|vite>` fresh scaffolds by syncing the shadcn wrapper to `shadcn@4.3.0` and regenerating the starter outputs against the latest upstream template contract.
+
 ## 0.13.0
 
 ### Minor Changes
