@@ -135,6 +135,61 @@ test('references resolves forward references via table.id', () => {
   );
 });
 
+test('references resolves bidirectional revision pointers in a CMS schema', () => {
+  const pageLocales = convexTable('pageLocales', {
+    title: text().notNull(),
+    currentRevisionId: id('pageLocaleRevisions').references(
+      () => pageLocaleRevisions.id
+    ),
+    publishedRevisionId: id('pageLocaleRevisions').references(
+      () => pageLocaleRevisions.id
+    ),
+  });
+
+  const pageLocaleRevisions = convexTable('pageLocaleRevisions', {
+    pageLocaleId: id('pageLocales')
+      .references(() => pageLocales.id, { onDelete: 'cascade' })
+      .notNull(),
+    revisionNumber: text().notNull(),
+    title: text().notNull(),
+  });
+
+  expect(() =>
+    defineSchema({
+      pageLocales,
+      pageLocaleRevisions,
+    })
+  ).not.toThrow();
+
+  const pageLocalesConfig = getTableConfig(pageLocales);
+  const pageLocaleRevisionsConfig = getTableConfig(pageLocaleRevisions);
+
+  expect(pageLocalesConfig.foreignKeys).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        columns: ['currentRevisionId'],
+        foreignTableName: 'pageLocaleRevisions',
+        foreignColumns: ['_id'],
+      }),
+      expect.objectContaining({
+        columns: ['publishedRevisionId'],
+        foreignTableName: 'pageLocaleRevisions',
+        foreignColumns: ['_id'],
+      }),
+    ])
+  );
+  expect(pageLocaleRevisionsConfig.foreignKeys).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        columns: ['pageLocaleId'],
+        foreignTableName: 'pageLocales',
+        foreignColumns: ['_id'],
+        onDelete: 'cascade',
+      }),
+    ])
+  );
+});
+
 test('references rejects detached id(table) callbacks', () => {
   const users = convexTable('users', {
     name: text().notNull(),
