@@ -211,13 +211,6 @@ const withDisabledSessionSignal = <T>(
   } as T & MutationArgsWithFetchOptions;
 };
 
-type AuthMutationsResult = {
-  useSignOutMutationOptions: MutationOptionsHook<unknown, void>;
-  useSignInSocialMutationOptions: MutationOptionsHook<unknown, unknown>;
-  useSignInMutationOptions: MutationOptionsHook<unknown, unknown>;
-  useSignUpMutationOptions: MutationOptionsHook<unknown, unknown>;
-};
-
 /**
  * Create mutation option hooks from a better-auth client.
  *
@@ -241,6 +234,16 @@ type AuthMutationsResult = {
  * }));
  * ```
  */
+type AuthMutationsResult = {
+  useSignOutMutationOptions: MutationOptionsHook<
+    unknown,
+    MutationArgsWithFetchOptions | void
+  >;
+  useSignInSocialMutationOptions: MutationOptionsHook<unknown, unknown>;
+  useSignInMutationOptions: MutationOptionsHook<unknown, unknown>;
+  useSignUpMutationOptions: MutationOptionsHook<unknown, unknown>;
+};
+
 export function createAuthMutations(
   authClient: AuthClient
 ): AuthMutationsResult {

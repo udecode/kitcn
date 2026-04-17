@@ -4,10 +4,12 @@ import type { Jwk } from 'better-auth/plugins/jwt';
 import type { AuthProvider } from 'convex/server';
 import * as jose from 'jose';
 import { JWT_COOKIE_NAME } from './convex-plugin';
+import { isTokenExpired, resolveConvexTokenPath } from './token-utils';
 
 const STATIC_JWKS_CLEANUP_RE = /[\s\\]/g;
 
 export type GetTokenOptions = {
+  basePath?: string;
   cookiePrefix?: string;
   forceRefresh?: boolean;
   jwtCache?: {
@@ -24,7 +26,7 @@ export const getToken = async (
 ) => {
   const fetchToken = async () => {
     const { data } = await betterFetch<{ token: string }>(
-      '/api/auth/convex/token',
+      resolveConvexTokenPath(opts?.basePath),
       {
         baseURL: siteUrl,
         headers,
@@ -47,13 +49,12 @@ export const getToken = async (
 
   try {
     const claims = jose.decodeJwt(token);
-    const exp = claims?.exp;
-    const now = Math.floor(Date.now() / 1000);
-    const isExpired = exp
-      ? now > exp + (opts?.jwtCache?.expirationToleranceSeconds ?? 60)
-      : true;
-
-    if (!isExpired) {
+    if (
+      !isTokenExpired(
+        claims?.exp,
+        opts?.jwtCache?.expirationToleranceSeconds ?? 60
+      )
+    ) {
       return { isFresh: false, token };
     }
   } catch (error) {

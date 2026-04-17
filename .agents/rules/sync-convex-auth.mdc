@@ -215,7 +215,7 @@ a slow upstream e2e suite unless the user explicitly approves it.
 ## 6. Delegate Through `task`
 
 Load
-[$task](../skills/task/SKILL.md) with a
+[$task](../task/SKILL.md) with a
 prompt in this exact shape:
 
 ```md

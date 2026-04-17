@@ -46,6 +46,8 @@ const nextJsHandler = (siteUrl: string) => ({
 
 /** Auth options for server-side calls. */
 type AuthOptions = {
+  /** Better Auth auth route base path. Defaults to `/api/auth`. */
+  basePath?: string;
   /** Enable/disable JWT caching. Default: true */
   jwtCache?: boolean;
   /** Custom function to detect UNAUTHORIZED errors. Default checks code property. */
@@ -101,6 +103,7 @@ export function convexBetterAuth<TApi extends Record<string, unknown>>(
             mutableHeaders.delete('transfer-encoding');
             mutableHeaders.set('accept-encoding', 'identity');
             return getToken(siteUrl, mutableHeaders, {
+              basePath: auth.basePath,
               ...(getTokenOpts as GetTokenOptions),
               jwtCache: {
                 enabled: true,

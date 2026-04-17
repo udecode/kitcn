@@ -42,8 +42,7 @@ bun add better-auth@1.6.5
 
 ```ts
 // Before
-import { createAuthClient } from "better-auth/react";
-import { convexClient } from "kitcn/auth/client";
+import { convexClient, createAuthClient } from "kitcn/auth/client";
 
 // After
 import { createAuthClient } from "better-auth/react";
@@ -57,6 +56,7 @@ import { convexClient } from "kitcn/auth/client";
 - Support Convex `dev --start` as a pre-run conflict flag.
 - Improve auth route registration so default Convex auth routes avoid eager Better Auth initialization during startup.
 - Preserve forwarded host and protocol headers through Next.js, TanStack Start, and Convex auth route proxies.
+- Fix auth helper token refresh, custom auth `basePath` support, and async custom JWT payload resolution.
 - Fix Better Auth adapter index matching and static filtering for composite and case-insensitive queries.
 - Replace the `@convex-dev/better-auth` runtime dependency with internal kitcn auth helpers.
 - Support the Better Auth 1.6 client surface without requiring casts in app auth clients.

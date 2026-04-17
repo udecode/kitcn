@@ -108,9 +108,9 @@ export const convex = (opts: {
       issuer: `${process.env.CONVEX_SITE_URL}`,
       audience: 'convex',
       expirationTime: `${jwtExpirationSeconds}s`,
-      definePayload: ({ user, session }) => ({
+      definePayload: async ({ user, session }) => ({
         ...(opts.jwt?.definePayload
-          ? opts.jwt.definePayload({ session, user })
+          ? await opts.jwt.definePayload({ session, user })
           : omit(user, ['id', 'image'])),
         sessionId: session.id,
         iat: Math.floor(Date.now() / 1000),
