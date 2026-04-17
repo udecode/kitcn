@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { execa } from 'execa';
 
 export type ConvexCommandResult = {
@@ -12,6 +14,9 @@ const CONVEX_OUTPUT_NOISE_LINES = [
   /^Changelog: https:\/\/github\.com\/get-convex\/convex-js\/blob\/main\/CHANGELOG\.md#changelog$/,
 ] as const;
 const CONVEX_OUTPUT_LINE_SPLIT_RE = /\r?\n/;
+const require = createRequire(import.meta.url);
+const convexPkg = require.resolve('convex/package.json');
+const REAL_CONVEX_CLI_PATH = join(dirname(convexPkg), 'bin/main.js');
 
 export const CLEARED_CONVEX_ENV = {
   CONVEX_DEPLOYMENT: undefined,
@@ -78,16 +83,15 @@ export const runLocalConvexCommand = async (
     env?: Record<string, string | undefined>;
   }
 ): Promise<ConvexCommandResult> => {
-  const result = await execa('convex', args, {
+  const result = await execa('node', [REAL_CONVEX_CLI_PATH, ...args], {
     cwd: options.cwd,
     env: {
       ...process.env,
       ...CLEARED_CONVEX_ENV,
       ...options.env,
     },
-    localDir: options.cwd,
-    preferLocal: true,
     reject: false,
+    stdio: 'pipe',
   });
 
   return normalizeConvexCommandResult(result);
