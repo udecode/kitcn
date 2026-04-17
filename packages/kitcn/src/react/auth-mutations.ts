@@ -237,6 +237,7 @@ const withDisabledSessionSignal = <T>(
 type AuthMutationsResult = {
   useSignOutMutationOptions: MutationOptionsHook<
     unknown,
+    // biome-ignore lint/suspicious/noConfusingVoidType: allows mutate() or mutate(options)
     MutationArgsWithFetchOptions | void
   >;
   useSignInSocialMutationOptions: MutationOptionsHook<unknown, unknown>;

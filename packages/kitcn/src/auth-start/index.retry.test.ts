@@ -6,16 +6,17 @@ describe('auth/start token refresh', () => {
   });
 
   test('retries with a fresh token when cached auth fails', async () => {
-    const query = mock(
-      async function (this: { token?: string }, _ref: unknown) {
-        if (this.token === 'stale-token') {
-          const error = new Error('unauthorized');
-          (error as Error & { code?: string }).code = 'UNAUTHORIZED';
-          throw error;
-        }
-        return 'ok';
+    const query = mock(async function (
+      this: { token?: string },
+      _ref: unknown
+    ) {
+      if (this.token === 'stale-token') {
+        const error = new Error('unauthorized');
+        (error as Error & { code?: string }).code = 'UNAUTHORIZED';
+        throw error;
       }
-    );
+      return 'ok';
+    });
 
     mock.module('convex/browser', () => ({
       ConvexHttpClient: class {
