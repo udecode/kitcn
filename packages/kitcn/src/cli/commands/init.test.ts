@@ -281,6 +281,14 @@ describe('cli/commands/init', () => {
       expect(fs.existsSync(path.join(expectedProjectDir, 'package.json'))).toBe(
         true
       );
+      const packageJson = JSON.parse(
+        fs.readFileSync(path.join(expectedProjectDir, 'package.json'), 'utf8')
+      ) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      expect(packageJson.dependencies?.next).toBe('16.1.7');
+      expect(packageJson.devDependencies?.tailwindcss).toBe('^4.2.1');
       expect(fs.existsSync(path.join(expectedProjectDir, 'convex.json'))).toBe(
         true
       );
@@ -389,16 +397,22 @@ describe('cli/commands/init', () => {
       const rootPackageJson = JSON.parse(
         fs.readFileSync(path.join(expectedProjectDir, 'package.json'), 'utf8')
       ) as {
+        devDependencies?: Record<string, string>;
+        packageManager?: string;
         scripts?: Record<string, string>;
       };
       expect(rootPackageJson.scripts?.['convex:dev']).toBeUndefined();
       expect(rootPackageJson.scripts?.codegen).toBeUndefined();
+      expect(rootPackageJson.devDependencies?.turbo).toBe('^2.8.17');
+      expect(rootPackageJson.packageManager).toBe('pnpm@9.15.9');
 
       const componentsJson = JSON.parse(
         fs.readFileSync(path.join(expectedAppDir, 'components.json'), 'utf8')
       ) as {
+        iconLibrary?: string;
         tailwind?: { css?: string };
       };
+      expect(componentsJson.iconLibrary).toBe('lucide');
       expect(componentsJson.tailwind?.css).toBe('app/globals.css');
 
       const dependencyInstallCall = execaStub.mock.calls.find((call) => {
@@ -482,6 +496,25 @@ describe('cli/commands/init', () => {
           'utf8'
         )
       ).toContain('<Providers>');
+      const packageJson = JSON.parse(
+        fs.readFileSync(path.join(expectedProjectDir, 'package.json'), 'utf8')
+      ) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      expect(packageJson.dependencies?.['@tanstack/react-start']).toBe(
+        '^1.166.15'
+      );
+      expect(packageJson.devDependencies?.vite).toBe('^7.3.1');
+      const componentsJson = JSON.parse(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'components.json'),
+          'utf8'
+        )
+      ) as {
+        iconLibrary?: string;
+      };
+      expect(componentsJson.iconLibrary).toBe('lucide');
     } finally {
       process.chdir(originalCwd);
     }
@@ -1005,6 +1038,20 @@ describe('cli/commands/init', () => {
       expect(
         fs.existsSync(path.join(tmpDir, 'src', 'app', 'convex', 'page.tsx'))
       ).toBe(false);
+      const packageJson = JSON.parse(
+        fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')
+      ) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      expect(packageJson.dependencies?.tailwindcss).toBe('^4.2.1');
+      expect(packageJson.devDependencies?.vite).toBe('^7.3.1');
+      const componentsJson = JSON.parse(
+        fs.readFileSync(path.join(tmpDir, 'components.json'), 'utf8')
+      ) as {
+        iconLibrary?: string;
+      };
+      expect(componentsJson.iconLibrary).toBe('lucide');
     } finally {
       process.chdir(originalCwd);
     }

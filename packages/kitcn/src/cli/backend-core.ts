@@ -168,7 +168,7 @@ const AGGREGATE_STATE_RELATIVE_PATH = join(
   'aggregate-backfill-state.json'
 );
 const AGGREGATE_STATE_VERSION = 1;
-export const INIT_SHADCN_PACKAGE_SPEC = 'shadcn@4.0.1';
+export const INIT_SHADCN_PACKAGE_SPEC = 'shadcn@4.3.0';
 const INIT_LOCAL_BOOTSTRAP_TIMEOUT_MS = 30_000;
 const LOCAL_BACKEND_NOT_RUNNING_RE = /Local backend isn't running/i;
 const INIT_GENERATED_SERVER_STUB_TEMPLATE = `// @ts-nocheck
