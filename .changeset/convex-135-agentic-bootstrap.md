@@ -38,17 +38,6 @@ bun add better-auth@1.5.3
 bun add better-auth@1.6.5
 ```
 
-- Drop `createAuthClient` from `kitcn/auth/client`. Import it from `better-auth/react`.
-
-```ts
-// Before
-import { convexClient, createAuthClient } from "kitcn/auth/client";
-
-// After
-import { createAuthClient } from "better-auth/react";
-import { convexClient } from "kitcn/auth/client";
-```
-
 ## Patches
 
 - Let Convex handle anonymous non-interactive local setup without forcing `CONVEX_AGENT_MODE`.
@@ -58,5 +47,4 @@ import { convexClient } from "kitcn/auth/client";
 - Preserve forwarded host and protocol headers through Next.js, TanStack Start, and Convex auth route proxies.
 - Fix auth helper token refresh, custom auth `basePath` support, and async custom JWT payload resolution.
 - Fix Better Auth adapter index matching and static filtering for composite and case-insensitive queries.
-- Replace the `@convex-dev/better-auth` runtime dependency with internal kitcn auth helpers.
-- Support the Better Auth 1.6 client surface without requiring casts in app auth clients.
+- Support Better Auth `1.6.5` auth clients without user-code casts.
