@@ -351,16 +351,16 @@ describe('cli/commands/init', () => {
     const expectedProjectDir = path.join(tmpDir, 'apps', 'mobile');
     const execaStub = mock(
       async (_cmd: string, args: string[], opts?: { cwd?: string }) => {
-      if (args.includes(INIT_EXPO_PACKAGE_SPEC)) {
-        expect(fs.realpathSync(opts?.cwd ?? '')).toBe(
-          fs.realpathSync(path.join(tmpDir, 'apps'))
-        );
-        expect(fs.existsSync(opts?.cwd ?? '')).toBe(true);
-        const projectName = args[1] ?? 'mobile';
-        writeExpoDefaultApp(path.join(tmpDir, 'apps', projectName));
+        if (args.includes(INIT_EXPO_PACKAGE_SPEC)) {
+          expect(fs.realpathSync(opts?.cwd ?? '')).toBe(
+            fs.realpathSync(path.join(tmpDir, 'apps'))
+          );
+          expect(fs.existsSync(opts?.cwd ?? '')).toBe(true);
+          const projectName = args[1] ?? 'mobile';
+          writeExpoDefaultApp(path.join(tmpDir, 'apps', projectName));
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
         return { exitCode: 0, stdout: '', stderr: '' } as any;
-      }
-      return { exitCode: 0, stdout: '', stderr: '' } as any;
       }
     );
     const generateMetaStub = mock(async () => {});
