@@ -1,5 +1,17 @@
 # kitcn
 
+## 0.13.3
+
+### Patch Changes
+
+- [#227](https://github.com/udecode/kitcn/pull/227) [`2446f3e`](https://github.com/udecode/kitcn/commit/2446f3e53fd74153a1e5ffffc7773553086f899b) Thanks [@zbeyens](https://github.com/zbeyens)! - Add `kitcn init -t expo` for a fresh Expo scaffold built on the official
+  `create-expo-app` shell, including the Convex baseline, starter messages
+  screen, and first-class `kitcn add auth` parity on the Expo scaffold.
+
+  Expo local env now also owns `EXPO_PUBLIC_SITE_URL`, so Concave dev and Expo
+  auth keep one local app-origin contract instead of drifting back to
+  `http://localhost:3000`.
+
 ## 0.13.2
 
 ### Patch Changes
