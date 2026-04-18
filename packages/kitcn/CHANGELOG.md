@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.13.4
+
+### Patch Changes
+
+- [#229](https://github.com/udecode/kitcn/pull/229) [`a93f264`](https://github.com/udecode/kitcn/commit/a93f264c522f2818a0166b85770ffe88d1a1eb6d) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn migrate` and `kitcn aggregate` so Convex prod-target runs keep
+    ambient deployment auth env in CI.
+
 ## 0.13.3
 
 ### Patch Changes
