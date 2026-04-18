@@ -1363,6 +1363,7 @@ export async function createProjectWithExpo(params: {
     ? fs.mkdtempSync(join(dirname(params.projectDir), '.kitcn-expo-'))
     : null;
   const expoCwd = stagingRoot ?? dirname(params.projectDir);
+  fs.mkdirSync(expoCwd, { recursive: true });
   const projectName = basename(params.projectDir);
   const command = detectPackageManager(expoCwd) === 'bun' ? 'bunx' : 'npx';
   const args = [
