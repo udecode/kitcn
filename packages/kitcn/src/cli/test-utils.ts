@@ -424,7 +424,6 @@ export function writeExpoDefaultApp(dir: string) {
       '.expo/',
       'dist/',
       'web-build/',
-      'expo-env.d.ts',
       '.env*.local',
     ].join('\n')}\n`
   );

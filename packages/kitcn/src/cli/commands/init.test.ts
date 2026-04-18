@@ -413,6 +413,9 @@ describe('cli/commands/init', () => {
         fs.readFileSync(path.join(expectedProjectDir, '.env.local'), 'utf8')
       ).toContain('EXPO_PUBLIC_SITE_URL=http://localhost:3000');
       expect(
+        fs.readFileSync(path.join(expectedProjectDir, '.gitignore'), 'utf8')
+      ).not.toContain('expo-env.d.ts');
+      expect(
         fs.readFileSync(
           path.join(expectedProjectDir, 'src', 'app', '_layout.tsx'),
           'utf8'
