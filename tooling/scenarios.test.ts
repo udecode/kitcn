@@ -79,6 +79,7 @@ describe('tooling/scenarios', () => {
     expect(resolveScenarioProofPath('next')).toBe('runtime');
     expect(resolveScenarioProofPath('create-convex-bare')).toBe('runtime');
     expect(resolveScenarioProofPath('next-auth')).toBe('auth-demo');
+    expect(resolveScenarioProofPath('expo-auth' as never)).toBe('auth-runtime');
     expect(resolveScenarioProofPath('start')).toBe('runtime');
     expect(resolveScenarioProofPath('start-auth')).toBe('auth-demo');
     expect(resolveScenarioProofPath('vite-auth')).toBe('auth-runtime');
@@ -580,6 +581,7 @@ describe('tooling/scenarios', () => {
       .toString(36)
       .slice(2)}`;
     const nextDir = `${rootDir}/next`;
+    const expoDir = `${rootDir}/expo`;
     const viteDir = `${rootDir}/vite`;
     const localPort = 3017;
 
@@ -604,6 +606,28 @@ describe('tooling/scenarios', () => {
     );
 
     await Bun.write(
+      `${expoDir}/package.json`,
+      JSON.stringify({
+        name: 'expo-app',
+        private: true,
+        dependencies: {
+          expo: '^55.0.0',
+        },
+        scripts: {
+          dev: 'expo start',
+        },
+      })
+    );
+    await Bun.write(
+      `${expoDir}/.env.local`,
+      'EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210\nEXPO_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211\nEXPO_PUBLIC_SITE_URL=http://localhost:3000\n'
+    );
+    await Bun.write(
+      `${expoDir}/convex/.env`,
+      'SITE_URL=http://localhost:3000\n'
+    );
+
+    await Bun.write(
       `${viteDir}/package.json`,
       JSON.stringify({
         name: 'vite-app',
@@ -621,6 +645,7 @@ describe('tooling/scenarios', () => {
 
     try {
       patchPreparedLocalDevPort(nextDir, localPort);
+      patchPreparedLocalDevPort(expoDir, localPort);
       patchPreparedLocalDevPort(viteDir, localPort);
 
       const nextPackageJson = JSON.parse(
@@ -643,8 +668,14 @@ describe('tooling/scenarios', () => {
       expect(fs.readFileSync(`${nextDir}/.env.local`, 'utf8')).toContain(
         'NEXT_PUBLIC_SITE_URL=http://localhost:3017'
       );
+      expect(fs.readFileSync(`${expoDir}/.env.local`, 'utf8')).toContain(
+        'EXPO_PUBLIC_SITE_URL=http://localhost:3017'
+      );
       expect(fs.readFileSync(`${viteDir}/.env.local`, 'utf8')).toContain(
         'VITE_SITE_URL=http://localhost:3017'
+      );
+      expect(fs.readFileSync(`${expoDir}/convex/.env`, 'utf8')).toContain(
+        'SITE_URL=http://localhost:3017'
       );
       expect(fs.readFileSync(`${nextDir}/convex/.env`, 'utf8')).toContain(
         'SITE_URL=http://localhost:3017'
@@ -659,6 +690,7 @@ describe('tooling/scenarios', () => {
       .toString(36)
       .slice(2)}`;
     const nextDir = `${rootDir}/next`;
+    const expoDir = `${rootDir}/expo`;
     const viteDir = `${rootDir}/vite`;
     const localPort = 3017;
 
@@ -678,6 +710,20 @@ describe('tooling/scenarios', () => {
     );
 
     await Bun.write(
+      `${expoDir}/package.json`,
+      JSON.stringify({
+        name: 'expo-app',
+        private: true,
+        dependencies: {
+          expo: '^55.0.0',
+        },
+        scripts: {
+          dev: 'expo start',
+        },
+      })
+    );
+
+    await Bun.write(
       `${viteDir}/package.json`,
       JSON.stringify({
         name: 'vite-app',
@@ -690,6 +736,7 @@ describe('tooling/scenarios', () => {
 
     try {
       patchPreparedLocalDevPort(nextDir, localPort);
+      patchPreparedLocalDevPort(expoDir, localPort);
       patchPreparedLocalDevPort(viteDir, localPort);
 
       expect(fs.readFileSync(`${nextDir}/.env.local`, 'utf8')).toContain(
@@ -697,6 +744,12 @@ describe('tooling/scenarios', () => {
       );
       expect(fs.readFileSync(`${nextDir}/.env.local`, 'utf8')).toContain(
         'NEXT_PUBLIC_SITE_URL=http://localhost:3017'
+      );
+      expect(fs.readFileSync(`${expoDir}/.env.local`, 'utf8')).toContain(
+        'EXPO_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211'
+      );
+      expect(fs.readFileSync(`${expoDir}/.env.local`, 'utf8')).toContain(
+        'EXPO_PUBLIC_SITE_URL=http://localhost:3017'
       );
       expect(fs.readFileSync(`${viteDir}/.env.local`, 'utf8')).toContain(
         'VITE_CONVEX_SITE_URL=http://127.0.0.1:3211'

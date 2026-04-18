@@ -6,6 +6,7 @@ const envSchema = z.object({
   SITE_URL: z.string().default('http://localhost:3005'),
   BETTER_AUTH_SECRET: z.string().optional(),
   JWKS: z.string().optional(),
+  CONVEX_SITE_URL: z.string().optional(),
 });
 
 export const getEnv = createEnv({

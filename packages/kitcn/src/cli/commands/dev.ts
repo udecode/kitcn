@@ -657,6 +657,7 @@ export function resolveConcaveLocalSiteUrl(cwd = process.cwd()): string {
   const parsed = parseEnv(fs.readFileSync(envLocalPath, 'utf8'));
   return (
     parsed.NEXT_PUBLIC_SITE_URL ??
+    parsed.EXPO_PUBLIC_SITE_URL ??
     parsed.VITE_SITE_URL ??
     'http://localhost:3000'
   );

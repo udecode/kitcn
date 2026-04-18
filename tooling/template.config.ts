@@ -1,6 +1,8 @@
 export type TemplateBackend = 'convex' | 'concave';
 
 export const TEMPLATE_KEYS = [
+  'expo',
+  'expo-auth',
   'next',
   'next-auth',
   'start',
@@ -12,7 +14,7 @@ export const TEMPLATE_KEYS = [
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
 export type TemplateDefinition = {
-  initTemplate: 'next' | 'start' | 'vite';
+  initTemplate: 'next' | 'expo' | 'start' | 'vite';
   label: string;
   setup: ReadonlyArray<readonly string[]>;
   successMessage: string;
@@ -22,6 +24,25 @@ export type TemplateDefinition = {
 };
 
 export const TEMPLATE_DEFINITIONS: Record<TemplateKey, TemplateDefinition> = {
+  expo: {
+    initTemplate: 'expo',
+    label: 'expo',
+    setup: [],
+    successMessage: 'fixtures/expo matches fresh `kitcn init -t expo` output.',
+    validation: {
+      lint: false,
+    },
+  },
+  'expo-auth': {
+    initTemplate: 'expo',
+    label: 'expo + auth',
+    setup: [['add', 'auth', '--yes']],
+    successMessage:
+      'fixtures/expo-auth matches fresh `kitcn init -t expo && kitcn add auth` output.',
+    validation: {
+      lint: false,
+    },
+  },
   next: {
     initTemplate: 'next',
     label: 'next',

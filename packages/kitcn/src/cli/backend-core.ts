@@ -37,6 +37,7 @@ import {
 } from './convex-command.js';
 import { pullEnv, resolveAuthEnvState, syncEnv } from './env.js';
 import {
+  type ExpoScaffoldContext,
   type NextAppScaffoldContext,
   type ProjectScaffoldContext,
   type ReactScaffoldContext,
@@ -56,6 +57,15 @@ import {
   type PluginEnvField,
   type SupportedPluginKey,
 } from './registry/index.js';
+import { INIT_EXPO_CONVEX_PROVIDER_TEMPLATE } from './registry/init/expo/init-expo-convex-provider.template.js';
+import { INIT_EXPO_CRPC_TEMPLATE } from './registry/init/expo/init-expo-crpc.template.js';
+import { renderInitExpoEnvTemplate } from './registry/init/expo/init-expo-env.template.js';
+import { INIT_EXPO_ENV_TYPES_TEMPLATE } from './registry/init/expo/init-expo-env-types.template.js';
+import { INIT_EXPO_EXPLORE_TEMPLATE } from './registry/init/expo/init-expo-explore.template.js';
+import { INIT_EXPO_LAYOUT_TEMPLATE } from './registry/init/expo/init-expo-layout.template.js';
+import { INIT_EXPO_MESSAGES_SCREEN_TEMPLATE } from './registry/init/expo/init-expo-messages-screen.template.js';
+import { renderInitExpoPackageJsonTemplate } from './registry/init/expo/init-expo-package-json.template.js';
+import { INIT_EXPO_PROVIDERS_TEMPLATE } from './registry/init/expo/init-expo-providers.template.js';
 import { INIT_CONVEX_CONFIG_TEMPLATE } from './registry/init/init-convex-config.template.js';
 import { renderInitConvexTsconfigTemplate } from './registry/init/init-convex-tsconfig.template.js';
 import { INIT_CRPC_TEMPLATE } from './registry/init/init-crpc.template.js';
@@ -169,6 +179,8 @@ const AGGREGATE_STATE_RELATIVE_PATH = join(
 );
 const AGGREGATE_STATE_VERSION = 1;
 export const INIT_SHADCN_PACKAGE_SPEC = 'shadcn@4.3.0';
+export const INIT_EXPO_PACKAGE_SPEC = 'create-expo-app@latest';
+export const INIT_EXPO_TEMPLATE_SPEC = 'default@sdk-55';
 const INIT_LOCAL_BOOTSTRAP_TIMEOUT_MS = 30_000;
 const LOCAL_BACKEND_NOT_RUNNING_RE = /Local backend isn't running/i;
 const INIT_GENERATED_SERVER_STUB_TEMPLATE = `// @ts-nocheck
@@ -343,6 +355,7 @@ type InitOwnedTemplateScaffoldFile = {
 };
 
 type InitNextScaffoldContext = NextAppScaffoldContext;
+type InitExpoScaffoldContext = ExpoScaffoldContext;
 
 type InstalledPluginState = {
   plugin: SupportedPlugin;
@@ -468,7 +481,7 @@ Options:
   --yes, -y         Deterministic non-interactive mode
   --json            Machine-readable command output`;
 
-const SUPPORTED_INIT_TEMPLATES = ['next', 'start', 'vite'] as const;
+const SUPPORTED_INIT_TEMPLATES = ['next', 'expo', 'start', 'vite'] as const;
 const REACT_APP_MOUNT_RE = /<App\s*\/>/;
 
 const DOCS_BASE_URL = 'https://kitcn.vercel.app/docs';
@@ -1337,12 +1350,69 @@ export async function createProjectWithShadcn(params: {
   }
 }
 
+export async function createProjectWithExpo(params: {
+  projectDir: string;
+  yes: boolean;
+  execaFn: typeof execa;
+}): Promise<void> {
+  const shouldStageIntoExistingDir =
+    fs.existsSync(params.projectDir) &&
+    fs.readdirSync(params.projectDir).length === 0;
+  const stagingRoot = shouldStageIntoExistingDir
+    ? fs.mkdtempSync(join(dirname(params.projectDir), '.kitcn-expo-'))
+    : null;
+  const expoCwd = stagingRoot ?? dirname(params.projectDir);
+  const projectName = basename(params.projectDir);
+  const command = detectPackageManager(expoCwd) === 'bun' ? 'bunx' : 'npx';
+  const args = [
+    INIT_EXPO_PACKAGE_SPEC,
+    projectName,
+    '--template',
+    INIT_EXPO_TEMPLATE_SPEC,
+    '--no-install',
+    ...(params.yes ? ['--yes'] : []),
+  ];
+
+  try {
+    const result = await params.execaFn(command, args, {
+      cwd: expoCwd,
+      env: createCommandEnv(),
+      reject: false,
+      stdio: 'inherit',
+    });
+    if ((result.exitCode ?? 0) !== 0) {
+      throw new Error(`Expo init failed: ${command} ${args.join(' ')}`);
+    }
+
+    if (stagingRoot) {
+      moveStagedProjectIntoExistingDir({
+        stagedProjectDir: join(stagingRoot, projectName),
+        targetDir: params.projectDir,
+      });
+    }
+  } finally {
+    if (stagingRoot) {
+      fs.rmSync(stagingRoot, { recursive: true, force: true });
+    }
+  }
+}
+
 function buildMissingShadcnScaffoldMessage(projectDir: string): string {
   const targetDir = normalizePath(relative(process.cwd(), projectDir) || '.');
   return [
     'Shadcn exited without creating a supported local scaffold.',
     'This usually means you chose the Custom preset.',
     `Run the generated shadcn command from ui.shadcn.com in ${targetDir} then re-run \`kitcn init --yes\` to adopt it.`,
+  ].join(' ');
+}
+
+function buildMissingExpoScaffoldMessage(projectDir: string): string {
+  const targetDir = normalizePath(relative(process.cwd(), projectDir) || '.');
+  return [
+    'create-expo-app exited without creating a supported local scaffold.',
+    `Re-run \`kitcn init -t expo --yes\` in ${targetDir}, or try \`${INIT_EXPO_PACKAGE_SPEC} ${basename(
+      projectDir
+    )} --template ${INIT_EXPO_TEMPLATE_SPEC}\` directly.`,
   ].join(' ');
 }
 
@@ -1581,6 +1651,154 @@ function buildInitNextOwnedScaffoldFiles(
         createReason: `Create ${context.appDir}/convex/page.tsx as the minimal kitcn demo route.`,
         updateReason: `Update ${context.appDir}/convex/page.tsx for the kitcn demo route.`,
         skipReason: `${context.appDir}/convex/page.tsx already matches the kitcn demo route.`,
+      },
+      {
+        kind: 'schema',
+        relativePath: `${functionsDirRelative}/schema.ts`,
+        requiresExplicitOverwrite: true,
+        content: INIT_NEXT_SCHEMA_TEMPLATE,
+        createReason: `Create ${functionsDirRelative}/schema.ts with the minimal kitcn demo schema.`,
+        updateReason: `Update ${functionsDirRelative}/schema.ts with the minimal kitcn demo schema.`,
+        skipReason: `${functionsDirRelative}/schema.ts already matches the kitcn demo schema.`,
+      },
+      {
+        kind: 'scaffold',
+        relativePath: `${functionsDirRelative}/messages.ts`,
+        requiresExplicitOverwrite: true,
+        content: renderInitNextMessagesTemplate(functionsDirRelative),
+        createReason: `Create ${functionsDirRelative}/messages.ts for the kitcn demo route.`,
+        updateReason: `Update ${functionsDirRelative}/messages.ts for the kitcn demo route.`,
+        skipReason: `${functionsDirRelative}/messages.ts already matches the kitcn demo route.`,
+      }
+    );
+  }
+
+  return files;
+}
+
+function buildInitExpoOwnedScaffoldFiles(
+  context: InitExpoScaffoldContext,
+  functionsDirRelative: string,
+  backend: CliBackend,
+  includeDemoFiles: boolean
+): readonly InitOwnedTemplateScaffoldFile[] {
+  const files: InitOwnedTemplateScaffoldFile[] = [
+    {
+      kind: 'config',
+      relativePath: 'package.json',
+      requiresExplicitOverwrite: false,
+      content: ({ existingContent }) =>
+        renderInitExpoPackageJsonTemplate(existingContent, {
+          backend,
+          functionsDirRelative,
+        }),
+      createReason:
+        'Create baseline package.json scripts for the Expo scaffold.',
+      updateReason: 'Update package.json scripts for the Expo scaffold.',
+      skipReason: 'package.json scripts already match the Expo scaffold.',
+    },
+    {
+      kind: 'env',
+      relativePath: '.env.local',
+      requiresExplicitOverwrite: false,
+      content: ({ existingContent }) =>
+        renderInitExpoEnvTemplate(existingContent),
+      createReason: 'Create baseline .env.local for the Expo scaffold.',
+      updateReason: 'Update baseline .env.local for the Expo scaffold.',
+      skipReason: '.env.local already matches the Expo scaffold.',
+    },
+    {
+      kind: 'config',
+      relativePath: 'expo-env.d.ts',
+      requiresExplicitOverwrite: true,
+      content: INIT_EXPO_ENV_TYPES_TEMPLATE,
+      createReason: 'Create expo-env.d.ts for the Expo scaffold.',
+      updateReason: 'Update expo-env.d.ts for the Expo scaffold.',
+      skipReason: 'expo-env.d.ts already matches the Expo scaffold.',
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.componentsDir}/providers.tsx`,
+      requiresExplicitOverwrite: true,
+      content: INIT_EXPO_PROVIDERS_TEMPLATE,
+      createReason: `Create baseline ${context.componentsDir}/providers.tsx for the Expo scaffold.`,
+      updateReason: `Update ${context.componentsDir}/providers.tsx for the Expo scaffold.`,
+      skipReason: `${context.componentsDir}/providers.tsx already matches the Expo scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.convexClientDir}/query-client.ts`,
+      requiresExplicitOverwrite: true,
+      content: INIT_NEXT_QUERY_CLIENT_TEMPLATE,
+      createReason: `Create baseline ${context.convexClientDir}/query-client.ts for the Expo scaffold.`,
+      updateReason: `Update ${context.convexClientDir}/query-client.ts for the Expo scaffold.`,
+      skipReason: `${context.convexClientDir}/query-client.ts already matches the Expo scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.convexClientDir}/crpc.tsx`,
+      requiresExplicitOverwrite: true,
+      content: INIT_EXPO_CRPC_TEMPLATE,
+      createReason: `Create baseline ${context.convexClientDir}/crpc.tsx for the Expo scaffold.`,
+      updateReason: `Update ${context.convexClientDir}/crpc.tsx for the Expo scaffold.`,
+      skipReason: `${context.convexClientDir}/crpc.tsx already matches the Expo scaffold.`,
+    },
+    {
+      kind: 'scaffold',
+      relativePath: `${context.convexClientDir}/convex-provider.tsx`,
+      requiresExplicitOverwrite: true,
+      content: INIT_EXPO_CONVEX_PROVIDER_TEMPLATE,
+      createReason: `Create baseline ${context.convexClientDir}/convex-provider.tsx for the Expo scaffold.`,
+      updateReason: `Update ${context.convexClientDir}/convex-provider.tsx for the Expo scaffold.`,
+      skipReason: `${context.convexClientDir}/convex-provider.tsx already matches the Expo scaffold.`,
+    },
+    {
+      kind: 'config',
+      relativePath: join(functionsDirRelative, 'tsconfig.json'),
+      managedBaselineContent:
+        getManagedConvexTsconfigBaselines(functionsDirRelative),
+      requiresExplicitOverwrite: true,
+      content: ({ existingContent }) =>
+        typeof existingContent === 'string'
+          ? patchInitConvexTsconfigContent(
+              existingContent,
+              functionsDirRelative
+            )
+          : renderInitConvexTsconfigTemplate(functionsDirRelative),
+      createReason: `Create ${join(functionsDirRelative, 'tsconfig.json')} for kitcn functions.`,
+      updateReason: `Patch ${join(functionsDirRelative, 'tsconfig.json')} for kitcn functions.`,
+      skipReason: `${join(functionsDirRelative, 'tsconfig.json')} already matches the kitcn functions project.`,
+    },
+  ];
+
+  if (includeDemoFiles) {
+    files.push(
+      {
+        kind: 'scaffold',
+        relativePath: `${context.appDir}/_layout.tsx`,
+        requiresExplicitOverwrite: true,
+        content: INIT_EXPO_LAYOUT_TEMPLATE,
+        createReason: `Create ${context.appDir}/_layout.tsx for the Expo scaffold.`,
+        updateReason: `Update ${context.appDir}/_layout.tsx for the Expo scaffold.`,
+        skipReason: `${context.appDir}/_layout.tsx already matches the Expo scaffold.`,
+      },
+      {
+        kind: 'scaffold',
+        relativePath: `${context.appDir}/index.tsx`,
+        requiresExplicitOverwrite: true,
+        content: INIT_EXPO_MESSAGES_SCREEN_TEMPLATE,
+        createReason: `Create ${context.appDir}/index.tsx as the minimal kitcn demo route.`,
+        updateReason: `Update ${context.appDir}/index.tsx for the kitcn demo route.`,
+        skipReason: `${context.appDir}/index.tsx already matches the kitcn demo route.`,
+      },
+      {
+        kind: 'scaffold',
+        relativePath: `${context.appDir}/explore.tsx`,
+        requiresExplicitOverwrite: true,
+        content: INIT_EXPO_EXPLORE_TEMPLATE,
+        createReason: `Create ${context.appDir}/explore.tsx as a redirect back to the kitcn demo route.`,
+        updateReason: `Update ${context.appDir}/explore.tsx as a redirect back to the kitcn demo route.`,
+        skipReason: `${context.appDir}/explore.tsx already redirects to the kitcn demo route.`,
       },
       {
         kind: 'schema',
@@ -2318,6 +2536,32 @@ function buildInitNextLayoutPlanFile(
   });
 }
 
+function buildInitExpoTsconfigPlanFile(
+  context: InitExpoScaffoldContext
+): PluginInstallPlanFile {
+  const filePath = resolve(process.cwd(), 'tsconfig.json');
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      'Could not patch tsconfig.json: the Expo scaffold did not create a tsconfig file.'
+    );
+  }
+
+  return createPlanFile({
+    kind: 'config',
+    filePath,
+    requiresExplicitOverwrite: false,
+    content: patchInitTsconfigContent(
+      fs.readFileSync(filePath, 'utf8'),
+      context
+    ),
+    updateReason:
+      'Patch tsconfig.json to keep the Expo alias and add @convex/*.',
+    createReason:
+      'Patch tsconfig.json to keep the Expo alias and add @convex/*.',
+    skipReason: 'tsconfig.json already includes the kitcn alias.',
+  });
+}
+
 function buildInitNextTsconfigPlanFile(
   context: InitNextScaffoldContext
 ): PluginInstallPlanFile {
@@ -2543,18 +2787,25 @@ function buildTemplateInitializationPlanFiles(params: {
           params.backend,
           params.includeDemoFiles
         )
-      : projectContext.framework === 'tanstack-start'
-        ? buildInitStartOwnedScaffoldFiles(
+      : projectContext.framework === 'expo'
+        ? buildInitExpoOwnedScaffoldFiles(
             projectContext,
             params.functionsDirRelative,
             params.backend,
             params.includeDemoFiles
           )
-        : buildInitReactOwnedScaffoldFiles(
-            projectContext,
-            params.functionsDirRelative,
-            params.backend
-          );
+        : projectContext.framework === 'tanstack-start'
+          ? buildInitStartOwnedScaffoldFiles(
+              projectContext,
+              params.functionsDirRelative,
+              params.backend,
+              params.includeDemoFiles
+            )
+          : buildInitReactOwnedScaffoldFiles(
+              projectContext,
+              params.functionsDirRelative,
+              params.backend
+            );
 
   const plannedOwnedFiles = ownedFiles.map((file) => {
     const filePath = resolve(process.cwd(), file.relativePath);
@@ -2597,6 +2848,13 @@ function buildTemplateInitializationPlanFiles(params: {
       buildInitNextComponentsJsonPlanFile(projectContext),
       ...(eslintConfigPlanFile ? [eslintConfigPlanFile] : []),
       buildInitNextLayoutPlanFile(projectContext),
+    ];
+  }
+
+  if (projectContext.framework === 'expo') {
+    return [
+      ...plannedOwnedFiles,
+      buildInitExpoTsconfigPlanFile(projectContext),
     ];
   }
 
@@ -3004,13 +3262,21 @@ async function runScaffoldCommandFlow(params: {
   realConcavePath?: string;
 }): Promise<InitRunResult> {
   if (params.template) {
-    await createProjectWithShadcn({
-      projectDir: params.projectDir,
-      template: params.template,
-      yes: params.yes,
-      defaults: params.defaults ?? false,
-      execaFn: params.execaFn,
-    });
+    if (params.template === 'expo') {
+      await createProjectWithExpo({
+        projectDir: params.projectDir,
+        yes: params.yes,
+        execaFn: params.execaFn,
+      });
+    } else {
+      await createProjectWithShadcn({
+        projectDir: params.projectDir,
+        template: params.template,
+        yes: params.yes,
+        defaults: params.defaults ?? false,
+        execaFn: params.execaFn,
+      });
+    }
   }
 
   const scaffoldProjectDir = resolveShadcnScaffoldProjectDir(
@@ -3025,7 +3291,11 @@ async function runScaffoldCommandFlow(params: {
       allowUnsupported: true,
     })
   ) {
-    throw new Error(buildMissingShadcnScaffoldMessage(scaffoldProjectDir));
+    throw new Error(
+      params.template === 'expo'
+        ? buildMissingExpoScaffoldMessage(scaffoldProjectDir)
+        : buildMissingShadcnScaffoldMessage(scaffoldProjectDir)
+    );
   }
 
   return withWorkingDirectory(scaffoldProjectDir, async () => {
@@ -3126,7 +3396,7 @@ export async function runInitCommandFlow(params: {
   if (wantsFreshScaffold) {
     if (!template) {
       throw new Error(
-        'Fresh app scaffolding requires `kitcn init -t <next|start|vite>`.'
+        'Fresh app scaffolding requires `kitcn init -t <next|expo|start|vite>`.'
       );
     }
     if (existingProjectContext) {
@@ -3158,9 +3428,15 @@ export async function runInitCommandFlow(params: {
     });
   }
 
+  if (existingProjectContext?.framework === 'expo') {
+    throw new Error(
+      'Expo adoption is not supported yet. Start with `kitcn init -t expo --yes`.'
+    );
+  }
+
   if (!existingProjectContext) {
     throw new Error(
-      'Could not detect a supported app scaffold. Use `kitcn init -t <next|start|vite>` for a fresh app.'
+      'Could not detect a supported app scaffold. Use `kitcn init -t <next|expo|start|vite>` for a fresh app.'
     );
   }
 
@@ -5871,7 +6147,7 @@ export async function run(
 
   if (command === 'create') {
     throw new Error(
-      'Removed `kitcn create`. Use `kitcn init -t <next|start|vite>` for fresh app scaffolding.'
+      'Removed `kitcn create`. Use `kitcn init -t <next|expo|start|vite>` for fresh app scaffolding.'
     );
   }
 

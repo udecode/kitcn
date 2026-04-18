@@ -6,6 +6,7 @@ import {
 } from '../../../supported-dependencies.js';
 import { defineInternalRegistryItem } from '../../define-item.js';
 import { createRegistryFile } from '../../files.js';
+import { INIT_EXPO_CONVEX_PROVIDER_TEMPLATE } from '../../init/expo/init-expo-convex-provider.template.js';
 import { INIT_CRPC_TEMPLATE } from '../../init/init-crpc.template.js';
 import { INIT_HTTP_TEMPLATE } from '../../init/init-http.template.js';
 import { INIT_NEXT_CONVEX_PROVIDER_TEMPLATE } from '../../init/next/init-next-convex-provider.template.js';
@@ -23,11 +24,16 @@ import { renderLocalConvexEnvContent } from '../../planner.js';
 import { reconcileRootSchemaOwnership } from '../../schema-ownership.js';
 import { getSchemaFilePath } from '../../state.js';
 import type { PluginRegistryBuildPlanFilesParams } from '../../types.js';
-import { AUTH_CONVEX_TEMPLATE, AUTH_TEMPLATE } from './auth.template.js';
+import {
+  AUTH_CONVEX_TEMPLATE,
+  AUTH_EXPO_TEMPLATE,
+  AUTH_TEMPLATE,
+} from './auth.template.js';
 import {
   AUTH_CLIENT_TEMPLATE,
   AUTH_CONVEX_CLIENT_TEMPLATE,
   AUTH_CONVEX_REACT_CLIENT_TEMPLATE,
+  AUTH_EXPO_CLIENT_TEMPLATE,
   AUTH_REACT_CLIENT_TEMPLATE,
   AUTH_START_CLIENT_TEMPLATE,
 } from './auth-client.template.js';
@@ -37,6 +43,8 @@ import {
 } from './auth-config.template.js';
 import { AUTH_CONVEX_PROVIDER_TEMPLATE } from './auth-convex-provider.template.js';
 import { renderAuthCrpcTemplate } from './auth-crpc.template.js';
+import { AUTH_EXPO_CONVEX_PROVIDER_TEMPLATE } from './auth-expo-convex-provider.template.js';
+import { AUTH_EXPO_PAGE_TEMPLATE } from './auth-expo-page.template.js';
 import { AUTH_NEXT_ROUTE_TEMPLATE } from './auth-next-route.template.js';
 import { AUTH_NEXT_SERVER_TEMPLATE } from './auth-next-server.template.js';
 import { AUTH_PAGE_TEMPLATE } from './auth-page.template.js';
@@ -83,7 +91,14 @@ const AUTH_ENV_FIELDS = [
     key: 'JWKS',
     schema: 'z.string().optional()',
   },
+  {
+    key: 'CONVEX_SITE_URL',
+    schema: 'z.string().optional()',
+  },
 ] as const;
+const BETTER_AUTH_EXPO_INSTALL_SPEC = '@better-auth/expo@1.6.5';
+const EXPO_SECURE_STORE_INSTALL_SPEC = 'expo-secure-store@~55.0.8';
+const EXPO_NETWORK_INSTALL_SPEC = 'expo-network@~55.0.8';
 
 const AUTH_FILES = [
   createRegistryFile({
@@ -297,8 +312,26 @@ function buildAuthProviderPlanFile(params: PluginRegistryBuildPlanFilesParams) {
   const projectContext = params.roots.projectContext;
   if (!projectContext) {
     throw new Error(
-      'Auth scaffolding requires a supported app baseline. Run `kitcn init --yes` in a supported app, or bootstrap one with `kitcn init -t <next|start|vite>` first.'
+      'Auth scaffolding requires a supported app baseline. Run `kitcn init --yes` in a supported app, or bootstrap one with `kitcn init -t <next|expo|start|vite>` first.'
     );
+  }
+
+  if (projectContext.framework === 'expo') {
+    const providerPath = resolve(
+      process.cwd(),
+      projectContext.convexClientDir,
+      'convex-provider.tsx'
+    );
+
+    return createPlanFile({
+      kind: 'scaffold',
+      filePath: providerPath,
+      content: AUTH_EXPO_CONVEX_PROVIDER_TEMPLATE,
+      managedBaselineContent: INIT_EXPO_CONVEX_PROVIDER_TEMPLATE,
+      createReason: 'Create auth-aware kitcn provider for the Expo scaffold.',
+      updateReason: 'Update kitcn provider with auth-aware client wiring.',
+      skipReason: 'kitcn provider already matches the auth scaffold.',
+    });
   }
 
   if (projectContext.framework === 'tanstack-start') {
@@ -499,6 +532,24 @@ function buildAuthStartPagePlanFile(
     createReason: 'Create the Start auth demo route.',
     updateReason: 'Update the Start auth demo route.',
     skipReason: 'The Start auth demo route already exists.',
+  });
+}
+
+function buildAuthExpoPagePlanFile(params: PluginRegistryBuildPlanFilesParams) {
+  const projectContext = params.roots.projectContext;
+  if (!projectContext || projectContext.framework !== 'expo') {
+    throw new Error('Auth scaffolding requires a supported Expo shell.');
+  }
+
+  const pagePath = resolve(process.cwd(), projectContext.appDir, 'auth.tsx');
+
+  return createPlanFile({
+    kind: 'scaffold',
+    filePath: pagePath,
+    content: AUTH_EXPO_PAGE_TEMPLATE,
+    createReason: 'Create the Expo auth demo route.',
+    updateReason: 'Update the Expo auth demo route.',
+    skipReason: 'The Expo auth demo route already exists.',
   });
 }
 
@@ -812,6 +863,40 @@ export const authRegistryItem = defineInternalRegistryItem({
           return templates;
         }
 
+        if (roots.projectContext.framework === 'expo') {
+          return templates
+            .filter((template) => template.id !== 'auth-page')
+            .map((template) => {
+              if (template.id === 'auth-runtime') {
+                return {
+                  ...template,
+                  content: AUTH_EXPO_TEMPLATE,
+                  dependencyHintMessage:
+                    'Expo auth runtime needs the Better Auth Expo plugin.',
+                  dependencyHints: [
+                    OPENTELEMETRY_API_INSTALL_SPEC,
+                    BETTER_AUTH_EXPO_INSTALL_SPEC,
+                  ],
+                };
+              }
+              if (template.id === 'auth-client') {
+                return {
+                  ...template,
+                  content: AUTH_EXPO_CLIENT_TEMPLATE,
+                  dependencyHintMessage:
+                    'Expo auth client needs native Better Auth and Expo storage dependencies.',
+                  dependencyHints: [
+                    BETTER_AUTH_EXPO_INSTALL_SPEC,
+                    EXPO_SECURE_STORE_INSTALL_SPEC,
+                    EXPO_NETWORK_INSTALL_SPEC,
+                  ],
+                };
+              }
+
+              return template;
+            });
+        }
+
         if (roots.projectContext.framework === 'tanstack-start') {
           return templates
             .filter(
@@ -880,6 +965,8 @@ export const authRegistryItem = defineInternalRegistryItem({
             buildAuthNextServerPlanFile(params),
             buildAuthNextRoutePlanFile(params)
           );
+        } else if (roots.projectContext?.framework === 'expo') {
+          files.push(buildAuthExpoPagePlanFile(params));
         } else if (roots.projectContext?.framework === 'tanstack-start') {
           files.push(
             buildAuthStartServerPlanFile(params),

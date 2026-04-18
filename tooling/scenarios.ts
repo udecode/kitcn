@@ -65,6 +65,8 @@ type RunningScenarioProcess = ScenarioSpawnedProcess & {
 };
 
 const DEFAULT_OUTPUT_ROOT = path.join(PROJECT_ROOT, 'tmp', 'scenarios');
+const getGeneratedScenarioAppName = (template: string) =>
+  template === 'expo' ? 'kitcn-expo' : template;
 const SCENARIO_FIXTURE_ROOT = path.join(
   PROJECT_ROOT,
   'tooling',
@@ -584,7 +586,7 @@ export const resolveScenarioProofPath = (
   if (scenarioKey === 'next-auth' || scenarioKey === 'start-auth') {
     return 'auth-demo';
   }
-  if (scenarioKey === 'vite-auth') {
+  if (scenarioKey === 'expo-auth' || scenarioKey === 'vite-auth') {
     return 'auth-runtime';
   }
   return 'runtime';
@@ -826,7 +828,7 @@ const prepareScenarioSource = async (
   } else {
     const { generatedAppDir, tempRoot } = await generateFreshApp({
       backend,
-      generatedAppName: scenario.source.template,
+      generatedAppName: getGeneratedScenarioAppName(scenario.source.template),
       initTemplate: scenario.source.template,
       runCommand,
     });

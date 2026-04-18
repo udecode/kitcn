@@ -448,14 +448,14 @@ const resolvePluginScaffoldFiles = (
     } else if (template.target === 'app') {
       if (!roots.appRootDir) {
         throw new Error(
-          `${descriptor.label} scaffolding requires a supported app baseline. Run \`kitcn init --yes\` in a supported app, or bootstrap one with \`kitcn init -t <next|start|vite>\` first.`
+          `${descriptor.label} scaffolding requires a supported app baseline. Run \`kitcn init --yes\` in a supported app, or bootstrap one with \`kitcn init -t <next|expo|start|vite>\` first.`
         );
       }
       rootDir = roots.appRootDir;
     } else {
       if (!roots.clientLibRootDir) {
         throw new Error(
-          `${descriptor.label} scaffolding requires a supported app baseline. Run \`kitcn init --yes\` in a supported app, or bootstrap one with \`kitcn init -t <next|start|vite>\` first.`
+          `${descriptor.label} scaffolding requires a supported app baseline. Run \`kitcn init --yes\` in a supported app, or bootstrap one with \`kitcn init -t <next|expo|start|vite>\` first.`
         );
       }
       rootDir = roots.clientLibRootDir;

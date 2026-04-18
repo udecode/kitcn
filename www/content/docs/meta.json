@@ -27,6 +27,7 @@
     "orm/api-reference",
     "---Integrations---",
     "react",
+    "expo",
     "nextjs",
     "tanstack-start",
     "---Auth---",
