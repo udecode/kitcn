@@ -5594,8 +5594,9 @@ export async function runAggregatePruneFlow(params: {
   execaFn: typeof execa;
   backendAdapter: BackendAdapter;
   targetArgs: string[];
+  env?: Record<string, string | undefined>;
 }): Promise<number> {
-  const { execaFn, backendAdapter, targetArgs } = params;
+  const { execaFn, backendAdapter, targetArgs, env } = params;
   const result = await runBackendFunction(
     execaFn,
     backendAdapter,
@@ -5606,6 +5607,7 @@ export async function runAggregatePruneFlow(params: {
     targetArgs,
     {
       echoOutput: false,
+      env,
     }
   );
 

@@ -13,6 +13,20 @@ import {
 } from './migrate';
 
 describe('cli/commands/migrate', () => {
+  const withConvexDeployKey = async (
+    deployKey: string,
+    run: () => Promise<void>
+  ) => {
+    const originalDeployKey = process.env.CONVEX_DEPLOY_KEY;
+    process.env.CONVEX_DEPLOY_KEY = deployKey;
+
+    try {
+      await run();
+    } finally {
+      process.env.CONVEX_DEPLOY_KEY = originalDeployKey;
+    }
+  };
+
   test('parseMigrateCommandArgs parses create/list/up/down/status/cancel shapes', () => {
     expect(parseMigrateCommandArgs(['create', 'Add', 'field'])).toEqual({
       subcommand: 'create',
@@ -253,5 +267,129 @@ describe('cli/commands/migrate', () => {
     expect(exitCode).toBe(0);
     expect(calls).toHaveLength(2);
     expect(calls[1]?.args).toContain('generated/server:migrationStatus');
+  });
+
+  test('handleMigrateCommand(up) forwards ambient Convex deployment env for convex backend', async () => {
+    const calls: Array<{
+      args: string[];
+      env: Record<string, string | undefined>;
+    }> = [];
+    const execaStub = mock(
+      async (_cmd: string, args: string[], options?: { env?: unknown }) => {
+        calls.push({
+          args,
+          env: (options?.env ?? {}) as Record<string, string | undefined>,
+        });
+        return {
+          exitCode: 0,
+          stdout: `${JSON.stringify({ status: 'noop' })}\n`,
+          stderr: '',
+        } as any;
+      }
+    );
+    const loadConfigStub = mock(() => {
+      const config = createDefaultConfig();
+      config.deploy.migrations.wait = false;
+      return config;
+    });
+
+    await withConvexDeployKey('prod:demo|secret', async () => {
+      const exitCode = await handleMigrateCommand(
+        ['migrate', 'up', '--prod', '--yes'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args).toContain('--prod');
+    expect(calls[0]?.env).toEqual(
+      expect.objectContaining({
+        CONVEX_DEPLOY_KEY: 'prod:demo|secret',
+      })
+    );
+  });
+
+  test('handleMigrateCommand(status) forwards ambient Convex deployment env for convex backend', async () => {
+    const calls: Record<string, string | undefined>[] = [];
+    const execaStub = mock(
+      async (
+        _cmd: string,
+        _args: string[],
+        options?: { env?: Record<string, string | undefined> }
+      ) => {
+        calls.push(options?.env ?? {});
+        return {
+          exitCode: 0,
+          stdout: '{}\n',
+          stderr: '',
+        } as any;
+      }
+    );
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    await withConvexDeployKey('prod:demo|secret', async () => {
+      const exitCode = await handleMigrateCommand(
+        ['migrate', 'status', '--prod'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual(
+      expect.objectContaining({
+        CONVEX_DEPLOY_KEY: 'prod:demo|secret',
+      })
+    );
+  });
+
+  test('handleMigrateCommand(cancel) forwards ambient Convex deployment env for convex backend', async () => {
+    const calls: Record<string, string | undefined>[] = [];
+    const execaStub = mock(
+      async (
+        _cmd: string,
+        _args: string[],
+        options?: { env?: Record<string, string | undefined> }
+      ) => {
+        calls.push(options?.env ?? {});
+        return {
+          exitCode: 0,
+          stdout: '{}\n',
+          stderr: '',
+        } as any;
+      }
+    );
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    await withConvexDeployKey('prod:demo|secret', async () => {
+      const exitCode = await handleMigrateCommand(
+        ['migrate', 'cancel', '--prod', '--run-id', 'mr_123'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual(
+      expect.objectContaining({
+        CONVEX_DEPLOY_KEY: 'prod:demo|secret',
+      })
+    );
   });
 });

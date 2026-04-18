@@ -2,6 +2,7 @@ import {
   createBackendAdapter,
   extractBackendRunTargetArgs,
   extractBackfillCliOptions,
+  getConvexDeploymentCommandEnv,
   parseArgs,
   type RunDeps,
   resolveBackfillConfig,
@@ -43,6 +44,8 @@ export const handleAggregateCommand = async (
     realConvexPath,
     realConcavePath,
   });
+  const commandEnv =
+    backend === 'convex' ? getConvexDeploymentCommandEnv() : undefined;
   const {
     remainingArgs: aggregateCommandArgs,
     overrides: aggregateBackfillOverrides,
@@ -62,6 +65,7 @@ export const handleAggregateCommand = async (
       execaFn,
       backendAdapter,
       targetArgs,
+      env: commandEnv,
     });
   }
 
@@ -71,6 +75,7 @@ export const handleAggregateCommand = async (
     backfillConfig,
     mode: subcommand === 'rebuild' ? 'rebuild' : 'resume',
     targetArgs,
+    env: commandEnv,
     context: 'aggregate',
   });
 };
