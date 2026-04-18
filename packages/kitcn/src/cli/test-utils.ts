@@ -419,13 +419,9 @@ export function writeExpoDefaultApp(dir: string) {
 
   fs.writeFileSync(
     path.join(dir, '.gitignore'),
-    `${[
-      'node_modules/',
-      '.expo/',
-      'dist/',
-      'web-build/',
-      '.env*.local',
-    ].join('\n')}\n`
+    `${['node_modules/', '.expo/', 'dist/', 'web-build/', '.env*.local'].join(
+      '\n'
+    )}\n`
   );
 
   fs.writeFileSync(

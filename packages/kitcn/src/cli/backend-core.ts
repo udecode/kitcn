@@ -61,8 +61,8 @@ import { INIT_EXPO_CONVEX_PROVIDER_TEMPLATE } from './registry/init/expo/init-ex
 import { INIT_EXPO_CRPC_TEMPLATE } from './registry/init/expo/init-expo-crpc.template.js';
 import { renderInitExpoEnvTemplate } from './registry/init/expo/init-expo-env.template.js';
 import { INIT_EXPO_ENV_TYPES_TEMPLATE } from './registry/init/expo/init-expo-env-types.template.js';
-import { renderInitExpoGitignoreTemplate } from './registry/init/expo/init-expo-gitignore.template.js';
 import { INIT_EXPO_EXPLORE_TEMPLATE } from './registry/init/expo/init-expo-explore.template.js';
+import { renderInitExpoGitignoreTemplate } from './registry/init/expo/init-expo-gitignore.template.js';
 import { INIT_EXPO_LAYOUT_TEMPLATE } from './registry/init/expo/init-expo-layout.template.js';
 import { INIT_EXPO_MESSAGES_SCREEN_TEMPLATE } from './registry/init/expo/init-expo-messages-screen.template.js';
 import { renderInitExpoPackageJsonTemplate } from './registry/init/expo/init-expo-package-json.template.js';
