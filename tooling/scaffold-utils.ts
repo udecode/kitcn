@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { renderInitExpoEnvTemplate } from '../packages/kitcn/src/cli/registry/init/expo/init-expo-env.template';
 import { renderInitNextEnvLocalTemplate } from '../packages/kitcn/src/cli/registry/init/next/init-next-env-local.template';
 import { renderInitReactEnvLocalTemplate } from '../packages/kitcn/src/cli/registry/init/react/init-react-env-local.template';
 import {
@@ -72,6 +73,8 @@ const GET_ENV_SITE_URL_DEFAULT_RE =
   /SITE_URL:\s*z\.string\(\)\.default\((['"])http:\/\/localhost:3000\1\)/;
 const NEXT_PUBLIC_SITE_URL_ENV_RE =
   /NEXT_PUBLIC_(?:CONVEX_URL|CONVEX_SITE_URL|SITE_URL)=/;
+const EXPO_PUBLIC_SITE_URL_ENV_RE =
+  /EXPO_PUBLIC_(?:CONVEX_URL|CONVEX_SITE_URL|SITE_URL)=/;
 const VITE_SITE_URL_ENV_RE = /VITE_(?:CONVEX_URL|CONVEX_SITE_URL|SITE_URL)=/;
 const BUILT_LOCAL_PACKAGE_DIRS = new Set<string>();
 let localInstallSpec: string | undefined;
@@ -82,6 +85,7 @@ const resolveLocalDevSiteUrl = (port: number) => `http://localhost:${port}`;
 export type WorkspacePackageJson = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  main?: string;
   name: string;
   packageManager?: string;
   peerDependencies?: Record<string, string>;
@@ -255,7 +259,7 @@ export const runLocalCliSteps = async (
 export const generateFreshApp = async (params: {
   backend: TemplateBackend;
   generatedAppName: string;
-  initTemplate: 'next' | 'start' | 'vite';
+  initTemplate: 'next' | 'expo' | 'start' | 'vite';
   localCliPath?: string;
   projectRoot?: string;
   runCommand?: typeof run;
@@ -507,7 +511,7 @@ export const patchPreparedLocalDevPort = (
 ) => {
   const localDevSiteUrl = resolveLocalDevSiteUrl(port);
   const packageJsonPath = path.join(directory, 'package.json');
-  let envTemplateKind: 'next' | 'vite' | null = null;
+  let envTemplateKind: 'next' | 'expo' | 'vite' | null = null;
   if (existsSync(packageJsonPath)) {
     const packageJson = readJson<WorkspacePackageJson>(packageJsonPath);
     const nextScripts = { ...(packageJson.scripts ?? {}) };
@@ -526,6 +530,12 @@ export const patchPreparedLocalDevPort = (
       )
     ) {
       envTemplateKind = 'next';
+    } else if (
+      'expo' in dependencies ||
+      'expo-router' in dependencies ||
+      existsSync(path.join(directory, 'app.json'))
+    ) {
+      envTemplateKind = 'expo';
     } else if (
       scriptValues.some((script) => VITE_DEV_SCRIPT_RE.test(script ?? '')) ||
       'vite' in dependencies ||
@@ -556,6 +566,8 @@ export const patchPreparedLocalDevPort = (
   if (!existsSync(envLocalPath)) {
     if (envTemplateKind === 'next') {
       writeFileSync(envLocalPath, renderInitNextEnvLocalTemplate());
+    } else if (envTemplateKind === 'expo') {
+      writeFileSync(envLocalPath, renderInitExpoEnvTemplate());
     } else if (envTemplateKind === 'vite') {
       writeFileSync(envLocalPath, renderInitReactEnvLocalTemplate());
     }
@@ -566,6 +578,9 @@ export const patchPreparedLocalDevPort = (
 
     if (NEXT_PUBLIC_SITE_URL_ENV_RE.test(envLocalSource)) {
       envEntries.NEXT_PUBLIC_SITE_URL = localDevSiteUrl;
+    }
+    if (EXPO_PUBLIC_SITE_URL_ENV_RE.test(envLocalSource)) {
+      envEntries.EXPO_PUBLIC_SITE_URL = localDevSiteUrl;
     }
     if (VITE_SITE_URL_ENV_RE.test(envLocalSource)) {
       envEntries.VITE_SITE_URL = localDevSiteUrl;

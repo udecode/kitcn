@@ -18,6 +18,7 @@ Use this table when you want the blunt version:
 | Start a new Next.js app | `kitcn init -t next --yes` |
 | Start a new TanStack Start app | `kitcn init -t start --yes` |
 | Start a new Vite app | `kitcn init -t vite --yes` |
+| Start a new Expo app | `kitcn init -t expo --yes` |
 | Adopt the current supported app | `kitcn init --yes` |
 | Add a capability | `kitcn add <plugin>` |
 | Verify local runtime | `kitcn verify` |
@@ -31,7 +32,7 @@ We'll start with `init`, because it owns bootstrap in both directions.
 
 ### Scaffold a fresh app
 
-Pass `-t next`, `-t start`, or `-t vite` when you want kitcn to create the app shell
+Pass `-t next`, `-t start`, `-t vite`, or `-t expo` when you want kitcn to create the app shell
 and patch its integration layer in one pass.
 
 <KitcnLatestCommandTabs
@@ -39,6 +40,7 @@ and patch its integration layer in one pass.
     'init -t next --yes',
     'init -t start --yes',
     'init -t vite --yes',
+    'init -t expo --yes',
     'init -t next --yes --cwd apps --name web',
     '--backend concave init -t next --yes',
   ]}
@@ -69,6 +71,12 @@ For a fresh Vite app, `init -t vite` keeps the flow smaller. It writes the
 React client core, the backend baseline, and the shared env/codegen wiring.
 That means provider and cRPC setup are ready without pretending Vite is a Next
 app.
+
+For a fresh Expo app, `init -t expo` uses the official `create-expo-app`
+default shell, then overlays the Convex client/provider wiring plus one native
+messages screen. It is still fresh scaffold only for app ownership, but Expo
+does support the default `add auth` scaffold on top of that baseline. Existing
+Expo app adoption is still out of scope.
 
 On backend `convex`, `init --yes` finishes the first local Convex bootstrap in
 the same command. Remote deployment-targeting flags stay `convex init` flags;
@@ -120,7 +128,7 @@ Backend resolution order stays:
 
 | Flag | Description |
 | ---- | ----------- |
-| `-t, --template <next\|vite>` | Fresh app template |
+| `-t, --template <next\|expo\|start\|vite>` | Fresh app template |
 | `--cwd <cwd>` | Target directory, or parent when used with `--name` |
 | `--name <name>` | New app directory name |
 | `--backend <convex\|concave>` | Backend CLI to drive |

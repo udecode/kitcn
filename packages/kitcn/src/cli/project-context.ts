@@ -4,6 +4,7 @@ import { posix, resolve } from 'node:path';
 export type DetectedProjectFramework =
   | 'next-app'
   | 'next-pages'
+  | 'expo'
   | 'vite'
   | 'react-router'
   | 'tanstack-start'
@@ -13,7 +14,7 @@ export type DetectedProjectFramework =
   | 'laravel'
   | 'remix';
 
-export type ScaffoldMode = 'next-app' | 'react';
+export type ScaffoldMode = 'next-app' | 'react' | 'expo';
 
 type CommonScaffoldContext = {
   framework: DetectedProjectFramework;
@@ -35,8 +36,18 @@ export type NextAppScaffoldContext = CommonScaffoldContext & {
   convexSiteUrlEnvKey: 'NEXT_PUBLIC_CONVEX_SITE_URL';
 };
 
+export type ExpoScaffoldContext = CommonScaffoldContext & {
+  framework: 'expo';
+  mode: 'expo';
+  appDir: string;
+  tailwindCssPath: null;
+  clientSiteUrlEnvKey: 'EXPO_PUBLIC_SITE_URL';
+  convexUrlEnvKey: 'EXPO_PUBLIC_CONVEX_URL';
+  convexSiteUrlEnvKey: 'EXPO_PUBLIC_CONVEX_SITE_URL';
+};
+
 export type ReactScaffoldContext = CommonScaffoldContext & {
-  framework: Exclude<DetectedProjectFramework, 'next-app'>;
+  framework: Exclude<DetectedProjectFramework, 'next-app' | 'expo'>;
   mode: 'react';
   appDir: null;
   clientEntryFile: string | null;
@@ -50,12 +61,13 @@ export type ReactScaffoldContext = CommonScaffoldContext & {
 
 export type ProjectScaffoldContext =
   | NextAppScaffoldContext
+  | ExpoScaffoldContext
   | ReactScaffoldContext;
 
 function isReactScaffoldFramework(
   framework: DetectedProjectFramework
 ): framework is ReactScaffoldContext['framework'] {
-  return framework !== 'next-app';
+  return framework !== 'next-app' && framework !== 'expo';
 }
 
 const NEXT_CONFIG_FILES = [
@@ -87,6 +99,13 @@ const GATSBY_CONFIG_FILES = [
   'gatsby-config.js',
   'gatsby-config.mjs',
   'gatsby-config.cjs',
+] as const;
+const EXPO_CONFIG_FILES = [
+  'app.json',
+  'app.config.ts',
+  'app.config.js',
+  'app.config.mjs',
+  'app.config.cjs',
 ] as const;
 const LEADING_SLASH_RE = /^\/+/;
 const TS_ALIAS_RE = /"@\/\*"\s*:\s*\[\s*"([^"]+)"\s*\]/m;
@@ -208,7 +227,9 @@ function inferUsesSrcFromAppDirs(cwd: string): boolean | null {
 function inferUsesSrc(cwd: string, mode: ScaffoldMode): boolean {
   const signals = [
     inferUsesSrcFromComponentsJson(cwd),
-    mode === 'next-app' ? inferUsesSrcFromAppDirs(cwd) : null,
+    mode === 'next-app' || mode === 'expo'
+      ? inferUsesSrcFromAppDirs(cwd)
+      : null,
     inferUsesSrcFromComponentRoots(cwd),
     inferUsesSrcFromTsconfig(cwd),
     fs.existsSync(resolve(cwd, 'src')) ? true : null,
@@ -272,6 +293,15 @@ export function detectProjectFramework(
   ) {
     return 'tanstack-start';
   }
+  if (
+    hasAnyFile(cwd, EXPO_CONFIG_FILES) &&
+    hasDependency(
+      packageJson,
+      (dependency) => dependency === 'expo' || dependency === 'expo-router'
+    )
+  ) {
+    return 'expo';
+  }
   if (hasAnyFile(cwd, REACT_ROUTER_CONFIG_FILES)) {
     return 'react-router';
   }
@@ -295,6 +325,9 @@ export function mapFrameworkToScaffoldMode(
   if (framework === 'next-app') {
     return 'next-app';
   }
+  if (framework === 'expo') {
+    return 'expo';
+  }
   if (
     framework === 'next-pages' ||
     framework === 'vite' ||
@@ -305,7 +338,7 @@ export function mapFrameworkToScaffoldMode(
     return 'react';
   }
   throw new Error(
-    `Unsupported framework "${framework}" for kitcn init. Supported frameworks map to: next-app, next-pages, vite, react-router, tanstack-start, manual.`
+    `Unsupported framework "${framework}" for kitcn init. Supported frameworks map to: next-app, expo, next-pages, vite, react-router, tanstack-start, manual.`
   );
 }
 
@@ -321,11 +354,13 @@ export function resolveProjectScaffoldContext(
   const templateFramework =
     params.template === 'next'
       ? 'next-app'
-      : params.template === 'start'
-        ? 'tanstack-start'
-        : params.template === 'vite'
-          ? 'vite'
-          : null;
+      : params.template === 'expo'
+        ? 'expo'
+        : params.template === 'start'
+          ? 'tanstack-start'
+          : params.template === 'vite'
+            ? 'vite'
+            : null;
   const detectedFramework = templateFramework ?? detectProjectFramework(cwd);
 
   if (!detectedFramework) {
@@ -333,7 +368,7 @@ export function resolveProjectScaffoldContext(
       return null;
     }
     throw new Error(
-      'Could not detect a supported app scaffold. Supported modes currently start from `next`, `start`, or `vite`.'
+      'Could not detect a supported app scaffold. Supported modes currently start from `next`, `expo`, `start`, or `vite`.'
     );
   }
 
@@ -370,6 +405,24 @@ export function resolveProjectScaffoldContext(
       clientSiteUrlEnvKey: 'NEXT_PUBLIC_SITE_URL',
       convexUrlEnvKey: 'NEXT_PUBLIC_CONVEX_URL',
       convexSiteUrlEnvKey: 'NEXT_PUBLIC_CONVEX_SITE_URL',
+    };
+  }
+
+  if (mode === 'expo') {
+    const appDir = posix.join(rootPrefix, 'app').replace(LEADING_SLASH_RE, '');
+    return {
+      framework: 'expo',
+      mode,
+      usesSrc,
+      appDir,
+      componentsDir,
+      libDir,
+      convexClientDir,
+      tailwindCssPath: null,
+      tsconfigAliasPath,
+      clientSiteUrlEnvKey: 'EXPO_PUBLIC_SITE_URL',
+      convexUrlEnvKey: 'EXPO_PUBLIC_CONVEX_URL',
+      convexSiteUrlEnvKey: 'EXPO_PUBLIC_CONVEX_SITE_URL',
     };
   }
 

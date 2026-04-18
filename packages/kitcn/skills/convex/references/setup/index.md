@@ -107,6 +107,12 @@ npx kitcn@latest --backend concave init --yes
 # New Next.js app with deterministic shadcn bootstrap + first local Convex bootstrap
 npx kitcn@latest init -t next --yes
 
+# New Expo app with the official create-expo-app shell + first local Convex bootstrap
+npx kitcn@latest init -t expo --yes
+
+# New TanStack Start app with the official shadcn Start shell + first local Convex bootstrap
+npx kitcn@latest init -t start --yes
+
 # New Vite app with the React baseline + first local Convex bootstrap
 npx kitcn@latest init -t vite --yes
 
@@ -175,6 +181,8 @@ Universal scaffold rule:
 Public template keys stay concrete:
 
 - `next`
+- `expo`
+- `start`
 - `vite`
 
 Internal scaffold modes stay broad:
@@ -184,6 +192,7 @@ Internal scaffold modes stay broad:
 
 Framework mapping:
 
+- `expo` -> `expo`
 - `next-app` -> `next-app`
 - `next-pages`, `vite`, `react-router`, `tanstack-start`, `manual` -> `react`
 

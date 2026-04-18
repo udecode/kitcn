@@ -7,6 +7,7 @@ import { renderAuthCrpcTemplate } from '../registry/items/auth/auth-crpc.templat
 import { AUTH_NEXT_SERVER_TEMPLATE } from '../registry/items/auth/auth-next-server.template.js';
 import {
   createDefaultConfig,
+  writeExpoDefaultApp,
   writePackageJson,
   writeShadcnNextApp,
   writeShadcnNextMonorepoApp,
@@ -16,6 +17,8 @@ import {
 import {
   detectProjectFramework,
   handleInitCommand,
+  INIT_EXPO_PACKAGE_SPEC,
+  INIT_EXPO_TEMPLATE_SPEC,
   INIT_HELP_TEXT,
   INIT_SHADCN_PACKAGE_SPEC,
   mapFrameworkToScaffoldMode,
@@ -100,13 +103,14 @@ describe('cli/commands/init', () => {
     );
   });
 
-  test('resolveSupportedInitTemplate allows next, start, and vite', () => {
+  test('resolveSupportedInitTemplate allows next, expo, start, and vite', () => {
     expect(resolveSupportedInitTemplate('next')).toBe('next');
+    expect(resolveSupportedInitTemplate('expo')).toBe('expo');
     expect(resolveSupportedInitTemplate('start')).toBe('start');
     expect(resolveSupportedInitTemplate('vite')).toBe('vite');
     expect(resolveSupportedInitTemplate(undefined)).toBeUndefined();
     expect(() => resolveSupportedInitTemplate('nope')).toThrow(
-      'Unsupported init template "nope". Expected one of: next, start, vite.'
+      'Unsupported init template "nope". Expected one of: next, expo, start, vite.'
     );
   });
 
@@ -120,6 +124,11 @@ describe('cli/commands/init', () => {
       path.join(os.tmpdir(), 'kitcn-init-detect-vite-')
     );
     writeShadcnViteApp(viteDir);
+
+    const expoDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-detect-expo-')
+    );
+    writeExpoDefaultApp(expoDir);
 
     const reactRouterDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-init-detect-react-router-')
@@ -152,6 +161,8 @@ describe('cli/commands/init', () => {
 
     expect(detectProjectFramework(nextDir)).toBe('next-app');
     expect(mapFrameworkToScaffoldMode('next-app')).toBe('next-app');
+    expect(detectProjectFramework(expoDir)).toBe('expo');
+    expect(mapFrameworkToScaffoldMode('expo')).toBe('expo');
     expect(detectProjectFramework(viteDir)).toBe('vite');
     expect(mapFrameworkToScaffoldMode('vite')).toBe('react');
     expect(detectProjectFramework(reactRouterDir)).toBe('react-router');
@@ -326,6 +337,122 @@ describe('cli/commands/init', () => {
             path.join(expectedProjectDir, 'app', 'layout.tsx'),
             'utf8'
           )
+        )
+      ).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand scaffolds the Expo baseline with -t expo', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-create-command-expo-')
+    );
+    const expectedProjectDir = path.join(tmpDir, 'apps', 'mobile');
+    const execaStub = mock(
+      async (_cmd: string, args: string[], opts?: { cwd?: string }) => {
+        if (args.includes(INIT_EXPO_PACKAGE_SPEC)) {
+          expect(fs.realpathSync(opts?.cwd ?? '')).toBe(
+            fs.realpathSync(path.join(tmpDir, 'apps'))
+          );
+          expect(fs.existsSync(opts?.cwd ?? '')).toBe(true);
+          const projectName = args[1] ?? 'mobile';
+          writeExpoDefaultApp(path.join(tmpDir, 'apps', projectName));
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(
+        ['init', '-t', 'expo', '--yes', '--cwd', 'apps', '--name', 'mobile'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      const expoCall = execaStub.mock.calls.find((call) =>
+        (
+          call as unknown as [string, string[], Record<string, unknown>]
+        )[1]?.includes(INIT_EXPO_PACKAGE_SPEC)
+      ) as [string, string[], Record<string, unknown>] | undefined;
+      expect(expoCall?.[1]).toEqual([
+        INIT_EXPO_PACKAGE_SPEC,
+        'mobile',
+        '--template',
+        INIT_EXPO_TEMPLATE_SPEC,
+        '--no-install',
+        '--yes',
+      ]);
+
+      expect(fs.existsSync(path.join(expectedProjectDir, 'package.json'))).toBe(
+        true
+      );
+      const packageJson = JSON.parse(
+        fs.readFileSync(path.join(expectedProjectDir, 'package.json'), 'utf8')
+      ) as {
+        main?: string;
+        scripts?: Record<string, string>;
+        dependencies?: Record<string, string>;
+      };
+      expect(packageJson.main).toBe('expo-router/entry');
+      expect(packageJson.scripts?.codegen).toBe('kitcn codegen');
+      expect(packageJson.scripts?.['convex:dev']).toBe('kitcn dev');
+      expect(packageJson.dependencies?.superjson).toBe('2.2.6');
+      expect(
+        fs.readFileSync(path.join(expectedProjectDir, '.env.local'), 'utf8')
+      ).toContain('EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210');
+      expect(
+        fs.readFileSync(path.join(expectedProjectDir, '.env.local'), 'utf8')
+      ).toContain('EXPO_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211');
+      expect(
+        fs.readFileSync(path.join(expectedProjectDir, '.env.local'), 'utf8')
+      ).toContain('EXPO_PUBLIC_SITE_URL=http://localhost:3000');
+      expect(
+        fs.readFileSync(path.join(expectedProjectDir, '.gitignore'), 'utf8')
+      ).not.toContain('expo-env.d.ts');
+      expect(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'src', 'app', '_layout.tsx'),
+          'utf8'
+        )
+      ).toContain('Stack.Screen name="index"');
+      expect(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'src', 'app', 'index.tsx'),
+          'utf8'
+        )
+      ).toContain('useCRPC()');
+      expect(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'src', 'app', 'explore.tsx'),
+          'utf8'
+        )
+      ).toContain('<Redirect href="/" />');
+      expect(
+        fs.existsSync(
+          path.join(
+            expectedProjectDir,
+            'src',
+            'lib',
+            'convex',
+            'convex-provider.tsx'
+          )
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(expectedProjectDir, 'convex', 'functions', 'messages.ts')
         )
       ).toBe(true);
     } finally {
@@ -1768,7 +1895,7 @@ describe('cli/commands/init', () => {
           loadCliConfig: loadConfigStub as any,
         })
       ).rejects.toThrow(
-        'Could not detect a supported app scaffold. Use `kitcn init -t <next|start|vite>` for a fresh app.'
+        'Could not detect a supported app scaffold. Use `kitcn init -t <next|expo|start|vite>` for a fresh app.'
       );
       expect(execaStub).not.toHaveBeenCalled();
     } finally {
@@ -1801,6 +1928,37 @@ describe('cli/commands/init', () => {
         })
       ).rejects.toThrow(
         'Existing supported app scaffold detected. Run `kitcn init --yes` in . to adopt the current project.'
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand rejects in-place Expo adoption for now', async () => {
+    const expoDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-existing-expo-')
+    );
+    writeExpoDefaultApp(expoDir);
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(expoDir);
+    try {
+      await expect(
+        handleInitCommand(['init', '--yes'], {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        })
+      ).rejects.toThrow(
+        'Expo adoption is not supported yet. Start with `kitcn init -t expo --yes`.'
       );
     } finally {
       process.chdir(originalCwd);

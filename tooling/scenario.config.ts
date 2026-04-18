@@ -1,6 +1,8 @@
 import type { TemplateBackend, TemplateKey } from './template.config';
 
 export const SCENARIO_KEYS = [
+  'expo',
+  'expo-auth',
   'next',
   'next-auth',
   'start',
@@ -42,7 +44,7 @@ type ScenarioSource =
     }
   | {
       kind: 'fresh';
-      template: 'next' | 'start' | 'vite';
+      template: 'next' | 'expo' | 'start' | 'vite';
     }
   | {
       kind: 'template';
@@ -67,6 +69,30 @@ export type ScenarioDefinition = {
 };
 
 export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
+  expo: {
+    check: false,
+    label: 'expo',
+    setup: [],
+    validation: {
+      lint: false,
+    },
+    source: {
+      kind: 'template',
+      template: 'expo',
+    },
+  },
+  'expo-auth': {
+    check: false,
+    label: 'expo + auth',
+    setup: [],
+    validation: {
+      lint: false,
+    },
+    source: {
+      kind: 'template',
+      template: 'expo-auth',
+    },
+  },
   next: {
     check: false,
     label: 'next',

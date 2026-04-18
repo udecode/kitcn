@@ -208,7 +208,7 @@ describe('cli/commands/dev', () => {
     expect(resolveConcaveLocalSiteUrl(dir)).toBe('http://localhost:4010');
   });
 
-  test('resolveConcaveLocalSiteUrl falls back to VITE_SITE_URL then localhost:3000', () => {
+  test('resolveConcaveLocalSiteUrl falls back to VITE_SITE_URL, EXPO_PUBLIC_SITE_URL, then localhost:3000', () => {
     const viteDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-dev-site-url-vite-')
     );
@@ -216,11 +216,19 @@ describe('cli/commands/dev', () => {
       path.join(viteDir, '.env.local'),
       'VITE_SITE_URL=http://localhost:4020\n'
     );
+    const expoDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-dev-site-url-expo-')
+    );
+    fs.writeFileSync(
+      path.join(expoDir, '.env.local'),
+      'EXPO_PUBLIC_SITE_URL=http://localhost:4030\n'
+    );
     const emptyDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-dev-site-url-empty-')
     );
 
     expect(resolveConcaveLocalSiteUrl(viteDir)).toBe('http://localhost:4020');
+    expect(resolveConcaveLocalSiteUrl(expoDir)).toBe('http://localhost:4030');
     expect(resolveConcaveLocalSiteUrl(emptyDir)).toBe('http://localhost:3000');
   });
 

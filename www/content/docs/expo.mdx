@@ -1,0 +1,95 @@
+---
+title: Expo
+description: Scaffold an Expo app from the official create-expo-app shell and layer in the kitcn Convex baseline.
+links:
+  doc: https://docs.expo.dev
+---
+
+## Expo Setup
+
+Use Expo when you want a native-first starter but still want the same kitcn
+backend baseline and starter messages flow.
+
+```bash showLineNumbers
+npx kitcn@latest init -t expo --yes
+```
+
+This path uses the official `create-expo-app` shell, then overlays the minimum
+kitcn Convex wiring:
+
+- `.env.local`
+- `expo-env.d.ts`
+- `src/components/providers.tsx`
+- `src/lib/convex/*`
+- `src/app/_layout.tsx`
+- `src/app/index.tsx`
+- `convex/functions/schema.ts`
+- `convex/functions/messages.ts`
+- `convex/lib/crpc.ts`
+- `convex/lib/get-env.ts`
+- `convex/shared/api.ts`
+
+V1 is intentionally narrow:
+
+- fresh scaffold only
+- no existing Expo app adoption
+- no styling-framework opinion beyond the official Expo baseline
+
+## Add Auth
+
+Expo now supports the default auth scaffold:
+
+```bash showLineNumbers
+npx kitcn add auth --yes
+npx kitcn add auth --schema --yes
+```
+
+On Expo, `add auth` owns:
+
+- `src/lib/convex/auth-client.ts`
+- `src/lib/convex/convex-provider.tsx`
+- `src/app/auth.tsx`
+- `convex/functions/auth.config.ts`
+- `convex/functions/auth.ts`
+- auth-owned schema blocks in `convex/functions/schema.ts`
+
+Expo auth parity follows the default auth scaffold, not the raw Convex preset.
+That means Expo keeps managed schema refresh with `add auth --schema --yes`.
+
+The generated Expo auth client uses:
+
+- `@better-auth/expo/client`
+- `expo-secure-store`
+- `EXPO_PUBLIC_CONVEX_SITE_URL`
+
+The generated auth route stays on `/auth`.
+
+## Run It
+
+Start the backend in one terminal:
+
+```bash title="terminal 1" showLineNumbers
+npx kitcn dev
+```
+
+Then start Expo in another:
+
+```bash title="terminal 2" showLineNumbers
+bun run start
+```
+
+The starter app opens to a single messages screen backed by Convex. Add a
+message and watch the list update.
+
+## Env Contract
+
+The Expo starter uses Expo's client env model:
+
+```bash
+EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
+EXPO_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211
+EXPO_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+Use `process.env.EXPO_PUBLIC_*` directly in the client. Do not destructure
+those values or access them with bracket notation.

@@ -29,6 +29,7 @@
     "react",
     "nextjs",
     "tanstack-start",
+    "expo",
     "---Auth---",
     "auth/index",
     "auth/server",

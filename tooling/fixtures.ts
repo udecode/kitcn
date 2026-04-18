@@ -37,6 +37,11 @@ const getFixturePackageName = (templateKey: TemplateKey) =>
 const getValidationPackageName = (templateKey: TemplateKey) =>
   `${getFixturePackageName(templateKey)}-check`;
 
+const getGeneratedAppName = (templateKey: TemplateKey) =>
+  TEMPLATE_DEFINITIONS[templateKey].initTemplate === 'expo'
+    ? 'kitcn-expo'
+    : TEMPLATE_DEFINITIONS[templateKey].initTemplate;
+
 const FIXTURE_TSCONFIG_FILES = [
   'tsconfig.json',
   'tsconfig.app.json',
@@ -82,6 +87,7 @@ const normalizeTemplatePackageJson = (
       )
     ),
   },
+  main: packageJson.main,
   devDependencies: packageJson.devDependencies,
   name: getFixturePackageName(templateKey),
   packageManager: packageJson.packageManager,
@@ -183,7 +189,7 @@ export const parseTemplateArgs = (
   const [mode, ...rest] = argv;
   if (mode !== 'sync' && mode !== 'check') {
     throw new Error(
-      'Usage: bun tooling/fixtures.ts <sync|check> [all|next|next-auth|start|start-auth|vite|vite-auth] [--backend <convex|concave>]'
+      'Usage: bun tooling/fixtures.ts <sync|check> [all|expo|expo-auth|next|next-auth|start|start-auth|vite|vite-auth] [--backend <convex|concave>]'
     );
   }
 
@@ -229,7 +235,7 @@ export const generateTemplate = async (
 ) => {
   const definition = TEMPLATE_DEFINITIONS[templateKey];
   const backend = params.backend ?? 'concave';
-  const generatedAppName = definition.initTemplate;
+  const generatedAppName = getGeneratedAppName(templateKey);
   const runCommand = params.runCommand ?? run;
   const { generatedAppDir, tempRoot } = await generateFreshApp({
     backend,

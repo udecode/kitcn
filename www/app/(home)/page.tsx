@@ -399,6 +399,10 @@ const homeTemplateOptions = [
     label: 'react',
     command: 'init',
   },
+  {
+    label: 'expo',
+    command: 'init -t expo',
+  },
 ] as const;
 
 function Hero() {

@@ -12,6 +12,7 @@ import {
   run,
 } from './cli';
 import {
+  INIT_EXPO_PACKAGE_SPEC,
   INIT_HELP_TEXT,
   INIT_SHADCN_PACKAGE_SPEC,
   KITCN_INSTALL_SPEC_ENV,
@@ -24,6 +25,7 @@ import {
   resolveScaffoldInstallSpec,
 } from './supported-dependencies';
 import {
+  writeExpoDefaultApp,
   writeShadcnNextApp,
   writeShadcnStartApp,
   writeShadcnViteApp,
@@ -846,7 +848,7 @@ describe('cli/cli', () => {
         loadCliConfig: loadConfigStub as any,
       })
     ).rejects.toThrow(
-      'Removed `kitcn create`. Use `kitcn init -t <next|start|vite>` for fresh app scaffolding.'
+      'Removed `kitcn create`. Use `kitcn init -t <next|expo|start|vite>` for fresh app scaffolding.'
     );
     expect(execaStub).not.toHaveBeenCalled();
   });
@@ -1243,7 +1245,7 @@ describe('cli/cli', () => {
           loadCliConfig: loadConfigStub as any,
         })
       ).rejects.toThrow(
-        'Could not detect a supported app scaffold. Use `kitcn init -t <next|start|vite>` for a fresh app.'
+        'Could not detect a supported app scaffold. Use `kitcn init -t <next|expo|start|vite>` for a fresh app.'
       );
       expect(
         (
@@ -2111,6 +2113,158 @@ describe('cli/cli', () => {
     }
   });
 
+  test('run(add auth --yes --no-codegen) patches the Expo baseline with auth parity scaffolding', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-cli-add-auth-expo-')
+    );
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(
+        async (_cmd: string, args: string[], opts?: { cwd?: string }) => {
+          if (args.includes(INIT_EXPO_PACKAGE_SPEC)) {
+            const projectName = args[1] ?? path.basename(dir);
+            const baseDir = opts?.cwd ?? dir;
+            writeExpoDefaultApp(path.join(baseDir, projectName));
+            return { exitCode: 0 } as any;
+          }
+          if (args[0] === '/fake/convex/main.js' && args[1] === 'codegen') {
+            return { exitCode: 0, stdout: '', stderr: '' } as any;
+          }
+          return { exitCode: 0 } as any;
+        }
+      );
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      const initExitCode = await run(['init', '-t', 'expo', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+      expect(initExitCode).toBe(0);
+
+      const exitCode = await run(['add', 'auth', '--yes', '--no-codegen'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'auth.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'convex', 'functions', 'auth.config.ts'))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'auth-client.ts'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'src', 'app', 'auth.tsx'))).toBe(
+        true
+      );
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'lib', 'convex', 'auth-server.ts'))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(dir, 'src', 'routes', 'api', 'auth', '$.ts'))
+      ).toBe(false);
+
+      const runtimeSource = fs.readFileSync(
+        path.join(dir, 'convex', 'functions', 'auth.ts'),
+        'utf8'
+      );
+      expect(runtimeSource).toContain(
+        "import { expo } from '@better-auth/expo';"
+      );
+      expect(runtimeSource).toContain('plugins: [');
+      expect(runtimeSource).toContain('expo(),');
+      expect(runtimeSource).toContain(
+        'baseURL: getEnv().CONVEX_SITE_URL ?? getEnv().SITE_URL'
+      );
+
+      const providerSource = fs.readFileSync(
+        path.join(dir, 'src', 'lib', 'convex', 'convex-provider.tsx'),
+        'utf8'
+      );
+      expect(providerSource).toContain('ConvexAuthProvider');
+      expect(providerSource).toContain("from 'expo-router'");
+      expect(providerSource).toContain("router.push('/auth')");
+
+      const authClientSource = fs.readFileSync(
+        path.join(dir, 'src', 'lib', 'convex', 'auth-client.ts'),
+        'utf8'
+      );
+      expect(authClientSource).toContain(
+        "import { expoClient } from '@better-auth/expo/client';"
+      );
+      expect(authClientSource).toContain(
+        "import * as SecureStore from 'expo-secure-store';"
+      );
+      expect(authClientSource).toContain(
+        "import Constants from 'expo-constants';"
+      );
+      expect(authClientSource).toContain(
+        'baseURL: process.env.EXPO_PUBLIC_CONVEX_SITE_URL!'
+      );
+      expect(authClientSource).toContain('plugins: [');
+      expect(authClientSource).toContain('expoClient({');
+      expect(authClientSource).toContain('convexClient(),');
+
+      const authPageSource = fs.readFileSync(
+        path.join(dir, 'src', 'app', 'auth.tsx'),
+        'utf8'
+      );
+      expect(authPageSource).toContain('Minimal Better Auth wiring');
+      expect(authPageSource).toContain('useSignInMutationOptions');
+      expect(authPageSource).toContain('useSignUpMutationOptions');
+      expect(authPageSource).toContain('useSignOutMutationOptions');
+
+      const crpcSource = fs.readFileSync(
+        path.join(dir, 'convex', 'lib', 'crpc.ts'),
+        'utf8'
+      );
+      expect(crpcSource).toContain('export const optionalAuthQuery');
+      expect(crpcSource).toContain('export const authQuery');
+      expect(crpcSource).toContain('export const authMutation');
+      expect(crpcSource).toContain('export const authAction');
+      expect(crpcSource).toContain('export const authRoute');
+      expect(crpcSource).toContain('export const optionalAuthRoute');
+
+      const schemaSource = fs.readFileSync(
+        path.join(dir, 'convex', 'functions', 'schema.ts'),
+        'utf8'
+      );
+      expect(schemaSource).toContain('export const userTable = convexTable(');
+      expect(schemaSource).toContain(
+        'export const sessionTable = convexTable('
+      );
+      expect(schemaSource).toContain('user: userTable,');
+      expect(schemaSource).toContain('session: sessionTable,');
+
+      expectDependencyInstallCall(
+        execaStub.mock.calls as unknown as unknown[],
+        BETTER_AUTH_INSTALL_SPEC
+      );
+      expectDependencyInstallCallWithPackages(
+        execaStub.mock.calls as unknown as unknown[],
+        [
+          '@better-auth/expo@1.6.5',
+          'expo-secure-store@~55.0.8',
+          'expo-network@~55.0.8',
+        ]
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('run(add auth --yes --no-codegen) patches the start baseline with minimal auth scaffolding', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-cli-add-auth-start-')
@@ -2918,7 +3072,7 @@ describe('cli/cli', () => {
           loadCliConfig: loadConfigStub as any,
         })
       ).rejects.toThrow(
-        'Auth scaffolding requires a supported app baseline. Run `kitcn init --yes` in a supported app, or bootstrap one with `kitcn init -t <next|start|vite>` first.'
+        'Auth scaffolding requires a supported app baseline. Run `kitcn init --yes` in a supported app, or bootstrap one with `kitcn init -t <next|expo|start|vite>` first.'
       );
     } finally {
       process.chdir(oldCwd);

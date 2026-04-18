@@ -1,6 +1,6 @@
 ## 5. Core Backend
 
-For production bootstrap, start in the CLI Registry: use `npx kitcn@latest init -t <next|vite> --yes` for the shortest fresh local path, `npx kitcn@latest init --yes` to adopt the current app and finish the first local Convex bootstrap in one command, and `bunx kitcn add <plugin>` for feature layers. This file is the manual backend wiring reference.
+For production bootstrap, start in the CLI Registry: use `npx kitcn@latest init -t <next|expo|start|vite> --yes` for the shortest fresh local path, `npx kitcn@latest init --yes` to adopt the current app and finish the first local Convex bootstrap in one command, and `bunx kitcn add <plugin>` for feature layers. This file is the manual backend wiring reference.
 
 ### 5.1 Define schema and relations
 

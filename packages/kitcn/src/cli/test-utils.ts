@@ -317,6 +317,181 @@ export function writeShadcnNextMonorepoApp(dir: string) {
   });
 }
 
+export function writeExpoDefaultApp(dir: string) {
+  const srcDir = path.join(dir, 'src');
+  const appDir = path.join(srcDir, 'app');
+  const componentsDir = path.join(srcDir, 'components');
+
+  fs.mkdirSync(appDir, { recursive: true });
+  fs.mkdirSync(componentsDir, { recursive: true });
+
+  writePackageJson(dir, {
+    name: 'expo-app',
+    license: '0BSD',
+    main: 'expo-router/entry',
+    version: '55.1.23',
+    private: true,
+    scripts: {
+      start: 'expo start',
+      'reset-project': 'node ./scripts/reset-project.js',
+      android: 'expo start --android',
+      ios: 'expo start --ios',
+      web: 'expo start --web',
+    },
+    dependencies: {
+      '@react-navigation/bottom-tabs': '^7.15.5',
+      '@react-navigation/elements': '^2.9.10',
+      '@react-navigation/native': '^7.1.33',
+      expo: '~55.0.15',
+      'expo-constants': '~55.0.14',
+      'expo-device': '~55.0.15',
+      'expo-font': '~55.0.6',
+      'expo-glass-effect': '~55.0.10',
+      'expo-image': '~55.0.8',
+      'expo-linking': '~55.0.13',
+      'expo-router': '~55.0.12',
+      'expo-splash-screen': '~55.0.18',
+      'expo-status-bar': '~55.0.5',
+      'expo-symbols': '~55.0.7',
+      'expo-system-ui': '~55.0.15',
+      'expo-web-browser': '~55.0.14',
+      react: '19.2.0',
+      'react-dom': '19.2.0',
+      'react-native': '0.83.6',
+      'react-native-gesture-handler': '~2.30.0',
+      'react-native-reanimated': '4.2.1',
+      'react-native-safe-area-context': '~5.6.2',
+      'react-native-screens': '~4.23.0',
+      'react-native-web': '~0.21.0',
+      'react-native-worklets': '0.7.4',
+    },
+    devDependencies: {
+      '@types/react': '~19.2.2',
+      typescript: '~5.9.2',
+    },
+  });
+
+  fs.writeFileSync(
+    path.join(dir, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        extends: 'expo/tsconfig.base',
+        compilerOptions: {
+          strict: true,
+          paths: {
+            '@/*': ['./src/*'],
+            '@/assets/*': ['./assets/*'],
+          },
+        },
+        include: [
+          '**/*.ts',
+          '**/*.tsx',
+          '.expo/types/**/*.ts',
+          'expo-env.d.ts',
+        ],
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'app.json'),
+    `${JSON.stringify(
+      {
+        expo: {
+          name: 'HelloWorld',
+          slug: 'expo-app',
+          version: '1.0.0',
+          orientation: 'portrait',
+          scheme: 'expo-app',
+          plugins: ['expo-router'],
+          experiments: {
+            typedRoutes: true,
+            reactCompiler: true,
+          },
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(dir, '.gitignore'),
+    `${['node_modules/', '.expo/', 'dist/', 'web-build/', '.env*.local'].join(
+      '\n'
+    )}\n`
+  );
+
+  fs.writeFileSync(
+    path.join(appDir, '_layout.tsx'),
+    `import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import React from "react";
+import { useColorScheme } from "react-native";
+
+import AppTabs from "@/components/app-tabs";
+
+export default function TabLayout() {
+  const colorScheme = useColorScheme();
+
+  return (
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <AppTabs />
+    </ThemeProvider>
+  );
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(appDir, 'index.tsx'),
+    `import { Text, View } from "react-native";
+
+export default function HomeScreen() {
+  return (
+    <View>
+      <Text>Welcome to Expo</Text>
+    </View>
+  );
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(appDir, 'explore.tsx'),
+    `import { Text, View } from "react-native";
+
+export default function ExploreScreen() {
+  return (
+    <View>
+      <Text>Explore</Text>
+    </View>
+  );
+}
+`
+  );
+
+  fs.writeFileSync(
+    path.join(componentsDir, 'app-tabs.tsx'),
+    `import { NativeTabs } from "expo-router/unstable-native-tabs";
+
+export default function AppTabs() {
+  return (
+    <NativeTabs>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="explore">
+        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
+  );
+}
+`
+  );
+}
+
 export function writeShadcnViteApp(
   dir: string,
   params: { usesSrc?: boolean } = {}

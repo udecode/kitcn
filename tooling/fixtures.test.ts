@@ -43,7 +43,7 @@ describe('tooling/fixtures', () => {
     });
 
     expect(() => parseTemplateArgs(['prepare'])).toThrow(
-      'Usage: bun tooling/fixtures.ts <sync|check> [all|next|next-auth|start|start-auth|vite|vite-auth] [--backend <convex|concave>]'
+      'Usage: bun tooling/fixtures.ts <sync|check> [all|expo|expo-auth|next|next-auth|start|start-auth|vite|vite-auth] [--backend <convex|concave>]'
     );
   });
 
@@ -63,6 +63,8 @@ describe('tooling/fixtures', () => {
   });
 
   test('template registry only lints starters worth linting', () => {
+    expect(TEMPLATE_DEFINITIONS.expo.validation.lint).toBe(false);
+    expect(TEMPLATE_DEFINITIONS['expo-auth'].validation.lint).toBe(false);
     expect(TEMPLATE_DEFINITIONS.next.validation.lint).toBe(true);
     expect(TEMPLATE_DEFINITIONS['next-auth'].validation.lint).toBe(true);
     expect(TEMPLATE_DEFINITIONS.vite.validation.lint).toBe(false);
