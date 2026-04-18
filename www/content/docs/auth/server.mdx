@@ -44,15 +44,6 @@ The default kitcn auth path writes and patches the auth surface for you:
 `functionsDir` comes from `convex.json.functions`. Scaffolded kitcn
 apps use `convex/functions`.
 
-On Expo, the same default auth scaffold also writes:
-
-- `src/lib/convex/auth-client.ts`
-- `src/lib/convex/convex-provider.tsx`
-- `src/app/auth.tsx`
-
-Expo does not add an app-side auth proxy route. The generated client talks
-directly to `EXPO_PUBLIC_CONVEX_SITE_URL`.
-
 ## Auth Config
 
 The scaffolded auth config keeps the first local bootstrap healthy. It uses the

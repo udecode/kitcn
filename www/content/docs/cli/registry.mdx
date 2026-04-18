@@ -15,10 +15,10 @@ Use this table when you want the blunt version:
 
 | Goal | Command |
 | ---- | ------- |
-| Start a new Expo app | `kitcn init -t expo --yes` |
 | Start a new Next.js app | `kitcn init -t next --yes` |
 | Start a new TanStack Start app | `kitcn init -t start --yes` |
 | Start a new Vite app | `kitcn init -t vite --yes` |
+| Start a new Expo app | `kitcn init -t expo --yes` |
 | Adopt the current supported app | `kitcn init --yes` |
 | Add a capability | `kitcn add <plugin>` |
 | Verify local runtime | `kitcn verify` |
@@ -32,15 +32,15 @@ We'll start with `init`, because it owns bootstrap in both directions.
 
 ### Scaffold a fresh app
 
-Pass `-t next`, `-t expo`, `-t start`, or `-t vite` when you want kitcn to create the app shell
+Pass `-t next`, `-t start`, `-t vite`, or `-t expo` when you want kitcn to create the app shell
 and patch its integration layer in one pass.
 
 <KitcnLatestCommandTabs
   commands={[
     'init -t next --yes',
-    'init -t expo --yes',
     'init -t start --yes',
     'init -t vite --yes',
+    'init -t expo --yes',
     'init -t next --yes --cwd apps --name web',
     '--backend concave init -t next --yes',
   ]}

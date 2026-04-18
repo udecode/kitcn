@@ -384,10 +384,6 @@ const steps = [
 
 const homeTemplateOptions = [
   {
-    label: 'expo',
-    command: 'init -t expo',
-  },
-  {
     label: 'next',
     command: 'init -t next',
   },
@@ -402,6 +398,10 @@ const homeTemplateOptions = [
   {
     label: 'react',
     command: 'init',
+  },
+  {
+    label: 'expo',
+    command: 'init -t expo',
   },
 ] as const;
 
