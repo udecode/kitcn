@@ -3,6 +3,7 @@ import {
   extractBackendRunTargetArgs,
   extractMigrationCliOptions,
   extractMigrationDownOptions,
+  getConvexDeploymentCommandEnv,
   parseArgs,
   type RunDeps,
   resolveConfiguredBackend,
@@ -110,6 +111,8 @@ export const handleMigrateCommand = async (
     realConvexPath,
     realConcavePath,
   });
+  const commandEnv =
+    backend === 'convex' ? getConvexDeploymentCommandEnv() : undefined;
 
   if (migrateArgs.subcommand === 'create') {
     const rawName = migrateArgs.restArgs.join(' ').trim();
@@ -142,6 +145,7 @@ export const handleMigrateCommand = async (
       backendAdapter,
       migrationConfig,
       targetArgs,
+      env: commandEnv,
       context: 'migration',
       direction: 'up',
     });
@@ -156,6 +160,7 @@ export const handleMigrateCommand = async (
       backendAdapter,
       migrationConfig,
       targetArgs: downTargetArgs,
+      env: commandEnv,
       context: 'migration',
       direction: 'down',
       steps,
@@ -169,7 +174,10 @@ export const handleMigrateCommand = async (
       backendAdapter,
       'generated/server:migrationStatus',
       {},
-      targetArgs
+      targetArgs,
+      {
+        env: commandEnv,
+      }
     );
     return statusResult.exitCode;
   }
@@ -203,7 +211,10 @@ export const handleMigrateCommand = async (
     backendAdapter,
     'generated/server:migrationCancel',
     runId ? { runId } : {},
-    cancelTargetArgs
+    cancelTargetArgs,
+    {
+      env: commandEnv,
+    }
   );
   return cancelResult.exitCode;
 };
