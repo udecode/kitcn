@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.13.5
+
+### Patch Changes
+
+- [#232](https://github.com/udecode/kitcn/pull/232) [`24ca124`](https://github.com/udecode/kitcn/commit/24ca124401b22f0ce370709675f796260bebb74e) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix noisy `oidc-provider` deprecation warnings from the internal Convex auth plugin.
+
 ## 0.13.4
 
 ### Patch Changes
