@@ -133,6 +133,31 @@ describe('use-query-options', () => {
     queryClient.clear();
   });
 
+  test('useConvexQueryOptions updates query key when args mutate in place', () => {
+    const fn = makeFunctionReference<'query'>('pets:get');
+    const args = { petId: 'p1' };
+    const { result, rerender } = renderHook(
+      ({ input }: { input: typeof args }) =>
+        useConvexQueryOptions(fn, input as any),
+      { initialProps: { input: args } }
+    );
+
+    expect(result.current.queryKey).toEqual([
+      'convexQuery',
+      'pets:get',
+      { petId: 'p1' },
+    ]);
+
+    args.petId = 'p2';
+    rerender({ input: args });
+
+    expect(result.current.queryKey).toEqual([
+      'convexQuery',
+      'pets:get',
+      { petId: 'p2' },
+    ]);
+  });
+
   test('useConvexActionQueryOptions uses convexAction key prefix and respects shouldSkip', () => {
     const fn = makeFunctionReference<'action'>('ai:generate');
     useAuthSkipSpy.mockImplementation(

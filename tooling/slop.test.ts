@@ -1,6 +1,21 @@
 import { describe, expect, test } from 'bun:test';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
-import { formatDeltaSummary } from './slop';
+import { formatDeltaSummary, resolveMergeBase } from './slop';
+
+const runGit = (cwd: string, args: string[]) => {
+  const result = spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+  });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout);
+  }
+};
 
 describe('tooling/slop', () => {
   test('formats regressions and improvements in a compact summary', () => {
@@ -110,5 +125,30 @@ describe('tooling/slop', () => {
     });
 
     expect(summary).toContain('No occurrence-level changes.');
+  });
+
+  test('throws when merge-base cannot resolve the base ref', () => {
+    const repo = mkdtempSync(path.join(os.tmpdir(), 'kitcn-slop-test-'));
+
+    try {
+      runGit(repo, ['init']);
+      writeFileSync(path.join(repo, 'file.txt'), 'hello\n');
+      runGit(repo, ['add', 'file.txt']);
+      runGit(repo, [
+        '-c',
+        'user.email=test@example.com',
+        '-c',
+        'user.name=Test',
+        'commit',
+        '-m',
+        'init',
+      ]);
+
+      expect(() => resolveMergeBase(repo, 'missing/ref')).toThrow(
+        /Could not resolve git merge-base for missing\/ref/
+      );
+    } finally {
+      rmSync(repo, { force: true, recursive: true });
+    }
   });
 });

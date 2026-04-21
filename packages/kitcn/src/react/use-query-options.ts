@@ -60,6 +60,10 @@ const MAX_STABLE_ARGS = 500;
 const stableArgsByHash = new Map<string, unknown>();
 
 type QueryOptionsPrefix = 'convexQuery' | 'convexAction';
+type StableQueryArgs<TArgs> = {
+  hash: string;
+  value: TArgs;
+};
 
 function getStableArgsByHash<TArgs>(hash: string, args: TArgs): TArgs {
   if (stableArgsByHash.has(hash)) {
@@ -86,7 +90,7 @@ function useStableQueryArgs<TArgs>(
   prefix: QueryOptionsPrefix,
   funcRef: FunctionReference<'query' | 'action'>,
   args: TArgs | SkipToken
-): TArgs {
+): StableQueryArgs<TArgs> {
   const resolvedArgs = (
     args === skipToken || args == null ? EMPTY_ARGS : args
   ) as TArgs;
@@ -96,10 +100,12 @@ function useStableQueryArgs<TArgs>(
     resolvedArgs,
   ]);
 
-  return useMemo(
+  const value = useMemo(
     () => getStableArgsByHash(argsHash, resolvedArgs),
     [argsHash, resolvedArgs]
   );
+
+  return useMemo(() => ({ hash: argsHash, value }), [argsHash, value]);
 }
 
 /**
@@ -153,7 +159,7 @@ export function useConvexQueryOptions<T extends FunctionReference<'query'>>(
 
   // Get base options from convexQuery (use empty args for skipToken to generate queryKey)
   const baseOptions = useMemo(
-    () => convexQuery(funcRef, stableArgs),
+    () => convexQuery(funcRef, stableArgs.value),
     [funcRef, stableArgs]
   );
 
@@ -283,7 +289,7 @@ export function useConvexActionQueryOptions<
 
   // Get base options from convexAction (use empty args for skipToken)
   const baseOptions = useMemo(
-    () => convexAction(action, stableArgs),
+    () => convexAction(action, stableArgs.value),
     [action, stableArgs]
   );
 

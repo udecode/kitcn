@@ -268,6 +268,25 @@ const resolveDefaultBaseRef = (cwd: string) => {
   return 'HEAD';
 };
 
+export const resolveMergeBase = (cwd: string, baseRef: string) => {
+  const result = run(['git', 'merge-base', 'HEAD', baseRef], {
+    allowFailure: true,
+    cwd,
+  });
+  const mergeBase = result.stdout.trim();
+
+  if (result.status !== 0 || !mergeBase) {
+    const detail = (result.stderr || result.stdout).trim();
+    const suffix = detail ? ` ${detail}` : '';
+
+    throw new Error(
+      `Could not resolve git merge-base for ${baseRef}.${suffix}`
+    );
+  }
+
+  return mergeBase;
+};
+
 const archiveTreeish = (cwd: string, treeish: string) => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'kitcn-slop-base-'));
   const archivePath = path.join(tempDir, 'base.tar');
@@ -509,10 +528,7 @@ const runDelta = (argv: string[]) => {
     args.baseRef ?? (repoRoot ? resolveDefaultBaseRef(repoRoot) : null);
   const mergeBase =
     repoRoot && !args.basePath
-      ? run(['git', 'merge-base', 'HEAD', baseRef ?? 'HEAD'], {
-          allowFailure: true,
-          cwd: repoRoot,
-        }).stdout.trim() || 'HEAD'
+      ? resolveMergeBase(repoRoot, baseRef ?? 'HEAD')
       : null;
   const baseLabel =
     args.basePath ??
