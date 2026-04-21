@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.13.6
+
+### Patch Changes
+
+- [#234](https://github.com/udecode/kitcn/pull/234) [`f137874`](https://github.com/udecode/kitcn/commit/f13787454ca5cf9a7ea37ca48d021b19de38a2db) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix React query options to stay stable for equal Convex query args.
+
 ## 0.13.5
 
 ### Patch Changes
