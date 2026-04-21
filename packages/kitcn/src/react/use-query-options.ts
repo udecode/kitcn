@@ -22,6 +22,7 @@ import type {
   FunctionReturnType,
 } from 'convex/server';
 import { getFunctionName } from 'convex/server';
+import { useMemo } from 'react';
 import { CRPCClientError } from '../crpc/error';
 import {
   convexAction,
@@ -38,6 +39,7 @@ import type {
   InfiniteQueryInput,
 } from '../crpc/types';
 import { useAuthSkip } from '../internal/auth';
+import { createHashFn } from '../internal/hash';
 import type { DistributiveOmit } from '../internal/types';
 import { useAuthGuard } from './auth-store';
 import { useFnMeta, useMeta } from './context';
@@ -51,6 +53,60 @@ import type {
 // Reserved options that we control - users cannot override these
 type ReservedQueryOptions = 'queryKey' | 'queryFn' | 'staleTime';
 type ReservedMutationOptions = 'mutationFn';
+
+const EMPTY_ARGS = {};
+const hashConvexOptionsKey = createHashFn();
+const MAX_STABLE_ARGS = 500;
+const stableArgsByHash = new Map<string, unknown>();
+
+type QueryOptionsPrefix = 'convexQuery' | 'convexAction';
+type StableQueryArgs<TArgs> = {
+  hash: string;
+  value: TArgs;
+};
+
+function getStableArgsByHash<TArgs>(hash: string, args: TArgs): TArgs {
+  if (stableArgsByHash.has(hash)) {
+    const stableArgs = stableArgsByHash.get(hash);
+    stableArgsByHash.delete(hash);
+    stableArgsByHash.set(hash, stableArgs);
+    return stableArgs as TArgs;
+  }
+
+  stableArgsByHash.set(hash, args);
+
+  if (stableArgsByHash.size > MAX_STABLE_ARGS) {
+    const oldestHash = stableArgsByHash.keys().next().value;
+
+    if (oldestHash !== undefined) {
+      stableArgsByHash.delete(oldestHash);
+    }
+  }
+
+  return args;
+}
+
+function useStableQueryArgs<TArgs>(
+  prefix: QueryOptionsPrefix,
+  funcRef: FunctionReference<'query' | 'action'>,
+  args: TArgs | SkipToken
+): StableQueryArgs<TArgs> {
+  const resolvedArgs = (
+    args === skipToken || args == null ? EMPTY_ARGS : args
+  ) as TArgs;
+  const argsHash = hashConvexOptionsKey([
+    prefix,
+    getFunctionName(funcRef),
+    resolvedArgs,
+  ]);
+
+  const value = useMemo(
+    () => getStableArgsByHash(argsHash, resolvedArgs),
+    [argsHash, resolvedArgs]
+  );
+
+  return useMemo(() => ({ hash: argsHash, value }), [argsHash, value]);
+}
 
 /**
  * Hook that returns query options for use with useQuery.
@@ -95,26 +151,33 @@ export function useConvexQueryOptions<T extends FunctionReference<'query'>>(
     enabled: isSkipped ? false : enabled,
     skipUnauth: options?.skipUnauth,
   });
-
-  // Get base options from convexQuery (use empty args for skipToken to generate queryKey)
-  const baseOptions = convexQuery(
+  const stableArgs = useStableQueryArgs(
+    'convexQuery',
     funcRef,
-    isSkipped ? ({} as FunctionArgs<T>) : args
+    isSkipped ? (EMPTY_ARGS as FunctionArgs<T>) : args
   );
 
-  // Extract ConvexQueryHookOptions from merged options
-  const { skipUnauth: _, subscribe, ...queryOptions } = options ?? {};
+  // Get base options from convexQuery (use empty args for skipToken to generate queryKey)
+  const baseOptions = useMemo(
+    () => convexQuery(funcRef, stableArgs.value),
+    [funcRef, stableArgs]
+  );
 
-  return {
-    ...baseOptions,
-    ...queryOptions, // Spread user options
-    enabled: isSkipped ? false : !shouldSkip,
-    meta: {
-      ...baseOptions.meta,
-      authType,
-      subscribe: subscribe !== false,
-    },
-  };
+  return useMemo(() => {
+    // Extract ConvexQueryHookOptions from merged options
+    const { skipUnauth: _, subscribe, ...queryOptions } = options ?? {};
+
+    return {
+      ...baseOptions,
+      ...queryOptions, // Spread user options
+      enabled: isSkipped ? false : !shouldSkip,
+      meta: {
+        ...baseOptions.meta,
+        authType,
+        subscribe: subscribe !== false,
+      },
+    };
+  }, [authType, baseOptions, isSkipped, options, shouldSkip]);
 }
 
 /**
@@ -218,21 +281,28 @@ export function useConvexActionQueryOptions<
     enabled: isSkipped ? false : enabled,
     skipUnauth: options?.skipUnauth,
   });
-
-  // Get base options from convexAction (use empty args for skipToken)
-  const baseOptions = convexAction(
+  const stableArgs = useStableQueryArgs(
+    'convexAction',
     action,
-    isSkipped ? ({} as FunctionArgs<Action>) : args
+    isSkipped ? (EMPTY_ARGS as FunctionArgs<Action>) : args
   );
 
-  // Extract skipUnauth from options before spreading
-  const { skipUnauth: _, ...queryOptions } = options ?? {};
+  // Get base options from convexAction (use empty args for skipToken)
+  const baseOptions = useMemo(
+    () => convexAction(action, stableArgs.value),
+    [action, stableArgs]
+  );
 
-  return {
-    ...baseOptions,
-    ...queryOptions,
-    enabled: isSkipped ? false : !shouldSkip,
-  };
+  return useMemo(() => {
+    // Extract skipUnauth from options before spreading
+    const { skipUnauth: _, ...queryOptions } = options ?? {};
+
+    return {
+      ...baseOptions,
+      ...queryOptions,
+      enabled: isSkipped ? false : !shouldSkip,
+    };
+  }, [baseOptions, isSkipped, options, shouldSkip]);
 }
 
 type AuthType = 'required' | 'optional' | undefined;
