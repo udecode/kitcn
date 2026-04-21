@@ -1,0 +1,120 @@
+---
+description: Run a bounded final deslop pass on a nearly-finished change using slop-scan deltas, focused review lenses, and post-cleanup re-verification
+---
+
+# Deslop
+
+Use this after the implementation already works and before commit or push. This
+is not a planning workflow and not a rescue mission for broken code. It is the
+last pressure pass that strips noise out of an otherwise-correct diff.
+
+## Core Contract
+
+- Deslop is a bounded helper inside the normal execution lane, not a competing
+  end-to-end workflow.
+- Default scope is changed files only. Do not widen to the whole repo unless
+  the user asks.
+- Prefer deleting or inlining over introducing fresh abstraction.
+- Treat slop-scan as signal, not law. Fix the good hits. Ignore the fake ones.
+
+## What Counts As Slop
+
+Focus on concrete smell families, not vague "AI code" vibes:
+
+- needless abstraction: pass-through wrappers, barrel-only indirection, async
+  noise, single-use helper layers
+- duplication: repeated signatures, repeated mock setup, local copy-paste
+  helpers
+- defensive noise: empty catches, error swallowing, error obscuring where the
+  real fix is to rethrow or narrow once
+- structural fragmentation: over-fragmentation and fan-out hotspots when they
+  land in the changed area
+- placeholders and leftovers: TODO comments, dead helpers, debug scraps, fake
+  scaffolding text
+
+## Inputs To Gather
+
+Before cleanup, collect:
+
+- repo root `AGENTS.md`
+- any nested `AGENTS.md` or design docs that govern the changed area
+- the active plan file when one exists
+- the changed-files list or explicit file scope
+- fresh verification evidence from the implementation pass
+- the repo slop delta command output
+
+## Review Lenses
+
+When the user explicitly asked for deslop / cleanup / refactor, run these 3
+review lenses in parallel on the same context bundle:
+
+1. Repo rules and documentation conformance
+2. Type safety and source of truth
+3. Simplification and overengineering
+
+If parallel reviewers are unavailable, do the same 3 lenses locally before
+editing.
+
+## Procedure
+
+1. Lock behavior first
+   - If current behavior is not already protected, add or run the narrowest
+     regression proof before cleanup edits.
+
+2. Bound the scope
+   - Build a changed-files list or explicit file scope.
+   - Stay inside that scope for both review and cleanup.
+
+3. Launch the review lenses
+   - Give every reviewer the same context bundle and one assigned lens.
+   - Ask for findings first, ordered by severity, with file references.
+
+4. Run slop delta while reviewers work
+   - Prefer the repo script: `bun run lint:slop:delta`
+   - If it does not exist, fall back to `slop-scan delta ...`
+   - Use delta, not raw repo-wide scan, to focus on added and worsened noise.
+
+5. Synthesize before editing
+   - Merge the reviewer output and delta output under:
+     - `How did we do?`
+     - `Feedback to keep`
+     - `Feedback to ignore`
+     - `Plan of attack`
+
+6. Apply only the worthwhile fixes
+   - type drift, casts, or duplicated type definitions
+   - pass-through wrappers, async noise, fake helper seams
+   - dead helpers, placeholder comments, debug leftovers
+   - duplicate mock setup or local copy-paste helpers
+   - empty or error-obscuring internal catches when the right fix is simpler
+
+7. Re-run the narrowest affected verification
+   - rerun the same tests, lint, and typecheck lanes that protect the touched
+     area
+   - if a stronger final gate already existed, rerun it after cleanup
+
+8. Update the story
+   - Make sure the active plan, commit text, and PR-facing text describe the
+     post-deslop state, not the earlier draft.
+
+## Stop Rules
+
+- Do not widen scope because the scan found juicy unrelated cleanup.
+- Do not start product work during deslop.
+- Do not add abstraction to fix abstraction.
+- If generated, vendored, or fixture noise dominates the scan, filter it and
+  move on.
+- If behavior is not locked and cleanup would be risky, stop and lock behavior
+  first.
+
+## Expected Output
+
+Return an evidence-dense cleanup report:
+
+- scope
+- behavior lock / verification used
+- top slop deltas
+- feedback kept vs ignored
+- simplifications applied
+- post-deslop verification
+- remaining risks or explicitly deferred cleanup

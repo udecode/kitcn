@@ -49,6 +49,7 @@ Use those skills when relevant:
 
 - `task` for normal repo task execution
 - `major-task` for heavyweight architecture, framework comparison, migration, benchmark, or proposal work
+- `deslop` for the final bounded cleanup pass once a change already works
 - `tdd`
 - `ce-review` when doing a code review
 

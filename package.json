@@ -31,6 +31,8 @@
     "intent:validate": "cd packages/kitcn && bunx intent validate skills",
     "lint": "biome check && eslint",
     "lint:fix": "biome check --write",
+    "lint:slop": "bun tooling/slop.ts scan --lint",
+    "lint:slop:delta": "bun tooling/slop.ts delta",
     "release": "bun build:pkg && changeset publish",
     "schema:stress": "bun tooling/auth-schema-stress.ts --project example",
     "scenario:check": "bun tooling/scenarios.ts check",

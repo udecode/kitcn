@@ -1,4 +1,5 @@
-import { skipToken } from '@tanstack/react-query';
+import { QueryObserver } from '@tanstack/query-core';
+import { QueryClient, skipToken } from '@tanstack/react-query';
 import { renderHook } from '@testing-library/react';
 import * as convexReact from 'convex/react';
 import { makeFunctionReference } from 'convex/server';
@@ -96,6 +97,40 @@ describe('use-query-options', () => {
       authType: 'optional',
       subscribe: true,
     });
+  });
+
+  test('useConvexQueryOptions keeps observer options stable for equal args', () => {
+    const fn = makeFunctionReference<'query'>('pets:get');
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          queryFn: async () => null,
+        },
+      },
+    });
+    const events: string[] = [];
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      events.push(event.type);
+    });
+
+    const { result, rerender } = renderHook(
+      ({ petId }: { petId: string }) =>
+        useConvexQueryOptions(fn, { petId } as any),
+      { initialProps: { petId: 'p1' } }
+    );
+
+    const observer = new QueryObserver(queryClient, result.current as any);
+    const unobserve = observer.subscribe(() => {});
+
+    events.length = 0;
+    rerender({ petId: 'p1' });
+    observer.setOptions(result.current as any);
+
+    expect(events).not.toContain('observerOptionsUpdated');
+
+    unobserve();
+    unsubscribe();
+    queryClient.clear();
   });
 
   test('useConvexActionQueryOptions uses convexAction key prefix and respects shouldSkip', () => {
