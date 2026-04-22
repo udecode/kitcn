@@ -29,6 +29,10 @@
           "session": {
             "owner": "local"
           },
+          "subscription": {
+            "checksum": "bc65c00ae14d",
+            "owner": "managed"
+          },
           "user": {
             "owner": "local"
           },

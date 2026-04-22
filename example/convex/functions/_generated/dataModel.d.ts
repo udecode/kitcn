@@ -923,6 +923,53 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  subscription: {
+    document: {
+      billingInterval?: null | string;
+      cancelAt?: null | number;
+      cancelAtPeriodEnd?: null | boolean;
+      canceledAt?: null | number;
+      endedAt?: null | number;
+      periodEnd?: null | number;
+      periodStart?: null | number;
+      plan: string;
+      referenceId: string;
+      seats?: null | number;
+      status?: null | string;
+      stripeCustomerId?: null | string;
+      stripeScheduleId?: null | string;
+      stripeSubscriptionId?: null | string;
+      trialEnd?: null | number;
+      trialStart?: null | number;
+      _id: Id<"subscription">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "billingInterval"
+      | "cancelAt"
+      | "cancelAtPeriodEnd"
+      | "canceledAt"
+      | "endedAt"
+      | "periodEnd"
+      | "periodStart"
+      | "plan"
+      | "referenceId"
+      | "seats"
+      | "status"
+      | "stripeCustomerId"
+      | "stripeScheduleId"
+      | "stripeSubscriptionId"
+      | "trialEnd"
+      | "trialStart";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   subscriptions: {
     document: {
       amount?: null | number;
@@ -1250,6 +1297,7 @@ export type DataModel = {
       name: string;
       personalOrganizationId?: null | string;
       role?: null | string;
+      stripeCustomerId?: null | string;
       updatedAt: number;
       userId?: null | string;
       username?: null | string;
@@ -1282,6 +1330,7 @@ export type DataModel = {
       | "name"
       | "personalOrganizationId"
       | "role"
+      | "stripeCustomerId"
       | "updatedAt"
       | "userId"
       | "username"

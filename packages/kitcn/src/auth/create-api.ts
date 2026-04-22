@@ -135,6 +135,72 @@ const resolveSchemaTableName = (
   }
 };
 
+const AUTH_TIMESTAMP_FIELDS = ['createdAt', 'updatedAt'] as const;
+
+const resolveBetterAuthModel = (betterAuthSchema: any, model: string) => {
+  if (betterAuthSchema?.[model]) {
+    return betterAuthSchema[model];
+  }
+
+  return Object.values<any>(betterAuthSchema ?? {}).find(
+    (value) => value?.modelName === model
+  );
+};
+
+const resolveWriteFields = (
+  schema: Schema,
+  betterAuthSchema: any,
+  model: string
+) => {
+  const tableName = resolveSchemaTableName(schema, betterAuthSchema, model);
+  const validatorFields = tableName
+    ? (schema.tables[tableName as keyof Schema['tables']] as any)?.validator
+        ?.fields
+    : undefined;
+
+  if (validatorFields) {
+    return new Set(Object.keys(validatorFields));
+  }
+
+  const modelConfig = resolveBetterAuthModel(betterAuthSchema, model);
+  const modelFields = modelConfig?.fields;
+  if (!modelFields) {
+    return;
+  }
+
+  const fields = new Set<string>();
+  for (const [field, config] of Object.entries<any>(modelFields)) {
+    fields.add(field);
+    if (typeof config?.fieldName === 'string') {
+      fields.add(config.fieldName);
+    }
+  }
+
+  return fields;
+};
+
+const stripUnsupportedAuthTimestamps = (
+  data: Record<string, unknown>,
+  schema: Schema,
+  betterAuthSchema: any,
+  model: string
+) => {
+  const writeFields = resolveWriteFields(schema, betterAuthSchema, model);
+  if (!writeFields) {
+    return data;
+  }
+
+  let result: Record<string, unknown> | undefined;
+  for (const field of AUTH_TIMESTAMP_FIELDS) {
+    if (field in data && !writeFields.has(field)) {
+      result ??= { ...data };
+      delete result[field];
+    }
+  }
+
+  return result ?? data;
+};
+
 const resolveOrmTable = (
   ctx: any,
   schema: Schema,
@@ -384,18 +450,44 @@ const serializeDatesForConvex = (value: unknown): unknown => {
 
 const toConvexSafe = <T>(value: T): T => serializeDatesForConvex(value) as T;
 
-const withAuthTimestamps = (data: Record<string, unknown>) => {
+const withAuthTimestamps = (
+  data: Record<string, unknown>,
+  schema: Schema,
+  betterAuthSchema: any,
+  model: string
+) => {
+  const writeFields = resolveWriteFields(schema, betterAuthSchema, model);
   if (data.createdAt !== undefined) {
+    return stripUnsupportedAuthTimestamps(
+      data,
+      schema,
+      betterAuthSchema,
+      model
+    );
+  }
+
+  const supportsCreatedAt = !writeFields || writeFields.has('createdAt');
+  const supportsUpdatedAt = !writeFields || writeFields.has('updatedAt');
+  if (!(supportsCreatedAt || supportsUpdatedAt)) {
     return data;
   }
 
   const now = Date.now();
 
-  return {
+  const withTimestamps = {
     ...data,
-    createdAt: now,
-    ...(data.updatedAt === undefined ? { updatedAt: now } : {}),
+    ...(supportsCreatedAt ? { createdAt: now } : {}),
+    ...(supportsUpdatedAt && data.updatedAt === undefined
+      ? { updatedAt: now }
+      : {}),
   };
+
+  return stripUnsupportedAuthTimestamps(
+    withTimestamps,
+    schema,
+    betterAuthSchema,
+    model
+  );
 };
 
 // Extracted handler functions
@@ -423,7 +515,12 @@ export const createHandler = async (
     triggerCtx
   );
   const data = serializeDatesForConvex(
-    withAuthTimestamps(transformedData)
+    withAuthTimestamps(
+      transformedData,
+      schema,
+      betterAuthSchema,
+      args.input.model
+    )
   ) as Record<string, unknown>;
 
   await checkUniqueFields(
@@ -529,10 +626,12 @@ export const updateOneHandler = async (
     tableTriggers?.update?.before,
     triggerCtx
   );
-  const update = serializeDatesForConvex(transformedUpdate) as Record<
-    string,
-    unknown
-  >;
+  const update = stripUnsupportedAuthTimestamps(
+    serializeDatesForConvex(transformedUpdate) as Record<string, unknown>,
+    schema,
+    betterAuthSchema,
+    args.input.model
+  );
 
   await checkUniqueFields(
     ctx,
@@ -642,10 +741,12 @@ export const updateManyHandler = async (
         tableTriggers?.update?.before,
         triggerCtx
       );
-      const update = serializeDatesForConvex(transformedUpdate) as Record<
-        string,
-        unknown
-      >;
+      const update = stripUnsupportedAuthTimestamps(
+        serializeDatesForConvex(transformedUpdate) as Record<string, unknown>,
+        schema,
+        betterAuthSchema,
+        args.input.model
+      );
 
       await checkUniqueFields(
         ctx,

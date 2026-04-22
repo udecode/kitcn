@@ -1,3 +1,4 @@
+import { v } from 'convex/values';
 import {
   createHandler,
   deleteManyHandler,
@@ -8,8 +9,27 @@ import {
 
 const schema = {
   tables: {
+    subscription: {
+      export: () => ({ indexes: [] }),
+      validator: {
+        fields: {
+          plan: v.string(),
+          referenceId: v.string(),
+          status: v.string(),
+          stripeSubscriptionId: v.optional(v.string()),
+        },
+      },
+    },
     users: {
       export: () => ({ indexes: [] }),
+      validator: {
+        fields: {
+          createdAt: v.number(),
+          email: v.string(),
+          name: v.optional(v.string()),
+          updatedAt: v.number(),
+        },
+      },
     },
   },
 } as any;
@@ -29,6 +49,18 @@ const betterAuthSchemaUniqueEmail = {
       email: { unique: true },
     },
     modelName: 'users',
+  },
+} as any;
+
+const subscriptionBetterAuthSchema = {
+  subscription: {
+    fields: {
+      plan: { required: true },
+      referenceId: { required: true },
+      status: { defaultValue: 'incomplete' },
+      stripeSubscriptionId: { required: false },
+    },
+    modelName: 'subscription',
   },
 } as any;
 
@@ -221,6 +253,56 @@ describe('createHandler', () => {
     });
   });
 
+  test('does not inject timestamps into auth plugin tables without timestamp fields', async () => {
+    const now = 1_772_802_853_052;
+    using nowSpy = spyOn(Date, 'now').mockReturnValue(now);
+
+    const insertCalls: Array<Record<string, unknown>> = [];
+    let insertedDoc: Record<string, unknown> | undefined;
+    const ctx = {
+      db: {
+        get: async (_id: string) =>
+          insertedDoc ? { _id: 'subscription-1', ...insertedDoc } : null,
+        insert: async (_model: string, data: Record<string, unknown>) => {
+          insertCalls.push(data);
+          insertedDoc = data;
+          return 'subscription-1';
+        },
+      },
+    };
+
+    const result = await createHandler(
+      ctx as any,
+      {
+        input: {
+          data: {
+            plan: 'starter',
+            referenceId: 'user-1',
+            status: 'incomplete',
+          },
+          model: 'subscription',
+        },
+      },
+      schema,
+      subscriptionBetterAuthSchema
+    );
+
+    expect(nowSpy).not.toHaveBeenCalled();
+    expect(insertCalls).toEqual([
+      {
+        plan: 'starter',
+        referenceId: 'user-1',
+        status: 'incomplete',
+      },
+    ]);
+    expect(result).toMatchObject({
+      _id: 'subscription-1',
+      id: 'subscription-1',
+      plan: 'starter',
+      referenceId: 'user-1',
+    });
+  });
+
   test('throws when create.before returns false', async () => {
     await expect(
       createHandler(
@@ -323,6 +405,55 @@ describe('updateOneHandler', () => {
       },
       expect.anything()
     );
+  });
+
+  test('strips unsupported auth timestamp fields before subscription updates', async () => {
+    const patchCalls: Array<Record<string, unknown>> = [];
+    const { db, store } = createMemoryCtx({
+      'subscription-1': {
+        _id: 'subscription-1',
+        plan: 'starter',
+        referenceId: 'user-1',
+        status: 'active',
+      },
+    });
+    const ctx = {
+      db: {
+        ...db,
+        patch: async (id: string, update: Record<string, unknown>) => {
+          patchCalls.push(update);
+          const existing = store.get(id);
+          if (!existing) {
+            return;
+          }
+          store.set(id, { ...existing, ...update });
+        },
+      },
+    };
+
+    const updated = await updateOneHandler(
+      ctx as any,
+      {
+        input: {
+          model: 'subscription',
+          update: {
+            plan: 'pro',
+            updatedAt: new Date('2026-04-22T01:22:58.000Z'),
+          },
+          where: [{ field: '_id', operator: 'eq', value: 'subscription-1' }],
+        },
+      },
+      schema,
+      subscriptionBetterAuthSchema
+    );
+
+    expect(patchCalls).toEqual([{ plan: 'pro' }]);
+    expect(updated).toMatchObject({
+      _id: 'subscription-1',
+      id: 'subscription-1',
+      plan: 'pro',
+    });
+    expect(store.get('subscription-1')).not.toHaveProperty('updatedAt');
   });
 });
 
