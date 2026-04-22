@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.13.7
+
+### Patch Changes
+
+- [#236](https://github.com/udecode/kitcn/pull/236) [`508f6df`](https://github.com/udecode/kitcn/commit/508f6df2cfb0e7177fefcdc48767473560b4b69b) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix auth Stripe subscription writes so `createdAt` and `updatedAt` are only written when the target table defines them.
+
 ## 0.13.6
 
 ### Patch Changes
