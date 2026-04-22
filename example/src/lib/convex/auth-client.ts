@@ -1,3 +1,4 @@
+import { stripeClient } from '@better-auth/stripe/client';
 import { type Auth, ac, roles } from '@convex/auth-shared';
 import {
   adminClient,
@@ -24,6 +25,7 @@ export const authClient = createAuthClient({
       ac,
       roles,
     }),
+    stripeClient({ subscription: true }),
     convexClient(),
   ],
 });

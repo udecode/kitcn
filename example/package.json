@@ -31,14 +31,16 @@
     "typecheck:watch": "tsc --noEmit --watch"
   },
   "dependencies": {
-    "@kitcn/resend": "workspace:*",
+    "@better-auth/stripe": "1.6.5",
     "@convex-dev/react-query": "0.1.0",
     "@hookform/resolvers": "5.2.2",
+    "@kitcn/resend": "workspace:*",
+    "@opentelemetry/api": "1.9.0",
     "@react-email/components": "1.0.8",
     "@react-email/render": "2.0.4",
     "@t3-oss/env-nextjs": "0.13.10",
+    "@tanstack/react-query": "5.95.2",
     "better-auth": "1.6.5",
-    "kitcn": "workspace:*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
@@ -49,6 +51,7 @@
     "hono": "4.12.9",
     "input-otp": "1.4.2",
     "jotai-x": "2.3.3",
+    "kitcn": "workspace:*",
     "lucide-react": "0.575.0",
     "next-themes": "0.4.6",
     "nuqs": "2.8.8",
@@ -61,14 +64,14 @@
     "react-resizable-panels": "3.0.6",
     "recharts": "2.15.4",
     "sonner": "2.0.7",
+    "stripe": "^22.0.1",
     "superjson": "2.2.6",
     "tailwind-merge": "3.5.0",
     "ts-essentials": "10.1.1",
     "tsx": "4.21.0",
     "type-fest": "5.4.4",
     "use-debounce": "10.1.0",
-    "vaul": "1.1.2",
-    "@tanstack/react-query": "5.95.2"
+    "vaul": "1.1.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.1",

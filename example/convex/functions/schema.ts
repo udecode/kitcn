@@ -213,6 +213,7 @@ export const userTable = convexTable(
     }),
     displayUsername: text(),
     userId: text(),
+    stripeCustomerId: text(),
   },
   (t) => [
     uniqueIndex('email').on(t.email),
@@ -603,6 +604,25 @@ export const triggerDemoRunTable = convexTable(
   (t) => [index('ownerId').on(t.ownerId)]
 );
 
+export const subscriptionTable = convexTable('subscription', {
+  plan: text().notNull(),
+  referenceId: text().notNull(),
+  stripeCustomerId: text(),
+  stripeSubscriptionId: text(),
+  status: text(),
+  periodStart: timestamp(),
+  periodEnd: timestamp(),
+  trialStart: timestamp(),
+  trialEnd: timestamp(),
+  cancelAtPeriodEnd: boolean(),
+  cancelAt: timestamp(),
+  canceledAt: timestamp(),
+  endedAt: timestamp(),
+  seats: integer(),
+  billingInterval: text(),
+  stripeScheduleId: text(),
+});
+
 export const tables = {
   session: sessionTable,
   account: accountTable,
@@ -626,6 +646,7 @@ export const tables = {
   triggerDemoAudit: triggerDemoAuditTable,
   triggerDemoStats: triggerDemoStatsTable,
   triggerDemoRun: triggerDemoRunTable,
+  subscription: subscriptionTable,
 };
 
 const schema = defineSchema(tables, {

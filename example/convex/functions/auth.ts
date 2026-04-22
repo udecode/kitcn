@@ -1,6 +1,8 @@
+import { stripe } from '@better-auth/stripe';
 import { admin, anonymous, organization, username } from 'better-auth/plugins';
 import { convex } from 'kitcn/auth';
 import { requireSchedulerCtx } from 'kitcn/server';
+import Stripe from 'stripe';
 import { getEnv } from '../lib/get-env';
 import {
   AUTH_DEMO_ANON_EMAIL_DOMAIN,
@@ -10,6 +12,10 @@ import { ac, roles } from '../shared/auth-shared';
 import { internal } from './_generated/api';
 import authConfig from './auth.config';
 import { defineAuth } from './generated/auth';
+
+const STRIPE_EXAMPLE_PRICE_ID = 'price_kitcn_example';
+const STRIPE_EXAMPLE_SECRET_KEY = 'sk_test_kitcn_example';
+const STRIPE_EXAMPLE_WEBHOOK_SECRET = 'whsec_kitcn_example';
 
 export default defineAuth((ctx) => {
   const env = getEnv();
@@ -88,6 +94,19 @@ export default defineAuth((ctx) => {
               ctaUrl: acceptUrl,
             }
           );
+        },
+      }),
+      stripe({
+        stripeClient: new Stripe(STRIPE_EXAMPLE_SECRET_KEY),
+        stripeWebhookSecret: STRIPE_EXAMPLE_WEBHOOK_SECRET,
+        subscription: {
+          enabled: true,
+          plans: [
+            {
+              name: 'premium',
+              priceId: STRIPE_EXAMPLE_PRICE_ID,
+            },
+          ],
         },
       }),
       convex({

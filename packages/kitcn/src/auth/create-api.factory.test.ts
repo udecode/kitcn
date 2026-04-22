@@ -19,8 +19,10 @@ const schema = {
       export: () => ({ indexes: [] }),
       validator: {
         fields: {
+          createdAt: v.number(),
           email: v.string(),
           name: v.optional(v.string()),
+          updatedAt: v.number(),
         },
       },
     },
