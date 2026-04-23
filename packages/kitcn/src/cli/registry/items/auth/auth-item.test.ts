@@ -549,4 +549,61 @@ ${userUnit.relations},
       owner: 'managed',
     });
   });
+
+  test('convex auth schema registration reuses existing double-quoted authSchema import', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-auth-item-'));
+    const functionsDir = path.join(dir, 'convex', 'functions');
+    const schemaPath = path.join(functionsDir, 'schema.ts');
+    const schemaSource = `
+      import { authSchema } from "./authSchema";
+      import { defineSchema } from "convex/server";
+
+      export default defineSchema({
+        messages: {},
+      });
+    `.trim();
+
+    fs.mkdirSync(functionsDir, { recursive: true });
+    fs.writeFileSync(schemaPath, schemaSource, 'utf8');
+
+    const descriptor = getPluginCatalogEntry('auth');
+    const plan =
+      await descriptor.integration?.buildSchemaRegistrationPlanFile?.({
+        config: createDefaultConfig(),
+        functionsDir,
+        lockfile: {
+          plugins: {},
+        },
+        overwrite: true,
+        preset: 'convex',
+        preview: false,
+        promptAdapter: {
+          confirm: async () => false,
+          isInteractive: () => false,
+          multiselect: async () => [],
+          select: async () => 'ignored',
+        },
+        roots: {
+          appRootDir: null,
+          clientLibRootDir: null,
+          crpcFilePath: path.join(dir, 'convex', 'lib', 'crpc.ts'),
+          envFilePath: path.join(dir, 'convex', 'lib', 'get-env.ts'),
+          functionsRootDir: functionsDir,
+          libRootDir: path.join(dir, 'convex', 'lib'),
+          projectContext: null,
+          sharedApiFilePath: path.join(dir, 'convex', 'shared', 'api.ts'),
+        },
+        yes: true,
+      });
+
+    expect(
+      plan?.content.match(
+        /import \{ authSchema \} from ['"]\.\/authSchema['"];/g
+      )
+    ).toHaveLength(1);
+    expect(plan?.content).toContain(
+      'import { authSchema } from "./authSchema";'
+    );
+    expect(plan?.content).toContain('...authSchema,');
+  });
 });

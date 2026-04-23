@@ -70,6 +70,8 @@ const AUTH_CONVEX_HTTP_IMPORT_RE = /from\s+['"]kitcn\/auth\/http['"]/;
 const AUTH_CONVEX_HTTP_GET_AUTH_IMPORT_RE =
   /from\s+['"]\.\/generated\/auth['"]/;
 const AUTH_CONVEX_SCHEMA_CALL_RE = /defineSchema\(\s*\{/;
+const AUTH_CONVEX_SCHEMA_AUTH_SCHEMA_IMPORT_RE =
+  /import\s+\{\s*authSchema\s*\}\s+from\s+['"]\.\/authSchema['"];?/;
 const AUTH_CONVEX_APP_IMPORT_RE = /import App from ['"][^'"]+['"];?/;
 const AUTH_CONVEX_PROVIDER_IMPORT_RE =
   /import\s+\{\s*ConvexProvider,\s*ConvexReactClient\s*\}\s+from\s+['"]convex\/react['"];?/;
@@ -624,7 +626,7 @@ function buildAuthConvexSchemaPlanFile(
   const schemaPath = getSchemaFilePath(params.functionsDir);
   let source = fs.readFileSync(schemaPath, 'utf8');
 
-  if (!source.includes("import { authSchema } from './authSchema';")) {
+  if (!AUTH_CONVEX_SCHEMA_AUTH_SCHEMA_IMPORT_RE.test(source)) {
     source = `import { authSchema } from './authSchema';\n${source}`;
   }
   if (!source.includes('...authSchema')) {
