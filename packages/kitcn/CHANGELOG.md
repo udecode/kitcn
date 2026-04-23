@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.13.8
+
+### Patch Changes
+
+- [#238](https://github.com/udecode/kitcn/pull/238) [`f43fc36`](https://github.com/udecode/kitcn/commit/f43fc3623b7f05fb8d55d9be1144d192c3e9235f) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn add auth --preset convex` so schema registration reuses existing `authSchema` imports.
+
 ## 0.13.7
 
 ### Patch Changes
