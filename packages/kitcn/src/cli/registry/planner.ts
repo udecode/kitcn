@@ -896,6 +896,7 @@ export const buildPluginInstallPlan = async (params: {
         templateId: file.templateId,
         filePath: file.filePath,
         content: file.content,
+        requiresExplicitOverwrite: file.requiresExplicitOverwrite,
         createReason: 'Create scaffold file.',
         updateReason: 'Update scaffold file.',
         skipReason: 'Scaffold file is already up to date.',

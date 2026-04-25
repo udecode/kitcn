@@ -31,6 +31,7 @@ import {
   resolveScenarioStepEnv,
   runScenarioDev,
   runScenarioTest,
+  stopLocalConvexBackendForProject,
 } from './scenarios';
 
 describe('tooling/scenarios', () => {
@@ -573,6 +574,84 @@ describe('tooling/scenarios', () => {
           resolve();
         });
       });
+    }
+  });
+
+  test('stopLocalConvexBackendForProject leaves unrelated listeners on the same port alone', async () => {
+    const server = createServer();
+    const reservedPort = await new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, () => {
+        resolve((server.address() as { port: number }).port);
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    const rootDir = `/tmp/kitcn-scenario-stop-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const projectDir = `${rootDir}/project`;
+    const unrelatedDir = `${rootDir}/unrelated`;
+
+    await Bun.write(
+      `${projectDir}/.env.local`,
+      `NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:${reservedPort}\n`
+    );
+    await Bun.write(`${unrelatedDir}/.keep`, '');
+
+    const child = Bun.spawn({
+      cmd: [
+        'bun',
+        '-e',
+        `Bun.serve({ port: ${reservedPort}, fetch() { return new Response("ok"); } }); setInterval(() => {}, 1000);`,
+      ],
+      cwd: unrelatedDir,
+      stdin: 'ignore',
+      stdout: 'ignore',
+      stderr: 'ignore',
+    });
+
+    try {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        try {
+          await findAvailableScenarioDevPort({
+            maxAttempts: 1,
+            preferredPort: reservedPort,
+          });
+        } catch {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      await expect(
+        findAvailableScenarioDevPort({
+          maxAttempts: 1,
+          preferredPort: reservedPort,
+        })
+      ).rejects.toThrow('Could not find an open local scenario dev port');
+
+      stopLocalConvexBackendForProject(projectDir);
+
+      const exited = await Promise.race([
+        child.exited.then(() => true),
+        new Promise<boolean>((resolve) =>
+          setTimeout(() => resolve(false), 250)
+        ),
+      ]);
+      expect(exited).toBe(false);
+    } finally {
+      child.kill('SIGKILL');
+      await child.exited.catch(() => {});
+      await Bun.$`rm -rf ${rootDir}`.quiet();
     }
   });
 

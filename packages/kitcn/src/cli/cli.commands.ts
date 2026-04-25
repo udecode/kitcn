@@ -2922,6 +2922,106 @@ describe('cli/cli', () => {
     }
   });
 
+  test('run(add auth --preset convex --yes) regenerates raw convex auth schema on rerun', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-cli-add-auth-convex-schema-rerun-')
+    );
+    const oldCwd = process.cwd();
+    writeRawConvexNextApp(dir);
+    fs.writeFileSync(
+      path.join(dir, '.env.local'),
+      'CONVEX_DEPLOYMENT=local:demo\nNEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+    process.chdir(dir);
+
+    try {
+      const execaStub = mock(async (_cmd: string, args: string[]) => {
+        if (args[0] === '/fake/convex/main.js' && args[1] === 'codegen') {
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+
+        return { exitCode: 0 } as any;
+      });
+      const generateMetaStub = mock(async () => {});
+      const syncEnvStub = mock(async () => {});
+      const loadConfigStub = mock(() => createDefaultConfig());
+
+      await run(['add', 'auth', '--preset', 'convex', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+
+      const authPath = path.join(dir, 'convex', 'auth.ts');
+      const authSource = fs
+        .readFileSync(authPath, 'utf8')
+        .replace(
+          "import { convex } from 'kitcn/auth';",
+          "import { convex } from 'kitcn/auth';\nimport { admin } from 'better-auth/plugins';"
+        )
+        .replace(
+          `  plugins: [
+    convex({
+      authConfig,
+      jwks: process.env.JWKS,
+    }),
+  ],`,
+          `  plugins: [
+    convex({
+      authConfig,
+      jwks: process.env.JWKS,
+    }),
+    admin(),
+  ],`
+        );
+      fs.writeFileSync(authPath, authSource, 'utf8');
+
+      const nodeModulesDir = path.join(dir, 'node_modules');
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.symlinkSync(
+        path.join(oldCwd, 'packages', 'kitcn'),
+        path.join(nodeModulesDir, 'kitcn')
+      );
+      fs.symlinkSync(
+        path.join(oldCwd, 'node_modules', 'better-auth'),
+        path.join(nodeModulesDir, 'better-auth')
+      );
+      fs.symlinkSync(
+        path.join(oldCwd, 'node_modules', 'zod'),
+        path.join(nodeModulesDir, 'zod')
+      );
+
+      const exitCode = await run(
+        ['add', 'auth', '--preset', 'convex', '--yes', '--no-codegen'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+
+      const authSchemaSource = fs.readFileSync(
+        path.join(dir, 'convex', 'authSchema.ts'),
+        'utf8'
+      );
+      expect(authSchemaSource).toContain(
+        'role: v.optional(v.union(v.null(), v.string()))'
+      );
+      expect(authSchemaSource).toContain(
+        'banned: v.optional(v.union(v.null(), v.boolean()))'
+      );
+      expect(fs.readFileSync(authPath, 'utf8')).toBe(authSource);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('run(add ratelimit/auth/resend --yes --no-codegen) keeps auth in root schema and other plugins in one ordered extend call', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-cli-add-plugin-stack-')
