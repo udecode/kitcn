@@ -22,6 +22,7 @@ type AuthScaffoldFile = {
   content: string;
   filePath: string;
   lockfilePath: string;
+  requiresExplicitOverwrite?: boolean;
   templateId: string;
 };
 
@@ -459,6 +460,7 @@ export const reconcileAuthScaffoldFiles = async ({
       nextFiles[index] = {
         ...nextFiles[index]!,
         content,
+        requiresExplicitOverwrite: false,
       };
     }
   }

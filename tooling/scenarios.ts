@@ -73,6 +73,7 @@ const SCENARIO_FIXTURE_ROOT = path.join(
   'scenario-fixtures'
 );
 const LOCALHOST_PORT_RE = /https?:\/\/(?:127\.0\.0\.1|localhost):(\d+)/;
+const LINE_SPLIT_RE = /\r?\n/;
 const PID_SPLIT_RE = /\s+/;
 const CLEARED_CONVEX_ENV = {
   CONVEX_DEPLOYMENT: undefined,
@@ -187,7 +188,32 @@ const extractLocalConvexPort = (projectDir: string) => {
   return match?.[1];
 };
 
-const stopLocalConvexBackendForProject = (projectDir: string) => {
+export const isProcessOwnedByProject = (pid: string, projectDir: string) => {
+  const result = Bun.spawnSync({
+    cmd: ['lsof', '-a', '-p', pid, '-d', 'cwd', '-Fn'],
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'ignore',
+  });
+  if (result.exitCode !== 0) {
+    return false;
+  }
+
+  const resolvedProjectDir = path.resolve(projectDir);
+  return result.stdout
+    .toString()
+    .split(LINE_SPLIT_RE)
+    .filter((line) => line.startsWith('n'))
+    .some((line) => {
+      const cwd = path.resolve(line.slice(1));
+      return (
+        cwd === resolvedProjectDir ||
+        cwd.startsWith(`${resolvedProjectDir}${path.sep}`)
+      );
+    });
+};
+
+export const stopLocalConvexBackendForProject = (projectDir: string) => {
   const port = extractLocalConvexPort(projectDir);
   if (!port) {
     return;
@@ -207,7 +233,7 @@ const stopLocalConvexBackendForProject = (projectDir: string) => {
     .toString()
     .split(PID_SPLIT_RE)
     .map((pid) => pid.trim())
-    .filter(Boolean);
+    .filter((pid) => pid && isProcessOwnedByProject(pid, projectDir));
   if (pids.length === 0) {
     return;
   }

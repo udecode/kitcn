@@ -84,6 +84,7 @@ export type PluginResolvedScaffoldFile = {
   filePath: string;
   lockfilePath: string;
   content: string;
+  requiresExplicitOverwrite?: boolean;
 };
 
 export type PluginRegistryIntegration = {
