@@ -1,6 +1,7 @@
 name: ReleaseOrVersionPR
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -14,6 +15,7 @@ on:
       - '.github/workflows/release.yml'
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -148,20 +150,23 @@ jobs:
           # See https://github.com/changesets/action/issues/147
           HOME: ${{ github.workspace }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.API_TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.API_TOKEN_GITHUB || github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: 🤖 Merge Version Packages PR
         if: ${{ steps.auto_release.outputs.enabled == 'true' && steps.changesets.outputs.pullRequestNumber != '' }}
         env:
-          GH_TOKEN: ${{ secrets.API_TOKEN_GITHUB }}
+          GH_TOKEN: ${{ secrets.API_TOKEN_GITHUB || github.token }}
+          HAS_API_TOKEN: ${{ secrets.API_TOKEN_GITHUB != '' }}
           RELEASE_PR: ${{ steps.changesets.outputs.pullRequestNumber }}
           SOURCE_PR: ${{ steps.auto_release.outputs.source_pr }}
         run: |
-          if [[ -z "${GH_TOKEN}" ]]; then
-            echo "API_TOKEN_GITHUB is required so the merged release PR can trigger publish workflows."
-            exit 1
-          fi
-
           gh pr comment "$RELEASE_PR" --body "Merging because PR #${SOURCE_PR} checked auto release."
-          gh pr merge "$RELEASE_PR" --squash --delete-branch --admin
+
+          if [[ "${HAS_API_TOKEN}" == "true" ]]; then
+            gh pr merge "$RELEASE_PR" --squash --delete-branch --admin
+          else
+            echo "::warning::API_TOKEN_GITHUB is not configured; merging with GITHUB_TOKEN and dispatching release workflow after merge."
+            gh pr merge "$RELEASE_PR" --squash --delete-branch
+            gh workflow run release.yml --ref main
+          fi
