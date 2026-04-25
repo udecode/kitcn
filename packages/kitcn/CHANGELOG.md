@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.13.9
+
+### Patch Changes
+
+- [#240](https://github.com/udecode/kitcn/pull/240) [`042a568`](https://github.com/udecode/kitcn/commit/042a5684066e6a6691f858afc22de68c71b58136) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix raw Convex auth reruns so added Better Auth plugins refresh the generated schema without `--overwrite`.
+
 ## 0.13.8
 
 ### Patch Changes
