@@ -139,7 +139,7 @@ type AuthClient = {
       };
     };
   };
-  getSession?: AnyFn;
+  getSession?: (...args: any[]) => Promise<any>;
   signOut?: AnyFn;
   signIn?: {
     anonymous?: AnyFn;
