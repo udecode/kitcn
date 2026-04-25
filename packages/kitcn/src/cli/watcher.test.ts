@@ -543,6 +543,14 @@ describe('cli/watcher', () => {
     });
 
     try {
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          watcher.on('ready', () => resolve());
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('watcher was not ready')), 2000)
+        ),
+      ]);
       await new Promise((resolve) => setTimeout(resolve, 100));
       await writeFile(sourceFile, 'export const value = 2;\n');
 
