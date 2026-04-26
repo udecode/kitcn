@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.13.10
+
+### Patch Changes
+
+- [#245](https://github.com/udecode/kitcn/pull/245) [`547ccfd`](https://github.com/udecode/kitcn/commit/547ccfd2673c0099c63b55137b201476da13a56e) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `createAuthMutations` support for Better Auth clients that use the Convex client plugin.
+
 ## 0.13.9
 
 ### Patch Changes
