@@ -92,7 +92,10 @@ const seedReturnedToken = (store: AuthStore, value: unknown) => {
   }
 };
 
-type AnyFn = (...args: unknown[]) => Promise<unknown>;
+type AnyAuthFn = (...args: never[]) => unknown;
+type AuthCall<TArgs extends unknown[]> = (
+  ...args: TArgs
+) => Promise<unknown> | unknown;
 type AuthResponse = {
   data?: unknown;
   error?: {
@@ -110,6 +113,13 @@ const toAuthMutationError = (error: AuthResponse['error']) =>
     status: error?.status ?? 500,
     statusText: error?.statusText ?? 'AUTH_ERROR',
   });
+const callAuthMethod = async <TArgs extends unknown[]>(
+  method: AnyAuthFn,
+  ...args: TArgs
+) => {
+  const callable = method as AuthCall<TArgs>;
+  return callable(...args);
+};
 type MutationArgsWithFetchOptions = {
   fetchOptions?: Record<string, unknown>;
 };
@@ -139,15 +149,15 @@ type AuthClient = {
       };
     };
   };
-  getSession?: AnyFn;
-  signOut?: AnyFn;
+  getSession?: AnyAuthFn;
+  signOut?: AnyAuthFn;
   signIn?: {
-    anonymous?: AnyFn;
-    social?: AnyFn;
-    email?: AnyFn;
+    anonymous?: AnyAuthFn;
+    social?: AnyAuthFn;
+    email?: AnyAuthFn;
   };
   signUp?: {
-    email?: AnyFn;
+    email?: AnyAuthFn;
   };
 };
 
@@ -179,7 +189,7 @@ const hydrateReturnedSession = async (
     return;
   }
 
-  const session = (await authClient.getSession({
+  const session = (await callAuthMethod(authClient.getSession, {
     fetchOptions: {
       credentials: 'omit',
       headers: {
@@ -255,14 +265,15 @@ export function createAuthMutations(
     return {
       ...options,
       mutationFn: async (args?: unknown) => {
-        if (typeof authClient.signOut !== 'function') {
+        const signOut = authClient.signOut;
+        if (typeof signOut !== 'function') {
           throw new Error('Auth client does not expose signOut');
         }
         // Set isAuthenticated: false BEFORE unsubscribing to prevent re-subscriptions
         // (cache events check shouldSkipSubscription which reads isAuthenticated)
         authStoreApi.set('isAuthenticated', false);
         convexQueryClient?.unsubscribeAuthQueries();
-        const res = (await authClient.signOut(args)) as AuthResponse;
+        const res = (await callAuthMethod(signOut, args)) as AuthResponse;
         if (res?.error) {
           throw toAuthMutationError(res.error);
         }
@@ -283,10 +294,12 @@ export function createAuthMutations(
     return {
       ...options,
       mutationFn: async (args: unknown) => {
-        if (typeof authClient.signIn?.social !== 'function') {
+        const signInSocial = authClient.signIn?.social;
+        if (typeof signInSocial !== 'function') {
           throw new Error('Auth client does not expose signIn.social');
         }
-        const res = (await authClient.signIn.social(
+        const res = (await callAuthMethod(
+          signInSocial,
           withDisabledSessionSignal(args)
         )) as AuthResponse;
         if (res?.error) {
@@ -309,10 +322,12 @@ export function createAuthMutations(
     return {
       ...options,
       mutationFn: async (args: unknown) => {
-        if (typeof authClient.signIn?.email !== 'function') {
+        const signInEmail = authClient.signIn?.email;
+        if (typeof signInEmail !== 'function') {
           throw new Error('Auth client does not expose signIn.email');
         }
-        const res = (await authClient.signIn.email(
+        const res = (await callAuthMethod(
+          signInEmail,
           withDisabledSessionSignal(args)
         )) as AuthResponse;
         if (res?.error) {
@@ -335,10 +350,12 @@ export function createAuthMutations(
     return {
       ...options,
       mutationFn: async (args: unknown) => {
-        if (typeof authClient.signUp?.email !== 'function') {
+        const signUpEmail = authClient.signUp?.email;
+        if (typeof signUpEmail !== 'function') {
           throw new Error('Auth client does not expose signUp.email');
         }
-        const res = (await authClient.signUp.email(
+        const res = (await callAuthMethod(
+          signUpEmail,
           withDisabledSessionSignal(args)
         )) as AuthResponse;
         if (res?.error) {

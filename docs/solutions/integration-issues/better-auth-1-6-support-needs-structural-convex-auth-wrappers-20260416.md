@@ -1,7 +1,7 @@
 ---
 title: Better Auth 1.6 support needs structural Convex auth wrappers
 date: 2026-04-16
-last_updated: 2026-04-16
+last_updated: 2026-04-26
 category: integration-issues
 module: auth-client
 problem_type: integration_issue
@@ -10,6 +10,9 @@ symptoms:
   - upgrading `better-auth` from `1.5.3` to `1.6.5` breaks typecheck in kitcn auth clients and generated auth apps
   - `createAuthMutations(authClient)` reports missing `signIn`, `signOut`, or `signUp` even though those methods exist at runtime
   - generated auth pages see `authClient.useSession().data` collapse to `never`
+  - Better Auth `1.6.x` clients using `convexClient()` fail
+    `createAuthMutations(authClient)` because `getSession` has a narrower
+    constrained generic signature than kitcn's helper accepted
 root_cause: wrong_api
 resolution_type: code_fix
 severity: high
@@ -64,6 +67,10 @@ Key changes:
   mutation helper boundaries instead of pushing that debt into app code
 - vendor the small Convex Better Auth runtime surfaces kitcn uses so package
   code no longer imports or depends on `@convex-dev/better-auth`
+- type mutation-helper methods as callable auth capabilities, not as
+  `(...args: unknown[]) => Promise<unknown>`. Better Auth methods can have
+  narrower params, optional options, generics, and sync-or-async return shapes.
+  Keep that variance at the package boundary and call through one local helper.
 
 ## Why This Works
 
@@ -78,6 +85,12 @@ By making kitcn depend on structural contracts at the boundaries, we stop
 TypeScript from forcing those three packages to agree on every internal generic
 detail before the app can compile.
 
+For `createAuthMutations`, the important TypeScript detail is parameter
+variance. A method that accepts a specific Better Auth options object is not
+assignable to `(...args: unknown[]) => Promise<unknown>` under strict function
+types. Model the stored auth methods as `(...args: never[]) => unknown`, then
+cast only at the call boundary where kitcn owns the exact invocation.
+
 ## Prevention
 
 1. When a dependency wrapper sits between two fast-moving auth libraries,
@@ -89,8 +102,13 @@ detail before the app can compile.
    auth client type widening. The generated apps are the real proof.
 4. Never put dependency-compatibility casts in scaffolded app code. Wrap the
    unstable dependency boundary in the package API.
+5. Add a type-level regression test when the bug is assignability-only. A small
+   `ts.createProgram()` fixture that compiles `createAuthClient({ plugins:
+   [convexClient()] })` plus `createAuthMutations(authClient)` catches the exact
+   failure without depending on runtime auth setup.
 
 ## Related Issues
 
 - `docs/solutions/integration-issues/better-auth-1-5-generated-auth-runtime-typing.md`
 - `docs/solutions/integration-issues/convex-better-auth-upstream-sync-runtime-fixes-20260416.md`
+- GitHub issue `udecode/kitcn#243`
