@@ -623,6 +623,8 @@ bunx kitcn codegen
 bunx kitcn env push
 bunx kitcn env push --prod
 bunx kitcn env push --rotate
+bunx kitcn env default list --type dev
+bunx kitcn env default set SITE_URL https://app.example.com --type prod
 bunx kitcn auth jwks
 bunx kitcn auth jwks --rotate
 # deploy with automatic aggregate backfill:
@@ -644,6 +646,8 @@ bunx kitcn --backend concave auth jwks --rotate --url http://localhost:3210
 On backend `convex`, `kitcn dev` watches `convex/.env` during a local
 dev session and auto-pushes later edits. Keep `env push` for `--prod`,
 `--rotate`, or explicit repair against an already active deployment.
+Use `env default` when new dev, preview, or production deployments should start
+with the same project-level values.
 
 On backend `concave`, `kitcn env` is not the right seam. Use `auth jwks`
 for manual static `JWKS` export instead.

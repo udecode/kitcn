@@ -42,4 +42,43 @@ describe('cli/commands/env', () => {
       targetArgs: ['--preview-name', 'pr-139'],
     });
   });
+
+  test('handleEnvCommand(default) forwards to convex env default', async () => {
+    const execaStub = mock(async () => ({ exitCode: 0 }));
+
+    await handleEnvCommand(
+      [
+        'env',
+        'default',
+        'set',
+        'SITE_URL',
+        'https://app.test',
+        '--type',
+        'prod',
+      ],
+      {
+        execa: execaStub as any,
+        loadCliConfig: (() => createDefaultConfig()) as any,
+        realConvex: '/fake/convex/main.js',
+      }
+    );
+
+    expect(execaStub).toHaveBeenCalledWith(
+      'node',
+      [
+        '/fake/convex/main.js',
+        'env',
+        'default',
+        'set',
+        'SITE_URL',
+        'https://app.test',
+        '--type',
+        'prod',
+      ],
+      expect.objectContaining({
+        reject: false,
+        stdio: 'inherit',
+      })
+    );
+  });
 });

@@ -7,7 +7,7 @@
     "@react-navigation/native": "^7.1.33",
     "@tanstack/react-query": "5.95.2",
     "better-auth": "1.6.5",
-    "convex": "1.35.1",
+    "convex": "1.36.1",
     "expo": "~55.0.17",
     "expo-constants": "~55.0.15",
     "expo-device": "~55.0.15",

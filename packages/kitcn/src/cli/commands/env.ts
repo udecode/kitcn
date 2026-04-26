@@ -11,6 +11,7 @@ import { logger } from '../utils/logger.js';
 
 const HELP_FLAGS = new Set(['--help', '-h']);
 const SUPPORTED_ENV_SUBCOMMANDS = [
+  'default',
   'push',
   'pull',
   'list',
@@ -33,6 +34,7 @@ const TARGET_FLAGS_WITH_VALUE = new Set([
 export const ENV_HELP_TEXT = `Usage: kitcn env <command> [options]
 
 Commands:
+  default <command>           Manage default env values for new deployments
   push                       Push local env values to Convex
   pull                       Pull remote env values from Convex
   list                       List remote env values
@@ -47,6 +49,9 @@ Push options:
 
 Pull options:
   --out <path>               Write pulled values to a file
+
+Default options:
+  Forwarded to convex env default.
 
 Target options:
   --prod

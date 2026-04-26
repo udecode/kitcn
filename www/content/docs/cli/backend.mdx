@@ -181,11 +181,15 @@ npx kitcn env list
 npx kitcn env get <name>
 npx kitcn env set <name> <value>
 npx kitcn env remove <name>
+npx kitcn env default list --type dev
+npx kitcn env default set SITE_URL https://app.example.com --type prod
 ```
 
 `kitcn env set` supports interactive values, `--from-file`, and stdin input.
 `kitcn env pull` gives you the same robust export format, so
 `env pull --out <path>` and `env set --from-file <path>` round-trip cleanly.
+`kitcn env default` forwards to `convex env default` for project defaults used
+by new dev, preview, and production deployments.
 
 Unknown commands on backend `convex` pass straight through to the Convex CLI,
 so `kitcn insights` opens the same insights surface as `convex insights`.
