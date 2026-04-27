@@ -18,3 +18,7 @@ bun add convex@1.36.1
 ## Features
 
 - Add `kitcn env default` passthrough for Convex default environment variables.
+
+## Patches
+
+- Document Convex inline query, branch deployment, deploy message, and preview deployment passthroughs.

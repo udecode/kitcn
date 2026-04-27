@@ -194,6 +194,28 @@ by new dev, preview, and production deployments.
 Unknown commands on backend `convex` pass straight through to the Convex CLI,
 so `kitcn insights` opens the same insights surface as `convex insights`.
 
+## Convex passthrough
+
+Unknown Convex commands stay available through `kitcn`:
+
+```bash showLineNumbers
+# Run an ad-hoc readonly query without adding a function file
+npx kitcn run --inline-query 'await ctx.db.query("messages").take(5)'
+
+# Create and select a shared dev deployment for the current branch
+npx kitcn deployment create "$(git branch --show-current)" --type dev --select
+
+# Create a long-lived staging deployment
+npx kitcn deployment create staging --type prod
+```
+
+Use `kitcn env default` before creating new deployments when every dev,
+preview, or production deployment should start with the same env values.
+
+Convex runtime APIs such as `ctx.meta.getFunctionMetadata()` and
+`ctx.meta.getTransactionMetrics()` are used inside Convex functions. `kitcn`
+does not wrap them.
+
 ### Concave backend
 
 For manual JWKS export on Concave:
@@ -228,7 +250,7 @@ Use this when you want a manual static `JWKS` payload without going through
 
 This command prints the payload. It does not update env by itself.
 
-Convex target flags are forwarded to the backend `run` seam:
+Convex target flags are forwarded to the backend `run` command:
 
 - `--prod`
 - `--deployment-name <name>`
@@ -254,7 +276,7 @@ On backend `concave`, this is the manual JWKS sync path.
 This command only prints `JWKS=...`. Save that value into your deployment env
 yourself.
 
-Concave target flags are forwarded to the backend `run` seam:
+Concave target flags are forwarded to the backend `run` command:
 
 - `--url <url>`
 - `--port <port>`
@@ -271,6 +293,8 @@ Shared options:
 
 ```bash showLineNumbers
 npx kitcn deploy --prod
+npx kitcn deploy --prod --message "Release $(git rev-parse --short HEAD)"
+npx kitcn deploy --preview-name "$(git branch --show-current)"
 ```
 
 `kitcn deploy` runs:
@@ -297,6 +321,8 @@ Options:
 | `--migrations-timeout-ms <n>` | Max migration wait duration before timeout |
 | `--migrations-strict` / `--no-migrations-strict` | Fail deploy on migration timeout/error |
 | `--migrations-allow-drift` / `--no-migrations-allow-drift` | Override drift blocking policy |
+| `--message <text>` | Forward deployment audit-log message to Convex |
+| `--preview-name <name>` | Deploy to a reusable preview deployment |
 
 Already-`READY` indexes are skipped (noop). See [Resume Compatibility](#resume-compatibility) for full behavior rules.
 

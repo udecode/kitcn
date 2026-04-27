@@ -225,6 +225,10 @@ Agent command policy:
 4. Use `bunx kitcn verify` for one-shot local runtime proof in CI or agent runs, with any long-running local backend stopped first.
 5. Use manual `bunx kitcn codegen` only as fallback when `kitcn dev` cannot be run and backend is already active.
 6. Use `bunx kitcn insights` for cloud-deployment debugging; it forwards to the upstream Convex insights CLI.
+7. Use `bunx kitcn run --inline-query 'await ctx.db.query("messages").take(5)'` for quick readonly database inspection.
+8. Use `bunx kitcn deployment create "$(git branch --show-current)" --type dev --select` when a branch needs its own shared cloud dev deployment.
+9. Use `bunx kitcn env default set ... --type <dev|preview|prod>` before creating deployments that should start with shared env defaults.
+10. Use Convex `ctx.meta` APIs directly inside functions. Do not add kitcn wrappers for function metadata or transaction metrics.
 
 One-time codegen (optional; use only when `kitcn dev` is not running):
 
