@@ -1,5 +1,30 @@
 # @kitcn/resend
 
+## 0.14.0
+
+### Minor Changes
+
+- [#248](https://github.com/udecode/kitcn/pull/248) [`26023d2`](https://github.com/udecode/kitcn/commit/26023d2ae1b359174658aa4e9dabaeb3683d2142) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Breaking changes
+
+  - Require Convex 1.36 or newer.
+
+  ```bash
+  # Before
+  bun add convex@1.35.1
+
+  # After
+  bun add convex@1.36.1
+  ```
+
+  ## Features
+
+  - Add `kitcn env default` passthrough for Convex default environment variables.
+
+  ## Patches
+
+  - Align Better Auth scaffolds and auth runtime helpers with Better Auth 1.6.9.
+  - Document Convex inline query, branch deployment, deploy message, and preview deployment passthroughs.
+
 ## 0.13.10
 
 ## 0.13.9
