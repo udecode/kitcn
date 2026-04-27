@@ -21,4 +21,5 @@ bun add convex@1.36.1
 
 ## Patches
 
+- Align Better Auth scaffolds and auth runtime helpers with Better Auth 1.6.9.
 - Document Convex inline query, branch deployment, deploy message, and preview deployment passthroughs.
