@@ -2255,7 +2255,7 @@ describe('cli/cli', () => {
       expectDependencyInstallCallWithPackages(
         execaStub.mock.calls as unknown as unknown[],
         [
-          '@better-auth/expo@1.6.5',
+          '@better-auth/expo@1.6.9',
           'expo-secure-store@~55.0.8',
           'expo-network@~55.0.8',
         ]
@@ -6483,6 +6483,72 @@ describe('cli/cli', () => {
     ]);
   });
 
+  test('run(run --inline-query) passes through to convex', async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      return { exitCode: 0 } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    const query = 'await ctx.db.query("messages").take(5)';
+    const exitCode = await run(['run', '--inline-query', query], {
+      realConvex: '/fake/convex/main.js',
+      execa: execaStub as any,
+      generateMeta: generateMetaStub as any,
+      syncEnv: syncEnvStub as any,
+      loadCliConfig: loadConfigStub as any,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(calls).toEqual([
+      {
+        cmd: 'node',
+        args: ['/fake/convex/main.js', 'run', '--inline-query', query],
+      },
+    ]);
+  });
+
+  test('run(deployment create --select) passes through to convex', async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      return { exitCode: 0 } as any;
+    });
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+
+    const exitCode = await run(
+      ['deployment', 'create', 'feature-branch', '--type', 'dev', '--select'],
+      {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(calls).toEqual([
+      {
+        cmd: 'node',
+        args: [
+          '/fake/convex/main.js',
+          'deployment',
+          'create',
+          'feature-branch',
+          '--type',
+          'dev',
+          '--select',
+        ],
+      },
+    ]);
+  });
+
   test('run(analyze) delegates to internal analyzer and does not invoke convex CLI', async () => {
     const execaStub = mock(async () => ({ exitCode: 0 }) as any);
     const runAnalyzeStub = mock(async () => 5);
@@ -6547,7 +6613,7 @@ describe('cli/cli', () => {
     const loadConfigStub = mock(() => createDefaultConfig());
 
     const exitCode = await run(
-      ['deploy', '--debug', '--api', 'out', '--prod'],
+      ['deploy', '--debug', '--api', 'out', '--prod', '--message', 'ship it'],
       {
         realConvex: '/fake/convex/main.js',
         execa: execaStub as any,
@@ -6561,7 +6627,13 @@ describe('cli/cli', () => {
     expect(loadConfigStub).toHaveBeenCalledWith(undefined);
     expect(calls[0]).toEqual({
       cmd: 'node',
-      args: ['/fake/convex/main.js', 'deploy', '--prod'],
+      args: [
+        '/fake/convex/main.js',
+        'deploy',
+        '--prod',
+        '--message',
+        'ship it',
+      ],
     });
     expect(calls[1]?.args).toContain('generated/server:migrationRun');
     expect(calls[2]?.args).toContain('generated/server:migrationStatus');

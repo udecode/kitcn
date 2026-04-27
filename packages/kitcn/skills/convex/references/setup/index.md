@@ -600,6 +600,7 @@ Recommended scripts:
     "verify": "kitcn verify",
     "reset": "kitcn reset --yes --after init",
     "seed": "convex run seed:seed",
+    "inspect": "kitcn run --inline-query 'await ctx.db.query(\"messages\").take(5)'",
     "env:push": "kitcn env push",
     "env:push:rotate": "kitcn env push --rotate"
   }
@@ -623,10 +624,18 @@ bunx kitcn codegen
 bunx kitcn env push
 bunx kitcn env push --prod
 bunx kitcn env push --rotate
+bunx kitcn env default list --type dev
+bunx kitcn env default set SITE_URL https://app.example.com --type prod
 bunx kitcn auth jwks
 bunx kitcn auth jwks --rotate
+# ad-hoc readonly database inspection:
+bunx kitcn run --inline-query 'await ctx.db.query("messages").take(5)'
+# create/select a branch-scoped cloud dev deployment:
+bunx kitcn deployment create "$(git branch --show-current)" --type dev --select
 # deploy with automatic aggregate backfill:
 bunx kitcn deploy --prod
+bunx kitcn deploy --prod --message "Release $(git rev-parse --short HEAD)"
+bunx kitcn deploy --preview-name "$(git branch --show-current)"
 # aggregate index management:
 bunx kitcn aggregate rebuild --prod
 bunx kitcn aggregate backfill --prod
@@ -644,8 +653,17 @@ bunx kitcn --backend concave auth jwks --rotate --url http://localhost:3210
 On backend `convex`, `kitcn dev` watches `convex/.env` during a local
 dev session and auto-pushes later edits. Keep `env push` for `--prod`,
 `--rotate`, or explicit repair against an already active deployment.
+Use `env default` when new dev, preview, or production deployments should start
+with the same project-level values.
+Unknown Convex commands pass through `kitcn`, so use `kitcn run --inline-query`
+for quick readonly inspection and `kitcn deployment create ... --select` for
+branch-scoped cloud dev deployments. `kitcn deploy` forwards Convex deployment
+flags such as `--message` and `--preview-name`, then runs kitcn migrations and
+aggregate backfill against the selected deployment.
+Convex `ctx.meta` APIs belong inside app functions; do not invent a kitcn
+wrapper for them.
 
-On backend `concave`, `kitcn env` is not the right seam. Use `auth jwks`
+On backend `concave`, `kitcn env` is not the right command. Use `auth jwks`
 for manual static `JWKS` export instead.
 
 ### 11.2 Phase A gate: non-auth baseline (required before auth work)

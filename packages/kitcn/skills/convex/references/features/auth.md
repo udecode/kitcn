@@ -228,6 +228,7 @@ Convex remote / repair:
 2. Use `npx kitcn env push --prod` for production sync.
 3. Use `npx kitcn env push --rotate` when you want fresh keys plus fresh `JWKS`.
 4. `kitcn env push` writes deployment env for you. No manual copy step.
+5. Use `npx kitcn env default set ... --type <dev|preview|prod>` for project defaults that should apply to new deployments.
 
 Concave manual lane:
 1. Use `npx kitcn --backend concave auth jwks` when you need a manual static `JWKS` payload.

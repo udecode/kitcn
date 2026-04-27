@@ -94,6 +94,8 @@ export const migrations = defineMigrationSet([migration1, migration2]);
 ## Deploy Integration
 
 `kitcn deploy` auto-runs: `convex deploy` → `migrate up` → `aggregate backfill`.
+Convex deploy flags pass through first, including `--message` for deployment
+history and `--preview-name` for reusable preview deployments.
 
 Config in `kitcn.json`:
 
