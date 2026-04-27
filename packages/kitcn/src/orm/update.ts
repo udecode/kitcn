@@ -464,6 +464,10 @@ export class ConvexUpdateBuilder<
       ...onUpdateSet,
       ...(normalizedSetValues as any),
     } as UpdateSet<TTable>;
+    const writeSet = normalizeDateFieldsForWrite(
+      this.table,
+      effectiveSet as any
+    ) as UpdateSet<TTable>;
 
     const tableName = getTableName(this.table);
 
@@ -636,7 +640,7 @@ export class ConvexUpdateBuilder<
 
     const updates = await Promise.all(
       rows.map(async (row) => {
-        const updatedRow = { ...(row as any), ...(effectiveSet as any) };
+        const updatedRow = { ...(row as any), ...(writeSet as any) };
         const decision = await evaluateUpdateDecision({
           table: this.table,
           existingRow: row as Record<string, unknown>,
@@ -669,11 +673,11 @@ export class ConvexUpdateBuilder<
         continue;
       }
       enforcePolymorphicWrite(this.table, updatedRow, {
-        changedFields: new Set(Object.keys(effectiveSet as any)),
+        changedFields: new Set(Object.keys(writeSet as any)),
       });
       enforceCheckConstraints(this.table, updatedRow);
       await enforceForeignKeys(this.db, this.table, updatedRow, {
-        changedFields: new Set(Object.keys(effectiveSet as any)),
+        changedFields: new Set(Object.keys(writeSet as any)),
       });
 
       await applyIncomingForeignKeyActionsOnUpdate(
@@ -698,9 +702,9 @@ export class ConvexUpdateBuilder<
       );
       await enforceUniqueIndexes(this.db, this.table, updatedRow, {
         currentId: (row as any)._id,
-        changedFields: new Set(Object.keys(effectiveSet as any)),
+        changedFields: new Set(Object.keys(writeSet as any)),
       });
-      await this.db.patch(tableName, (row as any)._id, effectiveSet as any);
+      await this.db.patch(tableName, (row as any)._id, writeSet as any);
       numAffected++;
 
       if (!this.returningFields) {

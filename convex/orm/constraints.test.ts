@@ -16,6 +16,7 @@ import {
   isNull,
   or,
   text,
+  timestamp,
   unique,
   unsetToken,
 } from 'kitcn/orm';
@@ -47,6 +48,14 @@ const hookUsers = convexTable(
   },
   (t) => [index('by_name').on(t.name)]
 );
+
+const timestampHookUsers = convexTable('timestamp_hook_users', {
+  name: text().notNull(),
+  updatedAt: timestamp()
+    .notNull()
+    .defaultNow()
+    .$onUpdateFn(() => new Date('2026-04-27T09:02:18.240Z')),
+});
 
 const checkUsers = convexTable(
   'check_users',
@@ -126,6 +135,7 @@ const polymorphicComments = convexTable(
 const rawSchema = {
   default_users: defaultUsers,
   hook_users: hookUsers,
+  timestamp_hook_users: timestampHookUsers,
   check_users: checkUsers,
   unique_column_users: uniqueColumnUsers,
   unique_table_users: uniqueTableUsers,
@@ -212,6 +222,23 @@ describe('column hooks', () => {
         expect(row.updatedAt).toBe('updated_1');
         expect(row.touchedAt).toBe('touched');
       }
+    }));
+
+  it('normalizes timestamp $onUpdateFn Date values before patching', async () =>
+    withCtx(async ({ orm }) => {
+      const [user] = await orm
+        .insert(timestampHookUsers)
+        .values({ name: 'Ada' })
+        .returning();
+
+      const [updated] = await orm
+        .update(timestampHookUsers)
+        .set({ name: 'Updated' })
+        .where(eq(timestampHookUsers.id, user.id))
+        .returning();
+
+      expect(updated.name).toBe('Updated');
+      expect(updated.updatedAt).toEqual(new Date('2026-04-27T09:02:18.240Z'));
     }));
 
   it('$onUpdateFn does not override explicit set', async () =>
