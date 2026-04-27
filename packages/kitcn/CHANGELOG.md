@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.14.1
+
+### Patch Changes
+
+- [#251](https://github.com/udecode/kitcn/pull/251) [`8ac174c`](https://github.com/udecode/kitcn/commit/8ac174cde9642dd61d5e9420b6cbc53ef7a7c124) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix ORM updates so timestamp `$onUpdateFn` hooks can return `Date` values.
+
 ## 0.14.0
 
 ### Minor Changes
