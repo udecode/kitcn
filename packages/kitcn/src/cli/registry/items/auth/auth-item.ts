@@ -1,9 +1,10 @@
 import fs from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import {
   BETTER_AUTH_INSTALL_SPEC,
   OPENTELEMETRY_API_INSTALL_SPEC,
 } from '../../../supported-dependencies.js';
+import type { PluginInstallPlanFile } from '../../../types.js';
 import { defineInternalRegistryItem } from '../../define-item.js';
 import { createRegistryFile } from '../../files.js';
 import { INIT_EXPO_CONVEX_PROVIDER_TEMPLATE } from '../../init/expo/init-expo-convex-provider.template.js';
@@ -725,9 +726,20 @@ function buildAuthConvexStartProviderPlanFile(
     'convex-provider.tsx'
   );
   if (!fs.existsSync(providerPath)) {
-    throw new Error(
-      'Auth preset "convex" for TanStack Start expects src/lib/convex/convex-provider.tsx.'
+    const normalizedPath = relative(process.cwd(), providerPath).replaceAll(
+      '\\',
+      '/'
     );
+    return {
+      action: 'skip',
+      content: '',
+      kind: 'scaffold',
+      manualActions: [
+        `Wrap your existing Convex provider with ConvexAuthProvider using src/lib/convex/auth-client.ts, or place the provider at ${normalizedPath} before rerunning auth adoption.`,
+      ],
+      path: normalizedPath,
+      reason: 'No Start provider found to patch.',
+    } satisfies PluginInstallPlanFile;
   }
 
   const source = patchAuthConvexProviderSource(

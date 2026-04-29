@@ -522,8 +522,9 @@ export const createOrganization = authMutation
 
 Build additional organization, invitation, and member functions following this pattern. The key conventions:
 
-- Use `ctx.auth.api.*` for multi-table operations (create, delete, invitations, member management)
+- Use `ctx.auth.api.*` for multi-table operations (create, delete, invitations, member management) when they stay inside Convex.
 - Use `ctx.orm` for simple reads and updates
+- Use `authAction` for Better Auth endpoints that can run external plugin work such as Stripe, Polar, or direct email delivery. Convex mutations cannot call those SDKs.
 - Check permissions with `hasPermission(ctx, { organizationId, permissions: { resource: ['action'] } })`
 - Use rate limiting via `.meta({ ratelimit: 'organization/action' })`
 

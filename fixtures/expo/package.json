@@ -6,7 +6,7 @@
     "@react-navigation/native": "^7.1.33",
     "@tanstack/react-query": "5.95.2",
     "convex": "1.36.1",
-    "expo": "~55.0.17",
+    "expo": "~55.0.18",
     "expo-constants": "~55.0.15",
     "expo-device": "~55.0.15",
     "expo-font": "~55.0.6",

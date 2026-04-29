@@ -1,6 +1,7 @@
 ---
 title: Raw Convex Start auth adoption must patch Start provider and React client
 category: integration-issues
+last_updated: 2026-04-29
 tags:
   - convex
   - auth
@@ -10,6 +11,7 @@ tags:
   - scaffolding
 symptoms:
   - `kitcn add auth --preset convex --yes` fails on TanStack Start with `Auth preset "convex" requires a Vite-style client entry file (main.tsx/main.jsx).`
+  - `kitcn add auth --preset convex --yes --overwrite` fails on TanStack Start with `Auth preset "convex" for TanStack Start expects src/lib/convex/convex-provider.tsx.`
   - raw Convex Start auth adoption writes `process.env.NEXT_PUBLIC_CONVEX_SITE_URL!` into `src/lib/convex/auth-client.ts`
   - TanStack Start is detected as a supported shell, but raw auth adoption still behaves like plain Vite
 module: auth-adoption
@@ -35,6 +37,9 @@ Two raw-preset branches were missing for TanStack Start:
 2. template resolution only swapped the default Start auth client template, not
    the raw Convex auth client template, so Start inherited the Next
    `NEXT_PUBLIC_CONVEX_SITE_URL` variant
+3. the raw Start provider patch still treated the kitcn-init provider path as
+   mandatory, even though raw adoption must work in apps that own provider
+   wiring elsewhere
 
 The bug was not in auth bootstrap itself. It was in scaffold selection.
 
@@ -44,11 +49,13 @@ Keep the raw Convex preset minimal on TanStack Start.
 
 Do not route Start through the richer kitcn auth scaffold. Instead:
 
-1. patch `src/lib/convex/convex-provider.tsx` in place, the same way raw Next
-   patches its provider shell
+1. patch `src/lib/convex/convex-provider.tsx` in place when it exists, the same
+   way raw Next patches its provider shell
 2. keep the raw auth client shape with no `createAuthMutations()`
 3. use the React/Vite raw auth client template for Start so it reads
    `import.meta.env.VITE_CONVEX_SITE_URL!`
+4. if the Start provider file is absent, skip that patch with a manual action
+   instead of failing the whole auth adoption
 
 That preserves the raw Convex contract:
 
@@ -56,6 +63,7 @@ That preserves the raw Convex contract:
 - no cRPC scaffold churn
 - no generated `/auth` page
 - no Start auth proxy route
+- no forced placeholder provider file just to let the command finish
 
 ## Verification
 
@@ -76,7 +84,8 @@ That preserves the raw Convex contract:
    auth template branch too
 3. For raw preset adoption, patch the narrowest existing provider shell instead
    of replacing it with the full managed auth baseline
-4. Keep a dedicated bootstrap-heavy raw Start scenario so raw auth adoption
+4. Missing raw-provider shells should become manual actions, not hard errors
+5. Keep a dedicated bootstrap-heavy raw Start scenario so raw auth adoption
    drift fails in scenario validation, not in user migration threads
 
 ## Files Changed
