@@ -150,8 +150,8 @@ Execute a TDD-first guardrail rollout now:
 
 ## Resources
 
-- Convex filtering guidance: `.claude/skills/convex-filters/convex-filters.mdc`
-- Convex best practices: `.claude/skills/convex/convex.mdc`
+- Convex filtering guidance: `.claude/skills/kitcn-filters/convex-filters.mdc`
+- Convex best practices: `.claude/skills/kitcn/convex.mdc`
 
 ## Acceptance Criteria
 

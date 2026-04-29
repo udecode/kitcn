@@ -146,7 +146,7 @@ Read relevant hits, especially notes about:
 - token, JWT, JWKS, cookie, and session handling
 - schema generation, plugin reconciliation, and generated auth contracts
 - React, Solid, Next.js, and TanStack Start provider behavior
-- scaffold templates, docs, and `packages/kitcn/skills/convex/**`
+- scaffold templates, docs, and `packages/kitcn/skills/kitcn/**`
 - local hacks that might be obsolete after upstream changes
 
 ## 4. Classify Every Upstream Change
@@ -234,16 +234,19 @@ Opportunity: <one-sentence selected slice>
 Class: <security | compatibility | bugfix | cleanup | agentic | feature | docs | tests>
 
 Evidence:
+
 - Upstream commits: <short commit list or summary>
 - Upstream diff: <refs and files>
 - Kitcn evidence: <local files and docs/solutions notes>
 
 Implementation:
+
 - <specific files or surfaces to inspect first>
 - <expected code/doc/test shape>
 - <anything explicitly ignored as irrelevant>
 
 Acceptance:
+
 - <focused tests/checks>
 - <package build if packages/kitcn changes>
 - <fixtures commands if scaffold output changes>
@@ -267,9 +270,9 @@ Upstream: <upstream-owner>/<repo-name>
 Range: <fork-ref>..<upstream-ref>
 Behind: <count>
 
-| Class | Opportunity | Evidence | Decision |
-| --- | --- | --- | --- |
-| bugfix | ... | ... | selected |
+| Class  | Opportunity | Evidence | Decision |
+| ------ | ----------- | -------- | -------- |
+| bugfix | ...         | ...      | selected |
 
 Delegating to task: <selected slice>
 ```

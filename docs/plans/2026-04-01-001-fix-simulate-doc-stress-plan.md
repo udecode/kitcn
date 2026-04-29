@@ -29,7 +29,7 @@ rather than from framework theory:
   anonymous Convex init)
 - local-runtime drift (`kitcn dev`, `kitcn add ...`, `kitcn verify`)
 - doc parity drift between `www/content/docs/**` and
-  `packages/kitcn/skills/convex/**`
+  `packages/kitcn/skills/kitcn/**`
 - “looks fine in the repo” failures that only show up when a user follows the
   docs literally in a blank app
 
@@ -51,7 +51,7 @@ safe to follow.
   one giant command prompt.
 - R6. The workflow must explicitly target the current live docs surfaces in
   `www/content/docs/**` and the synced Convex skill docs in
-  `packages/kitcn/skills/convex/**`.
+  `packages/kitcn/skills/kitcn/**`.
 - R7. The workflow must preserve fidelity during reproduction and still allow a
   second diagnosis pass that proposes grounded fixes.
 
@@ -109,7 +109,7 @@ safe to follow.
   The real deliverable is a prioritized report tied back to the exact doc
   sections that misled the user.
 - **Cover both docs surfaces deliberately**: `www` is the user-facing canon, and
-  `packages/kitcn/skills/convex/**` is the agent-facing compressed canon. The
+  `packages/kitcn/skills/kitcn/**` is the agent-facing compressed canon. The
   simulator should pressure both, not pretend only one matters.
 
 ## Open Questions
@@ -136,9 +136,9 @@ safe to follow.
 
 ## High-Level Technical Design
 
-> *This illustrates the intended approach and is directional guidance for
+> _This illustrates the intended approach and is directional guidance for
 > review, not implementation specification. The implementing agent should treat
-> it as context, not code to reproduce.*
+> it as context, not code to reproduce._
 
 ```mermaid
 flowchart TB
@@ -166,9 +166,11 @@ four-phase product build and instead invokes a docs stress-test workflow.
 **Dependencies:** None
 
 **Files:**
+
 - Modify: `.claude/commands/simulate.md`
 
 **Approach:**
+
 - Delete the current battle-test framing, old temp-path assumptions, and dead
   planning-file requirements.
 - Reframe the command around doc validation lanes, findings output, and scoped
@@ -177,14 +179,17 @@ four-phase product build and instead invokes a docs stress-test workflow.
   not inlined across a wall of prompt prose.
 
 **Patterns to follow:**
+
 - `.claude/commands/plan.md`
 - `.claude/commands/clean-docs.md`
 
 **Test scenarios:**
+
 - Test expectation: none -- prompt-only command contract, no code-bearing test
   seam.
 
 **Verification:**
+
 - Reading `.claude/commands/simulate.md` shows a docs stress-test invocation,
   not a staged app-build prompt.
 - The command no longer references `planning-with-files`, `task_plan.md`,
@@ -201,10 +206,12 @@ command body.
 **Dependencies:** Unit 1
 
 **Files:**
+
 - Create: `docs/analysis/docs-stress-test-protocol.md`
 - Modify: `.claude/commands/simulate.md`
 
 **Approach:**
+
 - Define two lanes explicitly:
   - human-like literal follower
   - agent-like follower
@@ -218,13 +225,16 @@ command body.
   behavior, workaround, likely root cause, proposed patch.
 
 **Patterns to follow:**
+
 - `docs/solutions/simulate-doc.md` for the core “log every gap” instinct
 - `docs/solutions/style.md` for evaluating docs quality beyond raw correctness
 
 **Test scenarios:**
+
 - Test expectation: none -- protocol-doc work, not executable code.
 
 **Verification:**
+
 - A reader can run the workflow without needing hidden knowledge from source.
 - The protocol clearly separates literal reproduction from diagnosis and gives a
   single lossless findings format.
@@ -239,9 +249,11 @@ matrix that targets the real breakage seams.
 **Dependencies:** Unit 2
 
 **Files:**
+
 - Modify: `docs/analysis/docs-stress-test-protocol.md`
 
 **Approach:**
+
 - Define prioritized lanes such as:
   - bootstrap lane: `www/content/docs/index.mdx`,
     `www/content/docs/quickstart.mdx`
@@ -249,7 +261,7 @@ matrix that targets the real breakage seams.
     from `www/content/docs/cli/**`, `www/content/docs/auth/**`,
     `www/content/docs/plugins/**`
   - agent parity lane: matching compressed guidance in
-    `packages/kitcn/skills/convex/**`
+    `packages/kitcn/skills/kitcn/**`
   - full sweep lane: walk the full `www/content/docs/**` tree in nav order and
     then the synced Convex skill surfaces, with off-nav docs called out
     explicitly instead of skipped silently
@@ -262,13 +274,16 @@ matrix that targets the real breakage seams.
   phase-gate theater that pretends every run must build a full product.
 
 **Patterns to follow:**
+
 - `docs/solutions/integration-issues/bootstrap-docs-must-use-latest-remote-cli-but-local-runtime-commands-stay-local-20260331.md`
 - `docs/solutions/integration-issues/published-cli-bootstrap-must-ship-runtime-deps-and-anonymous-convex-init-20260331.md`
 
 **Test scenarios:**
+
 - Test expectation: none -- workflow-definition unit.
 
 **Verification:**
+
 - The protocol names specific docs surfaces and specific seams to validate.
 - The workflow can be run narrowly against one docs lane without pretending to
   certify the entire docs site.
@@ -283,24 +298,29 @@ workflow, not two contradictory ones.
 **Dependencies:** Units 1-3
 
 **Files:**
+
 - Delete or replace: `docs/solutions/simulate-doc.md`
 - Modify: `docs/plans/2026-01-23-fix-quickstart-documentation-gaps-plan.md`
   (only if it needs a reference cleanup to stop pointing at the stale workflow)
 - Modify: `.claude/commands/simulate.md`
 
 **Approach:**
+
 - Hard-cut the stale workflow doc if it no longer belongs in `docs/solutions/`.
 - If any live internal references still point at the stale artifact, update
   them to the new protocol doc so future contributors land in the right place.
 - Keep exactly one active source of truth for docs simulation policy.
 
 **Patterns to follow:**
+
 - Repo-wide hard-cut policy for stale internal surfaces
 
 **Test scenarios:**
+
 - Test expectation: none -- internal docs/reference cleanup.
 
 **Verification:**
+
 - There is one obvious docs stress-test source of truth.
 - Searching for `simulate-doc.md`, `task_plan.md`, or `/tmp/simulation-1` no
   longer points contributors at stale simulation policy.
@@ -315,10 +335,12 @@ high-value docs slice and confirming the output is actionable.
 **Dependencies:** Units 1-4
 
 **Files:**
+
 - Modify: `.claude/commands/simulate.md`
 - Modify: `docs/analysis/docs-stress-test-protocol.md`
 
 **Approach:**
+
 - Use one narrow lane as proof, ideally `index.mdx` + `quickstart.mdx`, because
   that is the highest-value fresh-user seam and the one that has already bitten
   release validation repeatedly.
@@ -332,17 +354,20 @@ high-value docs slice and confirming the output is actionable.
 trying a broader docs sweep.
 
 **Patterns to follow:**
+
 - The repo’s repeated fresh-app smoke investigations from late March 2026
 
 **Test scenarios:**
+
 - Happy path — scoped run on `index.mdx` + `quickstart.mdx` completes with a
   success/failure report that names exact docs and steps.
 - Edge case — a blocker in the bootstrap lane gets logged before the runner
   reads repo code for diagnosis.
-- Integration — a mismatch between `www` docs and `packages/kitcn/skills/convex`
+- Integration — a mismatch between `www` docs and `packages/kitcn/skills/kitcn`
   guidance is recorded as one parity finding, not hand-waved away.
 
 **Verification:**
+
 - The new command can be followed end-to-end on a narrow lane.
 - The report contains enough detail to patch docs without rerunning the whole
   simulation blindly.
@@ -351,7 +376,7 @@ trying a broader docs sweep.
 
 - **Interaction graph:** `.claude/commands/simulate.md` becomes the invocation
   layer; the new protocol doc becomes the policy layer; `www/content/docs/**`
-  and `packages/kitcn/skills/convex/**` remain the validation inputs.
+  and `packages/kitcn/skills/kitcn/**` remain the validation inputs.
 - **Error propagation:** doc failures should first surface as literal
   reproduction findings, then optionally gain diagnosis notes. Do not collapse
   those into one muddy blob.
@@ -367,12 +392,12 @@ trying a broader docs sweep.
 
 ## Risks & Dependencies
 
-| Risk | Mitigation |
-|------|------------|
-| The rewritten command grows back into another mega-prompt | Keep durable policy in one protocol doc and keep the command thin |
-| The reproduction pass cheats by using repo knowledge too early | Make the two-pass boundary explicit and treat violations as command failure |
-| The workflow becomes too broad to run regularly | Support scoped lanes and prioritize bootstrap plus local runtime seams first |
-| Two contradictory workflow docs survive the rewrite | Hard-cut stale artifacts and update remaining references in the same change |
+| Risk                                                           | Mitigation                                                                   |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| The rewritten command grows back into another mega-prompt      | Keep durable policy in one protocol doc and keep the command thin            |
+| The reproduction pass cheats by using repo knowledge too early | Make the two-pass boundary explicit and treat violations as command failure  |
+| The workflow becomes too broad to run regularly                | Support scoped lanes and prioritize bootstrap plus local runtime seams first |
+| Two contradictory workflow docs survive the rewrite            | Hard-cut stale artifacts and update remaining references in the same change  |
 
 ## Documentation / Operational Notes
 

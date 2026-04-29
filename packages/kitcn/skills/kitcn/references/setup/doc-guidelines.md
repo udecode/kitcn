@@ -52,16 +52,16 @@ Snippet policy:
 
 Use non-overlapping placement.
 
-| Destination | Role | Must Contain | Must Not Contain |
-| --- | --- | --- | --- |
-| `references/setup/` | One-time bootstrap (loaded once per project) | install/bootstrap/env/config/initial wiring/framework setup | daily feature patterns and long advanced deep-dives |
-| `SKILL.md` | Always-loaded core | generic everyday E2E feature implementation path; usable alone for standard feature delivery | setup/install workflows and advanced niche overload |
-| `references/features/` | Features (on-demand, self-contained) | advanced/special cases, plugin depth, long snippets, niche troubleshooting, long-form API detail | setup bootstrap and generic core flow duplication |
+| Destination            | Role                                         | Must Contain                                                                                     | Must Not Contain                                    |
+| ---------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `references/setup/`    | One-time bootstrap (loaded once per project) | install/bootstrap/env/config/initial wiring/framework setup                                      | daily feature patterns and long advanced deep-dives |
+| `SKILL.md`             | Always-loaded core                           | generic everyday E2E feature implementation path; usable alone for standard feature delivery     | setup/install workflows and advanced niche overload |
+| `references/features/` | Features (on-demand, self-contained)         | advanced/special cases, plugin depth, long snippets, niche troubleshooting, long-form API detail | setup bootstrap and generic core flow duplication   |
 
 Definition:
 
-- setup == `packages/kitcn/skills/convex/references/setup/*.md`
-- features == `packages/kitcn/skills/convex/references/features/*.md`
+- setup == `packages/kitcn/skills/kitcn/references/setup/*.md`
+- features == `packages/kitcn/skills/kitcn/references/features/*.md`
 
 ## 5. WWW Sync Workflow (phase-by-phase)
 
@@ -104,18 +104,21 @@ Minimum acceptance statement per sync:
 Run these checks before accepting a sync.
 
 1. No stale setup command references in `.claude`:
+
 ```bash
 rg -n "convex-setup\\.md|commands/convex-setup|\\bconvex-setup\\b" .claude -g '*.md' -g '*.mdc'
 ```
 
 2. No legacy Ents/`ctx.table` snippets in active Convex skill docs:
+
 ```bash
-rg -n "ctx\\.table\\(|ctx\\.table\\b|convex-ents|defineEnt\\(" packages/kitcn/skills/convex/SKILL.md packages/kitcn/skills/convex/references -g '*.md'
+rg -n "ctx\\.table\\(|ctx\\.table\\b|convex-ents|defineEnt\\(" packages/kitcn/skills/kitcn/SKILL.md packages/kitcn/skills/kitcn/references -g '*.md'
 ```
 
 3. `SKILL.md` remains setup-free (manual + grep check):
+
 ```bash
-rg -n "create-next-app|Installation|convex\\.json|\\.env|env push|one-time setup" packages/kitcn/skills/convex/SKILL.md
+rg -n "create-next-app|Installation|convex\\.json|\\.env|env push|one-time setup" packages/kitcn/skills/kitcn/SKILL.md
 ```
 
 4. Every advanced reference has a discoverable pointer from core when relevant (manual review required).

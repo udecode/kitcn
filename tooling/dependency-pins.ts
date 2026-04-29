@@ -123,7 +123,7 @@ const PACKAGE_JSON_TARGETS: PackageJsonTarget[] = [
 
 const TEXT_TARGETS = [
   {
-    path: 'packages/kitcn/skills/convex/references/setup/auth.md',
+    path: 'packages/kitcn/skills/kitcn/references/setup/auth.md',
     replacements: [
       {
         pattern:

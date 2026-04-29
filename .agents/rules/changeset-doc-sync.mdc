@@ -1,5 +1,5 @@
 ---
-description: Read every doc in www and packages/kitcn/skills/convex, sync to active changeset(s), and track with checkmarks.
+description: Read every doc in www and packages/kitcn/skills/kitcn, sync to active changeset(s), and track with checkmarks.
 ---
 
 # Changeset Doc Sync
@@ -33,7 +33,7 @@ Use this workflow when release docs must match current changeset content.
    - Include every file in:
      - `www/**/*.md`
      - `www/**/*.mdx`
-     - `packages/kitcn/skills/convex/**/*.md`
+     - `packages/kitcn/skills/kitcn/**/*.md`
    - Keep `/example` crosswalk checklist in `task_plan.md` in sync during the run.
 
 5. Read every listed doc and sync:
@@ -68,10 +68,10 @@ Use this workflow when release docs must match current changeset content.
 - [ ] `www/content/docs/a.mdx` — pending
 - [ ] `www/content/docs/b.mdx` — pending
 
-### Phase: Doc Sync Checklist (packages/kitcn/skills/convex)
+### Phase: Doc Sync Checklist (packages/kitcn/skills/kitcn)
 
-- [ ] `packages/kitcn/skills/convex/SKILL.md` — pending
-- [ ] `packages/kitcn/skills/convex/references/setup/index.md` — pending
+- [ ] `packages/kitcn/skills/kitcn/SKILL.md` — pending
+- [ ] `packages/kitcn/skills/kitcn/references/setup/index.md` — pending
 
 ### Phase: /example-to-doc Crosswalk (required)
 
@@ -96,15 +96,15 @@ Use this workflow when release docs must match current changeset content.
 
 - [ ] `www/path/to/doc.mdx` — pending
 
-## packages/kitcn/skills/convex docs
+## packages/kitcn/skills/kitcn docs
 
-- [ ] `packages/kitcn/skills/convex/SKILL.md` — pending
-- [ ] `packages/kitcn/skills/convex/references/setup/index.md` — pending
+- [ ] `packages/kitcn/skills/kitcn/SKILL.md` — pending
+- [ ] `packages/kitcn/skills/kitcn/references/setup/index.md` — pending
 
 ## Synced
 
 - [x] `www/path/to/doc.mdx` — updated for `@convex/api` migration
-- [x] `packages/kitcn/skills/convex/references/setup/index.md` — no change needed
+- [x] `packages/kitcn/skills/kitcn/references/setup/index.md` — no change needed
 ```
 
 ## Suggested commands
@@ -115,5 +115,5 @@ git diff --stat -- example
 git diff -- example
 find .changeset -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | sort
 find www -type f \( -name '*.md' -o -name '*.mdx' \) | sort
-{ echo 'packages/kitcn/skills/convex/SKILL.md'; find packages/kitcn/skills/convex/references -type f -name '*.md' | sort; }
+{ echo 'packages/kitcn/skills/kitcn/SKILL.md'; find packages/kitcn/skills/kitcn/references -type f -name '*.md' | sort; }
 ```

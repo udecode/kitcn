@@ -22,14 +22,17 @@ Foreign key cascade handling loads all referencing rows via `.collect()`, which 
 ### Option 1: Paginated Cascade Processing (Preferred)
 
 **Approach:**
+
 - Replace `.collect()` with paginated iteration using `query.paginate()` or chunked `take()` loops.
 - Process cascade actions per batch to keep memory bounded.
 
 **Pros:**
+
 - Scales to large datasets
 - Avoids memory spikes and timeout risk
 
 **Cons:**
+
 - More complex control flow
 - Requires careful handling of visited set and recursion
 
@@ -42,13 +45,16 @@ Foreign key cascade handling loads all referencing rows via `.collect()`, which 
 ### Option 2: Stream-Based Cascade
 
 **Approach:**
+
 - Use `kitcn/orm/stream` to iterate indexed queries and apply cascade actions incrementally.
 
 **Pros:**
+
 - Fits Convex guidance for large data processing
 - Natural batching
 
 **Cons:**
+
 - Introduces stream dependency into mutation utils
 - Needs clear abort/backoff strategy
 
@@ -61,14 +67,17 @@ Foreign key cascade handling loads all referencing rows via `.collect()`, which 
 ### Option 3: Enforce Index + Size Guardrails
 
 **Approach:**
+
 - Require foreign key indexes for cascade paths and throw if missing.
 - Add configurable cap/warning if cascade expands beyond a threshold.
 
 **Pros:**
+
 - Quick protection
 - Minimal refactor
 
 **Cons:**
+
 - Still risks truncation or failure
 - Doesn’t solve large-scale cascade correctness
 
@@ -83,15 +92,17 @@ Foreign key cascade handling loads all referencing rows via `.collect()`, which 
 ## Technical Details
 
 **Affected files:**
+
 - `packages/kitcn/src/orm/mutation-utils.ts:521`
 
 **Related components:**
+
 - Cascade delete/update flows
 - Foreign key graph traversal
 
 ## Resources
 
-- Convex filters/streams guidance: `.claude/skills/convex-filters/convex-filters.mdc`
+- Convex filters/streams guidance: `.claude/skills/kitcn-filters/convex-filters.mdc`
 
 ## Acceptance Criteria
 
@@ -107,11 +118,13 @@ Foreign key cascade handling loads all referencing rows via `.collect()`, which 
 **By:** Codex
 
 **Actions:**
+
 - Located `.collect()` in `collectReferencingRows()`
 - Mapped cascade flow to unbounded fetch behavior
 - Drafted batched/stream alternatives
 
 **Learnings:**
+
 - Cascade behavior currently scales linearly with full referencing table size
 
 ## Notes

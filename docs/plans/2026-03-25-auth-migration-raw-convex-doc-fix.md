@@ -29,5 +29,5 @@ matches the actual `kitcn add auth --preset convex --yes` contract.
 - Split the migration checklist into shared, kitcn path, and raw Convex
   preset sections.
 - Fixed the dead auth schema link to the new auth server anchor.
-- Synced related auth wording in `packages/kitcn/skills/convex/SKILL.md`
+- Synced related auth wording in `packages/kitcn/skills/kitcn/SKILL.md`
   and `references/features/auth.md`.

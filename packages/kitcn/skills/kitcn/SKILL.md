@@ -1,9 +1,7 @@
 ---
-name: convex
-description: ALWAYS use this skill when working with convex or kitcn. Covers the common end-to-end feature path using cRPC + ORM + auth + React, with setup/bootstrap and niche depth in references.
-# biome-ignore format: keep sources compact so intent's 500-line validator passes
+name: kitcn
+description: ALWAYS use this skill when working with convex or kitcn. Covers both setup and e2e feature paths using cRPC + ORM + auth + React.
 sources: [www/content/docs/concepts.mdx, www/content/docs/orm/index.mdx, www/content/docs/orm/schema/relations.mdx, www/content/docs/orm/schema/triggers.mdx, www/content/docs/orm/queries/aggregates.mdx, www/content/docs/orm/queries/pagination.mdx, www/content/docs/server/error-handling.mdx, www/content/docs/server/http.mdx, www/content/docs/server/middlewares.mdx, www/content/docs/server/procedures.mdx, www/content/docs/server/server-side-calls.mdx, www/content/docs/react/queries.mdx, www/content/docs/react/mutations.mdx, www/content/docs/react/infinite-queries.mdx, www/content/docs/auth/client.mdx, www/content/docs/auth/server.mdx]
-# biome-ignore format: mirror blog/spec shape without burning 30 lines
 metadata: { sources: [www/content/docs/concepts.mdx, www/content/docs/orm/index.mdx, www/content/docs/orm/schema/relations.mdx, www/content/docs/orm/schema/triggers.mdx, www/content/docs/orm/queries/aggregates.mdx, www/content/docs/orm/queries/pagination.mdx, www/content/docs/server/error-handling.mdx, www/content/docs/server/http.mdx, www/content/docs/server/middlewares.mdx, www/content/docs/server/procedures.mdx, www/content/docs/server/server-side-calls.mdx, www/content/docs/react/queries.mdx, www/content/docs/react/mutations.mdx, www/content/docs/react/infinite-queries.mdx, www/content/docs/auth/client.mdx, www/content/docs/auth/server.mdx] }
 ---
 # kitcn Core Skill (80% Path)
@@ -64,7 +62,6 @@ Only remember these non-parity deltas:
 29. Polymorphic unions are schema-first: use `actionType: discriminator({ variants, as? })` in `convexTable(...)`. Query config does not include a `polymorphic` option. Writes stay flat; reads synthesize nested `details` (or custom alias). Use `withVariants: true` to auto-load all `one()` relations on discriminator tables.
 30. Do not add manual ORM mutation batching loops in app/plugin code by default. Convex runtime batching already handles mutation execution. Prefer set-based deletes/updates over per-row loops. Only add explicit chunking when batching external side effects (for example Resend API calls) or bounded cleanup sweeps.
 ## Directory Boundary (Important)
-This skill is directory-scoped. Do not depend on reading files outside `packages/kitcn/skills/convex/**`.
 Use `references/setup/` when the task needs:
 1. Project/file structure setup → `setup/index.md` + `setup/server.md`
 2. Auth bootstrap → `setup/auth.md`

@@ -101,19 +101,19 @@ Reason:
 If kitcn gains Turbopuffer-backed text filtering, the practical mapping
 should be:
 
-| ORM operator | Status today | With Turbopuffer regex/glob index |
-| --- | --- | --- |
-| `startsWith(x)` | native indexed | unchanged |
-| `like("prefix%")` | native indexed | unchanged |
-| `contains(x)` | post-fetch / workaround | provider-accelerated |
-| `endsWith(x)` | post-fetch / reversed-string workaround | provider-accelerated |
-| `like("%x%")` | post-fetch | provider-accelerated |
-| `like("%x")` | post-fetch | provider-accelerated |
-| `ilike("%x%")` | post-fetch / lowercase workaround | provider-accelerated |
-| `ilike("%x")` | post-fetch / lowercase workaround | provider-accelerated |
-| `regex(...)` | not exposed today | direct beneficiary |
-| `glob(...)` / `iglob(...)` | not exposed today | direct beneficiary |
-| `notLike(...)` / `notIlike(...)` | post-fetch | likely still fallback/post-filter |
+| ORM operator                     | Status today                            | With Turbopuffer regex/glob index |
+| -------------------------------- | --------------------------------------- | --------------------------------- |
+| `startsWith(x)`                  | native indexed                          | unchanged                         |
+| `like("prefix%")`                | native indexed                          | unchanged                         |
+| `contains(x)`                    | post-fetch / workaround                 | provider-accelerated              |
+| `endsWith(x)`                    | post-fetch / reversed-string workaround | provider-accelerated              |
+| `like("%x%")`                    | post-fetch                              | provider-accelerated              |
+| `like("%x")`                     | post-fetch                              | provider-accelerated              |
+| `ilike("%x%")`                   | post-fetch / lowercase workaround       | provider-accelerated              |
+| `ilike("%x")`                    | post-fetch / lowercase workaround       | provider-accelerated              |
+| `regex(...)`                     | not exposed today                       | direct beneficiary                |
+| `glob(...)` / `iglob(...)`       | not exposed today                       | direct beneficiary                |
+| `notLike(...)` / `notIlike(...)` | post-fetch                              | likely still fallback/post-filter |
 
 ## Why This Does Not Belong in `searchIndex`
 
@@ -162,7 +162,7 @@ Primary files:
 - `www/content/docs/orm/queries/filters.mdx`
 - `www/content/docs/orm/queries/operators.mdx`
 - `www/content/docs/orm/schema/indexes-constraints.mdx`
-- `packages/kitcn/skills/convex/references/features/orm.md`
+- `packages/kitcn/skills/kitcn/references/features/orm.md`
 
 Most important doc changes:
 

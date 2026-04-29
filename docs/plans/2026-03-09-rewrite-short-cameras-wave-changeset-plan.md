@@ -36,7 +36,7 @@ Source of truth: `git status --short --untracked-files=all`
       codegen lookup-helper change
 - [x] `docs/plans/2026-03-09-rewrite-short-cameras-wave-changeset-plan.md` —
       added file-granular planning log
-- [x] `packages/kitcn/skills/convex/references/setup/index.md` —
+- [x] `packages/kitcn/skills/kitcn/references/setup/index.md` —
       updated skill docs for scaffold ownership
 - [x] `packages/kitcn/src/cli/codegen.test.ts` — reviewed; covered by
       changeset patch bullet
@@ -200,47 +200,47 @@ Source of truth: `git status --short --untracked-files=all`
 
 ## Convex Skill Doc Sync Checklist
 
-- [x] `packages/kitcn/skills/convex/SKILL.md` — reviewed; no change
+- [x] `packages/kitcn/skills/kitcn/SKILL.md` — reviewed; no change
       needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/aggregates.md`
+- [x] `packages/kitcn/skills/kitcn/references/features/aggregates.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/auth-admin.md`
+- [x] `packages/kitcn/skills/kitcn/references/features/auth-admin.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/auth-organizations.md`
+- [x] `packages/kitcn/skills/kitcn/references/features/auth-organizations.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/auth-polar.md`
+- [x] `packages/kitcn/skills/kitcn/references/features/auth-polar.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/auth.md` —
+- [x] `packages/kitcn/skills/kitcn/references/features/auth.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/create-plugins.md`
+- [x] `packages/kitcn/skills/kitcn/references/features/create-plugins.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/http.md` —
+- [x] `packages/kitcn/skills/kitcn/references/features/http.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/migrations.md`
+- [x] `packages/kitcn/skills/kitcn/references/features/migrations.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/orm.md` —
+- [x] `packages/kitcn/skills/kitcn/references/features/orm.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/react.md` —
+- [x] `packages/kitcn/skills/kitcn/references/features/react.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/scheduling.md`
+- [x] `packages/kitcn/skills/kitcn/references/features/scheduling.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/features/testing.md`
+- [x] `packages/kitcn/skills/kitcn/references/features/testing.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/setup/auth.md` —
+- [x] `packages/kitcn/skills/kitcn/references/setup/auth.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/setup/biome.md` —
+- [x] `packages/kitcn/skills/kitcn/references/setup/biome.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/setup/doc-guidelines.md`
+- [x] `packages/kitcn/skills/kitcn/references/setup/doc-guidelines.md`
       — reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/setup/index.md` —
+- [x] `packages/kitcn/skills/kitcn/references/setup/index.md` —
       updated for the messages demo route and starter scaffold ownership
-- [x] `packages/kitcn/skills/convex/references/setup/next.md` —
+- [x] `packages/kitcn/skills/kitcn/references/setup/next.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/setup/react.md` —
+- [x] `packages/kitcn/skills/kitcn/references/setup/react.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/setup/server.md` —
+- [x] `packages/kitcn/skills/kitcn/references/setup/server.md` —
       reviewed; no change needed for this changeset surface
-- [x] `packages/kitcn/skills/convex/references/setup/start.md` —
+- [x] `packages/kitcn/skills/kitcn/references/setup/start.md` —
       reviewed; no change needed for this changeset surface
 
 ## Findings
@@ -279,7 +279,7 @@ Source of truth: `git status --short --untracked-files=all`
 - [x] Captured modified + untracked branch inventory with `git status --short`
 - [x] Identified doc-impact hotspots: `www/content/docs/cli.mdx`,
       `www/content/docs/templates.mdx`, and
-      `packages/kitcn/skills/convex/references/setup/index.md`
+      `packages/kitcn/skills/kitcn/references/setup/index.md`
 - [x] Rewrote `.changeset/short-cameras-wave.md`
 - [x] Synced impacted docs
 - [x] Marked every checklist item as `updated` or `no change needed`

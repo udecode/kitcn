@@ -227,8 +227,8 @@ contract.
 
 ## High-Level Technical Design
 
-> *This illustrates the intended approach and is directional guidance for
-> review, not implementation specification.*
+> _This illustrates the intended approach and is directional guidance for
+> review, not implementation specification._
 
 ```mermaid
 flowchart TB
@@ -251,6 +251,7 @@ through a dedicated Expo helper.
 **Dependencies:** None
 
 **Files:**
+
 - Modify: `packages/kitcn/src/cli/backend-core.ts`
 - Modify: `packages/kitcn/src/cli/commands/init.ts`
 - Modify: `packages/kitcn/src/cli/cli.ts`
@@ -258,6 +259,7 @@ through a dedicated Expo helper.
 - Modify: `packages/kitcn/src/cli/commands/init.test.ts`
 
 **Approach:**
+
 - Add `expo` to `SUPPORTED_INIT_TEMPLATES`, help text, and all user-facing
   error strings that currently lie with `<next|start|vite>`.
 - Add a dedicated Expo scaffold helper in `backend-core.ts` that mirrors the
@@ -269,12 +271,14 @@ through a dedicated Expo helper.
 the new helper path.
 
 **Patterns to follow:**
+
 - `createProjectWithShadcn(...)` in
   `packages/kitcn/src/cli/backend-core.ts`
 - Start template enablement tests in
   `packages/kitcn/src/cli/commands/init.test.ts`
 
 **Test scenarios:**
+
 - Happy path: `resolveSupportedInitTemplate('expo')` succeeds.
 - Happy path: `kitcn init -t expo --yes` shells out through the Expo helper and
   records `template: "expo"` in JSON output.
@@ -286,6 +290,7 @@ the new helper path.
   init when the backend is Convex.
 
 **Verification:**
+
 - `expo` is visible everywhere the public init contract is described or parsed.
 
 - [ ] **Unit 2: Add an explicit Expo/native scaffold context**
@@ -298,12 +303,14 @@ native lane with its own path and env assumptions.
 **Dependencies:** Unit 1
 
 **Files:**
+
 - Modify: `packages/kitcn/src/cli/project-context.ts`
 - Modify: `packages/kitcn/src/cli/backend-core.ts`
 - Modify: `packages/kitcn/src/cli/commands/init.test.ts`
 - Modify: `packages/kitcn/src/cli/cli.commands.ts`
 
 **Approach:**
+
 - Add an Expo/native framework detection path keyed off the real upstream shape
   (`expo` deps + Expo Router entry + `src/app/_layout.tsx` style paths).
 - Introduce an Expo-native scaffold context instead of forcing Expo through the
@@ -315,12 +322,14 @@ native lane with its own path and env assumptions.
   overlay set.
 
 **Patterns to follow:**
+
 - Start-specific branching in
   `buildTemplateInitializationPlanFiles(...)`
 - current `resolveProjectScaffoldContext(...)` type split in
   `packages/kitcn/src/cli/project-context.ts`
 
 **Test scenarios:**
+
 - Happy path: the official default Expo scaffold is detected as supported.
 - Edge case: Expo lane infers `src/` layout correctly and does not require a
   Vite-style `main.tsx`.
@@ -330,6 +339,7 @@ native lane with its own path and env assumptions.
   directories for downstream overlay planning.
 
 **Verification:**
+
 - Expo planning no longer depends on web-only assumptions like `import.meta.env`
   or `main.tsx`.
 
@@ -343,6 +353,7 @@ messages screen.
 **Dependencies:** Unit 2
 
 **Files:**
+
 - Modify: `packages/kitcn/src/cli/backend-core.ts`
 - Add: `packages/kitcn/src/cli/registry/init/expo/init-expo-package-json.template.ts`
 - Add: `packages/kitcn/src/cli/registry/init/expo/init-expo-env.template.ts`
@@ -356,6 +367,7 @@ messages screen.
   `packages/kitcn/src/cli/registry/init/next/init-next-schema.template.ts`
 
 **Approach:**
+
 - Keep the official Expo package/app shell as upstream-owned input.
 - Layer in Expo-specific client templates for:
   - provider mounting
@@ -369,6 +381,7 @@ messages screen.
   implementation proves it is cheap and clearly worth it.
 
 **Patterns to follow:**
+
 - provider/query-client wiring from
   `packages/kitcn/src/cli/registry/init/react/init-react-convex-provider.template.ts`
 - small demo posture from
@@ -377,6 +390,7 @@ messages screen.
   and `../expo-template-default/src/app/index.tsx`
 
 **Test scenarios:**
+
 - Happy path: generated Expo app contains `.env` or equivalent client env
   wiring with `EXPO_PUBLIC_CONVEX_URL`.
 - Happy path: generated root layout mounts kitcn providers and no longer boots
@@ -391,6 +405,7 @@ messages screen.
   generated package baseline.
 
 **Verification:**
+
 - A fresh scaffold launches into one Convex-backed messages screen on the
   official Expo shell.
 
@@ -404,6 +419,7 @@ used by the existing scaffold lanes.
 **Dependencies:** Unit 3
 
 **Files:**
+
 - Modify: `packages/kitcn/src/cli/test-utils.ts`
 - Modify: `packages/kitcn/src/cli/commands/init.test.ts`
 - Modify: `packages/kitcn/src/cli/cli.commands.ts`
@@ -413,6 +429,7 @@ used by the existing scaffold lanes.
 - Create or refresh: `fixtures/expo/**`
 
 **Approach:**
+
 - Add a test helper that mirrors the real official Expo default template shape
   closely enough that init overlay tests fail when upstream paths drift.
 - Add `expo` to the template-fixture config so `fixtures:sync` and
@@ -423,12 +440,14 @@ used by the existing scaffold lanes.
   added if the repo can support it repeatably without fake mobile claims.
 
 **Patterns to follow:**
+
 - `writeShadcnNextApp(...)`, `writeShadcnStartApp(...)`, and
   `writeShadcnViteApp(...)` in `packages/kitcn/src/cli/test-utils.ts`
 - template/scenario registration in `tooling/template.config.ts` and
   `tooling/scenario.config.ts`
 
 **Test scenarios:**
+
 - Happy path: the Expo test double matches the real upstream `src/app/**`
   structure closely enough for overlay tests to exercise the right seams.
 - Happy path: `fixtures/expo` syncs from `kitcn init -t expo`.
@@ -438,6 +457,7 @@ used by the existing scaffold lanes.
   generated Expo scaffold against the current package install spec.
 
 **Verification:**
+
 - Expo is part of the fixture/template proof system, not a one-off code path.
 
 - [ ] **Unit 5: Sync docs, skill references, and release metadata**
@@ -450,18 +470,20 @@ or discover `init -t`.
 **Dependencies:** Units 1 through 4
 
 **Files:**
+
 - Modify: `www/content/docs/index.mdx`
 - Modify: `www/content/docs/quickstart.mdx`
 - Modify: `www/content/docs/cli/registry.mdx`
 - Modify: `www/content/docs/meta.json`
 - Add: `www/content/docs/expo.mdx`
 - Modify: `www/app/(home)/page.tsx`
-- Modify: `packages/kitcn/skills/convex/references/setup/index.md`
-- Modify: `packages/kitcn/skills/convex/references/setup/server.md`
-- Add: `packages/kitcn/skills/convex/references/setup/expo.md`
+- Modify: `packages/kitcn/skills/kitcn/references/setup/index.md`
+- Modify: `packages/kitcn/skills/kitcn/references/setup/server.md`
+- Add: `packages/kitcn/skills/kitcn/references/setup/expo.md`
 - Add: `.changeset/*.md`
 
 **Approach:**
+
 - Add Expo to public entrypoint docs and homepage command examples.
 - Document the ownership model plainly: official Expo shell, kitcn Convex
   overlay, single-screen messages demo, auth excluded from v1.
@@ -470,17 +492,20 @@ or discover `init -t`.
   edits.
 
 **Patterns to follow:**
+
 - `www/content/docs/tanstack-start.mdx`
 - existing setup references under
-  `packages/kitcn/skills/convex/references/setup/`
+  `packages/kitcn/skills/kitcn/references/setup/`
 
 **Test scenarios:**
+
 - Happy path: public docs list Expo alongside the supported fresh-app templates.
 - Regression: docs do not claim Expo auth or existing-app adoption support that
   v1 does not actually ship.
 - Regression: skill docs and `www/` docs stay aligned on the same contract.
 
 **Verification:**
+
 - Users can discover the Expo template without stale or contradictory guidance.
 
 ## System-Wide Impact
@@ -505,18 +530,18 @@ or discover `init -t`.
 
 ## Risks & Dependencies
 
-| Risk | Mitigation |
-|------|------------|
-| Official Expo template structure drifts under `create-expo-app` | Keep the overlay narrow, mirror the real template in test utils, and fail loudly on unexpected path/shape changes |
-| Expo gets misrouted through generic React assumptions | Add a dedicated Expo/native scaffold context and branch the planner explicitly |
-| Mobile proof gets faked because simulator automation is inconvenient | Treat fixture/template proof as mandatory, and only add runtime smoke if the lane is actually repeatable |
-| Upstream default shell is multi-screen while v1 wants a single-screen launch surface | Replace the runtime-entry layout/home files and avoid unnecessary abstraction for full starter cleanup |
-| Public docs overpromise Expo auth/adoption | Keep scope boundaries explicit in docs and skill references |
+| Risk                                                                                 | Mitigation                                                                                                        |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Official Expo template structure drifts under `create-expo-app`                      | Keep the overlay narrow, mirror the real template in test utils, and fail loudly on unexpected path/shape changes |
+| Expo gets misrouted through generic React assumptions                                | Add a dedicated Expo/native scaffold context and branch the planner explicitly                                    |
+| Mobile proof gets faked because simulator automation is inconvenient                 | Treat fixture/template proof as mandatory, and only add runtime smoke if the lane is actually repeatable          |
+| Upstream default shell is multi-screen while v1 wants a single-screen launch surface | Replace the runtime-entry layout/home files and avoid unnecessary abstraction for full starter cleanup            |
+| Public docs overpromise Expo auth/adoption                                           | Keep scope boundaries explicit in docs and skill references                                                       |
 
 ## Documentation / Operational Notes
 
 - Any `www/` doc change must be mirrored in
-  `packages/kitcn/skills/convex/references/setup/`.
+  `packages/kitcn/skills/kitcn/references/setup/`.
 - Because this changes a published package surface under `packages/kitcn`, the
   implementation must include a changeset and run
   `bun --cwd packages/kitcn build`.
@@ -548,11 +573,11 @@ or discover `init -t`.
 
 ## Alternative Approaches Considered
 
-| Approach | Why not chosen |
-|------|------------|
-| Handwrite a full kitcn-owned Expo shell | Creates permanent template ownership and drift burden for a problem Expo already solves upstream |
-| Use `create-better-t-stack` as the scaffold owner | Wrong ownership model for `kitcn init -t`; useful donor, bad source of truth |
-| Start from `create-expo-app --template blank-typescript` and rebuild Router ourselves | More local surface area, less parity with Expo's official recommendation, worse drift story |
+| Approach                                                                              | Why not chosen                                                                                   |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Handwrite a full kitcn-owned Expo shell                                               | Creates permanent template ownership and drift burden for a problem Expo already solves upstream |
+| Use `create-better-t-stack` as the scaffold owner                                     | Wrong ownership model for `kitcn init -t`; useful donor, bad source of truth                     |
+| Start from `create-expo-app --template blank-typescript` and rebuild Router ourselves | More local surface area, less parity with Expo's official recommendation, worse drift story      |
 
 ## Success Metrics
 

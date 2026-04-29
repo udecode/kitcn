@@ -100,9 +100,9 @@ describe('package intent metadata', () => {
       expect(result?.files.map((file) => file.path)).toEqual(
         expect.arrayContaining([
           'bin/intent.js',
-          'skills/convex/SKILL.md',
-          'skills/convex/references/setup/index.md',
-          'skills/convex/references/features/create-plugins.md',
+          'skills/kitcn/SKILL.md',
+          'skills/kitcn/references/setup/index.md',
+          'skills/kitcn/references/features/create-plugins.md',
         ])
       );
 

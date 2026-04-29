@@ -8,7 +8,7 @@ date: 2026-02-04
 
 Dig into https://github.com/zbeyens/drizzle-v1 for Drizzle v1 - it's the latest version of Drizzle. Only when needed, you can dig into https://github.com/drizzle-team/drizzle-orm which was the original reference so far.
 Make sure we maximize mirroring drizzle-v1 - dont forget all ts answers are in drizzle repo, dig into it when needed. they master more typescript than you. drizzle has many db integrations so just pick the most relevant one - making sure we mirror all typing magic - dig into https://github.com/get-convex/convex-backend if you need to dig into convex typing, testing or src code.
-SAME for testing / type testing - but when you need to test convex part, see .claude/skills/convex-test/convex-test.mdc or convex-backend/npm-packages tests. see @.claude/skills/convex-test-orm/convex-test-orm.mdc for more details. We don't want to reinvent the wheel, but we want the closest API to Drizzle. At the end of each package change, make sure you didn't break the types: `bun typecheck` at root and `bun run test` at root.agents/skills/dig/SKILL.md has more details on how to dig into code.
+SAME for testing / type testing - but when you need to test convex part, see .claude/skills/kitcn-test/convex-test.mdc or convex-backend/npm-packages tests. see @.claude/skills/kitcn-test-orm/convex-test-orm.mdc for more details. We don't want to reinvent the wheel, but we want the closest API to Drizzle. At the end of each package change, make sure you didn't break the types: `bun typecheck` at root and `bun run test` at root.agents/skills/dig/SKILL.md has more details on how to dig into code.
 
 ## Overview
 
@@ -64,7 +64,7 @@ const posts = convexTable(
       .on(t.embedding)
       .dimensions(1536)
       .filter(t.type),
-  ]
+  ],
 );
 ```
 
@@ -167,7 +167,7 @@ export interface ConvexSearchIndexConfig {
 ```ts
 // Add type guard
 function isConvexSearchIndexBuilder(
-  value: unknown
+  value: unknown,
 ): value is ConvexSearchIndexBuilder {
   return (
     typeof value === "object" &&
@@ -203,7 +203,7 @@ function validateColumnTable(column: ColumnBuilderBase, expectedTable: string) {
   const tableName = getColumnTableName(column);
   if (tableName && tableName !== expectedTable) {
     throw new Error(
-      `Search index references column from '${tableName}', but belongs to '${expectedTable}'.`
+      `Search index references column from '${tableName}', but belongs to '${expectedTable}'.`,
     );
   }
 }
@@ -252,17 +252,17 @@ export class ConvexVectorIndexBuilder {
   dimensions(n: number): this {
     if (n <= 0) {
       throw new Error(
-        `Vector index '${this.config.name}' dimensions must be positive, got ${n}`
+        `Vector index '${this.config.name}' dimensions must be positive, got ${n}`,
       );
     }
     if (!Number.isInteger(n)) {
       throw new Error(
-        `Vector index '${this.config.name}' dimensions must be an integer, got ${n}`
+        `Vector index '${this.config.name}' dimensions must be an integer, got ${n}`,
       );
     }
     if (n > 10000) {
       console.warn(
-        `Vector index '${this.config.name}' has unusually large dimensions (${n}). Common values: 768, 1536, 3072`
+        `Vector index '${this.config.name}' has unusually large dimensions (${n}). Common values: 768, 1536, 3072`,
       );
     }
     this.config.dimensions = n;
@@ -305,7 +305,7 @@ if (isConvexVectorIndexBuilder(entry)) {
 
   if (dimensions === undefined) {
     throw new Error(
-      `Vector index '${name}' is missing dimensions. Call .dimensions(n) before using.`
+      `Vector index '${name}' is missing dimensions. Call .dimensions(n) before using.`,
     );
   }
 
@@ -352,7 +352,7 @@ export type {
 export const posts = convexTable(
   "posts",
   { text: text().notNull(), type: text().notNull() },
-  (t) => [index("numLikesAndType").on(t.type, t.numLikes)]
+  (t) => [index("numLikesAndType").on(t.type, t.numLikes)],
 );
 posts.searchIndex("text", { searchField: "text", filterFields: ["type"] });
 
@@ -363,7 +363,7 @@ export const posts = convexTable(
   (t) => [
     index("numLikesAndType").on(t.type, t.numLikes),
     searchIndex("text").on(t.text).filter(t.type),
-  ]
+  ],
 );
 ```
 
@@ -489,13 +489,13 @@ export const posts = convexTable(
 
 ### Risks
 
-| Risk                              | Impact | Mitigation                                                 |
-| --------------------------------- | ------ | ---------------------------------------------------------- |
-| Breaking changes by design        | High   | Builder-only API; clear errors + docs                      |
-| Type complexity too high          | Medium | Follow Drizzle patterns, extensive type tests              |
-| Convex schema incompatibility     | High   | Test with actual defineSchema(), validate export structure |
-| Performance regression            | Low    | Profile applyExtraConfig processing                        |
-| User confusion during transition  | Medium | Clear migration guide, good error messages                 |
+| Risk                             | Impact | Mitigation                                                 |
+| -------------------------------- | ------ | ---------------------------------------------------------- |
+| Breaking changes by design       | High   | Builder-only API; clear errors + docs                      |
+| Type complexity too high         | Medium | Follow Drizzle patterns, extensive type tests              |
+| Convex schema incompatibility    | High   | Test with actual defineSchema(), validate export structure |
+| Performance regression           | Low    | Profile applyExtraConfig processing                        |
+| User confusion during transition | Medium | Clear migration guide, good error messages                 |
 
 ## Open Questions
 
@@ -672,7 +672,7 @@ export const posts = convexTable(
 
 ### Testing References
 
-- **Testing guide**: [.claude/skills/convex-test-orm/convex-test-orm.mdc](.claude/skills/convex-test-orm/convex-test-orm.mdc)
+- **Testing guide**: [.claude/skills/kitcn-test-orm/convex-test-orm.mdc](.claude/skills/kitcn-test-orm/convex-test-orm.mdc)
   - Type testing patterns with Equal<>/Expect<>
   - Runtime testing with convex-test
 

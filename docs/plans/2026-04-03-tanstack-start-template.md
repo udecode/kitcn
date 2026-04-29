@@ -34,7 +34,7 @@ Today Start is half-supported in the most annoying way:
 - `packages/kitcn/src/cli/commands/init.ts` and
   `packages/kitcn/src/cli/backend-core.ts` still reject `-t start`
 - `www/content/docs/tanstack-start.mdx` and
-  `packages/kitcn/skills/convex/references/setup/start.md` document direct
+  `packages/kitcn/skills/kitcn/references/setup/start.md` document direct
   `@convex-dev/better-auth/react-start` usage as a special-case exception
 - the generic React scaffold path assumes a Vite-style `main.tsx`, which is the
   wrong seam for Start
@@ -192,6 +192,7 @@ That means:
 surfaces that contract.
 
 **Files:**
+
 - Modify: `packages/kitcn/src/cli/backend-core.ts`
 - Modify: `packages/kitcn/src/cli/commands/init.ts`
 - Modify: `packages/kitcn/src/cli/project-context.ts`
@@ -199,6 +200,7 @@ surfaces that contract.
 - Modify: `packages/kitcn/src/cli/cli.commands.ts`
 
 **Approach:**
+
 - Add `start` to `SUPPORTED_INIT_TEMPLATES`.
 - Pass `start` through `createProjectWithShadcn(...)` unchanged.
 - Teach `resolveProjectScaffoldContext({ template })` that `template: 'start'`
@@ -207,10 +209,12 @@ surfaces that contract.
 - Keep the existing staging-in-empty-dir behavior and bootstrap flow shared.
 
 **Test files:**
+
 - `packages/kitcn/src/cli/commands/init.test.ts`
 - `packages/kitcn/src/cli/cli.commands.ts`
 
 **Test scenarios:**
+
 - `init -t start --yes` is accepted and shells out to shadcn with
   `--template start`
 - current empty-directory staging still works for `start`
@@ -222,6 +226,7 @@ surfaces that contract.
 **Goal:** bootstrap a Start app against the real Start shell files.
 
 **Files:**
+
 - Modify: `packages/kitcn/src/cli/backend-core.ts`
 - Add: `packages/kitcn/src/cli/registry/init/start/init-start-root.template.ts`
 - Add: `packages/kitcn/src/cli/registry/init/start/init-start-router.template.ts`
@@ -232,6 +237,7 @@ surfaces that contract.
 - Modify: `packages/kitcn/src/cli/commands/init.test.ts`
 
 **Approach:**
+
 - Split the current “react scaffold” logic into:
   - shared React files that are actually framework-neutral
   - framework-specific overlay paths for Vite vs Start
@@ -245,11 +251,13 @@ surfaces that contract.
   framework-agnostic.
 
 **Test files:**
+
 - `packages/kitcn/src/cli/commands/init.test.ts`
 - new unit tests under `packages/kitcn/src/cli/registry/init/start/*.test.ts`
   if any new patch helpers are extracted
 
 **Test scenarios:**
+
 - fresh Start scaffold gets kitcn baseline files in the expected Start paths
 - Start baseline does not require `main.tsx`
 - Start root/router files receive provider/context wiring without corrupting the
@@ -260,6 +268,7 @@ surfaces that contract.
 **Goal:** give generated code and docs a stable first-class Start import path.
 
 **Files:**
+
 - Add: `packages/kitcn/src/auth-start/index.ts`
 - Add: `packages/kitcn/src/auth-start/index.test.ts`
 - Modify: `packages/kitcn/package.json`
@@ -267,16 +276,19 @@ surfaces that contract.
 - Modify: `packages/kitcn/src/package-intent.test.ts`
 
 **Approach:**
+
 - Re-export upstream Start helpers from `src/auth-start/index.ts`.
 - Add `./auth/start` to package exports and build entrypoints.
 - Keep the surface thin; do not wrap or rename the upstream helper unless a
   packaging constraint forces it.
 
 **Test files:**
+
 - `packages/kitcn/src/auth-start/index.test.ts`
 - `packages/kitcn/src/package-intent.test.ts`
 
 **Test scenarios:**
+
 - package exports include `./auth/start`
 - packed package contains the built Start auth entrypoint
 - local source import from `kitcn/auth/start` resolves and exposes the expected
@@ -288,6 +300,7 @@ surfaces that contract.
 output and rerun ownership.
 
 **Files:**
+
 - Modify: `packages/kitcn/src/cli/registry/items/auth/auth-item.ts`
 - Add: `packages/kitcn/src/cli/registry/items/auth/auth-start-server.template.ts`
 - Add: `packages/kitcn/src/cli/registry/items/auth/auth-start-route.template.ts`
@@ -302,6 +315,7 @@ output and rerun ownership.
 - Modify: `packages/kitcn/src/cli/cli.commands.ts`
 
 **Approach:**
+
 - Add a Start-specific auth branch instead of using the current generic React
   “patch the client entry file” path.
 - Generate or patch:
@@ -320,11 +334,13 @@ output and rerun ownership.
 - Preserve user-owned auth definition/auth-config files during add-auth reruns.
 
 **Test files:**
+
 - `packages/kitcn/src/cli/registry/items/auth/auth-item.test.ts`
 - `packages/kitcn/src/cli/commands/init.test.ts`
 - `packages/kitcn/src/cli/cli.commands.ts`
 
 **Test scenarios:**
+
 - `add auth --yes` on a Start app writes Start-specific auth files, not Vite
   `main.tsx` patches
 - generated Start auth imports `kitcn/auth/start`
@@ -339,9 +355,10 @@ output and rerun ownership.
 Start contract.
 
 **Files:**
+
 - Modify: `www/content/docs/tanstack-start.mdx`
-- Modify: `packages/kitcn/skills/convex/references/setup/start.md`
-- Modify if needed: `packages/kitcn/skills/convex/SKILL.md`
+- Modify: `packages/kitcn/skills/kitcn/references/setup/start.md`
+- Modify if needed: `packages/kitcn/skills/kitcn/SKILL.md`
 - Modify: `tooling/template.config.ts`
 - Modify: `tooling/fixtures.ts`
 - Modify: `tooling/fixtures.test.ts`
@@ -352,6 +369,7 @@ Start contract.
 - Add: `fixtures/start-auth/**`
 
 **Approach:**
+
 - Rewrite Start docs to use `kitcn/auth/start` and the new init/auth paths.
 - Keep docs latest-state only; no migration prose.
 - Add Start fixture templates:
@@ -365,10 +383,12 @@ Start contract.
 - Classify `start-auth` as an auth-demo lane with a real `/auth` proof path.
 
 **Test files:**
+
 - `tooling/fixtures.test.ts`
 - `tooling/scenarios.test.ts`
 
 **Test scenarios:**
+
 - fixture config accepts `start` and `start-auth`
 - scenario config accepts Start keys and assigns the right proof path
 - Start auth proof runs browser auth smoke/e2e instead of Vite’s weaker runtime
@@ -447,6 +467,6 @@ public path are already settled.
 ### Deferred to implementation
 
 - whether Start route output is best expressed by extending existing `target:
-  'app'` semantics or by adding a more explicit Start route target
+'app'` semantics or by adding a more explicit Start route target
 - whether the Start init overlay is cleanest as separate template files or a
   small set of patch helpers over shadcn-generated files

@@ -72,7 +72,7 @@ rule instead of hand-typing variants.
   - active tab text switched to `pnpm dlx kitcn@latest ...` and
     `bunx --bun kitcn@latest ...`
   - landing-page hero command rendered `npx kitcn@latest init -t next --yes`
-- `rg -n 'npx kitcn init|bunx kitcn init' www/content/docs packages/kitcn/skills/convex`
+- `rg -n 'npx kitcn init|bunx kitcn init' www/content/docs packages/kitcn/skills/kitcn`
   returned no stale bootstrap commands
 
 ## Prevention

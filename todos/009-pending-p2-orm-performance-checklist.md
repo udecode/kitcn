@@ -22,14 +22,17 @@ There is no single, operation-by-operation performance checklist for the ORM. Th
 ### Option 1: Add Checklist Table To Limitations Doc (Preferred)
 
 **Approach:**
+
 - Extend `www/content/docs/orm/limitations.mdx` with a table listing each ORM operation, its query strategy, index expectations, and failure modes.
 - Include flags for: index required, post-fetch behavior, pagination behavior, and scalability notes.
 
 **Pros:**
+
 - Centralized location for performance guidance
 - Minimal navigation changes
 
 **Cons:**
+
 - Limitations doc may become long
 
 **Effort:** Small–Medium
@@ -41,14 +44,17 @@ There is no single, operation-by-operation performance checklist for the ORM. Th
 ### Option 2: New "ORM Performance Checklist" Doc
 
 **Approach:**
+
 - Create a dedicated doc (e.g., `docs/analysis/orm-performance-checklist.md` or `www/content/docs/orm/performance.mdx`).
 - Link from `limitations.mdx`, `queries.mdx`, `relations.mdx`.
 
 **Pros:**
+
 - More space for examples and anti-patterns
 - Easier to keep updated
 
 **Cons:**
+
 - Requires new navigation entry
 
 **Effort:** Medium
@@ -60,12 +66,15 @@ There is no single, operation-by-operation performance checklist for the ORM. Th
 ### Option 3: Lightweight Checklist In README/Docs Only
 
 **Approach:**
+
 - Add a minimal checklist block without deep details.
 
 **Pros:**
+
 - Very low effort
 
 **Cons:**
+
 - May not be discoverable or actionable
 
 **Effort:** Small
@@ -79,6 +88,7 @@ There is no single, operation-by-operation performance checklist for the ORM. Th
 ## Technical Details
 
 **Suggested content for checklist table:**
+
 - Operation (`findMany`, `findFirst`, `paginate`, `insert`, `update`, `delete`, `relations`, `conflict handling`)
 - Query strategy (`withIndex`, `filter`, post-fetch)
 - Index requirements
@@ -88,14 +98,15 @@ There is no single, operation-by-operation performance checklist for the ORM. Th
 - Preferred alternatives (e.g., `paginate`, `kitcn/orm/stream`)
 
 **Candidate files:**
+
 - `www/content/docs/orm/limitations.mdx`
 - `www/content/docs/orm/queries.mdx`
 - `www/content/docs/orm/relations.mdx`
 
 ## Resources
 
-- Convex best practices: `.claude/skills/convex/convex.mdc`
-- Convex filters/streams: `.claude/skills/convex-filters/convex-filters.mdc`
+- Convex best practices: `.claude/skills/kitcn/convex.mdc`
+- Convex filters/streams: `.claude/skills/kitcn-filters/convex-filters.mdc`
 
 ## Acceptance Criteria
 
@@ -111,11 +122,13 @@ There is no single, operation-by-operation performance checklist for the ORM. Th
 **By:** Codex
 
 **Actions:**
+
 - Audited ORM docs for performance guidance gaps
 - Identified need for operation-by-operation checklist
 - Drafted table dimensions and candidate locations
 
 **Learnings:**
+
 - Current docs provide tips but lack explicit per-operation guidance
 
 ## Notes

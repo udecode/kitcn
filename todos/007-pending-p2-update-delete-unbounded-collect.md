@@ -23,16 +23,19 @@ dependencies: []
 ### Option 1: Index-Aware Filtering + Batched Processing (Preferred)
 
 **Approach:**
+
 - Reuse `WhereClauseCompiler` logic from query builder to select `withIndex` filters for mutations.
 - Process rows in batches using `paginate()` or `take()` loops to keep memory bounded.
 - Apply post-fetch filters only to batched results.
 
 **Pros:**
+
 - Scales with data size
 - Reduces memory footprint
 - Aligns mutation behavior with query planner logic
 
 **Cons:**
+
 - Requires refactoring mutation filtering pipeline
 - More code paths to test
 
@@ -45,14 +48,17 @@ dependencies: []
 ### Option 2: Guardrails + Unsafe Escape Hatch
 
 **Approach:**
+
 - Require explicit `limit()`/`batchSize()` on update/delete when filters are not indexable.
 - Introduce `.unsafe()` to allow full-scan behavior for small datasets only.
 
 **Pros:**
+
 - Immediate protection against accidental full-table scans
 - Clear developer intent
 
 **Cons:**
+
 - Requires API changes and docs updates
 - Still leaves unsafe path
 
@@ -65,12 +71,15 @@ dependencies: []
 ### Option 3: Document As Non-Scalable Behavior
 
 **Approach:**
+
 - Keep implementation, but update docs to flag update/delete as full-scan unless constrained.
 
 **Pros:**
+
 - Minimal code changes
 
 **Cons:**
+
 - Scalability issue remains
 - Easy for users to miss
 
@@ -85,16 +94,18 @@ dependencies: []
 ## Technical Details
 
 **Affected files:**
+
 - `packages/kitcn/src/orm/update.ts:101`
 - `packages/kitcn/src/orm/delete.ts:94`
 
 **Related components:**
+
 - Filter expressions (`toConvexFilter`, `evaluateFilter`)
 - RLS evaluation (`evaluateUpdateDecision`, `canDeleteRow`)
 
 ## Resources
 
-- Convex best practices: `.claude/skills/convex/convex.mdc`
+- Convex best practices: `.claude/skills/kitcn/convex.mdc`
 
 ## Acceptance Criteria
 
@@ -110,11 +121,13 @@ dependencies: []
 **By:** Codex
 
 **Actions:**
+
 - Located unbounded `.collect()` usage in update/delete builders
 - Identified in-memory filter re-evaluation path
 - Drafted index-aware and batching options
 
 **Learnings:**
+
 - Current mutation pipeline scales poorly for large tables
 
 ## Notes

@@ -1,10 +1,10 @@
 ---
-description: Sync doc changes from www/content/docs/ into packages/kitcn/skills/convex/
+description: Sync doc changes from www/content/docs/ into packages/kitcn/skills/kitcn/
 ---
 
 ## Task
 
-Sync recent doc changes into `packages/kitcn/skills/convex/` so the skill stays current.
+Sync recent doc changes into `packages/kitcn/skills/kitcn/` so the skill stays current.
 
 **Input**: $ARGUMENTS (doc file path, PR diff, or "all" to scan for drift)
 

@@ -32,8 +32,8 @@ docs.
   `getEnv()`-based kitcn auth config/runtime, `add auth --yes`, and
   `add auth --only schema --yes`.
 - Rewrote `www/content/docs/auth/server.mdx` into a single CLI-first flow.
-- Synced `packages/kitcn/skills/convex/references/setup/auth.md` and
-  `packages/kitcn/skills/convex/references/features/auth.md`.
+- Synced `packages/kitcn/skills/kitcn/references/setup/auth.md` and
+  `packages/kitcn/skills/kitcn/references/features/auth.md`.
 - Removed the old schema tabs/manual-first framing and replaced it with a raw
   Convex section plus a manual escape hatch link.
 - Ran `bun lint:fix` successfully.

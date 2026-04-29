@@ -35,10 +35,10 @@ report.
 
 Run one or both of these modes explicitly.
 
-| Mode | Behavior |
-| ---- | -------- |
+| Mode            | Behavior                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `human-literal` | Follow the docs like a smart developer who does not know repo internals and does not invent missing steps unless blocked |
-| `agent-literal` | Follow the docs like an agent using the named docs/skills/tools, but still without cheating during reproduction |
+| `agent-literal` | Follow the docs like an agent using the named docs/skills/tools, but still without cheating during reproduction          |
 
 If the caller does not specify a mode, run both.
 
@@ -49,7 +49,7 @@ If the caller does not specify a mode, run both.
 Use only the docs lane you are testing.
 
 - For `www` docs, follow `www/content/docs/**`.
-- For skill parity, follow `packages/kitcn/skills/convex/**`.
+- For skill parity, follow `packages/kitcn/skills/kitcn/**`.
 - If one lane references another surface explicitly, you may follow that link,
   but log the handoff.
 
@@ -113,8 +113,8 @@ Use this to catch drift between user docs and agent docs.
 
 **Targets**
 
-- `packages/kitcn/skills/convex/SKILL.md`
-- matching files under `packages/kitcn/skills/convex/references/**`
+- `packages/kitcn/skills/kitcn/SKILL.md`
+- matching files under `packages/kitcn/skills/kitcn/references/**`
 
 **What to prove**
 
@@ -140,10 +140,10 @@ Use this when you want the broadest docs audit.
 
 Do not mix these.
 
-| Contract | What it means |
-| -------- | ------------- |
-| Remote bootstrap | Blank-directory commands that fetch `kitcn@latest` from the package manager |
-| Local runtime | Commands run after the project exists and should target the local project binary |
+| Contract         | What it means                                                                    |
+| ---------------- | -------------------------------------------------------------------------------- |
+| Remote bootstrap | Blank-directory commands that fetch `kitcn@latest` from the package manager      |
+| Local runtime    | Commands run after the project exists and should target the local project binary |
 
 When testing docs, verify those seams separately. A page that gets one right and
 the other wrong is still broken.
@@ -168,12 +168,12 @@ Every finding should include:
 
 Severity guidance:
 
-| Severity | Meaning |
-| -------- | ------- |
-| `critical` | The docs cannot be followed to completion |
-| `high` | The docs work only with hidden knowledge or non-obvious rescue steps |
-| `medium` | The docs work, but they waste time or mislead the reader |
-| `low` | Polish issue, awkward wording, or minor friction |
+| Severity   | Meaning                                                              |
+| ---------- | -------------------------------------------------------------------- |
+| `critical` | The docs cannot be followed to completion                            |
+| `high`     | The docs work only with hidden knowledge or non-obvious rescue steps |
+| `medium`   | The docs work, but they waste time or mislead the reader             |
+| `low`      | Polish issue, awkward wording, or minor friction                     |
 
 ## Success Evidence
 
