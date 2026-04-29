@@ -606,4 +606,60 @@ ${userUnit.relations},
     );
     expect(plan?.content).toContain('...authSchema,');
   });
+
+  test('raw Convex Start auth adoption does not require kitcn provider file', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-auth-item-'));
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      const descriptor = getPluginCatalogEntry('auth');
+      const files = descriptor.integration?.buildPlanFiles?.({
+        config: createDefaultConfig(),
+        functionsDir: path.join(dir, 'convex', 'functions'),
+        lockfile: { plugins: {} },
+        overwrite: true,
+        preset: 'convex',
+        preview: false,
+        promptAdapter: {
+          confirm: async () => false,
+          isInteractive: () => false,
+          multiselect: async () => [],
+          select: async () => 'ignored',
+        },
+        roots: {
+          appRootDir: null,
+          clientLibRootDir: path.join(dir, 'src', 'lib'),
+          crpcFilePath: path.join(dir, 'convex', 'lib', 'crpc.ts'),
+          envFilePath: path.join(dir, 'convex', 'lib', 'get-env.ts'),
+          functionsRootDir: path.join(dir, 'convex', 'functions'),
+          libRootDir: path.join(dir, 'convex', 'lib'),
+          projectContext: {
+            appDir: 'src',
+            clientEntryFile: null,
+            componentsDir: 'src/components',
+            convexClientDir: 'src/lib/convex',
+            framework: 'tanstack-start',
+            mode: 'react',
+          },
+          sharedApiFilePath: path.join(dir, 'convex', 'shared', 'api.ts'),
+        },
+        yes: true,
+      });
+
+      expect(files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            action: 'skip',
+            manualActions: expect.arrayContaining([
+              expect.stringContaining('src/lib/convex/convex-provider.tsx'),
+            ]),
+            path: 'src/lib/convex/convex-provider.tsx',
+          }),
+        ])
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
 });

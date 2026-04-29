@@ -507,7 +507,16 @@ describe('tooling/scenarios', () => {
       validation: {
         beforeCheck: [
           ['convex', 'init'],
-          ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes'],
+          [
+            'kitcn',
+            'add',
+            'auth',
+            '--preset',
+            'convex',
+            '--yes',
+            '--no-codegen',
+          ],
+          ['kitcn', 'codegen'],
         ],
         lint: false,
       },
@@ -525,7 +534,16 @@ describe('tooling/scenarios', () => {
       validation: {
         beforeCheck: [
           ['convex', 'init'],
-          ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes'],
+          [
+            'kitcn',
+            'add',
+            'auth',
+            '--preset',
+            'convex',
+            '--yes',
+            '--no-codegen',
+          ],
+          ['kitcn', 'codegen'],
         ],
         lint: false,
       },

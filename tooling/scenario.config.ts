@@ -225,7 +225,8 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
     validation: {
       beforeCheck: [
         ['convex', 'init'],
-        ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes'],
+        ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes', '--no-codegen'],
+        ['kitcn', 'codegen'],
       ],
       lint: false,
     },
@@ -243,7 +244,8 @@ export const SCENARIO_DEFINITIONS: Record<ScenarioKey, ScenarioDefinition> = {
     validation: {
       beforeCheck: [
         ['convex', 'init'],
-        ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes'],
+        ['kitcn', 'add', 'auth', '--preset', 'convex', '--yes', '--no-codegen'],
+        ['kitcn', 'codegen'],
       ],
       lint: false,
     },
