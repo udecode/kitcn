@@ -1,6 +1,6 @@
 {
   "name": "kitcn",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "kitcn - React Query integration and CLI tools for Convex",
   "keywords": [
     "convex",

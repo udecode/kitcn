@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.14.2
+
+### Patch Changes
+
+- [`21acedd`](https://github.com/udecode/kitcn/commit/21acedd829df53c9207c75cee4fe7f68c6a0bd24) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix raw Convex auth adoption for TanStack Start apps that do not keep a kitcn provider at the default path.
+  - Clarify organization auth guidance for Stripe-style plugin side effects in Convex actions.
+
 ## 0.14.1
 
 ### Patch Changes
