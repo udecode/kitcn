@@ -58,9 +58,22 @@ const { data: posts } = useQuery(crpc.posts.list.queryOptions({ limit: 10 }));
 
 ## Requirements
 
-- Convex 1.31+
+- Convex
 - TanStack Query 5+
 - React 18+
+
+## Agents
+
+Use the `kitcn` skill instead of reading these docs as your primary source.
+
+If the `kitcn` skill is not already installed, run:
+
+```bash
+npx skills add https://github.com/udecode/kitcn --skill kitcn
+```
+
+Then load the `kitcn` skill and follow its setup or feature references. Use
+these docs only when the skill points to a page for deeper API detail.
 
 ## Next Steps
 
@@ -69,163 +82,3 @@ const { data: posts } = useQuery(crpc.posts.list.queryOptions({ limit: 10 }));
   <Card title="CLI" href="/docs/cli" />
   <Card title="Concepts" href="/docs/concepts" />
 </Cards>
-
----
-
-## For AI Agents
-
-Ask the user to select their stack before starting:
-
-### Required Choices
-
-| Feature | Options | Default |
-|---------|---------|---------|
-| **Bootstrap** | CLI (`kitcn init` / `add`), Docs by section | CLI |
-| **React Framework** | Next.js App Router, TanStack Start, Vite | Next.js App Router |
-| **Database** | ORM (`ctx.orm`) | ORM |
-
-### Optional Features
-
-| Feature | Options | When to Include |
-|---------|---------|-----------------|
-| **Auth** | Better Auth, Custom, None | Most apps need auth |
-| **SSR/RSC** | Yes, No | Next.js App Router apps |
-| **Triggers** | Yes, No | Auto side effects on data changes |
-| **Aggregates** | Yes, No | Counts, sums, leaderboards |
-| **Rate Limiting** | Yes, No | API protection |
-| **Scheduling** | Yes, No | Delayed/background work |
-| **HTTP router** | Yes, No | REST/webhook endpoints |
-| **RLS** | Yes, No | Runtime row-level access control |
-| **Auth plugins** | admin, organizations, polar, none | Only when required by product |
-
-### CLI Bootstrap
-
-1. Scaffold:
-   - Next.js: `npx kitcn@latest init -t next --yes`
-   - TanStack Start: `npx kitcn@latest init -t start --yes`
-   - Vite: `npx kitcn@latest init -t vite --yes`
-   - Expo: `npx kitcn@latest init -t expo --yes`
-2. Add features with `kitcn add <plugin>`:
-   - `npx kitcn add auth --yes`
-   - `npx kitcn add ratelimit --yes`
-   - `npx kitcn add resend --yes`
-3. Run: `npx kitcn dev` (runs `convex init` + codegen + watchers)
-4. Verify: `npx kitcn verify` (one-shot local runtime proof, stop `kitcn dev` first)
-5. Env: backend `convex` uses `npx kitcn env push` for `--prod`,
-   `--rotate`, or explicit repair. backend `concave` uses
-   `npx kitcn auth jwks` for manual JWKS export. During local Convex dev,
-   `convex/.env` edits auto-sync.
-6. Local auth assumes `http://localhost:3000`. If you change the port, update `SITE_URL` in `convex/.env` and the matching client env var (`NEXT_PUBLIC_SITE_URL` for Next.js, `VITE_SITE_URL` for Start/Vite, `EXPO_PUBLIC_SITE_URL` for Expo).
-
-### Docs-by-Section Bootstrap
-
-1. Follow [Quickstart](/docs/quickstart)
-2. Read individual docs for each feature
-3. Use [CLI Registry](/docs/cli/registry) as the command reference
-4. Confirm deployment/bootstrap before relying on generated imports
-
-### Quick Reference by Stack
-
-| Stack | Key Docs |
-|-------|----------|
-| Next.js + Auth | [Quickstart](/docs/quickstart), [Next.js](/docs/nextjs), [Auth Server](/docs/auth/server) |
-| TanStack Start + Auth | [TanStack Start](/docs/tanstack-start), [Auth Server](/docs/auth/server) |
-| Vite + No Auth | [React Setup](/docs/react), [Server Setup](/docs/server/setup) |
-| Expo + Auth | [Expo](/docs/expo), [Auth Server](/docs/auth/server) |
-| Expo + No Auth | [Expo](/docs/expo), [Server Setup](/docs/server/setup) |
-| Any + Custom Auth | [Server Setup](/docs/server/setup), [Middlewares](/docs/server/middlewares) |
-
----
-
-## Documentation Map
-
-### Getting Started
-
-| Page | When to Use |
-|------|-------------|
-| [Quickstart](/docs/quickstart) | First-time setup. Follow step-by-step to get a working app. |
-| [Concepts](/docs/concepts) | Understand architecture, folder structure (`convex/functions/`, `convex/lib/`, `convex/shared/`), and design decisions. |
-| [CLI Registry](/docs/cli/registry) | Bootstrap new or existing apps with `kitcn init`, add features with `kitcn add`, and inspect plans with `view`, `info`, and `docs`. |
-
-### Server (Backend)
-
-| Page | When to Use |
-|------|-------------|
-| [Server Setup](/docs/server/setup) | Initialize cRPC builder with `initCRPC`. Configure `dataModel`, `context`, `meta`. |
-| [Procedures](/docs/server/procedures) | Define queries, mutations, actions with `.input()`, `.output()`, `.query()/.mutation()/.action()`. Paginated queries with `.paginated()`. |
-| [Context](/docs/server/context) | Extend context with `ctx.orm`, `ctx.auth`. Add custom properties via `.context()`. |
-| [Middlewares](/docs/server/middlewares) | Create reusable middleware with `.use()`. Auth guards, logging, rate limiting. Chain with `.pipe()`. |
-| [Metadata](/docs/server/metadata) | Add procedure metadata with `.meta()`. Used by CLI for auth-aware query handling. |
-| [Error Handling](/docs/server/error-handling) | Throw `CRPCError` with codes like `UNAUTHORIZED`, `NOT_FOUND`, `BAD_REQUEST`. |
-| [Server-Side Calls](/docs/server/server-side-calls) | Call procedures from server with `createCallerFactory`. RSC data fetching. |
-| [Scheduling](/docs/server/scheduling) | Run cron jobs and one-time background work with Convex scheduler APIs. |
-
-### Plugins
-
-| Page | When to Use |
-|------|-------------|
-| [Plugins](/docs/plugins) | Discover cross-cutting features that span schema, runtime, and client DX. |
-| [Rate Limiting](/docs/plugins/ratelimit) | Add token bucket and fixed/sliding window rate limiting with `kitcn/ratelimit`. |
-
-### Database
-
-| Page | When to Use |
-|------|-------------|
-| [ORM](/docs/orm) | Drizzle-style schema, queries, mutations, RLS, runtime constraints via `ctx.orm`. |
-| [Triggers](/docs/orm/schema/triggers) | Automatic side effects on insert/update/delete with schema triggers. |
-| [Aggregates](/docs/orm/queries/aggregates) | Scalar metrics (`count`, `aggregate`) and ranked aggregate runtime. |
-
-### React (Client)
-
-| Page | When to Use |
-|------|-------------|
-| [React Setup](/docs/react) | Configure providers: `QueryClientProvider`, `CRPCProvider`. Singleton helpers. |
-| [Queries](/docs/react/queries) | `useQuery` with `crpc.path.queryOptions()`. Real-time updates, `skipToken` for conditional queries. |
-| [Mutations](/docs/react/mutations) | `useMutation` with `crpc.path.mutationOptions()`. Toast patterns, optimistic updates. |
-| [Infinite Queries](/docs/react/infinite-queries) | `useInfiniteQuery` with `crpc.path.infiniteQueryOptions()`. Cursor-based pagination. |
-| [Type Inference](/docs/react/infer-types) | `inferApiInputs`, `inferApiOutputs` for tRPC-style type extraction. |
-| [Error Handling](/docs/react/error-handling) | Handle `CRPCClientError` on client. Error boundaries, toast notifications. |
-
-### Next.js
-
-| Page | When to Use |
-|------|-------------|
-| [Next.js Setup](/docs/nextjs) | Configure `convexBetterAuth` for RSC. Server caller factory, JWT caching. |
-| [RSC](/docs/nextjs/rsc) | Server components with `prefetch`, `preloadQuery`, `HydrateClient`. SSR data fetching. |
-
-### Auth (Better Auth)
-
-| Page | When to Use |
-|------|-------------|
-| [Auth Overview](/docs/auth) | Architecture overview. When to use Better Auth vs other auth solutions. |
-| [Auth Server](/docs/auth/server) | Complete Better Auth setup: schema, adapters, HTTP routes, helpers. |
-| [Auth Client](/docs/auth/client) | `useAuth`, `Authenticated`/`Unauthenticated` components. |
-
-### Reference
-
-| Page | When to Use |
-|------|-------------|
-| [CLI Backend](/docs/cli/backend) | `kitcn dev` for codegen. Procedure metadata generation. |
-| [Migrations](/docs/migrations/convex) | Migration hub with paths for Core, ORM, and Auth. |
-| [Comparison](/docs/comparison/convex) | Compare with tRPC, Convex hooks, other patterns. |
-
-### Common Workflows
-
-**New project setup:**
-1. [Quickstart](/docs/quickstart) → basic setup
-2. [CLI Registry](/docs/cli/registry) → use `kitcn init` for scaffolding or adoption, and `kitcn add` for feature layers
-3. [Concepts](/docs/concepts) → understand folder structure
-
-**Add authentication:**
-1. [Auth Server](/docs/auth/server) → configure Better Auth
-2. [Auth Client](/docs/auth/client) → use auth in components
-3. [Middlewares](/docs/server/middlewares) → protect procedures
-
-**Add database features:**
-1. [ORM](/docs/orm) → schema + queries via `ctx.orm`
-2. [Triggers](/docs/orm/schema/triggers) → automatic side effects
-3. [Aggregates](/docs/orm/queries/aggregates) → counts and sums
-
-**Server components (RSC):**
-1. [Next.js Setup](/docs/nextjs) → configure caller
-2. [RSC](/docs/nextjs/rsc) → prefetch and hydrate

@@ -1,4 +1,5 @@
-- `.agents/AGENTS.md` and `.agents/rules/*.mdc` are source of truth. After editing them, run `bun install` to sync. Never edit `SKILL.md` directly.
+- `.agents/AGENTS.md` and `.agents/rules/*.mdc` are source of truth. After editing them, run `bun install` to sync. Never edit generated `.agents/skills/**/SKILL.md` directly.
+- Never update `.agents/skills/kitcn/**` manually. Update `packages/kitcn/skills/kitcn/**`, then run `bun tooling/sync-kitcn-skill.ts` or `bun install` to regenerate the repo-local copy.
 - In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
 
 - If you get `failed to load config from /Users/zbeyens/GitHub/kitcn/vitest.config.mts`, rimraf `**/node_modules` and install again.

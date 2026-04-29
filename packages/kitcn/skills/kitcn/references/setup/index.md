@@ -24,7 +24,7 @@ If migration is needed, stop and use migration docs separately. Do not mix migra
 This is the **mandatory first prompt** for agents helping users set up kitcn.
 Ask these questions before editing files.
 
-### 2.1 Ask These First (match `/www/content/docs/index.mdx`)
+### 2.1 Ask These First
 
 #### Required choices
 
