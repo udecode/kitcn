@@ -1,9 +1,5 @@
 ---
 description: Fallback browser automation with persistent Chrome state. Use only when Browser Use is unavailable or blocked.
-name: dev-browser
-metadata:
-  skiller:
-    source: .agents/rules/dev-browser.mdc
 ---
 
 # Dev Browser

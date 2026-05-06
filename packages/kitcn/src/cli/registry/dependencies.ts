@@ -2,6 +2,10 @@ import fs from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { execa } from 'execa';
 import {
+  detectPackageManager,
+  resolveDependencyInstallCommand,
+} from '../package-manager.js';
+import {
   getPackageNameFromInstallSpec,
   OPENTELEMETRY_API_INSTALL_SPEC,
   resolveSupportedDependencyInstallSpec,
@@ -62,6 +66,23 @@ const resolvePackageJsonInstallTarget = () => {
   };
 };
 
+const runDependencyInstall = async (
+  packageJsonPath: string,
+  packageSpecs: readonly string[],
+  execaFn: typeof execa
+) => {
+  const cwd = dirname(packageJsonPath);
+  const packageManager = detectPackageManager(cwd);
+  const { args, command } = resolveDependencyInstallCommand(
+    packageManager,
+    packageSpecs
+  );
+  await execaFn(command, args, {
+    cwd,
+    stdio: 'inherit',
+  });
+};
+
 export const resolveBunPeerWarningPreinstallSpecs = () => {
   const { packageJsonPath, packageJson } = resolvePackageJsonInstallTarget();
   if (!packageJsonPath || !packageJson) {
@@ -104,10 +125,7 @@ const applyBunPeerWarningPreinstall = async (execaFn: typeof execa) => {
   }
 
   const { packageJsonPath } = resolvePackageJsonInstallTarget();
-  await execaFn('bun', ['add', ...dependencySpecs], {
-    cwd: dirname(packageJsonPath!),
-    stdio: 'inherit',
-  });
+  await runDependencyInstall(packageJsonPath, dependencySpecs, execaFn);
 
   return dependencySpecs;
 };
@@ -179,10 +197,7 @@ export const applyDependencyHintsInstall = async (
   }
 
   const { packageJsonPath } = resolvePackageJsonInstallTarget();
-  await execaFn('bun', ['add', ...installSpecs], {
-    cwd: dirname(packageJsonPath),
-    stdio: 'inherit',
-  });
+  await runDependencyInstall(packageJsonPath, installSpecs, execaFn);
 
   return [...preinstalledSpecs, ...installSpecs];
 };
@@ -203,10 +218,7 @@ export const applyPlanningDependencyInstall = async (
   }
 
   const { packageJsonPath } = resolvePackageJsonInstallTarget();
-  await execaFn('bun', ['add', ...installSpecs], {
-    cwd: dirname(packageJsonPath),
-    stdio: 'inherit',
-  });
+  await runDependencyInstall(packageJsonPath, installSpecs, execaFn);
 
   return [...preinstalledSpecs, ...installSpecs];
 };
@@ -221,10 +233,7 @@ export const applyPluginDependencyInstall = async (
   await applyBunPeerWarningPreinstall(execaFn);
   const packageSpec = install.packageSpec ?? install.packageName;
 
-  await execaFn('bun', ['add', packageSpec], {
-    cwd: dirname(install.packageJsonPath),
-    stdio: 'inherit',
-  });
+  await runDependencyInstall(install.packageJsonPath, [packageSpec], execaFn);
   return {
     packageName: install.packageName,
     packageSpec,

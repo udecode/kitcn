@@ -37,6 +37,11 @@ import {
 } from './convex-command.js';
 import { pullEnv, resolveAuthEnvState, syncEnv } from './env.js';
 import {
+  detectPackageManager,
+  type PackageManager,
+  resolveDependencyInstallCommand,
+} from './package-manager.js';
+import {
   type ExpoScaffoldContext,
   type NextAppScaffoldContext,
   type ProjectScaffoldContext,
@@ -1486,8 +1491,6 @@ function overrideConfigBackend(
   };
 }
 
-type PackageManager = 'bun' | 'pnpm' | 'yarn' | 'npm';
-
 type DependencyInstallItem = {
   installSpec: string;
   packageName: string;
@@ -2888,55 +2891,6 @@ function buildTemplateInitializationPlanFiles(params: {
   ];
 }
 
-function detectPackageManager(projectDir: string): PackageManager {
-  let current = resolve(projectDir);
-  while (true) {
-    const packageJsonPath = join(current, 'package.json');
-    if (fs.existsSync(packageJsonPath)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
-          packageManager?: unknown;
-        };
-        if (typeof pkg.packageManager === 'string') {
-          if (pkg.packageManager.startsWith('bun@')) return 'bun';
-          if (pkg.packageManager.startsWith('pnpm@')) return 'pnpm';
-          if (pkg.packageManager.startsWith('yarn@')) return 'yarn';
-          if (pkg.packageManager.startsWith('npm@')) return 'npm';
-        }
-      } catch {
-        // ignore invalid package.json here; later reads will fail loudly if needed
-      }
-    }
-
-    if (
-      fs.existsSync(join(current, 'bun.lock')) ||
-      fs.existsSync(join(current, 'bun.lockb'))
-    ) {
-      return 'bun';
-    }
-    if (
-      fs.existsSync(join(current, 'pnpm-lock.yaml')) ||
-      fs.existsSync(join(current, 'pnpm-workspace.yaml'))
-    ) {
-      return 'pnpm';
-    }
-    if (fs.existsSync(join(current, 'yarn.lock'))) {
-      return 'yarn';
-    }
-    if (fs.existsSync(join(current, 'package-lock.json'))) {
-      return 'npm';
-    }
-
-    const parent = dirname(current);
-    if (parent === current) {
-      break;
-    }
-    current = parent;
-  }
-
-  return 'bun';
-}
-
 function resolveShadcnScaffoldProjectDir(
   projectDir: string,
   template?: string
@@ -2995,15 +2949,15 @@ function buildDependencyInstallPlan(
 
   const packageManager = detectPackageManager(projectDir);
   const missingSpecs = missing.map((dependency) => dependency.installSpec);
-  const args =
-    packageManager === 'npm'
-      ? ['install', ...missingSpecs]
-      : ['add', ...missingSpecs];
+  const installCommand = resolveDependencyInstallCommand(
+    packageManager,
+    missingSpecs
+  );
 
   return {
     packageManager,
-    command: packageManager,
-    args,
+    command: installCommand.command,
+    args: installCommand.args,
     packages: missingSpecs,
     cwd: projectDir,
   };

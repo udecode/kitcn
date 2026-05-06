@@ -8,7 +8,7 @@ which the user explicitly deferred.
 - [ ] Fix stale generated-api integration tests to use the chained schema
       contract and current generated server expectations.
 - [ ] Replace the remaining `agent-browser` auth E2E tooling seam with the
-      repo's `dev-browser --connect` direction, including tests.
+      repo's `browser-use --connect` direction, including tests.
 - [ ] Update the unreleased changeset so it reflects the real branch delta
       against `main`, including migrations.
 - [ ] Re-run focused verification plus the full ship gate that should now pass

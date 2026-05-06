@@ -15,7 +15,7 @@ using Next as the proving lane.
   in a temp Next auth app, signed-in UI showed account 1 while the auth-bound
   query still rendered `guest`
 - Screenshot proof:
-  [next-auth-viewer-stuck-guest.png](/Users/zbeyens/.dev-browser/tmp/next-auth-viewer-stuck-guest.png)
+  [next-auth-viewer-stuck-guest.png](/Users/zbeyens/.browser-use/tmp/next-auth-viewer-stuck-guest.png)
 - Likely code seam:
   [auth-mutations.ts](/Users/zbeyens/git/better-convex/packages/kitcn/src/react/auth-mutations.ts)
   and
