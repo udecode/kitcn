@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.14.3
+
+### Patch Changes
+
+- [#255](https://github.com/udecode/kitcn/pull/255) [`0bf1fc2`](https://github.com/udecode/kitcn/commit/0bf1fc2136bf9a2dd1f2ac218d614dcb58a5888b) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix plugin dependency installs to use the project's package manager.
+
 ## 0.14.2
 
 ### Patch Changes
