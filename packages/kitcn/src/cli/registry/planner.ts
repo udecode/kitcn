@@ -7,6 +7,10 @@ import {
   generateAuthSecret,
   serializeEnvValue,
 } from '../env.js';
+import {
+  detectPackageManager,
+  formatDependencyInstallCommand,
+} from '../package-manager.js';
 import { resolveProjectScaffoldContext } from '../project-context.js';
 import {
   FUNCTIONS_DIR_IMPORT_PLACEHOLDER,
@@ -777,14 +781,25 @@ export const buildPluginInstallPlan = async (params: {
   const dependency = await inspectPluginDependencyInstall({
     descriptor: params.descriptor,
   });
+  const dependencyPackageSpec =
+    dependency.packageSpec ?? dependency.packageName;
   const dependencyHints = [
     ...new Set(
       effectiveTemplates.flatMap((template) => template.dependencyHints)
     ),
   ];
+  const dependencyInstallTargetDir = dependency.packageJsonPath
+    ? dirname(dependency.packageJsonPath)
+    : process.cwd();
+  const dependencyPackageManager = detectPackageManager(
+    dependencyInstallTargetDir
+  );
   const dependencyHintCommand =
     dependencyHints.length > 0
-      ? `bun add ${dependencyHints.join(' ')}`
+      ? formatDependencyInstallCommand(
+          dependencyPackageManager,
+          dependencyHints
+        )
       : undefined;
   const envReminders = rawConvexAuthPreset
     ? []
@@ -925,12 +940,14 @@ export const buildPluginInstallPlan = async (params: {
       path: dependency.packageJsonPath
         ? normalizePath(relative(process.cwd(), dependency.packageJsonPath))
         : undefined,
-      packageName: dependency.packageSpec ?? dependency.packageName,
+      packageName: dependencyPackageSpec,
       command:
-        (dependency.packageSpec ?? dependency.packageName) &&
+        dependencyPackageSpec &&
         dependency.packageJsonPath &&
         !dependency.skipped
-          ? `bun add ${dependency.packageSpec ?? dependency.packageName}`
+          ? formatDependencyInstallCommand(dependencyPackageManager, [
+              dependencyPackageSpec,
+            ])
           : undefined,
     },
     {

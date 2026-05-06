@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { OPENTELEMETRY_API_INSTALL_SPEC } from '../supported-dependencies';
 import {
+  applyPlanningDependencyInstall,
   applyPluginDependencyInstall,
   resolveBunPeerWarningPreinstallSpecs,
   resolveMissingDependencyHints,
@@ -140,6 +141,64 @@ describe('cli/registry/dependencies', () => {
     expect(execaStub.mock.calls.map((call) => call.slice(0, 2))).toStrictEqual([
       ['bun', ['add', OPENTELEMETRY_API_INSTALL_SPEC]],
       ['bun', ['add', '@kitcn/resend@0.12.5']],
+    ]);
+  });
+
+  test('uses npm for planning dependency installs in npm projects', async () => {
+    fs.writeFileSync(
+      path.join(process.cwd(), 'package.json'),
+      JSON.stringify(
+        {
+          name: 'test-app',
+          packageManager: 'npm@10.9.0',
+          private: true,
+        },
+        null,
+        2
+      )
+    );
+
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+
+    await applyPlanningDependencyInstall(
+      [OPENTELEMETRY_API_INSTALL_SPEC],
+      execaStub as any
+    );
+
+    expect(execaStub.mock.calls.map((call) => call.slice(0, 2))).toStrictEqual([
+      ['npm', ['install', OPENTELEMETRY_API_INSTALL_SPEC]],
+    ]);
+  });
+
+  test('uses pnpm for plugin dependency installs in pnpm projects', async () => {
+    fs.writeFileSync(
+      path.join(process.cwd(), 'package.json'),
+      JSON.stringify(
+        {
+          name: 'test-app',
+          packageManager: 'pnpm@9.15.9',
+          private: true,
+        },
+        null,
+        2
+      )
+    );
+
+    const execaStub = mock(async () => ({ exitCode: 0 }) as any);
+
+    await applyPluginDependencyInstall(
+      {
+        installed: false,
+        packageJsonPath: path.join(process.cwd(), 'package.json'),
+        packageName: '@kitcn/resend',
+        packageSpec: '@kitcn/resend@0.12.5',
+        skipped: false,
+      },
+      execaStub as any
+    );
+
+    expect(execaStub.mock.calls.map((call) => call.slice(0, 2))).toStrictEqual([
+      ['pnpm', ['add', '@kitcn/resend@0.12.5']],
     ]);
   });
 });

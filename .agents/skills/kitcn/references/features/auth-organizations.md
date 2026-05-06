@@ -430,13 +430,17 @@ export const updateOrganization = authMutation
     if (input.name !== undefined) data.name = input.name;
     if (slug !== undefined) data.slug = slug;
 
-    await ctx.auth.api.updateOrganization({
-      body: { data, organizationId: input.organizationId },
-      headers: ctx.auth.headers,
-    });
+    await ctx.orm
+      .update(organization)
+      .set(data)
+      .where(eq(organization.id, input.organizationId));
     return null;
   });
 ```
+
+Use an `authAction` instead of an `authMutation` for any Better Auth endpoint
+that can run external plugin work such as Stripe, Polar, or email delivery.
+Convex mutations cannot call those SDKs.
 
 ### Delete Organization
 

@@ -111,6 +111,101 @@ describe('cli registry planner', () => {
     }
   });
 
+  test('uses detected package manager in install plan commands', async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-registry-package-manager-')
+    );
+    const originalCwd = process.cwd();
+    process.chdir(dir);
+
+    try {
+      writePackageJson(dir, {
+        name: 'test-app',
+        packageManager: 'npm@10.9.0',
+        private: true,
+      });
+      writeMinimalSchema(dir);
+
+      const plan = await buildPluginInstallPlan({
+        config: createDefaultConfig(),
+        descriptor: {
+          defaultPreset: 'default',
+          description: 'fake',
+          docs: {
+            localPath: 'www/content/docs/fake.mdx',
+            publicUrl: 'https://example.com/fake',
+          },
+          key: 'resend',
+          keywords: [],
+          label: 'Fake',
+          packageInstallSpec: '@kitcn/resend@0.12.5',
+          packageName: '@kitcn/resend',
+          presets: [
+            {
+              description: 'default',
+              key: 'default',
+              templateIds: ['fake-template'],
+            },
+          ],
+          schemaRegistration: {
+            importName: 'fakeExtension',
+            path: 'schema.ts',
+            target: 'lib',
+          },
+          templates: [
+            {
+              content: 'original content',
+              dependencyHints: ['@react-email/render@1.0.0'],
+              id: 'fake-template',
+              path: 'plugins/fake.ts',
+              requires: [],
+              target: 'functions',
+            },
+          ],
+        },
+        existingTemplatePathMap: {},
+        functionsDir: path.join(dir, 'convex'),
+        lockfile: { plugins: {} },
+        noCodegen: true,
+        overwrite: false,
+        preset: 'default',
+        preview: true,
+        promptAdapter: {
+          confirm: async () => true,
+          isInteractive: () => false,
+          multiselect: async () => [],
+          select: async () => 'ignored',
+        },
+        presetTemplateIds: ['fake-template'],
+        selectedPlugin: 'resend',
+        selectedTemplateIds: ['fake-template'],
+        selectedTemplates: [
+          {
+            content: 'original content',
+            dependencyHints: ['@react-email/render@1.0.0'],
+            id: 'fake-template',
+            path: 'plugins/fake.ts',
+            requires: [],
+            target: 'functions',
+          },
+        ],
+        selectionSource: 'preset',
+        yes: false,
+      });
+
+      expect(plan.nextSteps).toEqual([
+        'Install scaffold dependencies: npm install @react-email/render@1.0.0',
+      ]);
+      expect(
+        plan.operations.find(
+          (operation) => operation.kind === 'dependency_install'
+        )?.command
+      ).toBe('npm install @kitcn/resend@0.12.5');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test('adds a live bootstrap operation when the plugin requires local post-codegen bootstrap', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-registry-live-bootstrap-')

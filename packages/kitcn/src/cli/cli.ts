@@ -31,6 +31,10 @@ import { handleResetCommand } from './commands/reset.js';
 import { handleVerifyCommand, VERIFY_HELP_TEXT } from './commands/verify.js';
 import { handleViewCommand, VIEW_HELP_TEXT } from './commands/view.js';
 import type { CliBackend } from './config.js';
+import {
+  detectPackageManager,
+  formatDependencyInstallCommand,
+} from './package-manager.js';
 import { resolveSupportedDependencyWarnings } from './supported-dependencies.js';
 import { handleCliError } from './utils/handle-error.js';
 import { logger } from './utils/logger.js';
@@ -205,9 +209,13 @@ function warnSupportedDependencyIssues(command: string) {
     return;
   }
 
+  const packageManager = detectPackageManager(process.cwd());
   for (const warning of resolveSupportedDependencyWarnings()) {
+    const installCommand = formatDependencyInstallCommand(packageManager, [
+      warning.installSpec,
+    ]);
     logger.warn(
-      `⚠️  kitcn expects ${warning.packageName} ${warning.minimum}; found ${warning.current}. Run \`bun add ${warning.installSpec}\` when you can.`
+      `⚠️  kitcn expects ${warning.packageName} ${warning.minimum}; found ${warning.current}. Run \`${installCommand}\` when you can.`
     );
   }
 }
