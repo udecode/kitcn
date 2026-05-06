@@ -3,7 +3,24 @@ import { dirname, join, resolve } from 'node:path';
 
 export type PackageManager = 'bun' | 'pnpm' | 'yarn' | 'npm';
 
-export function detectPackageManager(projectDir: string): PackageManager {
+export function detectPackageManagerFromUserAgent(
+  env: Record<string, string | undefined> = process.env
+): PackageManager | null {
+  const userAgent = env.npm_config_user_agent?.trim().toLowerCase();
+  if (!userAgent) {
+    return null;
+  }
+  if (userAgent.startsWith('bun/')) return 'bun';
+  if (userAgent.startsWith('pnpm/')) return 'pnpm';
+  if (userAgent.startsWith('yarn/')) return 'yarn';
+  if (userAgent.startsWith('npm/')) return 'npm';
+  return null;
+}
+
+export function detectPackageManager(
+  projectDir: string,
+  env: Record<string, string | undefined> = process.env
+): PackageManager {
   let current = resolve(projectDir);
   while (true) {
     const packageJsonPath = join(current, 'package.json');
@@ -49,7 +66,7 @@ export function detectPackageManager(projectDir: string): PackageManager {
     current = parent;
   }
 
-  return 'bun';
+  return detectPackageManagerFromUserAgent(env) ?? 'bun';
 }
 
 export function resolveDependencyInstallCommand(

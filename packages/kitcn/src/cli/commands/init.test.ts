@@ -460,6 +460,64 @@ describe('cli/commands/init', () => {
     }
   });
 
+  test('handleInitCommand uses npx for Expo scaffold when invoked from pnpm dlx', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-create-command-expo-npx-')
+    );
+    const execaStub = mock(
+      async (_cmd: string, args: string[], opts?: { cwd?: string }) => {
+        if (args.includes(INIT_EXPO_PACKAGE_SPEC)) {
+          const projectName = args[1] ?? 'mobile';
+          writeExpoDefaultApp(path.join(opts?.cwd ?? tmpDir, projectName));
+          return { exitCode: 0, stdout: '', stderr: '' } as any;
+        }
+        return { exitCode: 0, stdout: '', stderr: '' } as any;
+      }
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    const originalUserAgent = process.env.npm_config_user_agent;
+    process.chdir(tmpDir);
+    process.env.npm_config_user_agent = 'pnpm/10.23.0 npm/? node/v24.0.0';
+    try {
+      const exitCode = await handleInitCommand(
+        ['init', '-t', 'expo', '--yes', '--name', 'mobile'],
+        {
+          realConvex: '/fake/convex/main.js',
+          execa: execaStub as any,
+          generateMeta: generateMetaStub as any,
+          syncEnv: syncEnvStub as any,
+          loadCliConfig: loadConfigStub as any,
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      const expoCall = execaStub.mock.calls.find((call) =>
+        (
+          call as unknown as [string, string[], Record<string, unknown>]
+        )[1]?.includes(INIT_EXPO_PACKAGE_SPEC)
+      ) as [string, string[], Record<string, unknown>] | undefined;
+      expect(expoCall?.[0]).toBe('npx');
+      expect(expoCall?.[1]).toEqual([
+        INIT_EXPO_PACKAGE_SPEC,
+        'mobile',
+        '--template',
+        INIT_EXPO_TEMPLATE_SPEC,
+        '--no-install',
+        '--yes',
+      ]);
+    } finally {
+      process.chdir(originalCwd);
+      if (originalUserAgent === undefined) {
+        process.env.npm_config_user_agent = undefined;
+      } else {
+        process.env.npm_config_user_agent = originalUserAgent;
+      }
+    }
+  });
+
   test('handleInitCommand patches shadcn monorepo next output inside apps/web', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-create-command-next-monorepo-')
@@ -1255,6 +1313,54 @@ describe('cli/commands/init', () => {
     }
   });
 
+  test('handleInitCommand adopts an existing Expo app without shelling out to create-expo-app', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-existing-expo-')
+    );
+    writeExpoDefaultApp(tmpDir);
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const runLocalBootstrapStub = mock(async () => 0);
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(
+        execaStub.mock.calls.some((call) =>
+          (
+            call as unknown as [string, string[], Record<string, unknown>]
+          )[1]?.includes(INIT_EXPO_PACKAGE_SPEC)
+        )
+      ).toBe(false);
+      expect(
+        fs.readFileSync(path.join(tmpDir, 'src', 'app', 'index.tsx'), 'utf8')
+      ).toContain('Welcome to Expo');
+      expect(
+        fs.existsSync(
+          path.join(tmpDir, 'src', 'lib', 'convex', 'convex-provider.tsx')
+        )
+      ).toBe(true);
+      expect(
+        fs.readFileSync(path.join(tmpDir, '.env.local'), 'utf8')
+      ).toContain('EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test('handleInitCommand --yes skips changed scaffold files without --overwrite', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-init-command-skip-custom-crpc-')
@@ -1928,37 +2034,6 @@ describe('cli/commands/init', () => {
         })
       ).rejects.toThrow(
         'Existing supported app scaffold detected. Run `kitcn init --yes` in . to adopt the current project.'
-      );
-    } finally {
-      process.chdir(originalCwd);
-    }
-  });
-
-  test('handleInitCommand rejects in-place Expo adoption for now', async () => {
-    const expoDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'kitcn-init-command-existing-expo-')
-    );
-    writeExpoDefaultApp(expoDir);
-
-    const execaStub = mock(
-      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
-    );
-    const generateMetaStub = mock(async () => {});
-    const syncEnvStub = mock(async () => {});
-    const loadConfigStub = mock(() => createDefaultConfig());
-    const originalCwd = process.cwd();
-    process.chdir(expoDir);
-    try {
-      await expect(
-        handleInitCommand(['init', '--yes'], {
-          realConvex: '/fake/convex/main.js',
-          execa: execaStub as any,
-          generateMeta: generateMetaStub as any,
-          syncEnv: syncEnvStub as any,
-          loadCliConfig: loadConfigStub as any,
-        })
-      ).rejects.toThrow(
-        'Expo adoption is not supported yet. Start with `kitcn init -t expo --yes`.'
       );
     } finally {
       process.chdir(originalCwd);

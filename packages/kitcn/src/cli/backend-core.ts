@@ -3395,12 +3395,6 @@ export async function runInitCommandFlow(params: {
     });
   }
 
-  if (existingProjectContext?.framework === 'expo') {
-    throw new Error(
-      'Expo adoption is not supported yet. Start with `kitcn init -t expo --yes`.'
-    );
-  }
-
   if (!existingProjectContext) {
     throw new Error(
       'Could not detect a supported app scaffold. Use `kitcn init -t <next|expo|start|vite>` for a fresh app.'
