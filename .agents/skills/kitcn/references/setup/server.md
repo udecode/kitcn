@@ -370,10 +370,8 @@ Create `convex/lib/plugins/ratelimit/plugin.ts` and call `ratelimit.middleware()
 Use `RatelimitPlugin` from `kitcn/ratelimit`:
 
 ```ts
-import { getSessionNetworkSignals } from "kitcn/auth";
 import { MINUTE, Ratelimit, RatelimitPlugin } from "kitcn/ratelimit";
 import type { MutationCtx } from "../../../functions/generated/server";
-import type { Select } from "../../../shared/api";
 
 const fixed = (rate: number) => Ratelimit.fixedWindow(rate, MINUTE);
 
@@ -392,7 +390,6 @@ type RatelimitUser = {
   id: string;
   isAdmin?: boolean;
   plan?: "premium" | "team" | null;
-  session?: Select<"session"> | null;
 };
 
 type RatelimitCtx = MutationCtx & {
@@ -409,6 +406,15 @@ export function getUserTier(user: RatelimitUser | null): RatelimitTier {
   return "free";
 }
 
+async function getRequestSignals(ctx: RatelimitCtx) {
+  const { ip, userAgent } = await ctx.meta.getRequestMetadata();
+
+  return {
+    ...(ip ? { ip } : {}),
+    ...(userAgent ? { userAgent } : {}),
+  };
+}
+
 export const ratelimit = RatelimitPlugin.configure({
   buckets: ratelimitBuckets,
   getBucket: ({ meta }: { meta: RatelimitMeta }) => meta.ratelimit ?? "default",
@@ -416,19 +422,15 @@ export const ratelimit = RatelimitPlugin.configure({
   getIdentifier: ({ user }: { user: RatelimitUser | null }) =>
     user?.id ?? "anonymous",
   getTier: getUserTier,
-  getSignals: ({
-    ctx,
-    user,
-  }: {
-    ctx: RatelimitCtx;
-    user: RatelimitUser | null;
-  }) => getSessionNetworkSignals(ctx, user?.session ?? null),
+  getSignals: ({ ctx }: { ctx: RatelimitCtx }) => getRequestSignals(ctx),
   prefix: ({ bucket, tier }) => `ratelimit:${bucket}:${tier}`,
   failureMode: "closed",
   enableProtection: true,
   denyListThreshold: 30,
 });
 ```
+
+Use `ctx.meta.getRequestMetadata()` on Convex 1.38.0+ for IP/user-agent signals in mutation rate limits. Convex also exposes this metadata in actions; route action-side enforcement through a mutation when database-backed ratelimit state is required.
 
 ### 9.5 Scheduling gate
 

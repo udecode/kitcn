@@ -53,11 +53,9 @@ export default defineSchema(tables).extend(ratelimitExtension());
 
 Scaffold a local plugin and keep one default bucket for every mutation. Add named buckets only when a procedure genuinely needs stricter behavior.
 
-```ts title="convex/lib/plugins/ratelimit/plugin.ts" showLineNumbers {1-5,8-13,39-54}
-import { getSessionNetworkSignals } from 'kitcn/auth';
+```ts title="convex/lib/plugins/ratelimit/plugin.ts" showLineNumbers {1-4,7-12,38-56}
 import { MINUTE, Ratelimit, RatelimitPlugin } from 'kitcn/ratelimit';
 import type { MutationCtx } from '../../../functions/generated/server';
-import type { Select } from '../../../shared/api';
 
 const fixed = (rate: number) => Ratelimit.fixedWindow(rate, MINUTE);
 
@@ -76,7 +74,6 @@ type RatelimitUser = {
   id: string;
   isAdmin?: boolean;
   plan?: 'premium' | 'team' | null;
-  session?: Select<'session'> | null;
 };
 
 type RatelimitCtx = MutationCtx & {
@@ -93,6 +90,15 @@ export function getUserTier(user: RatelimitUser | null): RatelimitTier {
   return 'free';
 }
 
+async function getRequestSignals(ctx: RatelimitCtx) {
+  const { ip, userAgent } = await ctx.meta.getRequestMetadata();
+
+  return {
+    ...(ip ? { ip } : {}),
+    ...(userAgent ? { userAgent } : {}),
+  };
+}
+
 export const ratelimit = RatelimitPlugin.configure({
   buckets: ratelimitBuckets,
   getBucket: ({ meta }: { meta: RatelimitMeta }) => meta.ratelimit ?? 'default',
@@ -100,8 +106,7 @@ export const ratelimit = RatelimitPlugin.configure({
   getIdentifier: ({ user }: { user: RatelimitUser | null }) =>
     user?.id ?? 'anonymous',
   getTier: getUserTier,
-  getSignals: ({ ctx, user }: { ctx: RatelimitCtx; user: RatelimitUser | null }) =>
-    getSessionNetworkSignals(ctx, user?.session ?? null),
+  getSignals: ({ ctx }: { ctx: RatelimitCtx }) => getRequestSignals(ctx),
   prefix: ({ bucket, tier }) => `ratelimit:${bucket}:${tier}`,
   failureMode: 'closed',
   enableProtection: true,
@@ -109,7 +114,11 @@ export const ratelimit = RatelimitPlugin.configure({
 });
 ```
 
-`getSessionNetworkSignals()` returns `{}` when no session exists and fills `ip` / `userAgent` when Better Auth session data is available.
+Convex exposes request metadata in mutation and action functions: request ID, client IP, and client user-agent. For `RatelimitPlugin`, read it from mutation middleware. Use it for anonymous flows too — session-based helpers return `{}` when no session exists, which is exactly when IP-aware protection matters most.
+
+<Callout icon={<InfoIcon />}>
+  **Note:** `ctx.meta.getRequestMetadata()` requires Convex 1.38.0 or newer.
+</Callout>
 
 ## Wire it into middleware
 
@@ -313,7 +322,18 @@ const limiter = new Ratelimit({
 });
 ```
 
-To trigger deny-list matching on request metadata, pass `ip`, `userAgent`, or `country` in the `limit()` call:
+To trigger deny-list matching on request metadata, pass `ip`, `userAgent`, or `country` in the `limit()` call. In mutation code, prefer Convex request metadata:
+
+```ts showLineNumbers {1-9}
+const { ip, userAgent } = await ctx.meta.getRequestMetadata();
+
+const result = await limiter.limit(userId, {
+  ip: ip ?? undefined,
+  userAgent: userAgent ?? undefined,
+});
+```
+
+For HTTP actions, read the `Request` headers directly:
 
 ```ts showLineNumbers {2-5}
 const result = await limiter.limit(userId, {
