@@ -1,5 +1,30 @@
 # kitcn
 
+## 0.15.0
+
+### Minor Changes
+
+- [#257](https://github.com/udecode/kitcn/pull/257) [`d476288`](https://github.com/udecode/kitcn/commit/d476288e617db8d5d44821a70af3ec787280ea5c) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Breaking changes
+
+  - Require Convex 1.38.0 or newer for generated apps and peer dependency checks.
+
+  ```sh
+  # Before
+  bun add convex@1.36.1 kitcn
+
+  # After
+  bun add convex@1.38.0 kitcn
+  ```
+
+  ## Features
+
+  - Support IP-aware rate-limit scaffolds with Convex request metadata.
+
+  ## Patches
+
+  - Support Expo app adoption and avoid Bun-only Expo scaffolding in npm-launched init flows.
+  - Document Convex request metadata for IP-aware rate-limit protection.
+
 ## 0.14.3
 
 ### Patch Changes
