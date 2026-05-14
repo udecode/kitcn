@@ -4379,6 +4379,9 @@ describe('cli/cli', () => {
       expect(ratelimitPluginSource).toContain(
         'export const ratelimit = RatelimitPlugin.configure({'
       );
+      expect(ratelimitPluginSource).toContain(
+        'const { ip, userAgent } = await ctx.meta.getRequestMetadata();'
+      );
       expect(ratelimitPluginSource).toContain('default: {');
       expect(ratelimitPluginSource).not.toContain('project/create:free');
       expect(ratelimitPluginSource).not.toContain('tag/create:free');

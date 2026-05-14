@@ -1,6 +1,22 @@
 ---
-"kitcn": patch
+"kitcn": minor
 ---
+
+## Breaking changes
+
+- Require Convex 1.38.0 or newer for generated apps and peer dependency checks.
+
+```sh
+# Before
+bun add convex@1.36.1 kitcn
+
+# After
+bun add convex@1.38.0 kitcn
+```
+
+## Features
+
+- Support IP-aware rate-limit scaffolds with Convex request metadata.
 
 ## Patches
 

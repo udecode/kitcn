@@ -93,7 +93,7 @@ const VITE_CONFIG_FILES = [
 ] as const;
 const DEFAULT_SCENARIO_READY_URL = 'http://127.0.0.1:3210/_dashboard';
 const READY_POLL_INTERVAL_MS = 250;
-const READY_TIMEOUT_MS = 30_000;
+export const SCENARIO_READY_TIMEOUT_MS = 60_000;
 const SCENARIO_STOP_SIGNAL = 'SIGINT';
 const TRAILING_SLASH_RE = /\/+$/;
 const BOOTSTRAP_CHECK_SCENARIOS = new Set<ScenarioKey>([
@@ -571,7 +571,7 @@ const waitForScenarioReady = async (
   projectDir: string,
   processes: readonly RunningScenarioProcess[],
   fetchFn: typeof fetch = fetch,
-  timeoutMs = READY_TIMEOUT_MS
+  timeoutMs = SCENARIO_READY_TIMEOUT_MS
 ) => {
   const readyUrl = resolveScenarioReadyUrl(projectDir);
   const deadline = Date.now() + timeoutMs;

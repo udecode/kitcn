@@ -7,6 +7,7 @@ import { MessageList } from '@/Chat/MessageList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '../../convex/_generated/api';
+import type { Doc } from '../../convex/_generated/dataModel';
 
 export function Chat({ viewer }: { viewer: string }) {
   const [newMessageText, setNewMessageText] = useState('');
@@ -24,7 +25,7 @@ export function Chat({ viewer }: { viewer: string }) {
   return (
     <>
       <MessageList messages={messages}>
-        {messages?.map((message) => (
+        {messages?.map((message: Doc<'messages'>) => (
           <Message author={message.author} key={message._id} viewer={viewer}>
             {message.body}
           </Message>

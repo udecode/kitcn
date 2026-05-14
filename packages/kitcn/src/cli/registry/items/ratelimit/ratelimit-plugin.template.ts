@@ -1,7 +1,6 @@
 const FUNCTIONS_DIR_IMPORT_PLACEHOLDER = '__KITCN_FUNCTIONS_DIR__';
 
-export const RATELIMIT_PLUGIN_TEMPLATE = `import { getSessionNetworkSignals } from "kitcn/auth";
-import { MINUTE, Ratelimit, RatelimitPlugin } from "kitcn/ratelimit";
+export const RATELIMIT_PLUGIN_TEMPLATE = `import { MINUTE, Ratelimit, RatelimitPlugin } from "kitcn/ratelimit";
 import type { MutationCtx } from "${FUNCTIONS_DIR_IMPORT_PLACEHOLDER}/generated/server";
 
 const fixed = (rate: number) => Ratelimit.fixedWindow(rate, MINUTE);
@@ -42,6 +41,15 @@ export function getUserTier(user: RatelimitUser | null): RatelimitTier {
   return "free";
 }
 
+async function getRequestSignals(ctx: RatelimitCtx) {
+  const { ip, userAgent } = await ctx.meta.getRequestMetadata();
+
+  return {
+    ...(ip ? { ip } : {}),
+    ...(userAgent ? { userAgent } : {}),
+  };
+}
+
 export const ratelimit = RatelimitPlugin.configure({
   buckets: ratelimitBuckets,
   getBucket: ({ meta }: { meta: RatelimitMeta }) => meta.ratelimit ?? "default",
@@ -49,7 +57,7 @@ export const ratelimit = RatelimitPlugin.configure({
   getIdentifier: ({ user }: { user: RatelimitUser | null }) =>
     user?.id ?? "anonymous",
   getTier: getUserTier,
-  getSignals: ({ ctx }: { ctx: RatelimitCtx }) => getSessionNetworkSignals(ctx),
+  getSignals: ({ ctx }: { ctx: RatelimitCtx }) => getRequestSignals(ctx),
   prefix: ({ bucket, tier }) => \`ratelimit:\${bucket}:\${tier}\`,
   failureMode: "closed",
   enableProtection: true,

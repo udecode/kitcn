@@ -31,6 +31,7 @@ import {
   resolveScenarioStepEnv,
   runScenarioDev,
   runScenarioTest,
+  SCENARIO_READY_TIMEOUT_MS,
   stopLocalConvexBackendForProject,
 } from './scenarios';
 
@@ -89,6 +90,10 @@ describe('tooling/scenarios', () => {
       'check'
     );
     expect(resolveScenarioProofPath('raw-start-auth-adoption')).toBe('check');
+  });
+
+  test('scenario runtime readiness allows slow Vite cold starts', () => {
+    expect(SCENARIO_READY_TIMEOUT_MS).toBe(60_000);
   });
 
   test('runScenarioTest uses check for bootstrap-heavy convex scenarios', async () => {
@@ -760,7 +765,7 @@ describe('tooling/scenarios', () => {
       );
       expect(vitePackageJson.scripts?.dev).toBe('vite --port 3017');
       expect(vitePackageJson.scripts?.['dev:frontend']).toBe(
-        'vite --open --port 3017'
+        'vite --port 3017'
       );
       expect(fs.readFileSync(`${nextDir}/.env.local`, 'utf8')).toContain(
         'NEXT_PUBLIC_SITE_URL=http://localhost:3017'

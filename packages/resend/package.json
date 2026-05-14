@@ -21,7 +21,7 @@
   },
   "peerDependencies": {
     "kitcn": ">=0.11.0 <1",
-    "convex": ">=1.36"
+    "convex": ">=1.38"
   },
   "devDependencies": {
     "kitcn": "workspace:*",

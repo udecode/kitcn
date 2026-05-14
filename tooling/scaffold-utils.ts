@@ -62,6 +62,7 @@ const NEXT_CONFIG_ENTRY_NAMES = new Set([
   'next.config.ts',
 ]);
 const VITE_DEV_SCRIPT_RE = /^vite(?:\s|$)/;
+const VITE_OPEN_FLAG_RE = /\s+--open(?=\s|$)/g;
 const VITE_CONFIG_ENTRY_NAMES = new Set([
   'vite.config.js',
   'vite.config.mjs',
@@ -449,11 +450,15 @@ const normalizeLocalDevScript = (script: string | undefined, port: number) => {
     return script;
   }
 
-  if (SCRIPT_PORT_FLAG_RE.test(script)) {
-    return script.replace(SCRIPT_PORT_FLAG_RE, ` --port ${port}`);
+  const normalizedScript = VITE_DEV_SCRIPT_RE.test(script)
+    ? script.replace(VITE_OPEN_FLAG_RE, '')
+    : script;
+
+  if (SCRIPT_PORT_FLAG_RE.test(normalizedScript)) {
+    return normalizedScript.replace(SCRIPT_PORT_FLAG_RE, ` --port ${port}`);
   }
 
-  return `${script} --port ${port}`;
+  return `${normalizedScript} --port ${port}`;
 };
 
 const upsertEnvEntries = (
