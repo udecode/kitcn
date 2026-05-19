@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.15.1
+
+### Patch Changes
+
+- [#260](https://github.com/udecode/kitcn/pull/260) [`b9ae68b`](https://github.com/udecode/kitcn/commit/b9ae68bc6c3c26b783f6ae491555026f05510d80) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+
+  - Add a TanStack Start loader auth helper for priming Convex query clients before protected route loaders run.
+
 ## 0.15.0
 
 ### Minor Changes
