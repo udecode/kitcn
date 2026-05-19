@@ -931,6 +931,7 @@ import {
 import { QueryClient } from '@tanstack/react-query';
 import { ConvexQueryClient } from '@convex-dev/react-query';
 import { ConvexAuthProvider } from 'kitcn/auth/client';
+import { syncConvexAuthForStartLoader } from 'kitcn/auth/start';
 import { authClient } from '@/lib/auth-client';
 import { createServerFn } from '@tanstack/react-start';
 import { getToken } from '@/lib/auth-server';
@@ -944,17 +945,10 @@ export const Route = createRootRouteWithContext<{
   convexQueryClient: ConvexQueryClient;
 }>()({
   beforeLoad: async (ctx) => {
-    const token = await getAuth();
-
-    // Set auth token for SSR queries
-    if (token) {
-      ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
-    }
-
-    return {
-      isAuthenticated: !!token,
-      token,
-    };
+    return await syncConvexAuthForStartLoader({
+      convex: ctx.context.convexQueryClient,
+      getToken: getAuth,
+    });
   },
   component: RootComponent,
 });

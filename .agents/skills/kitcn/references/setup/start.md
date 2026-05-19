@@ -48,6 +48,40 @@ export const {
 });
 ```
 
+For client-side route loaders that fetch protected Convex queries through the
+router `queryClient`, prime the shared Convex client in the root `beforeLoad`
+before child loaders run:
+
+```tsx
+import type { QueryClient } from "@tanstack/react-query";
+import { createRootRouteWithContext } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+import { syncConvexAuthForStartLoader } from "kitcn/auth/start";
+import type { ConvexQueryClient } from "kitcn/react";
+
+import { getToken } from "@/lib/convex/auth-server";
+
+const getLoaderToken = createServerFn({ method: "GET" }).handler(async () => {
+  return await getToken();
+});
+
+export const Route = createRootRouteWithContext<{
+  convexQueryClient: ConvexQueryClient;
+  queryClient: QueryClient;
+}>()({
+  beforeLoad: async ({ context }) => {
+    return await syncConvexAuthForStartLoader({
+      convex: context.convexQueryClient,
+      getToken: getLoaderToken,
+    });
+  },
+});
+```
+
+Use `runServerCall` or `fetchAuthQuery` for server-side loaders. Use
+`syncConvexAuthForStartLoader` only for client/router loaders that execute
+shared `ConvexQueryClient` queries before `ConvexAuthProvider` mounts.
+
 ### 8.B.2 Auth API endpoint
 
 **Create:** `src/routes/api/auth/$.ts`

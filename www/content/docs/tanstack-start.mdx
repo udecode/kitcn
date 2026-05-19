@@ -121,6 +121,66 @@ export const {
 });
 ```
 
+### Loader Auth
+
+Server functions and server loaders should call Convex through `runServerCall`
+or the `fetchAuthQuery` helper from `auth-server.ts`. Client-side route loaders
+that use the shared TanStack Query client can prime the shared Convex client
+before child loaders run:
+
+```tsx showLineNumbers title="src/routes/__root.tsx"
+import type { QueryClient } from '@tanstack/react-query';
+import {
+  Outlet,
+  createRootRouteWithContext,
+  redirect,
+} from '@tanstack/react-router';
+import { createServerFn } from '@tanstack/react-start';
+import { syncConvexAuthForStartLoader } from 'kitcn/auth/start';
+import type { ConvexQueryClient } from 'kitcn/react';
+
+import { Providers } from '@/components/providers';
+import { getToken } from '@/lib/convex/auth-server';
+
+const getLoaderToken = createServerFn({ method: 'GET' }).handler(async () => {
+  return await getToken();
+});
+
+export const Route = createRootRouteWithContext<{
+  convexQueryClient: ConvexQueryClient;
+  queryClient: QueryClient;
+}>()({
+  beforeLoad: async ({ context }) => {
+    const auth = await syncConvexAuthForStartLoader({
+      convex: context.convexQueryClient,
+      getToken: getLoaderToken,
+    });
+
+    return auth;
+  },
+  component: RootComponent,
+});
+
+export const requireAuth = (context: { isAuthenticated: boolean }) => {
+  if (!context.isAuthenticated) {
+    throw redirect({ to: '/auth' });
+  }
+};
+
+function RootComponent() {
+  return (
+    <Providers>
+      <Outlet />
+    </Providers>
+  );
+}
+```
+
+`syncConvexAuthForStartLoader` accepts either a `ConvexReactClient` or the
+`ConvexQueryClient` from router context. It updates the browser Convex client,
+updates the server HTTP client during SSR, skips duplicate `setAuth` calls for
+the same token, and clears auth when no token is present.
+
 ### Auth API Endpoint
 
 ```ts showLineNumbers title="src/routes/api/auth/$.ts"

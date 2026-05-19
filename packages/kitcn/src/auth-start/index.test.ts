@@ -1,5 +1,8 @@
-import { describe, expect, test } from 'bun:test';
-import { convexBetterAuthReactStart } from './index';
+import { describe, expect, mock, test } from 'bun:test';
+import {
+  convexBetterAuthReactStart,
+  syncConvexAuthForStartLoader,
+} from './index';
 
 describe('auth/start', () => {
   test('re-exports the react-start helper surface', () => {
@@ -49,5 +52,67 @@ describe('auth/start', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  test('syncs Convex auth before client-side route loaders run', async () => {
+    const clearAuth = mock(() => {});
+    const setAuth = mock((_fetchToken: () => Promise<string | null>) => {});
+    const convex = { clearAuth, setAuth };
+
+    const first = await syncConvexAuthForStartLoader({
+      convex,
+      getToken: async () => 'first-token',
+    });
+
+    expect(first).toEqual({
+      isAuthenticated: true,
+      token: 'first-token',
+    });
+    expect(setAuth).toHaveBeenCalledTimes(1);
+    await expect(setAuth.mock.calls[0]![0]()).resolves.toBe('first-token');
+
+    await syncConvexAuthForStartLoader({
+      convex,
+      getToken: async () => 'first-token',
+    });
+
+    expect(setAuth).toHaveBeenCalledTimes(1);
+
+    await syncConvexAuthForStartLoader({
+      convex,
+      getToken: async () => 'second-token',
+    });
+
+    expect(setAuth).toHaveBeenCalledTimes(2);
+    await expect(setAuth.mock.calls[1]![0]()).resolves.toBe('second-token');
+
+    const signedOut = await syncConvexAuthForStartLoader({
+      convex,
+      getToken: async () => null,
+    });
+
+    expect(signedOut).toEqual({
+      isAuthenticated: false,
+      token: null,
+    });
+    expect(clearAuth).toHaveBeenCalledTimes(1);
+  });
+
+  test('syncs auth through a ConvexQueryClient target', async () => {
+    const clearAuth = mock(() => {});
+    const setAuth = mock((_fetchToken: () => Promise<string | null>) => {});
+    const setServerAuth = mock((_token: string) => {});
+
+    await syncConvexAuthForStartLoader({
+      convex: {
+        convexClient: { clearAuth, setAuth },
+        serverHttpClient: { setAuth: setServerAuth },
+      },
+      getToken: async () => 'loader-token',
+    });
+
+    expect(setAuth).toHaveBeenCalledTimes(1);
+    await expect(setAuth.mock.calls[0]![0]()).resolves.toBe('loader-token');
+    expect(setServerAuth).toHaveBeenCalledWith('loader-token');
   });
 });
