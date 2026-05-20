@@ -12,19 +12,19 @@ export const RESEND_SCHEMA_TEMPLATE = `import {
   unionOf,
 } from "kitcn/orm";
 
-export const resendContentTable = convexTable("resend_content", {
+export const resendContentTable = convexTable("resendContent", {
   content: bytes().notNull(),
   mimeType: text().notNull(),
   filename: text(),
   path: text(),
 });
 
-export const resendNextBatchRunTable = convexTable("resend_next_batch_run", {
+export const resendNextBatchRunTable = convexTable("resendNextBatchRun", {
   runId: text().notNull(),
 });
 
 export const resendDeliveryEventsTable = convexTable(
-  "resend_delivery_events",
+  "resendDeliveryEvents",
   {
     emailId: text().notNull(),
     resendId: text().notNull(),
@@ -39,7 +39,7 @@ export const resendDeliveryEventsTable = convexTable(
 );
 
 export const resendEmailsTable = convexTable(
-  "resend_emails",
+  "resendEmails",
   {
     from: text().notNull(),
     to: arrayOf(text().notNull()).notNull(),

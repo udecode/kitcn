@@ -36,6 +36,12 @@
       "sourceType": "github",
       "computedHash": "0786830917e459be293f89c99fa83c513fd7631bceef1f0f18b951f78ed1f957"
     },
+    "codex-review": {
+      "source": "steipete/agent-scripts",
+      "sourceType": "github",
+      "skillPath": "skills/codex-review/SKILL.md",
+      "computedHash": "e3a1292fb7143420f81f4ca078ae8ea1b43f280de27f8b7f91f4bf0868d0f95a"
+    },
     "coding-tutor": {
       "source": "EveryInc/compound-engineering-plugin",
       "sourceType": "github",

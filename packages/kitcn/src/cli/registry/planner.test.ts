@@ -15,6 +15,201 @@ describe('cli registry planner', () => {
     );
   });
 
+  test('renders direct optional runtime env reads for marked fields', () => {
+    const source = renderEnvHelperContent([
+      {
+        key: 'RESEND_API_KEY',
+        readOptionalRuntimeEnv: true,
+        schema: 'z.string().optional()',
+      },
+    ]);
+
+    expect(source).toContain('readOptionalRuntimeEnv: [');
+    expect(source).toContain("'RESEND_API_KEY'");
+  });
+
+  test('updates existing env helpers with direct optional runtime env reads', () => {
+    const source = renderEnvHelperContent(
+      [
+        {
+          key: 'RESEND_API_KEY',
+          readOptionalRuntimeEnv: true,
+          schema: 'z.string().optional()',
+        },
+      ],
+      `import { createEnv } from 'kitcn/server';
+import { z } from 'zod';
+
+const envSchema = z.object({
+  RESEND_API_KEY: z.string().optional(),
+});
+
+export const getEnv = createEnv({
+  schema: envSchema,
+});
+`
+    );
+
+    expect(source).toContain('readOptionalRuntimeEnv: [');
+    expect(source).toContain("'RESEND_API_KEY'");
+  });
+
+  test('keeps generated env helpers stable when direct optional runtime env reads already exist', () => {
+    const fields = [
+      {
+        key: 'RESEND_API_KEY',
+        readOptionalRuntimeEnv: true,
+        schema: 'z.string().optional()',
+      },
+    ];
+    const source = renderEnvHelperContent(fields);
+
+    expect(renderEnvHelperContent(fields, source)).toBe(source);
+  });
+
+  test('updates existing env helpers when comments contain braces', () => {
+    const source = renderEnvHelperContent(
+      [
+        {
+          key: 'RESEND_API_KEY',
+          readOptionalRuntimeEnv: true,
+          schema: 'z.string().optional()',
+        },
+      ],
+      `import { createEnv } from 'kitcn/server';
+import { z } from 'zod';
+
+const envSchema = z.object({
+  JWKS: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+});
+
+export const getEnv = createEnv({
+  // generated object closes with }
+  readOptionalRuntimeEnv: [
+    'JWKS',
+  ],
+  schema: envSchema,
+});
+`
+    );
+
+    expect(source.match(/readOptionalRuntimeEnv/g)).toHaveLength(1);
+    expect(source).toContain("'JWKS'");
+    expect(source).toContain("'RESEND_API_KEY'");
+  });
+
+  test('updates inline env helpers with direct optional runtime env reads', () => {
+    const source = renderEnvHelperContent(
+      [
+        {
+          key: 'RESEND_API_KEY',
+          readOptionalRuntimeEnv: true,
+          schema: 'z.string().optional()',
+        },
+      ],
+      `import { createEnv } from 'kitcn/server';
+import { z } from 'zod';
+
+const envSchema = z.object({
+  RESEND_API_KEY: z.string().optional(),
+});
+
+export const getEnv = createEnv({ schema: envSchema });
+`
+    );
+
+    expect(source).toContain('readOptionalRuntimeEnv: [');
+    expect(source).toContain("'RESEND_API_KEY'");
+    expect(source).toContain('  schema: envSchema,\n});');
+  });
+
+  test('throws before duplicating non-literal direct optional runtime env reads', () => {
+    expect(() =>
+      renderEnvHelperContent(
+        [
+          {
+            key: 'RESEND_API_KEY',
+            readOptionalRuntimeEnv: true,
+            schema: 'z.string().optional()',
+          },
+        ],
+        `import { createEnv } from 'kitcn/server';
+import { z } from 'zod';
+
+const optionalKeys = ['JWKS'];
+const envSchema = z.object({
+  DEPLOY_ENV: z.string().default('production'),
+  SITE_URL: z.string().default('http://localhost:3000'),
+  RESEND_API_KEY: z.string().optional(),
+});
+
+export const getEnv = createEnv({
+  readOptionalRuntimeEnv: optionalKeys,
+  schema: envSchema,
+});
+`
+      )
+    ).toThrow('inline array');
+  });
+
+  test('throws before rewriting spread direct optional runtime env arrays', () => {
+    expect(() =>
+      renderEnvHelperContent(
+        [
+          {
+            key: 'RESEND_API_KEY',
+            readOptionalRuntimeEnv: true,
+            schema: 'z.string().optional()',
+          },
+        ],
+        `import { createEnv } from 'kitcn/server';
+import { z } from 'zod';
+
+const optionalKeys = ['JWKS'];
+const envSchema = z.object({
+  DEPLOY_ENV: z.string().default('production'),
+  SITE_URL: z.string().default('http://localhost:3000'),
+  RESEND_API_KEY: z.string().optional(),
+});
+
+export const getEnv = createEnv({
+  readOptionalRuntimeEnv: [...optionalKeys],
+  schema: envSchema,
+});
+`
+      )
+    ).toThrow('string literals');
+  });
+
+  test('throws before corrupting asserted direct optional runtime env arrays', () => {
+    expect(() =>
+      renderEnvHelperContent(
+        [
+          {
+            key: 'RESEND_API_KEY',
+            readOptionalRuntimeEnv: true,
+            schema: 'z.string().optional()',
+          },
+        ],
+        `import { createEnv } from 'kitcn/server';
+import { z } from 'zod';
+
+const envSchema = z.object({
+  DEPLOY_ENV: z.string().default('production'),
+  SITE_URL: z.string().default('http://localhost:3000'),
+  RESEND_API_KEY: z.string().optional(),
+});
+
+export const getEnv = createEnv({
+  readOptionalRuntimeEnv: ['JWKS'] as const,
+  schema: envSchema,
+});
+`
+      )
+    ).toThrow('string literals');
+  });
+
   test('reconciles scaffold files before turning them into plan files', async () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-registry-reconcile-')

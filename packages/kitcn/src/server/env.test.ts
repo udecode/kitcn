@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEnv } from './env';
+import { createEnv, type RuntimeEnv } from './env';
 import { CRPCError } from './error';
 
 describe('server/env', () => {
@@ -370,5 +370,107 @@ describe('server/env', () => {
     } finally {
       process.env = originalEnv;
     }
+  });
+
+  test('reads configured optional keys through direct runtimeEnv access', () => {
+    const schema = z.object({
+      RESEND_API_KEY: z.string().optional(),
+    });
+    const runtimeEnv = new Proxy({} as RuntimeEnv, {
+      get(_target, property) {
+        if (property === 'RESEND_API_KEY') {
+          return 're_secret';
+        }
+      },
+      getOwnPropertyDescriptor() {
+        return undefined;
+      },
+      has() {
+        return false;
+      },
+    }) as RuntimeEnv;
+
+    const getEnv = createEnv({
+      cache: false,
+      readOptionalRuntimeEnv: ['RESEND_API_KEY'],
+      runtimeEnv,
+      schema,
+    });
+
+    expect(getEnv()).toEqual({
+      RESEND_API_KEY: 're_secret',
+    });
+  });
+
+  test('reads configured defaulted optional keys through direct runtimeEnv access', () => {
+    const schema = z.object({
+      DEPLOY_ENV: z.string().default('production'),
+    });
+    const runtimeEnv = new Proxy({} as RuntimeEnv, {
+      get(_target, property) {
+        if (property === 'DEPLOY_ENV') {
+          return 'development';
+        }
+      },
+      getOwnPropertyDescriptor() {
+        return undefined;
+      },
+      has() {
+        return false;
+      },
+    }) as RuntimeEnv;
+
+    const getEnv = createEnv({
+      cache: false,
+      readOptionalRuntimeEnv: ['DEPLOY_ENV'],
+      runtimeEnv,
+      schema,
+    });
+
+    expect(getEnv()).toEqual({
+      DEPLOY_ENV: 'development',
+    });
+  });
+
+  test('defers direct optional runtimeEnv reads until the key is accessed', () => {
+    const schema = z.object({
+      JWKS: z.string().optional(),
+      RESEND_API_KEY: z.string().optional(),
+    });
+    let resendApiKeyReads = 0;
+    const runtimeEnv = new Proxy({ JWKS: 'jwks-json' } as RuntimeEnv, {
+      get(target, property, receiver) {
+        if (property === 'RESEND_API_KEY') {
+          resendApiKeyReads += 1;
+          return 're_secret';
+        }
+        return Reflect.get(target, property, receiver);
+      },
+      getOwnPropertyDescriptor(target, property) {
+        if (property === 'RESEND_API_KEY') {
+          return undefined;
+        }
+        return Reflect.getOwnPropertyDescriptor(target, property);
+      },
+      has(target, property) {
+        if (property === 'RESEND_API_KEY') {
+          return false;
+        }
+        return Reflect.has(target, property);
+      },
+    }) as RuntimeEnv;
+
+    const getEnv = createEnv({
+      cache: false,
+      readOptionalRuntimeEnv: ['RESEND_API_KEY'],
+      runtimeEnv,
+      schema,
+    });
+
+    const env = getEnv();
+    expect(env.JWKS).toBe('jwks-json');
+    expect(resendApiKeyReads).toBe(0);
+    expect(env.RESEND_API_KEY).toBe('re_secret');
+    expect(resendApiKeyReads).toBe(1);
   });
 });

@@ -40,6 +40,7 @@ export type PluginEnvField = {
         value: string;
       };
   key: string;
+  readOptionalRuntimeEnv?: boolean;
   schema: string;
   reminder?: {
     message?: string;

@@ -73,7 +73,87 @@ const BASE_ENV_FIELDS: readonly PluginEnvField[] = [
   },
 ] as const;
 const ENV_SCHEMA_RE = /(const\s+\w+\s*=\s*z\.object\(\{\n)([\s\S]*?)(\n\}\);)/m;
+const CREATE_ENV_OPTIONS_START_RE = /createEnv\s*\(\s*\{/m;
+const READ_OPTIONAL_RUNTIME_ENV_PROPERTY_RE = /\breadOptionalRuntimeEnv\s*:/m;
+const READ_OPTIONAL_RUNTIME_ENV_RE =
+  /(\s*readOptionalRuntimeEnv\s*:\s*\[)([\s\S]*?)(\]\s*,?)/m;
+const LEADING_WHITESPACE_RE = /^\s*/;
+const STRING_LITERAL_ARRAY_ENTRY_RE = /^(['"])([^'"]+)\1$/;
 const WHITESPACE_RE = /\s/;
+
+const findMatchingObjectBraceIndex = (source: string, openIndex: number) => {
+  let depth = 0;
+  let quote: '"' | "'" | '`' | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = openIndex; index < source.length; index++) {
+    const char = source[index];
+    const nextChar = source[index + 1];
+
+    if (lineComment) {
+      if (char === '\n' || char === '\r') {
+        lineComment = false;
+      }
+      continue;
+    }
+
+    if (blockComment) {
+      if (char === '*' && nextChar === '/') {
+        blockComment = false;
+        index++;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+
+    if (char === '/' && nextChar === '/') {
+      lineComment = true;
+      index++;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      blockComment = true;
+      index++;
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '{') {
+      depth++;
+      continue;
+    }
+
+    if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+};
 
 export const resolveEnvBootstrapPlanFileDetails = (templateId: string) => {
   if (templateId === KITCN_CONFIG_TEMPLATE_ID) {
@@ -143,17 +223,143 @@ const resolveBootstrapEnvFields = (envFields: readonly PluginEnvField[]) => {
   return fields;
 };
 
+const resolveReadOptionalRuntimeEnvKeys = (fields: readonly PluginEnvField[]) =>
+  fields
+    .filter((field) => field.readOptionalRuntimeEnv)
+    .map((field) => field.key);
+
+const renderReadOptionalRuntimeEnvOption = (keys: readonly string[]) => {
+  if (keys.length === 0) {
+    return '';
+  }
+  const keyLines = keys.map((key) => `    '${key}',`).join('\n');
+  return `  readOptionalRuntimeEnv: [\n${keyLines}\n  ],\n`;
+};
+
+const parseReadOptionalRuntimeEnvKeys = (
+  existingOptionsBody: string,
+  existingMatch: RegExpMatchArray
+) => {
+  if (existingMatch.index === undefined) {
+    return [];
+  }
+
+  const matchEnd = existingMatch.index + existingMatch[0].length;
+  const hasPropertySeparator = existingMatch[3].includes(',');
+  if (!hasPropertySeparator && existingOptionsBody.slice(matchEnd).trim()) {
+    throw new Error(
+      'Expected env helper `readOptionalRuntimeEnv` to be an inline array of string literals before adding keys.'
+    );
+  }
+
+  const rawEntries = existingMatch[2].trim();
+  if (!rawEntries) {
+    return [];
+  }
+
+  const keys: string[] = [];
+  const entries = rawEntries.split(',');
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index].trim();
+    if (!entry && index === entries.length - 1) {
+      continue;
+    }
+
+    const stringLiteralMatch = entry.match(STRING_LITERAL_ARRAY_ENTRY_RE);
+    if (!stringLiteralMatch) {
+      throw new Error(
+        'Expected env helper `readOptionalRuntimeEnv` to be an inline array of string literals before adding keys.'
+      );
+    }
+    keys.push(stringLiteralMatch[2]);
+  }
+
+  return keys;
+};
+
+const upsertReadOptionalRuntimeEnvOption = (
+  source: string,
+  keys: readonly string[]
+) => {
+  if (keys.length === 0) {
+    return source;
+  }
+
+  const createEnvMatch = source.match(CREATE_ENV_OPTIONS_START_RE);
+  if (!createEnvMatch || createEnvMatch.index === undefined) {
+    throw new Error(
+      'Expected env helper to call `createEnv({ ... })` before adding `readOptionalRuntimeEnv`.'
+    );
+  }
+
+  const insertIndex =
+    createEnvMatch.index + createEnvMatch[0].lastIndexOf('{') + 1;
+  const openBraceIndex = insertIndex - 1;
+  const closingBraceIndex = findMatchingObjectBraceIndex(
+    source,
+    openBraceIndex
+  );
+
+  if (closingBraceIndex === -1) {
+    throw new Error(
+      'Expected env helper `createEnv` options object to close before adding `readOptionalRuntimeEnv`.'
+    );
+  }
+
+  const existingOptionsBody = source.slice(insertIndex, closingBraceIndex);
+  const existingMatch = existingOptionsBody.match(READ_OPTIONAL_RUNTIME_ENV_RE);
+  if (
+    !existingMatch &&
+    READ_OPTIONAL_RUNTIME_ENV_PROPERTY_RE.test(existingOptionsBody)
+  ) {
+    throw new Error(
+      'Expected env helper `readOptionalRuntimeEnv` to be an inline array before adding keys.'
+    );
+  }
+
+  const existingKeys = existingMatch
+    ? parseReadOptionalRuntimeEnvKeys(existingOptionsBody, existingMatch)
+    : [];
+  const nextKeys = [...new Set([...existingKeys, ...keys])];
+  const option = renderReadOptionalRuntimeEnvOption(nextKeys);
+
+  if (existingMatch && existingMatch.index !== undefined) {
+    const leadingWhitespace =
+      existingMatch[1].match(LEADING_WHITESPACE_RE)?.[0] ?? '';
+    const replacement = `${leadingWhitespace}${option.trimStart().trimEnd()}`;
+    const existingOptionStart = insertIndex + existingMatch.index;
+    return `${source.slice(0, existingOptionStart)}${replacement}${source.slice(existingOptionStart + existingMatch[0].length)}`;
+  }
+
+  const before = source.slice(0, insertIndex);
+  const after = source.slice(insertIndex);
+
+  if (after.startsWith('\n')) {
+    return `${before}\n${option}${after.slice(1)}`;
+  }
+
+  const body = source.slice(insertIndex, closingBraceIndex).trim();
+  const bodyLine =
+    body.length === 0 ? '' : `  ${body}${body.endsWith(',') ? '' : ','}\n`;
+
+  return `${before}\n${option}${bodyLine}${source.slice(closingBraceIndex)}`;
+};
+
 export const renderEnvHelperContent = (
   envFields: readonly PluginEnvField[],
   existingContent?: string
 ): string => {
   const fields = resolveBootstrapEnvFields(envFields);
+  const readOptionalRuntimeEnvKeys = resolveReadOptionalRuntimeEnvKeys(fields);
 
   if (!existingContent) {
     const fieldLines = fields
       .map((field) => `  ${field.key}: ${field.schema},`)
       .join('\n');
-    return `import { createEnv } from 'kitcn/server';\nimport { z } from 'zod';\n\nconst envSchema = z.object({\n${fieldLines}\n});\n\nexport const getEnv = createEnv({\n  schema: envSchema,\n});\n`;
+    const readOptionalRuntimeEnvOption = renderReadOptionalRuntimeEnvOption(
+      readOptionalRuntimeEnvKeys
+    );
+    return `import { createEnv } from 'kitcn/server';\nimport { z } from 'zod';\n\nconst envSchema = z.object({\n${fieldLines}\n});\n\nexport const getEnv = createEnv({\n${readOptionalRuntimeEnvOption}  schema: envSchema,\n});\n`;
   }
 
   const match = existingContent.match(ENV_SCHEMA_RE);
@@ -172,13 +378,16 @@ export const renderEnvHelperContent = (
     .map((field) => `  ${field.key}: ${field.schema},`);
 
   if (missingFieldLines.length === 0) {
-    return existingContent;
+    return upsertReadOptionalRuntimeEnvOption(
+      existingContent,
+      readOptionalRuntimeEnvKeys
+    );
   }
 
   const nextBody = `${existingBody}${existingBody.endsWith('\n') ? '' : '\n'}${missingFieldLines.join('\n')}`;
-  return existingContent.replace(
-    ENV_SCHEMA_RE,
-    `${match[1]}${nextBody}${match[3]}`
+  return upsertReadOptionalRuntimeEnvOption(
+    existingContent.replace(ENV_SCHEMA_RE, `${match[1]}${nextBody}${match[3]}`),
+    readOptionalRuntimeEnvKeys
   );
 };
 

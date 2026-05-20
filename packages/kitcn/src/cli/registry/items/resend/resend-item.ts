@@ -134,6 +134,7 @@ export const resendRegistryItem = defineInternalRegistryItem({
     envFields: [
       {
         key: 'RESEND_API_KEY',
+        readOptionalRuntimeEnv: true,
         schema: 'z.string().optional()',
         reminder: {
           message: 'Set before sending email through Resend.',
@@ -141,10 +142,12 @@ export const resendRegistryItem = defineInternalRegistryItem({
       },
       {
         key: 'RESEND_WEBHOOK_SECRET',
+        readOptionalRuntimeEnv: true,
         schema: 'z.string().optional()',
       },
       {
         key: 'RESEND_FROM_EMAIL',
+        readOptionalRuntimeEnv: true,
         schema: 'z.string().optional()',
       },
     ],

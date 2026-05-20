@@ -4025,6 +4025,10 @@ describe('cli/cli', () => {
         'RESEND_WEBHOOK_SECRET: z.string().optional()'
       );
       expect(envSource).toContain('RESEND_FROM_EMAIL: z.string().optional()');
+      expect(envSource).toContain('readOptionalRuntimeEnv: [');
+      expect(envSource).toContain("'RESEND_API_KEY'");
+      expect(envSource).toContain("'RESEND_WEBHOOK_SECRET'");
+      expect(envSource).toContain("'RESEND_FROM_EMAIL'");
       const createdConfig = JSON.parse(
         fs.readFileSync(path.join(dir, 'kitcn.json'), 'utf8')
       ) as {
@@ -4171,6 +4175,18 @@ describe('cli/cli', () => {
       expect(resendWebhookSource).not.toContain('initCRPC.create(');
       expect(resendWebhookSource).not.toContain('const c =');
       expect(resendSchemaSource).toContain('export function resendExtension()');
+      expect(resendSchemaSource).toContain(
+        'export const resendContentTable = convexTable("resendContent", {'
+      );
+      expect(resendSchemaSource).toContain(
+        'export const resendNextBatchRunTable = convexTable("resendNextBatchRun", {'
+      );
+      expect(resendSchemaSource).toContain('  "resendDeliveryEvents",');
+      expect(resendSchemaSource).toContain('  "resendEmails",');
+      expect(resendSchemaSource).not.toContain('"resend_content"');
+      expect(resendSchemaSource).not.toContain('"resend_next_batch_run"');
+      expect(resendSchemaSource).not.toContain('"resend_delivery_events"');
+      expect(resendSchemaSource).not.toContain('"resend_emails"');
       expect(resendSchemaSource).toContain('defineSchemaExtension("resend", {');
       expect(resendSchemaSource).toContain('}).relations((r) => ({');
       expect(resendSchemaSource).toContain('deliveryEvents: r.many');

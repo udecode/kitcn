@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { CRPCError } from './error';
 
-type RuntimeEnv = Record<string, string | undefined>;
+export type RuntimeEnv = Record<string, string | undefined>;
 
 export type CreateEnvOptions<TSchema extends z.ZodObject<z.ZodRawShape>> = {
   cache?: boolean;
   codegenFallback?: boolean;
+  readOptionalRuntimeEnv?: readonly string[];
   runtimeEnv?: RuntimeEnv;
   schema: TSchema;
 };
@@ -13,8 +14,21 @@ export type CreateEnvOptions<TSchema extends z.ZodObject<z.ZodRawShape>> = {
 export function createEnv<TSchema extends z.ZodObject<z.ZodRawShape>>(
   options: CreateEnvOptions<TSchema>
 ): () => z.infer<TSchema> {
-  const { schema, runtimeEnv, cache = true, codegenFallback = false } = options;
+  const {
+    schema,
+    runtimeEnv,
+    cache = true,
+    codegenFallback = false,
+    readOptionalRuntimeEnv = [],
+  } = options;
+  const directOptionalKeys = new Set(readOptionalRuntimeEnv);
   let cached: z.infer<TSchema> | undefined;
+
+  const createInvalidEnvError = () =>
+    new CRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Invalid environment variables',
+    });
 
   return () => {
     if (cache && cached) {
@@ -37,6 +51,19 @@ export function createEnv<TSchema extends z.ZodObject<z.ZodRawShape>>(
       const undefinedParse = (zodType as z.ZodType).safeParse(undefined);
       const acceptsUndefined = undefinedParse.success;
       if (acceptsUndefined) {
+        if (directOptionalKeys.has(key)) {
+          if (
+            Object.hasOwn(runtimeEnvSource, key) ||
+            Object.getOwnPropertyDescriptor(runtimeEnvSource, key) !==
+              undefined ||
+            key in runtimeEnvSource
+          ) {
+            runtimeEnvSnapshot[key] = runtimeEnvSource[key];
+          } else if (!isCodegenParse && undefinedParse.data !== undefined) {
+            runtimeEnvSnapshot[key] = runtimeEnvSource[key];
+          }
+          continue;
+        }
         // Avoid direct reads for missing optional keys so auth-config env
         // tracking does not treat absent optional vars as required.
         if (
@@ -90,9 +117,28 @@ export function createEnv<TSchema extends z.ZodObject<z.ZodRawShape>>(
     const parsed = schema.safeParse(envForParse);
 
     if (!parsed.success) {
-      throw new CRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Invalid environment variables',
+      throw createInvalidEnvError();
+    }
+
+    const parsedData = parsed.data as Record<string, unknown>;
+    for (const key of directOptionalKeys) {
+      if (!(key in schema.shape) || parsedData[key] !== undefined) {
+        continue;
+      }
+      Object.defineProperty(parsedData, key, {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          const value = runtimeEnvSource[key];
+          if (value === undefined) {
+            return undefined;
+          }
+          const result = (schema.shape[key] as z.ZodType).safeParse(value);
+          if (!result.success) {
+            throw createInvalidEnvError();
+          }
+          return result.data;
+        },
       });
     }
 
