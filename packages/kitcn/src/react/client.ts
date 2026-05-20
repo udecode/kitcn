@@ -512,14 +512,11 @@ export class ConvexQueryClient {
     }
 
     if (result.ok) {
-      // Don't overwrite hydrated data with null/undefined from initial subscription
+      // Don't overwrite hydrated data with undefined from initial subscription
       // localQueryResult() returns undefined before the server sends the first update
-      // Guard against both null and undefined - subscription sends null before server responds
       const existingData = this.queryClient.getQueryData(queryKey);
-      const hasResultValue =
-        result.value !== null && result.value !== undefined;
-      const hasExistingData =
-        existingData !== null && existingData !== undefined;
+      const hasResultValue = result.value !== undefined;
+      const hasExistingData = existingData !== undefined;
 
       if (hasResultValue || !hasExistingData) {
         this.queryClient.setQueryData(

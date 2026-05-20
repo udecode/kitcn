@@ -235,7 +235,7 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
     unsubPublic();
   });
 
-  test('onUpdateQueryKeyHash does not overwrite existing data with null/undefined subscription values', async () => {
+  test('onUpdateQueryKeyHash keeps existing data for undefined but accepts null subscription values', async () => {
     const ConvexQueryClient = await getClientConvexQueryClient('update-values');
 
     const queryClient = new QueryClient();
@@ -282,15 +282,16 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
     client.onUpdateQueryKeyHash((query as any).queryHash);
     expect(setQueryData).not.toHaveBeenCalled();
 
-    // null -> should NOT overwrite existing data
+    // null -> valid Convex result, should overwrite existing data
     localQueryValue = null;
     client.onUpdateQueryKeyHash((query as any).queryHash);
-    expect(setQueryData).not.toHaveBeenCalled();
+    expect(setQueryData).toHaveBeenCalledTimes(1);
+    expect(setQueryData).toHaveBeenCalledWith(queryKey as any, null);
 
     // non-nullish -> should update
     localQueryValue = { updated: true };
     client.onUpdateQueryKeyHash((query as any).queryHash);
-    expect(setQueryData).toHaveBeenCalledTimes(1);
+    expect(setQueryData).toHaveBeenCalledTimes(2);
     expect(setQueryData).toHaveBeenCalledWith(queryKey as any, {
       updated: true,
     });
