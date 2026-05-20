@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.15.4
+
+### Patch Changes
+
+- [#266](https://github.com/udecode/kitcn/pull/266) [`5de6e94`](https://github.com/udecode/kitcn/commit/5de6e9466bf066180b76062cbbb5632e27fc6bd1) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+
+  - Support syncing shared Convex query clients directly from `ConvexAuthProvider`.
+
 ## 0.15.3
 
 ### Patch Changes
