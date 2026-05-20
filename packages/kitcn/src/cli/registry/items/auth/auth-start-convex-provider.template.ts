@@ -6,7 +6,6 @@ import {
   ConvexReactClient,
   getConvexQueryClientSingleton,
   getQueryClientSingleton,
-  useAuthStore,
 } from 'kitcn/react';
 import type { ReactNode } from 'react';
 
@@ -21,28 +20,24 @@ export function AppConvexProvider({
 }: {
   children: ReactNode;
 }) {
-  return (
-    <ConvexAuthProvider authClient={authClient} client={convex}>
-      <QueryProvider>{children}</QueryProvider>
-    </ConvexAuthProvider>
-  );
-}
-
-function QueryProvider({ children }: { children: ReactNode }) {
-  const authStore = useAuthStore();
   const queryClient = getQueryClientSingleton(createQueryClient);
   const convexQueryClient = getConvexQueryClientSingleton({
-    authStore,
     convex,
     queryClient,
   });
 
   return (
-    <TanstackQueryClientProvider client={queryClient}>
-      <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
-        {children}
-      </CRPCProvider>
-    </TanstackQueryClientProvider>
+    <ConvexAuthProvider
+      authClient={authClient}
+      client={convex}
+      convexQueryClient={convexQueryClient}
+    >
+      <TanstackQueryClientProvider client={queryClient}>
+        <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
+          {children}
+        </CRPCProvider>
+      </TanstackQueryClientProvider>
+    </ConvexAuthProvider>
   );
 }
 `;

@@ -387,6 +387,7 @@ All from `kitcn/react`:
 <ConvexAuthProvider
   client={convex}
   authClient={authClient}
+  convexQueryClient={convexQueryClient} // when using TanStack Query
   initialToken={token}           // from SSR (caller.getToken())
   onMutationUnauthorized={() => router.push('/login')}
   onQueryUnauthorized={({ queryName }) => console.log(`Unauth: ${queryName}`)}

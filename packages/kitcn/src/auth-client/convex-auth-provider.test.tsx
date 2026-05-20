@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import {
   decodeJwtExp,
@@ -29,6 +29,50 @@ describe('ConvexAuthProvider', () => {
     } catch {
       // Happy DOM may reject some URL transitions; don't let cleanup fail the suite.
     }
+  });
+
+  test('syncs ConvexQueryClient with the auth store before children render', () => {
+    const client = {
+      setAuth: () => {},
+      clearAuth: () => {},
+    };
+
+    const authClient = {
+      useSession: () => ({ data: null, isPending: true }),
+      convex: { token: mock(async () => ({ data: { token: makeJwt(7200) } })) },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: {
+        oneTimeToken: {
+          verify: async () => ({ data: {} }),
+        },
+      },
+    };
+
+    let syncedStore: ReturnType<typeof useAuthStore> | undefined;
+    const convexQueryClient = {
+      updateAuthStore: mock((authStore: ReturnType<typeof useAuthStore>) => {
+        syncedStore = authStore;
+      }),
+    };
+
+    function StoreProbe() {
+      const authStore = useAuthStore();
+      expect(syncedStore?.store).toBe(authStore.store);
+      return null;
+    }
+
+    render(
+      <ConvexAuthProvider
+        authClient={authClient as any}
+        client={client as any}
+        convexQueryClient={convexQueryClient}
+      >
+        <StoreProbe />
+      </ConvexAuthProvider>
+    );
+
+    expect(convexQueryClient.updateAuthStore).toHaveBeenCalled();
   });
 
   test('provides fetchAccessToken that returns cached SSR token while session is pending', async () => {

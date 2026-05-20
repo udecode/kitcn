@@ -20,6 +20,7 @@ import {
 import {
   AUTH_SESSION_SYNC_GRACE_MS,
   AuthProvider,
+  type AuthStore,
   decodeJwtExp,
   FetchAccessTokenContext,
   isSessionSyncGraceActive,
@@ -43,12 +44,18 @@ type IConvexReactClient = {
   clearAuth(): void;
 };
 
+export type ConvexAuthProviderQueryClient = {
+  updateAuthStore: (authStore?: AuthStore) => void;
+};
+
 export type ConvexAuthProviderProps = {
   children: ReactNode;
   /** Convex client instance */
   client: ConvexReactClient;
   /** Better Auth client instance */
   authClient: AuthClient;
+  /** Shared Convex query client to sync with auth state */
+  convexQueryClient?: ConvexAuthProviderQueryClient;
   /** Initial session token (from SSR) */
   initialToken?: string;
   /** Callback when mutation called while unauthorized */
@@ -171,6 +178,7 @@ export function ConvexAuthProvider({
   children,
   client,
   authClient,
+  convexQueryClient,
   initialToken,
   onMutationUnauthorized,
   onQueryUnauthorized,
@@ -197,7 +205,11 @@ export function ConvexAuthProvider({
       onMutationUnauthorized={onMutationUnauthorized ?? defaultMutationHandler}
       onQueryUnauthorized={onQueryUnauthorized ?? (() => {})}
     >
-      <ConvexAuthProviderInner authClient={authClient} client={client}>
+      <ConvexAuthProviderInner
+        authClient={authClient}
+        client={client}
+        convexQueryClient={convexQueryClient}
+      >
         {children}
       </ConvexAuthProviderInner>
     </AuthProvider>
@@ -212,12 +224,16 @@ function ConvexAuthProviderInner({
   children,
   client,
   authClient,
+  convexQueryClient,
 }: {
   children: ReactNode;
   client: ConvexReactClient;
   authClient: AuthClient;
+  convexQueryClient?: ConvexAuthProviderQueryClient;
 }) {
   const authStore = useAuthStore();
+  convexQueryClient?.updateAuthStore(authStore);
+
   const { data: session, isPending } = authClient.useSession();
 
   // Use refs to avoid recreating fetchAccessToken on session refetch (tab focus)
