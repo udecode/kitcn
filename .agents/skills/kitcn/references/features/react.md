@@ -113,35 +113,30 @@ function QueryProvider({ children }) {
 **With auth** — swap `ConvexProvider` for `ConvexAuthProvider`:
 ```tsx
 import { ConvexAuthProvider } from 'kitcn/auth/client';
-import { ConvexReactClient, getConvexQueryClientSingleton, getQueryClientSingleton, useAuthStore } from 'kitcn/react';
+import { ConvexReactClient, getConvexQueryClientSingleton, getQueryClientSingleton } from 'kitcn/react';
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export function AppConvexProvider({ children, token }: { children: ReactNode; token?: string }) {
   const router = useRouter();
+  const queryClient = getQueryClientSingleton(createQueryClient);
+  const convexQueryClient = getConvexQueryClientSingleton({ convex, queryClient });
+
   return (
     <ConvexAuthProvider
       authClient={authClient}
       client={convex}
+      convexQueryClient={convexQueryClient}
       initialToken={token}
       onMutationUnauthorized={() => router.push('/login')}
       onQueryUnauthorized={() => router.push('/login')}
     >
-      <QueryProvider>{children}</QueryProvider>
+      <QueryClientProvider client={queryClient}>
+        <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
+          {children}
+        </CRPCProvider>
+      </QueryClientProvider>
     </ConvexAuthProvider>
-  );
-}
-
-function QueryProvider({ children }) {
-  const authStore = useAuthStore(); // pass to singleton
-  const queryClient = getQueryClientSingleton(createQueryClient);
-  const convexQueryClient = getConvexQueryClientSingleton({ authStore, convex, queryClient });
-  return (
-    <QueryClientProvider client={queryClient}>
-      <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
-        {children}
-      </CRPCProvider>
-    </QueryClientProvider>
   );
 }
 ```
@@ -156,7 +151,7 @@ function QueryProvider({ children }) {
 `getConvexQueryClientSingleton` options:
 - `convex` — ConvexReactClient
 - `queryClient` — TanStack QueryClient
-- `authStore` — from `useAuthStore()` (auth apps only)
+- `authStore` — optional manual auth-store bridge
 - `unsubscribeDelay` — ms before unsubscribing after unmount (default 3000). Covers StrictMode + quick back-nav.
 
 ### ConvexQueryClient (Bridge)

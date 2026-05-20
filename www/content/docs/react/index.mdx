@@ -193,7 +193,6 @@ import {
   ConvexReactClient,
   getConvexQueryClientSingleton,
   getQueryClientSingleton,
-  useAuthStore,
 } from 'kitcn/react';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -212,37 +211,28 @@ export function AppConvexProvider({
   token?: string;
 }) {
   const router = useRouter();
-
-  return (
-    <ConvexAuthProvider
-      authClient={authClient}
-      client={convex}
-      initialToken={token}
-      onMutationUnauthorized={() => router.push('/login')}
-      onQueryUnauthorized={() => router.push('/login')}
-    >
-      <QueryProvider>{children}</QueryProvider>
-    </ConvexAuthProvider>
-  );
-}
-
-function QueryProvider({ children }: { children: ReactNode }) {
-  const authStore = useAuthStore();
-
   const queryClient = getQueryClientSingleton(createQueryClient);
   const convexQueryClient = getConvexQueryClientSingleton({
-    authStore,
     convex,
     queryClient,
   });
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
-        {children}
-        <ReactQueryDevtools initialIsOpen={false} />
-      </CRPCProvider>
-    </QueryClientProvider>
+    <ConvexAuthProvider
+      authClient={authClient}
+      client={convex}
+      convexQueryClient={convexQueryClient}
+      initialToken={token}
+      onMutationUnauthorized={() => router.push('/login')}
+      onQueryUnauthorized={() => router.push('/login')}
+    >
+      <QueryClientProvider client={queryClient}>
+        <CRPCProvider convexClient={convex} convexQueryClient={convexQueryClient}>
+          {children}
+          <ReactQueryDevtools initialIsOpen={false} />
+        </CRPCProvider>
+      </QueryClientProvider>
+    </ConvexAuthProvider>
   );
 }
 ```
@@ -252,7 +242,7 @@ Key differences from "Without Auth":
 | Feature | Description |
 |---------|-------------|
 | `ConvexAuthProvider` | Wraps everything with auth state management |
-| `useAuthStore()` | Passes auth state to `getConvexQueryClientSingleton` |
+| `convexQueryClient` | Syncs auth state to the shared query client |
 | `onQueryUnauthorized` | Handles auth failures with redirect |
 
 See [Auth Server](/docs/auth/server) for backend configuration.
@@ -355,4 +345,3 @@ Unlike traditional REST APIs that use polling, Convex pushes updates via WebSock
 | `gcTime` | `5 min` | Cached data persists for back-navigation after unmount |
 | `refetchOnMount` | `false` | No need to refetch - subscription provides latest data |
 | `refetchOnWindowFocus` | `false` | WebSocket already pushed any changes |
-
