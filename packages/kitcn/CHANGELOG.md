@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.15.3
+
+### Patch Changes
+
+- [#264](https://github.com/udecode/kitcn/pull/264) [`21760cb`](https://github.com/udecode/kitcn/commit/21760cb994a8f3e093795c342cdbda11ae8e8819) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix Convex query cache updates when a subscription returns `null`.
+
 ## 0.15.2
 
 ### Patch Changes
