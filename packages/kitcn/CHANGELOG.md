@@ -1,5 +1,16 @@
 # kitcn
 
+## 0.15.2
+
+### Patch Changes
+
+- [#262](https://github.com/udecode/kitcn/pull/262) [`a33d263`](https://github.com/udecode/kitcn/commit/a33d2633e0b2c2e016f4d951b3bea8a2852b7a03) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix Resend scaffolds to resolve optional Resend env values from Convex runtime env proxies.
+  - Fix Resend env helper reruns to update noncanonical `createEnv` formatting instead of silently skipping `readOptionalRuntimeEnv`.
+  - Fix env helper reruns to fail loudly instead of duplicating or rewriting non-literal `readOptionalRuntimeEnv` options.
+  - Fix Resend scaffold table names to match the camelCase schema extension keys.
+
 ## 0.15.1
 
 ### Patch Changes
