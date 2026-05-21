@@ -74,6 +74,9 @@ describe('package intent metadata', () => {
       expect(packageJson.exports?.['./auth/start']).toBe(
         './dist/auth/start/index.js'
       );
+      expect(packageJson.exports?.['./auth/start/server']).toBe(
+        './dist/auth/start/server/index.js'
+      );
       expect(packageJson.intent).toEqual({
         version: 1,
         repo: 'udecode/kitcn',

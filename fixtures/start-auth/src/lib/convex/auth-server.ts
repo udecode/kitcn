@@ -1,4 +1,4 @@
-import { convexBetterAuthReactStart } from 'kitcn/auth/start';
+import { convexBetterAuthReactStart } from 'kitcn/auth/start/server';
 
 export const {
   handler,

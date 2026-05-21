@@ -845,10 +845,10 @@ loop. There is no separate `auth:generate` step on this path.
 
 ### Server Setup
 
-Create server-side auth helpers using `kitcn/auth/start`:
+Create server-side auth helpers using `kitcn/auth/start/server`:
 
 ```ts showLineNumbers title="src/lib/auth-server.ts"
-import { convexBetterAuthReactStart } from 'kitcn/auth/start';
+import { convexBetterAuthReactStart } from 'kitcn/auth/start/server';
 
 export const { handler, getToken } = convexBetterAuthReactStart({
   convexUrl: import.meta.env.VITE_CONVEX_URL!,

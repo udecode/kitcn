@@ -37,7 +37,8 @@ kitcn integrates Convex for realtime data, TanStack Query for caching, and Bette
 | `kitcn/auth/config` | Convex auth config provider | `auth` |
 | `kitcn/auth/http` | Auth HTTP helpers | `auth` |
 | `kitcn/auth/nextjs` | Better Auth Next.js adapter | `server`, `next` |
-| `kitcn/auth/start` | Better Auth TanStack Start adapter | `auth` |
+| `kitcn/auth/start` | TanStack Start loader auth sync | `auth` |
+| `kitcn/auth/start/server` | Better Auth TanStack Start server adapter | `auth` |
 | `kitcn/ratelimit` | Rate limiting plugin | `orm` |
 
 `server`, `orm`, and `auth` are standalone foundations — everything else builds on one or more. You can use `server` or `auth` without `orm`, `orm` and `plugins` without `server`.

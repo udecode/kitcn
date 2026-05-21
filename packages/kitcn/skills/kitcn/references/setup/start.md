@@ -34,7 +34,7 @@ export const {
 **Create:** `src/lib/convex/auth-server.ts`
 
 ```ts
-import { convexBetterAuthReactStart } from "kitcn/auth/start";
+import { convexBetterAuthReactStart } from "kitcn/auth/start/server";
 
 export const {
   handler,

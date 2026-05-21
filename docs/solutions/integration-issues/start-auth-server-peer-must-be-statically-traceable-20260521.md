@@ -6,7 +6,7 @@ module: auth-start
 problem_type: integration_issue
 component: authentication
 symptoms:
-  - TanStack Start Nitro/Vercel production output crashes from kitcn/auth/start
+  - TanStack Start Nitro/Vercel production output crashes from kitcn/auth/start/server
   - Runtime error says @tanstack/react-start cannot be found from _libs/kitcn.mjs
   - The app already has @tanstack/react-start installed
 root_cause: wrong_api
@@ -19,7 +19,7 @@ tags: [auth, tanstack-start, nitro, vercel, package-tracing, peer-dependency]
 
 ## Problem
 
-`kitcn/auth/start` used a variable-fed dynamic import for
+`kitcn/auth/start/server` used a variable-fed dynamic import for
 `@tanstack/react-start/server`. Nitro could not see that dependency while
 building Vercel output, so the deployed server crashed even though the app had
 the Start peer installed.
@@ -47,8 +47,8 @@ Cannot find package '@tanstack/react-start' imported from /var/task/_libs/kitcn.
 
 ## Solution
 
-Make the Start server import a literal static import in the Start-only package
-entrypoint:
+Make the Start server import a literal static import in the Start server-only
+package entrypoint:
 
 ```ts
 import { getRequestHeaders } from '@tanstack/react-start/server';
@@ -64,12 +64,16 @@ await import(TANSTACK_REACT_START_SERVER);
 Also declare `@tanstack/react-start` as an optional peer and package dev
 dependency so the entrypoint's runtime contract is explicit and testable.
 
+Keep shared loader helpers in `kitcn/auth/start`. Do not put the server import
+in that shared entrypoint, because client/router loader bundles can import
+`syncConvexAuthForStartLoader()` from there.
+
 ## Why This Works
 
 Nitro traces production server dependencies from the import graph. A literal
-top-level import gives Nitro a stable package edge from `kitcn/auth/start` to
-`@tanstack/react-start/server`, so Vercel output can include the Start server
-peer.
+top-level import gives Nitro a stable package edge from
+`kitcn/auth/start/server` to `@tanstack/react-start/server`, so Vercel output
+can include the Start server peer.
 
 The dynamic import kept the public API technically lazy, but it made the
 packaging contract invisible. For a framework-specific entrypoint, static is the
@@ -77,8 +81,10 @@ right tradeoff.
 
 ## Prevention
 
-- Framework-specific package entrypoints should statically import their required
+- Framework-specific server entrypoints should statically import their required
   framework server peers.
+- Client-shared entrypoints should remain browser-bundleable; split server
+  helpers out before adding Node-only framework imports.
 - Use optional peer dependencies for framework-specific surfaces, not hidden
   dynamic imports.
 - Keep a focused test that asserts the source contains a literal

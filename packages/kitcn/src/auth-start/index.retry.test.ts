@@ -47,7 +47,7 @@ describe('auth/start token refresh', () => {
       getRequestHeaders: () => new Headers(),
     }));
 
-    const { convexBetterAuthReactStart } = await import('./index');
+    const { convexBetterAuthReactStart } = await import('./server');
 
     const auth = convexBetterAuthReactStart({
       convexSiteUrl: 'https://app.convex.site',

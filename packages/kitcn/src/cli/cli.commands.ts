@@ -2357,7 +2357,7 @@ describe('cli/cli', () => {
         'utf8'
       );
       expect(authServerSource).toContain(
-        "import { convexBetterAuthReactStart } from 'kitcn/auth/start';"
+        "import { convexBetterAuthReactStart } from 'kitcn/auth/start/server';"
       );
 
       const serverSource = fs.readFileSync(

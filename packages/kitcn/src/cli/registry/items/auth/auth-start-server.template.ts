@@ -1,4 +1,4 @@
-export const AUTH_START_SERVER_TEMPLATE = `import { convexBetterAuthReactStart } from 'kitcn/auth/start';
+export const AUTH_START_SERVER_TEMPLATE = `import { convexBetterAuthReactStart } from 'kitcn/auth/start/server';
 
 export const {
   handler,
