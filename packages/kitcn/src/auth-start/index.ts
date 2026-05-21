@@ -1,3 +1,4 @@
+import { getRequestHeaders } from '@tanstack/react-start/server';
 import { stripIndent } from 'common-tags';
 import { ConvexHttpClient } from 'convex/browser';
 import type {
@@ -59,7 +60,6 @@ const fallbackCache: ReactCache = (fn) => fn;
 const cache =
   (React as typeof React & { cache?: ReactCache }).cache ?? fallbackCache;
 
-const TANSTACK_REACT_START_SERVER = '@tanstack/react-start/server';
 const TRAILING_COLON_RE = /:$/;
 const startLoaderAuthTokens = new WeakMap<object, null | string>();
 
@@ -199,11 +199,6 @@ export const convexBetterAuthReactStart = (
   const siteUrl = parseConvexSiteUrl(opts.convexSiteUrl);
 
   const cachedGetToken = cache(async (opts: GetTokenOptions) => {
-    const { getRequestHeaders } = (await import(
-      TANSTACK_REACT_START_SERVER
-    )) as {
-      getRequestHeaders: () => HeadersInit;
-    };
     const headers = getRequestHeaders();
     const mutableHeaders = new Headers(headers);
     mutableHeaders.delete('content-length');

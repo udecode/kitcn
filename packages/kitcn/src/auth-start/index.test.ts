@@ -1,10 +1,18 @@
 import { describe, expect, mock, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   convexBetterAuthReactStart,
   syncConvexAuthForStartLoader,
 } from './index';
 
 describe('auth/start', () => {
+  test('keeps the TanStack Start server import statically traceable', () => {
+    const source = readFileSync(path.join(import.meta.dir, 'index.ts'), 'utf8');
+
+    expect(source).toContain("from '@tanstack/react-start/server'");
+  });
+
   test('re-exports the react-start helper surface', () => {
     expect(typeof convexBetterAuthReactStart).toBe('function');
   });
