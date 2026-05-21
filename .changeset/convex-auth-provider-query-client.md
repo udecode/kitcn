@@ -8,4 +8,5 @@
 
 ## Patches
 
+- Keep the existing auth store attached when reusing a Convex query client before `ConvexAuthProvider` resyncs it.
 - Fix `kitcn/auth/start` so Nitro production builds can trace and include the TanStack Start server dependency.

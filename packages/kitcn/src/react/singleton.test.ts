@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import type { AuthStore } from './auth-store';
 import {
   getConvexQueryClientSingleton,
   getQueryClientSingleton,
@@ -94,11 +95,11 @@ describe('getConvexQueryClientSingleton', () => {
     const authStoreA = {
       get: (_key: string) => null,
       set: (_key: string, _value: unknown) => {},
-    } as any;
+    } as AuthStore;
     const authStoreB = {
       get: (_key: string) => null,
       set: (_key: string, _value: unknown) => {},
-    } as any;
+    } as AuthStore;
 
     const first = getConvexQueryClientSingleton({
       authStore: authStoreA,
@@ -121,5 +122,32 @@ describe('getConvexQueryClientSingleton', () => {
     const defaults = queryClient.getDefaultOptions().queries;
     expect(typeof defaults?.queryFn).toBe('function');
     expect(typeof defaults?.queryKeyHashFn).toBe('function');
+  });
+
+  test('does not clear the existing auth store when reuse omits auth store', () => {
+    setWindow();
+
+    const queryClient = new QueryClient();
+    const authStore = {
+      get: (_key: string) => null,
+      set: (_key: string, _value: unknown) => {},
+    } as AuthStore;
+
+    const first = getConvexQueryClientSingleton({
+      authStore,
+      convex: convexStub,
+      queryClient,
+      symbolKey: 'test.convex.client.keep-auth-store',
+    });
+    const updateSpy = spyOn(first, 'updateAuthStore');
+
+    const second = getConvexQueryClientSingleton({
+      convex: convexStub,
+      queryClient,
+      symbolKey: 'test.convex.client.keep-auth-store',
+    });
+
+    expect(first).toBe(second);
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 });

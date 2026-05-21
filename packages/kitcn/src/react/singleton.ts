@@ -56,8 +56,10 @@ export const getConvexQueryClientSingleton = ({
     });
   } else {
     if (globalStore[key]) {
-      // Update authStore on reuse (HMR fix: jotai store may reset)
-      (globalStore[key] as ConvexQueryClient).updateAuthStore(authStore);
+      if (authStore !== undefined) {
+        // Update authStore on reuse when a provider supplies a live store.
+        (globalStore[key] as ConvexQueryClient).updateAuthStore(authStore);
+      }
     } else {
       globalStore[key] = new ConvexQueryClient(convex, {
         authStore,
