@@ -1,5 +1,11 @@
 # kitcn
 
+## 0.15.6
+
+### Patch Changes
+
+- [#270](https://github.com/udecode/kitcn/pull/270) [`2703bf0`](https://github.com/udecode/kitcn/commit/2703bf056b129c783ec772280b4e1648bffdf171) Thanks [@zbeyens](https://github.com/zbeyens)! - Support `OPTIONS` preflight forwarding in `kitcn/auth/nextjs` route handlers and generated Next auth routes.
+
 ## 0.15.5
 
 ### Patch Changes
