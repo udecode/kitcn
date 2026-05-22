@@ -513,7 +513,7 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 |--------|-------------|
 | `createContext` | RSC context with auth |
 | `createCaller` | Server-side caller factory |
-| `handler` | Next.js API route handler (`export const { GET, POST } = handler;`) |
+| `handler` | Next.js API route handler (`export const { GET, POST, OPTIONS } = handler;`) |
 
 Options: `api`, `convexSiteUrl`, `auth.jwtCache` (default true), `auth.isUnauthorized`.
 
@@ -530,7 +530,7 @@ return <ConvexProvider token={token}>{children}</ConvexProvider>;
 ```ts
 // src/app/api/auth/[...all]/route.ts
 import { handler } from '@/lib/convex/server';
-export const { GET, POST } = handler;
+export const { GET, POST, OPTIONS } = handler;
 ```
 
 ---

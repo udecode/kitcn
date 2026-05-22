@@ -1944,7 +1944,9 @@ describe('cli/cli', () => {
       expect(routeSource).toContain(
         "import { handler } from '@/lib/convex/server';"
       );
-      expect(routeSource).toContain('export const { GET, POST } = handler;');
+      expect(routeSource).toContain(
+        'export const { GET, POST, OPTIONS } = handler;'
+      );
 
       const authPageSource = fs.readFileSync(
         path.join(dir, 'app', 'auth', 'page.tsx'),

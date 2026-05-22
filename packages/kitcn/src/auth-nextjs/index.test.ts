@@ -1,7 +1,7 @@
 import { convexBetterAuth } from './index';
 
 describe('convexBetterAuth', () => {
-  test('creates GET/POST handlers that rewrite request URL to convex site', async () => {
+  test('creates GET/POST/OPTIONS handlers that rewrite request URL to convex site', async () => {
     const originalFetch = globalThis.fetch;
     const calls: Array<{
       input: RequestInfo | URL;
@@ -34,8 +34,17 @@ describe('convexBetterAuth', () => {
           method: 'POST',
         })
       );
+      const preflightRequest = {
+        headers: {
+          'access-control-request-method': 'POST',
+          origin: 'http://localhost:1420',
+        },
+        method: 'OPTIONS',
+        url: 'https://example.com/api/auth/session',
+      } as unknown as Request;
+      await result.handler.OPTIONS(preflightRequest);
 
-      expect(calls).toHaveLength(2);
+      expect(calls).toHaveLength(3);
 
       expect(calls[0]?.input).toBe('https://my-app.convex.site/path?a=1');
       expect(calls[0]?.init?.method).toBe('GET');
@@ -66,6 +75,18 @@ describe('convexBetterAuth', () => {
       await expect(
         new Response(calls[1]?.init?.body as BodyInit).text()
       ).resolves.toBe(JSON.stringify({ email: 'user@example.com' }));
+
+      expect(calls[2]?.input).toBe(
+        'https://my-app.convex.site/api/auth/session'
+      );
+      expect(calls[2]?.init?.method).toBe('OPTIONS');
+      expect(calls[2]?.init?.redirect).toBe('manual');
+      const optionsHeaders = new Headers(calls[2]?.init?.headers);
+      expect(optionsHeaders.get('host')).toBe('my-app.convex.site');
+      expect(optionsHeaders.get('x-forwarded-host')).toBe('example.com');
+      expect(optionsHeaders.get('x-forwarded-proto')).toBe('https');
+      expect(optionsHeaders.get('origin')).toBe('http://localhost:1420');
+      expect(calls[2]?.init?.body).toBeUndefined();
     } finally {
       globalThis.fetch = originalFetch;
     }

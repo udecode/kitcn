@@ -4,6 +4,7 @@
 
 ## Features
 
+- Support `OPTIONS` preflight forwarding in `kitcn/auth/nextjs` route handlers.
 - Support syncing shared Convex query clients directly from `ConvexAuthProvider`.
 
 ## Patches
