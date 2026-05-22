@@ -10,6 +10,9 @@ import { createCallerFactory } from '../server/caller-factory';
 
 const TRAILING_COLON_RE = /:$/;
 
+const requestCanHaveBody = (method: string) =>
+  method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+
 const handler = async (request: Request, siteUrl: string) => {
   const requestUrl = new URL(request.url);
   const nextUrl = `${siteUrl}${requestUrl.pathname}${requestUrl.search}`;
@@ -26,10 +29,9 @@ const handler = async (request: Request, siteUrl: string) => {
     'x-better-auth-forwarded-proto',
     requestUrl.protocol.replace(TRAILING_COLON_RE, '')
   );
-  const body =
-    request.method !== 'GET' && request.method !== 'HEAD'
-      ? await request.arrayBuffer()
-      : undefined;
+  const body = requestCanHaveBody(request.method)
+    ? await request.arrayBuffer()
+    : undefined;
 
   return fetch(nextUrl, {
     body,
@@ -41,6 +43,7 @@ const handler = async (request: Request, siteUrl: string) => {
 
 const nextJsHandler = (siteUrl: string) => ({
   GET: (request: Request) => handler(request, siteUrl),
+  OPTIONS: (request: Request) => handler(request, siteUrl),
   POST: (request: Request) => handler(request, siteUrl),
 });
 

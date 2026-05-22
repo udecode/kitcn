@@ -23,7 +23,7 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 ```ts
 import { handler } from "@/lib/convex/server";
 
-export const { GET, POST } = handler;
+export const { GET, POST, OPTIONS } = handler;
 ```
 
 ### 8.A.3 RSC helpers

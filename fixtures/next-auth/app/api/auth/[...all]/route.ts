@@ -1,3 +1,3 @@
 import { handler } from '@/lib/convex/server';
 
-export const { GET, POST } = handler;
+export const { GET, POST, OPTIONS } = handler;
