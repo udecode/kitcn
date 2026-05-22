@@ -36,6 +36,9 @@
       "kitcn/auth/start": [
         "../../packages/kitcn/src/auth-start/index.ts"
       ],
+      "kitcn/auth/start/server": [
+        "../../packages/kitcn/src/auth-start/server.ts"
+      ],
       "kitcn/crpc": [
         "../../packages/kitcn/src/crpc/index.ts"
       ],

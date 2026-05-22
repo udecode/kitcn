@@ -157,6 +157,9 @@ describe('tooling/fixtures', () => {
         readFileSync(path.join(templateDir, 'tsconfig.json'), 'utf8')
       ).toContain('"kitcn/auth/start": [');
       expect(
+        readFileSync(path.join(templateDir, 'tsconfig.json'), 'utf8')
+      ).toContain('"kitcn/auth/start/server": [');
+      expect(
         readFileSync(
           path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
           'utf8'
@@ -168,6 +171,12 @@ describe('tooling/fixtures', () => {
           'utf8'
         )
       ).toContain('../../../../packages/kitcn/src/auth-start/index.ts');
+      expect(
+        readFileSync(
+          path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
+          'utf8'
+        )
+      ).toContain('../../../../packages/kitcn/src/auth-start/server.ts');
       expect(
         readFileSync(
           path.join(templateDir, 'convex', 'functions', 'tsconfig.json'),
