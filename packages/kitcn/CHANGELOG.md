@@ -1,5 +1,18 @@
 # kitcn
 
+## 0.15.5
+
+### Patch Changes
+
+- [#268](https://github.com/udecode/kitcn/pull/268) [`da34316`](https://github.com/udecode/kitcn/commit/da34316d76a64ebd6d0ac683ded2472246bb9439) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+
+  - Support syncing shared Convex query clients directly from `ConvexAuthProvider`.
+
+  ## Patches
+
+  - Keep the existing auth store attached when reusing a Convex query client before `ConvexAuthProvider` resyncs it.
+  - Fix `kitcn/auth/start/server` so Nitro production builds can trace and include the TanStack Start server dependency without making `kitcn/auth/start` unsafe for browser loaders.
+
 ## 0.15.4
 
 ### Patch Changes
