@@ -1,5 +1,16 @@
 # Shadcn Parity
 
+Use this for UI/component parity work, including shadcn-owned shell files,
+registry-style component authorship, React component patterns, and React
+Compiler/Effect decisions inside shadcn-compatible surfaces.
+
+## Comprehensive References
+
+Load these only when the task needs the detail:
+
+- `.agents/rules/shadcn-parity/references/components.md` — comprehensive component architecture reference: accessibility, `asChild`, composition, data attributes, artifact taxonomy, polymorphism, controlled/uncontrolled state, and component typing.
+- `.agents/rules/shadcn-parity/references/react.md` — comprehensive React reference: React Compiler, manual memoization escape hatches, Effects, `useEffectEvent`, ref access, derived state, Tailwind v4 syntax, data attributes, and UI constraints.
+
 ## Contract
 
 When the user asks for shadcn parity, treat `../shadcn` as the source of

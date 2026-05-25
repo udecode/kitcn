@@ -6,9 +6,8 @@
 - `.agents/AGENTS.md` and `.agents/rules/*.mdc` are source of truth. After editing them, run `bun install` to sync. Never edit generated `.agents/skills/**/SKILL.md` directly.
 - Never update `.agents/skills/kitcn/**` manually. Update `packages/kitcn/skills/kitcn/**`, then run `bun tooling/sync-kitcn-skill.ts` or `bun install` to regenerate the repo-local copy.
 - In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
-
-- If you get `failed to load config from /Users/zbeyens/GitHub/kitcn/vitest.config.mts`, rimraf `**/node_modules` and install again.
-- Run `convex:logs` to watch the Convex logs
+- Answer in English by default. Switch languages only when the user explicitly asks for another language.
+- Prefer the best long-term architecture fix over the nearest local patch. If the real fix is an API or abstraction change, do that.
 
 ## Git
 
@@ -16,126 +15,111 @@
 - **Push scope:** When you do commit and push, include unrelated dirty files outside src; those are often manual user changes or synced skill/docs updates, so do not silently leave them behind.
 - **PR:** Before creating or updating a PR, run `check`. If it fails, stop and fix it or report the blocker. Do not open a PR with failing `check` unless the user explicitly says to.
 - **PR branch:** If the user explicitly says to open or create a PR, do not ask for confirmation. If the current branch is `main`, create a new `codex/` branch first, then commit/push/open the PR. If already on a non-`main` branch, proceed directly.
+- **Worktree env:** When starting from a worktree, copy all nested `**/.env` and `**/.env.local` files from the source checkout into the worktree, including `example/.env.local` and `example/convex/.env` when present.
 - Dirty workspace: Never pause to ask about unrelated local changes. Continue work and ignore unrelated diffs.
 - Never browse GitHub files. For library/API questions or unfamiliar deps, inspect the repo at `..`; if missing, clone `https://github.com/{owner}/{repo}.git` to `../{repo-name}`.
-- For repo research, use `spawn_agent(... agent_type="explorer")` and return file-backed findings from docs, structure, exports, examples, and tests only.
-
-- When using git worktree, copy `example/.env.local` and `example/convex/.env` to the worktree directory.
 
 ## Package
 
 - Project is in closed alpha with no external users. Breaking changes are allowed and recommended if they produce better results. No backward compatibility needed. Still confirm with the user before proceeding with a set of breaking changes.
 - Breaking changes: default to a hard cut. Do not add backward-compat aliases, deprecated shims, fallback parsing, migration bridges, or tests for the previous API unless the user explicitly asks. Remove the old surface and write tests only for the current behavior, as if the old API never existed.
-- Hard cut by default. For feature removal or unshipping, use `hard-cut` and delete the feature completely: no deprecation notices, no `Not implemented` throws, no compatibility stubs, no dead tests, no comments about deleted code. The user must explicitly ask for the softer path.
-- Bundle size: Convex does not support dynamic imports. Each function entry bundles everything it statically imports. Prefer splittable per-module patterns (e.g. per-module callers, plugins) over monolithic globals. Keep each entry's import graph minimal.
-- Parity: Don't reinvent the wheel. Before designing APIs or architecture, study how proven OSS projects solve the same problem — Drizzle (schema/ORM), tRPC (procedures/middleware), shadcn (CLI/codegen), better-auth (plugin system/auth). Adopt their patterns when applicable. Do `ls` in `..` directory to find the respective repositories, then inspect their source code when needed.
-- DX: Optimize for the absolute best developer experience. CLI must be first-class for agents — deterministic, machine-readable output (--json), non-interactive defaults (--yes), composable commands. Every API surface should be intuitive for both humans and AI agents.
-- Docs (www/): NEVER write changelog-style language ("has been removed", "new feature", "previously", "now supports"). Docs are user-facing reference for the LATEST state only. Write as if no prior version exists. No migration notes, no "what changed" — just document what IS. Follow docs/solutions/style.md for writing tone/structure.
-- Docs sync: When updating www/ docs, also update the corresponding content in packages/kitcn/skills/kitcn/SKILL.md or packages/kitcn/skills/kitcn/references/ to stay synced. Follow packages/kitcn/skills/kitcn/references/setup/doc-guidelines.md for compression/placement rules.
-- Plugins: ALWAYS read packages/kitcn/skills/kitcn/references/features/create-plugins.md before creating or modifying plugins. Keep it synced when any plugin API changes in the package.
-- Intent maintainer loop: use `bunx intent scaffold` when you need new skills or a major skill reshuffle; for normal work, update docs and `packages/kitcn/skills/kitcn/**` in the same diff; run `bunx intent validate skills` and `bunx intent stale`; keep `@tanstack/intent`, `bin/intent.js`, `bin.intent`, and package `files` wired; verify with `npm pack --json --dry-run ./packages/kitcn`; after release, treat `intent feedback` as product input — tighten the skill if wording is wrong, fix the API if the same workaround keeps repeating.
-- Always use @.agents/rules/changeset.mdc when updating packages to write a changeset before completing
-- After any package modification, run `bun --cwd packages/kitcn build`
-- Use tdd skill for package updates that add or change live behavior.
-- Do not write TDD cases for dead code/legacy removal assertions (for example: "should not contain old API X anymore"). Remove the dead path directly and keep tests focused on current behavior.
+- Bundle size: Convex does not support dynamic imports. Each function entry bundles everything it statically imports. Prefer splittable per-module patterns such as per-module callers and plugins over monolithic globals. Keep each entry's import graph minimal.
+- Parity: Don't reinvent the wheel. Before designing APIs or architecture, study how proven OSS projects solve the same problem: Drizzle, tRPC, shadcn, better-auth. Inspect local clones in `..` first.
+- DX: Optimize for the absolute best developer experience. CLI must be first-class for agents: deterministic, machine-readable output (`--json`), non-interactive defaults (`--yes`), and composable commands.
+- Docs (www/): NEVER write changelog-style language ("has been removed", "new feature", "previously", "now supports"). Docs are user-facing reference for the LATEST state only. Write as if no prior version exists. No migration notes, no "what changed".
+- Docs sync: When updating `www/` docs, also update matching `packages/kitcn/skills/kitcn/**` content. Follow `packages/kitcn/skills/kitcn/references/setup/doc-guidelines.md`.
+- Plugins: ALWAYS read `packages/kitcn/skills/kitcn/references/features/create-plugins.md` before creating or modifying plugins. Keep it synced when any plugin API changes.
+- Intent maintainer loop: use `bunx intent scaffold` when you need new skills or a major skill reshuffle. For normal work, update docs and `packages/kitcn/skills/kitcn/**` in the same diff. Run `bunx intent validate skills` and `bunx intent stale`.
+- Always use @.agents/rules/changeset.mdc when updating packages to write a changeset before completing.
+- After any package modification, run `bun --cwd packages/kitcn build`.
+- Use `tdd` for package updates that add or change live behavior.
+- Do not write TDD cases for dead code/legacy removal assertions. Remove the dead path directly and keep tests focused on current behavior.
 - Never edit scaffolded example output first. Change package scaffold source, then regenerate scaffold files via CLI.
 - Never update example plugin files directly. Update the package plugin template first, then regenerate with `kitcn add ... --overwrite`.
-- When changing `kitcn init -t` scaffold output, treat `fixtures/**` as generated fixture output from `bun run fixtures:sync` — including committed fixture `package.json` files. Do not patch fixture files by hand.
-- After any `init -t` template or scaffold change, you must rerun `bun run fixtures:sync` and `bun run fixtures:check`. No exceptions.
+- When changing `kitcn init -t` scaffold output, treat `fixtures/**` as generated fixture output from `bun run fixtures:sync`, including committed fixture `package.json` files. Do not patch fixture files by hand.
+- After any `init -t` template or scaffold change, run `bun run fixtures:sync` and `bun run fixtures:check`. No exceptions.
 - For manual runtime, never run committed `fixtures/**` in place. Materialize a tmp app with `bun run scenario:prepare <name>` and run it from `tmp/scenarios/<name>/project`, or use `bun run scenario:dev <name>`.
-- Use @.agents/rules/scenarios.mdc for fixture and scenario runtime proof. It owns when to stop at `scenario:dev`, when to add `test:auth` or `test:e2e`, and when `scenario:check` is the only honest lane.
-- Default `bun check` must not depend on auth browser E2E. Treat `test:e2e` as an auth-specific lane only. Run it when the diff touches auth runtime/client/provider/query-invalidation surfaces or auth demo scaffolds.
-- If `bun run fixtures:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers first: `pkill -f 'convex/bin/main.js codegen' || true; pkill -f 'convex/bin/main.js dev' || true; pkill -f '@esbuild/.*/bin/esbuild --service' || true`, then rerun sync once. If `ps` still shows an esbuild worker stuck in `U` state after `kill -9`, stop bullshitting and reboot — that machine state is wedged.
-- After every template/scaffold change, verify with `bun run fixtures:sync`, `bun run fixtures:check`, and prepared scenario apps under `tmp/scenarios/**`. Do not touch `example/` unless the user explicitly asks.
+- Use @.agents/rules/scenarios.mdc for fixture and scenario runtime proof.
+- Default `bun check` must not depend on auth browser E2E. Treat `test:e2e` as an auth-specific lane only.
+- If `bun run fixtures:sync` dies with Convex/esbuild `EPIPE`, `The service was stopped`, or `Timed out waiting for local Convex bootstrap`, kill stale workers once, then rerun sync. If workers stay wedged in `U` state after `kill -9`, reboot.
 - Prefer inline Zod schemas when used once; extract constants only when reused.
+
+## Tooling
+
+- If typecheck/build/dev suddenly fails with missing-module or package-resolution garbage that does not match the diff, run `bun install` once before deeper debugging.
+- Treat local-only React runtime weirdness as install corruption first, not product code:
+  - `Invalid hook call`
+  - `resolveDispatcher()` / null dispatcher crashes
+  - package-local `node_modules/react` or `node_modules/react-dom` paths under `packages/*`
+  - mixed `.bun` and `.pnpm` React paths in the same failing stack
+- Do not use reinstall as a lazy substitute for fixing real code errors.
+- If you get `failed to load config from /Users/zbeyens/GitHub/kitcn/vitest.config.mts`, rimraf `**/node_modules` and install again.
+- Run `convex:logs` to watch Convex logs.
 
 ## Skill
 
 Use those skills when relevant:
 
-- `task` for normal repo task execution
-- `major-task` for heavyweight architecture, framework comparison, migration, benchmark, or proposal work
-- `deslop` for the final bounded cleanup pass once a change already works
-- `tdd`
-- `ce-review` when doing a code review
+- `autogoal` for any prompt with a verifiable and quantitative outcome. Always use the autogoal skill before durable work when the task has a measurable completion threshold.
+- `task` for normal repo task execution.
+- `major-task` for heavyweight architecture, framework comparison, migration, benchmark, or proposal work.
+- `deslop` for the final bounded cleanup pass once a change already works.
+- `tdd`.
+- `agent-native-reviewer` when changes touch `.agents/**`, `.claude/**`,
+  `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
+- @.agents/rules/changeset.mdc when updating packages.
 
 Convex-specific CE exclusions:
 
 - Do not install or reference these by default in this repo unless the user explicitly asks: `data-integrity-guardian`, `data-migration-expert`, `data-migrations-reviewer`, `schema-drift-detector`, `deployment-verification-agent`, `dhh-rails-reviewer`, `kieran-rails-reviewer`, `kieran-python-reviewer`, `previous-comments-reviewer`, `pr-comment-resolver`, `figma-design-sync`.
 - Reason: better-convex is a framework/tooling repo. Data migration, Rails, deployment, PR-thread, and Figma workflow agents are mostly overkill or the wrong shape here.
 
-When using the following skills, override the default behavior.
+Goal plans:
 
-`planning-with-files`:
-
-- Do not create `task_plan.md`, `findings.md`, or `progress.md` at repo root. Merge that content into one file under `docs/plans/`. Example: `docs/plans/2026-02-07-fix-schema.md`
+- For issue-backed goal work, start the filename with the ticket number.
+  Example: `docs/plans/123-fix-schema.md`
+- For non-ticket goal work, keep the date-based format.
+  Example: `docs/plans/2026-02-07-fix-schema.md`
 
 Browser usage:
 
 - Always try `[@browser-use](plugin://browser-use@openai-bundled)` first for browser usage.
 - Do not substitute Puppeteer, standalone Playwright, or raw Chrome DevTools for browser usage.
 
-`ce-*`:
+## Commands
 
-- **plan:** Include Browser Use in acceptance criteria for browser features
-- **deepen-plan:** Context7 only when not covered by skills
-- **work:** UI tasks require Browser Use BEFORE marking complete. Never guess.
+### Development
 
-## Prompt Hook
+Default to source-first typecheck. Do not build packages just to run types unless the repo script or failure proves the typecheck graph still resolves built output.
 
-### Mandatory First Response
+If a local-only build/runtime/test failure points at corrupted files under `node_modules/.bun`, mixed `.bun` / `.pnpm` React installs, package-local `node_modules/react*` symlinks, `Invalid hook call`, or other non-versioned env state while CI is green, clean local env before changing repo code: run `bun install` once, then rerun the exact failing command. If the failure shape changes or disappears, it was local env rot. If not, go back to normal debugging.
 
-🚨 STOP - SKILL ANALYSIS IS MANDATORY
+Required sequence for type checking modified packages:
 
-**Instructions:**
-• DO NOT edit until skill analysis is complete.
-• Use `update_plan` only if that tool is available in the current runtime.
-• If `update_plan` is unavailable, run the same checklist inline.
-• Condition NO -> mark completed -> proceed
-• Condition YES -> work through steps -> mark completed -> proceed
-• Skipping skill analysis = FAILED to follow instructions
+1. `bun install` when needed by the task or lockfile state.
+2. `bun typecheck` or the relevant workspace typecheck.
+3. If that fails because the graph resolves built output, fix the source-entry or path setup when that is the right long-term shape.
+4. Build only when checking artifact output, package exports, or a package that intentionally has no source-first typecheck path.
+5. `bun lint:fix`.
 
-**Skill Analysis Checklist:**
-☐ Skill analysis (SKIP if 'quick' in message): (1) STOP rationalizing ('simple question', 'overkill', 'might be relevant') (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓. Only ✗ if DEFINITELY not related (4) Load all ✓ skills in one pass; do NOT load one then wait (5) Output '[Skills: X available, Y loaded: name1, name2]' CRITICAL: 'Might be relevant' = MUST load. '1% chance' = MUST load.
+Focused commands:
 
-**Default Skill Gates:**
+```bash
+bun --cwd packages/kitcn build
+bun run fixtures:sync
+bun run fixtures:check
+bun run scenario:prepare <name>
+bun run scenario:dev <name>
+bun run test:auth
+bun run test:e2e
+```
 
-- Before non-trivial bug/feature work on existing code, load `learnings-researcher` and check `docs/solutions` first.
-- For multi-step work, anything likely to be compacted / use a full context window, or any task that starts trivial but grows into that shape, start/update `planning-with-files` immediately. Do not wait for compaction or the next turn.
-- For bug fixes or behavior changes with a sane test seam, use `tdd` before the fix.
+Full project commands:
 
-### Verification Checklist
-
-🔒 VERIFICATION REQUIRED - NO COMPLETION WITHOUT FRESH EVIDENCE
-
-**Instructions:**
-• Track ALL verification items below (use `update_plan` if available, otherwise inline)
-• Condition NO -> mark completed and skip
-• Condition YES -> in_progress -> verify -> completed
-• Avoid unnecessary `build` check
-• No final "done", "fixed", or "works" message without fresh same-turn evidence for every required item below, or an explicit blocker.
-
-**Verification Checklist:**
-
-- [ ] Typecheck (IF updated .ts files): Run `typecheck`
-- [ ] Lint: Run `lint:fix`
-- [ ] PR gate (IF creating/updating a PR): Run `check`
-- [ ] Browser verification (IF a browser surface changed): verify with Browser Use before done
-- [ ] ce-compound (SKIP if trivial): CRITICAL: After completing this request, you MUST evaluate whether it produced extractable knowledge. EVALUATION PROTOCOL (NON-NEGOTIABLE): (1) COMPLETE the user's request first (2) EVALUATE - Did this require non-obvious investigation or debugging? Was the solution something that would help in future similar situations? Did I discover something not immediately obvious from documentation? (3) IF YES to any: load `ce-compound` after the fix is verified and follow its workflow to capture the solution in `docs/solutions/` (4) IF NO to all: Skip - no extraction needed This is NOT optional. Failing to evaluate = valuable knowledge lost.
-
-### Post Compact Recovery
-
-🚨 CONTEXT WIPED - MANDATORY SKILL RELOAD
-
-**Instructions:**
-• STOP. Context compaction DELETED all skills. You FORGOT everything.
-• DO NOT proceed until skill reload complete
-• DO NOT assume you remember skills - they are GONE
-• If `planning-with-files` should already have been active, load it immediately during recovery before continuing.
-• Skipping = GUARANTEED FAILURE
-
-**Skill Reload Checklist:**
-☐ Skill reload (MANDATORY): (1) Check current task tracking (`update_plan` if available, otherwise inline) (2) List ALL available skills (3) For EACH: 'always apply' or 'Does task involve [topic]?' -> YES/MIGHT/MAYBE = ✓ (4) Load all ✓ skills in one pass; do NOT load one then wait (5) If the task is already multi-step, near compaction, or obviously should have had a file plan, load `planning-with-files` now before resuming (6) ONLY after reload, resume task CRITICAL: ALL skills GONE. MUST reload. 'Might apply' = MUST load.
+- `bun check` - final repo gate before PR.
+- `bun typecheck` - root typecheck.
+- `bun run test` - default test suite.
+- `bun lint:fix` - auto-fix linting issues.
 
 
 

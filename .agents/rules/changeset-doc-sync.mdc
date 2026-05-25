@@ -12,29 +12,28 @@ Use this workflow when release docs must match current changeset content.
    - `git diff --name-only -- example`
    - `git diff --stat -- example`
    - `git diff -- example`
-   - Save migration conclusions in `findings.md`.
-   - **Mandatory:** build a `/example` change checklist in `task_plan.md` with one checkbox per changed file.
+   - Save migration conclusions in the active `docs/plans/<date>-changeset-doc-sync.md`.
+   - **Mandatory:** build a `/example` change checklist in that goal plan with one checkbox per changed file.
    - For each changed `/example` file, record:
      - impacted doc file(s), or
      - explicit `no doc impact` justification.
 
-2. Run file-based planning first (`planning-with-files`):
-   - Keep `task_plan.md`, `findings.md`, `progress.md` in repo root.
-   - Append dated sections if these files already exist.
-   - **Mandatory:** `task_plan.md` must include an exhaustive per-file checklist (every target doc as its own `- [ ]` item).
+2. Run `autogoal` planning first:
+   - Create or continue one `docs/plans/<date>-changeset-doc-sync.md` goal plan.
+   - Use `node .agents/rules/autogoal/scripts/create-goal-scratchpad.mjs --template task --title "changeset doc sync"` when creating a new plan.
+   - **Mandatory:** the goal plan must include an exhaustive per-file checklist (every target doc as its own `- [ ]` item).
 
 3. Resolve active changeset target(s):
    - List `.changeset/*.md` excluding `.changeset/README.md`.
    - Use changed changeset file(s) in the branch.
    - Extract breaking/features/patches and migration snippets.
 
-4. Build checklists in **both** places:
-   - `task_plan.md` (execution checklist; required)
+4. Build execution checklists in the goal plan:
    - Include every file in:
      - `www/**/*.md`
      - `www/**/*.mdx`
      - `packages/kitcn/skills/kitcn/**/*.md`
-   - Keep `/example` crosswalk checklist in `task_plan.md` in sync during the run.
+   - Keep `/example` crosswalk checklist in the goal plan in sync during the run.
 
 5. Read every listed doc and sync:
    - Update docs where migration changes are required.
@@ -43,15 +42,16 @@ Use this workflow when release docs must match current changeset content.
    - For each `/example` changed file, mark the corresponding crosswalk checkbox only after linked docs are verified.
 
 6. Completion gates:
-   - `/example` crosswalk in `task_plan.md` has zero unchecked file items.
-   - `task_plan.md` has zero unchecked file items.
+   - `/example` crosswalk in the goal plan has zero unchecked file items.
+   - The goal plan has zero unchecked file items.
    - No unchecked items remain.
-   - `progress.md` logs scanned/updated/unchanged totals.
-   - `findings.md` maps key doc edits to concrete changeset bullets.
+   - The goal plan logs scanned/updated/unchanged totals.
+   - The goal plan maps key doc edits to concrete changeset bullets.
+   - `node .agents/rules/autogoal/scripts/check-complete.mjs docs/plans/<date>-changeset-doc-sync.md` passes.
 
 ## Non-negotiable checklist rules
 
-1. Do not summarize file coverage in `task_plan.md` (for example, "56 files scanned").  
+1. Do not summarize file coverage in the goal plan (for example, "56 files scanned").  
    You must list each file explicitly with its own checkbox.
 2. Every processed file must be marked:
    - `updated`, or
@@ -60,7 +60,7 @@ Use this workflow when release docs must match current changeset content.
 4. Any changed `/example` file without a mapped doc check or `no doc impact` note is a hard failure.
 5. Do not close the run until `/example` diff, changeset bullets, and updated docs are all cross-referenced.
 
-## task_plan.md checklist template (required)
+## Goal plan checklist template (required)
 
 ```md
 ### Phase: Doc Sync Checklist (www)
