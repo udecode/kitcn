@@ -159,8 +159,10 @@ lock.
   inconclusive, or has no local patch. This is a task-skill requirement, so it
   satisfies the repo git permission policy. Stage the entire current checkout
   per repo policy when creating the PR, create the commit, push, create or
-  update the PR before tracker comments, and keep the PR description synced to
-  the final handoff.
+  update the PR before tracker comments. The `task` skill owns the PR body:
+  use `git-commit-push-pr` for git/gh transport, then write the PR description
+  from the task-style final handoff contract below instead of the generic
+  adaptive PR summary.
 - Review skills: load only for risky, large, user-facing, or
   architecture-sensitive changes.
 - `agent-native-reviewer`: changes touch `.agents/**`, `.claude/**`,
@@ -283,6 +285,27 @@ Keep verification mandatory and proportional.
   implementation history.
 - For browser work, include the exact route and human verification steps.
 
+## Task-Style PR Body
+
+When a `task` run creates or updates a PR, the PR description must mirror the
+task final handoff. Do not use a generic `Summary` / `Verification` PR body, an
+adaptive prose body from `git-commit-push-pr`, or a generated badge footer
+unless the caller or repo template explicitly asks for it.
+
+Use this order:
+
+1. Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
+   part of the diff and repo policy expects auto release, include that block.
+2. PR line when useful.
+3. Issue or tracker line when applicable.
+4. Confidence line.
+5. Reproduced / Verified table with test and browser columns.
+6. `Outcome`, `Caveat`, `Design`, and `Verified` sections.
+
+The body should tell QA/reviewers what was fixed, how it was reproduced, how it
+was verified, and why the chosen ownership boundary is right. After editing,
+verify it with `gh pr view --json body` before final handoff.
+
 ## Success Criteria
 
 - Source-of-truth context was read first.
@@ -300,4 +323,6 @@ Keep verification mandatory and proportional.
 - Verified code-changing work was committed and PR'd, or the user explicitly
   declined that path, the work had no local patch, or a real blocker was
   recorded.
+- PR descriptions created by task runs used the task-style final handoff body
+  and were verified with `gh pr view --json body`.
 - Final handoff matched the task type and any task-template gate evidence.

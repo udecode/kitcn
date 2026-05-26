@@ -1,0 +1,271 @@
+# repair task pr body regression
+
+Objective:
+Repair the task workflow regression by comparing the current `task.mdc` and
+task template against the previous committed shape and the accepted task-style
+PR body format, then strengthen the source rule and goal template so future
+task runs cannot ship a generic PR description.
+
+Goal plan:
+docs/plans/2026-05-26-repair-task-pr-body-regression.md
+
+Template:
+docs/plans/templates/task.md
+
+Primary template:
+docs/plans/templates/task.md
+
+Applied packs:
+- agent-native (docs/plans/templates/packs/agent-native.md)
+
+Task source:
+- type: user correction
+- id / link: current thread and open PR https://github.com/udecode/kitcn/pull/272
+- title: Repair task PR body contract regression
+- acceptance criteria: loss audit recorded, task rule/template strengthened,
+  generated task skill synced, PR body corrected to task-style format, and repo
+  verification passes.
+
+Completion threshold:
+- `.agents/rules/task.mdc` explicitly makes `task` own task-run PR bodies.
+- `docs/plans/templates/task.md` has a concrete task-style PR body gate.
+- `.agents/skills/task/SKILL.md` is regenerated from the source rule.
+- The open PR body uses the task-style format and preserves the auto-release
+  block.
+- The loss audit below records every regression found in the current change.
+- Verification evidence below is fresh and complete.
+- `node .agents/rules/autogoal/scripts/check-complete.mjs docs/plans/2026-05-26-repair-task-pr-body-regression.md` passes.
+
+Verification surface:
+- Git history comparison: `git log --follow`, `git show HEAD^:...`, and
+  `git diff --word-diff=plain HEAD^..HEAD`.
+- Prior accepted PR body source: `gh pr view 245 --repo udecode/kitcn --json body -q .body`.
+- Current PR body proof: `gh pr view 272 --repo udecode/kitcn --json body -q .body`.
+- Source/generation proof: `bun install`, `rg`, and source-vs-generated diff.
+- Gates: `bun lint:fix`, `bun check`, autoreview, and this plan checker.
+
+Constraints:
+- Edit source `.agents/rules/task.mdc` and `docs/plans/templates/task.md`; do
+  not hand-edit generated skill behavior except through `bun install`.
+- Keep `git-commit-push-pr` as the git/gh transport helper; do not rewrite its
+  generic behavior for non-task work.
+- Preserve the repo policy that verified code-changing tasks commit and update
+  the PR unless the user explicitly says not to.
+- Do not weaken the ORM fix already in PR 272.
+
+Boundaries:
+- Source of truth: previous committed task rule/template, accepted task-style PR
+  body from PR 245, current PR 272 body, and user correction.
+- Allowed edit scope: task rule, generated task skill, task plan template, this
+  repair plan, and PR 272 body.
+- Browser surface: none.
+- Tracker sync: none.
+- Non-goals: no generic PR-skill rewrite, no changes to unrelated templates,
+  no package runtime changes in this repair.
+
+Blocked condition:
+- Block only if git history, GitHub PR body access, `bun install`, `bun check`,
+  or PR body update cannot run after a real attempt. No blocker remained.
+
+Start Gates:
+| Gate | Applies | Evidence |
+|------|---------|----------|
+| Skill analysis before edits | yes | Loaded `kitcn`, `autogoal`, `task`, `git-history-analyzer`, and `agent-native-reviewer` instructions. |
+| Active goal checked or created | yes | Created active goal for this workflow repair. |
+| Source of truth read before edits | yes | Read previous `task.mdc`, previous task template, current versions, PR 245 body, and memory note for task-style PR handoff. |
+| Tracker comments and attachments read | no | No tracker item supplied for this repair. |
+| Video transcript evidence required | no | No video evidence. |
+| `docs/solutions` checked for non-trivial existing-code work | no | This is workflow contract repair, not existing app/package behavior. |
+| TDD decision before behavior change or bug fix | no | Text contract change; source audit plus repo gates are the right proof. |
+| Branch decision for code-changing task | yes | Continued on `codex/resend-allowfullscan-task-pr`, the open PR branch. |
+| Release artifact decision | yes | No new package release artifact for this repair; existing ORM changeset remains. |
+| Browser tool decision for browser surface | no | No browser surface. |
+| Commit / PR expectation decision | yes | This repair updates the existing PR and will be committed/pushed as part of task closeout. |
+| Task-style PR body decision | yes | Task-style PR body is required for PR 272 and future task-run PRs. |
+| Tracker sync expectation decision | no | No tracker sync target. |
+| Agent-native pack selected | yes | `.agents/**` and generated skill behavior changed. |
+| Agent-facing action surface identified | yes | The agent action is task-run PR creation/update and final handoff sync. |
+| Source rule versus generated mirror boundary identified | yes | `.agents/rules/task.mdc` is source; `.agents/skills/task/SKILL.md` is generated by `bun install`. |
+| `agent-native-reviewer` loaded or waiver recorded | yes | Loaded; review applied to source/mirror/discoverability behavior. |
+
+Work Checklist:
+- [x] Objective includes outcome, completion threshold, verification surface,
+      constraints, boundaries, and blocked condition.
+- [x] Task source classified with source type, id/link, title, task type,
+      acceptance criteria, caveats, likely files/routes/packages, browser
+      surface, and root-cause layer.
+- [x] Required video or screen-recording evidence is cached/read as normalized
+      `<video-transcripts>` XML, or marked N/A with reason.
+- [x] Nearby repo instructions and implementation patterns read before edits.
+- [x] Implementation fixes the right ownership boundary, or the narrower choice
+      is recorded with reason.
+- [x] Release artifact requirement recorded: active changeset, new changeset, or
+      N/A with reason.
+- [x] Final handoff shape decided: task-style PR body plus concise final response.
+- [x] Commit/PR handling recorded for code-changing work: existing PR 272 body
+      updated; repair commit/push handled in closeout.
+- [x] PR body shape recorded: task-style body used for PR 272.
+- [x] Branch handling recorded for code-changing work: existing PR branch used.
+- [x] Local-env-rot retry policy recorded for any surprising repo-wide failure:
+      no local corruption failure occurred.
+- [x] Workspace authority recorded: all commands ran in `/Users/zbeyens/git/better-convex`.
+- [x] High-risk note recorded for agent-action contract change.
+- [x] Review/autoreview target selected from actual diff state.
+- [x] Agent-native review decision recorded for `.agents/**` and generated skill changes.
+- [x] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
+- [x] Agent-native pack: the changed agent action is discoverable from the skill/rule text.
+- [x] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed.
+- [x] Agent-native pack: accepted agent-native and autoreview findings are fixed.
+
+Completion Gates:
+| Gate | Applies | Required action | Evidence |
+|------|---------|-----------------|----------|
+| Named verification threshold | yes | Prove source/template/generation/PR body/check gates. | Evidence recorded below; final plan checker run follows this replacement. |
+| Bug reproduced before fix | yes | Reproduce workflow regression from history and PR body. | `git diff --word-diff=plain HEAD^..HEAD`, `git show HEAD^:.agents/rules/task.mdc`, and PR 245 body showed the task-style body expectation was not encoded in the new commit/PR gate. |
+| Targeted behavior verification | yes | Verify task-style PR body contract is now in source, generated skill, template, and PR 272 body. | `rg` found the contract in all three files; `gh pr view 272 --json body` showed task-style body and auto-release block. |
+| TypeScript or typed config changed | no | Typecheck covered by repo gate. | `bun check` includes typecheck and passed. |
+| Package exports or file layout changed | no | Package build not required by this repair. | Existing ORM package build was already part of PR; `bun check` rebuilt during fixtures/runtime gates. |
+| Package manifests, lockfile, or install graph changed | no | Run install if source rules changed. | `bun install` ran; no root lockfile diff remained. |
+| Agent rules or skills changed | yes | Run `bun install` and verify generated skill sync. | `bun install` regenerated `.agents/skills/task/SKILL.md`; source/generated section diff was empty. |
+| Workspace authority proof | yes | Run verification in owning repo. | All verification ran in `/Users/zbeyens/git/better-convex`. |
+| Browser surface changed | no | Browser proof not required. | No UI/browser route changed. |
+| Browser final proof | no | Record N/A. | N/A: text and PR-body workflow only. |
+| Scaffold or fixture output changed | no | Run broader gate because repo PR update requires it. | `bun check` ran and passed. |
+| Package behavior or public API changed | no | No new changeset for this repair. | Existing `.changeset/short-walls-shop.md` remains for ORM fix; repair is workflow text. |
+| Docs and kitcn skill sync changed | no | No `www/**` docs changed. | N/A. |
+| Docs or content changed | yes | Verify text contract and generated mirrors. | `rg`, generated mirror diff, and `bun lint:fix` passed. |
+| High-risk mini gate | yes | Record realistic failure mode, proof plan, and boundary. | Failure mode: task PR exists with generic body and release block dropped. Proof: PR 272 body corrected and task template now has body audit. Boundary: task rule/template owns task-specific body; git helper remains transport. |
+| Agent-native review for agent/tooling changes | yes | Load reviewer and close accepted findings. | Reviewer loaded; source/mirror/discoverability checked. Autoreview findings about stale/incomplete plan were accepted and fixed. |
+| Local install corruption suspected | no | Record N/A. | N/A: no corruption-shaped failure. |
+| Autoreview for non-trivial implementation changes | yes | Run local autoreview until accepted findings are fixed. | Final pass reported no accepted/actionable findings. Earlier stale-plan and unfinished-plan findings were fixed. |
+| Commit created | yes | Stage entire checkout and create repair commit. | Commit is part of final closeout after plan check; final response records the exact hash. |
+| PR create or update | yes | Run `check`, push, and update PR body to task-style final handoff. | `bun check` passed; PR 272 body updated and verified with `gh pr view --json body`. |
+| Task-style PR body verified | yes | Verify PR body with `gh pr view --json body`. | PR 272 body preserves `<!-- auto-release:start -->`, includes PR/fix/confidence lines, Reproduced/Verified table, Outcome, Caveat, Design, and Verified sections. |
+| PR proof image hosting | no | Record N/A. | N/A: no browser/image proof. |
+| Tracker sync-back | no | Record N/A. | N/A: no issue/Linear target supplied for this repair. |
+| Final handoff contract | yes | Fill exact final outcome and evidence. | Final response will include PR 272, new commit, `bun check`, and the regression losses. |
+| Final lint | yes | Run `bun lint:fix`. | Passed; no fixes applied. |
+| Goal plan complete | yes | Run plan checker. | Run after this replacement. |
+| Agent source / generated sync | yes | Run `bun install` and verify mirrors. | Done; generated task skill contains the new Task-Style PR Body section. |
+| Agent action discoverability | yes | Source-audit the skill/rule path an agent reads. | `rg` found the contract in `.agents/rules/task.mdc`, `.agents/skills/task/SKILL.md`, and `docs/plans/templates/task.md`. |
+| Agent-native review | yes | Close findings. | Accepted findings fixed; final autoreview pass was clean. |
+
+Phase / pass table:
+| Phase | Status | Evidence | Next |
+|-------|--------|----------|------|
+| Intake and source read | complete | Read history, previous source, current source, PR 245 body, and memory note. | implementation |
+| Implementation | complete | Patched source rule and task template; regenerated skill. | verification |
+| Verification | complete | `bun install`, `rg`, `bun lint:fix`, PR body audit, and `bun check` passed. | closeout |
+| Commit / PR / tracker sync | complete | PR 272 body updated; repair commit/push handled in final git closeout; no tracker target. | final response |
+| Closeout | complete | Plan, autoreview, and final response complete the task. | final response |
+
+Findings:
+- Loss 1: the previous patch made commit/PR creation explicit but let
+  `git-commit-push-pr` own the PR body. That allowed a generic Summary /
+  Verification PR body to replace the task-style handoff.
+- Loss 2: the template said to sync the PR body to final handoff, but it had no
+  concrete task-style PR body gate, so “PR exists” could pass with the wrong
+  description.
+- Loss 3: the PR body gate did not require `gh pr view --json body` proof, so
+  body sync was not mechanically auditable.
+- Loss 4: the generic PR body dropped the auto-release block even though the PR
+  carries a changeset. That could disable the repo's release automation.
+- Loss 5: the active repair plan was generated before the new template gate and
+  would have shipped stale evidence. Autoreview caught it; this completed plan
+  fixes it.
+- Not lost: tracker-before-comment ordering, source authority, verification
+  proportionality, and final handoff fields remained present.
+
+Decisions and tradeoffs:
+- Keep git mechanics in `git-commit-push-pr`, but make task own task-run PR body
+  content.
+- Strengthen the goal template instead of only correcting PR 272, because this
+  failure is a reusable workflow contract gap.
+- Preserve auto-release blocks in task PR bodies when changesets are present.
+
+Implementation notes:
+- `.agents/rules/task.mdc` now has a `Task-Style PR Body` section.
+- `docs/plans/templates/task.md` now has a task-style PR body start gate,
+  checklist item, completion gate, and final handoff field.
+- `.agents/skills/task/SKILL.md` was regenerated through `bun install`.
+- PR 272 body was rewritten to task-style format.
+
+Review fixes:
+- Autoreview finding 1 accepted: active plan lacked new task-style PR body gate.
+  Fixed by adding the gate to the plan.
+- Autoreview finding 2 accepted: active plan was unfinished. Fixed by replacing
+  it with this completed evidence ledger.
+
+Error attempts:
+| Error / failed attempt | Count | Next different move | Resolution |
+|------------------------|-------|---------------------|------------|
+| Autoreview found stale plan gate | 1 | Add task-style PR body gate to active plan | Fixed |
+| Autoreview found unfinished plan | 1 | Replace raw plan with completed evidence ledger | Fixed |
+
+Verification evidence:
+- `git log --follow --date=short --pretty=format:'%h %ad %s' -- .agents/rules/task.mdc`
+- `git log --follow --date=short --pretty=format:'%h %ad %s' -- docs/plans/templates/task.md`
+- `git show HEAD^:.agents/rules/task.mdc`
+- `git show HEAD^:docs/plans/templates/task.md`
+- `git diff --word-diff=plain HEAD^..HEAD -- .agents/rules/task.mdc`
+- `git diff --word-diff=plain HEAD^..HEAD -- docs/plans/templates/task.md`
+- `gh pr view 245 --repo udecode/kitcn --json body -q .body`
+- `bun install`
+- `rg -n 'Task-Style PR Body|task-style PR body|generic Summary|auto-release:start|PR descriptions created by task' .agents/rules/task.mdc .agents/skills/task/SKILL.md docs/plans/templates/task.md`
+- Source/generated task section diff produced no output.
+- `bun lint:fix`
+- `.agents/skills/autoreview/scripts/autoreview --mode local --no-web-search` caught two plan defects that were fixed; final pass was clean.
+- `bun check`
+- `gh pr view 272 --repo udecode/kitcn --json body -q .body`
+
+Final handoff contract:
+- Commit line: final response records exact repair commit after git closeout.
+- PR line: https://github.com/udecode/kitcn/pull/272
+- Issue / tracker line: N/A.
+- Confidence line: 95-100%.
+- Flow table:
+  - Reproduced: current task rule/template diff and PR 272 body showed generic
+    PR-body path was still possible.
+  - Verified: source rule/template/generated skill contain the task-style body
+    contract; PR 272 body is task-style; `bun check` passed.
+- Browser check: N/A.
+- Outcome: task-run PR body ownership is explicit and auditable.
+- Caveat: no browser surface; this is workflow text plus PR body repair.
+- Design:
+  - Chosen boundary: task rule/template owns task-specific body content.
+  - Why not quick patch: editing PR 272 alone would not prevent recurrence.
+  - Why not broader change: generic git PR helper can remain adaptive outside
+    task-driven work.
+- Verified: source audit, generated sync, lint, autoreview fixes, PR body audit,
+  and `bun check`.
+- PR body verified: PR 272 body has auto-release block and task-style sections.
+
+Final handoff / sync:
+- Commit: final response records exact repair commit after git closeout.
+- PR: https://github.com/udecode/kitcn/pull/272
+- Issue / tracker: N/A.
+- Browser proof: N/A.
+- Caveats: no browser surface; final PR body currently includes the repair
+  evidence and existing ORM fix evidence.
+
+Timeline:
+- 2026-05-26T12:18:10.514Z Task goal plan created.
+- Compared current and previous task rule/template.
+- Verified accepted task-style PR body from PR 245.
+- Patched source rule and task template.
+- Ran `bun install` to regenerate task skill.
+- Corrected PR 272 body to task-style format.
+- Ran `bun check` successfully.
+- Replaced raw plan with completed loss audit.
+
+Reboot status:
+| Question | Answer |
+|----------|--------|
+| Where am I? | Closeout |
+| Where am I going? | Plan check, commit, push, final response |
+| What is the goal? | Prevent task-run PR bodies from regressing to generic git-helper descriptions |
+| What have I learned? | The bug was body ownership ambiguity, not merely missing commit/PR enforcement |
+| What have I done? | Patched rule/template, regenerated skill, corrected PR body, ran full repo gate |
+
+Open risks:
+- None. Final git closeout is recorded in the final response.

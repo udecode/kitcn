@@ -21,12 +21,13 @@ Completion threshold:
   satisfied or explicitly narrowed, required verification evidence is recorded,
   code-review and release-artifact gates are closed when applicable, verified
   code changes are committed and PR'd unless explicitly declined or blocked,
+  task-style PR body sync is complete or marked N/A with reason,
   tracker/PR sync is complete or marked N/A with reason, and
   `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` passes.
 
 Verification surface:
 - TODO: Name the tests, typecheck, lint, browser proof, source audit, PR/tracker
-  sync, or other artifact proving the threshold.
+  sync, PR body audit, or other artifact proving the threshold.
 
 Constraints:
 - Preserve existing user-facing behavior outside the task scope.
@@ -34,6 +35,8 @@ Constraints:
 - Verified code changes must be committed and PR'd because the task skill
   requires that path unless the user explicitly says not to, the work has no
   local patch, or a real blocker is recorded.
+- A PR created by this task must use the task-style PR body contract below, not
+  a generic summary/body from a git helper skill.
 - Do not add broad ceremony when the task is trivial or docs-only.
 
 Boundaries:
@@ -84,6 +87,7 @@ Start Gates:
 | Release artifact decision | pending | pending |
 | Browser tool decision for browser surface | pending | pending |
 | Commit / PR expectation decision | pending | pending |
+| Task-style PR body decision | pending | pending |
 | Tracker sync expectation decision | pending | pending |
 
 Work Checklist:
@@ -103,6 +107,8 @@ Work Checklist:
       requirements, PR body sync, and issue/Linear sync when applicable.
 - [ ] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
+- [ ] PR body shape recorded: task-style body used, N/A reason recorded, or
+      blocker recorded.
 - [ ] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
 - [ ] Local-env-rot retry policy recorded for any surprising repo-wide failure:
@@ -139,7 +145,8 @@ Completion Gates:
 | Local install corruption suspected | pending | Run `bun install` once, rerun the exact failing command, or record N/A | pending |
 | Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
 | Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
+| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
+| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable and include PR/tracker line, confidence, Reproduced/Verified table, Outcome, Caveat, Design, and Verified sections as applicable | pending |
 | PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
 | Tracker sync-back | pending | Post concise issue/Linear sync after PR exists, or record N/A/blocker | pending |
 | Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
@@ -191,6 +198,19 @@ Final handoff contract:
   - Why not quick patch: pending
   - Why not broader change: pending
 - Verified: pending
+- PR body verified: pending
+
+Task-style PR body contract:
+- Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
+  part of the diff and repo policy expects auto release, include that block.
+- Use the final handoff fields in this order: PR line when useful, issue or
+  tracker line when applicable, confidence line, Reproduced / Verified table,
+  Outcome, Caveat, Design, and Verified.
+- Do not replace this with a generic `Summary` / `Verification` PR body, an
+  adaptive prose body from a git helper skill, or an unrelated generated badge
+  footer unless the caller or repo template explicitly asks for it.
+- Proof is `gh pr view --json body` output or a concise source-backed summary
+  of that output.
 
 Final handoff / sync:
 - Commit: pending
