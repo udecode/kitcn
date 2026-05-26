@@ -146,7 +146,7 @@ Completion Gates:
 | Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
 | Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
 | PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable and include PR/tracker line, confidence, Reproduced/Verified table, Outcome, Caveat, Design, and Verified sections as applicable | pending |
+| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must include an issue/tracker/fix line when applicable, confidence, Reproduced/Verified table, Outcome, Caveat, Design, and Verified sections as applicable | pending |
 | PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
 | Tracker sync-back | pending | Post concise issue/Linear sync after PR exists, or record N/A/blocker | pending |
 | Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
@@ -203,9 +203,11 @@ Final handoff contract:
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
   part of the diff and repo policy expects auto release, include that block.
-- Use the final handoff fields in this order: PR line when useful, issue or
-  tracker line when applicable, confidence line, Reproduced / Verified table,
-  Outcome, Caveat, Design, and Verified.
+- Use the final handoff fields in this order: issue, tracker, or fix line when
+  applicable; confidence line; Reproduced / Verified table; Outcome; Caveat;
+  Design; and Verified.
+- Never include a line that links to the current PR itself. The current PR URL
+  belongs in the final response, not in its own description.
 - Do not replace this with a generic `Summary` / `Verification` PR body, an
   adaptive prose body from a git helper skill, or an unrelated generated badge
   footer unless the caller or repo template explicitly asks for it.

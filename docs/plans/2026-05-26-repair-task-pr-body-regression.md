@@ -140,7 +140,7 @@ Completion Gates:
 | Autoreview for non-trivial implementation changes | yes | Run local autoreview until accepted findings are fixed. | Final pass reported no accepted/actionable findings. Earlier stale-plan and unfinished-plan findings were fixed. |
 | Commit created | yes | Stage entire checkout and create repair commit. | Commit is part of final closeout after plan check; final response records the exact hash. |
 | PR create or update | yes | Run `check`, push, and update PR body to task-style final handoff. | `bun check` passed; PR 272 body updated and verified with `gh pr view --json body`. |
-| Task-style PR body verified | yes | Verify PR body with `gh pr view --json body`. | PR 272 body preserves `<!-- auto-release:start -->`, includes PR/fix/confidence lines, Reproduced/Verified table, Outcome, Caveat, Design, and Verified sections. |
+| Task-style PR body verified | yes | Verify PR body with `gh pr view --json body`. | PR 272 body preserves `<!-- auto-release:start -->`, contains no current-PR self-link, and includes fix/confidence lines, Reproduced/Verified table, Outcome, Caveat, Design, and Verified sections. |
 | PR proof image hosting | no | Record N/A. | N/A: no browser/image proof. |
 | Tracker sync-back | no | Record N/A. | N/A: no issue/Linear target supplied for this repair. |
 | Final handoff contract | yes | Fill exact final outcome and evidence. | Final response will include PR 272, new commit, `bun check`, and the regression losses. |
@@ -220,7 +220,7 @@ Verification evidence:
 
 Final handoff contract:
 - Commit line: final response records exact repair commit after git closeout.
-- PR line: https://github.com/udecode/kitcn/pull/272
+- PR line: final response only; not part of the PR body itself.
 - Issue / tracker line: N/A.
 - Confidence line: 95-100%.
 - Flow table:
@@ -238,7 +238,8 @@ Final handoff contract:
     task-driven work.
 - Verified: source audit, generated sync, lint, autoreview fixes, PR body audit,
   and `bun check`.
-- PR body verified: PR 272 body has auto-release block and task-style sections.
+- PR body verified: PR 272 body has auto-release block, no current-PR
+  self-link, and task-style sections.
 
 Final handoff / sync:
 - Commit: final response records exact repair commit after git closeout.

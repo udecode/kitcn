@@ -296,11 +296,12 @@ Use this order:
 
 1. Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
    part of the diff and repo policy expects auto release, include that block.
-2. PR line when useful.
-3. Issue or tracker line when applicable.
-4. Confidence line.
-5. Reproduced / Verified table with test and browser columns.
-6. `Outcome`, `Caveat`, `Design`, and `Verified` sections.
+2. Issue, tracker, or fix line when applicable. Never include a line that links
+   to the current PR itself; the current PR URL belongs in the final response,
+   not in its own description.
+3. Confidence line.
+4. Reproduced / Verified table with test and browser columns.
+5. `Outcome`, `Caveat`, `Design`, and `Verified` sections.
 
 The body should tell QA/reviewers what was fixed, how it was reproduced, how it
 was verified, and why the chosen ownership boundary is right. After editing,
