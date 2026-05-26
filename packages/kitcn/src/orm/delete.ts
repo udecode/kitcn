@@ -5,7 +5,9 @@ import { getIndexes } from './index-utils';
 import {
   applyIncomingForeignKeyActionsOnDelete,
   type CascadeMode,
+  canUsePrimaryIdLookupCursor,
   collectMutationRowsBounded,
+  collectPrimaryIdLookupRows,
   type DeleteMode,
   evaluateFilter,
   extractPrimaryIdLookup,
@@ -22,7 +24,6 @@ import {
   softDeleteRow,
   splitReturningSelection,
   toConvexFilter,
-  windowPrimaryIdLookup,
 } from './mutation-utils';
 import { GelRelationalQuery } from './query';
 import { QueryPromise } from './query-promise';
@@ -417,28 +418,24 @@ export class ConvexDeleteBuilder<
     let rows: Record<string, unknown>[];
     let continueCursor: string | null = null;
     let isDone = true;
-    const primaryIdLookup = extractPrimaryIdLookup(this.whereExpression);
+    const primaryIdLookup = canUsePrimaryIdLookupCursor(pagination?.cursor)
+      ? extractPrimaryIdLookup(this.whereExpression)
+      : null;
     if (primaryIdLookup) {
-      const primaryIdWindow = windowPrimaryIdLookup(
+      const primaryIdRows = await collectPrimaryIdLookupRows(
+        this.db,
+        tableName,
         primaryIdLookup,
-        pagination
+        {
+          operation: 'delete',
+          pagination,
+          batchSize,
+          maxRows,
+        }
       );
-      continueCursor = primaryIdWindow.continueCursor;
-      isDone = primaryIdWindow.isDone;
-      if (primaryIdWindow.values.length > maxRows) {
-        throw new Error(
-          `delete exceeded mutationMaxRows (${maxRows}) on "${tableName}". ` +
-            'Narrow the filter or increase defineSchema(..., { defaults: { mutationMaxRows } }).'
-        );
-      }
-      const normalizedIds = primaryIdWindow.values
-        .filter((value) => value !== null && value !== undefined)
-        .map((value) => this.db.normalizeId(tableName as any, value as any))
-        .filter((value): value is NonNullable<typeof value> => value !== null);
-      const fetchedRows = await Promise.all(
-        normalizedIds.map((value) => this.db.get(value as any))
-      );
-      rows = fetchedRows.filter((row): row is Record<string, unknown> => !!row);
+      continueCursor = primaryIdRows.continueCursor;
+      isDone = primaryIdRows.isDone;
+      rows = primaryIdRows.rows;
     } else if (this.whereExpression) {
       const compiler = new WhereClauseCompiler(
         tableName,

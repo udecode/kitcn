@@ -620,6 +620,13 @@ const parsePrimaryIdLookupCursor = (cursor: string | null): number => {
   return offset;
 };
 
+export const canUsePrimaryIdLookupCursor = (
+  cursor: string | null | undefined
+): boolean =>
+  cursor === null ||
+  cursor === undefined ||
+  cursor.startsWith(PRIMARY_ID_LOOKUP_CURSOR_PREFIX);
+
 export const extractPrimaryIdLookup = (
   expression: FilterExpression<boolean> | undefined
 ): PrimaryIdLookup | null => {
@@ -683,6 +690,56 @@ export const windowPrimaryIdLookup = (
       : `${PRIMARY_ID_LOOKUP_CURSOR_PREFIX}${nextOffset}`,
     isDone,
     values,
+  };
+};
+
+export const collectPrimaryIdLookupRows = async (
+  db: GenericDatabaseWriter<any>,
+  tableName: string,
+  lookup: PrimaryIdLookup,
+  options: {
+    operation: 'update' | 'delete';
+    pagination: { cursor: string | null; limit: number } | undefined;
+    batchSize: number;
+    maxRows: number;
+  }
+): Promise<{
+  continueCursor: string | null;
+  isDone: boolean;
+  rows: Record<string, unknown>[];
+}> => {
+  if (!options.pagination && lookup.values.length > options.maxRows) {
+    throw new Error(
+      `${options.operation} exceeded mutationMaxRows (${options.maxRows}) on "${tableName}". ` +
+        'Narrow the filter or increase defineSchema(..., { defaults: { mutationMaxRows } }).'
+    );
+  }
+  if (!options.pagination && lookup.values.length > options.batchSize) {
+    throw new Error(
+      `${options.operation} matched more than mutationBatchSize (${options.batchSize}) primary ids on "${tableName}". ` +
+        'Use executeAsync({ batchSize }) or paginate() to split the mutation.'
+    );
+  }
+
+  const primaryIdWindow = windowPrimaryIdLookup(lookup, options.pagination);
+  if (primaryIdWindow.values.length > options.maxRows) {
+    throw new Error(
+      `${options.operation} exceeded mutationMaxRows (${options.maxRows}) on "${tableName}". ` +
+        'Narrow the filter or increase defineSchema(..., { defaults: { mutationMaxRows } }).'
+    );
+  }
+  const normalizedIds = primaryIdWindow.values
+    .filter((value) => value !== null && value !== undefined)
+    .map((value) => db.normalizeId(tableName as any, value as any))
+    .filter((value): value is NonNullable<typeof value> => value !== null);
+  const fetchedRows = await Promise.all(
+    normalizedIds.map((value) => db.get(value as any))
+  );
+
+  return {
+    continueCursor: primaryIdWindow.continueCursor,
+    isDone: primaryIdWindow.isDone,
+    rows: fetchedRows.filter((row): row is Record<string, unknown> => !!row),
   };
 };
 
