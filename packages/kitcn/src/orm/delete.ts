@@ -8,6 +8,7 @@ import {
   collectMutationRowsBounded,
   type DeleteMode,
   evaluateFilter,
+  extractPrimaryIdLookup,
   getMutationAsyncDelayMs,
   getMutationCollectionLimits,
   getMutationExecutionMode,
@@ -21,6 +22,7 @@ import {
   softDeleteRow,
   splitReturningSelection,
   toConvexFilter,
+  windowPrimaryIdLookup,
 } from './mutation-utils';
 import { GelRelationalQuery } from './query';
 import { QueryPromise } from './query-promise';
@@ -205,32 +207,6 @@ export class ConvexDeleteBuilder<
   allowFullScan(): ConvexDeleteBuilder<TTable, TReturning, TMode, true> {
     this.allowFullScanFlag = true;
     return this as any;
-  }
-
-  private getIdEquality():
-    | { matched: true; value: unknown }
-    | { matched: false } {
-    const expression = this.whereExpression;
-    if (!expression || expression.type !== 'binary') {
-      return { matched: false };
-    }
-    if (expression.operator !== 'eq') {
-      return { matched: false };
-    }
-    const [left, right] = expression.operands;
-    if (isFieldReference(left) && left.fieldName === '_id') {
-      if (isFieldReference(right)) {
-        return { matched: false };
-      }
-      return { matched: true, value: right };
-    }
-    if (isFieldReference(right) && right.fieldName === '_id') {
-      if (isFieldReference(left)) {
-        return { matched: false };
-      }
-      return { matched: true, value: left };
-    }
-    return { matched: false };
   }
 
   soft(): this {
@@ -441,17 +417,28 @@ export class ConvexDeleteBuilder<
     let rows: Record<string, unknown>[];
     let continueCursor: string | null = null;
     let isDone = true;
-    const idEquality = this.getIdEquality();
-    if (idEquality.matched) {
-      const idValue = idEquality.value;
-      if (isPaginated && pagination.cursor !== null) {
-        rows = [];
-      } else if (idValue === null || idValue === undefined) {
-        rows = [];
-      } else {
-        const row = await this.db.get(idValue as any);
-        rows = row ? [row as Record<string, unknown>] : [];
+    const primaryIdLookup = extractPrimaryIdLookup(this.whereExpression);
+    if (primaryIdLookup) {
+      const primaryIdWindow = windowPrimaryIdLookup(
+        primaryIdLookup,
+        pagination
+      );
+      continueCursor = primaryIdWindow.continueCursor;
+      isDone = primaryIdWindow.isDone;
+      if (primaryIdWindow.values.length > maxRows) {
+        throw new Error(
+          `delete exceeded mutationMaxRows (${maxRows}) on "${tableName}". ` +
+            'Narrow the filter or increase defineSchema(..., { defaults: { mutationMaxRows } }).'
+        );
       }
+      const normalizedIds = primaryIdWindow.values
+        .filter((value) => value !== null && value !== undefined)
+        .map((value) => this.db.normalizeId(tableName as any, value as any))
+        .filter((value): value is NonNullable<typeof value> => value !== null);
+      const fetchedRows = await Promise.all(
+        normalizedIds.map((value) => this.db.get(value as any))
+      );
+      rows = fetchedRows.filter((row): row is Record<string, unknown> => !!row);
     } else if (this.whereExpression) {
       const compiler = new WhereClauseCompiler(
         tableName,

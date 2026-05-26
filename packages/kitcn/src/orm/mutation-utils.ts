@@ -595,6 +595,97 @@ export const deserializeFilterExpression = (
   return createUnaryExpression(unary.operator, nested);
 };
 
+export type PrimaryIdLookup =
+  | { kind: 'eq'; values: [unknown] }
+  | { kind: 'in'; values: unknown[] };
+
+const PRIMARY_ID_LOOKUP_CURSOR_PREFIX = 'kitcn:primary-id:';
+
+const dedupePrimaryIds = (values: readonly unknown[]): unknown[] =>
+  Array.from(
+    new Map(values.map((value) => [String(value), value] as const)).values()
+  );
+
+const parsePrimaryIdLookupCursor = (cursor: string | null): number => {
+  if (cursor === null) {
+    return 0;
+  }
+  if (!cursor.startsWith(PRIMARY_ID_LOOKUP_CURSOR_PREFIX)) {
+    throw new Error('Invalid primary id mutation cursor.');
+  }
+  const offset = Number(cursor.slice(PRIMARY_ID_LOOKUP_CURSOR_PREFIX.length));
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new Error('Invalid primary id mutation cursor.');
+  }
+  return offset;
+};
+
+export const extractPrimaryIdLookup = (
+  expression: FilterExpression<boolean> | undefined
+): PrimaryIdLookup | null => {
+  if (!expression || expression.type !== 'binary') {
+    return null;
+  }
+
+  const binary = expression as BinaryExpression;
+  const [left, right] = binary.operands;
+  if (binary.operator === 'eq') {
+    if (isFieldReference(left) && left.fieldName === '_id') {
+      if (isFieldReference(right)) {
+        return null;
+      }
+      return { kind: 'eq', values: [right] };
+    }
+    if (isFieldReference(right) && right.fieldName === '_id') {
+      if (isFieldReference(left)) {
+        return null;
+      }
+      return { kind: 'eq', values: [left] };
+    }
+  }
+
+  if (
+    binary.operator === 'inArray' &&
+    isFieldReference(left) &&
+    left.fieldName === '_id' &&
+    Array.isArray(right)
+  ) {
+    return { kind: 'in', values: dedupePrimaryIds(right) };
+  }
+
+  return null;
+};
+
+export const windowPrimaryIdLookup = (
+  lookup: PrimaryIdLookup,
+  pagination: { cursor: string | null; limit: number } | undefined
+): {
+  continueCursor: string | null;
+  isDone: boolean;
+  values: unknown[];
+} => {
+  if (!pagination) {
+    return {
+      continueCursor: null,
+      isDone: true,
+      values: lookup.values,
+    };
+  }
+
+  const offset = parsePrimaryIdLookupCursor(pagination.cursor);
+  const nextOffset = offset + pagination.limit;
+  const values = lookup.values.slice(offset, nextOffset);
+  const isDone = nextOffset >= lookup.values.length;
+
+  return {
+    continueCursor: isDone
+      ? null
+      : `${PRIMARY_ID_LOOKUP_CURSOR_PREFIX}${nextOffset}`,
+    isDone,
+    values,
+  };
+};
+
 const DEFAULT_MUTATION_BATCH_SIZE = 400;
 const DEFAULT_MUTATION_LEAF_BATCH_SIZE = 1600;
 const DEFAULT_MUTATION_MAX_ROWS = 10_000;

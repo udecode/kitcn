@@ -154,9 +154,13 @@ lock.
 - Docs/content work: use `--template docs` when docs dominate; use `--with docs`
   when docs are a supporting touched surface. For `www/**`, keep matching
   `packages/kitcn/skills/kitcn/**` content in sync.
-- `git-commit-push-pr`: verified code should ship as a PR. Create or update the
-  PR before tracker comments, and keep the PR description synced to the final
-  handoff.
+- `git-commit-push-pr`: verified code should ship as a commit and PR unless
+  the user explicitly says not to, or the work is analytical, blocked,
+  inconclusive, or has no local patch. This is a task-skill requirement, so it
+  satisfies the repo git permission policy. Stage the entire current checkout
+  per repo policy when creating the PR, create the commit, push, create or
+  update the PR before tracker comments, and keep the PR description synced to
+  the final handoff.
 - Review skills: load only for risky, large, user-facing, or
   architecture-sensitive changes.
 - `agent-native-reviewer`: changes touch `.agents/**`, `.claude/**`,
@@ -258,8 +262,12 @@ Keep verification mandatory and proportional.
   `bun --cwd packages/kitcn build`.
 - If work changes `kitcn init -t` templates or scaffold sources, run
   `bun run fixtures:sync` and `bun run fixtures:check`.
-- If verified work changed code, create or update the PR before tracker
-  sync-back unless the user said not to.
+- If verified work changed code, commit it and create or update the PR before
+  tracker sync-back and final handoff unless the user explicitly said not to.
+  Do not mark commit/PR gates N/A merely because the user did not ask for a PR;
+  the task skill requires shipping verified code. If commit or PR creation is
+  impossible after real attempts, record the blocker and stop instead of
+  silently handing off a local-only patch.
 - If the task came from a tracker item and reached a meaningful outcome, sync
   back unless the user said not to.
 
@@ -289,4 +297,7 @@ Keep verification mandatory and proportional.
 - Only necessary skills were loaded.
 - Batch work did not sprawl without explicit instruction.
 - Verification matched change scope.
+- Verified code-changing work was committed and PR'd, or the user explicitly
+  declined that path, the work had no local patch, or a real blocker was
+  recorded.
 - Final handoff matched the task type and any task-template gate evidence.

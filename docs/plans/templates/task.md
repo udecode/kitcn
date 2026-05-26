@@ -19,8 +19,9 @@ Completion threshold:
 - TODO: Define the exact task done state.
 - Task closure is legal only when the source-of-truth acceptance criteria are
   satisfied or explicitly narrowed, required verification evidence is recorded,
-  code-review and release-artifact gates are closed when applicable, tracker/PR
-  sync is complete or marked N/A with reason, and
+  code-review and release-artifact gates are closed when applicable, verified
+  code changes are committed and PR'd unless explicitly declined or blocked,
+  tracker/PR sync is complete or marked N/A with reason, and
   `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` passes.
 
 Verification surface:
@@ -30,8 +31,9 @@ Verification surface:
 Constraints:
 - Preserve existing user-facing behavior outside the task scope.
 - Prefer the durable ownership boundary over caller-by-caller patches.
-- Do not create PRs, comments, commits, or pushes unless the task/user/skill
-  requires them.
+- Verified code changes must be committed and PR'd because the task skill
+  requires that path unless the user explicitly says not to, the work has no
+  local patch, or a real blocker is recorded.
 - Do not add broad ceremony when the task is trivial or docs-only.
 
 Boundaries:
@@ -81,7 +83,7 @@ Start Gates:
 | Branch decision for code-changing task | pending | pending |
 | Release artifact decision | pending | pending |
 | Browser tool decision for browser surface | pending | pending |
-| PR expectation decision | pending | pending |
+| Commit / PR expectation decision | pending | pending |
 | Tracker sync expectation decision | pending | pending |
 
 Work Checklist:
@@ -99,6 +101,8 @@ Work Checklist:
       N/A with reason.
 - [ ] Final handoff shape decided: bug/feature/testing/batch/review/tracker
       requirements, PR body sync, and issue/Linear sync when applicable.
+- [ ] Commit/PR handling recorded for code-changing work: commit and PR
+      completed, no local patch, user explicitly declined, or blocker recorded.
 - [ ] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
 - [ ] Local-env-rot retry policy recorded for any surprising repo-wide failure:
@@ -134,7 +138,8 @@ Completion Gates:
 | Agent-native review for agent/tooling changes | pending | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | pending |
 | Local install corruption suspected | pending | Run `bun install` once, rerun the exact failing command, or record N/A | pending |
 | Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
-| PR create or update | pending | Run `check` before PR work and sync PR body to final handoff | pending |
+| Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
+| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
 | PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
 | Tracker sync-back | pending | Post concise issue/Linear sync after PR exists, or record N/A/blocker | pending |
 | Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
@@ -147,7 +152,7 @@ Phase / pass table:
 | Intake and source read | in_progress | created plan | implementation |
 | Implementation | pending | | verification |
 | Verification | pending | | closeout |
-| PR / tracker sync | pending | | final response |
+| Commit / PR / tracker sync | pending | | final response |
 | Closeout | pending | | final response |
 
 Findings:
@@ -171,6 +176,7 @@ Verification evidence:
 - Pending.
 
 Final handoff contract:
+- Commit line: pending
 - PR line: pending
 - Issue / tracker line: pending
 - Confidence line: pending
@@ -187,6 +193,7 @@ Final handoff contract:
 - Verified: pending
 
 Final handoff / sync:
+- Commit: pending
 - PR: pending
 - Issue / tracker: pending
 - Browser proof: pending
@@ -199,7 +206,7 @@ Reboot status:
 | Question | Answer |
 |----------|--------|
 | Where am I? | Intake and source read |
-| Where am I going? | Implementation, verification, PR/tracker sync, closeout |
+| Where am I going? | Implementation, verification, commit/PR/tracker sync, closeout |
 | What is the goal? | TODO: Fill from Objective |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
