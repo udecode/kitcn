@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.15.7
+
+### Patch Changes
+
+- [#272](https://github.com/udecode/kitcn/pull/272) [`d286077`](https://github.com/udecode/kitcn/commit/d286077bf388956d8f423eaaa1afed18b0b4b7b9) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix ORM update and delete filters on primary id arrays so bounded mutations do not require `allowFullScan`.
+  - Bound sync primary-id mutation fanout by `mutationBatchSize` and keep legacy scheduled cursors on the query-pagination path.
+
 ## 0.15.6
 
 ### Patch Changes
