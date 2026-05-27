@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.15.8
+
+### Patch Changes
+
+- [#275](https://github.com/udecode/kitcn/pull/275) [`4dd56d0`](https://github.com/udecode/kitcn/commit/4dd56d062dbd268e7768f0a0e854572a840d7de6) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+
+  - Support Better Auth plugin sign-in methods in `useSignInMutationOptions`.
+
 ## 0.15.7
 
 ### Patch Changes
