@@ -196,6 +196,92 @@ describe('createAuthMutations', () => {
     expect(authClient.signIn.email).toHaveBeenCalledTimes(1);
   });
 
+  test('signIn(username): calls the requested sign-in method', async () => {
+    useConvexQueryClientSpy = vi
+      .spyOn(contextModule, 'useConvexQueryClient')
+      .mockReturnValue(null as any);
+
+    const authClient = {
+      signOut: vi.fn(async () => ({})),
+      signIn: {
+        social: vi.fn(async () => ({})),
+        email: vi.fn(async () => ({})),
+        username: vi.fn(async (args: unknown) => ({
+          args,
+          token: 'returned-username-token',
+        })),
+      },
+      signUp: {
+        email: vi.fn(async () => ({})),
+      },
+    };
+
+    const { useSignInMutationOptions } = createAuthMutations(authClient as any);
+
+    const wrapper = makeWrapper({ token: null });
+
+    const { result } = renderHook(
+      () => ({
+        store: useAuthStore(),
+        opts: useSignInMutationOptions({ signInMethod: 'username' } as any),
+      }),
+      { wrapper }
+    );
+
+    const res = await result.opts.mutationFn?.(
+      {
+        password: 'pw',
+        username: 'ada',
+      },
+      makeMutationCtx()
+    );
+    expect(res).toMatchObject({ token: 'returned-username-token' });
+
+    expect(result.store.get('token')).toBe('returned-username-token');
+    expect(authClient.signIn.username).toHaveBeenCalledTimes(1);
+    expect(authClient.signIn.username).toHaveBeenCalledWith({
+      password: 'pw',
+      username: 'ada',
+    });
+    expect(authClient.signIn.email).not.toHaveBeenCalled();
+  });
+
+  test('signIn(custom): throws when the sign-in method is missing', async () => {
+    useConvexQueryClientSpy = vi
+      .spyOn(contextModule, 'useConvexQueryClient')
+      .mockReturnValue(null as any);
+
+    const authClient = {
+      signOut: vi.fn(async () => ({})),
+      signIn: {
+        social: vi.fn(async () => ({})),
+        email: vi.fn(async () => ({})),
+      },
+      signUp: {
+        email: vi.fn(async () => ({})),
+      },
+    };
+
+    const { useSignInMutationOptions } = createAuthMutations(authClient as any);
+
+    const wrapper = makeWrapper({ token: null });
+
+    const { result } = renderHook(
+      () => ({
+        store: useAuthStore(),
+        opts: useSignInMutationOptions({ signInMethod: 'username' } as any),
+      }),
+      { wrapper }
+    );
+
+    await expect(
+      result.opts.mutationFn?.(
+        { password: 'pw', username: 'ada' },
+        makeMutationCtx()
+      )
+    ).rejects.toThrow('Auth client does not expose signIn.username');
+  });
+
   test('signUp(email): seeds the auth store from a returned token', async () => {
     useConvexQueryClientSpy = vi
       .spyOn(contextModule, 'useConvexQueryClient')

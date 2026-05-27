@@ -212,6 +212,100 @@ describe('createAuthMutations', () => {
     expect(resetAuthQueries).toHaveBeenCalledTimes(1);
   });
 
+  test('signIn(username): calls the requested sign-in method', async () => {
+    const resetAuthQueries = mock(() => {});
+    useConvexQueryClientSpy = spyOn(
+      contextModule,
+      'useConvexQueryClient'
+    ).mockReturnValue({ resetAuthQueries } as any);
+
+    const authClient = {
+      signOut: mock(async () => ({})),
+      signIn: {
+        social: mock(async () => ({})),
+        email: mock(async () => ({})),
+        username: mock(async (args: unknown) => ({
+          args,
+          token: 'returned-username-token',
+        })),
+      },
+      signUp: { email: mock(async () => ({})) },
+    };
+
+    const { useSignInMutationOptions } = createAuthMutations(authClient as any);
+
+    const wrapper = makeWrapper({ token: null });
+
+    const { result } = renderHook(
+      () => ({
+        store: useAuthStore(),
+        opts: useSignInMutationOptions({ signInMethod: 'username' }),
+      }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      const res = await result.current.opts.mutationFn?.(
+        {
+          password: 'pw',
+          username: 'ada',
+        },
+        makeMutationCtx()
+      );
+      expect(res).toMatchObject({ token: 'returned-username-token' });
+    });
+
+    expect(result.current.store.get('token')).toBe('returned-username-token');
+    expect(result.current.store.get('isAuthenticated')).toBe(true);
+    expect(authClient.signIn.username).toHaveBeenCalledTimes(1);
+    expect(authClient.signIn.username).toHaveBeenCalledWith({
+      password: 'pw',
+      username: 'ada',
+      fetchOptions: {
+        disableSignal: true,
+      },
+    });
+    expect(authClient.signIn.email).not.toHaveBeenCalled();
+    expect(resetAuthQueries).toHaveBeenCalledTimes(1);
+  });
+
+  test('signIn(custom): throws when the sign-in method is missing', async () => {
+    useConvexQueryClientSpy = spyOn(
+      contextModule,
+      'useConvexQueryClient'
+    ).mockReturnValue(null as any);
+
+    const authClient = {
+      signOut: mock(async () => ({})),
+      signIn: {
+        social: mock(async () => ({})),
+        email: mock(async () => ({})),
+      },
+      signUp: { email: mock(async () => ({})) },
+    };
+
+    const { useSignInMutationOptions } = createAuthMutations(authClient as any);
+
+    const wrapper = makeWrapper({ token: null });
+
+    const { result } = renderHook(
+      () => ({
+        store: useAuthStore(),
+        opts: useSignInMutationOptions({ signInMethod: 'username' }),
+      }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await expect(
+        result.current.opts.mutationFn?.(
+          { password: 'pw', username: 'ada' },
+          makeMutationCtx()
+        )
+      ).rejects.toThrow('Auth client does not expose signIn.username');
+    });
+  });
+
   test('signUp(email): seeds the auth store from a returned token', async () => {
     const resetAuthQueries = mock(() => {});
     useConvexQueryClientSpy = spyOn(

@@ -184,6 +184,37 @@ function EmailLoginForm() {
 Unlike OAuth (which redirects server-side), email/password auth requires a client-side redirect via `onSuccess`.
 </Callout>
 
+### Plugin Sign-In Methods
+
+Better Auth client plugins can add sign-in methods under `authClient.signIn`.
+Set `signInMethod` when the mutation should call one of those methods:
+
+```tsx title="src/components/username-login-form.tsx" showLineNumbers {7-10,13-18}
+'use client';
+
+import { useMutation } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { useSignInMutationOptions } from '@/lib/convex/auth-client';
+
+function UsernameLoginForm() {
+  const router = useRouter();
+  const signIn = useMutation(
+    useSignInMutationOptions({
+      signInMethod: 'username',
+      onSuccess: () => router.push('/'),
+    })
+  );
+
+  const handleSubmit = (username: string, password: string) => {
+    signIn.mutate({
+      callbackURL: window.location.origin,
+      password,
+      username,
+    });
+  };
+}
+```
+
 ## Sign Out
 
 ```tsx title="src/components/logout-button.tsx" showLineNumbers {6,8-12,15}

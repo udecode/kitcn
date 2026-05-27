@@ -9,23 +9,23 @@ const formatDiagnostics = (diagnostics: readonly ts.Diagnostic[]) =>
     getNewLine: () => '\n',
   });
 
-describe('createAuthMutations types', () => {
-  test('accepts a better-auth client with the kitcn convexClient plugin', () => {
+describe('createAuthMutations solid types', () => {
+  test('accepts a username sign-in method from Better Auth plugins', () => {
     const rootDir = process.cwd();
     const tmpRoot = path.join(rootDir, 'tmp');
     fs.mkdirSync(tmpRoot, { recursive: true });
     const fixtureDir = fs.mkdtempSync(
-      path.join(tmpRoot, 'kitcn-auth-mutations-types-')
+      path.join(tmpRoot, 'kitcn-solid-auth-mutations-types-')
     );
     const fixtureFile = path.join(fixtureDir, 'repro.ts');
 
     try {
       fs.writeFileSync(
         fixtureFile,
-        `import { createAuthClient } from "better-auth/react";
+        `import { createAuthClient } from "better-auth/solid";
 import { usernameClient } from "better-auth/client/plugins";
 import { convexClient } from "../../packages/kitcn/src/auth-client/index";
-import { createAuthMutations } from "../../packages/kitcn/src/react/auth-mutations";
+import { createAuthMutations } from "../../packages/kitcn/src/solid/auth-mutations";
 
 const authClient = createAuthClient({
   baseURL: "http://localhost:3000",

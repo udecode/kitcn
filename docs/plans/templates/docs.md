@@ -49,6 +49,10 @@ Boundaries:
 - Tracker sync: TODO.
 - Non-goals: TODO.
 
+Output budget strategy:
+- TODO: Record how command/search output will be scoped, capped, counted, or
+  saved as artifacts before broad exploration.
+
 Blocked condition:
 - TODO: Name the missing source code, docs entry, demo, route, design
   decision, product choice, or command failure that stops autonomous docs work.
@@ -88,6 +92,7 @@ Start Gates:
 | Docs style doctrine read | pending | pending |
 | Documented source code read | pending | pending |
 | Ownership map drafted | pending | pending |
+| Output budget strategy recorded | pending | pending |
 | Kitcn skill sync decision | pending | pending |
 | Browser/render proof decision | pending | pending |
 | PR/tracker expectation decision | pending | pending |
@@ -122,6 +127,9 @@ Work Checklist:
       comments, no TODOs, no dead anchors, no redundant summary section.
 - [ ] Workspace authority recorded: every proof command names the cwd/tool that
       owns the changed docs.
+- [ ] Output budget discipline recorded and followed: broad searches are
+      scoped, capped, counted, or artifacted instead of streamed into goal
+      context.
 - [ ] Review/autoreview target selected for non-trivial docs work, or marked
       N/A with reason.
 
@@ -140,6 +148,7 @@ Completion Gates:
 | Agent rules or skills changed | pending | Run `bun install` and verify generated skill sync | pending |
 | Autoreview for non-trivial docs changes | pending | Load `.agents/skills/autoreview/SKILL.md` and run the right target, or record N/A for tiny/no-local-patch work | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
+| Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
 | Goal plan complete | yes | Run `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:
