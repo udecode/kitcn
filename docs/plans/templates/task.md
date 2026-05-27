@@ -35,8 +35,8 @@ Constraints:
 - Verified code changes must be committed and PR'd because the task skill
   requires that path unless the user explicitly says not to, the work has no
   local patch, or a real blocker is recorded.
-- A PR created by this task must use the task-style PR body contract below, not
-  a generic summary/body from a git helper skill.
+- A PR created by this task must use the PR #270 emoji task-style PR body
+  contract below, not a generic summary/body from a git helper skill.
 - Do not add broad ceremony when the task is trivial or docs-only.
 
 Boundaries:
@@ -112,8 +112,8 @@ Work Checklist:
       requirements, PR body sync, and issue/Linear sync when applicable.
 - [ ] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
-- [ ] PR body shape recorded: task-style body used, N/A reason recorded, or
-      blocker recorded.
+- [ ] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
+      recorded, or blocker recorded.
 - [ ] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
 - [ ] Local-env-rot retry policy recorded for any surprising repo-wide failure:
@@ -154,7 +154,7 @@ Completion Gates:
 | Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
 | Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
 | PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must include an issue/tracker/fix line when applicable, confidence, Reproduced/Verified table, Outcome, Caveat, Design, and Verified sections as applicable | pending |
+| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
 | PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
 | Tracker sync-back | pending | Post concise issue/Linear sync after PR exists, or record N/A/blocker | pending |
 | Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
@@ -212,14 +212,20 @@ Final handoff contract:
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
   part of the diff and repo policy expects auto release, include that block.
-- Use the final handoff fields in this order: issue, tracker, or fix line when
-  applicable; confidence line; Reproduced / Verified table; Outcome; Caveat;
-  Design; and Verified.
+- Use the accepted PR #270 visual format. The body starts with an emoji
+  issue/tracker/fix line, for example `🐛 Fixes #123` or `🐛 Fixes ➖ N/A`, then
+  an emoji confidence line like `🟢 95-100% confidence`.
+- Use this exact table header: `| Phase | 🧪 Tests | 🌐 Browser |`.
+- Use `Reproduced` and `Verified` rows. Mark passing proof with `🟢`, repro or
+  failing proof with `🔴`, and non-applicable cells with `➖ N/A`.
+- Use bold emoji section headings: `**✅ Outcome**`, `**⚠️ Caveat**`,
+  `**🏗️ Design**`, and `**🧪 Verified**`.
 - Never include a line that links to the current PR itself. The current PR URL
   belongs in the final response, not in its own description.
 - Do not replace this with a generic `Summary` / `Verification` PR body, an
-  adaptive prose body from a git helper skill, or an unrelated generated badge
-  footer unless the caller or repo template explicitly asks for it.
+  adaptive prose body from a git helper skill, plain `## Outcome` sections, or
+  an unrelated generated badge footer unless the caller or repo template
+  explicitly asks for it.
 - Proof is `gh pr view --json body` output or a concise source-backed summary
   of that output.
 
