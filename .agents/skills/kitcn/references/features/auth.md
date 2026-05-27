@@ -326,6 +326,15 @@ const signUp = useMutation(useSignUpMutationOptions({ onSuccess: () => router.pu
 signUp.mutate({ callbackURL: window.location.origin, email, name, password });
 ```
 
+**Plugin sign-in methods** (requires the matching Better Auth client plugin):
+```ts
+const signIn = useMutation(useSignInMutationOptions({
+  signInMethod: 'username',
+  onSuccess: () => router.push('/'),
+}));
+signIn.mutate({ callbackURL: window.location.origin, password, username });
+```
+
 ### Sign Out
 
 ```ts

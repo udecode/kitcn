@@ -31,6 +31,15 @@ type MutationOptionsHook<TData, TVariables = void> = (
   >
 ) => UseMutationOptions<TData, DefaultError, TVariables>;
 
+type SignInMutationOptionsHook<TData, TVariables = void> = (
+  options?: Omit<
+    UseMutationOptions<TData, DefaultError, TVariables>,
+    'mutationFn'
+  > & {
+    signInMethod?: string;
+  }
+) => UseMutationOptions<TData, DefaultError, TVariables>;
+
 /** Poll until JWT token exists (auth complete) (max 5s) */
 const waitForAuth = async (
   store: AuthStore,
@@ -153,8 +162,9 @@ type AuthClient = {
   signOut?: AnyAuthFn;
   signIn?: {
     anonymous?: AnyAuthFn;
-    social?: AnyAuthFn;
     email?: AnyAuthFn;
+    social?: AnyAuthFn;
+    [method: string]: AnyAuthFn | undefined;
   };
   signUp?: {
     email?: AnyAuthFn;
@@ -251,7 +261,7 @@ type AuthMutationsResult = {
     MutationArgsWithFetchOptions | void
   >;
   useSignInSocialMutationOptions: MutationOptionsHook<unknown, unknown>;
-  useSignInMutationOptions: MutationOptionsHook<unknown, unknown>;
+  useSignInMutationOptions: SignInMutationOptionsHook<unknown, unknown>;
   useSignUpMutationOptions: MutationOptionsHook<unknown, unknown>;
 };
 
@@ -318,16 +328,17 @@ export function createAuthMutations(
   const useSignInMutationOptions = ((options) => {
     const authStoreApi = useAuthStore();
     const convexQueryClient = useConvexQueryClient();
+    const { signInMethod = 'email', ...mutationOptions } = options ?? {};
 
     return {
-      ...options,
+      ...mutationOptions,
       mutationFn: async (args: unknown) => {
-        const signInEmail = authClient.signIn?.email;
-        if (typeof signInEmail !== 'function') {
-          throw new Error('Auth client does not expose signIn.email');
+        const signIn = authClient.signIn?.[signInMethod];
+        if (typeof signIn !== 'function') {
+          throw new Error(`Auth client does not expose signIn.${signInMethod}`);
         }
         const res = (await callAuthMethod(
-          signInEmail,
+          signIn,
           withDisabledSessionSignal(args)
         )) as AuthResponse;
         if (res?.error) {

@@ -21,6 +21,54 @@ type MutationOptionsHook<TData, TVariables = void> = (
   >
 ) => SolidMutationOptions<TData, DefaultError, TVariables>;
 
+type SignInMethod<T extends AuthClient> = Extract<keyof T['signIn'], string>;
+
+type EmailSignInMutationOptions<T extends AuthClient> = Omit<
+  SolidMutationOptions<
+    Awaited<ReturnType<T['signIn']['email']>>,
+    DefaultError,
+    Parameters<T['signIn']['email']>[0]
+  >,
+  'mutationFn'
+> & {
+  signInMethod?: 'email';
+};
+
+type CustomSignInMutationOptions<
+  T extends AuthClient,
+  TMethod extends SignInMethod<T>,
+> = Omit<
+  SolidMutationOptions<
+    Awaited<ReturnType<T['signIn'][TMethod]>>,
+    DefaultError,
+    Parameters<T['signIn'][TMethod]>[0]
+  >,
+  'mutationFn'
+> & {
+  signInMethod: TMethod;
+};
+
+type SignInMutationOptionsHook<T extends AuthClient> = {
+  (
+    options?: EmailSignInMutationOptions<T>
+  ): SolidMutationOptions<
+    Awaited<ReturnType<T['signIn']['email']>>,
+    DefaultError,
+    Parameters<T['signIn']['email']>[0]
+  >;
+  <TMethod extends Exclude<SignInMethod<T>, 'email'>>(
+    options: CustomSignInMutationOptions<T, TMethod>
+  ): SolidMutationOptions<
+    Awaited<ReturnType<T['signIn'][TMethod]>>,
+    DefaultError,
+    Parameters<T['signIn'][TMethod]>[0]
+  >;
+};
+
+type SignInOptions<T extends AuthClient> =
+  | EmailSignInMutationOptions<T>
+  | CustomSignInMutationOptions<T, Exclude<SignInMethod<T>, 'email'>>;
+
 /** Poll until JWT token exists (auth complete) (max 5s) */
 const waitForAuth = async (
   store: AuthStore,
@@ -82,9 +130,9 @@ type AnyFn = (...args: any[]) => Promise<any>;
 
 type AuthClient = {
   signOut: AnyFn;
-  signIn: {
-    social: AnyFn;
+  signIn: Record<string, AnyFn> & {
     email: AnyFn;
+    social: AnyFn;
   };
   signUp: {
     email: AnyFn;
@@ -101,10 +149,7 @@ type AuthMutationsResult<T extends AuthClient> = {
     Awaited<ReturnType<T['signIn']['social']>>,
     Parameters<T['signIn']['social']>[0]
   >;
-  useSignInMutationOptions: MutationOptionsHook<
-    Awaited<ReturnType<T['signIn']['email']>>,
-    Parameters<T['signIn']['email']>[0]
-  >;
+  useSignInMutationOptions: SignInMutationOptionsHook<T>;
   useSignUpMutationOptions: MutationOptionsHook<
     Awaited<ReturnType<T['signUp']['email']>>,
     Parameters<T['signUp']['email']>[0]
@@ -176,13 +221,19 @@ export function createAuthMutations<T extends AuthClient>(
     };
   }) as AuthMutationsResult<T>['useSignInSocialMutationOptions'];
 
-  const useSignInMutationOptions = ((options) => {
+  const useSignInMutationOptions = ((options?: SignInOptions<T>) => {
     const authStoreApi = useAuthStore();
+    const { signInMethod = 'email', ...mutationOptions } = (options ??
+      {}) as SignInOptions<T> & { signInMethod?: string };
 
     return {
-      ...options,
+      ...mutationOptions,
       mutationFn: async (args: Parameters<T['signIn']['email']>[0]) => {
-        const res = await authClient.signIn.email(args);
+        const signIn = authClient.signIn[signInMethod];
+        if (typeof signIn !== 'function') {
+          throw new Error(`Auth client does not expose signIn.${signInMethod}`);
+        }
+        const res = await signIn(args);
         if (res?.error) {
           throw new AuthMutationError(res.error);
         }
