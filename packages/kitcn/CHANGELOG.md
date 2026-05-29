@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.15.9
+
+### Patch Changes
+
+- [`386b54e`](https://github.com/udecode/kitcn/commit/386b54e2d5a9c1b48e9a8db5604d29d8e9013f9f) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn init -t start` for TanStack Start scaffolds that use Vite
+    `resolve.tsconfigPaths`.
+  - Improve the packaged kitcn agent skill prompt and reference footprint.
+
 ## 0.15.8
 
 ### Patch Changes
