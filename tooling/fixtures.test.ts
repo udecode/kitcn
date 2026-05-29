@@ -11,13 +11,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   checkTemplates,
+  normalizeFixtureComparisonPackageJson,
   normalizeTemplateSnapshot,
   parseTemplateArgs,
+  stripFixtureComparisonArtifacts,
 } from './fixtures';
 import {
   runAppValidation,
   stripAppleDoubleSidecars,
   stripVolatileArtifacts,
+  type WorkspacePackageJson,
 } from './scaffold-utils';
 import { TEMPLATE_DEFINITIONS, TEMPLATE_KEYS } from './template.config';
 
@@ -26,24 +29,37 @@ describe('tooling/fixtures', () => {
     expect(parseTemplateArgs(['sync'])).toEqual({
       backend: 'concave',
       mode: 'sync',
+      scope: 'owned',
       target: 'all',
     });
 
     expect(
-      parseTemplateArgs(['check', 'next-auth', '--backend', 'convex'])
+      parseTemplateArgs([
+        'check',
+        'next-auth',
+        '--backend',
+        'convex',
+        '--scope',
+        'full',
+      ])
     ).toEqual({
       backend: 'convex',
       mode: 'check',
+      scope: 'full',
       target: 'next-auth',
     });
     expect(parseTemplateArgs(['check', 'start-auth'])).toEqual({
       backend: 'concave',
       mode: 'check',
+      scope: 'owned',
       target: 'start-auth',
     });
 
     expect(() => parseTemplateArgs(['prepare'])).toThrow(
       'Usage: bun tooling/fixtures.ts <sync|check> [all|expo|expo-auth|next|next-auth|start|start-auth|vite|vite-auth] [--backend <convex|concave>]'
+    );
+    expect(() => parseTemplateArgs(['check', '--scope', 'thin'])).toThrow(
+      'Invalid --scope value "thin". Expected one of: owned, full.'
     );
   });
 
@@ -60,6 +76,22 @@ describe('tooling/fixtures', () => {
     });
 
     expect(callOrder).toEqual([...TEMPLATE_KEYS]);
+  });
+
+  test('checkTemplates forwards the selected fixture check scope', async () => {
+    const scopes: Array<string | undefined> = [];
+
+    await checkTemplates({
+      scope: 'full',
+      target: 'next',
+      checkTemplateFn: mock(async (_templateKey, params) => {
+        scopes.push(params?.scope);
+      }) as typeof checkTemplates extends (params?: infer T) => Promise<unknown>
+        ? NonNullable<T extends { checkTemplateFn?: infer U } ? U : never>
+        : never,
+    });
+
+    expect(scopes).toEqual(['full']);
   });
 
   test('template registry only lints starters worth linting', () => {
@@ -140,12 +172,14 @@ describe('tooling/fixtures', () => {
 
       const packageJson = JSON.parse(
         readFileSync(path.join(templateDir, 'package.json'), 'utf8')
-      ) as {
-        scripts?: Record<string, string>;
-      };
+      ) as WorkspacePackageJson;
+      const rootPackageJson = JSON.parse(
+        readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
+      ) as WorkspacePackageJson;
 
       expect(packageJson.scripts?.dev).toBe('next dev --turbopack --port 3005');
       expect(packageJson.dependencies?.shadcn).toBe('latest');
+      expect(packageJson.packageManager).toBe(rootPackageJson.packageManager);
       expect(existsSync(path.join(templateDir, '.env.local'))).toBe(false);
       expect(
         readFileSync(path.join(getEnvDir, 'get-env.ts'), 'utf8')
@@ -183,6 +217,104 @@ describe('tooling/fixtures', () => {
           'utf8'
         )
       ).toContain('../../../../packages/kitcn/src/server/index.ts');
+    } finally {
+      rmSync(templateDir, { force: true, recursive: true });
+    }
+  });
+
+  test('stripFixtureComparisonArtifacts ignores shadcn-owned UI component output by default', () => {
+    const templateDir = mkdtempSync(
+      path.join(tmpdir(), 'kitcn-template-comparison-')
+    );
+    const nextButtonPath = path.join(
+      templateDir,
+      'components',
+      'ui',
+      'button.tsx'
+    );
+    const viteButtonPath = path.join(
+      templateDir,
+      'src',
+      'components',
+      'ui',
+      'button.tsx'
+    );
+    const providerPath = path.join(templateDir, 'components', 'providers.tsx');
+
+    try {
+      mkdirSync(path.dirname(nextButtonPath), { recursive: true });
+      mkdirSync(path.dirname(viteButtonPath), { recursive: true });
+      mkdirSync(path.dirname(providerPath), { recursive: true });
+      writeFileSync(nextButtonPath, 'next button\n');
+      writeFileSync(viteButtonPath, 'vite button\n');
+      writeFileSync(providerPath, 'provider\n');
+
+      stripFixtureComparisonArtifacts(templateDir, 'next');
+
+      expect(existsSync(nextButtonPath)).toBe(false);
+      expect(existsSync(viteButtonPath)).toBe(false);
+      expect(readFileSync(providerPath, 'utf8')).toBe('provider\n');
+    } finally {
+      rmSync(templateDir, { force: true, recursive: true });
+    }
+  });
+
+  test('stripFixtureComparisonArtifacts keeps Expo UI fixtures', () => {
+    const templateDir = mkdtempSync(
+      path.join(tmpdir(), 'kitcn-template-expo-comparison-')
+    );
+    const expoUiPath = path.join(
+      templateDir,
+      'src',
+      'components',
+      'ui',
+      'collapsible.tsx'
+    );
+
+    try {
+      mkdirSync(path.dirname(expoUiPath), { recursive: true });
+      writeFileSync(expoUiPath, 'expo ui\n');
+
+      stripFixtureComparisonArtifacts(templateDir, 'expo');
+
+      expect(readFileSync(expoUiPath, 'utf8')).toBe('expo ui\n');
+    } finally {
+      rmSync(templateDir, { force: true, recursive: true });
+    }
+  });
+
+  test('normalizeFixtureComparisonPackageJson only scrubs packageManager drift', () => {
+    const templateDir = mkdtempSync(
+      path.join(tmpdir(), 'kitcn-template-package-manager-')
+    );
+    const packageJsonPath = path.join(templateDir, 'package.json');
+    const rootPackageJson = JSON.parse(
+      readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
+    ) as WorkspacePackageJson;
+
+    try {
+      writeFileSync(
+        packageJsonPath,
+        `${JSON.stringify(
+          {
+            name: 'fixture',
+            packageManager: 'bun@0.0.0',
+            scripts: {
+              dev: 'upstream dev',
+            },
+          },
+          null,
+          2
+        )}\n`
+      );
+
+      normalizeFixtureComparisonPackageJson(templateDir);
+
+      const packageJson = JSON.parse(
+        readFileSync(packageJsonPath, 'utf8')
+      ) as WorkspacePackageJson;
+      expect(packageJson.packageManager).toBe(rootPackageJson.packageManager);
+      expect(packageJson.scripts?.dev).toBe('upstream dev');
     } finally {
       rmSync(templateDir, { force: true, recursive: true });
     }
