@@ -723,7 +723,6 @@ export function writeShadcnStartApp(dir: string) {
       react: '^19.2.4',
       'react-dom': '^19.2.4',
       tailwindcss: '^4.2.1',
-      'vite-tsconfig-paths': '^5.1.4',
     },
     devDependencies: {
       '@tanstack/devtools-vite': '^0.6.0',
@@ -793,19 +792,15 @@ export function writeShadcnStartApp(dir: string) {
 
   fs.writeFileSync(
     path.join(dir, 'vite.config.ts'),
-    `import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
-import tsConfigPaths from "vite-tsconfig-paths";
-import path from "node:path";
+    `import { defineConfig } from "vite";
+import { devtools } from "@tanstack/devtools-vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [tsConfigPaths(), tanstackStart(), react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
+  resolve: { tsconfigPaths: true },
+  plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 });
 `
   );

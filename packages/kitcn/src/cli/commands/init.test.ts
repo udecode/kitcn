@@ -29,6 +29,8 @@ import {
 
 const SHADCN_LAYOUT_PROVIDERS_RE =
   /ThemeProvider>\s*<Providers>\{children\}<\/Providers>\s*<\/ThemeProvider>/s;
+const CONVEX_INSTALL_SPEC_RE = /^convex@/;
+const KITCN_INSTALL_SPEC_RE = /^kitcn@/;
 const LEGACY_GENERATED_CONVEX_TSCONFIG_TEMPLATE = `{
   "compilerOptions": {
     "allowJs": true,
@@ -671,6 +673,9 @@ describe('cli/commands/init', () => {
         fs.existsSync(path.join(expectedProjectDir, 'src', 'router.tsx'))
       ).toBe(true);
       expect(
+        fs.readFileSync(path.join(expectedProjectDir, 'vite.config.ts'), 'utf8')
+      ).toContain('resolve: { tsconfigPaths: true }');
+      expect(
         fs.existsSync(
           path.join(expectedProjectDir, 'src', 'routes', '__root.tsx')
         )
@@ -691,6 +696,16 @@ describe('cli/commands/init', () => {
         '^1.166.15'
       );
       expect(packageJson.devDependencies?.vite).toBe('^7.3.1');
+      const dependencyInstallCall = execaStub.mock.calls.find((call) => {
+        const [, args] = call as unknown as [string, string[]];
+        return args.some((arg) => KITCN_INSTALL_SPEC_RE.test(arg));
+      }) as [string, string[], Record<string, unknown>] | undefined;
+      expect(dependencyInstallCall?.[1]).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(CONVEX_INSTALL_SPEC_RE),
+          expect.stringMatching(KITCN_INSTALL_SPEC_RE),
+        ])
+      );
       const componentsJson = JSON.parse(
         fs.readFileSync(
           path.join(expectedProjectDir, 'components.json'),
@@ -700,6 +715,303 @@ describe('cli/commands/init', () => {
         iconLibrary?: string;
       };
       expect(componentsJson.iconLibrary).toBe('lucide');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand keeps Start vite tsconfigPaths when resolve has nested options', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-start-tsconfig-paths-')
+    );
+    writeShadcnStartApp(tmpDir);
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import { defineConfig } from "vite";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": new URL("./src", import.meta.url).pathname,
+    },
+    tsconfigPaths: true,
+  },
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const runLocalBootstrapStub = mock(async () => 0);
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+      });
+      expect(exitCode).toBe(0);
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig).toContain('tsconfigPaths: true');
+      expect(viteConfig).not.toContain('@convex');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand keeps quoted Start vite tsconfigPaths', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-start-quoted-tsconfig-')
+    );
+    writeShadcnStartApp(tmpDir);
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import { defineConfig } from "vite";
+
+export default defineConfig({
+  "resolve": {
+    "alias": {
+      "@": new URL("./src", import.meta.url).pathname,
+    },
+    "tsconfigPaths": true,
+  },
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const runLocalBootstrapStub = mock(async () => 0);
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+      });
+      expect(exitCode).toBe(0);
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig).toContain('"tsconfigPaths": true');
+      expect(viteConfig).not.toContain('@convex');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand patches Start vite aliases when tsconfigPaths is false', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-start-false-tsconfig-')
+    );
+    writeShadcnStartApp(tmpDir);
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import path from "node:path";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+    tsconfigPaths: false,
+  },
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const runLocalBootstrapStub = mock(async () => 0);
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+      });
+      expect(exitCode).toBe(0);
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig).toContain("'@convex'");
+      expect(viteConfig).toContain('tsconfigPaths: false');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand patches Start vite aliases when tsconfigPaths is undefined', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-start-undefined-tsconfig-')
+    );
+    writeShadcnStartApp(tmpDir);
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import path from "node:path";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+    tsconfigPaths: undefined,
+  },
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const runLocalBootstrapStub = mock(async () => 0);
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+      });
+      expect(exitCode).toBe(0);
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig).toContain("'@convex'");
+      expect(viteConfig).toContain('tsconfigPaths: undefined');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand ignores commented and string defineConfig examples', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-start-commented-config-')
+    );
+    writeShadcnStartApp(tmpDir);
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import { defineConfig } from "vite";
+
+// defineConfig({ resolve: { tsconfigPaths: false } })
+const docs = "defineConfig({ resolve: { tsconfigPaths: false } })";
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": new URL("./src", import.meta.url).pathname,
+    },
+    tsconfigPaths: true,
+  },
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const runLocalBootstrapStub = mock(async () => 0);
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+      });
+      expect(exitCode).toBe(0);
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig).toContain('tsconfigPaths: true');
+      expect(viteConfig).not.toContain('@convex');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand patches Start vite aliases when tsconfigPaths is only mentioned outside config', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-start-tsconfig-comment-')
+    );
+    writeShadcnStartApp(tmpDir);
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import path from "node:path";
+import { defineConfig } from "vite";
+
+// resolve: { tsconfigPaths: true }
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const runLocalBootstrapStub = mock(async () => 0);
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+        runLocalBootstrap: runLocalBootstrapStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(fs.readFileSync(viteConfigPath, 'utf8')).toContain("'@convex'");
     } finally {
       process.chdir(originalCwd);
     }

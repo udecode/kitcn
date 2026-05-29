@@ -1,11 +1,11 @@
 {
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
-    "target": "ES2023",
+    "target": "es2023",
     "lib": [
       "ES2023"
     ],
-    "module": "ESNext",
+    "module": "esnext",
     "types": [
       "node"
     ],
@@ -15,12 +15,10 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
-    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
     "paths": {
       "kitcn/aggregate": [
         "../../packages/kitcn/src/aggregate/index.ts"
