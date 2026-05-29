@@ -108,14 +108,14 @@ Completion Gates:
 | Agent-native review | no | N/A | No agent/tooling surface changed. |
 | Local install corruption suspected | no | N/A | No unexplained local install corruption; normal installs happened inside fixture/scenario gates. |
 | Autoreview | yes | Run until clean | Claude fallback autoreview passed clean after accepted parser/test findings were fixed. |
-| Commit created | yes | Stage and commit whole checkout | To be filled after git commit. |
-| PR create or update | yes | Push branch and open PR | To be filled after PR creation. |
-| Task-style PR body verified | yes | `gh pr view --json body` | To be filled after PR body audit. |
+| Commit created | yes | Stage and commit whole checkout | Branch `codex/278-start-vite-tsconfig-paths`; commit created before PR. |
+| PR create or update | yes | Push branch and open PR | PR #279: https://github.com/udecode/kitcn/pull/279. |
+| Task-style PR body verified | yes | `gh pr view --json body` | `gh pr view 279 --json body,url,title,number` confirmed task-style body and auto-release block. |
 | PR proof image hosting | no | N/A | No browser proof image. |
-| Tracker sync-back | yes | Comment on issue #278 | To be filled after PR exists. |
+| Tracker sync-back | yes | Comment on issue #278 | Comment posted: https://github.com/udecode/kitcn/issues/278#issuecomment-4574466162. |
 | Final lint | yes | Run lint fix | `bun lint:fix` passed; final `bun check` passed lint. |
 | Output budget discipline | yes | Record recovery | Required gates emitted long output; continued with capped polling and summarized evidence. |
-| Goal plan complete | yes | Run goal checker | To be filled after PR/tracker rows are updated. |
+| Goal plan complete | yes | Run goal checker | `node .agents/rules/autogoal/scripts/check-complete.mjs docs/plans/278-fix-init-start-vite-patch-bootstrap.md` passed. |
 | Public API / package boundary proof | yes | Source audit | Public CLI init behavior changed; no exported JS API change. |
 | Release artifact classification | yes | Record artifact | Published package behavior change, changeset required. |
 | Published package changeset | yes | Update `.changeset` | `.changeset/clean-kitcn-skill-footprint.md` updated for `kitcn`. |
@@ -128,8 +128,8 @@ Phase / pass table:
 | Intake and source read | complete | Issue #278 read via `gh issue view`; source classified. | implementation |
 | Implementation | complete | Vite config scanner and Start scaffold helper updated; generated fixtures synced. | verification |
 | Verification | complete | Focused tests, package build, fixture checks, autoreview, and `bun check` passed. | commit / PR |
-| Commit / PR / tracker sync | complete | To be filled after PR and issue sync. | closeout |
-| Closeout | complete | Goal checker to be run after final PR/tracker evidence is inserted. | final response |
+| Commit / PR / tracker sync | complete | PR #279 opened and issue #278 comment posted. | closeout |
+| Closeout | complete | Goal checker passed after PR/tracker evidence was inserted. | final response |
 
 Findings:
 - Root cause: `patchInitReactViteConfigContent` only understood an alias block
@@ -171,9 +171,10 @@ Verification evidence:
 - `bun check`: passed.
 
 Final handoff contract:
-- Commit line: to be filled after commit.
-- PR line: to be filled after PR creation.
-- Issue / tracker line: to be filled after issue comment.
+- Commit line: branch `codex/278-start-vite-tsconfig-paths` contains the fix
+  commit and this closeout evidence.
+- PR line: https://github.com/udecode/kitcn/pull/279
+- Issue / tracker line: https://github.com/udecode/kitcn/issues/278#issuecomment-4574466162
 - Confidence line: high; the reported failure is covered by red/green tests and
   generated fixture/runtime proof.
 - Flow table:
@@ -182,9 +183,10 @@ Final handoff contract:
     passed; browser N/A.
 
 Reboot status:
-Current task state is complete through verification. Remaining local actions are
-branch, commit, push, PR creation/body audit, issue comment, final plan evidence
-update, goal checker, and `update_goal(status: complete)`.
+Current task state is complete through verification, branch, commit, push, PR
+creation/body audit, issue comment, final plan evidence, and goal checker. The
+remaining action is marking the active goal complete after this final plan update
+is pushed.
 
 Open risks:
 None known. Browser proof is intentionally N/A because the defect is a CLI
