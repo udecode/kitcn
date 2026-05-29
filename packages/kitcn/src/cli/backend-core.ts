@@ -212,6 +212,8 @@ const INIT_NEXT_IMPORT_SEMICOLON_RE = /^\s*import .*;\s*$/m;
 const INIT_NEXT_TRAILING_NEWLINES_RE = /\n*$/;
 const INIT_NEXT_PROVIDERS_IMPORT_RE = /from ['"]@\/components\/providers['"]/;
 const INIT_NEXT_CHILDREN_SLOT_RE = /\{\s*children\s*\}/g;
+const IDENTIFIER_CHAR_RE = /[A-Za-z0-9_$]/;
+const WHITESPACE_RE = /\s/;
 
 export type ParsedArgs = {
   command: string;
@@ -2452,6 +2454,370 @@ function patchInitReactMainContent(source: string): string {
   return nextSource.endsWith('\n') ? nextSource : `${nextSource}\n`;
 }
 
+function findMatchingObjectBraceIndex(source: string, openIndex: number) {
+  let depth = 0;
+  let quote: '"' | "'" | '`' | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = openIndex; index < source.length; index++) {
+    const char = source[index];
+    const nextChar = source[index + 1];
+
+    if (lineComment) {
+      if (char === '\n' || char === '\r') {
+        lineComment = false;
+      }
+      continue;
+    }
+
+    if (blockComment) {
+      if (char === '*' && nextChar === '/') {
+        blockComment = false;
+        index++;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+
+    if (char === '/' && nextChar === '/') {
+      lineComment = true;
+      index++;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      blockComment = true;
+      index++;
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '{') {
+      depth++;
+      continue;
+    }
+
+    if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function isIdentifierChar(char: string | undefined) {
+  return typeof char === 'string' && IDENTIFIER_CHAR_RE.test(char);
+}
+
+function isIdentifierAt(source: string, index: number, identifier: string) {
+  return (
+    source.startsWith(identifier, index) &&
+    !isIdentifierChar(source[index - 1]) &&
+    !isIdentifierChar(source[index + identifier.length])
+  );
+}
+
+function skipWhitespace(source: string, index: number) {
+  let nextIndex = index;
+  while (
+    nextIndex < source.length &&
+    WHITESPACE_RE.test(source[nextIndex] ?? '')
+  ) {
+    nextIndex++;
+  }
+  return nextIndex;
+}
+
+function skipTrivia(source: string, index: number) {
+  let nextIndex = index;
+
+  while (nextIndex < source.length) {
+    const whitespaceIndex = skipWhitespace(source, nextIndex);
+    if (whitespaceIndex !== nextIndex) {
+      nextIndex = whitespaceIndex;
+      continue;
+    }
+
+    const char = source[nextIndex];
+    const nextChar = source[nextIndex + 1];
+    if (char === '/' && nextChar === '/') {
+      const lineEndIndex = source.indexOf('\n', nextIndex + 2);
+      nextIndex = lineEndIndex === -1 ? source.length : lineEndIndex + 1;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      const blockEndIndex = source.indexOf('*/', nextIndex + 2);
+      nextIndex = blockEndIndex === -1 ? source.length : blockEndIndex + 2;
+      continue;
+    }
+
+    break;
+  }
+
+  return nextIndex;
+}
+
+function readObjectPropertyNameEndIndex(
+  source: string,
+  index: number,
+  propertyName: string
+) {
+  const char = source[index];
+
+  if (char === '"' || char === "'") {
+    const closeIndex = source.indexOf(char, index + 1);
+    if (closeIndex === -1) {
+      return -1;
+    }
+
+    return source.slice(index + 1, closeIndex) === propertyName
+      ? closeIndex + 1
+      : -1;
+  }
+
+  if (isIdentifierAt(source, index, propertyName)) {
+    return index + propertyName.length;
+  }
+
+  return -1;
+}
+
+function findConfigObjectOpenIndex(source: string) {
+  let quote: '"' | "'" | '`' | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index];
+    const nextChar = source[index + 1];
+
+    if (lineComment) {
+      if (char === '\n' || char === '\r') {
+        lineComment = false;
+      }
+      continue;
+    }
+
+    if (blockComment) {
+      if (char === '*' && nextChar === '/') {
+        blockComment = false;
+        index++;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+
+    if (char === '/' && nextChar === '/') {
+      lineComment = true;
+      index++;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      blockComment = true;
+      index++;
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (isIdentifierAt(source, index, 'defineConfig')) {
+      const callIndex = skipTrivia(source, index + 'defineConfig'.length);
+      if (source[callIndex] === '(') {
+        const objectOpenIndex = skipTrivia(source, callIndex + 1);
+        if (source[objectOpenIndex] === '{') {
+          return objectOpenIndex;
+        }
+      }
+    }
+
+    if (isIdentifierAt(source, index, 'export')) {
+      const defaultIndex = skipTrivia(source, index + 'export'.length);
+      if (isIdentifierAt(source, defaultIndex, 'default')) {
+        const objectOpenIndex = skipTrivia(
+          source,
+          defaultIndex + 'default'.length
+        );
+        if (source[objectOpenIndex] === '{') {
+          return objectOpenIndex;
+        }
+      }
+    }
+  }
+
+  return -1;
+}
+
+function findObjectPropertyValueIndex(
+  source: string,
+  openIndex: number,
+  propertyName: string
+) {
+  const closeIndex = findMatchingObjectBraceIndex(source, openIndex);
+  if (closeIndex === -1) {
+    return -1;
+  }
+
+  let depth = 1;
+  let quote: '"' | "'" | '`' | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = openIndex + 1; index < closeIndex; index++) {
+    const char = source[index];
+    const nextChar = source[index + 1];
+
+    if (lineComment) {
+      if (char === '\n' || char === '\r') {
+        lineComment = false;
+      }
+      continue;
+    }
+
+    if (blockComment) {
+      if (char === '*' && nextChar === '/') {
+        blockComment = false;
+        index++;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+
+    if (char === '/' && nextChar === '/') {
+      lineComment = true;
+      index++;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      blockComment = true;
+      index++;
+      continue;
+    }
+
+    if (depth === 1) {
+      const propertyNameEndIndex = readObjectPropertyNameEndIndex(
+        source,
+        index,
+        propertyName
+      );
+      if (propertyNameEndIndex !== -1) {
+        const colonIndex = skipTrivia(source, propertyNameEndIndex);
+        if (source[colonIndex] === ':') {
+          return skipTrivia(source, colonIndex + 1);
+        }
+      }
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '{') {
+      depth++;
+      continue;
+    }
+
+    if (char === '}') {
+      depth--;
+    }
+  }
+
+  return -1;
+}
+
+function hasEnabledTsconfigPathsValueAt(source: string, index: number) {
+  const valueIndex = skipTrivia(source, index);
+  return (
+    source[valueIndex] === '{' || isIdentifierAt(source, valueIndex, 'true')
+  );
+}
+
+function hasResolveTsconfigPathsOption(source: string): boolean {
+  const configOpenIndex = findConfigObjectOpenIndex(source);
+  if (configOpenIndex === -1) {
+    return false;
+  }
+
+  const resolveValueIndex = findObjectPropertyValueIndex(
+    source,
+    configOpenIndex,
+    'resolve'
+  );
+  if (source[resolveValueIndex] !== '{') {
+    return false;
+  }
+
+  const tsconfigPathsValueIndex = findObjectPropertyValueIndex(
+    source,
+    resolveValueIndex,
+    'tsconfigPaths'
+  );
+
+  return (
+    tsconfigPathsValueIndex !== -1 &&
+    hasEnabledTsconfigPathsValueAt(source, tsconfigPathsValueIndex)
+  );
+}
+
 function patchInitReactViteConfigContent(source: string): string {
   if (source.includes("'@convex'") || source.includes('"@convex"')) {
     return source.endsWith('\n') ? source : `${source}\n`;
@@ -2459,7 +2825,8 @@ function patchInitReactViteConfigContent(source: string): string {
 
   if (
     source.includes('viteTsConfigPaths(') ||
-    source.includes('tsConfigPaths(')
+    source.includes('tsConfigPaths(') ||
+    hasResolveTsconfigPathsOption(source)
   ) {
     return source.endsWith('\n') ? source : `${source}\n`;
   }

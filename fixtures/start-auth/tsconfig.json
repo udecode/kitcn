@@ -14,18 +14,6 @@
     "types": [
       "vite/client"
     ],
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
-    "allowJs": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
@@ -88,6 +76,16 @@
         "../../packages/kitcn/src/solid/index.ts"
       ]
     },
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
     "strictFunctionTypes": false
   }
 }

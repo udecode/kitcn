@@ -25,8 +25,11 @@ import {
 } from './template.config';
 
 export type TemplateTarget = 'all' | TemplateKey;
+export type FixtureCheckScope = 'owned' | 'full';
 
 const VALID_TEMPLATE_BACKENDS = new Set(['convex', 'concave'] as const);
+const VALID_FIXTURE_CHECK_SCOPES = new Set(['owned', 'full'] as const);
+const DEFAULT_FIXTURE_CHECK_SCOPE = 'owned' satisfies FixtureCheckScope;
 
 const getTemplateFixtureDir = (templateKey: TemplateKey) =>
   path.join(PROJECT_ROOT, 'fixtures', templateKey);
@@ -75,6 +78,24 @@ const VOLATILE_FIXTURE_DEPENDENCY_SPECS = {
   shadcn: 'latest',
 } as const;
 
+const VOLATILE_FIXTURE_COMPARISON_DIRS = [
+  path.join('components', 'ui'),
+  path.join('src', 'components', 'ui'),
+] as const;
+
+const SHADCN_TEMPLATE_KEYS = new Set<TemplateKey>([
+  'next',
+  'next-auth',
+  'start',
+  'start-auth',
+  'vite',
+  'vite-auth',
+]);
+
+const getProjectPackageManager = () =>
+  readJson<WorkspacePackageJson>(path.join(PROJECT_ROOT, 'package.json'))
+    .packageManager;
+
 const normalizeTemplatePackageJson = (
   packageJson: WorkspacePackageJson,
   templateKey: TemplateKey
@@ -91,7 +112,7 @@ const normalizeTemplatePackageJson = (
   main: packageJson.main,
   devDependencies: packageJson.devDependencies,
   name: getFixturePackageName(templateKey),
-  packageManager: packageJson.packageManager,
+  packageManager: getProjectPackageManager(),
   private: packageJson.private ?? true,
   scripts: packageJson.scripts,
   type: packageJson.type,
@@ -100,6 +121,60 @@ const normalizeTemplatePackageJson = (
 
 const stripFixtureSnapshotArtifacts = (directory: string) => {
   rmSync(path.join(directory, '.env.local'), { force: true });
+};
+
+export const stripFixtureComparisonArtifacts = (
+  directory: string,
+  templateKey: TemplateKey,
+  scope: FixtureCheckScope = DEFAULT_FIXTURE_CHECK_SCOPE
+) => {
+  stripFixtureSnapshotArtifacts(directory);
+
+  if (scope === 'full' || !SHADCN_TEMPLATE_KEYS.has(templateKey)) {
+    return;
+  }
+
+  for (const relativeDir of VOLATILE_FIXTURE_COMPARISON_DIRS) {
+    rmSync(path.join(directory, relativeDir), {
+      force: true,
+      recursive: true,
+    });
+  }
+};
+
+export const normalizeFixtureComparisonPackageJson = (directory: string) => {
+  const packageJsonPath = path.join(directory, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return;
+  }
+
+  const packageJson = readJson<WorkspacePackageJson>(packageJsonPath);
+  const packageManager = getProjectPackageManager();
+  const {
+    dependencies,
+    devDependencies,
+    main,
+    name,
+    packageManager: _packageManager,
+    private: isPrivate,
+    scripts,
+    type,
+    version,
+    ...rest
+  } = packageJson;
+
+  writeJson(packageJsonPath, {
+    dependencies,
+    main,
+    devDependencies,
+    name,
+    packageManager,
+    private: isPrivate,
+    scripts,
+    type,
+    version,
+    ...rest,
+  });
 };
 
 export const normalizeTemplateSnapshot = (
@@ -185,6 +260,7 @@ export const parseTemplateArgs = (
 ): {
   backend: TemplateBackend;
   mode: 'sync' | 'check';
+  scope: FixtureCheckScope;
   target: TemplateTarget;
 } => {
   const [mode, ...rest] = argv;
@@ -195,6 +271,7 @@ export const parseTemplateArgs = (
   }
 
   let backend: TemplateBackend = 'concave';
+  let scope = DEFAULT_FIXTURE_CHECK_SCOPE;
   let target: TemplateTarget = 'all';
 
   for (let index = 0; index < rest.length; index += 1) {
@@ -211,6 +288,21 @@ export const parseTemplateArgs = (
       continue;
     }
 
+    if (arg === '--scope') {
+      const value = rest[index + 1];
+      if (
+        !value ||
+        !VALID_FIXTURE_CHECK_SCOPES.has(value as FixtureCheckScope)
+      ) {
+        throw new Error(
+          `Invalid --scope value "${value ?? ''}". Expected one of: owned, full.`
+        );
+      }
+      scope = value as FixtureCheckScope;
+      index += 1;
+      continue;
+    }
+
     if (arg === 'all' || TEMPLATE_KEYS.includes(arg as TemplateKey)) {
       target = arg as TemplateTarget;
       continue;
@@ -219,7 +311,7 @@ export const parseTemplateArgs = (
     throw new Error(`Unknown template target "${arg}".`);
   }
 
-  return { backend, mode, target };
+  return { backend, mode, scope, target };
 };
 
 export const resolveTemplateKeys = (target: TemplateTarget = 'all') =>
@@ -327,6 +419,7 @@ export const checkTemplate = async (
     normalizeTemplateFn?: typeof normalizeTemplateSnapshot;
     projectRoot?: string;
     runCommand?: typeof run;
+    scope?: FixtureCheckScope;
     validateAppFn?: typeof runAppValidation;
   } = {}
 ) => {
@@ -364,7 +457,17 @@ export const checkTemplate = async (
     const fixtureDiffDir = path.join(tempRoot, '__fixture__');
     cpSync(fixtureDir, fixtureDiffDir, { recursive: true });
     stripVolatileArtifacts(fixtureDiffDir);
-    stripFixtureSnapshotArtifacts(fixtureDiffDir);
+    normalizeFixtureComparisonPackageJson(fixtureDiffDir);
+    stripFixtureComparisonArtifacts(
+      fixtureDiffDir,
+      templateKey,
+      params.scope ?? DEFAULT_FIXTURE_CHECK_SCOPE
+    );
+    stripFixtureComparisonArtifacts(
+      generatedAppDir,
+      templateKey,
+      params.scope ?? DEFAULT_FIXTURE_CHECK_SCOPE
+    );
 
     const diffExitCode = await runCommand(
       [
@@ -409,8 +512,10 @@ export const checkTemplates = async (
       templateKey: TemplateKey,
       params?: {
         backend?: TemplateBackend;
+        scope?: FixtureCheckScope;
       }
     ) => Promise<void>;
+    scope?: FixtureCheckScope;
     target?: TemplateTarget;
   } = {}
 ) => {
@@ -418,19 +523,22 @@ export const checkTemplates = async (
   for (const templateKey of resolveTemplateKeys(params.target)) {
     await checkTemplateFn(templateKey, {
       backend: params.backend,
+      scope: params.scope ?? DEFAULT_FIXTURE_CHECK_SCOPE,
     });
   }
 };
 
 const main = async () => {
-  const { backend, mode, target } = parseTemplateArgs(process.argv.slice(2));
+  const { backend, mode, scope, target } = parseTemplateArgs(
+    process.argv.slice(2)
+  );
 
   if (mode === 'sync') {
     await syncTemplates({ backend, target });
     return;
   }
 
-  await checkTemplates({ backend, target });
+  await checkTemplates({ backend, scope, target });
 };
 
 if (import.meta.main) {
