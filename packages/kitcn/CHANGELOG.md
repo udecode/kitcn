@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.15.10
+
+### Patch Changes
+
+- [#280](https://github.com/udecode/kitcn/pull/280) [`a684485`](https://github.com/udecode/kitcn/commit/a6844855d69725321ddfbd4b50e8a1f517e70e96) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn init -t start` to preserve the shadcn Start template while safely staging existing empty target directories.
+
 ## 0.15.9
 
 ### Patch Changes
