@@ -1,7 +1,7 @@
 # {{TITLE}}
 
 Objective:
-TODO: Write the exact active docs objective after creating this file.
+TODO: Write the short create_goal objective, under 240 characters. Put the full docs contract in the sections below.
 
 Goal plan:
 {{PLAN_PATH}}
@@ -27,7 +27,7 @@ Completion threshold:
 - Docs closure is legal only when the page teaches the fastest correct path,
   every claim is source-backed, docs-lane shape is satisfied, required MDX/link/
   preview checks are recorded, and
-  `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
+  `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
   passes.
 
 Verification surface:
@@ -76,7 +76,7 @@ Completion rule:
   remains unchecked. If an item does not apply, check it and add `N/A: <reason>`.
 - Do not call `update_goal(status: complete)` until every completion threshold
   above is satisfied, final evidence is recorded, and
-  `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
+  `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
   passes.
 - Do not create hook state for this goal. This file plus the active goal are the
   durable state.
@@ -149,7 +149,7 @@ Completion Gates:
 | Autoreview for non-trivial docs changes | pending | Load `.agents/skills/autoreview/SKILL.md` and run the right target, or record N/A for tiny/no-local-patch work | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
-| Goal plan complete | yes | Run `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |

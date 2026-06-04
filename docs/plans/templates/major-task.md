@@ -1,7 +1,7 @@
 # {{TITLE}}
 
 Objective:
-TODO: Write the exact active major-task objective after creating this file.
+TODO: Write the short create_goal objective, under 240 characters. Put the full major-task contract in the sections below.
 
 Goal plan:
 {{PLAN_PATH}}
@@ -30,7 +30,7 @@ Completion threshold:
   explicitly narrowed, facts/inference/recommendation are separated, required
   review or pressure passes are recorded, implementation gates are closed when
   code changed, and
-  `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
+  `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
   passes.
 
 Verification surface:
@@ -78,7 +78,7 @@ Completion rule:
   remains unchecked. If an item does not apply, check it and add `N/A: <reason>`.
 - Do not call `update_goal(status: complete)` until every completion threshold
   above is satisfied, final evidence is recorded, and
-  `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
+  `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
   passes.
 - Do not create hook state for this goal. This file plus the active goal are the
   durable state.
@@ -140,7 +140,7 @@ Completion Gates:
 | Final handoff contract | pending | Record recommendation, evidence, caveats, residual risk, and next owner | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent when files changed | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
-| Goal plan complete | yes | Run `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |

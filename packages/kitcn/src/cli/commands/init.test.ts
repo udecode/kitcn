@@ -614,26 +614,20 @@ describe('cli/commands/init', () => {
     }
   });
 
-  test('handleInitCommand scaffolds the start baseline with -t start', async () => {
+  test('handleInitCommand scaffolds the shadcn start baseline with -t start', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-create-command-start-')
     );
     const expectedProjectDir = path.join(tmpDir, 'apps', 'web');
-    const expectedShadcnCwd = path.join(fs.realpathSync(tmpDir), 'apps');
+    fs.mkdirSync(expectedProjectDir, { recursive: true });
     const execaStub = mock(async (_cmd: string, args: string[]) => {
       if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
         const cwdFlagIndex = args.indexOf('--cwd');
         const nameFlagIndex = args.indexOf('--name');
-        const baseDir =
-          cwdFlagIndex >= 0 && args[cwdFlagIndex + 1]
-            ? args[cwdFlagIndex + 1]!
-            : tmpDir;
+        const baseDir = cwdFlagIndex >= 0 ? args[cwdFlagIndex + 1]! : tmpDir;
         const projectName =
-          nameFlagIndex >= 0 && args[nameFlagIndex + 1]
-            ? args[nameFlagIndex + 1]!
-            : 'web';
+          nameFlagIndex >= 0 ? args[nameFlagIndex + 1]! : path.basename(tmpDir);
         writeShadcnStartApp(path.join(baseDir, projectName));
-        return { exitCode: 0, stdout: '', stderr: '' } as any;
       }
       return { exitCode: 0, stdout: '', stderr: '' } as any;
     });
@@ -659,22 +653,65 @@ describe('cli/commands/init', () => {
           call as unknown as [string, string[], Record<string, unknown>]
         )[1]?.includes(INIT_SHADCN_PACKAGE_SPEC)
       ) as [string, string[], Record<string, unknown>] | undefined;
-      expect(shadcnCall?.[1]?.slice(0, 8)).toEqual([
+      expect(shadcnCall?.[1].slice(0, 5)).toEqual([
         INIT_SHADCN_PACKAGE_SPEC,
         'init',
         '--template',
         'start',
         '--cwd',
-        expectedShadcnCwd,
-        '--name',
-        'web',
       ]);
+      expect(path.dirname(shadcnCall?.[1][5] ?? '')).toBe(
+        fs.realpathSync(path.join(tmpDir, 'apps'))
+      );
+      expect(path.basename(shadcnCall?.[1][5] ?? '')).toContain(
+        '.kitcn-shadcn-'
+      );
+      expect(shadcnCall?.[1].slice(6, 8)).toEqual(['--name', 'web']);
       expect(
         fs.existsSync(path.join(expectedProjectDir, 'src', 'router.tsx'))
       ).toBe(true);
       expect(
-        fs.readFileSync(path.join(expectedProjectDir, 'vite.config.ts'), 'utf8')
-      ).toContain('resolve: { tsconfigPaths: true }');
+        fs.existsSync(
+          path.join(expectedProjectDir, 'src', 'components', 'ui', 'button.tsx')
+        )
+      ).toBe(true);
+      const tsconfig = fs.readFileSync(
+        path.join(expectedProjectDir, 'tsconfig.json'),
+        'utf8'
+      );
+      expect(tsconfig).toContain('"moduleResolution": "bundler"');
+      expect(tsconfig).toContain('"jsx": "react-jsx"');
+      expect(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'src', 'routes', 'index.tsx'),
+          'utf8'
+        )
+      ).toContain('Messages');
+      expect(
+        fs.readFileSync(
+          path.join(expectedProjectDir, 'src', 'styles.css'),
+          'utf8'
+        )
+      ).toContain('--shadcn-shell');
+      const viteConfig = fs.readFileSync(
+        path.join(expectedProjectDir, 'vite.config.ts'),
+        'utf8'
+      );
+      expect(viteConfig).toContain(
+        "'@': fileURLToPath(new URL('./src', import.meta.url))"
+      );
+      expect(viteConfig).toContain(
+        "'@convex': fileURLToPath(new URL('./convex/shared', import.meta.url))"
+      );
+      expect(viteConfig).toContain('tsconfigPaths: true');
+      const gitignore = fs.readFileSync(
+        path.join(expectedProjectDir, '.gitignore'),
+        'utf8'
+      );
+      expect(gitignore).toContain('node_modules');
+      expect(gitignore).toContain('.env*');
+      expect(gitignore).toContain('.tanstack');
+      expect(gitignore).toContain('.convex/');
       expect(
         fs.existsSync(
           path.join(expectedProjectDir, 'src', 'routes', '__root.tsx')
@@ -763,7 +800,7 @@ export default defineConfig({
       expect(exitCode).toBe(0);
       const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
       expect(viteConfig).toContain('tsconfigPaths: true');
-      expect(viteConfig).not.toContain('@convex');
+      expect(viteConfig).toContain("'@convex'");
     } finally {
       process.chdir(originalCwd);
     }
@@ -812,7 +849,7 @@ export default defineConfig({
       expect(exitCode).toBe(0);
       const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
       expect(viteConfig).toContain('"tsconfigPaths": true');
-      expect(viteConfig).not.toContain('@convex');
+      expect(viteConfig).toContain("'@convex'");
     } finally {
       process.chdir(originalCwd);
     }
@@ -963,7 +1000,7 @@ export default defineConfig({
       expect(exitCode).toBe(0);
       const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
       expect(viteConfig).toContain('tsconfigPaths: true');
-      expect(viteConfig).not.toContain('@convex');
+      expect(viteConfig).toContain("'@convex'");
     } finally {
       process.chdir(originalCwd);
     }
@@ -1017,9 +1054,9 @@ export default defineConfig({
     }
   });
 
-  test('handleInitCommand stops with custom preset guidance when shadcn exits without a scaffold', async () => {
+  test('handleInitCommand stops with custom preset guidance when shadcn exits without a Next scaffold', async () => {
     const tmpDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'kitcn-init-command-start-custom-preset-')
+      path.join(os.tmpdir(), 'kitcn-init-command-next-custom-preset-')
     );
     const execaStub = mock(
       async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
@@ -1031,7 +1068,7 @@ export default defineConfig({
     process.chdir(tmpDir);
     try {
       await expect(
-        handleInitCommand(['init', '-t', 'start', '--yes'], {
+        handleInitCommand(['init', '-t', 'next', '--yes'], {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
           generateMeta: generateMetaStub as any,
@@ -1046,9 +1083,9 @@ export default defineConfig({
     }
   });
 
-  test('handleInitCommand stops with custom preset guidance when shadcn creates an empty staged project', async () => {
+  test('handleInitCommand stops with custom preset guidance when shadcn creates an empty staged Next project', async () => {
     const tmpDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'kitcn-init-command-start-custom-empty-')
+      path.join(os.tmpdir(), 'kitcn-init-command-next-custom-empty-')
     );
     const execaStub = mock(async (_cmd: string, args: string[]) => {
       if (args.includes(INIT_SHADCN_PACKAGE_SPEC)) {
@@ -1073,7 +1110,7 @@ export default defineConfig({
     process.chdir(tmpDir);
     try {
       await expect(
-        handleInitCommand(['init', '-t', 'start', '--yes'], {
+        handleInitCommand(['init', '-t', 'next', '--yes'], {
           realConvex: '/fake/convex/main.js',
           execa: execaStub as any,
           generateMeta: generateMetaStub as any,
@@ -2204,6 +2241,159 @@ export default defineConfig({
           )[1]?.includes(INIT_SHADCN_PACKAGE_SPEC)
         )
       ).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand patches root-layout vite aliases to the project root', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-root-vite-alias-')
+    );
+    writeShadcnViteApp(tmpDir, { usesSrc: false });
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      expect(
+        fs.existsSync(path.join(tmpDir, 'components', 'providers.tsx'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'src'))).toBe(false);
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig).toContain(
+        "'@': fileURLToPath(new URL('./', import.meta.url))"
+      );
+      expect(viteConfig).toContain(
+        "'@convex': fileURLToPath(new URL('./convex/shared', import.meta.url))"
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand patches CommonJS vite aliases without ESM syntax', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-commonjs-vite-alias-')
+    );
+    writeShadcnViteApp(tmpDir);
+
+    const packageJsonPath = path.join(tmpDir, 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    packageJson.type = undefined;
+    fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson)}\n`);
+
+    fs.rmSync(path.join(tmpDir, 'vite.config.ts'));
+    const viteConfigPath = path.join(tmpDir, 'vite.config.js');
+    fs.writeFileSync(
+      viteConfigPath,
+      `const { defineConfig } = require("vite");
+
+module.exports = defineConfig({
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig).not.toContain('import.meta.url');
+      expect(viteConfig).not.toContain('fileURLToPath');
+      expect(viteConfig).toContain(
+        "'@': require('node:path').resolve(__dirname, './src')"
+      );
+      expect(viteConfig).toContain(
+        "'@convex': require('node:path').resolve(__dirname, './convex/shared')"
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('handleInitCommand patches vite @ alias when @convex already exists', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-vite-existing-convex-alias-')
+    );
+    writeShadcnViteApp(tmpDir);
+
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import { fileURLToPath } from "node:url";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@convex": fileURLToPath(new URL("./convex/shared", import.meta.url)),
+    },
+  },
+  plugins: [],
+});
+`
+    );
+
+    const execaStub = mock(
+      async () => ({ exitCode: 0, stdout: '', stderr: '' }) as any
+    );
+    const generateMetaStub = mock(async () => {});
+    const syncEnvStub = mock(async () => {});
+    const loadConfigStub = mock(() => createDefaultConfig());
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: generateMetaStub as any,
+        syncEnv: syncEnvStub as any,
+        loadCliConfig: loadConfigStub as any,
+      });
+      expect(exitCode).toBe(0);
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig).toContain(
+        "'@': fileURLToPath(new URL('./src', import.meta.url))"
+      );
+      expect(viteConfig.match(/@convex/g)).toHaveLength(1);
     } finally {
       process.chdir(originalCwd);
     }

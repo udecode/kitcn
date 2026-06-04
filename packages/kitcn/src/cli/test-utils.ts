@@ -692,9 +692,11 @@ export function writeShadcnViteApp(
 export function writeShadcnStartApp(dir: string) {
   const srcDir = path.join(dir, 'src');
   const routesDir = path.join(srcDir, 'routes');
+  const componentsUiDir = path.join(srcDir, 'components', 'ui');
   const libDir = path.join(srcDir, 'lib');
 
   fs.mkdirSync(routesDir, { recursive: true });
+  fs.mkdirSync(componentsUiDir, { recursive: true });
   fs.mkdirSync(libDir, { recursive: true });
   fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
 
@@ -747,11 +749,32 @@ export function writeShadcnStartApp(dir: string) {
     path.join(dir, 'tsconfig.json'),
     `${JSON.stringify(
       {
+        include: [
+          '**/*.ts',
+          '**/*.tsx',
+          'eslint.config.js',
+          'prettier.config.js',
+          'vite.config.ts',
+        ],
         compilerOptions: {
-          baseUrl: '.',
+          target: 'ES2022',
+          jsx: 'react-jsx',
+          module: 'ESNext',
+          lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+          types: ['vite/client'],
           paths: {
             '@/*': ['./src/*'],
           },
+          moduleResolution: 'bundler',
+          allowImportingTsExtensions: true,
+          verbatimModuleSyntax: true,
+          noEmit: true,
+          skipLibCheck: true,
+          strict: true,
+          noUnusedLocals: true,
+          noUnusedParameters: true,
+          noFallthroughCasesInSwitch: true,
+          noUncheckedSideEffectImports: true,
         },
       },
       null,
@@ -808,6 +831,28 @@ export default defineConfig({
   fs.writeFileSync(
     path.join(srcDir, 'lib', 'utils.ts'),
     'export function cn(...classes: Array<string | false | null | undefined>) {\n  return classes.filter(Boolean).join(" ")\n}\n'
+  );
+
+  fs.writeFileSync(
+    path.join(componentsUiDir, 'button.tsx'),
+    `import type { ButtonHTMLAttributes } from "react";
+
+import { cn } from "@/lib/utils";
+
+export function Button({
+  className,
+  type = "button",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      className={cn("inline-flex items-center justify-center", className)}
+      type={type}
+      {...props}
+    />
+  );
+}
+`
   );
 
   fs.writeFileSync(

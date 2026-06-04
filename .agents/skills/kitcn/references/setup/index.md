@@ -110,7 +110,7 @@ npx kitcn@latest init -t next --yes
 # New Expo app with the official create-expo-app shell + first local Convex bootstrap
 npx kitcn@latest init -t expo --yes
 
-# New TanStack Start app with the official shadcn Start shell + first local Convex bootstrap
+# New TanStack Start app with the shadcn Start shell + first local Convex bootstrap
 npx kitcn@latest init -t start --yes
 
 # New Vite app with the React baseline + first local Convex bootstrap

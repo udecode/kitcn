@@ -25,8 +25,12 @@ they earn their keep, and verify before calling the task done.
 - Prefer targeted tests and checks during iteration.
 - Keep the user updated at milestones.
 - Verify the actual result before claiming done.
-- Do not default to research swarms, review swarms, browser proof, PRs, tracker
+- Do not default to research swarms, review swarms, browser proof, tracker
   comments, or compounding.
+- For verified code-changing work, commit, push, and create or update a PR by
+  default. The `task` skill is the explicit git permission. Only skip that path
+  when the user explicitly says not to, the work has no local patch, the task is
+  analytical/blocked/inconclusive, or a real blocker is recorded.
 - Before calling a task blocked on a repo-wide gate, rule out local install
   corruption once when the failure smells wrong for the diff.
 
@@ -77,7 +81,7 @@ they earn their keep, and verify before calling the task done.
      - browser/UI route or interaction touched: add `--with browser`
      - package exports, public API, release artifacts, or package boundary
        touched: add `--with package-api`
-     `node .agents/rules/autogoal/scripts/create-goal-scratchpad.mjs --template <task|docs> --with <pack> --title "<short task title>"`
+     `node .agents/skills/autogoal/scripts/create-goal-scratchpad.mjs --template <task|docs> --with <pack> --title "<short task title>"`
    - follow local repo overrides for where planning files live
 10. If testing or coverage work, load `testing` before `tdd` and choose the
     smallest honest slice.
@@ -87,7 +91,10 @@ they earn their keep, and verify before calling the task done.
     criteria, caveats, likely files/routes/packages, browser surface, and likely
     root-cause layer in the plan when a plan exists.
 13. If code will change, decide branch handling before edits using repo policy;
-    do not reuse an unrelated branch just because it is checked out.
+    do not reuse an unrelated branch just because it is checked out. For
+    verified code-changing work, this branch decision must assume commit, push,
+    and PR as the default closeout path unless the user explicitly declined it
+    or a real blocker is recorded.
 14. If anything important is still ambiguous after the source and nearby code
     pass, ask the smallest useful clarifying question.
 
@@ -162,7 +169,8 @@ lock.
   update the PR before tracker comments. The `task` skill owns the PR body:
   use `git-commit-push-pr` for git/gh transport, then write the PR description
   from the task-style final handoff contract below instead of the generic
-  adaptive PR summary.
+  adaptive PR summary. Do not skip this merely because the user did not type a
+  separate "open a PR" sentence.
 - Review skills: load only for risky, large, user-facing, or
   architecture-sensitive changes.
 - `agent-native-reviewer`: changes touch `.agents/**`, `.claude/**`,
@@ -270,6 +278,9 @@ Keep verification mandatory and proportional.
   the task skill requires shipping verified code. If commit or PR creation is
   impossible after real attempts, record the blocker and stop instead of
   silently handing off a local-only patch.
+- A final response that says "No commit/PR created because you did not ask" is
+  wrong for verified code-changing `task` work. Either create/update the PR or
+  name the explicit decline/blocker.
 - If the task came from a tracker item and reached a meaningful outcome, sync
   back unless the user said not to.
 

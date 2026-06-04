@@ -7,6 +7,7 @@
 ## Git
 
 - **Git:** Never git add, commit, push, or create PR unless the user explicitly asks, or the active command/skill explicitly requires it.
+- **Task PR default:** The `task` and `major-task` skills explicitly require verified code-changing work to be committed, pushed, and opened/updated as a PR unless the user explicitly says not to, the work has no local patch, or a real blocker is recorded. Do not treat the lack of a separate "open a PR" user sentence as a blocker.
 - **Push scope:** When you do commit and push, include unrelated dirty files outside src; those are often manual user changes or synced skill/docs updates, so do not silently leave them behind.
 - **PR:** Before creating or updating a PR, run `check`. If it fails, stop and fix it or report the blocker. Do not open a PR with failing `check` unless the user explicitly says to.
 - **PR branch:** If the user explicitly says to open or create a PR, do not ask for confirmation. If the current branch is `main`, create a new `codex/` branch first, then commit/push/open the PR. If already on a non-`main` branch, proceed directly.
@@ -56,6 +57,7 @@
 Use those skills when relevant:
 
 - `autogoal` for any prompt with a verifiable and quantitative outcome. Always use the autogoal skill before durable work when the task has a measurable completion threshold.
+- `orchestrator` when the current thread should route per-branch work to child threads instead of executing locally.
 - `task` for normal repo task execution.
 - `major-task` for heavyweight architecture, framework comparison, migration, benchmark, or proposal work.
 - `deslop` for the final bounded cleanup pass once a change already works.
