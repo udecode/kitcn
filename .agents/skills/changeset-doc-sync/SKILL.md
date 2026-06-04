@@ -24,7 +24,7 @@ Use this workflow when release docs must match current changeset content.
 
 2. Run `autogoal` planning first:
    - Create or continue one `docs/plans/<date>-changeset-doc-sync.md` goal plan.
-   - Use `node .agents/rules/autogoal/scripts/create-goal-scratchpad.mjs --template task --title "changeset doc sync"` when creating a new plan.
+   - Use `node .agents/skills/autogoal/scripts/create-goal-scratchpad.mjs --template task --title "changeset doc sync"` when creating a new plan.
    - **Mandatory:** the goal plan must include an exhaustive per-file checklist (every target doc as its own `- [ ]` item).
 
 3. Resolve active changeset target(s):
@@ -51,7 +51,7 @@ Use this workflow when release docs must match current changeset content.
    - No unchecked items remain.
    - The goal plan logs scanned/updated/unchanged totals.
    - The goal plan maps key doc edits to concrete changeset bullets.
-   - `node .agents/rules/autogoal/scripts/check-complete.mjs docs/plans/<date>-changeset-doc-sync.md` passes.
+   - `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/<date>-changeset-doc-sync.md` passes.
 
 ## Non-negotiable checklist rules
 

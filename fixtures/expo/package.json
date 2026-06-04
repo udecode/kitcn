@@ -41,6 +41,7 @@
     "@concavejs/cli": "latest"
   },
   "name": "kitcn-template-expo",
+  "packageManager": "bun@1.3.9",
   "private": true,
   "scripts": {
     "start": "expo start",

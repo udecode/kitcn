@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import {
   basename,
   dirname,
+  extname,
   isAbsolute,
   join,
   posix,
@@ -95,6 +96,7 @@ import { renderInitReactPackageJsonTemplate } from './registry/init/react/init-r
 import { INIT_REACT_PROVIDERS_TEMPLATE } from './registry/init/react/init-react-providers.template.js';
 import { INIT_START_CONVEX_PROVIDER_TEMPLATE } from './registry/init/start/init-start-convex-provider.template.js';
 import { INIT_START_CRPC_TEMPLATE } from './registry/init/start/init-start-crpc.template.js';
+import { renderInitStartGitignoreTemplate } from './registry/init/start/init-start-gitignore.template.js';
 import { INIT_START_MESSAGES_PAGE_TEMPLATE } from './registry/init/start/init-start-messages-page.template.js';
 import { INIT_START_ROOT_TEMPLATE } from './registry/init/start/init-start-root.template.js';
 import { INIT_START_ROUTER_TEMPLATE } from './registry/init/start/init-start-router.template.js';
@@ -364,6 +366,7 @@ type InitOwnedTemplateScaffoldFile = {
 
 type InitNextScaffoldContext = NextAppScaffoldContext;
 type InitExpoScaffoldContext = ExpoScaffoldContext;
+type InitReactViteConfigModule = 'cjs' | 'esm';
 
 type InstalledPluginState = {
   plugin: SupportedPlugin;
@@ -1962,6 +1965,16 @@ function buildInitStartOwnedScaffoldFiles(
       skipReason: '.env.local already matches the Start scaffold.',
     },
     {
+      kind: 'config',
+      relativePath: '.gitignore',
+      requiresExplicitOverwrite: false,
+      content: ({ existingContent }) =>
+        renderInitStartGitignoreTemplate(existingContent ?? ''),
+      createReason: 'Create .gitignore for the Start scaffold.',
+      updateReason: 'Update .gitignore for the Start scaffold.',
+      skipReason: '.gitignore already matches the Start scaffold.',
+    },
+    {
       kind: 'scaffold',
       relativePath: `${context.componentsDir}/providers.tsx`,
       requiresExplicitOverwrite: true,
@@ -2784,63 +2797,124 @@ function findObjectPropertyValueIndex(
   return -1;
 }
 
-function hasEnabledTsconfigPathsValueAt(source: string, index: number) {
-  const valueIndex = skipTrivia(source, index);
-  return (
-    source[valueIndex] === '{' || isIdentifierAt(source, valueIndex, 'true')
-  );
+function hasViteConfigAlias(source: string, alias: string): boolean {
+  return source.includes(`'${alias}'`) || source.includes(`"${alias}"`);
 }
 
-function hasResolveTsconfigPathsOption(source: string): boolean {
-  const configOpenIndex = findConfigObjectOpenIndex(source);
-  if (configOpenIndex === -1) {
-    return false;
+function withInitReactViteFileUrlImport(source: string): string {
+  if (source.includes('fileURLToPath')) {
+    return source;
   }
 
-  const resolveValueIndex = findObjectPropertyValueIndex(
-    source,
-    configOpenIndex,
-    'resolve'
-  );
-  if (source[resolveValueIndex] !== '{') {
-    return false;
-  }
-
-  const tsconfigPathsValueIndex = findObjectPropertyValueIndex(
-    source,
-    resolveValueIndex,
-    'tsconfigPaths'
-  );
-
-  return (
-    tsconfigPathsValueIndex !== -1 &&
-    hasEnabledTsconfigPathsValueAt(source, tsconfigPathsValueIndex)
-  );
+  return `import { fileURLToPath } from 'node:url';\n\n${source}`;
 }
 
-function patchInitReactViteConfigContent(source: string): string {
-  if (source.includes("'@convex'") || source.includes('"@convex"')) {
-    return source.endsWith('\n') ? source : `${source}\n`;
+function resolveInitReactViteConfigModule(
+  viteConfigFile: string
+): InitReactViteConfigModule {
+  const extension = extname(viteConfigFile);
+  if (extension === '.cjs') {
+    return 'cjs';
+  }
+  if (extension !== '.js') {
+    return 'esm';
   }
 
+  const packageJsonPath = resolve(process.cwd(), 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return 'cjs';
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    return isPlainObject(parsed) && parsed.type === 'module' ? 'esm' : 'cjs';
+  } catch {
+    return 'cjs';
+  }
+}
+
+function buildInitReactViteAliasEntries(
+  source: string,
+  context: Pick<ReactScaffoldContext, 'usesSrc'>,
+  moduleFormat: InitReactViteConfigModule
+): string {
+  const appAliasPath = context.usesSrc ? './src' : './';
+  const formatAlias = (aliasPath: string) =>
+    moduleFormat === 'esm'
+      ? `fileURLToPath(new URL('${aliasPath}', import.meta.url))`
+      : `require('node:path').resolve(__dirname, '${aliasPath}')`;
+
+  return [
+    hasViteConfigAlias(source, '@')
+      ? null
+      : `      '@': ${formatAlias(appAliasPath)},`,
+    hasViteConfigAlias(source, '@convex')
+      ? null
+      : `      '@convex': ${formatAlias('./convex/shared')},`,
+  ]
+    .filter((entry): entry is string => entry !== null)
+    .join('\n');
+}
+
+function patchInitReactViteConfigContent(
+  source: string,
+  context: Pick<ReactScaffoldContext, 'usesSrc'>,
+  moduleFormat: InitReactViteConfigModule
+): string {
   if (
-    source.includes('viteTsConfigPaths(') ||
-    source.includes('tsConfigPaths(') ||
-    hasResolveTsconfigPathsOption(source)
+    hasViteConfigAlias(source, '@') &&
+    hasViteConfigAlias(source, '@convex')
   ) {
     return source.endsWith('\n') ? source : `${source}\n`;
   }
 
-  if (!source.includes('alias: {')) {
+  let nextSource =
+    moduleFormat === 'esm' ? withInitReactViteFileUrlImport(source) : source;
+  const configOpenIndex = findConfigObjectOpenIndex(nextSource);
+  if (configOpenIndex === -1) {
     throw new Error(
-      'Could not patch vite.config.ts: expected a resolve.alias block.'
+      'Could not patch vite.config.ts: expected a defineConfig object.'
     );
   }
 
-  const nextSource = source.replace(
-    'alias: {',
-    `alias: {\n      '@convex': path.resolve(__dirname, './convex/shared'),`
+  const resolveValueIndex = findObjectPropertyValueIndex(
+    nextSource,
+    configOpenIndex,
+    'resolve'
   );
+  const aliasEntries = buildInitReactViteAliasEntries(
+    nextSource,
+    context,
+    moduleFormat
+  );
+  if (resolveValueIndex === -1) {
+    nextSource = `${nextSource.slice(0, configOpenIndex + 1)}\n  resolve: {\n    alias: {\n${aliasEntries}\n    },\n  },${nextSource.slice(configOpenIndex + 1)}`;
+    return nextSource.endsWith('\n') ? nextSource : `${nextSource}\n`;
+  }
+
+  if (nextSource[resolveValueIndex] !== '{') {
+    throw new Error(
+      'Could not patch vite.config.ts: expected a resolve object.'
+    );
+  }
+
+  const aliasValueIndex = findObjectPropertyValueIndex(
+    nextSource,
+    resolveValueIndex,
+    'alias'
+  );
+  if (aliasValueIndex === -1) {
+    nextSource = `${nextSource.slice(0, resolveValueIndex + 1)}\n    alias: {\n${aliasEntries}\n    },${nextSource.slice(resolveValueIndex + 1)}`;
+    return nextSource.endsWith('\n') ? nextSource : `${nextSource}\n`;
+  }
+
+  if (nextSource[aliasValueIndex] !== '{') {
+    throw new Error(
+      'Could not patch vite.config.ts: expected a resolve.alias object.'
+    );
+  }
+
+  nextSource = `${nextSource.slice(0, aliasValueIndex + 1)}\n${aliasEntries}${nextSource.slice(aliasValueIndex + 1)}`;
 
   return nextSource.endsWith('\n') ? nextSource : `${nextSource}\n`;
 }
@@ -3032,13 +3106,16 @@ function buildInitReactViteConfigPlanFile(
   }
 
   const filePath = resolve(process.cwd(), context.viteConfigFile);
+  const moduleFormat = resolveInitReactViteConfigModule(context.viteConfigFile);
   return [
     createPlanFile({
       kind: 'config',
       filePath,
       requiresExplicitOverwrite: false,
       content: patchInitReactViteConfigContent(
-        fs.readFileSync(filePath, 'utf8')
+        fs.readFileSync(filePath, 'utf8'),
+        context,
+        moduleFormat
       ),
       updateReason: `Patch ${context.viteConfigFile} to add the @convex alias.`,
       createReason: `Patch ${context.viteConfigFile} to add the @convex alias.`,
@@ -3693,7 +3770,7 @@ async function runScaffoldCommandFlow(params: {
       created: applyResult.created,
       updated: applyResult.updated,
       skipped: applyResult.skipped,
-      usedShadcn: params.template !== undefined,
+      usedShadcn: params.template !== undefined && params.template !== 'expo',
       template: params.template ?? null,
       codegen: codegenResult.codegen,
       convexBootstrap: codegenResult.convexBootstrap,

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /** biome-ignore-all lint/suspicious/noConsole: CLI scripts write command output. */
 import { existsSync } from 'node:fs';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { initProjectTemplates } from './init-templates.mjs';
 
 const ALLOWED_FLAGS = new Set([
   'date',
@@ -29,6 +31,9 @@ const TABLE_GATE_HEADER_PATTERN = /^gate$/i;
 const SECTION_START_PATTERN = /^[A-Z][A-Za-z /-]+:\s*$/;
 const HEADING_PATTERN = /^#{1,6}\s+\S/;
 const TABLE_MARKDOWN_SEPARATOR_CELL_PATTERN = /^:?-+:?$/;
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const SKILL_DIR = path.dirname(SCRIPT_DIR);
+const BUILTIN_TEMPLATES_DIR = path.join(SKILL_DIR, 'assets', 'templates');
 
 const args = parseArgs(process.argv.slice(2));
 
@@ -39,6 +44,7 @@ if (args.help) {
 
 if (args.title) {
   const root = findRepoRoot(process.cwd());
+  await initProjectTemplates(root, { silent: true });
   const templatePath = resolveTemplatePath(root, args.template);
   const packs = resolvePackPaths(root, args.with ?? []);
   const date = args.date ?? new Date().toISOString().slice(0, 10);
@@ -49,9 +55,11 @@ if (args.title) {
   const scratchpadPath = args.path
     ? path.resolve(root, args.path)
     : path.join(root, 'docs', 'plans', fileName);
+  const taskSourceLink = await resolveTaskSourceLink(root, args.ticket);
   let content = await renderTemplate(templatePath, {
     createdAt: new Date().toISOString(),
     planPath: path.relative(root, scratchpadPath),
+    taskSourceLink,
     title: args.title,
     templatePath: path.relative(root, templatePath),
   });
@@ -62,6 +70,7 @@ if (args.title) {
         createdAt: new Date().toISOString(),
         packName: pack.name,
         planPath: path.relative(root, scratchpadPath),
+        taskSourceLink,
         templatePath: path.relative(root, templatePath),
         title: args.title,
       }),
@@ -153,8 +162,98 @@ async function renderTemplate(templatePath, values) {
     .replaceAll('{{TITLE}}', values.title)
     .replaceAll('{{PLAN_PATH}}', values.planPath)
     .replaceAll('{{PACK_NAME}}', values.packName ?? '')
+    .replaceAll('{{TASK_SOURCE_LINK}}', values.taskSourceLink ?? 'pending')
     .replaceAll('{{CREATED_AT}}', values.createdAt)
     .replaceAll('{{TEMPLATE_PATH}}', values.templatePath);
+}
+
+async function resolveTaskSourceLink(root, ticket) {
+  if (!ticket) {
+    return 'pending';
+  }
+
+  if (/^https?:\/\//i.test(ticket)) {
+    return ticket;
+  }
+
+  const linearWorkspaceSlug = await findLinearWorkspaceSlug(root);
+
+  if (linearWorkspaceSlug) {
+    return `[${ticket}](https://linear.app/${linearWorkspaceSlug}/issue/${ticket})`;
+  }
+
+  return ticket;
+}
+
+async function findLinearWorkspaceSlug(root) {
+  for (const relativePath of [
+    'docs/plans/templates/task.md',
+    '.agents/AGENTS.md',
+    'README.md',
+  ]) {
+    const slug = await readLinearWorkspaceSlug(path.join(root, relativePath));
+
+    if (slug) {
+      return slug;
+    }
+  }
+
+  return findLinearWorkspaceSlugInDocs(path.join(root, 'docs', 'plans'));
+}
+
+async function findLinearWorkspaceSlugInDocs(dir, state = { readCount: 0 }) {
+  if (state.readCount >= 200) {
+    return '';
+  }
+
+  let entries;
+
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return '';
+  }
+
+  for (const entry of entries) {
+    if (state.readCount >= 200) {
+      return '';
+    }
+
+    const entryPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      const slug = await findLinearWorkspaceSlugInDocs(entryPath, state);
+
+      if (slug) {
+        return slug;
+      }
+
+      continue;
+    }
+
+    if (!entry.name.endsWith('.md')) {
+      continue;
+    }
+
+    state.readCount += 1;
+    const slug = await readLinearWorkspaceSlug(entryPath);
+
+    if (slug) {
+      return slug;
+    }
+  }
+
+  return '';
+}
+
+async function readLinearWorkspaceSlug(filePath) {
+  try {
+    const content = await readFile(filePath, 'utf8');
+    const match = content.match(/https:\/\/linear\.app\/([^/\s)]+)\/issue\//);
+    return match?.[1] ?? '';
+  } catch {
+    return '';
+  }
 }
 
 function findRepoRoot(start) {
@@ -162,7 +261,7 @@ function findRepoRoot(start) {
 
   while (true) {
     if (path.basename(current) !== '.tmp') {
-      const marker = path.join(current, '.agents', 'AGENTS.md');
+      const marker = path.join(current, 'AGENTS.md');
 
       if (existsSync(marker)) {
         return current;
@@ -172,7 +271,7 @@ function findRepoRoot(start) {
     const parent = path.dirname(current);
 
     if (parent === current) {
-      throw new Error('could not find repo root containing .agents/AGENTS.md');
+      throw new Error('could not find repo root containing AGENTS.md');
     }
 
     current = parent;
@@ -214,7 +313,9 @@ function resolveTemplatePath(root, template) {
   } else {
     candidates.push(
       path.join(root, 'docs', 'plans', 'templates', `${template}.md`),
-      path.join(root, 'docs', 'plans', 'templates', template, 'goal.md')
+      path.join(root, 'docs', 'plans', 'templates', template, 'goal.md'),
+      path.join(BUILTIN_TEMPLATES_DIR, `${template}.md`),
+      path.join(BUILTIN_TEMPLATES_DIR, template, 'goal.md')
     );
   }
 
@@ -253,6 +354,7 @@ function resolvePackPaths(root, packNames) {
               'packs',
               `${packName}.md`
             ),
+            path.join(BUILTIN_TEMPLATES_DIR, 'packs', `${packName}.md`),
           ];
     const found = candidates.find((candidate) => existsSync(candidate));
 
@@ -480,7 +582,7 @@ function toCamelCase(value) {
 
 function printHelp() {
   console.log(`Usage:
-  node .agents/rules/autogoal/scripts/create-goal-scratchpad.mjs \\
+  node .agents/skills/autogoal/scripts/create-goal-scratchpad.mjs \\
     --title "Short goal title" \\
     [--slug short-slug] \\
     [--template "skill-name or template path"] \\
@@ -497,10 +599,9 @@ threshold, verification, constraints, boundaries, or blocked condition through
 the CLI. After creation, edit the generated docs/plans file and fill the
 template fields there.
 
-Templates are project-owned. Use --template task to resolve
-docs/plans/templates/task.md, or pass an explicit template path.
-Use --with docs --with browser to materialize pack rows from
-docs/plans/templates/packs/*.md into the same plan.
-Reusable templates live under docs/plans/templates/. Runtime goal plans live
-under docs/plans/.`);
+Before creating a plan, missing generic templates are initialized under
+docs/plans/templates/. Use --template task to resolve project templates first,
+then built-in templates under .agents/skills/autogoal/assets/templates/.
+Use --with docs --with browser to materialize pack rows from project packs
+first, then built-in packs. Runtime goal plans live under docs/plans/.`);
 }

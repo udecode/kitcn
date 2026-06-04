@@ -40,7 +40,7 @@
     "@concavejs/cli": "latest"
   },
   "name": "kitcn-template-vite-auth",
-  "packageManager": "bun@1.3.12",
+  "packageManager": "bun@1.3.9",
   "private": true,
   "scripts": {
     "dev": "vite --port 3005",

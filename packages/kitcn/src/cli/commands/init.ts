@@ -105,7 +105,7 @@ export const handleInitCommand = async (
 
   if (
     shouldRunLocalBootstrap &&
-    !result.usedShadcn &&
+    result.template === null &&
     !result.localBootstrapUsed
   ) {
     await withWorkingDirectory(result.cwd, async () => {

@@ -1,7 +1,7 @@
 # {{TITLE}}
 
 Objective:
-TODO: Write the exact active task objective after creating this file.
+TODO: Write the short create_goal objective, under 240 characters. Put the full task contract in the sections below.
 
 Goal plan:
 {{PLAN_PATH}}
@@ -23,7 +23,7 @@ Completion threshold:
   code changes are committed and PR'd unless explicitly declined or blocked,
   task-style PR body sync is complete or marked N/A with reason,
   tracker/PR sync is complete or marked N/A with reason, and
-  `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` passes.
+  `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` passes.
 
 Verification surface:
 - TODO: Name the tests, typecheck, lint, browser proof, source audit, PR/tracker
@@ -35,6 +35,8 @@ Constraints:
 - Verified code changes must be committed and PR'd because the task skill
   requires that path unless the user explicitly says not to, the work has no
   local patch, or a real blocker is recorded.
+- The absence of a separate "open a PR" sentence from the user is not a valid
+  N/A reason for verified code-changing task work.
 - A PR created by this task must use the PR #270 emoji task-style PR body
   contract below, not a generic summary/body from a git helper skill.
 - Do not add broad ceremony when the task is trivial or docs-only.
@@ -73,7 +75,7 @@ Completion rule:
   remains unchecked. If an item does not apply, check it and add `N/A: <reason>`.
 - Do not call `update_goal(status: complete)` until every completion threshold
   above is satisfied, final handoff evidence is recorded, and
-  `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` passes.
+  `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` passes.
 - Do not create hook state for this goal. This file plus the active goal are the
   durable state.
 
@@ -90,7 +92,7 @@ Start Gates:
 | Branch decision for code-changing task | pending | pending |
 | Release artifact decision | pending | pending |
 | Browser tool decision for browser surface | pending | pending |
-| Commit / PR expectation decision | pending | pending |
+| Commit / PR expectation decision | pending | For verified code-changing work, default is commit, push, and PR because `task` explicitly requires it; N/A only for explicit user decline, no local patch, analytical/blocked/inconclusive work, or recorded blocker. |
 | Task-style PR body decision | pending | pending |
 | Tracker sync expectation decision | pending | pending |
 | Output budget strategy recorded | pending | pending |
@@ -112,6 +114,7 @@ Work Checklist:
       requirements, PR body sync, and issue/Linear sync when applicable.
 - [ ] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
+      "User did not separately ask for a PR" is not a valid blocker.
 - [ ] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
       recorded, or blocker recorded.
 - [ ] Branch handling recorded for code-changing work: dedicated branch used,
@@ -160,7 +163,7 @@ Completion Gates:
 | Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
-| Goal plan complete | yes | Run `node .agents/rules/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
@@ -250,3 +253,8 @@ Reboot status:
 
 Open risks:
 - Pending.
+
+Hard closeout guard:
+- A local-only final response for verified code-changing work is invalid unless
+  this plan records an explicit user decline, no local patch, analytical/
+  blocked/inconclusive outcome, or a real commit/PR blocker.
