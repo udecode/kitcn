@@ -58,12 +58,34 @@ export interface ConvexRankIndexOrderSpec<
 
 type ConvexRankOrderByInput<TColumn extends ConvexIndexColumn> =
   | TColumn
-  | {
-      column: {
-        builder: TColumn;
-      };
-      direction: 'asc' | 'desc';
-    };
+  | ConvexRankIndexOrderSpec<TColumn>;
+
+type ConvexRankOrderByInputToSpec<TInput> =
+  TInput extends ConvexRankIndexOrderSpec<infer TColumn>
+    ? ConvexRankIndexOrderSpec<TColumn>
+    : TInput extends ConvexIndexColumn
+      ? ConvexRankIndexOrderSpec<TInput>
+      : never;
+
+type ConvexRankOrderByInputsToSpecs<
+  TInputs extends readonly ConvexRankOrderByInput<ConvexIndexColumn>[],
+> = TInputs extends readonly [
+  infer TFirst extends ConvexRankOrderByInput<ConvexIndexColumn>,
+  ...infer TRest extends readonly ConvexRankOrderByInput<ConvexIndexColumn>[],
+]
+  ? readonly [
+      ConvexRankOrderByInputToSpec<TFirst>,
+      ...ConvexRankOrderByInputsToSpecs<TRest>,
+    ]
+  : readonly [];
+
+type ConvexRankOrderByResultColumns<
+  TExistingColumns extends readonly ConvexRankIndexOrderSpec[],
+  TInputColumns extends readonly ConvexRankOrderByInput<ConvexIndexColumn>[],
+> = readonly [
+  ...TExistingColumns,
+  ...ConvexRankOrderByInputsToSpecs<TInputColumns>,
+];
 
 export interface ConvexRankIndexConfig<
   TName extends string = string,
@@ -331,18 +353,23 @@ export class ConvexRankIndexBuilder<
     };
   }
 
-  orderBy<TNextColumns extends readonly ConvexRankIndexOrderSpec[]>(
-    ...columns: TNextColumns &
-      readonly ConvexRankOrderByInput<ConvexIndexColumn>[]
-  ): ConvexRankIndexBuilder<TName, TPartitionColumns, TNextColumns> {
-    this.config.orderColumns = columns.map((entry) => {
+  orderBy<
+    TNextColumns extends readonly ConvexRankOrderByInput<ConvexIndexColumn>[],
+  >(
+    ...columns: TNextColumns
+  ): ConvexRankIndexBuilder<
+    TName,
+    TPartitionColumns,
+    ConvexRankOrderByResultColumns<TOrderColumns, TNextColumns>
+  > {
+    const orderColumns = columns.map((entry) => {
       if (
         entry &&
         typeof entry === 'object' &&
         'column' in entry &&
         'direction' in entry
       ) {
-        const builder = (entry as any).column?.builder as ConvexIndexColumn;
+        const builder = (entry as any).column as ConvexIndexColumn;
         if (!builder) {
           throw new Error('rankIndex orderBy() expected a column builder.');
         }
@@ -356,11 +383,15 @@ export class ConvexRankIndexBuilder<
         column: entry as ConvexIndexColumn,
         direction: 'asc',
       } as ConvexRankIndexOrderSpec;
-    }) as unknown as TOrderColumns;
+    });
+    this.config.orderColumns = [
+      ...this.config.orderColumns,
+      ...orderColumns,
+    ] as unknown as TOrderColumns;
     return this as unknown as ConvexRankIndexBuilder<
       TName,
       TPartitionColumns,
-      TNextColumns
+      ConvexRankOrderByResultColumns<TOrderColumns, TNextColumns>
     >;
   }
 

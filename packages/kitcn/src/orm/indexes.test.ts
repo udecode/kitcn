@@ -3,10 +3,13 @@ import {
   aggregateIndex,
   convexTable,
   defineSchema,
+  getTableConfig,
   index,
   integer,
+  rankIndex,
   searchIndex,
   text,
+  timestamp,
   vector,
   vectorIndex,
 } from './index';
@@ -312,6 +315,35 @@ test('aggregateIndex requires .on(...) or .all()', () => {
       () => [aggregateIndex('missing_on') as any]
     )
   ).toThrow(/Did you forget to call \.on\(\.\.\.\) or \.all\(\)/);
+});
+
+test('rankIndex orderBy accepts documented direction objects', () => {
+  const cards = convexTable(
+    'rank_index_cards',
+    {
+      score: integer().notNull(),
+      status: text().notNull(),
+      updatedAt: timestamp().notNull(),
+    },
+    (t) => [
+      rankIndex('cards_by_status_recent')
+        .partitionBy(t.status)
+        .orderBy({ column: t.updatedAt, direction: 'desc' })
+        .orderBy(t.score),
+    ]
+  );
+
+  expect(getTableConfig(cards).rankIndexes).toEqual([
+    {
+      name: 'cards_by_status_recent',
+      partitionFields: ['status'],
+      orderFields: [
+        { field: 'updatedAt', direction: 'desc' },
+        { field: 'score', direction: 'asc' },
+      ],
+      sumField: undefined,
+    },
+  ]);
 });
 
 test('aggregateIndex sum() validates numeric columns', () => {
