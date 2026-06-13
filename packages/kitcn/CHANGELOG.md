@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.15.11
+
+### Patch Changes
+
+- [#283](https://github.com/udecode/kitcn/pull/283) [`2e09a29`](https://github.com/udecode/kitcn/commit/2e09a297e27ea714fe73d0a388d3ed11359630c3) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix `kitcn init -t start` to preserve the shadcn Start template while safely staging existing empty target directories.
+  - Fix `rankIndex().orderBy()` so documented direction objects typecheck and normalize correctly.
+
 ## 0.15.10
 
 ### Patch Changes
