@@ -19,11 +19,13 @@ Applied packs:
 
 Completion threshold:
 - Fork/upstream refs, behind/ahead counts, exact commit range, upstream diff
-  summary, local KitCN surface audit, docs/solutions audit, classification
-  ledger, selected slice or no-action verdict, ambiguity decisions, delegated
-  `task` prompt/result or N/A reason, and final evidence are recorded.
+  summary, fork sync status, local KitCN surface audit, docs/solutions audit,
+  classification ledger, selected slice or no-action verdict, ambiguity
+  decisions, delegated `task` prompt/result or N/A reason, and final evidence
+  are recorded.
 - Closure is legal only when every upstream change in the compared range is
-  classified, every non-`no-op` classification has evidence and a decision, and
+  classified, every non-`no-op` classification has evidence and a decision, the
+  fork is fast-forwarded/PR'd or a blocker is recorded, and
   `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-06-15-sync-convex-auth.md`
   passes.
 
@@ -32,6 +34,8 @@ Verification surface:
 - `git -C ../convex-better-auth fetch origin --tags` and upstream fetch.
 - `git -C ../convex-better-auth rev-list --count ...` for behind/ahead counts.
 - `git -C ../convex-better-auth log ...` and `git diff --name-status ...`.
+- Fork sync proof: fast-forward push result, fork PR URL, already-synced ref, or
+  divergent/blocker evidence.
 - Patch reads for relevant upstream files.
 - Local `rg` surface audit across `packages`, `www`, `.agents`, `docs`,
   `tooling`, `fixtures`, and `example`.
@@ -40,6 +44,8 @@ Verification surface:
 
 Constraints:
 - Use evidence, not vibes.
+- Snapshot the pre-sync compare range, then sync the fork itself when safe.
+- Never force push `zbeyens/convex-better-auth`.
 - Pull only upstream changes that matter to KitCN auth integration.
 - Stop and ask before importing optional e2e suites, broad fixtures, examples,
   release plumbing, or dev-only test infrastructure unless they are the direct
@@ -54,13 +60,13 @@ Boundaries:
   `../convex-better-auth` commits and patches, local KitCN auth surfaces, and
   institutional notes under `docs/solutions` / `docs/plans`.
 - Allowed sync-audit scope: fork/upstream refs, upstream diff evidence,
-  classification ledger, local surface map, selected slice, delegated `task`
-  prompt, and final sync verdict.
+  fork fast-forward/PR state, classification ledger, local surface map, selected
+  slice, delegated `task` prompt, and final sync verdict.
 - Delegated implementation scope: owned by the delegated `task` plan and PR.
 - Browser surface: N/A unless upstream change or local KitCN impact requires
   real browser proof.
 - Tracker sync: N/A unless the sync run starts from a tracker item.
-- Non-goals: mirroring upstream wholesale, importing optional test/example
+- Non-goals: force-pushing a diverged fork, importing optional test/example
   infrastructure without approval, and coding inside the sync audit plan.
 
 Output budget strategy:
@@ -86,6 +92,9 @@ Sync refs:
 - Behind count: 33
 - Ahead count: 0
 - Exact range: `fork/main..origin/main`
+- Fork sync status: fast-forward pushed
+- Post-sync fork ref or PR: `fork/main` at
+  `c8df6790a496ab066f72139be16767c9c235df91`; post-sync behind 0 / ahead 0
 
 Sync verdict:
 - verdict: actionable sync completed
@@ -93,7 +102,7 @@ Sync verdict:
 - class: compatibility + bugfix
 - decision reason: highest leverage upstream delta touching KitCN runtime, package
   boundary, scaffold installs, and auth smoke scenarios.
-- next owner: PR review
+- next owner: PR review / merge
 
 Ambiguity / approval ledger:
 | Item | Why ambiguous | Decision | Evidence |
@@ -162,6 +171,11 @@ Work Checklist:
       are recorded.
 - [x] Local clone exists or is created, origin/upstream remotes are correct, and
       origin/upstream refs are fetched.
+- [x] Fork sync is executed when fast-forward-safe, represented by a fork PR
+      when direct push is blocked, or stopped with a recorded blocker when the
+      fork diverged.
+- [x] Post-sync fork ref or fork PR URL is recorded before KitCN implementation
+      delegation.
 - [x] Upstream commit list and file summary are read.
 - [x] Relevant upstream patches are read; large compares are grouped before
       deep patch review.
@@ -195,6 +209,8 @@ Completion Gates:
 | Ref fetch | yes | Fetch fork and upstream refs/tags in `../convex-better-auth` | `git -C ../convex-better-auth fetch fork --tags` and `fetch origin --tags` exited 0. |
 | Behind/ahead counts | yes | Record `rev-list --count` results | Behind 33, ahead 0. |
 | Commit range | yes | Record exact compared range and commit summary | `fork/main..origin/main`, fork `ac48c35`, upstream `c8df679`. |
+| Fork sync | yes | Fast-forward/push fork, open fork PR, record already-synced state, or record divergence blocker | `git -C ../convex-better-auth merge-base --is-ancestor fork/main origin/main` passed; `git -C ../convex-better-auth push fork refs/remotes/origin/main:refs/heads/main` fast-forwarded fork `main`. |
+| Post-sync fork proof | yes | Fetch/read post-sync fork ref or record fork PR URL | After `git -C ../convex-better-auth fetch fork --tags`, `fork/main` resolved to `c8df6790a496ab066f72139be16767c9c235df91`; post-sync behind 0 / ahead 0. |
 | Upstream diff summary | yes | Record `diff --name-status` and relevant patch evidence | Commit/file audit grouped runtime, proxy, adapter, plugin, docs/tests/release changes. |
 | Local KitCN surface audit | yes | Run/read scoped `rg` across KitCN integration points | Read auth adapter, Next/Start helpers, auth client/provider, create-api, CLI dependency pins, fixtures, example. |
 | Institutional note audit | yes | Search/read relevant `docs/solutions` and `docs/plans` notes | No blocking prior note; memory hit only confirmed source-rule/template sync conventions. |
@@ -214,6 +230,7 @@ Phase / pass table:
 | Phase | Status | Evidence | Next |
 |-------|--------|----------|------|
 | Setup refs | complete | fork/upstream refs and counts recorded | done |
+| Fork sync | complete | fork fast-forwarded from `ac48c35` to `c8df679`; post-sync behind 0 / ahead 0 | done |
 | Upstream diff audit | complete | 33 upstream commits grouped and relevant patches read | done |
 | Local KitCN impact audit | complete | auth, framework, CLI, fixture, and example surfaces read | done |
 | Classification and decision | complete | selected compatibility/bugfix slice | done |
@@ -227,6 +244,8 @@ Findings:
   `origin` for `get-convex/better-auth`, so this audit compares
   `fork/main..origin/main`.
 - Upstream has 33 commits ahead and 0 commits behind the fork.
+- The fork was fast-forward-safe; `fork/main` was pushed from `ac48c35` to
+  upstream `c8df679`, leaving behind 0 / ahead 0.
 - Relevant-looking upstream runtime changes include getToken Host header,
   cross-domain 2FA cookie preservation, trigger return passthrough, framework
   proxy hop-by-hop header stripping, Better Auth minimum `>=1.6.11`, and
@@ -263,6 +282,8 @@ Timeline:
 - 2026-06-15T16:13Z `scenario:test -- start-auth` passed after local proxy fix.
 - 2026-06-15T17:31Z First post-fix full `bun check` exited 0.
 - 2026-06-15T17:52+0200 Final post-autoreview `bun check` exited 0.
+- 2026-06-15T18:41+0200 Fork sync completed: `fork/main` fast-forwarded to
+  `c8df6790a496ab066f72139be16767c9c235df91`.
 
 Verification evidence:
 - `gh repo view zbeyens/convex-better-auth --json nameWithOwner,parent,defaultBranchRef` returned fork `zbeyens/convex-better-auth`, branch `main`, parent `null`.
@@ -271,6 +292,10 @@ Verification evidence:
 - `git -C ../convex-better-auth fetch fork --tags` and `git -C ../convex-better-auth fetch origin --tags` exited 0.
 - `git -C ../convex-better-auth rev-list --count fork/main..origin/main` -> `33`; reverse -> `0`.
 - `git -C ../convex-better-auth diff --name-status fork/main..origin/main` showed runtime files under `src/client`, `src/nextjs`, `src/react-start`, `src/plugins/cross-domain`, and `src/utils`.
+- Pre-sync refs on 2026-06-15T18:41+0200: fork `ac48c35ce63f05e32077d0b3450ae0d447e31e1b`, upstream `c8df6790a496ab066f72139be16767c9c235df91`, behind 33, ahead 0.
+- `git -C ../convex-better-auth merge-base --is-ancestor fork/main origin/main` exited 0.
+- `git -C ../convex-better-auth push fork refs/remotes/origin/main:refs/heads/main` fast-forwarded `zbeyens/convex-better-auth` `main` from `ac48c35` to `c8df679`.
+- Post-sync refs: `fork/main` resolved to `c8df6790a496ab066f72139be16767c9c235df91`; behind 0, ahead 0.
 - `bun test packages/kitcn/src/auth/adapter.test.ts packages/kitcn/src/auth-nextjs/index.test.ts packages/kitcn/src/auth-start/index.test.ts packages/kitcn/src/cli/commands/dev.test.ts` passed 61 tests.
 - `bun test ./tooling/dependency-pins.test.ts` passed 4 tests.
 - `bun test packages/kitcn/src/auth/adapter.test.ts packages/kitcn/src/auth-nextjs/index.test.ts packages/kitcn/src/auth-start/index.test.ts packages/kitcn/src/cli/commands/dev.test.ts ./tooling/dependency-pins.test.ts` passed 65 tests.
@@ -289,9 +314,11 @@ Final handoff / sync:
 - Fork/upstream: `zbeyens/convex-better-auth` fork compared to
   `get-convex/better-auth`.
 - Range: `fork/main..origin/main`, 33 behind / 0 ahead.
+- Fork sync: fast-forward pushed; post-sync `fork/main` is
+  `c8df6790a496ab066f72139be16767c9c235df91`, behind 0 / ahead 0.
 - Decision: selected and implemented Better Auth 1.6.15 compatibility plus
   proxy/header bugfixes.
-- Delegated PR: create PR from `codex/sync-convex-auth-compat`.
+- Delegated PR: https://github.com/udecode/kitcn/pull/289.
 - Caveats: no cross-domain 2FA cookie local patch; KitCN does not own that
   upstream plugin storage path.
 
@@ -299,8 +326,8 @@ Reboot status:
 | Question | Answer |
 |----------|--------|
 | Where am I? | Closeout |
-| Where am I going? | Commit, push, PR, goal complete |
-| What is the goal? | Compare upstream `convex-better-auth`, classify all deltas, select/delegate one KitCN sync slice, verify and PR if actionable. |
+| Where am I going? | Commit/push updated plan evidence to PR #289, then goal complete |
+| What is the goal? | Complete repaired sync: sync the fork itself, keep KitCN PR evidence current, and close the goal. |
 | What have I learned? | See Findings |
 | What have I done? | Audited upstream, implemented the selected slice, ran focused tests and full `bun check`. |
 
