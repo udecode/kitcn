@@ -5,6 +5,7 @@ CONTEXT.md
 *.tgz
 
 # dependencies
+.bun
 src/generated
 node_modules
 /.pnp

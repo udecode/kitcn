@@ -37,13 +37,21 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          token: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || github.token }}
+
+      - name: 🔧 Configure release git credentials
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
       - name: 🔎 Detect auto-release opt-in
         id: auto_release
         uses: actions/github-script@v7
         with:
-          github-token: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || github.token }}
           script: |
             const { pathToFileURL } = await import('node:url');
             const helperUrl = pathToFileURL(
@@ -136,15 +144,15 @@ jobs:
           publish: bun run ci:release
           createGithubReleases: false
         env:
-          HOME: ${{ github.workspace }}
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: 🏷️ Push package tags
         if: ${{ steps.changesets.outputs.published == 'true' }}
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || github.token }}
           PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
         run: |
           mapfile -t TAGS < <(node tooling/scripts/published-package-tags.mjs)
@@ -186,7 +194,7 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action/base-action@2ff1acb3ee319fa302837dad6e17c2f36c0d98ea # v1.0.91
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.ai-prompt.outputs.prompt }}
@@ -208,7 +216,7 @@ jobs:
       - name: 📝 Create GitHub Release
         if: ${{ steps.changesets.outputs.published == 'true' }}
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.API_TOKEN_GITHUB || github.token }}
           VERSION: ${{ steps.raw-notes.outputs.version }}
           RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
         run: |
