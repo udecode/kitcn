@@ -11,7 +11,7 @@
     "@tanstack/react-router-ssr-query": "latest",
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "latest",
-    "better-auth": "1.6.15",
+    "better-auth": "1.6.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "1.38.0",

@@ -82,8 +82,10 @@ const PACKAGE_JSON_TARGETS: PackageJsonTarget[] = [
     path: 'example/package.json',
     updates: {
       dependencies: {
+        '@better-auth/stripe': SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact,
         '@tanstack/react-query':
           SUPPORTED_DEPENDENCY_VERSIONS.tanstackReactQuery.exact,
+        'better-auth': SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact,
         convex: SUPPORTED_DEPENDENCY_VERSIONS.convex.exact,
         hono: SUPPORTED_DEPENDENCY_VERSIONS.hono.exact,
       },
