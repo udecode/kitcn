@@ -2,11 +2,14 @@ export const AUTO_RELEASE_START = '<!-- auto-release:start -->';
 export const AUTO_RELEASE_END = '<!-- auto-release:end -->';
 
 const checkboxText = 'Auto release';
+const legacyBlockPattern =
+  /<!-- kitcn:auto-release:start -->[\s\S]*?<!-- kitcn:auto-release:end -->\n*/m;
 const blockPattern = new RegExp(
-  `${escapeRegExp(AUTO_RELEASE_START)}[\\s\\S]*?${escapeRegExp(AUTO_RELEASE_END)}\\n*`,
+  `(?:${escapeRegExp(AUTO_RELEASE_START)}[\\s\\S]*?${escapeRegExp(AUTO_RELEASE_END)}|${legacyBlockPattern.source})\\n*`,
   'm'
 );
-const checkedAutoReleasePattern = /-\s*\[[xX]\]\s*Auto release/;
+const checkedAutoReleasePattern =
+  /-\s*\[[xX]\]\s*(?:Auto release|Auto-merge the Version Packages PR after this PR lands\.)/;
 const changesetFrontmatterPattern = /^---\r?\n([\s\S]*?)\r?\n---/;
 const changesetReleaseTypePattern = /:\s*(major|minor|patch)\b/g;
 const versionPackagesTitlePattern = /\bVersion Packages\b/i;

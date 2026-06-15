@@ -9,6 +9,10 @@ on:
       - opened
       - synchronize
       - reopened
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,41 +23,33 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.title != '[Release] Version packages'
+      (
+        github.event_name != 'pull_request' ||
+        github.event.pull_request.title != '[Release] Version packages'
+      ) && (
+        github.event_name != 'push' ||
+        !contains(github.event.head_commit.message, '[skip ci]')
+      )
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - uses: oven-sh/setup-bun@v2
-        name: Install bun
         with:
-          bun-version-file: package.json
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
+      - name: 📥 Monorepo install
+        uses: ./.github/actions/bun-install
         with:
-          node-version: 22
+          generate: "true"
 
-      - uses: actions/cache@v4
-        name: ♻️ Setup bun cache
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - uses: actions/cache@v4
-        name: ♻️ Setup Next.js cache
+      - name: ♻️ Setup Next.js cache
+        uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/www/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-
-
-      - name: 📥 Install
-        run: bun install --frozen-lockfile && bun gen
 
       - name: 🧠 Validate Skills
         run: bun run intent:validate

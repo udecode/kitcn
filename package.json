@@ -15,6 +15,8 @@
     "build:watch": "bun --cwd packages/kitcn build:watch",
     "check": "bun run check:ci && bun run test:verify && bun run test:runtime",
     "check:ci": "bun lint && bun typecheck && bun run test && bun run test:cli && bun run test:concave && bun run fixtures:check",
+    "ci:release": "bun run release",
+    "ci:version": "bun changeset version && bun install --no-frozen-lockfile",
     "deps:sync": "bun tooling/dependency-pins.ts sync",
     "deps:upgrade": "bun tooling/dependency-pins.ts upgrade",
     "dev": "bun --cwd www dev",

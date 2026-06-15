@@ -27,21 +27,17 @@ jobs:
       - name: 📥 Checkout workflow helper
         uses: actions/checkout@v4
         with:
-          ref: >-
-            ${{
-              github.event_name == 'pull_request'
-                && github.event.pull_request.head.sha
-                || github.event.repository.default_branch
-            }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: 🔁 Sync auto-release checkbox
         uses: actions/github-script@v7
         with:
+          github-token: ${{ github.token }}
           script: |
             const { pathToFileURL } = await import('node:url');
             const helperUrl = pathToFileURL(
-              `${process.env.GITHUB_WORKSPACE}/tooling/auto-release-pr.mjs`
+              `${process.env.GITHUB_WORKSPACE}/tooling/scripts/auto-release-pr.mjs`
             ).href;
             const {
               getChangesetReleaseType,
