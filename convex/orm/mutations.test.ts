@@ -277,6 +277,51 @@ describe('M7 Mutations', () => {
     });
   });
 
+  it('should allow returning hydrated Date values from t.run in convex-test', async () => {
+    const localSubscriptions = convexTable('localSubscriptionsForRunReturn', {
+      plan: text().notNull(),
+      referenceId: text().notNull(),
+      status: text(),
+      createdAt: timestamp().notNull().defaultNow(),
+      updatedAt: timestamp().notNull().defaultNow(),
+    });
+    const localSchema = defineSchema({
+      localSubscriptions,
+    });
+    const localRelations = defineRelations(
+      {
+        localSubscriptions,
+      },
+      () => ({})
+    );
+
+    const sub = await convexTest(localSchema).run(async (baseCtx) => {
+      const ctx = withOrm(baseCtx, localRelations);
+      const [inserted] = await ctx.orm
+        .insert(localSubscriptions)
+        .values({ plan: 'pro', referenceId: 'ref_1', status: 'active' })
+        .returning();
+
+      expect(inserted.createdAt).toBeInstanceOf(Date);
+      expect(inserted.updatedAt).toBeInstanceOf(Date);
+
+      return inserted;
+    });
+
+    expect(typeof sub.createdAt).toBe('number');
+    expect(typeof sub.updatedAt).toBe('number');
+  });
+
+  it('should preserve convex-test rejection for unsupported class returns', async () => {
+    class UnsupportedDateReturn {
+      createdAt = new Date();
+    }
+
+    await expect(
+      convexTest(schema).run(async () => new UnsupportedDateReturn())
+    ).rejects.toThrow('not a supported Convex type');
+  });
+
   it('should update rows and return updated values', async ({ ctx }) => {
     const db = ctx.orm;
     const [user] = await db.insert(users).values(baseUser).returning();

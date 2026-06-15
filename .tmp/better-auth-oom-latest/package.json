@@ -1,0 +1,20 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit --extendedDiagnostics",
+    "check:declarations": "tsc --emitDeclarationOnly --declaration --extendedDiagnostics",
+    "generate": "node ./scripts/generate-medium-app.mjs"
+  },
+  "dependencies": {
+    "@convex-dev/better-auth": "latest",
+    "@tanstack/react-query": "latest",
+    "@types/react": "latest",
+    "better-auth": "latest",
+    "convex": "latest",
+    "kitcn": "latest",
+    "react": "latest",
+    "typescript": "latest"
+  },
+  "devDependencies": {}
+}

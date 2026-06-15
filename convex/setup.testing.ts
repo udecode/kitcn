@@ -25,10 +25,96 @@ const convexModules = (import.meta as ImportMetaWithGlob).glob([
 ]);
 const relations = requireSchemaRelations(schema);
 
+type TestIdentity = Parameters<
+  ReturnType<typeof baseConvexTest>['withIdentity']
+>[0];
+
+const serializeDatesForConvexTest = (value: unknown): unknown => {
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (Array.isArray(value)) {
+    let serialized: unknown[] | undefined;
+
+    for (let index = 0; index < value.length; index += 1) {
+      const entry = value[index];
+      const encoded = serializeDatesForConvexTest(entry);
+      if (encoded !== entry) {
+        if (!serialized) {
+          serialized = value.slice();
+        }
+        serialized[index] = encoded;
+      }
+    }
+
+    return serialized ?? value;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  const isSimpleObject =
+    prototype === null ||
+    prototype === Object.prototype ||
+    prototype?.constructor?.name === 'Object';
+  if (!isSimpleObject) {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  let serialized: Record<string, unknown> | undefined;
+
+  for (const key in record) {
+    if (!Object.hasOwn(record, key)) {
+      continue;
+    }
+
+    const entry = record[key];
+    const encoded = serializeDatesForConvexTest(entry);
+    if (encoded !== entry) {
+      if (!serialized) {
+        serialized = { ...record };
+      }
+      serialized[key] = encoded;
+    }
+  }
+
+  return serialized ?? value;
+};
+
+const wrapConvexTestDateReturns = <Test extends object>(test: Test): Test => {
+  const runnable = test as Test & {
+    run: <Output>(fn: (ctx: unknown) => Promise<Output>) => Promise<Output>;
+    withIdentity?: (identity: TestIdentity) => object;
+  };
+  const withIdentity = runnable.withIdentity;
+
+  const wrapped = {
+    ...runnable,
+    run: async <Output>(fn: (ctx: unknown) => Promise<Output>) =>
+      runnable.run(
+        async (ctx) => serializeDatesForConvexTest(await fn(ctx)) as Output
+      ),
+  };
+
+  if (!withIdentity) {
+    return wrapped as Test;
+  }
+
+  return {
+    ...wrapped,
+    withIdentity: (identity: TestIdentity) =>
+      wrapConvexTestDateReturns(withIdentity(identity)),
+  } as Test;
+};
+
 export function convexTest<Schema extends SchemaDefinition<any, any>>(
   schema: Schema
 ) {
-  return baseConvexTest(schema, convexModules);
+  return wrapConvexTestDateReturns(baseConvexTest(schema, convexModules));
 }
 
 export const withOrm = <
