@@ -8,7 +8,6 @@ import {
   addPackageChangelogLinks,
   extractReleaseChanges,
   generateRawReleaseNotes,
-  getFullChangelog,
   getGlobalReleaseVersion,
   getPackageChangelogUrls,
   getWorkspacePackages,
@@ -88,10 +87,6 @@ test('generates raw release notes from published package changelogs', async () =
   );
 
   const body = await generateRawReleaseNotes({
-    fullChangelog: {
-      label: 'v53.0.1...v53.0.2',
-      url: 'https://github.com/udecode/kitcn/compare/v53.0.1...v53.0.2',
-    },
     publishedPackages: [{ name: '@kitcn/list', version: '53.0.2' }],
     workspacePackages: await getWorkspacePackages([packageRoot]),
   });
@@ -99,12 +94,9 @@ test('generates raw release notes from published package changelogs', async () =
   assert.match(body, /## `@kitcn\/list`/);
   assert.match(body, /### Patch Changes/);
   assert.match(body, /Fix ordered list numbering/);
-  assert.match(body, /## Contributors/);
+  assert.doesNotMatch(body, /## Contributors/);
   assert.match(body, /@dylans/);
-  assert.match(
-    body,
-    /Full changelog: \[`v53\.0\.1\.\.\.v53\.0\.2`\]\(https:\/\/github\.com\/udecode\/kitcn\/compare\/v53\.0\.1\.\.\.v53\.0\.2\)/
-  );
+  assert.doesNotMatch(body, /Full changelog:/);
   assert.doesNotMatch(body, /For detailed changes/);
 });
 
@@ -202,64 +194,10 @@ Full changelog: [\`v53.0.4...v53.0.5\`](https://github.com/udecode/kitcn/compare
   );
   assert.match(
     linkedContent,
-    /## `kitcn`[\s\S]*For detailed changes, see \[`CHANGELOG`\]\(https:\/\/github\.com\/udecode\/kitcn\/blob\/abc123\/packages\/kitcn\/CHANGELOG\.md\)[\s\S]*## Contributors/
+    /## `kitcn`[\s\S]*For detailed changes, see \[`CHANGELOG`\]\(https:\/\/github\.com\/udecode\/kitcn\/blob\/abc123\/packages\/kitcn\/CHANGELOG\.md\)/
   );
-});
-
-test('uses release index package tags for full changelog fallback', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'kitcn-release-index-'));
-  const releaseIndexFile = path.join(root, 'release-index.json');
-
-  await writeFile(
-    releaseIndexFile,
-    JSON.stringify([
-      {
-        packageTag: '@kitcn/ai@98.0.0',
-        tag: 'v98.0.0',
-      },
-    ])
-  );
-
-  assert.deepEqual(
-    await getFullChangelog({
-      globalReleaseTags: ['v1.0.0'],
-      publishedPackages: [{ name: 'kitcn', version: '99.0.0' }],
-      releaseIndexFile,
-      version: '99.0.0',
-    }),
-    {
-      label: 'v98.0.0...v99.0.0',
-      url: 'https://github.com/udecode/kitcn/compare/%40kitcn%2Fai%4098.0.0...kitcn%4099.0.0',
-    }
-  );
-});
-
-test('uses previous global tag when it matches the release index version', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'kitcn-release-index-'));
-  const releaseIndexFile = path.join(root, 'release-index.json');
-
-  await writeFile(
-    releaseIndexFile,
-    JSON.stringify([
-      {
-        packageTag: 'kitcn@99.0.0',
-        tag: 'v99.0.0',
-      },
-    ])
-  );
-
-  assert.deepEqual(
-    await getFullChangelog({
-      globalReleaseTags: ['v99.0.0'],
-      publishedPackages: [{ name: 'kitcn', version: '99.0.1' }],
-      releaseIndexFile,
-      version: '99.0.1',
-    }),
-    {
-      label: 'v99.0.0...v99.0.1',
-      url: 'https://github.com/udecode/kitcn/compare/v99.0.0...v99.0.1',
-    }
-  );
+  assert.doesNotMatch(linkedContent, /## Contributors/);
+  assert.doesNotMatch(linkedContent, /Full changelog:/);
 });
 
 test('validates AI release notes preserve deterministic structure', () => {
@@ -271,22 +209,12 @@ test('validates AI release notes preserve deterministic structure', () => {
 > **Migration:** Use \`newApi\`.
 
 For detailed changes, see [\`CHANGELOG\`](https://github.com/udecode/kitcn/blob/abc/packages/table/CHANGELOG.md)
-
-## Contributors
-
-Thanks to everyone who contributed to this release:
-
-@alice
 `;
   const good = raw.replace('Removed `oldApi`', 'Removed `oldApi` from tables');
   const bad = raw
     .replace('## `@kitcn/table`', '## `@kitcn/core`')
     .replace('[#5000](https://github.com/udecode/kitcn/pull/5000)', '')
-    .replace('> **Migration:** Use `newApi`.\n', '')
-    .replace(
-      '\n## Contributors\n\nThanks to everyone who contributed to this release:\n\n@alice\n',
-      ''
-    );
+    .replace('> **Migration:** Use `newApi`.\n', '');
 
   assert.deepEqual(validateAiReleaseNotes(raw, good), {
     errors: [],
@@ -295,11 +223,11 @@ Thanks to everyone who contributed to this release:
   assert.equal(validateAiReleaseNotes(raw, bad).valid, false);
   assert.match(
     validateAiReleaseNotes(raw, bad).errors.join('\n'),
-    /AI output dropped Contributors section\./
+    /AI output changed package headings\./
   );
 });
 
-test('validates AI release notes preserve the Contributors section itself', () => {
+test('validates AI release notes reject standalone release footers', () => {
   const raw = `## \`@kitcn/table\`
 
 ### Patch Changes
@@ -307,25 +235,24 @@ test('validates AI release notes preserve the Contributors section itself', () =
 - [#5000](https://github.com/udecode/kitcn/pull/5000) by [@alice](https://github.com/alice) – Fix table.
 
 For detailed changes, see [\`CHANGELOG\`](https://github.com/udecode/kitcn/blob/abc/packages/table/CHANGELOG.md)
-
+`;
+  const withFooter = `${raw}
 ## Contributors
 
 Thanks to everyone who contributed to this release:
 
-@alice
-`;
-  const withoutContributors = raw.replace(
-    '\n## Contributors\n\nThanks to everyone who contributed to this release:\n\n@alice\n',
-    '\n'
-  );
+[@alice](https://github.com/alice)
 
-  assert.deepEqual(validateAiReleaseNotes(raw, withoutContributors), {
-    errors: ['AI output dropped Contributors section.'],
+Full changelog: [\`v53.0.4...v53.0.5\`](https://github.com/udecode/kitcn/compare/v53.0.4...v53.0.5)
+`;
+
+  assert.deepEqual(validateAiReleaseNotes(raw, withFooter), {
+    errors: ['AI output added release footer.'],
     valid: false,
   });
 });
 
-test('validates AI release notes preserve comma-separated contributor handles', () => {
+test('validates AI release notes preserve author links in entries', () => {
   const raw = `## \`@kitcn/table\`
 
 ### Patch Changes
@@ -334,14 +261,8 @@ test('validates AI release notes preserve comma-separated contributor handles', 
 - [#5001](https://github.com/udecode/kitcn/pull/5001) by [@bob](https://github.com/bob) – Fix more.
 
 For detailed changes, see [\`CHANGELOG\`](https://github.com/udecode/kitcn/blob/abc/packages/table/CHANGELOG.md)
-
-## Contributors
-
-Thanks to everyone who contributed to this release:
-
-@alice, @bob
 `;
-  const missingBob = raw.replace('@alice, @bob', '@alice');
+  const missingBob = raw.replace(' by [@bob](https://github.com/bob)', '');
 
   assert.deepEqual(validateAiReleaseNotes(raw, missingBob), {
     errors: ['AI output dropped contributors.'],

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { execFileSync } from 'node:child_process';
 import { appendFile, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +8,6 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..', '..');
 const repo = 'udecode/kitcn';
 const packageRoots = [path.join(repoRoot, 'packages')];
-const releaseIndexPath = path.join(repoRoot, '.tmp/release-index.json');
 const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const releaseTypeHeadingPattern =
   /^###\s+(Major|Minor|Patch) Changes[^\S\r\n]*$/gm;
@@ -19,9 +17,11 @@ const packageNameFromHeadingPattern = /^## `([^`]+)`/;
 const changeHeadingPattern = /^###\s+(Major|Minor|Patch) Changes[^\S\r\n]*$/gm;
 const changelogLinkPattern =
   /For detailed changes, see \[`CHANGELOG`\]\([^)]+\)/g;
-const fullChangelogLinkPattern = /Full changelog: \[`[^`]+`\]\([^)]+\)/g;
 const fullChangelogFooterPattern =
   /\n\nFull changelog: \[`[^`]+`\]\([^)]+\)\s*$/;
+const contributorsFooterPattern = /\n## Contributors\b[\s\S]*$/;
+const releaseFooterPattern =
+  /(?:^|\n)(?:## Contributors\b|Full changelog: \[`[^`]+`\]\([^)]+\))/;
 const markdownHeadingBoundaryPattern = /\n##\s+/;
 const packageChangelogFooterPattern =
   /\n*For detailed changes, see \[`CHANGELOG`\]\([^)]+\)\s*$/g;
@@ -32,9 +32,6 @@ const bulletEntryPattern = /^-\s+/gm;
 const migrationPattern = /\bMigration\b/g;
 const contributorPattern =
   /by \[@([A-Za-z0-9-]+)\]\(https:\/\/github\.com\/[^)]+\)/g;
-const contributorHandlePattern = /(?:^|[\s,])@([A-Za-z0-9-]+)(?=$|[\s,.;)])/gm;
-const contributorsHeadingPattern = /^## Contributors[^\n]*\n/m;
-const headingBoundaryPattern = /\n##\s+/;
 const releaseTypes = ['major', 'minor', 'patch'];
 const releaseTypeLabels = {
   major: 'Major',
@@ -122,12 +119,7 @@ async function main(args) {
   }
 
   const workspacePackages = await getWorkspacePackages();
-  const fullChangelog = await getFullChangelog({
-    publishedPackages,
-    version,
-  });
   const body = await generateRawReleaseNotes({
-    fullChangelog,
     publishedPackages,
     workspacePackages,
   });
@@ -156,47 +148,6 @@ export function getGlobalReleaseVersion(publishedPackages) {
     .filter((version) => typeof version === 'string')
     .filter((version) => semverPattern.test(version))
     .sort(compareVersionsDesc)[0];
-}
-
-export async function getFullChangelog({
-  globalReleaseTags,
-  publishedPackages,
-  releaseIndexFile = releaseIndexPath,
-  version,
-}) {
-  const currentTag = `v${version}`;
-  const previousGlobalVersion = getPreviousGlobalReleaseVersion(
-    version,
-    globalReleaseTags
-  );
-  const previousEntry = getPreviousReleaseIndexEntry(
-    await readReleaseIndex(releaseIndexFile),
-    version
-  );
-
-  if (
-    previousGlobalVersion &&
-    (!previousEntry?.version ||
-      compareVersionsDesc(previousGlobalVersion, previousEntry.version) <= 0)
-  ) {
-    const previousGlobalTag = `v${previousGlobalVersion}`;
-
-    return {
-      label: `${previousGlobalTag}...${currentTag}`,
-      url: compareUrl(previousGlobalTag, currentTag),
-    };
-  }
-
-  const currentPackageTag = getPreferredPackageTag(publishedPackages, version);
-
-  if (!currentPackageTag) return null;
-
-  if (!previousEntry?.packageTag || !previousEntry?.tag) return null;
-
-  return {
-    label: `${previousEntry.tag}...${currentTag}`,
-    url: compareUrl(previousEntry.packageTag, currentPackageTag),
-  };
 }
 
 export function getPackageChangelogUrls({
@@ -261,12 +212,10 @@ export async function getWorkspacePackages(roots = packageRoots) {
 }
 
 export async function generateRawReleaseNotes({
-  fullChangelog,
   publishedPackages,
   workspacePackages,
 }) {
   const lines = [];
-  const contributors = new Set();
   const packages = publishedPackages
     .filter(
       (publishedPackage) =>
@@ -295,34 +244,12 @@ export async function generateRawReleaseNotes({
 
     if (releaseChanges) {
       lines.push(releaseChanges.body);
-      collectContributors(contributors, releaseChanges.body);
     } else {
       lines.push(
         `Published \`${publishedPackage.name}@${publishedPackage.version}\`.`
       );
     }
 
-    lines.push('');
-  }
-
-  if (contributors.size > 0) {
-    lines.push('## Contributors');
-    lines.push('');
-    lines.push('Thanks to everyone who contributed to this release:');
-    lines.push('');
-    lines.push(
-      [...contributors]
-        .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
-        .map((contributor) => `@${contributor}`)
-        .join(', ')
-    );
-    lines.push('');
-  }
-
-  if (fullChangelog) {
-    lines.push(
-      `Full changelog: [\`${fullChangelog.label}\`](${fullChangelog.url})`
-    );
     lines.push('');
   }
 
@@ -338,6 +265,7 @@ export function addPackageChangelogLinks(
     workspacePackages,
   }
 ) {
+  const contentWithoutReleaseFooter = stripReleaseFooter(content);
   const changelogUrls = getPackageChangelogUrls({
     commitRef,
     publishedPackages,
@@ -347,7 +275,9 @@ export function addPackageChangelogLinks(
   let output = '';
   let cursor = 0;
 
-  for (const match of content.matchAll(packageHeadingPattern)) {
+  for (const match of contentWithoutReleaseFooter.matchAll(
+    packageHeadingPattern
+  )) {
     const headingStart = match.index;
 
     if (headingStart < cursor) continue;
@@ -356,16 +286,16 @@ export function addPackageChangelogLinks(
     const packageName = packageNameFromHeadingPattern.exec(heading)?.[1];
     const bodyStart = headingStart + heading.length;
     const nextHeadingMatch = markdownHeadingBoundaryPattern.exec(
-      content.slice(bodyStart)
+      contentWithoutReleaseFooter.slice(bodyStart)
     );
     const sectionEnd =
       nextHeadingMatch?.index === undefined
-        ? content.length
+        ? contentWithoutReleaseFooter.length
         : bodyStart + nextHeadingMatch.index;
     const changelogUrl = packageName ? changelogUrls.get(packageName) : null;
-    let sectionBody = content.slice(bodyStart, sectionEnd);
+    let sectionBody = contentWithoutReleaseFooter.slice(bodyStart, sectionEnd);
 
-    output += content.slice(cursor, bodyStart);
+    output += contentWithoutReleaseFooter.slice(cursor, bodyStart);
 
     if (changelogUrl) {
       sectionBody = appendPackageChangelogLink(sectionBody, changelogUrl);
@@ -375,7 +305,7 @@ export function addPackageChangelogLinks(
     cursor = sectionEnd;
   }
 
-  output += content.slice(cursor);
+  output += contentWithoutReleaseFooter.slice(cursor);
 
   return output.endsWith('\n') ? output : `${output}\n`;
 }
@@ -408,22 +338,10 @@ export function validateAiReleaseNotes(raw, final) {
   const finalChangeHeadings = matchAll(final, changeHeadingPattern);
   const rawChangelogLinks = matchAll(raw, changelogLinkPattern);
   const finalChangelogLinks = matchAll(final, changelogLinkPattern);
-  const rawFullChangelogLinks = matchAll(raw, fullChangelogLinkPattern);
-  const finalFullChangelogLinks = matchAll(final, fullChangelogLinkPattern);
   const rawPullRequestLinks = matchAll(raw, pullRequestLinkPattern);
   const finalPullRequestLinks = matchAll(final, pullRequestLinkPattern);
   const rawCommitLinks = matchAll(raw, commitLinkPattern);
   const finalCommitLinks = matchAll(final, commitLinkPattern);
-  const rawContributorsSection = getContributorsSection(raw);
-  const finalContributorsSection = getContributorsSection(final);
-  const didDropContributorsSection =
-    rawContributorsSection.trim().length > 0 &&
-    finalContributorsSection.trim().length === 0;
-  const missingSectionContributors = didDropContributorsSection
-    ? []
-    : extractContributorSectionHandles(rawContributorsSection).filter(
-        (handle) => !hasContributorHandle(finalContributorsSection, handle)
-      );
   const missingContributors = extractContributorHandles(raw).filter(
     (handle) => !hasContributorHandle(final, handle)
   );
@@ -442,10 +360,6 @@ export function validateAiReleaseNotes(raw, final) {
 
   if (!sameList(rawChangelogLinks, finalChangelogLinks)) {
     errors.push('AI output changed package changelog links.');
-  }
-
-  if (!sameList(rawFullChangelogLinks, finalFullChangelogLinks)) {
-    errors.push('AI output changed full changelog links.');
   }
 
   if (!sameList(rawPullRequestLinks, finalPullRequestLinks)) {
@@ -469,11 +383,11 @@ export function validateAiReleaseNotes(raw, final) {
     errors.push('AI output dropped migration notes.');
   }
 
-  if (didDropContributorsSection) {
-    errors.push('AI output dropped Contributors section.');
+  if (releaseFooterPattern.test(final)) {
+    errors.push('AI output added release footer.');
   }
 
-  if (missingContributors.length > 0 || missingSectionContributors.length > 0) {
+  if (missingContributors.length > 0) {
     errors.push('AI output dropped contributors.');
   }
 
@@ -534,18 +448,16 @@ function extractReleaseTypeSections(content) {
 }
 
 function appendPackageChangelogLink(sectionBody, changelogUrl) {
-  const fullChangelogMatch = fullChangelogFooterPattern.exec(sectionBody);
-
-  if (fullChangelogMatch) {
-    const body = sectionBody.slice(0, fullChangelogMatch.index);
-    const footer = sectionBody.slice(fullChangelogMatch.index);
-
-    return `${appendPackageChangelogLink(body, changelogUrl)}${footer}`;
-  }
-
   return `${sectionBody
     .replace(packageChangelogFooterPattern, '')
     .trimEnd()}\n\nFor detailed changes, see [\`CHANGELOG\`](${changelogUrl})`;
+}
+
+function stripReleaseFooter(content) {
+  return content
+    .replace(contributorsFooterPattern, '')
+    .replace(fullChangelogFooterPattern, '')
+    .trimEnd();
 }
 
 async function readPackageJson(directory) {
@@ -554,100 +466,8 @@ async function readPackageJson(directory) {
   return content ? JSON.parse(content) : null;
 }
 
-async function readReleaseIndex(filePath) {
-  const content = await readOptionalFile(filePath);
-
-  if (!content) return [];
-
-  try {
-    const releases = JSON.parse(content);
-
-    return Array.isArray(releases) ? releases : [];
-  } catch {
-    return [];
-  }
-}
-
-function getPreviousReleaseIndexEntry(releases, version) {
-  return releases
-    .map((release) => ({
-      ...release,
-      version: tagToVersion(release?.tag),
-    }))
-    .filter(
-      (release) => release.version && isBeforeVersion(release.version, version)
-    )
-    .sort((a, b) => compareVersionsDesc(a.version, b.version))[0];
-}
-
-function getPreferredPackageTag(publishedPackages, version) {
-  const preferredPackage = getPreferredPublishedPackage(
-    publishedPackages,
-    version
-  );
-
-  return preferredPackage
-    ? `${preferredPackage.name}@${preferredPackage.version}`
-    : null;
-}
-
-function getPreferredPublishedPackage(publishedPackages, version) {
-  const matchingPackages = publishedPackages.filter(
-    (publishedPackage) =>
-      typeof publishedPackage?.name === 'string' &&
-      publishedPackage.version === version
-  );
-
-  return (
-    matchingPackages.find(
-      (publishedPackage) => publishedPackage.name === 'kitcn'
-    ) ?? matchingPackages[0]
-  );
-}
-
-function getPreviousGlobalReleaseVersion(version, globalReleaseTags) {
-  const previousVersion = (globalReleaseTags ?? getGitGlobalReleaseTags())
-    .map(tagToVersion)
-    .filter(Boolean)
-    .filter((tagVersion) => isBeforeVersion(tagVersion, version))
-    .sort(compareVersionsDesc)[0];
-
-  return previousVersion ?? null;
-}
-
-function getGitGlobalReleaseTags() {
-  try {
-    return execFileSync('git', ['tag', '--list', 'v*'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-    })
-      .split('\n')
-      .map((tag) => tag.trim())
-      .filter(Boolean)
-      .filter((tag) => semverPattern.test(tagToVersion(tag) ?? ''));
-  } catch {
-    return [];
-  }
-}
-
-function compareUrl(fromTag, toTag) {
-  return `https://github.com/${repo}/compare/${encodeURIComponent(fromTag)}...${encodeURIComponent(toTag)}`;
-}
-
 function normalizePath(filePath) {
   return filePath.split(path.sep).join('/');
-}
-
-function tagToVersion(tag) {
-  if (typeof tag !== 'string' || !tag.startsWith('v')) return null;
-
-  const version = tag.slice(1);
-
-  return semverPattern.test(version) ? version : null;
-}
-
-function isBeforeVersion(version, referenceVersion) {
-  return compareVersionsDesc(version, referenceVersion) > 0;
 }
 
 async function readOptionalFile(filePath) {
@@ -665,42 +485,12 @@ function collectContributors(contributors, content) {
   }
 }
 
-function collectContributorSectionHandles(contributors, content) {
-  for (const match of content.matchAll(contributorHandlePattern)) {
-    contributors.add(match[1]);
-  }
-}
-
 function extractContributorHandles(content) {
   const contributors = new Set();
 
   collectContributors(contributors, content);
-  collectContributorSectionHandles(
-    contributors,
-    getContributorsSection(content)
-  );
 
   return [...contributors];
-}
-
-function extractContributorSectionHandles(content) {
-  const contributors = new Set();
-
-  collectContributorSectionHandles(contributors, content);
-
-  return [...contributors];
-}
-
-function getContributorsSection(content) {
-  const match = contributorsHeadingPattern.exec(content);
-
-  if (!match) return '';
-
-  const sectionStart = match.index + match[0].length;
-  const rest = content.slice(sectionStart);
-  const nextHeading = headingBoundaryPattern.exec(rest);
-
-  return rest.slice(0, nextHeading?.index ?? rest.length);
 }
 
 function hasContributorHandle(content, handle) {
