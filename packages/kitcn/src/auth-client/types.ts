@@ -1,9 +1,12 @@
-import type { BetterAuthClientPlugin } from 'better-auth';
+import type { BetterAuthClientPlugin } from 'better-auth/client';
 import type { createAuthClient } from 'better-auth/react';
 import type { convexClient } from '../auth/internal/convex-client';
 
+type OpaqueClientPlugin = Omit<BetterAuthClientPlugin, '$InferServerPlugin'> & {
+  $InferServerPlugin?: never;
+};
 type ConvexClient = ReturnType<typeof convexClient>;
-type CrossDomainClient = BetterAuthClientPlugin & {
+type CrossDomainClient = OpaqueClientPlugin & {
   id: 'cross-domain';
   getActions: (...args: never[]) => {
     crossDomain: {
@@ -19,13 +22,10 @@ type CrossDomainClient = BetterAuthClientPlugin & {
 export type PluginsWithCrossDomain = (
   | CrossDomainClient
   | ConvexClient
-  | BetterAuthClientPlugin
+  | OpaqueClientPlugin
 )[];
 
-export type PluginsWithoutCrossDomain = (
-  | ConvexClient
-  | BetterAuthClientPlugin
-)[];
+export type PluginsWithoutCrossDomain = (ConvexClient | OpaqueClientPlugin)[];
 
 type AuthSessionState = {
   data: unknown;
@@ -72,9 +72,8 @@ export type ConvexAuthProviderClient = {
   useSession: () => AuthSessionState;
 } & Record<string, unknown>;
 
-export type AuthClientWithPlugins<
-  Plugins extends PluginsWithCrossDomain | PluginsWithoutCrossDomain,
-> = ReturnType<typeof createAuthClient<{ plugins: Plugins }>>;
+export type AuthClientWithPlugins<Plugins extends BetterAuthClientPlugin[]> =
+  ReturnType<typeof createAuthClient<{ plugins: Plugins }>>;
 
 export type AuthClient =
   | AuthClientWithPlugins<PluginsWithCrossDomain>

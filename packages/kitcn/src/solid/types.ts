@@ -1,9 +1,12 @@
-import type { BetterAuthClientPlugin } from 'better-auth';
+import type { BetterAuthClientPlugin } from 'better-auth/client';
 import type { createAuthClient } from 'better-auth/solid';
 import type { convexClient } from '../auth/internal/convex-client';
 
+type OpaqueClientPlugin = Omit<BetterAuthClientPlugin, '$InferServerPlugin'> & {
+  $InferServerPlugin?: never;
+};
 type ConvexClient = ReturnType<typeof convexClient>;
-type CrossDomainClient = BetterAuthClientPlugin & {
+type CrossDomainClient = OpaqueClientPlugin & {
   id: 'cross-domain';
   getActions: (...args: never[]) => {
     crossDomain: {
@@ -18,9 +21,9 @@ type CrossDomainClient = BetterAuthClientPlugin & {
 type PluginsWithCrossDomain = (
   | CrossDomainClient
   | ConvexClient
-  | BetterAuthClientPlugin
+  | OpaqueClientPlugin
 )[];
-type PluginsWithoutCrossDomain = (ConvexClient | BetterAuthClientPlugin)[];
+type PluginsWithoutCrossDomain = (ConvexClient | OpaqueClientPlugin)[];
 
 type SolidAuthSessionState = {
   data: unknown;
@@ -62,9 +65,8 @@ export type SolidAuthProviderClient = {
   useSession: () => () => SolidAuthSessionState;
 } & Record<string, unknown>;
 
-type AuthClientWithPlugins<
-  Plugins extends PluginsWithCrossDomain | PluginsWithoutCrossDomain,
-> = ReturnType<typeof createAuthClient<{ plugins: Plugins }>>;
+type AuthClientWithPlugins<Plugins extends BetterAuthClientPlugin[]> =
+  ReturnType<typeof createAuthClient<{ plugins: Plugins }>>;
 
 export type SolidAuthClient =
   | AuthClientWithPlugins<PluginsWithCrossDomain>
