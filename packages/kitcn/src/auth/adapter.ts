@@ -451,15 +451,16 @@ export const httpAdapter = <
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
+          if (!data.where?.length) {
+            return null;
+          }
 
           // Support multiple AND conditions with eq operator only
-          const isValidWhere =
-            data.where?.length &&
-            data.where.every(
-              (w) =>
-                (w.operator === 'eq' || w.operator === undefined) &&
-                w.connector !== 'OR'
-            );
+          const isValidWhere = data.where.every(
+            (w) =>
+              (w.operator === 'eq' || w.operator === undefined) &&
+              w.connector !== 'OR'
+          );
 
           if (isValidWhere) {
             // Validate exactly 1 match before updating
@@ -786,14 +787,16 @@ export const dbAdapter = <
           );
         },
         update: async (data): Promise<any> => {
+          if (!data.where?.length) {
+            return null;
+          }
+
           // Support multiple AND conditions with eq operator only
-          const isValidWhere =
-            data.where?.length &&
-            data.where.every(
-              (w) =>
-                (w.operator === 'eq' || w.operator === undefined) &&
-                w.connector !== 'OR'
-            );
+          const isValidWhere = data.where.every(
+            (w) =>
+              (w.operator === 'eq' || w.operator === undefined) &&
+              w.connector !== 'OR'
+          );
 
           if (isValidWhere) {
             // Validate exactly 1 match before updating

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   applyPinnedVersionsToPackageJson,
   getMinimumVersionRange,
+  getMinorVersionPeerRange,
   parseDependencyPinsArgs,
 } from './dependency-pins';
 
@@ -34,6 +35,13 @@ describe('tooling/dependency-pins', () => {
     expect(getMinimumVersionRange('2.4.7')).toBe('>=2.4');
   });
 
+  test('derives better-auth peer ranges from the supported minor line', () => {
+    expect(getMinorVersionPeerRange('1.6.11', '1.6.15')).toBe(
+      '>=1.6.11 <1.7.0'
+    );
+    expect(getMinorVersionPeerRange('1.6.11', '1.7.3')).toBe('>=1.6.11 <1.8.0');
+  });
+
   test('applies pinned versions to package.json dependency maps', () => {
     expect(
       applyPinnedVersionsToPackageJson(
@@ -62,7 +70,7 @@ describe('tooling/dependency-pins', () => {
           },
           peerDependencies: {
             convex: '>=1.33',
-            'better-auth': '1.4.9',
+            'better-auth': '>=1.4.9 <1.5.0',
           },
         }
       )
@@ -77,7 +85,7 @@ describe('tooling/dependency-pins', () => {
       },
       peerDependencies: {
         convex: '>=1.33',
-        'better-auth': '1.4.9',
+        'better-auth': '>=1.4.9 <1.5.0',
       },
     });
   });

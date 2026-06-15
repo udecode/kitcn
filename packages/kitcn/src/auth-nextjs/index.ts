@@ -13,10 +13,17 @@ const TRAILING_COLON_RE = /:$/;
 const requestCanHaveBody = (method: string) =>
   method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
 
+const stripHopByHopHeaders = (headers: Headers) => {
+  headers.delete('connection');
+  headers.delete('content-length');
+  headers.delete('transfer-encoding');
+};
+
 const handler = async (request: Request, siteUrl: string) => {
   const requestUrl = new URL(request.url);
   const nextUrl = `${siteUrl}${requestUrl.pathname}${requestUrl.search}`;
   const headers = new Headers(request.headers);
+  stripHopByHopHeaders(headers);
   headers.set('accept-encoding', 'application/json');
   headers.set('host', new URL(siteUrl).host);
   headers.set('x-forwarded-host', requestUrl.host);
@@ -29,9 +36,13 @@ const handler = async (request: Request, siteUrl: string) => {
     'x-better-auth-forwarded-proto',
     requestUrl.protocol.replace(TRAILING_COLON_RE, '')
   );
-  const body = requestCanHaveBody(request.method)
-    ? await request.arrayBuffer()
-    : undefined;
+  let body: ArrayBuffer | undefined;
+  if (requestCanHaveBody(request.method)) {
+    const bufferedBody = await request.arrayBuffer();
+    if (bufferedBody.byteLength > 0) {
+      body = bufferedBody;
+    }
+  }
 
   return fetch(nextUrl, {
     body,
@@ -102,8 +113,7 @@ export function convexBetterAuth<TApi extends Record<string, unknown>>(
       ? {
           getToken: (siteUrl, headers, getTokenOpts) => {
             const mutableHeaders = new Headers(headers);
-            mutableHeaders.delete('content-length');
-            mutableHeaders.delete('transfer-encoding');
+            stripHopByHopHeaders(mutableHeaders);
             mutableHeaders.set('accept-encoding', 'identity');
             return getToken(siteUrl, mutableHeaders, {
               basePath: auth.basePath,

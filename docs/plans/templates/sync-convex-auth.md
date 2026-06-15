@@ -13,19 +13,23 @@ Template:
 
 Completion threshold:
 - Fork/upstream refs, behind/ahead counts, exact commit range, upstream diff
-  summary, local KitCN surface audit, docs/solutions audit, classification
-  ledger, selected slice or no-action verdict, ambiguity decisions, delegated
-  `task` prompt/result or N/A reason, and final evidence are recorded.
+  summary, fork sync status, local KitCN surface audit, docs/solutions audit,
+  classification ledger, selected slice or no-action verdict, ambiguity
+  decisions, delegated `task` prompt/result or N/A reason, and final evidence
+  are recorded.
 - Closure is legal only when every upstream change in the compared range is
-  classified, every non-`no-op` classification has evidence and a decision, and
-  `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}`
-  passes.
+  classified, every non-`no-op` classification has evidence and a decision, the
+  fork is fast-forwarded/PR'd or a blocker is recorded, and
+  `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` passes.
 
 Verification surface:
 - `gh repo view` or fallback evidence for fork/upstream identity.
-- `git -C ../convex-better-auth fetch origin --tags` and upstream fetch.
+- `git -C ../convex-better-auth fetch <fork-remote> --tags` and upstream
+  fetch.
 - `git -C ../convex-better-auth rev-list --count ...` for behind/ahead counts.
 - `git -C ../convex-better-auth log ...` and `git diff --name-status ...`.
+- Fork sync proof: fast-forward push result, fork PR URL, already-synced ref, or
+  divergent/blocker evidence.
 - Patch reads for relevant upstream files.
 - Local `rg` surface audit across `packages`, `www`, `.agents`, `docs`,
   `tooling`, `fixtures`, and `example`.
@@ -34,6 +38,8 @@ Verification surface:
 
 Constraints:
 - Use evidence, not vibes.
+- Snapshot the pre-sync compare range, then sync the fork itself when safe.
+- Never force push `zbeyens/convex-better-auth`.
 - Pull only upstream changes that matter to KitCN auth integration.
 - Stop and ask before importing optional e2e suites, broad fixtures, examples,
   release plumbing, or dev-only test infrastructure unless they are the direct
@@ -48,13 +54,13 @@ Boundaries:
   `../convex-better-auth` commits and patches, local KitCN auth surfaces, and
   institutional notes under `docs/solutions` / `docs/plans`.
 - Allowed sync-audit scope: fork/upstream refs, upstream diff evidence,
-  classification ledger, local surface map, selected slice, delegated `task`
-  prompt, and final sync verdict.
+  fork fast-forward/PR state, classification ledger, local surface map, selected
+  slice, delegated `task` prompt, and final sync verdict.
 - Delegated implementation scope: owned by the delegated `task` plan and PR.
 - Browser surface: N/A unless upstream change or local KitCN impact requires
   real browser proof.
 - Tracker sync: N/A unless the sync run starts from a tracker item.
-- Non-goals: mirroring upstream wholesale, importing optional test/example
+- Non-goals: force-pushing a diverged fork, importing optional test/example
   infrastructure without approval, and coding inside the sync audit plan.
 
 Output budget strategy:
@@ -67,8 +73,9 @@ Output budget strategy:
 Blocked condition:
 - Blocked only if upstream cannot be identified after documented fallbacks,
   required fork/upstream refs cannot be fetched, the compare is too large to
-  classify without a user-selected bound, or the highest-leverage opportunity is
-  ambiguous and needs user approval.
+  classify without a user-selected bound, the fork has diverged and needs a
+  merge/rebase decision, direct fork sync and fork PR creation both fail, or the
+  highest-leverage opportunity is ambiguous and needs user approval.
 
 Sync refs:
 - Fork: pending
@@ -78,13 +85,15 @@ Sync refs:
 - Behind count: pending
 - Ahead count: pending
 - Exact range: pending
+- Fork sync status: pending
+- Post-sync fork ref or PR: pending
 
 Sync verdict:
 - verdict: pending
 - selected slice: pending
 - class: pending
 - decision reason: pending
-- next owner: sync audit
+- next owner: fork sync
 
 Ambiguity / approval ledger:
 | Item | Why ambiguous | Decision | Evidence |
@@ -127,8 +136,13 @@ Work Checklist:
       blocked condition are filled from the active sync goal.
 - [ ] Fork, upstream, branches/refs, behind count, ahead count, and exact range
       are recorded.
-- [ ] Local clone exists or is created, origin/upstream remotes are correct, and
-      origin/upstream refs are fetched.
+- [ ] Local clone exists or is created, fork/upstream remotes are identified by
+      URL, and fork/upstream refs are fetched.
+- [ ] Fork sync is executed when fast-forward-safe, represented by a fork PR
+      when direct push is blocked, or stopped with a recorded blocker when the
+      fork diverged.
+- [ ] Post-sync fork ref or fork PR URL is recorded before KitCN implementation
+      delegation.
 - [ ] Upstream commit list and file summary are read.
 - [ ] Relevant upstream patches are read; large compares are grouped before
       deep patch review.
@@ -162,6 +176,8 @@ Completion Gates:
 | Ref fetch | pending | Fetch fork and upstream refs/tags in `../convex-better-auth` | pending |
 | Behind/ahead counts | pending | Record `rev-list --count` results | pending |
 | Commit range | pending | Record exact compared range and commit summary | pending |
+| Fork sync | pending | Fast-forward/push fork, open fork PR, record already-synced state, or record divergence blocker | pending |
+| Post-sync fork proof | pending | Fetch/read post-sync fork ref or record fork PR URL | pending |
 | Upstream diff summary | pending | Record `diff --name-status` and relevant patch evidence | pending |
 | Local KitCN surface audit | pending | Run/read scoped `rg` across KitCN integration points | pending |
 | Institutional note audit | pending | Search/read relevant `docs/solutions` and `docs/plans` notes | pending |
@@ -180,7 +196,8 @@ Completion Gates:
 Phase / pass table:
 | Phase | Status | Evidence | Next |
 |-------|--------|----------|------|
-| Setup refs | in_progress | created plan | upstream diff |
+| Setup refs | in_progress | created plan | fork sync |
+| Fork sync | pending | | upstream diff |
 | Upstream diff audit | pending | | local impact audit |
 | Local KitCN impact audit | pending | | classification |
 | Classification and decision | pending | | delegation or no-action closeout |
@@ -208,13 +225,14 @@ Final handoff / sync:
 - Range: pending
 - Decision: pending
 - Delegated PR: pending
+- Fork sync: pending
 - Caveats: pending
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
 | Where am I? | Setup refs |
-| Where am I going? | Upstream diff, local impact audit, classification, delegation or no-action closeout |
+| Where am I going? | Fork sync, upstream diff, local impact audit, classification, delegation or no-action closeout |
 | What is the goal? | TODO: Fill from Objective |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |

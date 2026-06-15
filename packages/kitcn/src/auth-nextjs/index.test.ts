@@ -25,15 +25,18 @@ describe('convexBetterAuth', () => {
       await result.handler.GET(
         new Request('https://example.com/path?a=1', { method: 'GET' })
       );
-      await result.handler.POST(
-        new Request('https://example.com/other?b=2', {
-          body: JSON.stringify({ email: 'user@example.com' }),
-          headers: {
-            'content-type': 'application/json',
-          },
-          method: 'POST',
-        })
-      );
+      const postBody = JSON.stringify({ email: 'user@example.com' });
+      await result.handler.POST({
+        arrayBuffer: async () => new TextEncoder().encode(postBody).buffer,
+        headers: new Headers({
+          connection: 'keep-alive',
+          'content-length': String(postBody.length),
+          'content-type': 'application/json',
+          'transfer-encoding': 'chunked',
+        }),
+        method: 'POST',
+        url: 'https://example.com/other?b=2',
+      } as unknown as Request);
       const preflightRequest = {
         headers: {
           'access-control-request-method': 'POST',
@@ -72,9 +75,12 @@ describe('convexBetterAuth', () => {
         'example.com'
       );
       expect(postHeaders.get('x-better-auth-forwarded-proto')).toBe('https');
+      expect(postHeaders.get('connection')).toBeNull();
+      expect(postHeaders.get('content-length')).toBeNull();
+      expect(postHeaders.get('transfer-encoding')).toBeNull();
       await expect(
         new Response(calls[1]?.init?.body as BodyInit).text()
-      ).resolves.toBe(JSON.stringify({ email: 'user@example.com' }));
+      ).resolves.toBe(postBody);
 
       expect(calls[2]?.input).toBe(
         'https://my-app.convex.site/api/auth/session'

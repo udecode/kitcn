@@ -941,7 +941,8 @@ export async function startLocalSiteProxy(
           value === undefined ||
           key === 'host' ||
           key === 'connection' ||
-          key === 'content-length'
+          key === 'content-length' ||
+          key === 'transfer-encoding'
         ) {
           continue;
         }
