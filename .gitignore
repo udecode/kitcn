@@ -21,6 +21,7 @@ node_modules
 # production
 dist
 /tmp
+.tmp
 /out-tsc
 **/build
 
