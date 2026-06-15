@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.15.13
+
+### Patch Changes
+
+- [#289](https://github.com/udecode/kitcn/pull/289) [`4aae1ee`](https://github.com/udecode/kitcn/commit/4aae1ee1dfac8ae85fe0999fba8a78e523fec975) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix auth adapter updates with no `where` clauses to return `null`.
+  - Fix Next.js and TanStack Start auth proxies to strip hop-by-hop headers.
+  - Update supported Better Auth installs to `1.6.15` with a `>=1.6.11 <1.7.0` peer range.
+
 ## 0.15.12
 
 ### Patch Changes
