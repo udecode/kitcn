@@ -1,5 +1,5 @@
 ---
-description: Sync kitcn against upstream `convex-better-auth` changes. Use when asked to run `sync-convex-auth`, compare `zbeyens/convex-better-auth` with its upstream fork, audit commits the fork is behind on, classify relevance to kitcn auth integration, and delegate one implementation PR through `task`.
+description: Sync `zbeyens/convex-better-auth` with upstream, then sync kitcn against upstream `convex-better-auth` changes. Use when asked to run `sync-convex-auth`, compare the fork with upstream, fast-forward or PR the fork update when safe, audit commits the fork was behind on, classify relevance to kitcn auth integration, and delegate one implementation PR through `task`.
 name: sync-convex-auth
 metadata:
   skiller:
@@ -11,7 +11,8 @@ metadata:
 Handle $ARGUMENTS.
 
 Goal: compare `https://github.com/zbeyens/convex-better-auth` with its
-upstream fork, extract every upstream change that matters to kitcn, then
+upstream fork, sync that fork to upstream when it can be done without losing
+fork-only work, extract every upstream change that matters to kitcn, then
 delegate one coherent implementation slice to
 [$task](../skills/task/SKILL.md) so it
 opens the PR.
@@ -28,16 +29,19 @@ node .agents/skills/autogoal/scripts/create-goal-scratchpad.mjs \
 ```
 
 This plan owns the upstream audit, classification ledger, ambiguity decisions,
-and delegated task prompt. The delegated implementation still uses `task`; do
-not duplicate implementation PR machinery inside the sync plan.
+fork-sync result, and delegated task prompt. The delegated implementation still
+uses `task`; do not duplicate implementation PR machinery inside the sync plan.
 
 ## Rules
 
 - Use evidence, not vibes. Read commits, changed files, and patches.
 - Treat the fork being behind upstream as signal, not proof. Pull only relevant
   work into kitcn.
-- Ignore genuinely irrelevant upstream changes. Do not mirror upstream just to
-  feel caught up.
+- Syncing the fork is required. Snapshot the pre-sync range first, then update
+  `zbeyens/convex-better-auth` by fast-forward push or fork PR. Never force
+  push the fork.
+- Ignore genuinely irrelevant upstream changes when deciding KitCN work. Do not
+  mirror upstream into KitCN just to feel caught up.
 - Pull all clearly relevant, non-conflicting fixes in the same slice when they
   share the same kitcn auth surface.
 - Stop and ask the user before importing optional additions where the tradeoff is
@@ -71,21 +75,25 @@ gh repo view get-convex/better-auth --json nameWithOwner,defaultBranchRef,url
 If npm metadata or the local clone clearly point to one upstream repo, use that
 repo and continue instead of stopping.
 
-Use a local clone for navigation, creating it only if missing:
+Use a local clone for navigation, creating it only if missing. Identify the
+remote that points at the fork and the remote that points at upstream by URL;
+do not assume `origin` is the fork:
 
 ```bash
 test -d ../convex-better-auth/.git || \
   gh repo clone zbeyens/convex-better-auth ../convex-better-auth
-git -C ../convex-better-auth remote get-url upstream >/dev/null 2>&1 || \
-  git -C ../convex-better-auth remote add upstream https://github.com/<upstream-owner>/<repo-name>.git
-git -C ../convex-better-auth fetch origin --tags
-git -C ../convex-better-auth fetch upstream --tags
+git -C ../convex-better-auth remote -v
+git -C ../convex-better-auth remote get-url <upstream-remote> >/dev/null 2>&1 || \
+  git -C ../convex-better-auth remote add <upstream-remote> https://github.com/<upstream-owner>/<repo-name>.git
+git -C ../convex-better-auth fetch <fork-remote> --tags
+git -C ../convex-better-auth fetch <upstream-remote> --tags
 ```
 
 Record:
 
 - fork owner/name and default branch
 - upstream owner/name and default branch
+- fork remote name and upstream remote name
 - fork ref and upstream ref being compared
 - behind count
 - ahead count, if any
@@ -94,28 +102,72 @@ Record:
 Commands:
 
 ```bash
-git -C ../convex-better-auth rev-list --count origin/<fork-branch>..upstream/<upstream-branch>
-git -C ../convex-better-auth rev-list --count upstream/<upstream-branch>..origin/<fork-branch>
-git -C ../convex-better-auth log --oneline --decorate origin/<fork-branch>..upstream/<upstream-branch>
+git -C ../convex-better-auth rev-list --count <fork-remote>/<fork-branch>..<upstream-remote>/<upstream-branch>
+git -C ../convex-better-auth rev-list --count <upstream-remote>/<upstream-branch>..<fork-remote>/<fork-branch>
+git -C ../convex-better-auth log --oneline --decorate <fork-remote>/<fork-branch>..<upstream-remote>/<upstream-branch>
 ```
 
 If $ARGUMENTS names a base or target ref, use it as the bound after proving it
 exists.
 
-## 2. Read The Upstream Diff
+## 2. Sync The Fork
+
+The sync audit must update `zbeyens/convex-better-auth` itself, not only KitCN.
+Do this after recording the pre-sync range above, so the KitCN audit still knows
+which upstream commits were imported.
+
+If the fork is already at the upstream ref, record `fork sync: already synced`.
+
+If the fork is behind and not ahead, fast-forward the fork default branch to the
+upstream ref and push:
+
+```bash
+git -C ../convex-better-auth merge-base --is-ancestor \
+  <fork-remote>/<fork-branch> <upstream-remote>/<upstream-branch>
+git -C ../convex-better-auth push <fork-remote> \
+  refs/remotes/<upstream-remote>/<upstream-branch>:refs/heads/<fork-branch>
+git -C ../convex-better-auth fetch <fork-remote> --tags
+git -C ../convex-better-auth rev-parse <fork-remote>/<fork-branch>
+```
+
+If the fast-forward push is rejected because the fork default branch is
+protected or direct push is not allowed, open a PR in the fork instead:
+
+```bash
+git -C ../convex-better-auth switch -C sync-upstream-<date> \
+  <upstream-remote>/<upstream-branch>
+git -C ../convex-better-auth push <fork-remote> \
+  HEAD:refs/heads/sync-upstream-<date>
+gh pr create \
+  --repo zbeyens/convex-better-auth \
+  --base <fork-branch> \
+  --head zbeyens:sync-upstream-<date> \
+  --title "Sync upstream convex-better-auth" \
+  --body "Fast-forward fork to <upstream-owner>/<repo-name>@<upstream-ref>."
+```
+
+If the fork is ahead of upstream or has diverged, stop and ask before merging,
+rebasing, or overwriting anything. Do not force push. Record:
+
+- fork sync status: `already synced`, `fast-forward pushed`,
+  `fork PR opened`, `blocked: diverged`, or `blocked: push rejected`
+- post-sync fork ref or PR URL
+- whether KitCN audit continues from the pre-sync range
+
+## 3. Read The Upstream Diff
 
 Start with a file summary:
 
 ```bash
 git -C ../convex-better-auth diff --name-status \
-  origin/<fork-branch>..upstream/<upstream-branch>
+  <pre-sync-fork-ref>..<pre-sync-upstream-ref>
 ```
 
 Then read patches for relevant-looking files:
 
 ```bash
 git -C ../convex-better-auth diff \
-  origin/<fork-branch>..upstream/<upstream-branch> -- \
+  <pre-sync-fork-ref>..<pre-sync-upstream-ref> -- \
   src package.json bun.lock tsconfig.json '*.md' \
   ':!**/dist/**' ':!**/build/**' ':!**/node_modules/**'
 ```
@@ -135,7 +187,7 @@ gh api \
 If the compare is too large, group by subsystem first, then inspect the patches
 for likely auth-runtime impact.
 
-## 3. Search Kitcn For Affected Auth Surfaces
+## 4. Search Kitcn For Affected Auth Surfaces
 
 Search local kitcn integration points:
 
@@ -164,7 +216,7 @@ Read relevant hits, especially notes about:
 - scaffold templates, docs, and `packages/kitcn/skills/kitcn/**`
 - local hacks that might be obsolete after upstream changes
 
-## 4. Classify Every Upstream Change
+## 5. Classify Every Upstream Change
 
 Classify each commit or file group:
 
@@ -204,7 +256,7 @@ Use this relevance filter:
   benchmark tooling, and dev-only utilities. Stop and ask before pulling these
   in unless they are the direct verification path for a selected required fix.
 
-## 5. Choose One Implementation Slice
+## 6. Choose One Implementation Slice
 
 Pick the highest-leverage slice using this order:
 
@@ -231,7 +283,7 @@ If it touches auth runtime, client, provider, or query invalidation surfaces,
 the delegated task must follow the repo's auth verification lane. Do not import
 a slow upstream e2e suite unless the user explicitly approves it.
 
-## 6. Delegate Through `task`
+## 7. Delegate Through `task`
 
 Load
 [$task](../task/SKILL.md) with a
@@ -244,6 +296,7 @@ Fork: zbeyens/convex-better-auth
 Upstream: <upstream-owner>/<repo-name>
 Range: <fork-ref>..<upstream-ref>
 Behind: <count> commits
+Fork sync: <already synced | fast-forward pushed | fork PR URL | blocked reason>
 
 Opportunity: <one-sentence selected slice>
 Class: <security | compatibility | bugfix | cleanup | agentic | feature | docs | tests>
@@ -284,6 +337,7 @@ Fork: zbeyens/convex-better-auth
 Upstream: <upstream-owner>/<repo-name>
 Range: <fork-ref>..<upstream-ref>
 Behind: <count>
+Fork sync: <status and post-sync ref or PR URL>
 
 | Class  | Opportunity | Evidence | Decision |
 | ------ | ----------- | -------- | -------- |
