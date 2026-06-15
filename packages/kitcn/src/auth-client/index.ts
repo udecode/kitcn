@@ -4,6 +4,7 @@ export * from './convex-auth-provider';
 export type {
   AuthClient,
   AuthClientWithPlugins,
+  ConvexAuthProviderClient,
   PluginsWithCrossDomain,
   PluginsWithoutCrossDomain,
 } from './types';

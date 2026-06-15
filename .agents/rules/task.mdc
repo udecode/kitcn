@@ -111,6 +111,30 @@ Apply only when the source is a tracker item.
 - Do not require PR creation, screenshots, or comments for analytical, blocked,
   or inconclusive work.
 
+## Public Issue Challenge Gate
+
+For public tracker bug reports, behavior claims, technical diagnoses, or
+suggested fixes, challenge the issue before implementation.
+
+1. Restate the reporter claim in falsifiable terms.
+2. Separate observed behavior from reporter interpretation and suggested fix.
+3. Reproduce through the lowest honest layer first:
+   - focused test/source-level repro when applicable;
+   - existing repo-owned automated browser or integration proof when useful;
+   - repo-approved Browser/browser-use proof when tests or automation cannot
+     model the surface honestly;
+   - screenshot or explicit visual-proof waiver when visual/native state
+     matters.
+4. If no existing test can reproduce it, create the smallest honest repro or
+   harness before fixing.
+5. If the issue is not reproduced, invalid, or won't-fix, hard stop and report
+   the evidence. Do not code around a claim you cannot prove.
+6. If the issue is partially valid, discard the weak suggested fix and pivot to
+   the best long-term ownership fix for the valid behavior.
+7. Record the verdict in the task plan when one exists:
+   `valid`, `not reproduced`, `invalid`, `wont-fix`, `partially valid`, or
+   `platform limitation`.
+
 ## Load Skills Only When Justified
 
 ## Skill Diet
