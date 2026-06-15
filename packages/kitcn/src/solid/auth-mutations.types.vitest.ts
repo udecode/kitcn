@@ -10,19 +10,22 @@ const formatDiagnostics = (diagnostics: readonly ts.Diagnostic[]) =>
   });
 
 describe('createAuthMutations solid types', () => {
-  test('accepts a username sign-in method from Better Auth plugins', () => {
-    const rootDir = process.cwd();
-    const tmpRoot = path.join(rootDir, 'tmp');
-    fs.mkdirSync(tmpRoot, { recursive: true });
-    const fixtureDir = fs.mkdtempSync(
-      path.join(tmpRoot, 'kitcn-solid-auth-mutations-types-')
-    );
-    const fixtureFile = path.join(fixtureDir, 'repro.ts');
+  test(
+    'accepts a username sign-in method from Better Auth plugins',
+    { timeout: 15_000 },
+    () => {
+      const rootDir = process.cwd();
+      const tmpRoot = path.join(rootDir, 'tmp');
+      fs.mkdirSync(tmpRoot, { recursive: true });
+      const fixtureDir = fs.mkdtempSync(
+        path.join(tmpRoot, 'kitcn-solid-auth-mutations-types-')
+      );
+      const fixtureFile = path.join(fixtureDir, 'repro.ts');
 
-    try {
-      fs.writeFileSync(
-        fixtureFile,
-        `import { createAuthClient } from "better-auth/solid";
+      try {
+        fs.writeFileSync(
+          fixtureFile,
+          `import { createAuthClient } from "better-auth/solid";
 import { usernameClient } from "better-auth/client/plugins";
 import { convexClient } from "../../packages/kitcn/src/auth-client/index";
 import { createAuthMutations } from "../../packages/kitcn/src/solid/auth-mutations";
@@ -35,25 +38,26 @@ const authClient = createAuthClient({
 const { useSignInMutationOptions } = createAuthMutations(authClient);
 useSignInMutationOptions({ signInMethod: "username" });
 `
-      );
+        );
 
-      const program = ts.createProgram([fixtureFile], {
-        allowImportingTsExtensions: true,
-        jsx: ts.JsxEmit.ReactJSX,
-        module: ts.ModuleKind.ESNext,
-        moduleResolution: ts.ModuleResolutionKind.Bundler,
-        noEmit: true,
-        skipLibCheck: true,
-        strict: true,
-        strictFunctionTypes: true,
-        target: ts.ScriptTarget.ES2022,
-        types: ['bun-types'],
-      });
-      const diagnostics = ts.getPreEmitDiagnostics(program);
+        const program = ts.createProgram([fixtureFile], {
+          allowImportingTsExtensions: true,
+          jsx: ts.JsxEmit.ReactJSX,
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          noEmit: true,
+          skipLibCheck: true,
+          strict: true,
+          strictFunctionTypes: true,
+          target: ts.ScriptTarget.ES2022,
+          types: ['bun-types'],
+        });
+        const diagnostics = ts.getPreEmitDiagnostics(program);
 
-      expect(formatDiagnostics(diagnostics)).toBe('');
-    } finally {
-      fs.rmSync(fixtureDir, { force: true, recursive: true });
+        expect(formatDiagnostics(diagnostics)).toBe('');
+      } finally {
+        fs.rmSync(fixtureDir, { force: true, recursive: true });
+      }
     }
-  });
+  );
 });

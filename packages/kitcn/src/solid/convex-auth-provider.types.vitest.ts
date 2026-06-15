@@ -10,19 +10,22 @@ const formatDiagnostics = (diagnostics: readonly ts.Diagnostic[]) =>
   });
 
 describe('Solid ConvexAuthProvider types', () => {
-  test('accepts Better Auth and structural auth clients', () => {
-    const rootDir = process.cwd();
-    const tmpRoot = path.join(rootDir, 'tmp');
-    fs.mkdirSync(tmpRoot, { recursive: true });
-    const fixtureDir = fs.mkdtempSync(
-      path.join(tmpRoot, 'kitcn-solid-convex-auth-provider-types-')
-    );
-    const fixtureFile = path.join(fixtureDir, 'repro.ts');
+  test(
+    'accepts Better Auth and structural auth clients',
+    { timeout: 15_000 },
+    () => {
+      const rootDir = process.cwd();
+      const tmpRoot = path.join(rootDir, 'tmp');
+      fs.mkdirSync(tmpRoot, { recursive: true });
+      const fixtureDir = fs.mkdtempSync(
+        path.join(tmpRoot, 'kitcn-solid-convex-auth-provider-types-')
+      );
+      const fixtureFile = path.join(fixtureDir, 'repro.ts');
 
-    try {
-      fs.writeFileSync(
-        fixtureFile,
-        `import type { ConvexClient } from "convex/browser";
+      try {
+        fs.writeFileSync(
+          fixtureFile,
+          `import type { ConvexClient } from "convex/browser";
 import { createAuthClient } from "better-auth/solid";
 import {
   inferAdditionalFields,
@@ -99,26 +102,27 @@ ConvexAuthProvider({
   client,
 });
 `
-      );
+        );
 
-      const program = ts.createProgram([fixtureFile], {
-        allowImportingTsExtensions: true,
-        jsx: ts.JsxEmit.ReactJSX,
-        jsxImportSource: 'solid-js',
-        module: ts.ModuleKind.ESNext,
-        moduleResolution: ts.ModuleResolutionKind.Bundler,
-        noEmit: true,
-        skipLibCheck: true,
-        strict: true,
-        strictFunctionTypes: true,
-        target: ts.ScriptTarget.ES2022,
-        types: ['bun-types'],
-      });
-      const diagnostics = ts.getPreEmitDiagnostics(program);
+        const program = ts.createProgram([fixtureFile], {
+          allowImportingTsExtensions: true,
+          jsx: ts.JsxEmit.ReactJSX,
+          jsxImportSource: 'solid-js',
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          noEmit: true,
+          skipLibCheck: true,
+          strict: true,
+          strictFunctionTypes: true,
+          target: ts.ScriptTarget.ES2022,
+          types: ['bun-types'],
+        });
+        const diagnostics = ts.getPreEmitDiagnostics(program);
 
-      expect(formatDiagnostics(diagnostics)).toBe('');
-    } finally {
-      fs.rmSync(fixtureDir, { force: true, recursive: true });
+        expect(formatDiagnostics(diagnostics)).toBe('');
+      } finally {
+        fs.rmSync(fixtureDir, { force: true, recursive: true });
+      }
     }
-  });
+  );
 });

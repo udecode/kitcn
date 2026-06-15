@@ -56,6 +56,8 @@ test('auto-release checkbox workflow imports the canonical helper', async () => 
   const workflow = await readFile(autoReleaseWorkflowPath, 'utf8');
 
   assert.match(workflow, /github\.repository == 'udecode\/kitcn'/);
+  assert.match(workflow, /github\.event\.pull_request\.head\.sha/);
+  assert.match(workflow, /github\.event\.repository\.default_branch/);
   assert.match(workflow, /tooling\/scripts\/auto-release-pr\.mjs/);
 });
 

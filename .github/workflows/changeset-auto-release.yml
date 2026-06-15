@@ -24,7 +24,15 @@ jobs:
       )
 
     steps:
-      - name: 📥 Checkout workflow helper
+      - name: 📥 Checkout same-repo workflow helper
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: 📥 Checkout default-branch workflow helper
+        if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
