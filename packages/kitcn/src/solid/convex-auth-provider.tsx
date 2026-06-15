@@ -18,14 +18,21 @@ import {
   useAuthStore,
 } from './auth-store';
 import { ConvexProviderWithAuth, useConvexAuth } from './convex-solid';
-import type { SolidAuthClient } from './types';
+import type { SolidAuthProviderClient } from './types';
+
+type AuthGetSession = (options?: {
+  fetchOptions?: {
+    credentials?: RequestCredentials;
+    headers?: Record<string, string>;
+  };
+}) => Promise<unknown> | unknown;
 
 export type ConvexAuthProviderProps = {
   children: JSX.Element;
   /** Convex client instance */
   client: ConvexClient;
   /** Better Auth client instance */
-  authClient: SolidAuthClient;
+  authClient: SolidAuthProviderClient;
   /** Initial session token (from SSR) */
   initialToken?: string;
   /** Callback when mutation called while unauthorized */
@@ -91,7 +98,7 @@ export function ConvexAuthProvider(props: ConvexAuthProviderProps) {
 function ConvexAuthProviderInner(
   props: ParentProps<{
     client: ConvexClient;
-    authClient: SolidAuthClient;
+    authClient: SolidAuthProviderClient;
   }>
 ) {
   const authStore = useAuthStore();
@@ -262,7 +269,7 @@ function AuthStateSync(props: ParentProps) {
 /**
  * Handles cross-domain one-time token (OTT) verification.
  */
-function useOTTHandler(authClient: SolidAuthClient) {
+function useOTTHandler(authClient: SolidAuthProviderClient) {
   onMount(async () => {
     if (typeof window === 'undefined' || !window.location?.href) {
       return;
@@ -283,7 +290,8 @@ function useOTTHandler(authClient: SolidAuthClient) {
       const session = result.data?.session;
 
       if (session) {
-        await authClient.getSession({
+        const getSession = authClient.getSession as AuthGetSession | undefined;
+        await getSession?.({
           fetchOptions: {
             headers: {
               Authorization: `Bearer ${session.token}`,

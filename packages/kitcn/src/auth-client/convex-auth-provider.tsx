@@ -27,9 +27,9 @@ import {
   useAuthStore,
   useAuthValue,
 } from '../react/auth-store';
-import type { AuthClient } from './types';
+import type { ConvexAuthProviderClient } from './types';
 
-type AuthClientFetch = AuthClient & {
+type AuthClientFetch = ConvexAuthProviderClient & {
   $fetch?: (
     path: string,
     options?: {
@@ -37,6 +37,28 @@ type AuthClientFetch = AuthClient & {
       headers?: Record<string, string>;
     }
   ) => Promise<{ data?: unknown } | null | undefined>;
+};
+
+type AuthGetSession = (options?: {
+  fetchOptions?: {
+    credentials?: RequestCredentials;
+    headers?: Record<string, string>;
+  };
+}) => Promise<unknown> | unknown;
+
+type AuthSessionAtom = {
+  get?: () =>
+    | {
+        refetch?: (...args: never[]) => unknown;
+      }
+    | undefined;
+  set?: (state: {
+    data: unknown;
+    error: null;
+    isPending: false;
+    isRefetching: false;
+    refetch: (...args: never[]) => unknown;
+  }) => void;
 };
 
 type IConvexReactClient = {
@@ -53,7 +75,7 @@ export type ConvexAuthProviderProps = {
   /** Convex client instance */
   client: ConvexReactClient;
   /** Better Auth client instance */
-  authClient: AuthClient;
+  authClient: ConvexAuthProviderClient;
   /** Shared Convex query client to sync with auth state */
   convexQueryClient?: ConvexAuthProviderQueryClient;
   /** Initial session token (from SSR) */
@@ -98,6 +120,7 @@ const getSessionFromPersistedToken = async (
   token: string
 ) => {
   await wait(250);
+  const getSession = authClient.getSession as AuthGetSession | undefined;
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const result = authClient.$fetch
@@ -107,7 +130,7 @@ const getSessionFromPersistedToken = async (
             Authorization: `Bearer ${token}`,
           },
         })
-      : await authClient.getSession?.({
+      : await getSession?.({
           fetchOptions: {
             credentials: 'omit',
             headers: {
@@ -129,8 +152,13 @@ const getSessionFromPersistedToken = async (
   return null;
 };
 
-const syncSessionAtom = (authClient: AuthClient, sessionData: unknown) => {
-  const sessionAtom = authClient.$store?.atoms?.session;
+const syncSessionAtom = (
+  authClient: ConvexAuthProviderClient,
+  sessionData: unknown
+) => {
+  const sessionAtom = authClient.$store?.atoms?.session as
+    | AuthSessionAtom
+    | undefined;
   if (
     typeof sessionAtom?.get !== 'function' ||
     typeof sessionAtom.set !== 'function'
@@ -148,8 +176,10 @@ const syncSessionAtom = (authClient: AuthClient, sessionData: unknown) => {
   });
 };
 
-const clearSessionAtom = (authClient: AuthClient) => {
-  const sessionAtom = authClient.$store?.atoms?.session;
+const clearSessionAtom = (authClient: ConvexAuthProviderClient) => {
+  const sessionAtom = authClient.$store?.atoms?.session as
+    | AuthSessionAtom
+    | undefined;
   if (
     typeof sessionAtom?.get !== 'function' ||
     typeof sessionAtom.set !== 'function'
@@ -228,7 +258,7 @@ function ConvexAuthProviderInner({
 }: {
   children: ReactNode;
   client: ConvexReactClient;
-  authClient: AuthClient;
+  authClient: ConvexAuthProviderClient;
   convexQueryClient?: ConvexAuthProviderQueryClient;
 }) {
   const authStore = useAuthStore();
@@ -574,7 +604,7 @@ function AuthStateSync({ children }: { children: ReactNode }) {
 /**
  * Handles cross-domain one-time token (OTT) verification.
  */
-function useOTTHandler(authClient: AuthClient) {
+function useOTTHandler(authClient: ConvexAuthProviderClient) {
   useEffect(() => {
     (async () => {
       if (typeof window === 'undefined' || !window.location?.href) {
@@ -595,7 +625,8 @@ function useOTTHandler(authClient: AuthClient) {
         const session = result.data?.session;
 
         if (session && typeof authClient.getSession === 'function') {
-          await authClient.getSession({
+          const getSession = authClient.getSession as AuthGetSession;
+          await getSession({
             fetchOptions: {
               credentials: 'omit',
               headers: {
