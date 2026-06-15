@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.15.12
+
+### Patch Changes
+
+- [#285](https://github.com/udecode/kitcn/pull/285) [`0ca9202`](https://github.com/udecode/kitcn/commit/0ca9202b83ccaa692507242aee99e086c1994cb1) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix auth providers to accept plugin-rich Better Auth clients without casts.
+
 ## 0.15.11
 
 ### Patch Changes
