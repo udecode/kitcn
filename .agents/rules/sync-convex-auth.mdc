@@ -12,6 +12,21 @@ delegate one coherent implementation slice to
 [$task](../skills/task/SKILL.md) so it
 opens the PR.
 
+## Goal Template
+
+When this sync needs durable goal state, use the project-owned sync template
+instead of the generic task template:
+
+```bash
+node .agents/skills/autogoal/scripts/create-goal-scratchpad.mjs \
+  --template sync-convex-auth \
+  --title "sync convex auth"
+```
+
+This plan owns the upstream audit, classification ledger, ambiguity decisions,
+and delegated task prompt. The delegated implementation still uses `task`; do
+not duplicate implementation PR machinery inside the sync plan.
+
 ## Rules
 
 - Use evidence, not vibes. Read commits, changed files, and patches.
