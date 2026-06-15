@@ -18,26 +18,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - uses: oven-sh/setup-bun@v2
-        name: Install bun
+      - name: 📥 Monorepo install
+        uses: ./.github/actions/bun-install
         with:
-          bun-version-file: package.json
-
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - uses: actions/cache@v4
-        name: ♻️ Setup bun cache
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: 📥 Install
-        run: bun install --frozen-lockfile && bun gen
+          generate: "true"
 
       - name: 📦 Build Packages
         run: bun build:pkg
