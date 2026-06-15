@@ -99,7 +99,7 @@ const AUTH_ENV_FIELDS = [
     schema: 'z.string().optional()',
   },
 ] as const;
-const BETTER_AUTH_EXPO_INSTALL_SPEC = '@better-auth/expo@1.6.9';
+const BETTER_AUTH_EXPO_INSTALL_SPEC = '@better-auth/expo@1.6.15';
 const EXPO_SECURE_STORE_INSTALL_SPEC = 'expo-secure-store@~55.0.8';
 const EXPO_NETWORK_INSTALL_SPEC = 'expo-network@~55.0.8';
 

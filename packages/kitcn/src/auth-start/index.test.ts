@@ -68,11 +68,18 @@ describe('auth/start', () => {
         convexUrl: 'https://my-app.convex.cloud',
       });
 
-      await auth.handler(
-        new Request('https://app.example.com/api/auth/session', {
-          method: 'GET',
-        })
-      );
+      const payload = JSON.stringify({ email: 'a@b.com' });
+      await auth.handler({
+        arrayBuffer: async () => new TextEncoder().encode(payload).buffer,
+        headers: new Headers({
+          connection: 'keep-alive',
+          'content-length': '19',
+          'content-type': 'application/json',
+          'transfer-encoding': 'chunked',
+        }),
+        method: 'POST',
+        url: 'https://app.example.com/api/auth/session',
+      } as unknown as Request);
 
       expect(calls).toHaveLength(1);
       expect(calls[0]?.input).toBe(
@@ -87,6 +94,13 @@ describe('auth/start', () => {
         'app.example.com'
       );
       expect(headers.get('x-better-auth-forwarded-proto')).toBe('https');
+      expect(headers.get('connection')).toBeNull();
+      expect(headers.get('content-length')).toBeNull();
+      expect(headers.get('transfer-encoding')).toBeNull();
+      const init = calls[0]?.init as RequestInit & { duplex?: string };
+      expect(init.duplex).toBeUndefined();
+      expect(init.body).toBeInstanceOf(ArrayBuffer);
+      expect(new TextDecoder().decode(init.body as ArrayBuffer)).toBe(payload);
     } finally {
       globalThis.fetch = originalFetch;
     }

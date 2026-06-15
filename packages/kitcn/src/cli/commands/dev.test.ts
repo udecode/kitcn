@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { createDefaultConfig } from '../test-utils';
@@ -13,6 +14,7 @@ import {
   resolveSupportedLocalNodeEnvOverrides,
   resolveWatcherCommand,
   runDevStartupRetryLoop,
+  startLocalSiteProxy,
 } from './dev';
 
 function createPendingProcess() {
@@ -92,6 +94,57 @@ function createPersistentProcess() {
     },
     resolveExit,
   };
+}
+
+async function listenOnRandomPort(server: ReturnType<typeof createHttpServer>) {
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('expected tcp server address');
+  }
+  return address.port;
+}
+
+async function closeHttpServer(server: ReturnType<typeof createHttpServer>) {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+async function postChunked(port: number) {
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        new TextEncoder().encode(JSON.stringify({ email: 'smoke@example.com' }))
+      );
+      controller.close();
+    },
+  });
+  const response = await Bun.fetch(
+    `http://127.0.0.1:${port}/api/auth/sign-up/email`,
+    {
+      body,
+      duplex: 'half',
+      headers: {
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    } as RequestInit & { duplex: 'half' }
+  );
+  return response.status;
 }
 
 function isLocalUpgradePreflightCommand(args: string[]): boolean {
@@ -278,6 +331,42 @@ describe('cli/commands/dev', () => {
         },
       }
     );
+  });
+
+  test('startLocalSiteProxy strips chunked request headers before forwarding', async () => {
+    let upstreamTransferEncoding: string | string[] | undefined;
+    let upstreamContentType: string | string[] | undefined;
+    const upstream = createHttpServer((request, response) => {
+      upstreamTransferEncoding = request.headers['transfer-encoding'];
+      upstreamContentType = request.headers['content-type'];
+      request.resume();
+      request.on('end', () => {
+        response.statusCode = 204;
+        response.end();
+      });
+    });
+    const upstreamPort = await listenOnRandomPort(upstream);
+    const reservedProxy = createHttpServer();
+    const proxyPort = await listenOnRandomPort(reservedProxy);
+    await closeHttpServer(reservedProxy);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = Bun.fetch as typeof fetch;
+    const proxy = await startLocalSiteProxy({
+      listenHost: '127.0.0.1',
+      listenPort: proxyPort,
+      targetOrigin: `http://127.0.0.1:${upstreamPort}`,
+    });
+
+    try {
+      await expect(postChunked(proxyPort)).resolves.toBe(204);
+
+      expect(upstreamContentType).toBe('application/json');
+      expect(upstreamTransferEncoding).toBeUndefined();
+    } finally {
+      proxy.kill();
+      globalThis.fetch = originalFetch;
+      await closeHttpServer(upstream);
+    }
   });
 
   test('resolveDevStartupRetryDelayMs uses TanStack-style exponential backoff', () => {

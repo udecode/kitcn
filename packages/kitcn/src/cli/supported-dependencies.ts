@@ -7,7 +7,8 @@ const VERSION_IN_SPEC_RE = /(\d+)\.(\d+)(?:\.\d+)?/;
 const PLAIN_VERSION_SPEC_RE = /^[\^~]?v?\d+\.\d+(?:\.\d+)?$/;
 const UPPER_BOUND_RE = /(?:^|\s)<={0,1}\s*v?(\d+)\.(\d+)(?:\.\d+)?/g;
 const SUPPORTED_CONVEX_VERSION = '1.38.0';
-const SUPPORTED_BETTER_AUTH_VERSION = '1.6.9';
+const SUPPORTED_BETTER_AUTH_VERSION = '1.6.15';
+const SUPPORTED_BETTER_AUTH_MIN_VERSION = '1.6.11';
 const SUPPORTED_HONO_VERSION = '4.12.9';
 const SUPPORTED_OPENTELEMETRY_API_VERSION = '1.9.0';
 const SUPPORTED_TANSTACK_REACT_QUERY_VERSION = '5.95.2';
@@ -27,6 +28,20 @@ export function getMinimumVersionRange(version: string): string {
   }
 
   return `>=${match[1]}.${match[2]}`;
+}
+
+export function getMinorVersionPeerRange(
+  minimumVersion: string,
+  supportedVersion: string
+): string {
+  const match = EXACT_VERSION_RE.exec(supportedVersion);
+  if (!match) {
+    throw new Error(
+      `Unsupported exact version "${supportedVersion}". Expected x.y.z format.`
+    );
+  }
+
+  return `>=${minimumVersion} <${match[1]}.${Number(match[2]) + 1}.0`;
 }
 
 export function getPackageNameFromInstallSpec(spec: string): string {
@@ -126,6 +141,10 @@ export const SUPPORTED_DEPENDENCY_VERSIONS = {
   },
   betterAuth: {
     exact: SUPPORTED_BETTER_AUTH_VERSION,
+    peer: getMinorVersionPeerRange(
+      SUPPORTED_BETTER_AUTH_MIN_VERSION,
+      SUPPORTED_BETTER_AUTH_VERSION
+    ),
   },
   hono: {
     exact: SUPPORTED_HONO_VERSION,

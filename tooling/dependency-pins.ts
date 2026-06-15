@@ -3,6 +3,7 @@ import path from 'node:path';
 import {
   BETTER_AUTH_INSTALL_SPEC,
   getMinimumVersionRange as getSupportedMinimumVersionRange,
+  getMinorVersionPeerRange as getSupportedMinorVersionPeerRange,
   SUPPORTED_DEPENDENCY_VERSIONS,
 } from '../packages/kitcn/src/cli/supported-dependencies';
 
@@ -15,6 +16,7 @@ const SUPPORTED_BETTER_AUTH_VERSION_DECL_RE =
   /const SUPPORTED_BETTER_AUTH_VERSION = '\d+\.\d+\.\d+';/;
 
 export const getMinimumVersionRange = getSupportedMinimumVersionRange;
+export const getMinorVersionPeerRange = getSupportedMinorVersionPeerRange;
 
 type SupportedDependency = (typeof SUPPORTED_DEPENDENCIES)[number];
 
@@ -62,7 +64,7 @@ const PACKAGE_JSON_TARGETS: PackageJsonTarget[] = [
     path: 'packages/kitcn/package.json',
     updates: {
       peerDependencies: {
-        'better-auth': SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.exact,
+        'better-auth': SUPPORTED_DEPENDENCY_VERSIONS.betterAuth.peer,
         convex: SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum,
         hono: SUPPORTED_DEPENDENCY_VERSIONS.hono.exact,
       },

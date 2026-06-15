@@ -441,6 +441,27 @@ describe('httpAdapter', () => {
     ).rejects.toThrow('where clause not supported');
   });
 
+  test('update returns null and skips mutation when where clause is empty', async () => {
+    const runMutation = mock(async () => ({ _id: 'user-1', ok: true }));
+
+    const adapterFactory = httpAdapter(
+      { runMutation, runQuery: mock(async () => ({})) } as any,
+      {
+        authFunctions: { updateOne: 'updateOne' } as any,
+      }
+    );
+    const adapter = adapterFactory({} as any);
+
+    await expect(
+      adapter.update({
+        model: 'user',
+        update: { name: 'alice' },
+        where: [],
+      })
+    ).resolves.toBeNull();
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
   test('updateMany and deleteMany aggregate count-only pagination results', async () => {
     const runMutation = mock(async () => ({
       continueCursor: 'cursor-1',
@@ -673,6 +694,28 @@ describe('dbAdapter', () => {
     });
 
     expect(doc).toMatchObject({ id: 'user-2', email: 'b@b.com' });
+  });
+
+  test('update returns null and skips mutation when where clause is empty', async () => {
+    const { ctx, store } = createMemoryCtx({
+      'user-1': { _id: 'user-1', email: 'a@b.com', name: 'Alice' },
+    });
+
+    const adapterFactory = dbAdapter(ctx, () => ({}) as any, {
+      authFunctions: { updateOne: 'updateOne' } as any,
+      schema,
+    });
+    const adapter = adapterFactory({} as any);
+
+    await expect(
+      adapter.update({
+        model: 'user',
+        update: { name: 'Bob' },
+        where: [],
+      })
+    ).resolves.toBeNull();
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+    expect(store.get('user-1')).toMatchObject({ name: 'Alice' });
   });
 
   test('create/update/delete use handler implementations (happy path)', async () => {

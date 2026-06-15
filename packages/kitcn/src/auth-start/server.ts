@@ -31,6 +31,15 @@ const cache =
 
 const TRAILING_COLON_RE = /:$/;
 
+const requestCanHaveBody = (method: string) =>
+  method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+
+const stripHopByHopHeaders = (headers: Headers) => {
+  headers.delete('connection');
+  headers.delete('content-length');
+  headers.delete('transfer-encoding');
+};
+
 function setupClient(options: ClientOptions) {
   const client = new ConvexHttpClient(options.convexUrl);
   if (options.token !== undefined) {
@@ -98,7 +107,7 @@ const cloneAuthHandlerResponse = (response: Response) => {
   });
 };
 
-const handler = (
+const handler = async (
   request: Request,
   opts: { convexSiteUrl: string }
 ): Promise<Response> => {
@@ -107,24 +116,27 @@ const handler = (
   const headers = new Headers(request.headers);
   const proto = requestUrl.protocol.replace(TRAILING_COLON_RE, '');
 
+  stripHopByHopHeaders(headers);
   headers.set('accept-encoding', 'application/json');
   headers.set('host', new URL(opts.convexSiteUrl).host);
   headers.set('x-forwarded-host', requestUrl.host);
   headers.set('x-forwarded-proto', proto);
   headers.set('x-better-auth-forwarded-host', requestUrl.host);
   headers.set('x-better-auth-forwarded-proto', proto);
+  let body: ArrayBuffer | undefined;
+  if (requestCanHaveBody(request.method)) {
+    const bufferedBody = await request.arrayBuffer();
+    if (bufferedBody.byteLength > 0) {
+      body = bufferedBody;
+    }
+  }
 
   return fetch(nextUrl, {
-    body:
-      request.method !== 'GET' && request.method !== 'HEAD'
-        ? request.body
-        : undefined,
-    // Required by modern fetch implementations for streaming request bodies.
-    duplex: 'half',
+    body,
     headers,
     method: request.method,
     redirect: 'manual',
-  } as RequestInit & { duplex: 'half' });
+  });
 };
 
 export const convexBetterAuthReactStart = (
@@ -135,8 +147,7 @@ export const convexBetterAuthReactStart = (
   const cachedGetToken = cache(async (opts: GetTokenOptions) => {
     const headers = getRequestHeaders();
     const mutableHeaders = new Headers(headers);
-    mutableHeaders.delete('content-length');
-    mutableHeaders.delete('transfer-encoding');
+    stripHopByHopHeaders(mutableHeaders);
     mutableHeaders.set('accept-encoding', 'identity');
     return getToken(siteUrl, mutableHeaders, opts);
   });
