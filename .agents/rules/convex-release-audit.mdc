@@ -11,6 +11,23 @@ delegate one concrete implementation slice to
 [$task](/Users/zbeyens/git/better-convex/.agents/skills/task/SKILL.md) so it
 opens the PR.
 
+## Goal Template
+
+When this audit needs durable goal state, use the project-owned Convex release
+audit template instead of the generic task template:
+
+```bash
+node .agents/skills/autogoal/scripts/create-goal-scratchpad.mjs \
+  --template convex-release-audit \
+  --title "convex release audit"
+```
+
+This plan owns version discovery, changelog reconciliation, upstream diff
+evidence, kitcn leverage classification, the selected slice or no-action
+verdict, and the delegated task prompt. Implementation still goes through
+`task`; do not duplicate implementation PR machinery inside the release-audit
+plan.
+
 ## Rules
 
 - Use evidence, not vibes. Read both changelog sources and a diff.
@@ -19,7 +36,7 @@ opens the PR.
 - Do not upgrade Convex just because a newer version exists. Ship only a
   leverageable improvement.
 - Keep the PR slice coherent. One release opportunity per PR unless multiple
-  fixes share the same seam.
+  fixes share the same implementation boundary.
 - If no actionable opportunity exists, stop with the evidence. Do not open a
   vanity PR.
 
@@ -145,7 +162,7 @@ For every non-`no-op`, include:
 - changelog evidence
 - diff evidence
 - kitcn file(s) affected
-- expected implementation seam
+- expected implementation boundary
 - verification command(s)
 - confidence
 
@@ -190,7 +207,7 @@ Evidence:
 - Kitcn evidence: <local files and docs/solutions notes>
 
 Implementation:
-- <specific files or seams to inspect first>
+- <specific files or boundaries to inspect first>
 - <expected code/doc/test shape>
 
 Acceptance:
