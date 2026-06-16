@@ -26,6 +26,7 @@ import {
   resolvePrepareBootstrapSteps,
   resolveScenarioInstallSpecs,
   resolveScenarioKeysForCheck,
+  resolveScenarioKeysForRuntime,
   resolveScenarioProcessEnv,
   resolveScenarioProofPath,
   resolveScenarioStepEnv,
@@ -50,6 +51,10 @@ describe('tooling/scenarios', () => {
     expect(parseScenarioArgs(['test', 'start-auth'])).toEqual({
       mode: 'test',
       target: 'start-auth',
+    });
+    expect(parseScenarioArgs(['test', 'runtime'])).toEqual({
+      mode: 'test',
+      target: 'runtime',
     });
 
     expect(parseScenarioArgs(['dev', 'next-auth'])).toEqual({
@@ -232,6 +237,26 @@ describe('tooling/scenarios', () => {
       'create-convex-nextjs-shadcn',
       'create-convex-react-vite-shadcn',
     ]);
+  });
+
+  test('resolveScenarioKeysForRuntime excludes check-only convex scenarios', () => {
+    expect(resolveScenarioKeysForRuntime()).toEqual([
+      'expo',
+      'expo-auth',
+      'next',
+      'next-auth',
+      'start',
+      'start-auth',
+      'vite',
+      'vite-auth',
+      'create-convex-bare',
+      'create-convex-nextjs-shadcn',
+      'create-convex-react-vite-shadcn',
+    ]);
+
+    for (const scenarioKey of FULL_CONVEX_SCENARIO_KEYS) {
+      expect(resolveScenarioKeysForRuntime()).not.toContain(scenarioKey);
+    }
   });
 
   test('checkScenarios validates the CI scenario subset by default', async () => {

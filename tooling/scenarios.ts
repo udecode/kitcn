@@ -47,7 +47,7 @@ import type { TemplateBackend } from './template.config';
 
 export type ScenarioMode = 'prepare' | 'check' | 'codegen' | 'dev' | 'test';
 
-export type ScenarioTarget = 'all' | ScenarioKey;
+export type ScenarioTarget = 'all' | 'runtime' | ScenarioKey;
 export type ScenarioProofPath =
   | 'runtime'
   | 'auth-demo'
@@ -258,8 +258,22 @@ const stopScenarioBackends = (outputRoot = DEFAULT_OUTPUT_ROOT) => {
   }
 };
 
-const resolveScenarioKeys = (target: ScenarioTarget = 'all') =>
-  target === 'all' ? [...SCENARIO_KEYS] : [target];
+export const resolveScenarioKeysForRuntime = () =>
+  SCENARIO_KEYS.filter(
+    (scenarioKey) => resolveScenarioProofPath(scenarioKey) !== 'check'
+  );
+
+const resolveScenarioKeys = (target: ScenarioTarget = 'all') => {
+  if (target === 'all') {
+    return [...SCENARIO_KEYS];
+  }
+
+  if (target === 'runtime') {
+    return resolveScenarioKeysForRuntime();
+  }
+
+  return [target];
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -788,7 +802,7 @@ export const parseScenarioArgs = (
     mode !== 'dev'
   ) {
     throw new Error(
-      `Usage: bun tooling/scenarios.ts <prepare|check|test|codegen|dev> [all|${SCENARIO_KEYS.join('|')}]`
+      `Usage: bun tooling/scenarios.ts <prepare|check|test|codegen|dev> [all|runtime|${SCENARIO_KEYS.join('|')}]`
     );
   }
 
@@ -797,7 +811,11 @@ export const parseScenarioArgs = (
   }
 
   const target = (targetArg ?? 'all') as ScenarioTarget;
-  if (target !== 'all' && !SCENARIO_KEYS.includes(target as ScenarioKey)) {
+  if (
+    target !== 'all' &&
+    target !== 'runtime' &&
+    !SCENARIO_KEYS.includes(target as ScenarioKey)
+  ) {
     throw new Error(`Unknown scenario target "${target}".`);
   }
 
@@ -1050,7 +1068,7 @@ export const checkScenarios = async (
   const checkScenarioFn = params.checkScenarioFn ?? checkScenario;
   const scenarioKeys =
     params.target && params.target !== 'all'
-      ? [params.target]
+      ? resolveScenarioKeys(params.target)
       : resolveScenarioKeysForCheck();
 
   for (const scenarioKey of scenarioKeys) {
@@ -1237,7 +1255,7 @@ const main = async () => {
     return;
   }
 
-  if (target === 'all') {
+  if (target === 'all' || target === 'runtime') {
     throw new Error('scenario dev requires a specific scenario target.');
   }
 

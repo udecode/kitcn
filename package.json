@@ -55,7 +55,7 @@
     "test:limits:stress": "CONVEX_LIMIT_STRESS=1 vitest run convex/orm/limits.stress.test.ts",
     "test:limits:stress:coverage": "CONVEX_LIMIT_STRESS=1 vitest run convex/orm/limits.stress.test.ts --coverage --coverage.reporter=text",
     "test:limits:tune": "CONVEX_LIMIT_TUNE=1 vitest run convex/orm/limits.defaults-tuning.test.ts",
-    "test:runtime": "bun run scenario:test -- all",
+    "test:runtime": "bun run scenario:test -- runtime",
     "test:verify": "bun run scenario:prepare -- create-convex-bare && cd tmp/scenarios/create-convex-bare/project && bunx kitcn verify",
     "test:vitest": "vitest run",
     "typecheck": "turbo typecheck",
