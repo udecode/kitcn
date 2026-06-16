@@ -15,6 +15,13 @@ Task source:
 - title: pending
 - acceptance criteria: pending
 
+Timed checkpoint:
+- requested duration: pending
+- semantics: pending
+- initial confidence score: pending
+- improvement loop: pending
+- final score / loop closure: pending
+
 Completion threshold:
 - TODO: Define the exact task done state.
 - Task closure is legal only when the source-of-truth acceptance criteria are
@@ -96,6 +103,7 @@ Completion rule:
 Start Gates:
 | Gate | Applies | Evidence |
 |------|---------|----------|
+| Timed checkpoint parsed | pending | pending |
 | Skill analysis before edits | pending | pending |
 | Active goal checked or created | pending | pending |
 | Source of truth read before edits | pending | pending |
@@ -116,6 +124,9 @@ Start Gates:
 | Output budget strategy recorded | pending | pending |
 
 Work Checklist:
+- [ ] If a duration was requested, it is recorded as minimum active work unless
+      explicitly marked hard stop; when no better metric exists, initial and
+      final confidence scores are recorded.
 - [ ] Objective includes outcome, completion threshold, verification surface,
       constraints, boundaries, and blocked condition.
 - [ ] Task source classified with source type, id/link, title, task type,
@@ -200,6 +211,7 @@ Completion Gates:
 | Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
+| Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:

@@ -22,6 +22,13 @@ Docs lane:
 - nearest sibling docs: pending
 - kitcn skill mirror: pending
 
+Timed checkpoint:
+- requested duration: pending
+- semantics: pending
+- initial confidence score: pending
+- improvement loop: pending
+- final score / loop closure: pending
+
 Completion threshold:
 - TODO: Define the exact docs done state.
 - Docs closure is legal only when the page teaches the fastest correct path,
@@ -84,6 +91,7 @@ Completion rule:
 Start Gates:
 | Gate | Applies | Evidence |
 |------|---------|----------|
+| Timed checkpoint parsed | pending | pending |
 | Docs guidance loaded | pending | pending |
 | Active goal checked or created | pending | pending |
 | Docs lane selected | pending | pending |
@@ -98,6 +106,9 @@ Start Gates:
 | PR/tracker expectation decision | pending | pending |
 
 Work Checklist:
+- [ ] If a duration was requested, it is recorded as minimum active work unless
+      explicitly marked hard stop; when no better metric exists, initial and
+      final confidence scores are recorded.
 - [ ] Objective includes outcome, completion threshold, verification surface,
       constraints, boundaries, and blocked condition.
 - [ ] Docs lane is classified as install, guide/system, plugin/feature,
@@ -149,6 +160,7 @@ Completion Gates:
 | Autoreview for non-trivial docs changes | pending | Load `.agents/skills/autoreview/SKILL.md` and run the right target, or record N/A for tiny/no-local-patch work | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
+| Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:

@@ -5,7 +5,7 @@
       "source": "udecode/dotai",
       "sourceType": "github",
       "skillPath": "skills/autogoal/SKILL.md",
-      "computedHash": "ac02e9faac0896e2b7922ab3c5536b55baff07b9a69faa06367fca70e1dbc7c4"
+      "computedHash": "b39af211b4e83be092b60f376eac2b58aad58089d904a73058d33f36610ad93a"
     },
     "autoreview": {
       "source": "openclaw/agent-skills",
