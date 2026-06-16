@@ -33,6 +33,7 @@ import {
   runScenarioTest,
   SCENARIO_READY_TIMEOUT_MS,
   stopLocalConvexBackendForProject,
+  stopRunningScenarioProcesses,
 } from './scenarios';
 
 describe('tooling/scenarios', () => {
@@ -94,6 +95,28 @@ describe('tooling/scenarios', () => {
 
   test('scenario runtime readiness allows slow Vite cold starts', () => {
     expect(SCENARIO_READY_TIMEOUT_MS).toBe(60_000);
+  });
+
+  test('stopRunningScenarioProcesses force kills processes that ignore SIGINT', async () => {
+    const kills: string[] = [];
+    let resolveExit: ((code: number) => void) | undefined;
+    const process = {
+      exitCode: undefined,
+      exited: new Promise<number>((resolve) => {
+        resolveExit = resolve;
+      }),
+      kill: (signal?: string) => {
+        kills.push(signal ?? '');
+        if (signal === 'SIGKILL') {
+          resolveExit?.(137);
+        }
+      },
+      killed: false,
+    };
+
+    await stopRunningScenarioProcesses([process] as never, 1);
+
+    expect(kills).toEqual(['SIGINT', 'SIGKILL']);
   });
 
   test('runScenarioTest uses check for bootstrap-heavy convex scenarios', async () => {

@@ -95,6 +95,8 @@ const DEFAULT_SCENARIO_READY_URL = 'http://127.0.0.1:3210/_dashboard';
 const READY_POLL_INTERVAL_MS = 250;
 export const SCENARIO_READY_TIMEOUT_MS = 60_000;
 const SCENARIO_STOP_SIGNAL = 'SIGINT';
+const SCENARIO_FORCE_STOP_SIGNAL = 'SIGKILL';
+const SCENARIO_FORCE_STOP_TIMEOUT_MS = 10_000;
 const TRAILING_SLASH_RE = /\/+$/;
 const BOOTSTRAP_CHECK_SCENARIOS = new Set<ScenarioKey>([
   'convex-next-auth-bootstrap',
@@ -554,8 +556,9 @@ const startScenarioProcesses = (
     return runningProcess;
   });
 
-const stopRunningScenarioProcesses = async (
-  processes: readonly RunningScenarioProcess[]
+export const stopRunningScenarioProcesses = async (
+  processes: readonly RunningScenarioProcess[],
+  forceStopTimeoutMs = SCENARIO_FORCE_STOP_TIMEOUT_MS
 ) => {
   for (const process of processes) {
     if (!process.killed && process.exitCode === undefined) {
@@ -563,7 +566,24 @@ const stopRunningScenarioProcesses = async (
     }
   }
 
-  await Promise.allSettled(processes.map((process) => process.exited));
+  await Promise.allSettled(
+    processes.map(async (process) => {
+      if (process.exitCode !== undefined) {
+        return;
+      }
+
+      const exited = await Promise.race([
+        process.exited.then(() => true),
+        sleep(forceStopTimeoutMs).then(() => false),
+      ]);
+
+      if (!exited && process.exitCode === undefined) {
+        process.kill(SCENARIO_FORCE_STOP_SIGNAL);
+      }
+
+      await process.exited;
+    })
+  );
 };
 
 const waitForScenarioReady = async (
