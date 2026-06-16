@@ -11,7 +11,7 @@
   "scripts": {
     "analyze": "bun --cwd example analyze",
     "build": "bun --cwd www build",
-    "build:pkg": "bun --cwd packages/kitcn build",
+    "build:pkg": "bun --cwd packages/kitcn build && bun --cwd packages/resend build",
     "build:watch": "bun --cwd packages/kitcn build:watch",
     "check": "bun run check:ci && bun run test:verify && bun run test:runtime",
     "check:ci": "bun lint && bun typecheck && bun run test && bun run test:cli && bun run test:concave && bun run fixtures:check",
