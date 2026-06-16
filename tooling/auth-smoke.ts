@@ -8,11 +8,41 @@ const SIGN_UP_PATH = '/api/auth/sign-up/email';
 const GET_SESSION_PATH = '/api/auth/get-session';
 const URL_PROTOCOL_RE = /^https?:\/\//;
 const TRAILING_SLASH_RE = /\/+$/;
+const AUTH_SMOKE_ATTEMPTS = 10;
+const AUTH_SMOKE_RETRY_DELAY_MS = 1000;
+const RETRYABLE_AUTH_SMOKE_STATUSES = new Set([502, 503, 504]);
 
 type AuthSmokeArgs = {
   target: string | undefined;
   url: string | undefined;
 };
+
+type RunAuthSmokeOptions = {
+  attempts?: number;
+  fetchFn?: typeof fetch;
+  logFn?: typeof log;
+  retryDelayMs?: number;
+};
+
+class AuthSmokeRequestError extends Error {
+  status: number | undefined;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'AuthSmokeRequestError';
+    this.status = status;
+  }
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const formatUnknownError = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+const isRetryableAuthSmokeError = (error: unknown) =>
+  error instanceof AuthSmokeRequestError &&
+  (error.status === undefined ||
+    RETRYABLE_AUTH_SMOKE_STATUSES.has(error.status));
 
 const trimTrailingSlash = (value: string) =>
   value.replace(TRAILING_SLASH_RE, '');
@@ -102,7 +132,10 @@ export const buildCookieHeader = (setCookieValues: readonly string[]) => {
 
 const getSetCookieValues = (headers: Headers) => {
   if (typeof headers.getSetCookie === 'function') {
-    return headers.getSetCookie();
+    const setCookieValues = headers.getSetCookie();
+    if (setCookieValues.length > 0) {
+      return setCookieValues;
+    }
   }
 
   const rawHeader = headers.get('set-cookie');
@@ -126,25 +159,44 @@ const createSmokeUser = () => {
   };
 };
 
-export const runAuthSmoke = async (argv: string[] = process.argv.slice(2)) => {
-  const { target, url } = parseAuthSmokeArgs(argv);
-  const baseUrl = resolveAuthSmokeBaseUrl({ target, url });
+const fetchAuthSmoke = async (
+  fetchFn: typeof fetch,
+  url: URL,
+  init: RequestInit,
+  label: string
+) => {
+  try {
+    return await fetchFn(url, init);
+  } catch (error) {
+    throw new AuthSmokeRequestError(
+      `Auth smoke ${label} request failed: ${formatUnknownError(error)}`
+    );
+  }
+};
+
+const runAuthSmokeAttempt = async (baseUrl: string, fetchFn: typeof fetch) => {
   const user = createSmokeUser();
 
-  const signUpResponse = await fetch(new URL(SIGN_UP_PATH, baseUrl), {
-    body: JSON.stringify(user),
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      origin: baseUrl,
+  const signUpResponse = await fetchAuthSmoke(
+    fetchFn,
+    new URL(SIGN_UP_PATH, baseUrl),
+    {
+      body: JSON.stringify(user),
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        origin: baseUrl,
+      },
+      method: 'POST',
+      redirect: 'manual',
     },
-    method: 'POST',
-    redirect: 'manual',
-  });
+    'sign-up'
+  );
 
   if (!signUpResponse.ok) {
-    throw new Error(
-      `Auth smoke sign-up failed (${signUpResponse.status}): ${await readResponseBody(signUpResponse)}`
+    throw new AuthSmokeRequestError(
+      `Auth smoke sign-up failed (${signUpResponse.status}): ${await readResponseBody(signUpResponse)}`,
+      signUpResponse.status
     );
   }
 
@@ -166,18 +218,24 @@ export const runAuthSmoke = async (argv: string[] = process.argv.slice(2)) => {
     throw new Error('Auth smoke sign-up did not return a bearer token.');
   }
 
-  const sessionResponse = await fetch(new URL(GET_SESSION_PATH, baseUrl), {
-    headers: {
-      accept: 'application/json',
-      Authorization: `Bearer ${signUp.token}`,
-      origin: baseUrl,
+  const sessionResponse = await fetchAuthSmoke(
+    fetchFn,
+    new URL(GET_SESSION_PATH, baseUrl),
+    {
+      headers: {
+        accept: 'application/json',
+        Authorization: `Bearer ${signUp.token}`,
+        origin: baseUrl,
+      },
+      redirect: 'manual',
     },
-    redirect: 'manual',
-  });
+    'get-session'
+  );
 
   if (!sessionResponse.ok) {
-    throw new Error(
-      `Auth smoke get-session failed (${sessionResponse.status}): ${await readResponseBody(sessionResponse)}`
+    throw new AuthSmokeRequestError(
+      `Auth smoke get-session failed (${sessionResponse.status}): ${await readResponseBody(sessionResponse)}`,
+      sessionResponse.status
     );
   }
 
@@ -192,8 +250,35 @@ export const runAuthSmoke = async (argv: string[] = process.argv.slice(2)) => {
       `Auth smoke session mismatch. Expected ${user.email}, got ${session?.user?.email ?? 'null'}.`
     );
   }
+};
 
-  log(`Auth smoke passed against ${baseUrl}.`);
+export const runAuthSmoke = async (
+  argv: string[] = process.argv.slice(2),
+  options: RunAuthSmokeOptions = {}
+) => {
+  const { target, url } = parseAuthSmokeArgs(argv);
+  const baseUrl = resolveAuthSmokeBaseUrl({ target, url });
+  const attempts = options.attempts ?? AUTH_SMOKE_ATTEMPTS;
+  const fetchFn = options.fetchFn ?? fetch;
+  const logFn = options.logFn ?? log;
+  const retryDelayMs = options.retryDelayMs ?? AUTH_SMOKE_RETRY_DELAY_MS;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await runAuthSmokeAttempt(baseUrl, fetchFn);
+      logFn(`Auth smoke passed against ${baseUrl}.`);
+      return;
+    } catch (error) {
+      if (attempt === attempts || !isRetryableAuthSmokeError(error)) {
+        throw error;
+      }
+
+      logFn(
+        `Auth smoke retry ${attempt + 1}/${attempts} after ${formatUnknownError(error)}.`
+      );
+      await sleep(retryDelayMs);
+    }
+  }
 };
 
 if (import.meta.main) {
