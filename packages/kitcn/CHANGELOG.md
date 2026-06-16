@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.15.14
+
+### Patch Changes
+
+- [#293](https://github.com/udecode/kitcn/pull/293) [`0fcbae0`](https://github.com/udecode/kitcn/commit/0fcbae099b0658c2d921a42a189e713a71ebeb71) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix Better Auth client type compatibility for auth providers and organization-heavy auth clients.
+  - Support Better Auth 1.6.18 across generated auth apps.
+
 ## 0.15.13
 
 ### Patch Changes
