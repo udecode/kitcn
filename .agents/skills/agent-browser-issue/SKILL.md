@@ -64,6 +64,7 @@ Body shape:
 
 ## After
 
-- if the browser/tool failure exposes a user-action parity gap, load `agent-native-reviewer` and note that gap in the issue
+- if the browser/tool failure exposes a user-action parity gap, use the
+  autogoal agent-native pack and note that gap in the issue
 - link the issue in the task caveat or handoff
 - keep moving if the product task is still otherwise fixable

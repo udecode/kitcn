@@ -62,14 +62,10 @@ Use those skills when relevant:
 - `major-task` for heavyweight architecture, framework comparison, migration, benchmark, or proposal work.
 - `deslop` for the final bounded cleanup pass once a change already works.
 - `tdd`.
-- `agent-native-reviewer` when changes touch `.agents/**`, `.claude/**`,
-  `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
+- For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands,
+  prompts, or user-action tooling, use the autogoal agent-native pack and end
+  with `autoreview`.
 - @.agents/rules/changeset.mdc when updating packages.
-
-Convex-specific CE exclusions:
-
-- Do not install or reference these by default in this repo unless the user explicitly asks: `data-integrity-guardian`, `data-migration-expert`, `data-migrations-reviewer`, `schema-drift-detector`, `deployment-verification-agent`, `dhh-rails-reviewer`, `kieran-rails-reviewer`, `kieran-python-reviewer`, `previous-comments-reviewer`, `pr-comment-resolver`, `figma-design-sync`.
-- Reason: better-convex is a framework/tooling repo. Data migration, Rails, deployment, PR-thread, and Figma workflow agents are mostly overkill or the wrong shape here.
 
 Goal plans:
 

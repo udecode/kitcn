@@ -204,7 +204,6 @@ lock.
 - `tdd`: bugs and feature work where behavior-level automated coverage is sane.
 - `learnings-researcher`: non-trivial repeated domains with documented
   solutions.
-- `debug`: fuzzy failures after the first repro pass or failing test.
 - `video-transcripts`: tracker evidence contains a video or screen recording.
 - If requirements remain ambiguous after source and local context, ask the
   smallest clarifying question or switch to a planning goal when the user wants
@@ -221,20 +220,18 @@ lock.
 - Docs/content work: use `--template docs` when docs dominate; use `--with docs`
   when docs are a supporting touched surface. For `www/**`, keep matching
   `packages/kitcn/skills/kitcn/**` content in sync.
-- `git-commit-push-pr`: verified code should ship as a commit and PR unless
-  the user explicitly says not to, or the work is analytical, blocked,
-  inconclusive, or has no local patch. This is a task-skill requirement, so it
-  satisfies the repo git permission policy. Stage the entire current checkout
+- Git/PR shipping: when verified code should ship and repo policy permits it,
+  use normal `git`/`gh` commands directly. Stage the entire current checkout
   per repo policy when creating the PR, create the commit, push, create or
   update the PR before tracker comments. The `task` skill owns the PR body:
-  use `git-commit-push-pr` for git/gh transport, then write the PR description
-  from the task-style final handoff contract below instead of the generic
-  adaptive PR summary. Do not skip this merely because the user did not type a
-  separate "open a PR" sentence.
+  write the PR description from the task-style final handoff contract below.
+  Do not skip this merely because the user did not type a separate "open a PR"
+  sentence.
 - Review skills: load only for risky, large, user-facing, or
   architecture-sensitive changes.
-- `agent-native-reviewer`: changes touch `.agents/**`, `.claude/**`,
-  AI/tooling surfaces, commands, or user actions an agent should perform.
+- Agent-native surface: when changes touch `.agents/**`, `.claude/**`,
+  AI/tooling surfaces, commands, or user actions an agent should perform, use
+  the autogoal agent-native pack and end with `autoreview`.
 
 ## Review And Risk Gates
 
@@ -245,9 +242,9 @@ real closeout pressure.
 - Autoreview is a hard closeout gate for non-trivial implementation changes.
   Load `.agents/skills/autoreview/SKILL.md`, pick the target from the actual
   diff state, and keep going until there are no accepted/actionable findings.
-- `agent-native-reviewer` is required when the task changes `.agents/**`,
-  `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action
-  tooling.
+- The autogoal agent-native pack plus `autoreview` are required when the task
+  changes `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands,
+  prompts, or user-action tooling.
 - Source authority is workspace-local. A check run in the planning repo cannot
   prove behavior owned by a sibling repo, package, app, browser route, or
   tracker system. Record the cwd/tool that owns each proof.
@@ -363,9 +360,9 @@ Keep verification mandatory and proportional.
 ## Task-Style PR Body
 
 When a `task` run creates or updates a PR, the PR description must mirror the
-task final handoff. Do not use a generic `Summary` / `Verification` PR body, an
-adaptive prose body from `git-commit-push-pr`, or a generated badge footer
-unless the caller or repo template explicitly asks for it.
+task final handoff. Do not use a generic `Summary` / `Verification` PR body,
+generic git-helper prose, or a generated badge footer unless the caller or repo
+template explicitly asks for it.
 
 Use the accepted task PR format from PR #270. The shape is not optional:
 

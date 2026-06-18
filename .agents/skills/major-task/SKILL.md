@@ -21,7 +21,7 @@ Handle $ARGUMENTS. Use this for architectural, comparative, benchmark, migration
 - Start from repo constraints, not internet takes.
 - Search for existing boundaries, patterns, and prior decisions before inventing new ones.
 - Prefer the smallest heavy stack that can answer the decision.
-- Usually load 3 to 5 helpers, not every possible helper.
+- Usually load 2 to 4 helpers, not every possible helper.
 - Separate facts, inference, and recommendation.
 - Do not default to review swarms, browser proof, PR work, or compounding.
 - Use external docs only when repo evidence and local clones are not enough or the task explicitly depends on third-party behavior.
@@ -142,44 +142,29 @@ Apply this section only when the task source is a tracker item.
   the durable working state in one `docs/plans` goal plan. Use
   `--template major-task`, then add touched-surface packs for docs, browser,
   package/API, or agent-native surfaces.
-- `learnings-researcher`
-  Use early when prior repo decisions, solutions, or repeated failures may matter.
-- `repo-research-analyst`
-  Default repo-grounding helper for major work.
-- `architecture-strategist`
-  Use for public API design, layering, ownership boundaries, abstraction cleanup, and major cross-package refactors.
-- `pattern-recognition-specialist`
-  Use when the question needs repo-wide pattern extraction, repeated smell detection, or design consistency analysis across packages.
-- `framework-docs-researcher`
-  Use only after local clone/source/docs work per AGENTS is not enough, or when competing framework behavior must be grounded in official docs.
-- `best-practices-researcher`
-  Use only when official docs leave gaps or the task genuinely needs broader field patterns beyond official sources.
-- `performance-oracle`
-  Use for benchmark design, scalability analysis, hot-path tradeoffs, or performance validation strategy.
-- `spec-flow-analyzer`
-  Use for RFCs, proposals, acceptance criteria, rollout plans, and completeness pressure-testing.
-- `issue-intelligence-analyst` or `git-history-analyzer`
-  Use only when issue churn, historical regressions, or design history matter to the decision.
-- `coherence-reviewer` and `feasibility-reviewer`
-  Default pair for explicit document review.
-- `scope-guardian-reviewer`
-  Use when scope, abstraction count, or rollout shape may be inflated.
-- `product-lens-reviewer`
-  Use when the document is making product framing, value, or roadmap claims.
-- `adversarial-document-reviewer`
-  Use for larger, riskier, or more assumption-heavy docs where premise stress-testing is worth the cost.
-- `correctness-reviewer`, `maintainability-reviewer`, `project-standards-reviewer`, `code-simplicity-reviewer`
-  Use only when major work actually turns into risky code-changing execution or architecture-sensitive diffs.
-- `agent-native-reviewer`
-  Use only when the change touches `.agents/**`, `.claude/**`, AI/tooling surfaces, commands, or user actions that an agent should also be able to perform.
-- `browser-use`
-  Use only when there is a real browser surface to verify.
+- `research-wiki`
+  Use when prior repo decisions, solutions, research artifacts, or repeated
+  failures may matter.
+- `diagnosing-bugs`
+  Use when the major task is still a failure-mode investigation rather than a
+  design decision.
+- `deslop`
+  Use after a working change when the remaining risk is code shape, simplicity,
+  over-abstraction, or AI-generated sludge.
+- `tdd`
+  Use when package behavior changes and the next step should be a focused
+  executable contract before implementation.
+- `autoreview`
+  Use for explicit diff review, release-readiness review, or final review of a
+  risky code-changing slice.
+- Agent-native surfaces
+  Use the autogoal agent-native pack and `autoreview` when the change touches
+  `.agents/**`, `.claude/**`, AI/tooling surfaces, commands, or user actions
+  that an agent should also be able to perform.
 - `agent-browser-issue`
   Use when browser automation is blocked by a likely reusable tool-side issue that deserves a separate GitHub follow-up.
 - `changeset`
   Use when verified work changes a published package under `packages/` and the repo expects release notes before completion.
-- `git-commit-push-pr`
-  Use when verified code-changing work should ship as a PR.
 ## Execution Paths
 
 ### Architecture Or Public API
@@ -231,7 +216,8 @@ Apply this section only when the task source is a tracker item.
 
 ### Spec Or Proposal
 
-1. Use `spec-flow-analyzer` to pressure-test completeness.
+1. Pressure-test completeness directly against source, current constraints,
+   acceptance criteria, rollout, and verification.
 2. Define constraints, acceptance criteria, rollout, verification, and open questions before implementation.
 3. If the task is still mushy product framing rather than implementation
    strategy, stop for focused clarification or switch to collaborative planning.
@@ -240,13 +226,14 @@ Apply this section only when the task source is a tracker item.
 ### Document Review
 
 1. Use this path only for explicit plan, RFC, proposal, or spec review.
-2. Default review pair:
-   - `coherence-reviewer`
-   - `feasibility-reviewer`
-3. Add `scope-guardian-reviewer` when the document introduces multiple new abstractions, broad rollout shape, or scope that may have drifted past the stated goal.
-4. Add `product-lens-reviewer` when the document is making product framing, roadmap, UX-value, or "are we solving the right thing?" claims.
-5. Add `adversarial-document-reviewer` when the document has more than 5 requirements or implementation units, makes significant architectural decisions, proposes new abstractions, or feels high-stakes enough that premise stress-testing is worth the cost.
-6. Keep this pass selective. Most docs should not load every reviewer.
+2. Review with one compact pass:
+   - coherence: does the proposal contradict itself?
+   - feasibility: can the repo implement and verify it?
+   - scope: are abstractions, rollout, and proof proportional?
+   - product fit: does it solve the right problem for this repo?
+   - adversarial pass: what would make this plan fail?
+3. Use `autoreview` only when there is an actual diff or final review target.
+4. Keep this pass selective. Most docs should not need another skill.
 
 ### Mixed Major Work
 
