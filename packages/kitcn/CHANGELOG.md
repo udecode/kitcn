@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.15.15
+
+### Patch Changes
+
+- [#297](https://github.com/udecode/kitcn/pull/297) [`4fba1b8`](https://github.com/udecode/kitcn/commit/4fba1b8dcef38e3433984553063306aafd87a453) Thanks [@MikeyZhang75](https://github.com/MikeyZhang75)! - ## Patches
+
+  - Fix `kitcn deploy` and `kitcn aggregate backfill|rebuild|prune` failing with `Too many documents read in a single function execution (limit: 32000)` once a table with an `aggregateIndex()` grows past ~32k rows. Backfill kickoff now discovers removed aggregate indexes with bounded distinct-key index scans instead of reading every aggregate row. Clearing a removed index whose aggregate rows already exceed platform limits still requires a chunked prune.
+  - Fix `backend=concave` failing to locate the Concave CLI with `@concavejs/cli` releases that do not export `./package.json`.
+  - Pin `@concavejs/cli` in concave scaffolds to the supported version instead of `latest`.
+
 ## 0.15.14
 
 ### Patch Changes
