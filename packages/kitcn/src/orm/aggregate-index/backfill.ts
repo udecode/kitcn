@@ -275,6 +275,44 @@ const requiresMetricBackfill = (
   );
 };
 
+const listDistinctIndexTuples = async (
+  db: GenericDatabaseWriter<any>,
+  tableName: string,
+  indexName: string,
+  fields: string[]
+): Promise<Record<string, string>[]> => {
+  const tuples: Record<string, string>[] = [];
+  let current = (await db
+    .query(tableName)
+    .withIndex(indexName)
+    .first()) as Record<string, string> | null;
+
+  while (current) {
+    const row = current;
+    const tuple: Record<string, string> = {};
+    for (const field of fields) {
+      tuple[field] = row[field];
+    }
+    tuples.push(tuple);
+
+    current = null;
+    for (let depth = fields.length - 1; depth >= 0 && !current; depth -= 1) {
+      current = (await db
+        .query(tableName)
+        .withIndex(indexName, (q: any) => {
+          let range = q;
+          for (let i = 0; i < depth; i += 1) {
+            range = range.eq(fields[i], tuple[fields[i]]);
+          }
+          return range.gt(fields[depth], tuple[fields[depth]]);
+        })
+        .first()) as Record<string, string> | null;
+    }
+  }
+
+  return tuples;
+};
+
 export function createCountBackfillHandlers(
   schema: TablesRelationalConfig,
   getChunkRef?: () => SchedulableFunctionReference | undefined
@@ -314,15 +352,24 @@ export function createCountBackfillHandlers(
       ])
     );
     const [bucketRows, memberRows, extremaRows] = await Promise.all([
-      ctx.db.query(AGGREGATE_BUCKET_TABLE).collect() as Promise<
-        Array<{ tableKey: string; indexName: string }>
-      >,
-      ctx.db.query(AGGREGATE_MEMBER_TABLE).collect() as Promise<
-        Array<{ kind?: string; tableKey: string; indexName: string }>
-      >,
-      ctx.db.query(AGGREGATE_EXTREMA_TABLE).collect() as Promise<
-        Array<{ tableKey: string; indexName: string }>
-      >,
+      listDistinctIndexTuples(
+        ctx.db,
+        AGGREGATE_BUCKET_TABLE,
+        'by_table_index',
+        ['tableKey', 'indexName']
+      ),
+      listDistinctIndexTuples(
+        ctx.db,
+        AGGREGATE_MEMBER_TABLE,
+        'by_kind_table_index',
+        ['kind', 'tableKey', 'indexName']
+      ),
+      listDistinctIndexTuples(
+        ctx.db,
+        AGGREGATE_EXTREMA_TABLE,
+        'by_table_index',
+        ['tableKey', 'indexName']
+      ),
     ]);
     const existingKeys = new Set<string>();
     for (const state of states) {
