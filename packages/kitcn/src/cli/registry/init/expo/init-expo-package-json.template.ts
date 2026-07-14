@@ -38,7 +38,7 @@ const getInitExpoPackageJsonDevDependencies = (
   ...INIT_EXPO_PACKAGE_JSON_DEV_DEPENDENCIES,
   ...(options.backend === 'concave'
     ? {
-        '@concavejs/cli': 'latest',
+        '@concavejs/cli': SUPPORTED_DEPENDENCY_VERSIONS.concaveCli.exact,
       }
     : {}),
 });

@@ -6,6 +6,7 @@ const EXACT_VERSION_RE = /^(\d+)\.(\d+)\.\d+$/;
 const VERSION_IN_SPEC_RE = /(\d+)\.(\d+)(?:\.\d+)?/;
 const PLAIN_VERSION_SPEC_RE = /^[\^~]?v?\d+\.\d+(?:\.\d+)?$/;
 const UPPER_BOUND_RE = /(?:^|\s)<={0,1}\s*v?(\d+)\.(\d+)(?:\.\d+)?/g;
+const SUPPORTED_CONCAVE_CLI_VERSION = '0.0.1-alpha.14';
 const SUPPORTED_CONVEX_VERSION = '1.38.0';
 const SUPPORTED_BETTER_AUTH_VERSION = '1.6.18';
 const SUPPORTED_BETTER_AUTH_MIN_VERSION = '1.6.11';
@@ -145,6 +146,9 @@ export const SUPPORTED_DEPENDENCY_VERSIONS = {
       SUPPORTED_BETTER_AUTH_MIN_VERSION,
       SUPPORTED_BETTER_AUTH_VERSION
     ),
+  },
+  concaveCli: {
+    exact: SUPPORTED_CONCAVE_CLI_VERSION,
   },
   hono: {
     exact: SUPPORTED_HONO_VERSION,

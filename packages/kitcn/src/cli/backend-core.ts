@@ -4461,9 +4461,23 @@ export function resolveConfiguredBackend(params: {
   return params.backendArg ?? params.config?.backend ?? 'convex';
 }
 
+function findConcavePkgPath() {
+  // Module resolution cannot locate the package root across published
+  // shapes: some versions have an `exports` map without './package.json',
+  // others are bin-only with no entry point at all. Walk the standard
+  // resolution paths on the filesystem instead.
+  for (const searchPath of require.resolve.paths('@concavejs/cli') ?? []) {
+    const candidate = join(searchPath, '@concavejs', 'cli', 'package.json');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error("Cannot find module '@concavejs/cli'.");
+}
+
 function resolveInstalledConcaveCliPath() {
   try {
-    const concavePkgPath = require.resolve('@concavejs/cli/package.json');
+    const concavePkgPath = findConcavePkgPath();
     const concavePkg = JSON.parse(fs.readFileSync(concavePkgPath, 'utf8')) as {
       bin?: string | Record<string, string>;
     };
