@@ -100,7 +100,7 @@ describe('init-next-package-json.template', () => {
         superjson: '2.2.6',
       },
       devDependencies: {
-        '@concavejs/cli': 'latest',
+        '@concavejs/cli': '0.0.1-alpha.14',
         '@types/bun': 'latest',
       },
     });

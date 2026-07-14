@@ -33,6 +33,81 @@ const schedulerStub = {
 const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
 const METRIC_STATE_KIND = 'metric' as const;
+const RANK_STATE_KIND = 'rank' as const;
+
+const createReadCountingDb = (db: unknown) => {
+  const reads = new Map<string, number>();
+  const recordReads = (table: string, count: number) => {
+    reads.set(table, (reads.get(table) ?? 0) + count);
+  };
+  const wrapQuery = (query: object, table: string): object =>
+    new Proxy(query, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop);
+        if (typeof value !== 'function') {
+          return value;
+        }
+        if (prop === Symbol.asyncIterator) {
+          return () => {
+            const iterator = value.call(target) as AsyncIterator<unknown>;
+            return {
+              next: async () => {
+                const step = await iterator.next();
+                if (!step.done) {
+                  recordReads(table, 1);
+                }
+                return step;
+              },
+              return: iterator.return?.bind(iterator),
+              throw: iterator.throw?.bind(iterator),
+            };
+          };
+        }
+        return (...args: unknown[]) => {
+          const result = value.apply(target, args);
+          if (prop === 'collect' || prop === 'take') {
+            return (result as Promise<unknown[]>).then((rows) => {
+              recordReads(table, rows.length);
+              return rows;
+            });
+          }
+          if (prop === 'first' || prop === 'unique') {
+            return (result as Promise<unknown>).then((row) => {
+              recordReads(table, row === null ? 0 : 1);
+              return row;
+            });
+          }
+          if (prop === 'paginate') {
+            return (result as Promise<{ page: unknown[] }>).then((page) => {
+              recordReads(table, page.page.length);
+              return page;
+            });
+          }
+          return typeof result === 'object' && result !== null
+            ? wrapQuery(result, table)
+            : result;
+        };
+      },
+    });
+  const dbProxy = new Proxy(db as object, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop);
+      if (prop === 'query') {
+        return (table: string) =>
+          wrapQuery((value as Function).call(target, table) as object, table);
+      }
+      if (prop === 'get') {
+        return async (...args: unknown[]) => {
+          const doc = await (value as Function).apply(target, args);
+          recordReads('#db.get', doc === null ? 0 : 1);
+          return doc;
+        };
+      }
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  return { db: dbProxy, reads };
+};
 
 const buildCountIndexedFixtures = (options?: {
   includeOrgStatusIndex?: boolean;
@@ -1333,6 +1408,295 @@ describe('ORM count() with aggregateIndex', () => {
         )
         .collect();
       expect(remainingExtrema).toHaveLength(0);
+    });
+  });
+
+  it('resume kickoff prunes orphans across kinds, tables, and indexes while keeping active data', async () => {
+    const { schema } = buildCountIndexedFixtures({
+      includeOrgStatusIndex: true,
+    });
+    const { relations: relationsWithoutOrgStatus } = buildCountIndexedFixtures({
+      includeOrgStatusIndex: false,
+    });
+    const t = convexTest(schema);
+
+    await t.run(async (baseCtx) => {
+      const insertMember = async (
+        kind: string,
+        tableKey: string,
+        indexName: string,
+        docId: string
+      ) => {
+        await baseCtx.db.insert('aggregate_member', {
+          kind,
+          tableKey,
+          indexName,
+          docId,
+          keyHash: '["org-1"]',
+          keyParts: ['org-1'],
+          sumValues: {},
+          nonNullCountValues: {},
+          extremaValues: {},
+          updatedAt: 0,
+        });
+      };
+
+      await insertMember(
+        METRIC_STATE_KIND,
+        'countUsers',
+        'by_org_status',
+        'doc_orphan_1'
+      );
+      await insertMember(
+        METRIC_STATE_KIND,
+        'countUsers',
+        'by_org_status',
+        'doc_orphan_2'
+      );
+      await insertMember(
+        METRIC_STATE_KIND,
+        'countUsers',
+        'by_org_tier',
+        'doc_active_1'
+      );
+      await insertMember(
+        METRIC_STATE_KIND,
+        'countPosts',
+        'by_org',
+        'doc_active_2'
+      );
+      await insertMember(
+        RANK_STATE_KIND,
+        'countUsers',
+        'by_rank_removed_a',
+        'doc_rank_orphan_a'
+      );
+      await insertMember(
+        RANK_STATE_KIND,
+        'countUsers',
+        'by_rank_removed_b',
+        'doc_rank_orphan_b'
+      );
+
+      await baseCtx.db.insert('aggregate_bucket', {
+        tableKey: 'countUsers',
+        indexName: 'by_org_status',
+        keyHash: '["org-1"]',
+        keyParts: ['org-1'],
+        count: 2,
+        sumValues: {},
+        nonNullCountValues: {},
+        updatedAt: 0,
+      });
+      for (const orphanBucketIndex of ['by_removed_x', 'by_removed_y']) {
+        await baseCtx.db.insert('aggregate_bucket', {
+          tableKey: 'countPosts',
+          indexName: orphanBucketIndex,
+          keyHash: '["org-1"]',
+          keyParts: ['org-1'],
+          count: 1,
+          sumValues: {},
+          nonNullCountValues: {},
+          updatedAt: 0,
+        });
+      }
+      await baseCtx.db.insert('aggregate_bucket', {
+        tableKey: 'countUsers',
+        indexName: 'by_org_tier',
+        keyHash: '["org-1"]',
+        keyParts: ['org-1'],
+        count: 1,
+        sumValues: {},
+        nonNullCountValues: {},
+        updatedAt: 0,
+      });
+      await baseCtx.db.insert('aggregate_extrema', {
+        tableKey: 'countUsers',
+        indexName: 'by_org_status',
+        keyHash: '["org-1"]',
+        fieldName: 'score',
+        valueHash: 'value_hash',
+        value: 1,
+        sortKey: 'n:1',
+        count: 1,
+        updatedAt: 0,
+      });
+
+      const prunedOrmClient = createOrm({
+        schema: relationsWithoutOrgStatus,
+        ormFunctions: {
+          scheduledDelete: {} as any,
+          scheduledMutationBatch: {} as any,
+        },
+        internalMutation: passthroughInternalMutation,
+      });
+      const prunedApi = prunedOrmClient.api();
+
+      const result = await (prunedApi as any).aggregateBackfill.handler(
+        { db: baseCtx.db, scheduler: schedulerStub },
+        {}
+      );
+      expect(result).toMatchObject({
+        mode: 'resume',
+        pruned: 5,
+      });
+
+      const membersByIndex = async (
+        kind: string,
+        tableKey: string,
+        indexName: string
+      ) =>
+        baseCtx.db
+          .query('aggregate_member')
+          .withIndex('by_kind_table_index', (q: any) =>
+            q
+              .eq('kind', kind)
+              .eq('tableKey', tableKey)
+              .eq('indexName', indexName)
+          )
+          .collect();
+
+      await expect(
+        membersByIndex(METRIC_STATE_KIND, 'countUsers', 'by_org_status')
+      ).resolves.toHaveLength(0);
+      await expect(
+        membersByIndex(RANK_STATE_KIND, 'countUsers', 'by_rank_removed_a')
+      ).resolves.toHaveLength(0);
+      await expect(
+        membersByIndex(RANK_STATE_KIND, 'countUsers', 'by_rank_removed_b')
+      ).resolves.toHaveLength(0);
+      await expect(
+        membersByIndex(METRIC_STATE_KIND, 'countUsers', 'by_org_tier')
+      ).resolves.toHaveLength(1);
+      await expect(
+        membersByIndex(METRIC_STATE_KIND, 'countPosts', 'by_org')
+      ).resolves.toHaveLength(1);
+
+      const orphanBuckets = await baseCtx.db
+        .query('aggregate_bucket')
+        .withIndex('by_table_index', (q: any) =>
+          q.eq('tableKey', 'countUsers').eq('indexName', 'by_org_status')
+        )
+        .collect();
+      expect(orphanBuckets).toHaveLength(0);
+
+      const activeBuckets = await baseCtx.db
+        .query('aggregate_bucket')
+        .withIndex('by_table_index', (q: any) =>
+          q.eq('tableKey', 'countUsers').eq('indexName', 'by_org_tier')
+        )
+        .collect();
+      expect(activeBuckets).toHaveLength(1);
+
+      for (const orphanBucketIndex of ['by_removed_x', 'by_removed_y']) {
+        const orphanOnlyBuckets = await baseCtx.db
+          .query('aggregate_bucket')
+          .withIndex('by_table_index', (q: any) =>
+            q.eq('tableKey', 'countPosts').eq('indexName', orphanBucketIndex)
+          )
+          .collect();
+        expect(orphanOnlyBuckets).toHaveLength(0);
+      }
+
+      const orphanExtrema = await baseCtx.db
+        .query('aggregate_extrema')
+        .withIndex('by_table_index', (q: any) =>
+          q.eq('tableKey', 'countUsers').eq('indexName', 'by_org_status')
+        )
+        .collect();
+      expect(orphanExtrema).toHaveLength(0);
+    });
+  });
+
+  it('resume kickoff reads a bounded number of aggregate rows regardless of member table size', async () => {
+    const { schema, relations } = buildCountIndexedFixtures();
+    const t = convexTest(schema);
+
+    await t.run(async (baseCtx) => {
+      const ormClient = createOrm({
+        schema: relations,
+        ormFunctions: {
+          scheduledDelete: {} as any,
+          scheduledMutationBatch: {} as any,
+        },
+        internalMutation: passthroughInternalMutation,
+      });
+      const api = ormClient.api();
+
+      const memberTuples = [
+        {
+          kind: METRIC_STATE_KIND,
+          tableKey: 'countUsers',
+          indexName: 'by_org_status',
+        },
+        {
+          kind: METRIC_STATE_KIND,
+          tableKey: 'countUsers',
+          indexName: 'by_org_tier',
+        },
+        {
+          kind: METRIC_STATE_KIND,
+          tableKey: 'countPosts',
+          indexName: 'by_org',
+        },
+      ];
+      for (const [tupleIndex, tuple] of memberTuples.entries()) {
+        for (let i = 0; i < 100; i += 1) {
+          await baseCtx.db.insert('aggregate_member', {
+            ...tuple,
+            docId: `doc_${tupleIndex}_${i}`,
+            keyHash: '["org-1","active"]',
+            keyParts: ['org-1', 'active'],
+            sumValues: {},
+            nonNullCountValues: {},
+            extremaValues: {},
+            updatedAt: 0,
+          });
+        }
+      }
+      const bucketTuples = [
+        { tableKey: 'countUsers', indexName: 'by_org_status' },
+        { tableKey: 'countUsers', indexName: 'by_org_tier' },
+      ];
+      for (const tuple of bucketTuples) {
+        for (let i = 0; i < 30; i += 1) {
+          await baseCtx.db.insert('aggregate_bucket', {
+            ...tuple,
+            keyHash: `["org-${i}","active"]`,
+            keyParts: [`org-${i}`, 'active'],
+            count: 1,
+            sumValues: {},
+            nonNullCountValues: {},
+            updatedAt: 0,
+          });
+          await baseCtx.db.insert('aggregate_extrema', {
+            ...tuple,
+            keyHash: `["org-${i}","active"]`,
+            fieldName: 'score',
+            valueHash: `value_hash_${i}`,
+            value: i,
+            sortKey: `n:${i}`,
+            count: 1,
+            updatedAt: 0,
+          });
+        }
+      }
+
+      const { db: countingDb, reads } = createReadCountingDb(baseCtx.db);
+
+      const result = await (api as any).aggregateBackfill.handler(
+        { db: countingDb, scheduler: schedulerStub },
+        {}
+      );
+
+      expect(result).toMatchObject({ mode: 'resume', status: 'ok' });
+      expect(reads.get('aggregate_member') ?? 0).toBeGreaterThan(0);
+      expect(reads.get('aggregate_member') ?? 0).toBeLessThan(20);
+      expect(reads.get('aggregate_bucket') ?? 0).toBeGreaterThan(0);
+      expect(reads.get('aggregate_bucket') ?? 0).toBeLessThan(20);
+      expect(reads.get('aggregate_extrema') ?? 0).toBeGreaterThan(0);
+      expect(reads.get('aggregate_extrema') ?? 0).toBeLessThan(20);
+      expect(reads.get('#db.get') ?? 0).toBeLessThan(20);
     });
   });
 
