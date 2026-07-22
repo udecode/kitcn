@@ -341,6 +341,41 @@ const handleClick = () => {
 };
 ```
 
+### useConvexAuthRecovery
+
+Use `useConvexAuthRecovery()` when the outer auth provider still has a valid
+session but Convex became unauthenticated after a transient token refresh
+failure. `recover()` replaces the provider-owned auth binding and resolves only
+after Convex confirms authentication.
+
+```tsx title="src/components/reconnect-auth.tsx" showLineNumbers {3,6,11-14}
+'use client';
+
+import { useConvexAuthRecovery } from 'kitcn/react';
+
+export function ReconnectAuth() {
+  const { error, recover, status } = useConvexAuthRecovery();
+
+  return (
+    <div>
+      <button
+        disabled={status === 'recovering'}
+        onClick={() => void recover().catch(() => undefined)}
+      >
+        {status === 'recovering' ? 'Reconnecting…' : 'Reconnect'}
+      </button>
+      {error && <p>{error.message}</p>}
+    </div>
+  );
+}
+```
+
+Concurrent calls share one promise. Pass `{ timeoutMs }` to override the
+10-second timeout. Failures reject with `ConvexAuthRecoveryError` and one of
+these codes: `AUTH_PROVIDER_LOADING`, `AUTH_PROVIDER_UNAUTHENTICATED`,
+`AUTH_RECOVERY_CANCELLED`, `AUTH_RECOVERY_FAILED`, or
+`AUTH_RECOVERY_TIMEOUT`. Do not invoke recovery for intentional sign-out.
+
 ## Conditional Rendering
 
 ### MaybeAuthenticated
@@ -478,7 +513,8 @@ function App() {
 }
 ```
 
-This enables `skipUnauth` queries, `useAuth`, and conditional rendering components to work with `@convex-dev/auth`.
+This enables `skipUnauth` queries, `useAuth`, conditional rendering components,
+and `useConvexAuthRecovery` to work with `@convex-dev/auth`.
 
 ## Next Steps
 

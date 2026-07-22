@@ -6,7 +6,7 @@
 
 import type { AuthTokenFetcher } from 'convex/browser';
 import type { ConvexReactClient } from 'convex/react';
-import { ConvexProviderWithAuth, useConvexAuth } from 'convex/react';
+import { useConvexAuth } from 'convex/react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
@@ -21,6 +21,7 @@ import {
   AUTH_SESSION_SYNC_GRACE_MS,
   AuthProvider,
   type AuthStore,
+  ConvexProviderWithAuth,
   decodeJwtExp,
   FetchAccessTokenContext,
   isSessionSyncGraceActive,

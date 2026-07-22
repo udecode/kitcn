@@ -12,7 +12,15 @@ import {
   useConvexAuth,
 } from 'convex/react';
 import { createAtomStore } from 'jotai-x';
-import { createContext, useContext } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { CRPCClientError, defaultIsUnauthorized } from '../crpc/error';
 
@@ -45,6 +53,151 @@ const ConvexAuthBridgeContext = createContext<ConvexAuthResult | null>(null);
 
 /** Get auth from bridge context (null if no bridge configured) */
 export const useConvexAuthBridge = () => useContext(ConvexAuthBridgeContext);
+
+export type ConvexAuthRecoveryStatus = 'idle' | 'recovering' | 'failed';
+
+export type ConvexAuthRecoveryErrorCode =
+  | 'AUTH_PROVIDER_LOADING'
+  | 'AUTH_PROVIDER_UNAUTHENTICATED'
+  | 'AUTH_RECOVERY_CANCELLED'
+  | 'AUTH_RECOVERY_FAILED'
+  | 'AUTH_RECOVERY_TIMEOUT';
+
+export class ConvexAuthRecoveryError extends Error {
+  readonly code: ConvexAuthRecoveryErrorCode;
+
+  constructor(code: ConvexAuthRecoveryErrorCode, message: string) {
+    super(message);
+    this.name = 'ConvexAuthRecoveryError';
+    this.code = code;
+  }
+}
+
+export type ConvexAuthRecoveryOptions = {
+  /** Maximum time to wait for Convex backend confirmation. Defaults to 10s. */
+  timeoutMs?: number;
+};
+
+export type ConvexAuthRecovery = {
+  error: ConvexAuthRecoveryError | null;
+  recover: (options?: ConvexAuthRecoveryOptions) => Promise<void>;
+  status: ConvexAuthRecoveryStatus;
+};
+
+const ConvexAuthRecoveryContext = createContext<ConvexAuthRecovery | null>(
+  null
+);
+
+/** Imperatively rebind Convex auth and wait for backend confirmation. */
+export function useConvexAuthRecovery(): ConvexAuthRecovery {
+  const recovery = useContext(ConvexAuthRecoveryContext);
+
+  if (!recovery) {
+    throw new Error(
+      'useConvexAuthRecovery must be used inside ConvexProviderWithAuth'
+    );
+  }
+
+  return recovery;
+}
+
+type ConvexProviderWithAuthProps = React.ComponentProps<
+  typeof ConvexProviderWithAuthBase
+>;
+
+type PendingAuthRecovery = {
+  bindingVersion: number;
+  isBound: boolean;
+  promise: Promise<void>;
+  reject: (error: ConvexAuthRecoveryError) => void;
+  resolve: () => void;
+  timeoutId: ReturnType<typeof setTimeout>;
+};
+
+type AuthRecoverySnapshot = {
+  authProviderAuthenticated: boolean;
+  authProviderLoading: boolean;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+};
+
+const AUTH_RECOVERY_TIMEOUT_MS = 10_000;
+
+function ConvexAuthRecoverySync({
+  authProviderAuthenticated,
+  authProviderLoading,
+  onChange,
+}: {
+  authProviderAuthenticated: boolean;
+  authProviderLoading: boolean;
+  onChange: (snapshot: AuthRecoverySnapshot) => void;
+}) {
+  const auth = useConvexAuth();
+
+  useEffect(() => {
+    onChange({
+      authProviderAuthenticated,
+      authProviderLoading,
+      isAuthenticated: auth.isAuthenticated,
+      isLoading: auth.isLoading,
+    });
+  }, [
+    auth.isAuthenticated,
+    auth.isLoading,
+    authProviderAuthenticated,
+    authProviderLoading,
+    onChange,
+  ]);
+
+  return null;
+}
+
+function ConvexAuthBinding({
+  bindingVersion,
+  children,
+  client,
+  onAuthSnapshot,
+  onBindingFetch,
+  useAuth,
+}: ConvexProviderWithAuthProps & {
+  bindingVersion: number;
+  onAuthSnapshot: (snapshot: AuthRecoverySnapshot) => void;
+  onBindingFetch: (bindingVersion: number) => void;
+}) {
+  const {
+    fetchAccessToken: fetchAccessTokenFromAuth,
+    isAuthenticated,
+    isLoading,
+  } = useAuth();
+
+  const fetchAccessToken = useCallback(
+    (args: { forceRefreshToken: boolean }) => {
+      onBindingFetch(bindingVersion);
+      return fetchAccessTokenFromAuth(args);
+    },
+    [bindingVersion, fetchAccessTokenFromAuth, onBindingFetch]
+  );
+  const boundAuth = useMemo(
+    () => ({
+      fetchAccessToken,
+      isAuthenticated,
+      isLoading,
+    }),
+    [fetchAccessToken, isAuthenticated, isLoading]
+  );
+  const useBoundAuth = useCallback(() => boundAuth, [boundAuth]);
+
+  return (
+    <ConvexProviderWithAuthBase client={client} useAuth={useBoundAuth}>
+      <ConvexAuthRecoverySync
+        authProviderAuthenticated={isAuthenticated}
+        authProviderLoading={isLoading}
+        onChange={onAuthSnapshot}
+      />
+      <ConvexAuthBridge>{children}</ConvexAuthBridge>
+    </ConvexProviderWithAuthBase>
+  );
+}
 
 // ============================================================================
 // Auth Store State
@@ -170,12 +323,195 @@ export function ConvexAuthBridge({ children }: { children: React.ReactNode }) {
  */
 export function ConvexProviderWithAuth({
   children,
-  ...props
-}: React.ComponentProps<typeof ConvexProviderWithAuthBase>) {
+  client,
+  useAuth,
+}: ConvexProviderWithAuthProps) {
+  const [bindingVersion, setBindingVersion] = useState(0);
+  const [error, setError] = useState<ConvexAuthRecoveryError | null>(null);
+  const [status, setStatus] = useState<ConvexAuthRecoveryStatus>('idle');
+  const bindingVersionRef = useRef(0);
+  const pendingRef = useRef<PendingAuthRecovery | null>(null);
+  const authSnapshotRef = useRef<AuthRecoverySnapshot>({
+    authProviderAuthenticated: false,
+    authProviderLoading: true,
+    isAuthenticated: false,
+    isLoading: true,
+  });
+
+  const settleRecovery = useCallback(
+    (recoveryError: ConvexAuthRecoveryError | null) => {
+      const pending = pendingRef.current;
+      if (!pending) {
+        return;
+      }
+
+      clearTimeout(pending.timeoutId);
+      pendingRef.current = null;
+
+      if (recoveryError) {
+        setError(recoveryError);
+        setStatus('failed');
+        pending.reject(recoveryError);
+        return;
+      }
+
+      setError(null);
+      setStatus('idle');
+      pending.resolve();
+    },
+    []
+  );
+
+  const onAuthSnapshot = useCallback(
+    (snapshot: AuthRecoverySnapshot) => {
+      authSnapshotRef.current = snapshot;
+
+      const pending = pendingRef.current;
+      if (!pending) {
+        return;
+      }
+
+      if (snapshot.authProviderLoading) {
+        settleRecovery(
+          new ConvexAuthRecoveryError(
+            'AUTH_PROVIDER_LOADING',
+            'Cannot recover Convex auth while the auth provider is loading'
+          )
+        );
+        return;
+      }
+      if (!snapshot.authProviderAuthenticated) {
+        settleRecovery(
+          new ConvexAuthRecoveryError(
+            'AUTH_PROVIDER_UNAUTHENTICATED',
+            'Cannot recover Convex auth without an authenticated provider session'
+          )
+        );
+        return;
+      }
+      if (!pending.isBound || snapshot.isLoading) {
+        return;
+      }
+      if (snapshot.isAuthenticated) {
+        settleRecovery(null);
+        return;
+      }
+
+      settleRecovery(
+        new ConvexAuthRecoveryError(
+          'AUTH_RECOVERY_FAILED',
+          'Convex rejected the recovered authentication binding'
+        )
+      );
+    },
+    [settleRecovery]
+  );
+
+  const onBindingFetch = useCallback((activeBindingVersion: number) => {
+    const pending = pendingRef.current;
+    if (pending?.bindingVersion === activeBindingVersion) {
+      pending.isBound = true;
+    }
+  }, []);
+
+  const recover = useCallback(
+    (options: ConvexAuthRecoveryOptions = {}) => {
+      const pending = pendingRef.current;
+      if (pending) {
+        return pending.promise;
+      }
+
+      const authSnapshot = authSnapshotRef.current;
+      if (authSnapshot.authProviderLoading) {
+        const recoveryError = new ConvexAuthRecoveryError(
+          'AUTH_PROVIDER_LOADING',
+          'Cannot recover Convex auth while the auth provider is loading'
+        );
+        setError(recoveryError);
+        setStatus('failed');
+        return Promise.reject(recoveryError);
+      }
+      if (!authSnapshot.authProviderAuthenticated) {
+        const recoveryError = new ConvexAuthRecoveryError(
+          'AUTH_PROVIDER_UNAUTHENTICATED',
+          'Cannot recover Convex auth without an authenticated provider session'
+        );
+        setError(recoveryError);
+        setStatus('failed');
+        return Promise.reject(recoveryError);
+      }
+
+      let resolve!: () => void;
+      let reject!: (error: ConvexAuthRecoveryError) => void;
+      const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      });
+      const timeoutMs = options.timeoutMs ?? AUTH_RECOVERY_TIMEOUT_MS;
+      const nextBindingVersion = bindingVersionRef.current + 1;
+      const timeoutId = setTimeout(() => {
+        settleRecovery(
+          new ConvexAuthRecoveryError(
+            'AUTH_RECOVERY_TIMEOUT',
+            `Convex auth recovery timed out after ${timeoutMs}ms`
+          )
+        );
+      }, timeoutMs);
+
+      pendingRef.current = {
+        bindingVersion: nextBindingVersion,
+        isBound: false,
+        promise,
+        reject,
+        resolve,
+        timeoutId,
+      };
+      bindingVersionRef.current = nextBindingVersion;
+      setError(null);
+      setStatus('recovering');
+      setBindingVersion(nextBindingVersion);
+
+      return promise;
+    },
+    [settleRecovery]
+  );
+
+  useEffect(
+    () => () => {
+      const pending = pendingRef.current;
+      if (!pending) {
+        return;
+      }
+
+      clearTimeout(pending.timeoutId);
+      pendingRef.current = null;
+      pending.reject(
+        new ConvexAuthRecoveryError(
+          'AUTH_RECOVERY_CANCELLED',
+          'Convex auth recovery was cancelled because the provider unmounted'
+        )
+      );
+    },
+    []
+  );
+
+  const recovery = useMemo(
+    () => ({ error, recover, status }),
+    [error, recover, status]
+  );
+
   return (
-    <ConvexProviderWithAuthBase {...props}>
-      <ConvexAuthBridge>{children}</ConvexAuthBridge>
-    </ConvexProviderWithAuthBase>
+    <ConvexAuthRecoveryContext.Provider value={recovery}>
+      <ConvexAuthBinding
+        bindingVersion={bindingVersion}
+        client={client}
+        onAuthSnapshot={onAuthSnapshot}
+        onBindingFetch={onBindingFetch}
+        useAuth={useAuth}
+      >
+        {children}
+      </ConvexAuthBinding>
+    </ConvexAuthRecoveryContext.Provider>
   );
 }
 

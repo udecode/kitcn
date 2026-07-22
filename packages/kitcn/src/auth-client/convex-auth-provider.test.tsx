@@ -1,9 +1,10 @@
-import { act, render, renderHook } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import {
   decodeJwtExp,
   useAuth,
   useAuthStore,
+  useConvexAuthRecovery,
   useFetchAccessToken,
 } from '../react/auth-store';
 import { ConvexAuthProvider } from './convex-auth-provider';
@@ -29,6 +30,92 @@ describe('ConvexAuthProvider', () => {
     } catch {
       // Happy DOM may reject some URL transitions; don't let cleanup fail the suite.
     }
+  });
+
+  test('recovers Better Auth after a transient token refresh failure', async () => {
+    const bindings: Array<{
+      fetchToken: (args: {
+        forceRefreshToken: boolean;
+      }) => Promise<string | null>;
+      onChange: (isAuthenticated: boolean) => void;
+    }> = [];
+    const client = {
+      clearAuth: mock(() => {}),
+      setAuth: mock(
+        (
+          fetchToken: (args: {
+            forceRefreshToken: boolean;
+          }) => Promise<string | null>,
+          onChange: (isAuthenticated: boolean) => void
+        ) => {
+          bindings.push({ fetchToken, onChange });
+        }
+      ),
+    };
+    const recoveredToken = makeJwt(7200);
+    const token = mock()
+      .mockResolvedValueOnce({ data: {} })
+      .mockResolvedValueOnce({ data: { token: recoveredToken } });
+    const authClient = {
+      useSession: () => ({
+        data: { session: { id: 'session-1' } },
+        isPending: false,
+      }),
+      convex: { token },
+      getSession: async () => null,
+      updateSession: () => {},
+      crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+    };
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ConvexAuthProvider authClient={authClient as any} client={client as any}>
+        {children}
+      </ConvexAuthProvider>
+    );
+
+    let recovery: ReturnType<typeof useConvexAuthRecovery> | undefined;
+    expect(() => {
+      renderHook(
+        () => {
+          recovery = useConvexAuthRecovery();
+        },
+        { wrapper }
+      );
+    }).not.toThrow();
+
+    await waitFor(() => {
+      expect(bindings).toHaveLength(1);
+    });
+    let failedToken: string | null = null;
+    await act(async () => {
+      failedToken = await bindings[0]!.fetchToken({
+        forceRefreshToken: true,
+      });
+    });
+    expect(failedToken).toBeNull();
+    act(() => {
+      bindings[0]!.onChange(false);
+    });
+
+    let recovered!: Promise<void>;
+    act(() => {
+      recovered = recovery!.recover({ timeoutMs: 1_000 });
+    });
+    await waitFor(() => {
+      expect(bindings).toHaveLength(2);
+    });
+    let freshToken: string | null = null;
+    await act(async () => {
+      freshToken = await bindings[1]!.fetchToken({
+        forceRefreshToken: false,
+      });
+    });
+    expect(freshToken).toBe(recoveredToken);
+    act(() => {
+      bindings[1]!.onChange(true);
+    });
+
+    await expect(recovered).resolves.toBeUndefined();
+    expect(token).toHaveBeenCalledTimes(2);
   });
 
   test('syncs ConvexQueryClient with the auth store before children render', () => {

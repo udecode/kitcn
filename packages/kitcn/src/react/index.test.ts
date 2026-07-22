@@ -9,6 +9,7 @@ describe('react public exports', () => {
     expect(typeof reactExports.ConvexQueryClient).toBe('function');
     expect(typeof reactExports.getQueryClientSingleton).toBe('function');
     expect(typeof reactExports.getConvexQueryClientSingleton).toBe('function');
+    expect(typeof reactExports.useConvexAuthRecovery).toBe('function');
     expect(reactExports.useConvexAuth).toBe(useSafeConvexAuth);
   });
 });
