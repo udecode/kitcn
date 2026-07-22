@@ -1,0 +1,18 @@
+---
+description: Route durable product, architecture, API, and DX decisions through the repository vision. Use before planning, prioritizing, or changing doctrine.
+---
+
+# Vision
+
+`VISION.md` is the durable doctrine owner. Read it before making product,
+architecture, public-API, CLI, data-model, or workflow decisions.
+
+## Rule
+
+- Treat vision as a decision filter, not a feature backlog.
+- Prefer repository evidence over memory and temporary discussion.
+- Record new durable doctrine in `VISION.md`; put implementation detail in docs,
+  plans, PRDs, milestones, ADRs, or source owners.
+- If source truth contradicts the vision, stop and resolve the contradiction
+  explicitly. Do not quietly pick one.
+- Use `sync-vision` to audit drift and advance the recorded baseline.

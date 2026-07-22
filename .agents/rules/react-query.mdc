@@ -1,0 +1,84 @@
+---
+description: TanStack Query ownership for kitcn cRPC queries, mutations, live Convex subscriptions, RSC preloading, cache keys, and bounded invalidation.
+---
+
+# TanStack Query And cRPC
+
+## Default
+
+Use generated cRPC query and mutation options as the owner of query keys,
+functions, input typing, and result typing. Do not hand-build parallel keys or
+duplicate the transport contract in components.
+
+Convex-backed cRPC queries are live subscriptions unless the API explicitly
+documents a non-live path. A successful mutation normally updates subscribed
+queries through Convex; blind invalidation is redundant and can cause churn.
+
+## Colocation
+
+- Keep a query in the smallest component or hook that owns its loading, empty,
+  error, permission, and success states.
+- Hoist only when siblings share the same result or a route owns preload.
+- Keep presentation components data-agnostic when that improves reuse.
+- Use component colocation rules before inventing a feature-wide data layer.
+
+## Query Pattern
+
+```tsx
+const result = useQuery(
+  crpc.projects.list.queryOptions({ workspaceId }),
+);
+```
+
+Use `skipToken`, an explicit enabled condition, or the generated auth-aware
+option when required input or session authority is missing. Do not send fake
+identifiers to keep a hook unconditional.
+
+## Mutation Pattern
+
+```tsx
+const createProject = useMutation(
+  crpc.projects.create.mutationOptions({
+    onSuccess: (project) => {
+      router.push(`/projects/${project.id}`);
+    },
+  }),
+);
+```
+
+Own user feedback at the mutation boundary. Disable duplicate submission,
+surface the actual error, and preserve form input on failure.
+
+Do not invalidate a live cRPC query by habit. Invalidation is allowed only when
+the consumer is demonstrably non-subscribed, the source is HTTP/external, a
+manual cache entry was written, or a server-side/RSC snapshot needs a bounded
+refresh. Name that exception beside the code.
+
+## RSC And Preload
+
+- Prefer server callers for server-owned rendering and authorization.
+- Use the package's supported preload/hydration path when a client component
+  must adopt server-fetched data.
+- Never create a second query-key dialect for RSC.
+- Treat server snapshots and live client subscriptions as different lifetimes;
+  document which one owns freshness.
+- Avoid importing client-only Query machinery into Convex functions or other
+  server-only package entries.
+
+## Cache Operations
+
+Use generated filters/options for `getQueryData`, `setQueryData`, cancellation,
+and invalidation. An optimistic update must define rollback and reconciliation
+with the live Convex result. If subscription delivery is fast enough, prefer
+pending UI over speculative cache mutation.
+
+## Proof
+
+Test the owner, not TanStack Query itself:
+
+- query is skipped until required identity/input exists;
+- mutation pending/error/success states are honest;
+- live data changes without a redundant refetch;
+- bounded invalidation affects only the intended non-live key;
+- RSC hydration and client adoption use one key contract;
+- permission failures never render stale privileged data.

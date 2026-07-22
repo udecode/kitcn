@@ -53,7 +53,7 @@ Boundaries:
 - Source of truth: TODO.
 - Allowed edit scope: TODO.
 - Browser surface: TODO.
-- Tracker sync: TODO.
+- GitHub sync: TODO.
 - Non-goals: TODO.
 
 Output budget strategy:
@@ -103,7 +103,7 @@ Start Gates:
 | Output budget strategy recorded | pending | pending |
 | Kitcn skill sync decision | pending | pending |
 | Browser/render proof decision | pending | pending |
-| PR/tracker expectation decision | pending | pending |
+| PR/GitHub expectation decision | pending | pending |
 
 Work Checklist:
 - [ ] If a duration was requested, it is recorded as minimum active work unless
@@ -157,10 +157,11 @@ Completion Gates:
 | Browser/render surface changed | pending | Capture Browser Use proof or record explicit waiver/blocker | pending |
 | Package/API behavior changed | pending | Add changeset or record N/A | pending |
 | Agent rules or skills changed | pending | Run `bun install` and verify generated skill sync | pending |
-| Autoreview for non-trivial docs changes | pending | Load `.agents/skills/autoreview/SKILL.md` and run the right target, or record N/A for tiny/no-local-patch work | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
 | Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
+| Agent-native reviewer | pending | Run for agent workflow docs or record N/A | pending |
+| Autoreview for non-trivial docs changes | pending | Load `.agents/skills/autoreview/SKILL.md` and run the right target, or record N/A for tiny/no-local-patch work | pending |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:
@@ -169,7 +170,7 @@ Phase / pass table:
 | Intake and source read | in_progress | created plan | writing |
 | Writing | pending | | verification |
 | Verification | pending | | closeout |
-| PR / tracker sync | pending | | final response |
+| PR / GitHub sync | pending | | final response |
 | Closeout | pending | | final response |
 
 Findings:
@@ -194,7 +195,7 @@ Verification evidence:
 
 Final handoff contract:
 - PR line: pending
-- Issue / tracker line: pending
+- Issue line: pending
 - Confidence line: pending
 - Docs lane: pending
 - Source-backed claims: pending
@@ -207,7 +208,7 @@ Final handoff contract:
 
 Final handoff / sync:
 - PR: pending
-- Issue / tracker: pending
+- Issue: pending
 - Browser proof: pending
 - Caveats: pending
 

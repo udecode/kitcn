@@ -1,14 +1,23 @@
 #!/usr/bin/env node
 /** biome-ignore-all lint/suspicious/noConsole: CLI scripts write command output. */
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 const CHECKLIST_ITEM_PATTERN = /^-\s+\[([ xX])\]\s+/;
 const GATE_SECTION_NAMES = ['Start Gates', 'Completion Gates'];
 const HEADING_PATTERN = /^#{1,6}\s+\S/;
 const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
+const LINKED_PLAN_ENTRY_PATTERN =
+  /^(?:`?((?:\.\/)?docs\/plans\/[A-Za-z0-9._/-]+\.md)`?|\[[^\]\n]+\]\(`?((?:\.\/)?docs\/plans\/[A-Za-z0-9._/-]+\.md)`?\))(?:\s+-\s+.+|\.)?$/;
+const LINKED_PLAN_SECTION_NAMES = [
+  'Linked plans',
+  'Linked goal plans',
+  'Child plans',
+];
+const MAX_LINKED_PLAN_DEPTH = 20;
 const NEWLINE_PATTERN = /\r?\n/;
+const NO_LINKED_PLANS_PATTERN = /^(?:-\s*)?(?:none\.?|n\/a\b.*)$/i;
 const OPEN_STATUS_PATTERN = /^(pending|in[_ -]?progress|todo|open)$/i;
 const PHASE_HEADER_PATTERN = /^phase$/i;
 const PLACEHOLDER_ONLY_PATTERN = /^(?:-\s*)?(?:pending|none yet)\.?$/i;
@@ -29,22 +38,7 @@ if (args.planPath) {
   const root = findRepoRoot(process.cwd());
   const planPath = path.resolve(root, args.planPath);
   const relativePlanPath = path.relative(root, planPath);
-  const failures = [];
-
-  if (
-    relativePlanPath.startsWith('..') ||
-    path.isAbsolute(relativePlanPath) ||
-    !relativePlanPath.startsWith(`docs${path.sep}plans${path.sep}`)
-  ) {
-    failures.push('goal plan must live under docs/plans/');
-  }
-
-  if (existsSync(planPath)) {
-    const content = await readFile(planPath, 'utf8');
-    failures.push(...checkPlanContent(content));
-  } else {
-    failures.push(`goal plan not found: ${relativePlanPath}`);
-  }
+  const failures = await checkPlanFile(planPath, root, []);
 
   if (failures.length > 0) {
     console.error(`[autogoal] incomplete: ${relativePlanPath}`);
@@ -83,6 +77,70 @@ function parseArgs(argv) {
   }
 
   return parsed;
+}
+
+async function checkPlanFile(planPath, root, stack) {
+  const relativePlanPath = path.relative(root, planPath);
+  const failures = [];
+
+  if (
+    relativePlanPath.startsWith('..') ||
+    path.isAbsolute(relativePlanPath) ||
+    !relativePlanPath.startsWith(`docs${path.sep}plans${path.sep}`)
+  ) {
+    return ['goal plan must live under docs/plans/'];
+  }
+
+  if (stack.includes(relativePlanPath)) {
+    return [
+      `linked plan cycle: ${[...stack, relativePlanPath].join(' -> ')}`,
+    ];
+  }
+
+  if (stack.length >= MAX_LINKED_PLAN_DEPTH) {
+    return [
+      `linked plan depth exceeds ${MAX_LINKED_PLAN_DEPTH}: ${[
+        ...stack,
+        relativePlanPath,
+      ].join(' -> ')}`,
+    ];
+  }
+
+  if (!existsSync(planPath)) {
+    return [`goal plan not found: ${relativePlanPath}`];
+  }
+
+  try {
+    const plansRoot = await realpath(path.join(root, 'docs/plans'));
+    const resolvedPlanPath = await realpath(planPath);
+    const resolvedRelativePath = path.relative(plansRoot, resolvedPlanPath);
+
+    if (
+      !resolvedRelativePath ||
+      resolvedRelativePath.startsWith('..') ||
+      path.isAbsolute(resolvedRelativePath)
+    ) {
+      return [`goal plan resolves outside docs/plans/: ${relativePlanPath}`];
+    }
+  } catch (error) {
+    return [
+      `goal plan could not be resolved: ${relativePlanPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    ];
+  }
+
+  const content = await readFile(planPath, 'utf8');
+  failures.push(...checkPlanContent(content));
+
+  const linkedFailures = await checkLinkedPlans(content, root, [
+    ...stack,
+    relativePlanPath,
+  ]);
+
+  failures.push(...linkedFailures);
+
+  return failures;
 }
 
 function checkPlanContent(content) {
@@ -158,6 +216,105 @@ function checkPlanContent(content) {
   }
 
   return failures;
+}
+
+async function checkLinkedPlans(content, root, stack) {
+  const blocks = LINKED_PLAN_SECTION_NAMES.map((label) => ({
+    block: getSectionBlock(content, label),
+    label,
+    present: hasSection(content, label),
+  })).filter(({ present }) => present);
+
+  if (blocks.length === 0) {
+    return [];
+  }
+
+  const failures = [];
+  const linkedPlanPaths = new Set();
+
+  for (const { block, label } of blocks) {
+    const parsed = parseLinkedPlanBlock(block);
+
+    for (const invalidEntry of parsed.invalidEntries) {
+      failures.push(
+        `${label} has invalid linked-plan entry: ${invalidEntry}`
+      );
+    }
+
+    if (parsed.paths.length === 0 && !parsed.hasNoLinkedPlans) {
+      failures.push(
+        `${label} must list docs/plans/*.md children, or say None/N/A with reason`
+      );
+    }
+
+    if (parsed.paths.length > 0 && parsed.hasNoLinkedPlans) {
+      failures.push(`${label} cannot mix child paths with None/N/A`);
+    }
+
+    for (const linkedPlanPath of parsed.paths) {
+      linkedPlanPaths.add(linkedPlanPath);
+    }
+  }
+
+  for (const linkedPlanPath of linkedPlanPaths) {
+    const childPath = path.resolve(root, linkedPlanPath);
+    const childRelativePath = path.relative(root, childPath);
+    const childFailures = await checkPlanFile(childPath, root, stack);
+
+    for (const failure of childFailures) {
+      failures.push(`${childRelativePath}: ${failure}`);
+    }
+  }
+
+  return failures;
+}
+
+function hasSection(content, label) {
+  return content
+    .split(NEWLINE_PATTERN)
+    .some((line) => line.trim() === `${label}:`);
+}
+
+function parseLinkedPlanBlock(block) {
+  const paths = new Set();
+  const invalidEntries = [];
+  let hasNoLinkedPlans = false;
+
+  for (const rawLine of block.split(NEWLINE_PATTERN)) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      continue;
+    }
+
+    if (!line.startsWith('-')) {
+      invalidEntries.push(line);
+      continue;
+    }
+
+    const entry = line.replace(/^-\s*/, '').trim();
+
+    if (NO_LINKED_PLANS_PATTERN.test(entry)) {
+      hasNoLinkedPlans = true;
+      continue;
+    }
+
+    const match = LINKED_PLAN_ENTRY_PATTERN.exec(entry);
+    const linkedPlanPath = match?.[1] ?? match?.[2];
+
+    if (!linkedPlanPath) {
+      invalidEntries.push(line);
+      continue;
+    }
+
+    paths.add(linkedPlanPath.replace(/^\.\//, ''));
+  }
+
+  return {
+    hasNoLinkedPlans,
+    invalidEntries,
+    paths: [...paths],
+  };
 }
 
 function checkGateSections(content) {
@@ -394,6 +551,8 @@ function printHelp() {
 Validates the active goal plan before update_goal(status: complete). The check
 is mechanical: it proves the checklist, phase table, verification evidence,
 reboot status, risks, and any Start Gates / Completion Gates tables are
-recorded. It does not replace the goal's named tests, browser proof, source
-audit, or artifact verification.`);
+recorded. If the plan has a Linked plans / Linked goal plans / Child plans
+section with docs/plans/*.md links, those child plans are checked recursively.
+It does not replace the goal's named tests, browser proof, source audit, or
+artifact verification.`);
 }

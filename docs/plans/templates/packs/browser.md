@@ -10,16 +10,22 @@ Start Gates:
 | Browser route / app surface identified | pending | pending |
 | Browser tool decision recorded | pending | pending |
 | Console/network caveat policy recorded | pending | pending |
+| UI state/accessibility matrix recorded | pending | pending |
 
 Work Checklist:
 - [ ] Browser pack: route, interaction path, and expected visible outcome are recorded before proof.
 - [ ] Browser pack: browser proof uses the repo-approved browser tool or records a blocker/waiver.
 - [ ] Browser pack: console and network errors are checked or explicitly out of scope.
 - [ ] Browser pack: screenshot, trace, or exact verification caveat is ready for final handoff.
+- [ ] Browser pack: loading, empty, error, permission, mutation, keyboard/focus,
+      reduced motion, and responsive cases are covered or N/A with reason.
+- [ ] Browser pack: Browser is used first for ordinary app QA; Chrome/Computer
+      own native browser/OS behavior when applicable.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
 | Browser interaction proof | pending | Exercise the target route/interaction with the approved browser tool or record blocker | pending |
 | Browser console/network check | pending | Record console/network state or why it is not applicable | pending |
+| Browser state/accessibility proof | pending | Exercise applicable honest states, keyboard/focus, motion, and sizes | pending |
 | Browser final proof artifact | pending | Record screenshot/trace/route proof or exact caveat | pending |

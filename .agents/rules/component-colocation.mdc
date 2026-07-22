@@ -1,0 +1,139 @@
+---
+description: Use after migrating/refactoring features (especially tables/data grids) when reviewing component structure - enforces merging over-split components, colocating files where used, removing unused code, following vertical slice architecture. Prevents premature abstraction and over-engineering.
+---
+
+# Component Colocation & Refactoring
+
+## Overview
+
+React Compiler removes many performance-only reasons to split components where
+it is enabled, including the canonical `example` app. Merge related code,
+colocate files where they are used, and delete unused files. Split only for
+genuine reuse, package boundaries, independent testing, or hook decoupling.
+
+## Kitcn Boundary
+
+- Apply this to `example/**`, `www/**`, and package UI modules after checking
+  whether the affected app actually enables React Compiler.
+- Do not merge across public package exports, runtime entrypoints, generated
+  boundaries, CLI template ownership, or React/Solid framework boundaries.
+- Scaffolded fixture output is generated. Improve its source template, then
+  regenerate fixtures; never colocate by editing committed fixture output first.
+
+## When to Use
+
+- After implementing a new feature (especially tables/data grids)
+- When reviewing component structure during refactoring
+- When you notice files spread across multiple folders that are only used in one place
+- When cleaning up after removing a context/state management migration
+
+## Core Principles
+
+### 1. Don't Over-Split Components
+
+**React Compiler handles memoization automatically.** You don't need to split components into smaller pieces for performance.
+
+```tsx
+// ❌ Over-split: separate files for each button group
+FormDraftActionButtons.tsx;
+FormEsignPendingActionButtons.tsx;
+FormSignedActionButtons.tsx;
+// ↑ Each file has similar hooks, similar logic, different render
+
+// ✅ Single file with all logic colocated
+ReportHistoryActionButtons.tsx;
+// ↑ One component, switch/conditional for different states
+```
+
+### 2. Large Files Are Fine
+
+Don't fear 300-500 line components. Splitting creates:
+
+- More files to navigate
+- Props drilling between components
+- Harder-to-follow data flow
+- Redundant hook calls
+
+### 3. Colocate Where Used
+
+**Vertical slice architecture:** Keep feature code together.
+
+```
+// ❌ Scattered across shared folders
+src/components/shared/ActionButtons.tsx
+src/components/shared/StatusBadge.tsx
+src/hooks/useReportActions.ts
+
+// ✅ Colocated in feature folder
+src/app/(protected)/report-history/
+  _components/
+    report-history-action-buttons.tsx
+    report-history-columns.tsx
+    report-history-table.tsx
+```
+
+### 4. Ask Before Splitting
+
+Only split components when:
+
+1. **Hook decoupling**: Component needs different hook contexts
+2. **Genuine reuse**: Used in 2+ unrelated features
+3. **Explicit request**: User asks for separation
+
+**Never split for:**
+
+- "Readability" (large files are readable)
+- "Performance" (React Compiler handles it)
+- "Single responsibility" (SRP doesn't mean tiny files)
+
+## Post-Feature Checklist
+
+After implementing a feature, review:
+
+- [ ] **Unused files**: Delete components/hooks no longer referenced
+- [ ] **Over-split components**: Merge files that are only used together
+- [ ] **Scattered locations**: Move files to feature's `_components` folder if only used there
+- [ ] **Prop drilling**: If passing 5+ props between split components, merge them
+- [ ] **Duplicate hooks**: If multiple components call same hooks, merge components
+
+## Common Mistakes
+
+| Pattern                                   | Problem                             | Fix                                           |
+| ----------------------------------------- | ----------------------------------- | --------------------------------------------- |
+| One component per file for "each variant" | 7 files instead of 1                | Merge into single component with conditionals |
+| Shared folder for feature-specific code   | Hard to find, pollutes shared space | Move to feature's `_components`               |
+| Keeping deleted context's components      | Dead code, confusion                | Delete immediately                            |
+| Splitting for "testability"               | Tests can test large components     | Keep together, test the whole thing           |
+
+## Red Flags - Merge Instead
+
+- Creating new file for component used in only one place
+- Passing props through 2+ levels just to reach a split component
+- Multiple small components with identical hook calls
+- "Shared" folder containing feature-specific code
+- Components named `*Part1`, `*Section`, `*Inner`
+
+## Example: Action Buttons Refactor
+
+**Before (over-split):**
+
+```
+report-history-table/
+  ActionButtons.tsx           # Router wrapper
+  FormDraftActionButtons.tsx  # Draft state buttons
+  FormEsignPendingActionButtons.tsx
+  FormISOActionButtons.tsx
+  FormMarkedCompleteActionButtons.tsx
+  FormRefusedActionButtons.tsx
+  FormSignedESignedActionButtons.tsx
+  RefusedButton.tsx          # Single button extracted
+```
+
+**After (colocated):**
+
+```
+_components/
+  report-history-action-buttons.tsx  # All logic in one file
+```
+
+Single 400-line file with switch statement for each form status. All hooks called once, no prop drilling, easy to follow.

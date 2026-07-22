@@ -55,5 +55,5 @@ Use this when a feature should die, not linger.
 
 ## Bias
 
-If the choice is between deleting more code and leaving a zombie seam, delete
-more code.
+If the choice is between deleting more code and leaving zombie compatibility,
+delete more code.

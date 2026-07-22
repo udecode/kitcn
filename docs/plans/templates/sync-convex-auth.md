@@ -59,7 +59,7 @@ Boundaries:
 - Delegated implementation scope: owned by the delegated `task` plan and PR.
 - Browser surface: N/A unless upstream change or local KitCN impact requires
   real browser proof.
-- Tracker sync: N/A unless the sync run starts from a tracker item.
+- GitHub sync: N/A unless the sync run starts from an issue or PR.
 - Non-goals: force-pushing a diverged fork, importing optional test/example
   infrastructure without approval, and coding inside the sync audit plan.
 

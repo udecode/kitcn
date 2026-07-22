@@ -1,0 +1,87 @@
+---
+description: Autonomously close the current kitcn work tree through source sync, proof, review, checks, GitHub delivery, and final audit without expanding product scope.
+argument-hint: '[current tree | plan path | PR]'
+---
+
+# Autoclosure
+
+Autoclosure finishes already-started work. It does not invent the next feature.
+
+## Use When
+
+- implementation exists but verification, docs, generated output, review, or
+  GitHub delivery is incomplete;
+- an active goal plan has only closeout gates remaining;
+- the user asks to finish, close, ship, or clean the current tree.
+
+Use `auto full` when substantial implementation remains. Use `task` for a named
+ordinary task and `major-task` for unresolved architecture.
+
+## Goal Contract
+
+Create or resume a goal plan from the `autoclosure` template with the
+`agent-native` pack. Inventory the current intended delta from the active plan,
+source owners, and actual files. Do not absorb unrelated product scope.
+
+## Closure Matrix
+
+| Lane | Applies | Owner/proof | Status |
+| --- | --- | --- | --- |
+| source behavior | yes/no | focused tests/runtime | pending |
+| package API/build | yes/no | exports/build/types | pending |
+| generated output | yes/no | source + regenerate + diff | pending |
+| fixtures/scenarios | yes/no | sync/check/runtime proof | pending |
+| docs/package skill | yes/no | paired owner audit | pending |
+| changeset | yes/no | package delta coverage | pending |
+| agent workflow | yes/no | source/mirror/lock/helper proof | pending |
+| review/deslop | yes/no | accepted findings closed | pending |
+| repository check | yes | `bun check` | pending |
+| GitHub delivery | yes/no | commit/push/PR/checks | pending |
+
+Mark N/A only with a concrete reason.
+
+## Closure Loop
+
+1. Reconstruct intended behavior and exclusions from the active source.
+2. Run the smallest missing proof first; classify failures before editing.
+3. Repair accepted defects within the existing contract.
+4. When package behavior changed, ensure changeset, package build, focused tests,
+   docs, and published kitcn skill all match.
+5. When scaffold/template behavior changed, edit the owner, regenerate fixtures
+   or examples, and run the required checks.
+6. When agent files changed, reconcile `skills-lock.json` through the CLI, run
+   `bun install`, and prove `.agents`/`.claude`/root generated mirrors.
+7. Run `deslop` once behavior works.
+8. Run `agent-native-reviewer`, resolve accepted findings, then `autoreview`.
+9. Run `bun lint:fix` and `bun check`; repeat only with a different repair when
+   the prior move failed.
+10. Complete the GitHub commit/push/PR path when authorized by the active skill.
+11. Audit the goal plan and mark it complete only when every applicable row has
+    evidence.
+
+## Clean Definition
+
+Clean means:
+
+- requested behavior exists with regression proof;
+- source/generated ownership is correct;
+- public exports, docs, package skill, examples, fixtures, and scenarios agree;
+- no stale alias, placeholder, skipped required gate, or accepted review finding
+  remains;
+- changeset coverage matches package changes;
+- `bun check` passes;
+- GitHub delivery and PR body accurately describe behavior, proof, confidence,
+  and risk;
+- the plan records all residual blockers or explicit waivers.
+
+Unrelated files are not defects. Do not stop for them or silently omit them from
+an authorized whole-checkout commit.
+
+## Stop Conditions
+
+Stop only for missing authority, an external action the user must perform, an
+irreversible choice outside the source contract, or a reproducible environment
+blocker after different repair attempts. Record exact evidence and next owner.
+
+Do not call closeout complete because code compiles, a PR exists, or a reviewer
+returned clean. Those are receipts inside the closure matrix.

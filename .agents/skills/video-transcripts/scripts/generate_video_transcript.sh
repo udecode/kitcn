@@ -11,6 +11,7 @@ Examples:
   generate_video_transcript.sh "/tmp/bug.mov" --title "Preview link leaves workflow"
   generate_video_transcript.sh "https://uploads.linear.app/.../recording.mov" --title "PDF preview hyperlink exits workflow"
   generate_video_transcript.sh "https://github.com/user-attachments/assets/..." --title "Slash menu loses selection"
+  generate_video_transcript.sh "https://app.screencastify.com/watch/..." --title "Bulk send expands filtered recipients"
 EOF
 }
 
@@ -133,18 +134,18 @@ is_linear_upload_url() {
 is_github_attachment_url() {
   local host
   host="$(url_host "$1")"
-  local path
-  path="$(url_path "$1")"
+  local url_path_value
+  url_path_value="$(url_path "$1")"
 
   case "$host" in
     github.com)
-      [[ "$path" == /user-attachments/* ]]
+      [[ "$url_path_value" == /user-attachments/* ]]
       ;;
     private-user-images.githubusercontent.com | private-attachments.githubusercontent.com)
       return 0
       ;;
     media.githubusercontent.com)
-      [[ "$path" == /media/attachments/* ]]
+      [[ "$url_path_value" == /media/attachments/* ]]
       ;;
     *)
       return 1
@@ -260,6 +261,219 @@ download_to_path_with_header_config() {
   return 1
 }
 
+append_query() {
+  local url="$1"
+  local query="$2"
+
+  if [[ -z "$query" ]]; then
+    printf '%s\n' "$url"
+  elif [[ "$url" == *"?"* ]]; then
+    printf '%s&%s\n' "$url" "$query"
+  else
+    printf '%s?%s\n' "$url" "$query"
+  fi
+}
+
+screencastify_recording_id() {
+  local source="$1"
+  local host
+  host="$(url_host "$source")"
+  if [[ "$host" != "screencastify.com" && "$host" != *.screencastify.com ]]; then
+    return 1
+  fi
+
+  local url_path_value recording_id
+  url_path_value="$(url_path "$source")"
+
+  case "$url_path_value" in
+    /watch/*)
+      recording_id="${url_path_value#/watch/}"
+      ;;
+    /v/*)
+      recording_id="${url_path_value#/v/}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  recording_id="${recording_id%%/*}"
+  if [[ -n "$recording_id" ]]; then
+    printf '%s\n' "$recording_id"
+    return 0
+  fi
+
+  return 1
+}
+
+rewrite_screencastify_child_playlist() {
+  local input_file="$1"
+  local output_file="$2"
+  local prefix="$3"
+  local query="$4"
+
+  python3 - "$input_file" "$output_file" "$prefix" "$query" <<'PY'
+import re
+import sys
+
+input_file, output_file, prefix, query = sys.argv[1:]
+prefix = prefix.rstrip("/") + "/"
+
+def signed(uri: str) -> str:
+    if uri.startswith(("data:", "file:")):
+        return uri
+    if uri.startswith(("http://", "https://")):
+        base = uri
+    else:
+        base = prefix + uri.lstrip("/")
+    if not query:
+        return base
+    separator = "&" if "?" in base else "?"
+    return f"{base}{separator}{query}"
+
+with open(input_file, encoding="utf-8") as source:
+    lines = source.read().splitlines()
+
+rewritten = []
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("#EXT-X-MAP:"):
+        rewritten.append(
+            re.sub(r'URI="([^"]+)"', lambda match: f'URI="{signed(match.group(1))}"', line)
+        )
+    elif stripped.startswith("#") or not stripped:
+        rewritten.append(line)
+    else:
+        rewritten.append(signed(stripped))
+
+with open(output_file, "w", encoding="utf-8") as dest:
+    dest.write("\n".join(rewritten) + "\n")
+PY
+}
+
+rewrite_screencastify_master_playlist() {
+  local input_file="$1"
+  local output_file="$2"
+  local child_list_file="$3"
+
+  python3 - "$input_file" "$output_file" "$child_list_file" <<'PY'
+import re
+import sys
+
+input_file, output_file, child_list_file = sys.argv[1:]
+uri_pattern = re.compile(r'URI="([^"]+)"')
+
+with open(input_file, encoding="utf-8") as source:
+    lines = source.read().splitlines()
+
+children = []
+child_names = {}
+rewritten = []
+
+def local_child(uri: str) -> str:
+    if uri in child_names:
+        return child_names[uri]
+    name = f"child-{len(children) + 1:03d}.m3u8"
+    child_names[uri] = name
+    children.append((name, uri))
+    return name
+
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("#EXT-X-MEDIA:"):
+        rewritten.append(
+            uri_pattern.sub(lambda match: f'URI="{local_child(match.group(1))}"', line)
+        )
+    elif stripped.startswith("#") or not stripped:
+        rewritten.append(line)
+    elif stripped.endswith(".m3u8") or ".m3u8?" in stripped:
+        rewritten.append(local_child(stripped))
+    else:
+        rewritten.append(line)
+
+with open(output_file, "w", encoding="utf-8") as dest:
+    dest.write("\n".join(rewritten) + "\n")
+
+with open(child_list_file, "w", encoding="utf-8") as dest:
+    for name, child in children:
+        dest.write(f"{name}\t{child}\n")
+PY
+}
+
+download_screencastify_watch() {
+  local source="$1"
+  local dest="$2"
+  local recording_id
+  recording_id="$(screencastify_recording_id "$source")"
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "Screencastify downloads require jq." >&2
+    return 1
+  fi
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "Screencastify downloads require ffmpeg to remux the signed HLS stream." >&2
+    return 1
+  fi
+
+  local metadata_file="$WORK_DIR/screencastify.json"
+  download_to_path "https://umbrella.svc.screencastify.com/api/umbrellaService/watch/$recording_id" "$metadata_file"
+
+  local hls_url auth_query prefix
+  hls_url="$(jq -r '.manifest.hlsUrl // empty' "$metadata_file")"
+  auth_query="$(jq -r '.manifest.auth.query // empty' "$metadata_file")"
+  prefix="$(jq -r '.manifest.auth.prefix // empty' "$metadata_file")"
+
+  if [[ -z "$hls_url" ]]; then
+    echo "Screencastify watch metadata did not include an HLS manifest URL." >&2
+    return 1
+  fi
+
+  if [[ -z "$prefix" ]]; then
+    prefix="${hls_url%/*}/"
+  fi
+
+  local hls_dir="$WORK_DIR/screencastify-hls"
+  mkdir -p "$hls_dir"
+
+  local remote_master="$hls_dir/master.remote.m3u8"
+  local local_master="$hls_dir/master.m3u8"
+  local child_list="$hls_dir/children.txt"
+  download_to_path "$(append_query "$hls_url" "$auth_query")" "$remote_master"
+  rewrite_screencastify_master_playlist "$remote_master" "$local_master" "$child_list"
+
+  while IFS=$'\t' read -r child_name child_uri; do
+    [[ -z "$child_uri" ]] && continue
+
+    local child_remote child_local child_source_url child_url child_prefix
+    child_remote="$hls_dir/$child_name.remote"
+    child_local="$hls_dir/$child_name"
+
+    if [[ "$child_uri" =~ ^https?:// ]]; then
+      child_source_url="$child_uri"
+    else
+      child_source_url="$(resolve_redirect_url "$prefix" "$child_uri")"
+    fi
+    child_url="$(append_query "$child_source_url" "$auth_query")"
+    child_prefix="$(resolve_redirect_url "$child_source_url" ".")"
+
+    download_to_path "$child_url" "$child_remote"
+    rewrite_screencastify_child_playlist "$child_remote" "$child_local" "$child_prefix" "$auth_query"
+  done < "$child_list"
+
+  ffmpeg -hide_banner -loglevel error -y \
+    -protocol_whitelist file,http,https,tcp,tls,crypto \
+    -allowed_extensions ALL \
+    -i "$local_master" \
+    -map 0:v:0 -map 0:a:0? \
+    -c copy "$dest"
+
+  if [[ -n "$DEBUG_DIR" ]]; then
+    cp "$metadata_file" "$DEBUG_DIR/screencastify.json"
+    cp -R "$hls_dir" "$DEBUG_DIR/screencastify-hls"
+  fi
+}
+
 download_input_if_needed() {
   local source="$1"
   if [[ "$source" =~ ^https?:// ]]; then
@@ -269,7 +483,10 @@ download_input_if_needed() {
     [[ "$ext" == "$source" ]] && ext="bin"
     local dest="$WORK_DIR/input.$ext"
 
-    if is_linear_upload_url "$source"; then
+    if screencastify_recording_id "$source" >/dev/null; then
+      dest="$WORK_DIR/input.mp4"
+      download_screencastify_watch "$source" "$dest"
+    elif is_linear_upload_url "$source"; then
       local cookie_header
       cookie_header="$(linear_cookie_header)"
       if [[ -n "$cookie_header" ]]; then

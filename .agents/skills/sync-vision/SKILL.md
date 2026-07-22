@@ -1,0 +1,113 @@
+---
+description: Incrementally audit kitcn doctrine drift since the recorded baseline, classify it, update VISION.md and local planning owners, then advance the baseline only after proof.
+argument-hint: '[status|preview|sync|advance]'
+name: sync-vision
+metadata:
+  skiller:
+    source: .agents/rules/sync-vision.mdc
+---
+
+# Sync Vision
+
+`sync-vision` turns repository changes into an explicit doctrine-drift audit. It
+does not rewrite vision from commit messages.
+
+## Autogoal Dependency
+
+Every `sync` or `advance` run is durable work. Create or resume a goal from the
+`sync-vision` template with the `agent-native` pack before editing.
+
+`status` and `preview` are read-only and may run without a goal.
+
+## State
+
+The committed baseline lives at:
+
+```text
+docs/sync/vision/status.json
+```
+
+It records the last reviewed commit, review time, optional note, and the files
+whose conclusions were advanced. The baseline means “reviewed for doctrine,”
+not “all changes were copied into VISION.md.”
+
+## Commands
+
+```bash
+node .agents/rules/sync-vision/scripts/collect-vision-diff.mjs --status
+node .agents/rules/sync-vision/scripts/collect-vision-diff.mjs --preview
+node .agents/rules/sync-vision/scripts/collect-vision-diff.mjs --since <sha>
+```
+
+- `status`: show baseline and candidate count.
+- `preview`: print the candidate file/keyword evidence since baseline.
+- `sync`: inspect candidates, update owners, validate, and advance state.
+- `advance`: advance without doctrine edits only after recording why every
+  candidate is already represented, implementation-only, or intentionally
+  rejected.
+
+## Input Scope
+
+The collector searches source-owned doctrine and planning surfaces:
+
+- `VISION.md`, `.agents/AGENTS.md`, and `.agents/rules/**`;
+- `docs/README.md`, plans, PRDs, milestones, ADRs, analysis, brainstorms,
+  research, solutions, and sync records;
+- root Markdown/MDX/MDC sources.
+
+Generated skill mirrors, build output, fixtures, temp apps, dependencies, and
+the current generated sync report are excluded. Source changes may still require
+inspection even when their text does not contain a keyword.
+
+## Classification
+
+Classify every candidate:
+
+| Class | Owner/action |
+| --- | --- |
+| durable doctrine | update `VISION.md` |
+| planning map | update PRD/milestone/docs map |
+| architecture decision | update ADR/analysis and link from vision if durable |
+| repository workflow | update `.agents` source and regenerate |
+| current implementation detail | keep in source/docs; no vision edit |
+| superseded/rejected | record reason; no vision edit |
+| contradiction | stop and resolve before advancing |
+
+Relevant kitcn topics include public API, cRPC/ORM, Convex import graphs,
+plugins, auth, CLI/DX, scaffolds, fixtures, docs, compatibility, release, proof,
+and agent workflow.
+
+## Sync Workflow
+
+1. Read baseline status and preview candidates.
+2. Read `VISION.md`, `docs/README.md`, and each candidate's actual owner.
+3. Build a classification table with evidence and proposed owner.
+4. Resolve contradictions and duplicate doctrine.
+5. Update the smallest canonical owners. Keep implementation detail out of
+   `VISION.md`.
+6. Regenerate agent mirrors when `.agents` sources changed.
+7. Run helper syntax/status checks, exact-term audits, and relevant repository
+   checks.
+8. Run `agent-native-reviewer`, then `autoreview`.
+9. Record the reviewed head and note in `status.json` only after all applicable
+   gates pass.
+10. Rerun `--status`; it must show the expected baseline and no unexplained
+    candidate drift.
+
+## Baseline Advancement
+
+Never advance merely to silence the collector. The goal plan must contain:
+
+- old and new commit ids;
+- candidate inventory and classification;
+- changed owners or no-change reasons;
+- contradiction resolution;
+- validation and review receipts.
+
+If the working tree contains relevant uncommitted doctrine changes, include
+them in the audit and do not pretend a commit-only baseline represents them.
+
+## Final Handoff
+
+Report updated doctrine owners, intentionally unchanged candidates, exact
+baseline, validation, and any open decision.
