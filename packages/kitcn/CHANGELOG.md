@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.15.16
+
+### Patch Changes
+
+- [#301](https://github.com/udecode/kitcn/pull/301) [`3248105`](https://github.com/udecode/kitcn/commit/32481058f1043a4f9a0a897ee966d9048dc79739) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Features
+
+  - Add provider-owned Convex authentication recovery after transient token failures.
+
 ## 0.15.15
 
 ### Patch Changes
