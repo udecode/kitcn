@@ -115,16 +115,16 @@ Blocked condition:
 Major state:
 - task_type: major
 - task_complexity: major
-- current_phase: implementation
-- current_phase_status: in_progress
-- next_phase: verification
+- current_phase: closeout
+- current_phase_status: completed
+- next_phase: final response
 - goal_status: active
 
 Current verdict:
 - verdict: valid problem, rejected implementation shape
 - confidence: high: characterization plus Better Auth red-green proof reproduces
   the terminal loss and provider-owned recovery
-- next owner: verification and autoreview
+- next owner: PR #301 maintainer review and merge
 - reason: terminal recovery is real and kitcn must own Better Auth compatibility,
   but capturing/monkey-patching `client.setAuth` is rejected.
 
@@ -233,13 +233,13 @@ Completion Gates:
 | External-source audit | yes | Cite official/local clone/external sources when used, or record N/A | GitHub issue #299 and installed Convex 1.38 source were inspected; no additional web claim required. |
 | Implementation gates | yes | If code changed, close primary-template and touched-surface gates; otherwise N/A | Package/API and docs packs closed with source, tests, build, docs, changeset, and review. |
 | Service/API/auth/data-flow map | yes | Prove every architecture surface below or record N/A | Every row below is implemented, proved, or explicitly N/A. |
-| Final handoff contract | pending | Record recommendation, evidence, caveats, residual risk, and next owner | Awaiting PR and issue read-back. |
+| Final handoff contract | yes | Record recommendation, evidence, caveats, residual risk, and next owner | Contract below names recommendation, proof, caveat, PR/issue links, and maintainer owner. |
 | Final lint | yes | Run `bun lint:fix` or scoped equivalent when files changed | `bun lint:fix` and final `bun lint` passed. |
 | Output budget discipline | yes | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | Searches were scoped/capped; noisy full gate was rerun into a temporary log with only its tail emitted. |
 | Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no duration requested. |
 | Agent-native reviewer | no | Run when agent workflow changes or record N/A | N/A: no agent workflow, skill, hook, command, or prompt changed. |
 | Autoreview | yes | Run final review and close every accepted actionable finding | Final post-lint helper run clean: no accepted/actionable findings, patch correct at 0.91. |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/299-convex-auth-recovery.md` | Final invocation required after GitHub closeout is recorded. |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/299-convex-auth-recovery.md` | Final invocation follows this GitHub closeout record before goal completion. |
 | Public API / package boundary proof | yes | Source-audit public API, exports, and package boundary impact | `kitcn/react` export test plus generated `dist/react/index.d.ts` include hook, options, status, and error types. |
 | Convex bundle/import proof | no | Audit affected function-entry static graphs or record N/A | N/A: only client React/auth-client entries changed; no Convex function import graph touched. |
 | CLI/scaffold/generated proof | no | Prove command contract and regenerate owned output or record N/A | N/A: no CLI, scaffold, fixture, or generated source changed. |
@@ -263,7 +263,7 @@ Phase / pass table:
 | Review / pressure pass | completed | autoreview accepted two P2 races; both reproduced and fixed; final pass clean | verification |
 | Implementation or plan artifact | completed | public hook/error contract, generic/Better Auth owner, tests, docs mirror, changeset added | verification |
 | Verification | completed | focused tests, typecheck, package/docs build, lint, Intent checks, autoreview, and `bun check` exit 0 | closeout |
-| Closeout | in_progress | technical gates complete | commit, push, PR, issue sync, final plan check |
+| Closeout | completed | commit `de71b7a9`, push, PR #301/body read-back, issue comment/read-back complete | final plan check and response |
 
 Findings:
 - Fact: issue #299 has no comments and requests recovery after Convex reaches
@@ -375,28 +375,40 @@ Service / API / auth / data-flow map:
 | proof/benchmark/rollback | Bun React harnesses and package gates | regression tests plus normal code revert; no migration | focused tests passed; final gates pending | in_progress |
 
 Final handoff contract:
-- Recommendation: pending
-- Confidence: pending
-- Evidence: pending
-- Tests / commands: pending
-- Browser proof: pending
-- PR / GitHub issue: pending
-- Caveats: pending
-- Next owner: pending
+- Recommendation: merge PR #301; kitcn owns recovery at its provider boundary,
+  not through a Convex client patch.
+- Confidence: 95%: exact Better Auth and generic lifecycle proof, two race
+  regressions, full repo gate, and clean structured review.
+- Evidence: provider-owned versioned binding, typed public hook/errors, current
+  docs/skill mirror, patch changeset, 44 focused tests / 140 assertions.
+- Tests / commands: focused Bun tests; `bun lint:fix`; `bun typecheck`;
+  `bun --cwd packages/kitcn build`; `bun --cwd www build`; Intent validate and
+  stale checks; final `bun check` with explicit `EXIT_CODE=0`; final autoreview
+  clean at 0.91 confidence.
+- Browser proof: N/A: no rendered UI change; React/provider lifecycle is the
+  owning proof boundary.
+- PR / GitHub issue: https://github.com/udecode/kitcn/pull/301 open with body
+  verified; https://github.com/udecode/kitcn/issues/299 remains open and has the
+  QA-focused #301 comment verified by read-back.
+- Caveats: recovery is explicit by design; apps own trigger policy and must not
+  invoke it for intentional sign-out. Convex private callbacks remain untouched.
+- Next owner: maintainer reviews/merges #301, then QA forces one terminal token
+  refresh failure and confirms queries resume after backend confirmation.
 
 Timeline:
 - 2026-07-22T18:45:17.493Z Major-task goal plan created.
 - 2026-07-22 Provider-owned callback rebind selected after source and option audit.
 - 2026-07-22 TDD lifecycle, Better Auth, public export, docs mirror, and changeset implemented; focused tests and root typecheck green.
+- 2026-07-22 Full repo gate exited 0; PR #301 opened/read back; issue #299 QA comment posted/read back.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Implementation complete enough for final package/repo proof and review |
-| Where am I going? | Focused rerun, package build, docs build, lint/check, autoreview, PR |
+| Where am I? | GitHub delivery complete; final goal-plan audit |
+| Where am I going? | Mark goal complete and hand PR #301 to maintainers |
 | What is the goal? | Ship provider-owned Convex auth recovery for #299 with full package and GitHub proof. |
 | What have I learned? | Failure is real; provider callback identity drives the stock lifecycle, and Better Auth can recover on the next token exchange without patching the client. |
-| What have I done? | Implemented and documented the additive recovery hook, typed failures, shared provider owner, TDD cases, public export proof, and changeset. |
+| What have I done? | Implemented, documented, reviewed, fully verified, committed, pushed, opened PR #301, and synchronized issue #299. |
 
 Open risks:
 - Current repo pins Convex 1.38 while issue references the newer
@@ -405,4 +417,5 @@ Open risks:
   callback.
 - The generic auth wrapper receives an arbitrary `useAuth` hook; the selected
   recovery context must not violate React hook ordering or freeze closures.
-  Focused latest-fetcher and typecheck proof are green; final autoreview remains.
+  Latest-fetcher, binding-correlation, typecheck, and final autoreview proof are
+  green; residual risk is limited to real-app trigger policy and maintainer QA.
