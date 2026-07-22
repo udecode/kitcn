@@ -112,15 +112,16 @@ Major state:
 - task_type: major
 - task_complexity: major
 - current_phase: closeout
-- current_phase_status: in_progress
-- next_phase: GitHub delivery
-- goal_status: active
+- current_phase_status: complete
+- next_phase: maintainer review
+- goal_status: complete
 
 Current verdict:
-- verdict: approved topology implemented and verified; publish the PR
+- verdict: approved topology implemented, verified, and published in PR #300
 - confidence: high; source, generated, review, audit, and repository gates pass
-- next owner: GitHub delivery, then maintainer review
-- reason: only branch, commit, push, PR read-back, and final goal closure remain
+- next owner: maintainer review
+- reason: implementation, exact-commit check, push, PR read-back, and final goal
+  closure all pass
 
 Completion rule:
 - Do not call `update_goal(status: complete)` while any required checklist item
@@ -193,24 +194,25 @@ Work Checklist:
 - [x] Add VISION/docs ownership and every approved plan template/pack; add no issue template or slicing skill.
 - [x] Remove destination-owned Linear routing while retaining GitHub issue/PR/review behavior.
 - [x] Regenerate and prove root, `.agents`, and `.claude` mirrors from source.
-- [ ] Close helper, template, exact-term, lint, repo-check, review, goal-check, and GitHub PR gates. All pre-PR gates pass; GitHub delivery and goal-check remain.
+- [x] Close helper, template, exact-term, lint, repo-check, review, goal-check,
+      and GitHub PR gates. PR #300 is open and the final validators pass.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
 | Named verification threshold | complete | Run the repo audit, benchmark, review, prototype, or artifact check named in this plan | 12/12 local and 14/14 installed targets mirrored; exact audit and `bun check` pass |
 | Current-state source audit | complete | Map current owner, boundaries, constraints, and affected surfaces | Destination, donor, package-skill, lock, and generated ownership mapped before edits |
-| Decision criteria closure | complete | Mark each criterion satisfied, narrowed, rejected, or blocked with evidence | All pre-PR criteria pass; GitHub delivery is the remaining mechanical gate |
+| Decision criteria closure | complete | Mark each criterion satisfied, narrowed, rejected, or blocked with evidence | All source, generated, review, repository, commit, push, and PR criteria pass |
 | Options / tradeoffs / rejection record | complete | Record viable options, chosen recommendation, and why alternatives lose | Maximum relevant copy chosen; incompatible tracker/product/framework doctrine rejected |
 | Review / pressure pass | complete | Run selected reviewer/lens or record N/A with reason | Agent-native capability audit plus full four-pass autoreview completed |
 | Review findings closure | complete | Fix or explicitly reject accepted/actionable findings and record closure proof | Every accepted finding repaired and regression-tested; three rejections recorded below |
 | External-source audit | complete | Cite official/local clone/external sources when used, or record N/A | N/A: sibling repository and installed local sources were authoritative |
 | Implementation gates | complete | If code changed, close primary-template and touched-surface gates; otherwise N/A | Agent-native pack, source/generated sync, helper smoke, lint, and full check pass |
-| Final handoff contract | pending | Record recommendation, evidence, caveats, residual risk, and next owner | Pre-PR contract recorded below; add PR URL/read-back after creation |
+| Final handoff contract | complete | Record recommendation, evidence, caveats, residual risk, and next owner | Branch `codex/sync-repo-skills`, commit `66164539`, and open PR #300 read back from GitHub |
 | Final lint | complete | Run `bun lint:fix` or scoped equivalent when files changed | `bun lint:fix`: 870 files checked, no fixes required |
 | Output budget discipline | complete | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | One Skills CLI clone and one full check exceeded preview caps; later audits were scoped and the full gate completed normally |
 | Timed checkpoint | complete | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no duration requested |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-07-22-sync-repo-skills.md` | pending |
+| Goal plan complete | complete | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-07-22-sync-repo-skills.md` | Final placeholder and completion validators pass on this complete record |
 | Agent source / generated sync | complete | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | `bun install`; 12 local and 14 installed targets exist under both `.agents` and `.claude` |
 | Agent action discoverability | complete | Source-audit the skill/rule path an agent will read | 17 changed local owners expose names, triggers, actions, templates, and helper paths |
 | Agent-native review | complete | Load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted findings, or record N/A | Capability audit passed after correcting one React Query example |
@@ -224,7 +226,7 @@ Phase / pass table:
 | Review / pressure pass | complete | agent-native capability audit and four-pass autoreview; all accepted findings closed | GitHub delivery |
 | Implementation or plan artifact | complete | local rules, templates, doctrine, lock, and generated output landed | verification |
 | Verification | complete | helper/status/smoke, exact audits, lint, hardening suite, fixtures, `bun check` all pass | GitHub delivery |
-| Closeout | in_progress | pre-PR handoff complete | branch, commit, push, PR, goal check |
+| Closeout | complete | signed commit, exact-commit `bun check`, push, open PR #300 read-back, and final validators | maintainer review |
 
 Findings:
 - Destination owns 21 local rule names, 8 installed skills, 11 primary/packs
@@ -292,7 +294,7 @@ Error attempts:
 | Python compilation created a temporary `__pycache__` that polluted the review bundle | 1 | Remove the exact generated cache and use direct syntax/test commands | Cache removed; final audit finds none |
 | Broad donor vocabulary and capability audits included irrelevant trees or omitted `.mdc` | 2 | Restrict to changed owner lanes and include source extensions explicitly | Final exact-term and discoverability audits pass |
 | First `bun check` found generated fixture drift from upstream `@latest` scaffolds | 1 | Regenerate every owned fixture, then replay every template | Eight fixture package snapshots refreshed; `fixtures:check` and full `bun check` pass |
-| Signed commit could not reach locked 1Password agent | 2 | Preserve staged state and retry only after the Mac/1Password is unlocked | Both attempts failed before writing a commit; all 130 paths remain staged |
+| Signed commit could not reach locked 1Password agent | 3 | Preserve staged state and retry only after the Mac/1Password is unlocked | First two attempts failed; the third wrote signed commit `66164539` after unlock |
 
 Verification evidence:
 - `node --check` passes for both copied helper scripts; vision `--status` reports
@@ -315,6 +317,8 @@ Verification evidence:
   Expo, Next, Start, and Vite with and without auth.
 - `bun lint:fix` passes. Final `bun check` passes lint, typecheck, unit, CLI,
   Concave, fixture replay, verification, and runtime/auth scenario lanes.
+- The exact committed revision `66164539` passed `bun lint:fix && bun check`
+  before push; the post-check checkout remained diff-clean.
 - `git diff --check` passes; no generated Python cache remains.
 
 Final handoff contract:
@@ -328,12 +332,13 @@ Final handoff contract:
   `bun check`; `git diff --check`.
 - Browser proof: N/A: no rendered UI or runtime product behavior changed; runtime
   and auth scenario smoke tests ran inside `bun check`.
-- PR / tracker: GitHub PR authorized and pending creation; no tracker issue work.
+- PR / tracker: [GitHub PR #300](https://github.com/udecode/kitcn/pull/300)
+  is open from `codex/sync-repo-skills` to `main`; title, body, refs, state, and
+  status checks were read back with `gh`. No tracker issue work occurred.
 - Caveats: fixture package snapshots moved with current upstream `@latest`
   scaffolds. Reviewed integration hardening lives inside installed skill files
   and can be overwritten by a future upstream skill update unless retained there.
-- Next owner: create/read back the GitHub PR, run final plan validators, then
-  hand off to maintainer review.
+- Next owner: maintainer review of PR #300.
 
 Timeline:
 - 2026-07-22T09:11:47.217Z Major-task goal plan created.
@@ -349,17 +354,21 @@ Timeline:
   accepted finding repaired and regression-tested.
 - 2026-07-22 Upstream fixture snapshots refreshed and replayed; final
   `bun lint:fix`, `bun check`, exact routing/ownership audit, and diff check pass.
-- 2026-07-22 Signed commit attempted twice; 1Password rejected both while the
-  Mac remained locked. Branch and staged checkout are preserved for retry.
+- 2026-07-22 First two signed-commit attempts were rejected while 1Password was
+  locked; the unlocked retry produced commit `66164539`.
+- 2026-07-22 Exact-commit `bun lint:fix && bun check` passed; branch
+  `codex/sync-repo-skills` was pushed and open PR #300 was read back from GitHub.
+- 2026-07-22 Final placeholder and autogoal completion validators passed; goal
+  handed to maintainer review.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Closeout after all local verification and review gates passed |
-| Where am I going? | Branch, commit, push, PR read-back, plan/goal closure |
+| Where am I? | Complete, with open PR #300 handed to maintainer review |
+| Where am I going? | Maintainer review and merge |
 | What is the goal? | Maximum relevant kitcn-native skill sync with no destination-owned Linear routing |
 | What have I learned? | Maximum copying works when destination ownership and fail-closed helper behavior stay explicit |
-| What have I done? | Implemented, generated, reviewed, repaired, audited, refreshed fixtures, and passed the complete repo gate |
+| What have I done? | Implemented, generated, reviewed, repaired, audited, refreshed fixtures, passed the complete repo gate, and opened PR #300 |
 
 Open risks:
 - Future Skills CLI updates may overwrite the reviewed local integration repairs
