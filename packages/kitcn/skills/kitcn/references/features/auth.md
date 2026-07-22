@@ -358,6 +358,7 @@ All from `kitcn/react`:
 | `useMaybeAuth()` | `boolean` | Has token (optimistic, may not be verified) |
 | `useIsAuth()` | `boolean` | Server-verified authentication |
 | `useAuthGuard()` | `() => boolean` | Guard mutations, returns true if blocked |
+| `useConvexAuthRecovery()` | `{ recover, status, error }` | Rebind Convex auth after a transient token failure |
 
 ### useAuthGuard
 
@@ -408,6 +409,28 @@ For `@convex-dev/auth` (React Native):
 import { ConvexProviderWithAuth } from 'kitcn/react';
 <ConvexProviderWithAuth client={convex} useAuth={useAuthFromConvexDev}>
 ```
+
+### Convex Auth Recovery
+
+Use recovery only when the outer auth provider remains authenticated but
+Convex entered an unauthenticated state after a transient token refresh
+failure:
+
+```tsx
+import { useConvexAuthRecovery } from 'kitcn/react';
+
+const { error, recover, status } = useConvexAuthRecovery();
+await recover();
+```
+
+`recover()` replaces the provider-owned auth binding and resolves after Convex
+confirms authentication. Concurrent calls share one promise. The default
+timeout is 10 seconds; override it with `recover({ timeoutMs })`.
+
+Failures are `ConvexAuthRecoveryError` values with code
+`AUTH_PROVIDER_LOADING`, `AUTH_PROVIDER_UNAUTHENTICATED`,
+`AUTH_RECOVERY_CANCELLED`, `AUTH_RECOVERY_FAILED`, or
+`AUTH_RECOVERY_TIMEOUT`. Never recover an intentional sign-out.
 
 ---
 
