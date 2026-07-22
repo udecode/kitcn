@@ -4,6 +4,14 @@
 - Answer in English by default. Switch languages only when the user explicitly asks for another language.
 - Prefer the best long-term architecture fix over the nearest local patch. If the real fix is an API or abstraction change, do that.
 
+## Doctrine
+
+- Read root `VISION.md` before product, public-API, architecture, CLI/DX, or
+  durable workflow decisions. Use `docs/README.md` to find the current owner.
+- `VISION.md` owns durable doctrine, not implementation detail or backlog.
+- Local PRDs and milestone maps own planning. Auto decomposes them directly
+  into local task packets.
+
 ## Git
 
 - **Git:** Never git add, commit, push, or create PR unless the user explicitly asks, or the active command/skill explicitly requires it.
@@ -57,15 +65,57 @@
 Use those skills when relevant:
 
 - `autogoal` for any prompt with a verifiable and quantitative outcome. Always use the autogoal skill before durable work when the task has a measurable completion threshold.
-- `orchestrator` when the current thread should route per-branch work to child threads instead of executing locally.
+- `auto` when the user asks for autonomous `sweep`, `clean`, `full`, `design`,
+  `milestone`, `prd`, timed, or review-until work. `auto full` continues through
+  local task packets, implementation, proof, sync, review, checks, and GitHub
+  PR delivery.
 - `task` for normal repo task execution.
 - `major-task` for heavyweight architecture, framework comparison, migration, benchmark, or proposal work.
+- `vision` before durable product/API/DX decisions; `sync-vision` for incremental
+  doctrine-drift audits.
+- `grill-with-vision` to pressure-test an unclear or expensive direction.
+- `to-milestone` for a pivotable local outcome map and ranked PRD ladder.
+- `to-prd` for an implementation-ready local capability source.
+- `architecture-cleanup` for public exports, package boundaries, Convex import
+  graphs, plugins, CLI/scaffolds, generated ownership, and navigation cost.
+- `autoclosure` to finish the current tree without creating new product scope.
+- `design` for live `www`/`example` UI decisions and Browser proof.
+- `react-query` for cRPC query/mutation options, live subscription ownership,
+  RSC preloading, and bounded invalidation.
+- `component-colocation` for React component ownership after checking compiler,
+  package, generated, and cross-runtime boundaries.
+- `turborepo` for task graphs, caching, filtering, package tasks, and explicit
+  kitcn root orchestration.
+- `orchestrator` only when the user explicitly requests parallel child-thread
+  or per-branch work. Never route there merely because multiple packets exist.
 - `deslop` for the final bounded cleanup pass once a change already works.
-- `tdd`.
+- `tdd` for bounded red-green-refactor behavior work.
+- `testing` for Bun/React test design, suite contamination, and flaky failures.
+- `diagnosing-bugs` when the root cause is not proven by the first honest repro.
+- `prototype` for explicitly disposable interaction exploration, never as the
+  product implementation owner.
+- `resolving-merge-conflicts` for source-backed conflict resolution.
+- `better-auth-best-practices` when Better Auth behavior is in scope.
+- `avoid-feature-creep` when a requested outcome is being diluted by adjacent
+  scope.
+- `find-skills` only after the configured local/installed set lacks a needed
+  specialist capability.
 - For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands,
-  prompts, or user-action tooling, use the autogoal agent-native pack and end
-  with `autoreview`.
+  prompts, or user-action tooling, use the autogoal agent-native pack, run
+  `agent-native-reviewer`, then end with `autoreview`.
+- `autoreview` is the final review owner. `resolve-pr-feedback` owns actionable
+  GitHub PR feedback after source-backed triage.
+- Repository-owner authorization: `task`, `major-task`, `auto`, and
+  agent-native workflows may invoke their required final `autoreview` without
+  per-run confirmation. This is the explicit acceptance required by the
+  installed `autogoal` skill; a goal or completion condition alone never grants
+  that authority outside these repository-owned workflows.
 - @.agents/rules/changeset.mdc when updating packages.
+
+Keep the skill set lean. Do not add local rules for product-specific donor
+domains, duplicate framework doctrine, or a route already owned by a stronger
+installed skill. Repository workflow stays local; `packages/kitcn/skills/kitcn`
+remains the published end-user skill.
 
 Goal plans:
 

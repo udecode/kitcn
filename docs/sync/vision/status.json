@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "initializedAt": "2026-07-22T00:00:00.000Z",
+  "lastSyncedCommit": "8d176e9f6e1bcafcdbbb130f9286179af05c59c6",
+  "lastSyncedAt": "2026-07-22T00:00:00.000Z",
+  "lastTargetCommit": "8d176e9f6e1bcafcdbbb130f9286179af05c59c6",
+  "lastRunDir": null,
+  "pendingRunDir": null,
+  "lastPlan": "docs/plans/2026-07-22-sync-repo-skills.md",
+  "notes": [
+    "Baseline initialized before the repository workflow sync commit.",
+    "Working-tree doctrine remains visible until committed and reviewed."
+  ]
+}

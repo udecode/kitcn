@@ -182,6 +182,54 @@ describe("MyHook", () => {
 3. Always `mockRestore()` in `afterEach`
 4. Use mock variables in assertions: `expect(mockFn)` not `expect(apiModule.fn)`
 
+### When `mock.module()` Is Allowed
+
+Use `mock.module()` only for infrastructure every test needs, configured in a
+preload, or for a module that will never be imported as real code elsewhere in
+the same Bun process. It mutates process-global module state and may preserve
+unmocked real exports while overriding only returned keys. The result can look
+real while a few exports are poisoned.
+
+Do not solve one contaminated test by lowering global concurrency, changing CI,
+or adding runtime dependency-indirection files solely for tests. Prefer a
+lower-level contract, a file-scoped spy, or a different integration harness.
+
+### `mockReset()` Destroys Implementations
+
+`mockReset()` clears calls and the implementation. Restore defaults immediately:
+
+```typescript
+const fetchValue = mock(async () => "default");
+
+beforeEach(() => {
+  fetchValue.mockReset();
+  fetchValue.mockResolvedValue("default");
+});
+```
+
+Use `mockClear()` when only call history should reset.
+
+### Module-Scope Environment Values Need Fresh Imports
+
+If a subject reads an environment flag at module scope, changing the mock after
+the static import cannot affect it. Set a mutable environment mock first, then
+dynamically import the subject. Add a deterministic cache-busting import query
+only when Bun otherwise reuses the module. Avoid random cache keys in committed
+tests when an incrementing case id works.
+
+### Reproducing Order-Dependent Failures
+
+If a test passes alone and fails in the suite, run likely contaminators before
+the victim in one command:
+
+```bash
+bun test likely-contaminator.test.ts victim.test.ts
+```
+
+Record the minimal ordering that fails. Inspect module keys, critical function
+types, and resolved default values behind a temporary opt-in debug flag. Remove
+debug output after the owner is proven.
+
 ### Testing React Hooks
 
 ```typescript

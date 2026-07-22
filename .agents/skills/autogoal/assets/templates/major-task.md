@@ -9,6 +9,9 @@ Goal plan:
 Template:
 {{TEMPLATE_PATH}}
 
+Linked plans:
+- None.
+
 Major source:
 - type: pending
 - id / link: pending
@@ -86,7 +89,6 @@ Completion Gates:
 | Decision criteria satisfied | pending | Map evidence to each criterion | pending |
 | Source audit complete | pending | Record repo evidence and external evidence | pending |
 | Review / pressure pass | pending | Record review lens or N/A | pending |
-| Autoreview | pending | Review final artifact against objective, criteria, constraints, and newest user request | pending |
 | Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 

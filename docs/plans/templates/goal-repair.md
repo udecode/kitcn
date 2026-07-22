@@ -114,10 +114,11 @@ Completion Gates:
 | Incomplete-plan guard | pending | Verify an unfinished generated plan still fails `check-complete.mjs`, or record N/A with reason | pending |
 | Completed-plan representability | pending | Verify the repaired expectation can be recorded in a completed plan without editing the template again, or record N/A | pending |
 | Helper/checker tests | pending | If scripts changed, run focused script tests; otherwise N/A | pending |
-| Autoreview / review | pending | Run applicable review gate or record N/A for docs-only/source-rule-only repair | pending |
 | Final lint | pending | Run scoped formatter/lint or record ignored-path/N/A reason | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
 | Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
+| Agent-native reviewer | pending | Run when workflow source changes or record N/A | pending |
+| Autoreview / review | pending | Run applicable final review gate or record N/A for docs-only/source-rule-only repair | pending |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:

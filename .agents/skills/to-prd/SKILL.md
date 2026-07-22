@@ -1,0 +1,130 @@
+---
+description: Turn a settled kitcn capability or milestone rung into an ambitious, implementation-ready local PRD with decisions, owner maps, task packets, and proof contracts.
+argument-hint: <source | milestone rung | capability>
+name: to-prd
+metadata:
+  skiller:
+    source: .agents/rules/to-prd.mdc
+---
+
+# To PRD
+
+The PRD is the local source for a coherent capability. It must let `auto full`
+or `task` execute without inventing product, API, auth, or proof decisions.
+
+## Source Order
+
+1. Latest user direction.
+2. `VISION.md` and the selected milestone map.
+3. Existing PRDs, ADRs, research, plans, and docs.
+4. Public exports, runtime entry points, CLI/template owners, tests, fixtures,
+   scenarios, and examples.
+5. Proven OSS implementations from local clones when relevant.
+
+If these contradict, repair or record the decision before publishing the PRD.
+
+## Scope Ambition
+
+Write one PRD for one end-to-end developer outcome. Include all owners necessary
+for it to work: package/API, Convex runtime, auth/data flow, CLI/scaffold,
+examples, docs/package skill, fixtures/scenarios, and observability/proof.
+
+Do not split supporting tests, guards, types, docs, or internal helpers into
+independent PRDs. Do not inflate the PRD with adjacent roadmap ideas.
+
+## Required Decisions
+
+The PRD settles:
+
+- user/developer problem and success story;
+- familiar mental model and deviations from it;
+- public API names, types, errors, and hard-cut stance;
+- service/runtime entry points and Convex static import boundaries;
+- canonical data, identity, auth/session, permission, and lifecycle flow;
+- plugin/extensibility and bundle-size consequences;
+- CLI commands, `--json`, `--yes`, and non-interactive behavior when relevant;
+- source/generated owners and regeneration commands;
+- migration/deletion behavior;
+- docs, package skill, examples, fixtures, and scenario ownership;
+- testing, benchmark, runtime, browser, and repository proof.
+
+Unsettled irreversible choices go in an explicit decision table with a
+recommended answer and disconfirming evidence. Do not hide them in “TBD.”
+
+## Design Lane
+
+When UI is part of the outcome, include the real subject, route, tokens,
+primitives, state matrix, accessibility, responsive behavior, and Browser proof.
+Link a prototype only as evidence; source implementation remains the owner.
+
+## Task Packets
+
+Decompose directly into local packets inside the PRD.
+
+Each packet has:
+
+- outcome and owner files;
+- prerequisites and conflict group;
+- behavior/API decisions it consumes;
+- source/generated work;
+- acceptance and proof;
+- explicit exclusions;
+- blocking, parallel-join, or detached status.
+
+Packets should be vertical and independently provable. Consolidate guard-only,
+test-only, docs-only, and refactor-only fragments into the behavior packet they
+support unless they have a genuinely separate owner and outcome.
+
+## PRD Template
+
+```md
+# <Title> PRD
+
+## Milestone Context
+## Problem Statement
+## Target Story
+## Solution
+## Vision Alignment
+## Self-Grill Receipt
+## Current Source Evidence
+## Public API And Mental Model
+## Service, Auth, And Data Flow
+## Package And Bundle Ownership
+## CLI, Scaffold, And Generated Ownership
+## Design Lock
+## Implementation Decisions
+## Testing And Proof Decisions
+## Task Packets
+## Acceptance Criteria
+## Source-Backed Claim Ledger
+## Out Of Scope
+## Open Decisions
+## Done Means
+```
+
+Use N/A with reason for irrelevant sections; do not delete the reasoning surface.
+
+## Scoring Gate
+
+Before publication, score `0-5` with citations:
+
+- vision fit;
+- user/developer leverage;
+- source capability;
+- public API and type clarity;
+- auth/data-flow clarity;
+- bundle/ownership safety;
+- implementation readiness;
+- proof and rollback strength;
+- scope discipline.
+
+Any dimension below `4` blocks implementation readiness unless the PRD records a
+real external blocker and safe boundary. Run a contradiction pass, self-grill,
+`agent-native-reviewer` when agent workflow is involved, then `autoreview`.
+
+## Publish
+
+Write to `docs/prds/<date>-<slug>.md`, link it from the selected milestone or
+`docs/README.md`, and name the first packet owner. Publication is not
+implementation; `auto full` continues through packets, verification, and GitHub
+delivery when asked.

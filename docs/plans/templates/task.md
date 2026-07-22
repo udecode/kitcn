@@ -29,11 +29,11 @@ Completion threshold:
   code-review and release-artifact gates are closed when applicable, verified
   code changes are committed and PR'd unless explicitly declined or blocked,
   task-style PR body sync is complete or marked N/A with reason,
-  tracker/PR sync is complete or marked N/A with reason, and
+  GitHub issue/PR sync is complete or marked N/A with reason, and
   `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` passes.
 
 Verification surface:
-- TODO: Name the tests, typecheck, lint, browser proof, source audit, PR/tracker
+- TODO: Name the tests, typecheck, lint, browser proof, source audit, GitHub
   sync, PR body audit, or other artifact proving the threshold.
 
 Constraints:
@@ -52,7 +52,7 @@ Boundaries:
 - Source of truth: TODO.
 - Allowed edit scope: TODO.
 - Browser surface: TODO.
-- Tracker sync: TODO.
+- GitHub issue sync: TODO.
 - Non-goals: TODO.
 
 Output budget strategy:
@@ -76,6 +76,12 @@ Current verdict:
 - confidence: pending
 - next owner: task
 - reason: pending
+
+Implementation readiness:
+- verdict: pending
+- exact owner: pending
+- contradiction status: pending
+- source-listed cases complete: pending
 
 Pre-solution issue challenge:
 - reporter claim: pending
@@ -107,7 +113,7 @@ Start Gates:
 | Skill analysis before edits | pending | pending |
 | Active goal checked or created | pending | pending |
 | Source of truth read before edits | pending | pending |
-| Tracker comments and attachments read | pending | pending |
+| GitHub comments and attachments read | pending | pending |
 | Video transcript evidence required | pending | pending |
 | Pre-solution issue challenge required | pending | pending |
 | Reproduction verdict before implementation | pending | pending |
@@ -120,7 +126,7 @@ Start Gates:
 | Browser tool decision for browser surface | pending | pending |
 | Commit / PR expectation decision | pending | For verified code-changing work, default is commit, push, and PR because `task` explicitly requires it; N/A only for explicit user decline, no local patch, analytical/blocked/inconclusive work, or recorded blocker. |
 | Task-style PR body decision | pending | pending |
-| Tracker sync expectation decision | pending | pending |
+| GitHub issue sync expectation decision | pending | pending |
 | Output budget strategy recorded | pending | pending |
 
 Work Checklist:
@@ -134,7 +140,7 @@ Work Checklist:
       surface, and root-cause layer.
 - [ ] Required video or screen-recording evidence is cached/read as normalized
       `<video-transcripts>` XML, or marked N/A with reason.
-- [ ] For public tracker bug reports, behavior claims, technical diagnoses, or
+- [ ] For public GitHub bug reports, behavior claims, technical diagnoses, or
       suggested fixes, reporter claims are challenged before implementation
       with a recorded verdict: `valid`, `not reproduced`, `invalid`,
       `wont-fix`, `partially valid`, or `platform limitation`. Feature, docs,
@@ -152,12 +158,16 @@ Work Checklist:
       best long-term fix and records what was wrong or incomplete in the
       issue's proposed path.
 - [ ] Nearby repo instructions and implementation patterns read before edits.
+- [ ] Source-listed case matrix is complete and every contradiction has an
+      owner, harness, and verdict before mutation.
+- [ ] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
+      `invalid` with evidence.
 - [ ] Implementation fixes the right ownership boundary, or the narrower choice
       is recorded with reason.
 - [ ] Release artifact requirement recorded: active changeset, new changeset, or
       N/A with reason.
-- [ ] Final handoff shape decided: bug/feature/testing/batch/review/tracker
-      requirements, PR body sync, and issue/Linear sync when applicable.
+- [ ] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
+      requirements, PR body sync, and issue sync when applicable.
 - [ ] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
@@ -202,16 +212,16 @@ Completion Gates:
 | High-risk mini gate | pending | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | pending |
 | Agent-native review for agent/tooling changes | pending | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | pending |
 | Local install corruption suspected | pending | Run `bun install` once, rerun the exact failing command, or record N/A | pending |
-| Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
 | Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
 | PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
 | Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
 | PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
-| Tracker sync-back | pending | Post concise issue/Linear sync after PR exists, or record N/A/blocker | pending |
+| GitHub issue sync-back | pending | Post concise issue sync after PR exists, or record N/A/blocker | pending |
 | Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
 | Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
+| Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:
@@ -220,7 +230,7 @@ Phase / pass table:
 | Intake and source read | in_progress | created plan | implementation |
 | Implementation | pending | | verification |
 | Verification | pending | | closeout |
-| Commit / PR / tracker sync | pending | | final response |
+| Commit / PR / GitHub sync | pending | | final response |
 | Closeout | pending | | final response |
 
 Findings:
@@ -243,10 +253,15 @@ Error attempts:
 Verification evidence:
 - Pending.
 
+Source-listed case matrix:
+| Case | Source claim | Harness | Before | Expected after | Evidence | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| pending | pending | pending | pending | pending | pending | pending |
+
 Final handoff contract:
 - Commit line: pending
 - PR line: pending
-- Issue / tracker line: pending
+- Issue line: pending
 - Confidence line: pending
 - Flow table:
   - Reproduced: tests pending, browser pending
@@ -265,7 +280,7 @@ Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
   part of the diff and repo policy expects auto release, include that block.
 - Use the accepted PR #270 visual format. The body starts with an emoji
-  issue/tracker/fix line, for example `🐛 Fixes #123` or `🐛 Fixes ➖ N/A`, then
+  issue/fix line, for example `🐛 Fixes #123` or `🐛 Fixes ➖ N/A`, then
   an emoji confidence line like `🟢 95-100% confidence`.
 - Use this exact table header: `| Phase | 🧪 Tests | 🌐 Browser |`.
 - Use `Reproduced` and `Verified` rows. Mark passing proof with `🟢`, repro or
@@ -284,7 +299,7 @@ Task-style PR body contract:
 Final handoff / sync:
 - Commit: pending
 - PR: pending
-- Issue / tracker: pending
+- Issue: pending
 - Browser proof: pending
 - Caveats: pending
 
@@ -295,7 +310,7 @@ Reboot status:
 | Question | Answer |
 |----------|--------|
 | Where am I? | Intake and source read |
-| Where am I going? | Implementation, verification, commit/PR/tracker sync, closeout |
+| Where am I going? | Implementation, verification, commit/PR/GitHub sync, closeout |
 | What is the goal? | TODO: Fill from Objective |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |

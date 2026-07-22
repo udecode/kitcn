@@ -25,7 +25,7 @@ they earn their keep, and verify before calling the task done.
 - Prefer targeted tests and checks during iteration.
 - Keep the user updated at milestones.
 - Verify the actual result before claiming done.
-- Do not default to research swarms, review swarms, browser proof, tracker
+- Do not default to research swarms, review swarms, browser proof, GitHub
   comments, or compounding.
 - For verified code-changing work, commit, push, and create or update a PR by
   default. The `task` skill is the explicit git permission. Only skip that path
@@ -43,10 +43,9 @@ they earn their keep, and verify before calling the task done.
    - GitHub PR URL: fetch it with `gh pr view` first.
    - Bare GitHub issue like `#555`: resolve it against the current `gh` repo
      first, then fetch it with `gh issue view`.
-   - Linear issue link/id: fetch it with the Linear integration first.
 2. Read the full source-of-truth context before doing anything else.
-3. For tracker items, also read comments and attachments when available.
-4. If tracker evidence includes video or screen recording, load
+3. For GitHub issues and PRs, also read comments and attachments when available.
+4. If source evidence includes video or screen recording, load
    `video-transcripts`, use or create the shared transcript cache through that
    skill, and require normalized `<video-transcripts>` XML before
    implementation. If the helper cannot produce it after a real attempt, stop
@@ -87,7 +86,7 @@ they earn their keep, and verify before calling the task done.
     smallest honest slice.
 11. If program or batch work, restate the ordered scope and finish one slice at
     a time unless the user asked for a broader sweep.
-12. For any tracker source, record source type/id/title, task type, acceptance
+12. For any GitHub source, record source type/id/title, task type, acceptance
     criteria, caveats, likely files/routes/packages, browser surface, and likely
     root-cause layer in the plan when a plan exists.
 13. If code will change, decide branch handling before edits using repo policy;
@@ -98,26 +97,24 @@ they earn their keep, and verify before calling the task done.
 14. If anything important is still ambiguous after the source and nearby code
     pass, ask the smallest useful clarifying question.
 
-## Tracker Rules
+## GitHub Source Rules
 
-Apply only when the source is a tracker item.
+Apply only when the source is a GitHub issue or PR.
 
-- Treat the tracker item as the source of truth.
-- Use the native tool for fetch and sync-back: `gh` for GitHub, Linear
-  integration for Linear.
+- Treat the GitHub issue or PR as the source of truth.
+- Use `gh` for fetch, comment, and read-back.
 - If useful, rename the thread to `<issue-number> <issue-title>`.
-- Prefer PR before tracker comment for verified code-changing work unless
+- Prefer PR before issue comment for verified code-changing work unless
   blocked or the user said not to.
 - For GitHub comments after a fix, write for QA: one fixed-in-PR line plus
   short verification steps. Do not mention internal files, tests, branch names,
   or staging mechanics.
-- For Linear comments, keep proof local and write for QA, not developers.
 - Do not require PR creation, screenshots, or comments for analytical, blocked,
   or inconclusive work.
 
 ## Public Issue Challenge Gate
 
-For public tracker bug reports, behavior claims, technical diagnoses, or
+For public GitHub bug reports, behavior claims, technical diagnoses, or
 suggested fixes, challenge the issue before implementation.
 
 1. Restate the reporter claim in falsifiable terms.
@@ -142,6 +139,41 @@ suggested fixes, challenge the issue before implementation.
 7. Record the verdict in the task plan when one exists:
    `valid`, `not reproduced`, `invalid`, `wont-fix`, `partially valid`, or
    `platform limitation`.
+
+## Reproduction And Contradiction Harness
+
+Before fixing reported behavior, list every source-stated case. Do not reduce a
+multi-case report to the first reproduction.
+
+| Case | Source claim | Smallest honest harness | Before | Expected after | Proof |
+| --- | --- | --- | --- | --- | --- |
+
+If source, tests, docs, and runtime disagree:
+
+1. State the contradiction precisely.
+2. Identify which owner can settle it: public API, runtime, generated output,
+   docs, or user direction.
+3. Build the smallest harness that makes both interpretations observable.
+4. Choose the durable owner, repair source and dependents, then rerun every
+   source-listed case.
+
+Never “fix” a contradiction by adding fallback parsing, duplicate exports, or a
+compatibility shim unless the task explicitly requires compatibility.
+
+## Implementation Readiness Triage
+
+Classify before mutation:
+
+- `ready`: acceptance, owner, and harness are known;
+- `repair-source`: the source is usable after a bounded contradiction or
+  placeholder repair;
+- `major`: public API/architecture/migration/benchmark decisions belong to
+  `major-task`;
+- `blocked`: missing authority or external state prevents an honest next move;
+- `invalid`: the claim is disproven or outside the requested boundary.
+
+Only `ready` and repaired sources proceed to implementation. Record the verdict
+in the plan with evidence.
 
 ## Browser Proof
 
@@ -202,16 +234,14 @@ lock.
 - `testing`: tasks primarily about tests, coverage, regression gaps, or suite
   phases.
 - `tdd`: bugs and feature work where behavior-level automated coverage is sane.
-- `learnings-researcher`: non-trivial repeated domains with documented
-  solutions.
-- `video-transcripts`: tracker evidence contains a video or screen recording.
+- `video-transcripts`: source evidence contains a video or screen recording.
 - If requirements remain ambiguous after source and local context, ask the
   smallest clarifying question or switch to a planning goal when the user wants
   planning.
-- `framework-docs-researcher`: unfamiliar, version-sensitive, or unstable
-  third-party APIs after checking local clones and docs per AGENTS.
-- `browser-use`: real browser/UI/native browser surface needs verification;
-  follow Browser Proof for Browser vs Chrome vs Computer.
+- `find-skills`: a genuinely missing specialist capability after local skills
+  and source owners have been checked.
+- Browser/Chrome/Computer: real UI or native browser behavior needs proof;
+  follow Browser Proof for escalation.
 - `agent-browser-issue`: browser automation is blocked by a reusable tool-side
   issue.
 - `changeset`: published package work under `packages/` needs release notes.
@@ -223,7 +253,7 @@ lock.
 - Git/PR shipping: when verified code should ship and repo policy permits it,
   use normal `git`/`gh` commands directly. Stage the entire current checkout
   per repo policy when creating the PR, create the commit, push, create or
-  update the PR before tracker comments. The `task` skill owns the PR body:
+  update the PR before issue comments. The `task` skill owns the PR body:
   write the PR description from the task-style final handoff contract below.
   Do not skip this merely because the user did not type a separate "open a PR"
   sentence.
@@ -247,7 +277,7 @@ real closeout pressure.
   prompts, or user-action tooling.
 - Source authority is workspace-local. A check run in the planning repo cannot
   prove behavior owned by a sibling repo, package, app, browser route, or
-  tracker system. Record the cwd/tool that owns each proof.
+  GitHub surface. Record the cwd/tool that owns each proof.
 - For public API, runtime, package-boundary, browser behavior, agent-action, or
   command-contract changes, add a compact high-risk note before closeout:
   realistic failure mode, proof plan, and why the chosen boundary is still the
@@ -268,10 +298,11 @@ real closeout pressure.
 
 ### Feature
 
-1. Reduce the task to the smallest slice that satisfies acceptance criteria.
-2. Add behavior coverage when sane.
-3. Prefer the cleanest long-term design that fits the slice.
-4. Verify the user-facing outcome.
+1. Build the source-listed case matrix and readiness verdict.
+2. Use bounded TDD at the behavior boundary when automated proof is sane.
+3. Implement the smallest coherent slice that satisfies all acceptance cases.
+4. Prefer the cleanest long-term ownership design that fits the slice.
+5. Verify the user-facing outcome and every case row.
 
 ### Testing Or Coverage Work
 
@@ -334,7 +365,7 @@ Keep verification mandatory and proportional.
 - If work changes `kitcn init -t` templates or scaffold sources, run
   `bun run fixtures:sync` and `bun run fixtures:check`.
 - If verified work changed code, commit it and create or update the PR before
-  tracker sync-back and final handoff unless the user explicitly said not to.
+  GitHub sync-back and final handoff unless the user explicitly said not to.
   Do not mark commit/PR gates N/A merely because the user did not ask for a PR;
   the task skill requires shipping verified code. If commit or PR creation is
   impossible after real attempts, record the blocker and stop instead of
@@ -342,18 +373,37 @@ Keep verification mandatory and proportional.
 - A final response that says "No commit/PR created because you did not ask" is
   wrong for verified code-changing `task` work. Either create/update the PR or
   name the explicit decline/blocker.
-- If the task came from a tracker item and reached a meaningful outcome, sync
+- If the task came from a GitHub item and reached a meaningful outcome, sync
   back unless the user said not to.
+
+## Evidence-Bound Confidence
+
+Confidence describes the exact delivered claim, not how good the diff looks.
+
+- `95-100%`: every source-listed case has fresh direct proof at the owning
+  layer, required visual proof is inspected, and no accepted finding remains.
+- `80-94%`: the core claim has direct proof but a bounded non-critical case is
+  inferred or externally unavailable; name it.
+- below `80%`: do not present the task as complete.
+
+Link confidence to the case matrix, changed owner, and final repository gate.
+
+## Durable Learning Capture
+
+When the task exposes a reusable repository-specific trap, add the smallest
+durable note to the real owner: nearby test helper, rule, docs map, ADR, or
+active plan. Capture the failure signature, correct owner, and next-different
+move. Do not create a generic diary or duplicate existing doctrine.
 
 ## Final Handoff
 
 - Be extremely concise.
-- Report PR, issue/tracker, confidence, tests, browser proof, outcome, caveats,
+- Report PR/issue, confidence, tests, browser proof, outcome, caveats,
   design choice, and verification only when applicable.
 - For non-trivial task goals, close every relevant task-template gate before the
   final response.
 - If a PR exists, keep the PR description synced to the final handoff.
-- For tracker comments, write for QA or the issue owner, not internal
+- For GitHub comments, write for QA or the issue owner, not internal
   implementation history.
 - For browser work, include the exact route and human verification steps.
 
@@ -368,7 +418,7 @@ Use the accepted task PR format from PR #270. The shape is not optional:
 
 1. Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
    part of the diff and repo policy expects auto release, include that block.
-2. Use an emoji-prefixed issue/tracker/fix line, for example
+2. Use an emoji-prefixed issue/fix line, for example
    `🐛 Fixes #123` or `🐛 Fixes ➖ N/A`. Never include a line that links to the
    current PR itself; the current PR URL belongs in the final response, not in
    its own description.
@@ -391,7 +441,7 @@ with `gh pr view --json body` before final handoff.
 
 - Source-of-truth context was read first.
 - Relevant repo instructions and patterns were read before editing.
-- Tracker items were fetched and summarized correctly when provided.
+- GitHub items were fetched and summarized correctly when provided.
 - Video evidence used `video-transcripts` before implementation when required.
 - Bare GitHub issues like `#555` were resolved against the current repo.
 - The chosen fix addressed the highest-leverage ownership boundary available.

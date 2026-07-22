@@ -49,7 +49,6 @@ Handle $ARGUMENTS. Use this for architectural, comparative, benchmark, migration
    - GitHub issue URL: fetch it with `gh issue view` first.
    - GitHub PR URL: fetch it with `gh pr view` first.
    - Bare GitHub issue like `#555`: resolve it against the current `gh` repo first, then fetch it with `gh issue view`.
-   - Linear issue link/id: fetch it with the Linear integration first.
 2. Read the full source-of-truth context before doing anything else.
 3. If the task comes from a ticket, issue, PR, or spec, also read comments and attachments when available.
 4. Restate the decision to make, not just the topic.
@@ -79,10 +78,11 @@ Handle $ARGUMENTS. Use this for architectural, comparative, benchmark, migration
 8. When the work needs a real implementation plan, phased rollout, or plan
    artifact, make the active `major-task` goal plan the durable planning
    surface.
-9. Load `learnings-researcher` early when the domain smells repeated or the repo has prior decisions worth mining.
+9. Search `docs/research/**`, `docs/solutions/**`, ADRs, and prior plans when
+   the domain has repository history worth mining.
 10. For library or framework questions, inspect the local clone in `..` first per AGENTS. If missing, clone it. Only then reach for official docs.
 11. Pick the smallest justified helper stack for the lane.
-12. For any tracker source, restate for yourself:
+12. For any GitHub source, restate for yourself:
 
 - source type
 - source id
@@ -95,21 +95,16 @@ Handle $ARGUMENTS. Use this for architectural, comparative, benchmark, migration
 - likely highest-leverage owner
 
 13. Read repo instructions and nearby implementation patterns before editing.
-14. If the task becomes code-changing work:
-
-- if already on a relevant feature branch, continue there
-- otherwise check out `main`, pull the latest `main`, then create a repo-convention branch before editing
-- if the task has a tracker id, prefer a branch name that includes it
-- run install or setup only when the repo or task actually needs it
+14. If the task becomes code-changing work, follow the repository's current
+    branch and GitHub delivery policy. Do not add branch/worktree ceremony at
+    task start. Run install or setup only when the repo or task needs it.
 
 15. If the task stays analytical, skip branch and setup noise.
 16. If anything important is still ambiguous after the source-of-truth pass and nearby code reading, ask the smallest useful clarifying question.
 
-## Tracked Task Rules
+## GitHub Source Rules
 
-Apply this section only when the task source is a tracker item.
-
-### GitHub
+Apply this section only when the task source is a GitHub issue or PR.
 
 - Treat the GitHub issue or PR as the source of truth.
 - Use `gh` for fetch and sync-back.
@@ -118,17 +113,10 @@ Apply this section only when the task source is a tracker item.
 - If the task changed code and reached a verified meaningful outcome, create or update the PR before any issue comment unless blocked or the user said not to.
 - If the task stayed analytical, only post back when the analysis itself is the deliverable and a comment would help.
 
-### Linear
-
-- Keep the same fetch-first behavior as the dedicated Linear workflow.
-- Read the issue, comments, and attachments before analysis.
-- Keep comment-back QA-focused.
-- Do not force browser proof unless the task actually has a browser surface.
-
-### Tracked Task Non-Rules
-
-- Do not force PR creation for tracker tasks that stayed analytical, ended blocked, or never changed code.
-- Do not require tracker comments for inconclusive investigation unless sync-back is useful.
+- Do not force PR creation for GitHub tasks that stayed analytical, ended
+  blocked, or never changed code.
+- Do not require issue comments for inconclusive investigation unless sync-back
+  is useful.
 - Do not force screenshots for non-browser analytical work.
 
 ## Load Skills Only When Justified
@@ -152,7 +140,10 @@ Apply this section only when the task source is a tracker item.
   executable contract before implementation.
 - `autoreview`
   Use for explicit diff review, release-readiness review, or final review of a
-  risky code-changing slice.
+  risky code-changing slice. It is mandatory at final closeout.
+- `agent-native-reviewer`
+  Run before final `autoreview` when the work changes agent rules, skills,
+  templates, prompts, commands, helpers, or generated agent surfaces.
 - Agent-native surfaces
   Use the autogoal agent-native pack and `autoreview` when the change touches
   `.agents/**`, `.claude/**`, AI/tooling surfaces, commands, or user actions
@@ -169,8 +160,28 @@ Apply this section only when the task source is a tracker item.
 2. Find what already exists before proposing new structure.
 3. Prefer changing the ownership boundary over papering around it at each call site.
 4. Call out blast radius explicitly when the recommendation changes public API or package contracts.
-5. If recommending a migration path, include staged rollout, compatibility strategy, and rollback shape.
+5. Default breaking changes to a hard cut after the required user confirmation;
+   do not add compatibility aliases or migration bridges by reflex.
 6. If a smaller boundary change and a broader architecture reset are both viable, say why one wins now.
+
+### Service, API, Auth, And Data Flow
+
+Every architecture/migration/proposal lane must map these surfaces or mark them
+N/A with reason:
+
+| Surface | Questions |
+| --- | --- |
+| public API | names, inputs, outputs, errors, type inference, extension points |
+| service/runtime | entry points, callers, lifecycle, retry, idempotency, failure |
+| auth/session | identity source, session lifetime, permission checks, denied path |
+| canonical data | owner, persisted/derived state, transaction boundary, deletion |
+| Convex graph | static imports per function entry, bundle impact, leaf split |
+| CLI/scaffold | command contract, JSON/non-interactive behavior, generated owner |
+| docs/examples | current-state user story and source synchronization |
+| proof | tests, types, build, benchmark, fixture, scenario, Browser |
+
+Trace at least one end-to-end happy path and one denied/failure path through the
+actual symbols. Proposals without this map are not implementation-ready.
 
 ### Performance And Optimization
 
@@ -269,10 +280,15 @@ Keep verification mandatory but proportional.
 - Run lint when code changed and the repo expects it.
 - Run browser verification only for browser or UI tasks.
 - Run broader repo-wide gates only when repo instructions require them or the change scope justifies them.
-- If verified work changed code, create or update the PR before tracker sync-back unless the user explicitly said not to.
-- If the task came from a tracked issue and reached a meaningful outcome, sync back unless the user said not to.
+- If verified work changed code, create or update the PR before GitHub issue
+  sync-back unless the user explicitly said not to.
+- If the task came from a GitHub issue and reached a meaningful outcome, sync
+  back unless the user said not to.
 - If UI changed, capture proof from the real browser surface.
-- Do not hardcode PR creation, screenshots, or tracker comments for every task.
+- Do not hardcode screenshots or issue comments for every task.
+- Run final `autoreview` for every completed major-task artifact or diff. When
+  agent-native surfaces changed, run `agent-native-reviewer` first and resolve
+  every accepted actionable finding.
 
 ## Final Handoff
 
@@ -283,21 +299,24 @@ Keep verification mandatory but proportional.
   - same leading tables
   - same verification reporting
   - same browser-proof rules when applicable
-  - same PR and tracker sync expectations when applicable
+  - same PR and GitHub issue sync expectations when applicable
 - If this stayed analytical, the handoff must still say:
   - what decision was made
   - what evidence supported it
   - what would change the recommendation
   - what remains open by design
 
-## Post Back To Tracker
+## Post Back To GitHub
 
-Apply this section only when the task came from a tracker item and reached a meaningful outcome.
+Apply this section only when the task came from a GitHub item and reached a
+meaningful outcome.
 
-- If the work changed code, follow the same PR and tracker sync contract as `task.mdc`.
-- If the work stayed analytical, comment back only when the analysis itself is useful to the tracker owner.
-- Keep tracker comments user-facing and outcome-focused.
-- Do not dump research process into tracker comments.
+- If the work changed code, follow the same PR and issue sync contract as
+  `task.mdc`.
+- If the work stayed analytical, comment back only when the analysis itself is
+  useful to the issue owner.
+- Keep comments user-facing and outcome-focused.
+- Do not dump research process into issue comments.
 
 ## Success Criteria
 
@@ -311,4 +330,7 @@ Apply this section only when the task came from a tracker item and reached a mea
 - Only the necessary helpers were loaded.
 - Document-review personas were conditional, not ceremonial.
 - Verification matched whether the work was analytical, planning, or code-changing.
+- Service/API/auth/data-flow surfaces were mapped or explicitly N/A.
+- Final `autoreview` passed; agent-native changes also passed
+  `agent-native-reviewer` first.
 - Final handoff made the recommendation and the evidence easy to scan.

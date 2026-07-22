@@ -62,7 +62,7 @@ Boundaries:
 - Allowed edit scope: this plan for the audit; delegated implementation belongs
   to `task`.
 - Browser surface: N/A unless the selected task changes browser-visible UI.
-- Tracker sync: N/A unless the delegated task has an issue or PR tracker.
+- GitHub sync: N/A unless the delegated task has an issue or PR.
 - Non-goals: broad Convex upgrade PRs, vanity changelog sync, or multi-slice
   implementation planning.
 

@@ -55,7 +55,7 @@ Boundaries:
 - Allowed edit scope: TODO.
 - External sources: TODO.
 - Browser surface: TODO.
-- Tracker sync: TODO.
+- GitHub sync: TODO.
 - Non-goals: TODO.
 
 Output budget strategy:
@@ -125,6 +125,11 @@ Work Checklist:
 - [ ] Options, recommendation, tradeoffs, blast radius, and rejection reasons
       are recorded.
 - [ ] Facts, inference, and recommendation are separated.
+- [ ] Public API, service/runtime, auth/session/permission, canonical data,
+      Convex graph, CLI/generated, docs/example, and proof surfaces are mapped
+      or N/A with reason.
+- [ ] At least one happy path and one denied/failure path are traced through
+      exact symbols when implementation readiness is claimed.
 - [ ] Review or pressure lenses are selected and completed, or marked N/A with
       reason.
 - [ ] If implementation happens, touched-surface packs cover docs, browser,
@@ -148,10 +153,13 @@ Completion Gates:
 | Review findings closure | pending | Fix or explicitly reject accepted/actionable findings and record closure proof | pending |
 | External-source audit | pending | Cite official/local clone/external sources when used, or record N/A | pending |
 | Implementation gates | pending | If code changed, close primary-template and touched-surface gates; otherwise N/A | pending |
+| Service/API/auth/data-flow map | pending | Prove every architecture surface below or record N/A | pending |
 | Final handoff contract | pending | Record recommendation, evidence, caveats, residual risk, and next owner | pending |
 | Final lint | pending | Run `bun lint:fix` or scoped equivalent when files changed | pending |
 | Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
 | Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
+| Agent-native reviewer | pending | Run when agent workflow changes or record N/A | pending |
+| Autoreview | yes | Run final review and close every accepted actionable finding | pending |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs {{PLAN_PATH}}` | pending |
 
 Phase / pass table:
@@ -185,13 +193,25 @@ Error attempts:
 Verification evidence:
 - Pending.
 
+Service / API / auth / data-flow map:
+| Surface | Current owner | Target decision | Evidence | Status |
+| --- | --- | --- | --- | --- |
+| public API/types/errors | pending | pending | pending | pending |
+| service/runtime/lifecycle | pending | pending | pending | pending |
+| auth/session/permission | pending | pending | pending | pending |
+| canonical data/transactions/deletion | pending | pending | pending | pending |
+| Convex static import graph | pending | pending | pending | pending |
+| CLI/scaffold/generated | pending | pending | pending | pending |
+| docs/examples/package skill | pending | pending | pending | pending |
+| proof/benchmark/rollback | pending | pending | pending | pending |
+
 Final handoff contract:
 - Recommendation: pending
 - Confidence: pending
 - Evidence: pending
 - Tests / commands: pending
 - Browser proof: pending
-- PR / tracker: pending
+- PR / GitHub issue: pending
 - Caveats: pending
 - Next owner: pending
 

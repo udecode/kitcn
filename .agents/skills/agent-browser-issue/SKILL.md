@@ -12,7 +12,7 @@ metadata:
 
 Handle $ARGUMENTS.
 
-Use this only for likely reusable agent/browser tooling bugs. Do not use it for:
+Use this only for likely reusable agent or browser tooling bugs. Do not use it for:
 
 - auth or SSO gates
 - manual human gates
@@ -34,7 +34,7 @@ Capture only the minimum:
 
 Open a GitHub issue with:
 
-- a short title focused on the browser/tool failure
+- a short title focused on the browser or tool failure
 - label `agent:browser`
 - concise body
 
@@ -64,7 +64,7 @@ Body shape:
 
 ## After
 
-- if the browser/tool failure exposes a user-action parity gap, use the
-  autogoal agent-native pack and note that gap in the issue
+- if the browser or tool failure exposes a user-action parity gap, load
+  `agent-native-reviewer` and note that gap in the issue
 - link the issue in the task caveat or handoff
 - keep moving if the product task is still otherwise fixable

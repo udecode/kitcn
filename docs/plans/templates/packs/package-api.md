@@ -16,6 +16,8 @@ Start Gates:
 |------|---------|----------|
 | Package/API pack selected | pending | pending |
 | Public surface or package boundary identified | pending | pending |
+| Convex entry/import graph impact identified | pending | pending |
+| CLI/scaffold/generated impact identified | pending | pending |
 | Release artifact path selected | pending | Choose one: `.changeset` or `N/A: no published user-visible delta` |
 | `changeset` skill loaded when `.changeset` is required | pending | pending |
 | Package build / fixture impact decision recorded | pending | pending |
@@ -26,6 +28,12 @@ Work Checklist:
 - [ ] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
 - [ ] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`.
 - [ ] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes.
+- [ ] Package/API pack: affected Convex static import graphs stay narrow and
+      plugin/per-module boundaries are used where appropriate.
+- [ ] Package/API pack: CLI commands remain deterministic, `--json` capable,
+      and non-interactive with explicit confirmation bypass when relevant.
+- [ ] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
+      current-state synchronized when public guidance changes.
 - [ ] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
 - [ ] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
 
@@ -33,8 +41,11 @@ Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
 | Public API / package boundary proof | pending | Source-audit public API, exports, and package boundary impact | pending |
+| Convex bundle/import proof | pending | Audit affected function-entry static graphs or record N/A | pending |
+| CLI/scaffold/generated proof | pending | Prove command contract and regenerate owned output or record N/A | pending |
 | Release artifact classification | pending | Record whether the change is published package behavior/API/types/config/runtime or no published user-visible delta | pending |
 | Published package changeset | pending | If published package users see a delta, load `changeset` and add/update one `.changeset/*.md` per package | pending |
 | No release artifact | pending | If no artifact is needed, record the exact reason: internal-only, docs-only, agent-only, test-only, or no user-visible delta from `main` | pending |
 | Package typecheck/build/test | pending | Run owning package checks or record N/A with reason | pending |
 | Fixture/scaffold generation | pending | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | pending |
+| Docs/package skill sync | pending | Synchronize current-state public guidance or record N/A | pending |

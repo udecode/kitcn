@@ -1,35 +1,77 @@
 {
   "version": 1,
   "skills": {
+    "agent-native-reviewer": {
+      "source": "udecode/dotai",
+      "sourceType": "github",
+      "skillPath": "skills/agent-native-reviewer/SKILL.md",
+      "computedHash": "b3aae9467ee099c9a811bf22ff48276c5adde2e90a25dcf150cb9db831427788"
+    },
     "autogoal": {
       "source": "udecode/dotai",
       "sourceType": "github",
       "skillPath": "skills/autogoal/SKILL.md",
-      "computedHash": "4a9e75ae168c8bef7d9b6555551356b281b729c35dfd75faf1d54d3b22eac347"
+      "computedHash": "c33a1de068e9b6059c4e469315821e64c9f834483561d9b95f19bfac995e41a8"
     },
     "autoreview": {
       "source": "openclaw/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/autoreview/SKILL.md",
-      "computedHash": "d4504560d06faeb839c45dce60958d61fff9f18a7530e5e4b343775457799345"
+      "computedHash": "db09c4873aeff8cea467b82e27fc858667b7d5bff2dfe58ca478f66542d5586b"
+    },
+    "avoid-feature-creep": {
+      "source": "waynesutton/convexskills",
+      "sourceType": "github",
+      "skillPath": "skills/avoid-feature-creep/SKILL.md",
+      "computedHash": "e63392840c3a80cbd9ec7b27888bf8d433b09bf6c9077ee3a6f882668057a390"
+    },
+    "better-auth-best-practices": {
+      "source": "better-auth/skills",
+      "sourceType": "github",
+      "skillPath": "better-auth/best-practices/SKILL.md",
+      "computedHash": "61ba0ef64ed2e7c424401cc848ca33dd6d790a720c44727717dc0c5cba5fc122"
     },
     "diagnosing-bugs": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
-      "computedHash": "1a993ce9b2aaa653ee441c8d7efb7f27de03493c722be6dfb8137bcb8db1bc72"
+      "computedHash": "fd6c99466b7ba43be624e6e66ed6d7af2796ded7218f24c83820823977819e22"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "b146008599c31057cef1c145774cea5d5afb30e8f43fa802e47a4b461419aaaf"
+    },
+    "next-dev-loop": {
+      "source": "vercel/next.js",
+      "sourceType": "github",
+      "skillPath": "skills/next-dev-loop/SKILL.md",
+      "computedHash": "aad97b32ba6efd31e92d063ec77120a694fe0d4a9401daf9af4c205cd5e21b07"
     },
     "orchestrator": {
       "source": "udecode/dotai",
       "sourceType": "github",
       "skillPath": "skills/orchestrator/SKILL.md",
-      "computedHash": "02a6d9c3931f0af4b6d0a04344082c90dd7d9cb9dbe1e4962bd98471591f02d8"
+      "computedHash": "4f4a86411e051b09635f48951c700e6be677abc5ef395217facff980fd543a48"
+    },
+    "prototype": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/prototype/SKILL.md",
+      "computedHash": "faba901c53a6ca245174c4ba5db3929d14253232b3050fdbd46539720adf1ab8"
     },
     "resolve-pr-feedback": {
       "source": "udecode/dotai",
       "sourceType": "github",
       "skillPath": "skills/resolve-pr-feedback/SKILL.md",
-      "computedHash": "442e0972e713cf42b08be2caebf18a00c267211bd19d71953a3572326853c782"
+      "computedHash": "e17b174cfda02006cf4477f8ebae28de5909e990cf3688c34675068bbe16d7a8"
+    },
+    "resolving-merge-conflicts": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/resolving-merge-conflicts/SKILL.md",
+      "computedHash": "28aad6f8b1b7025abc8892fa8890f68fe1533499b28a565f416b159131d22fad"
     },
     "tdd": {
       "source": "udecode/dotai",
@@ -41,7 +83,7 @@
       "source": "udecode/dotai",
       "sourceType": "github",
       "skillPath": "skills/video-transcripts/SKILL.md",
-      "computedHash": "dfce0b8ea81350223ee9967acbad18eb589e17aebf91e87e94b07dfaa86db471"
+      "computedHash": "76081a34506afc0fccb812ef41286247dd954b8b22af435171da7fd9c06bac95"
     }
   }
 }
