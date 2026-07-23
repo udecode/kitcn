@@ -82,6 +82,27 @@ export function useFnMeta(): (
 /** Headers record that allows empty objects and optional properties */
 type HeadersInput = { [key: string]: string | undefined };
 
+const decodeJwtSubject = (token: string | null): string | null => {
+  if (!token) return null;
+
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4)) % 4),
+      '='
+    );
+    const decoded = JSON.parse(atob(padded)) as {
+      sub?: unknown;
+    };
+    return typeof decoded.sub === 'string' ? decoded.sub : null;
+  } catch {
+    return null;
+  }
+};
+
 export type CRPCHttpOptions = {
   /** Base URL for the Convex HTTP API (e.g., https://your-site.convex.site) */
   convexSiteUrl: string;
@@ -201,13 +222,28 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
         return;
       }
 
-      if (
-        tokenReady &&
-        (previous.token !== token ||
-          previous.isAuthenticated !== isAuthenticated)
-      ) {
-        void convexQueryClient.resetAuthQueries();
+      const tokenChanged = previous.token !== token;
+      const authChanged = previous.isAuthenticated !== isAuthenticated;
+      if (!tokenReady || (!tokenChanged && !authChanged)) {
+        return;
       }
+
+      const previousSubject = decodeJwtSubject(previous.token);
+      const subject = decodeJwtSubject(token);
+      const sameKnownSubject =
+        previousSubject !== null &&
+        subject !== null &&
+        previousSubject === subject;
+      if (authChanged && sameKnownSubject) {
+        void convexQueryClient.softRefreshAuthQueries().catch(() => {});
+        return;
+      }
+
+      if (tokenChanged && sameKnownSubject) {
+        return;
+      }
+
+      void convexQueryClient.resetAuthQueries().catch(() => {});
     }, [convexQueryClient, isAuthenticated, token]);
 
     // Create HTTP proxy inside component with authStore access

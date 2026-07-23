@@ -235,6 +235,104 @@ describe('ConvexQueryClient (client mode lifecycle)', () => {
     unsubPublic();
   });
 
+  test('softRefreshAuthQueries preserves data and refetches only active one-shot auth queries', async () => {
+    const ConvexQueryClient = await getClientConvexQueryClient('soft-auth');
+
+    let liveUnsubscribes = 0;
+    const convexClient = {
+      watchQuery: () => ({
+        localQueryResult: () => undefined,
+        onUpdate: () => () => {
+          liveUnsubscribes++;
+        },
+      }),
+    };
+    const queryClient = new QueryClient();
+    const client = new ConvexQueryClient(convexClient, {
+      queryClient,
+      unsubscribeDelay: 0,
+    });
+
+    const liveKey = ['convexQuery', 'viewer:live', {}] as const;
+    const observedKey = ['convexQuery', 'viewer:observed', {}] as const;
+    const disabledKey = ['convexQuery', 'viewer:disabled', {}] as const;
+    const observerlessKey = ['convexQuery', 'viewer:observerless', {}] as const;
+    let observedFetches = 0;
+    let disabledFetches = 0;
+    let observerlessFetches = 0;
+
+    queryClient.setQueryData(liveKey as any, { value: 'live-cached' });
+    queryClient.setQueryData(observedKey as any, {
+      value: 'observed-cached',
+    });
+    queryClient.setQueryData(disabledKey as any, {
+      value: 'disabled-cached',
+    });
+    await queryClient.prefetchQuery({
+      meta: { authType: 'required', subscribe: false },
+      queryFn: async () => {
+        observerlessFetches++;
+        return { value: 'observerless-cached' };
+      },
+      queryKey: observerlessKey,
+    });
+
+    const liveObserver = new QueryObserver(queryClient as any, {
+      meta: { authType: 'required' },
+      queryFn: async () => ({ value: 'live-fresh' }),
+      queryKey: liveKey,
+    });
+    const unsubscribeLive = liveObserver.subscribe(() => {});
+    const observedObserver = new QueryObserver(queryClient as any, {
+      meta: { authType: 'optional', subscribe: false },
+      queryFn: async () => {
+        observedFetches++;
+        return { value: 'observed-fresh' };
+      },
+      queryKey: observedKey,
+    });
+    const unsubscribeObserved = observedObserver.subscribe(() => {});
+    const disabledObserver = new QueryObserver(queryClient as any, {
+      enabled: false,
+      meta: { authType: 'required', subscribe: false },
+      queryFn: async () => {
+        disabledFetches++;
+        return { value: 'disabled-fresh' };
+      },
+      queryKey: disabledKey,
+    });
+    const unsubscribeDisabled = disabledObserver.subscribe(() => {});
+
+    await queryClient.cancelQueries();
+    observedFetches = 0;
+    disabledFetches = 0;
+    observerlessFetches = 0;
+
+    await client.softRefreshAuthQueries();
+
+    expect(liveUnsubscribes).toBe(1);
+    expect(Object.keys(client.subscriptions)).toHaveLength(1);
+    expect(queryClient.getQueryData(liveKey as any)).toEqual({
+      value: 'live-cached',
+    });
+    expect(queryClient.getQueryData(disabledKey as any)).toEqual({
+      value: 'disabled-cached',
+    });
+    expect(queryClient.getQueryData(observedKey as any)).toEqual({
+      value: 'observed-fresh',
+    });
+    expect(queryClient.getQueryData(observerlessKey as any)).toEqual({
+      value: 'observerless-cached',
+    });
+    expect(observedFetches).toBe(1);
+    expect(disabledFetches).toBe(0);
+    expect(observerlessFetches).toBe(0);
+
+    unsubscribeLive();
+    unsubscribeObserved();
+    unsubscribeDisabled();
+  });
+
   test('onUpdateQueryKeyHash keeps existing data for undefined but accepts null subscription values', async () => {
     const ConvexQueryClient = await getClientConvexQueryClient('update-values');
 

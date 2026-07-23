@@ -470,6 +470,40 @@ export class ConvexQueryClient {
   }
 
   /**
+   * Rebuild auth-bound subscriptions without clearing cached query data.
+   *
+   * Active one-shot auth queries are refetched so they observe the current
+   * auth state. Disabled and observer-less queries remain untouched.
+   */
+  async softRefreshAuthQueries() {
+    const authQueries = this.queryClient
+      .getQueryCache()
+      .getAll()
+      .filter((query) => this.isAuthBoundQuery(query));
+
+    for (const query of authQueries) {
+      this.cancelPendingUnsubscribe(query.queryHash);
+      this.unsubscribeQueryByHash(query.queryHash);
+    }
+
+    for (const query of authQueries) {
+      this.subscribeQuery(query);
+    }
+
+    await this.queryClient.refetchQueries({
+      predicate: (query) => {
+        const meta = query.meta as ConvexQueryMeta | undefined;
+        return (
+          this.isAuthBoundQuery(query) &&
+          meta?.subscribe === false &&
+          query.getObserversCount() > 0 &&
+          !this.isQueryDisabled(query)
+        );
+      },
+    });
+  }
+
+  /**
    * Batch update all subscriptions.
    * Called internally when Convex client reconnects.
    */

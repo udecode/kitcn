@@ -224,11 +224,16 @@ describe('createCRPCContext', () => {
     }
   });
 
-  test('resets auth queries only when auth transitions reach a real JWT or logout null', () => {
+  test('refreshes auth queries based on identity changes', () => {
     const api = {} as any;
     const convexClient = {} as any;
     const convexQueryClient = {
-      resetAuthQueries: mock(async () => {}),
+      resetAuthQueries: mock(async () => {
+        throw new Error('reset failed');
+      }),
+      softRefreshAuthQueries: mock(async () => {
+        throw new Error('refresh failed');
+      }),
     } as any;
 
     let authState = {
@@ -249,13 +254,22 @@ describe('createCRPCContext', () => {
       </CRPCProvider>
     );
 
-    const jwt = `a.${Buffer.from(
-      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })
-    ).toString('base64')}.b`;
+    const makeJwt = (sub: string, tokenId: string) =>
+      `a.${Buffer.from(
+        JSON.stringify({
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          jti: tokenId,
+          sub,
+        })
+      ).toString('base64')}.b`;
+    const userA1 = makeJwt('user-a', 'token-1');
+    const userA2 = makeJwt('user-a', 'token-2');
+    const userB = makeJwt('user-b', 'token-3');
 
     const hook = renderHook(() => useMeta(), { wrapper });
     expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
 
+    // Token expiration is not decodable yet.
     authState = {
       isAuthenticated: false,
       token: 'opaque-session-token',
@@ -263,18 +277,71 @@ describe('createCRPCContext', () => {
     hook.rerender();
     expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
 
+    // Anonymous to signed in cannot prove the same identity.
     authState = {
       isAuthenticated: true,
-      token: jwt,
+      token: userA1,
     };
     hook.rerender();
     expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(1);
 
+    // A same-subject token re-mint is handled by the WebSocket layer.
+    authState = {
+      isAuthenticated: true,
+      token: userA2,
+    };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(1);
+    expect(convexQueryClient.softRefreshAuthQueries).not.toHaveBeenCalled();
+
+    // A late auth-state settle for the same known subject preserves data.
+    authState = {
+      isAuthenticated: false,
+      token: userA2,
+    };
+    hook.rerender();
+    expect(convexQueryClient.softRefreshAuthQueries).toHaveBeenCalledTimes(1);
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(1);
+
+    // Switching between known users hard-resets.
+    authState = {
+      isAuthenticated: false,
+      token: userB,
+    };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(2);
+
+    // A flip with an undecodable identity hard-resets.
+    authState = {
+      isAuthenticated: true,
+      token: `a.${Buffer.from(
+        JSON.stringify({
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        })
+      ).toString('base64')}.b`,
+    };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(3);
+
+    // A token-only change with unknown identity also fails closed.
+    authState = {
+      isAuthenticated: true,
+      token: `a.${Buffer.from(
+        JSON.stringify({
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          jti: 'token-without-sub',
+        })
+      ).toString('base64')}.b`,
+    };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(4);
+
+    // Sign-out remains a hard reset.
     authState = {
       isAuthenticated: false,
       token: null,
     };
     hook.rerender();
-    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(2);
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(5);
   });
 });
