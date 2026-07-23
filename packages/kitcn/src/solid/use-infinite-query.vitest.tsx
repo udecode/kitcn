@@ -201,6 +201,41 @@ describe('useInfiniteQuery', () => {
     expect((firstCall.queries[0] as any).enabled).toBe(true);
   });
 
+  test('does not split a native Convex page solely because it has a split cursor', () => {
+    const queryClient = new QueryClient();
+    const wrapper = makeWrapper(queryClient);
+    const firstPage = {
+      page: [{ _id: 'post-1' }, { _id: 'post-2' }, { _id: 'post-3' }],
+      isDone: false,
+      continueCursor: 'cursor-3',
+      splitCursor: 'cursor-2',
+    };
+    let capturedAccessor: (() => UseQueriesArg) | null = null;
+
+    mockUseQueries.mockImplementation((accessor: any) => {
+      capturedAccessor = accessor;
+      const arg = typeof accessor === 'function' ? accessor() : accessor;
+      useQueriesCalls.push(arg);
+      return arg.combine([
+        {
+          data: firstPage,
+          dataUpdatedAt: 1,
+          isError: false,
+          isFetching: false,
+          isLoading: false,
+          isPlaceholderData: false,
+        },
+      ]);
+    });
+
+    const options = createOptions({ limit: 3 });
+    const { result } = renderHook(() => useInfiniteQuery(options), { wrapper });
+
+    expect(result.data).toEqual(firstPage.page);
+    expect(result.hasNextPage).toBe(true);
+    expect(capturedAccessor!().queries).toHaveLength(1);
+  });
+
   test('fetchNextPage adds a new page query with continueCursor and limit', () => {
     const queryClient = new QueryClient();
     const wrapper = makeWrapper(queryClient);
