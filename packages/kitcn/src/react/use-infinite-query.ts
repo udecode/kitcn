@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CRPCClientError, isCRPCClientError } from '../crpc/error';
 import { convexQuery } from '../crpc/query-options';
 import { type ExtractPaginatedItem, FUNC_REF_SYMBOL } from '../crpc/types';
+import { shouldSplitPaginationPage } from '../internal/pagination';
 import type { DistributiveOmit } from '../internal/types';
 import { useAuthValue, useSafeConvexAuth } from './auth-store';
 import { useMeta } from './context';
@@ -132,13 +133,6 @@ type PageState = {
     __paginationId?: number;
   };
   endCursor?: string | null; // For page splitting - the cursor where this page ends
-};
-
-// Page splitting: when a page gets too large, Convex may return splitCursor
-// - SplitRecommended: page is large, should split on next render
-// - SplitRequired: page MUST be split (too large to return)
-type PageResultWithSplit<T> = PaginationResult<T> & {
-  splitCursor?: string | null;
 };
 
 /** Build a unique key for recovery attempt detection */
@@ -507,7 +501,7 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
       const allItems: PaginatedQueryItem<Query>[] = [];
       const pages: PaginatedQueryItem<Query>[][] = [];
       const seenIds = new Set<string>();
-      let lastPage: PageResultWithSplit<PaginatedQueryItem<Query>> | undefined;
+      let lastPage: PaginationResult<PaginatedQueryItem<Query>> | undefined;
       let paginationStatus: PaginationStatus = 'LoadingFirstPage';
 
       for (let i = 0; i < results.length; i++) {
@@ -516,7 +510,7 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
           paginationStatus = i === 0 ? 'LoadingFirstPage' : 'LoadingMore';
           break;
         }
-        const page = pageQuery.data as PageResultWithSplit<
+        const page = pageQuery.data as PaginationResult<
           PaginatedQueryItem<Query>
         >;
         lastPage = page;
@@ -577,25 +571,29 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
     state,
   });
 
-  // Handle page splitting - when a page returns splitCursor, we need to split it
+  // Split when Convex requests it or a reactive page outgrows its target size.
   useEffect(() => {
     for (let i = 0; i < combined._rawResults.length; i++) {
       const pageQuery = combined._rawResults[i];
       if (pageQuery.data) {
-        const page = pageQuery.data as PageResultWithSplit<
+        const page = pageQuery.data as PaginationResult<
           PaginatedQueryItem<Query>
         >;
         const pageKey = state.pageKeys[i];
         const pageState = state.queries[pageKey];
 
         // Check if this page needs splitting and we haven't already split it
-        if (page.splitCursor && pageState && !pageState.endCursor) {
+        if (
+          shouldSplitPaginationPage(page, limit) &&
+          pageState &&
+          !pageState.endCursor
+        ) {
           setState((prev) => {
             const currentPageState = prev.queries[pageKey];
             if (!currentPageState || currentPageState.endCursor) return prev;
 
             const newKey = prev.nextPageKey;
-            const splitCursor = page.splitCursor!; // Checked above: page.splitCursor is truthy
+            const splitCursor = page.splitCursor;
             const splitPageArgs = {
               ...argsObject,
               cursor: splitCursor,
@@ -635,6 +633,7 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
     state.pageKeys,
     state.queries,
     argsObject,
+    limit,
     setState,
   ]);
 

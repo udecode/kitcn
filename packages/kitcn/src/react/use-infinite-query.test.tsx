@@ -174,6 +174,87 @@ describe('useInfiniteQuery', () => {
     expect((firstCall.queries[0] as any).enabled).toBe(true);
   });
 
+  test('does not split a native Convex page solely because it has a split cursor', () => {
+    const queryClient = new QueryClient();
+    const wrapper = makeWrapper(queryClient);
+    const firstPage = {
+      page: [{ _id: 'post-1' }, { _id: 'post-2' }, { _id: 'post-3' }],
+      isDone: false,
+      continueCursor: 'cursor-3',
+      splitCursor: 'cursor-2',
+    };
+    const secondPage = {
+      page: [{ _id: 'post-4' }, { _id: 'post-5' }, { _id: 'post-6' }],
+      isDone: true,
+      continueCursor: 'cursor-6',
+    };
+
+    useQueriesSpy.mockImplementation((arg: UseQueriesArg) => {
+      useQueriesCalls.push(arg);
+      return (arg as any).combine(
+        [firstPage, secondPage]
+          .slice(0, arg.queries.length)
+          .map((data, index) => ({
+            data,
+            dataUpdatedAt: index + 1,
+            isError: false,
+            isFetching: false,
+            isLoading: false,
+            isPlaceholderData: false,
+          }))
+      );
+    });
+
+    const options = createOptions({ limit: 3 });
+    const { result } = renderHook(() => useInfiniteQuery(options), { wrapper });
+
+    expect(result.current.data).toEqual(firstPage.page);
+    expect(result.current.hasNextPage).toBe(true);
+    expect(useQueriesCalls.at(-1)?.queries).toHaveLength(1);
+
+    act(() => {
+      result.current.fetchNextPage();
+    });
+
+    expect(result.current.data).toEqual([
+      ...firstPage.page,
+      ...secondPage.page,
+    ]);
+    expect(result.current.hasNextPage).toBe(false);
+    expect(useQueriesCalls.at(-1)?.queries).toHaveLength(2);
+  });
+
+  test('splits a page when Convex recommends it', () => {
+    const queryClient = new QueryClient();
+    const wrapper = makeWrapper(queryClient);
+    const firstPage = {
+      page: [{ _id: 'post-1' }, { _id: 'post-2' }, { _id: 'post-3' }],
+      isDone: false,
+      continueCursor: 'cursor-3',
+      splitCursor: 'cursor-2',
+      pageStatus: 'SplitRecommended',
+    };
+
+    useQueriesSpy.mockImplementation((arg: UseQueriesArg) => {
+      useQueriesCalls.push(arg);
+      return (arg as any).combine([
+        {
+          data: firstPage,
+          dataUpdatedAt: 1,
+          isError: false,
+          isFetching: false,
+          isLoading: false,
+          isPlaceholderData: false,
+        },
+      ]);
+    });
+
+    const options = createOptions({ limit: 3 });
+    renderHook(() => useInfiniteQuery(options), { wrapper });
+
+    expect(useQueriesCalls.at(-1)?.queries).toHaveLength(2);
+  });
+
   test('fetchNextPage adds a new page query with continueCursor and limit', () => {
     const queryClient = new QueryClient();
     const wrapper = makeWrapper(queryClient);
