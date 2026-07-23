@@ -216,8 +216,9 @@ Work Checklist:
 - [x] Shared internal split policy is the durable owner; no caller shim.
 - [x] Patch changeset added for published `kitcn` runtime behavior.
 - [x] Bug handoff, task-style PR body, and discussion sync shape are recorded.
-- [ ] Commit/PR completed and recorded after final autoreview.
-- [ ] PR #270 task-style body created and read back after PR creation.
+- [x] Implementation committed as `0e6caccd`; branch pushed and PR #305 opened.
+- [x] PR #270 task-style body created for PR #305 and read back with
+      `gh pr view 305 --json body`.
 - [x] Dedicated `codex/fix-native-convex-pagination` branch used.
 - [x] Local-env retry recorded: one `bun install`, exact `bun check` rerun;
       remaining raw fixture failure was proven on `origin/main` and repaired.
@@ -270,17 +271,17 @@ Completion Gates:
 | High-risk mini gate | yes | Record risk/proof | Risk is premature exhaustion; 3-of-6 plus split-recommended tests cover both sides |
 | Agent-native review for agent/tooling changes | no | N/A | No agent/tooling contract changed |
 | Local install corruption suspected | yes | Retry once | `bun install` rerun did not hide product failure; stale mainline raw fixture then repaired and proved |
-| Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
+| Commit created | yes | Commit entire checkout | `0e6caccd fix native Convex pagination` |
+| PR create or update | yes | Push and open PR after `bun check` | PR #305 open from `codex/fix-native-convex-pagination` to `main` |
+| Task-style PR body verified | yes | Read body back | `gh pr view 305 --json body` confirmed auto-release block, fix/confidence lines, proof table, and all four emoji sections |
 | PR proof image hosting | no | N/A | No browser image applies |
-| GitHub issue sync-back | pending | Post concise issue sync after PR exists, or record N/A/blocker | pending |
-| Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
+| GitHub issue sync-back | yes | Post concise sync after PR | Discussion comment `DC_kwDOPTlS684BDuxx` read back from discussion #304 |
+| Final handoff contract | yes | Fill exact handoff fields | PR #305, discussion comment, 97% confidence, test/browser/outcome/caveat/design evidence recorded below |
 | Final lint | yes | Run lint | `bun lint:fix` and final `bun check` lint passed |
 | Output budget discipline | yes | Record recovery | One broad `rg` truncated; subsequent reads were exact and bounded |
 | Timed checkpoint | no | N/A | No duration requested |
 | Autoreview for non-trivial implementation changes | yes | Run required review | Final local autoreview clean; no accepted/actionable findings; overall 0.94 |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/304-native-convex-pagination-in-crpc-infinite-queries.md` | pending |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/304-native-convex-pagination-in-crpc-infinite-queries.md` | passed |
 | Docs source-backed claim audit | yes | Audit existing claims | Migration guide already shows native `paginate()` through cRPC |
 | Docs links / routes / previews | no | N/A | No docs content changed |
 | Docs MDX/content parser | no | N/A | No MDX/content changed |
@@ -301,8 +302,8 @@ Phase / pass table:
 | Intake and source read | complete | Discussion, Convex source, hooks, tests, and migration docs read | source-level repro |
 | Implementation | complete | React and Solid red-green tests; shared split predicate; patch changeset | verification |
 | Verification | complete | Focused tests, package checks, fixtures, repaired raw scenario, and full `bun check` passed | review |
-| Commit / PR / GitHub sync | pending | | final response |
-| Closeout | pending | | final response |
+| Commit / PR / GitHub sync | complete | Commit `0e6caccd`, PR #305, task body read-back, discussion comment read-back | closeout |
+| Closeout | complete | Final contract filled; closeout check follows this edit | final response |
 
 Findings:
 - Discussion #304 has no comments, answer, attachment, or video.
@@ -373,22 +374,29 @@ Source-listed case matrix:
 | Partial migration | Native Convex schema/paginator cannot easily be replaced with ORM | React and Solid native `PaginationResult` hook harnesses plus migration source audit | Both hooks created a split subscription from native result metadata | Native Convex paginator works without ORM/schema conversion | Both framework tests pass; migration guide already uses native paginator | fixed |
 
 Final handoff contract:
-- Commit line: pending
-- PR line: pending
-- Issue line: pending
-- Confidence line: pending
+- Commit line: `0e6caccd fix native Convex pagination`
+- PR line: https://github.com/udecode/kitcn/pull/305
+- Issue line:
+  https://github.com/udecode/kitcn/discussions/304#discussioncomment-17755249
+- Confidence line: 🟢 97% — focused regression, package, fixture, runtime, full
+  gate, and clean autoreview evidence
 - Flow table:
-  - Reproduced: tests pending, browser pending
-  - Verified: tests pending, browser pending
-- Browser check: pending
-- Outcome: pending
-- Caveat: pending
+  - Reproduced: 🔴 React/Solid made a second subscription from plain
+    `splitCursor`; browser N/A
+  - Verified: 🟢 React 6/6, Solid 5/5, `bun check`; browser N/A
+- Browser check: N/A: no visual surface; direct hook/runtime harness is honest
+- Outcome: native Convex pagination stays at 3 rows until explicit
+  `fetchNextPage()`, then reaches 6 and flips `hasNextPage` to false
+- Caveat: fixture sync refreshed six lucide ranges; current Next also required
+  a client boundary in the pre-existing raw shadcn runtime fixture
 - Design:
-  - Chosen boundary: pending
-  - Why not quick patch: pending
-  - Why not broader change: pending
-- Verified: pending
-- PR body verified: pending
+  - Chosen boundary: shared internal Convex split predicate
+  - Why not quick patch: hook-local conditionals would drift across frameworks
+  - Why not broader change: native pagination contract is sufficient; no ORM,
+    schema, public API, or docs migration is needed
+- Verified: focused tests, package typecheck/build, lint, fixture sync/check,
+  focused runtime scenario, full `bun check`, final autoreview clean at 0.94
+- PR body verified: yes, read back from PR #305
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -411,11 +419,13 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
-- Issue: pending
-- Browser proof: pending
-- Caveats: pending
+- Commit: `0e6caccd`
+- PR: https://github.com/udecode/kitcn/pull/305
+- Issue:
+  https://github.com/udecode/kitcn/discussions/304#discussioncomment-17755249
+- Browser proof: N/A: no visual surface
+- Caveats: six generated fixture manifest refreshes and one stale raw Next
+  fixture client-boundary repair shipped with the pagination fix
 
 Timeline:
 - 2026-07-23T17:39:30.782Z Task goal plan created.
@@ -427,12 +437,15 @@ Timeline:
 - 2026-07-23T20:22Z Current Next rejected the stale raw fixture server/client
   boundary; focused scenario passed after the one-line fixture repair.
 - 2026-07-23T20:28Z Final `bun check` passed every repo and runtime gate.
+- 2026-07-23T20:31Z Final autoreview clean at 0.94; commit `0e6caccd`
+  pushed; PR #305 opened and discussion #304 synced/read back.
+- 2026-07-23T20:33Z Goal-plan completion check passed.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Final review |
-| Where am I going? | Autoreview, commit/PR/discussion sync, closeout |
+| Where am I? | Closeout |
+| Where am I going? | Goal-plan completion check, closeout commit/push, final response |
 | What is the goal? | Fix and ship discussion #304 with direct 3-of-6 pagination proof |
 | What have I learned? | Plain `splitCursor` is metadata; page status/size owns splitting |
 | What have I done? | Reproduced/fixed both hooks, added changeset, restored stale runtime fixture, passed `bun check` |
