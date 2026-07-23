@@ -140,18 +140,18 @@ Start Gates:
 | Skill analysis before edits | yes | autogoal, vision, task, TDD, changeset, autoreview loaded |
 | Active goal checked or created | yes | thread goal created before edits |
 | Source of truth read before edits | yes | user task, VISION.md, current source/tests |
-| GitHub comments and attachments read | pending | pending |
+| GitHub comments and attachments read | no | N/A: user task, not GitHub-sourced |
 | Video transcript evidence required | no | N/A: no video |
 | Pre-solution issue challenge required | yes | valid; current effect hard-resets raw token/auth changes |
 | Reproduction verdict before implementation | yes | existing test/source path identified |
 | Repro escalation ladder selected | yes | focused unit tests; browser N/A |
 | Suggested fix reviewed against durable boundary | yes | client method + provider decision owner |
-| `docs/solutions` checked for non-trivial existing-code work | pending | pending |
+| `docs/solutions` checked for non-trivial existing-code work | yes | no matching solution owner found |
 | TDD decision before behavior change or bug fix | yes | vertical focused lifecycle/context tests |
 | Branch decision for code-changing task | yes | current dedicated branch is exactly at `origin/main` |
 | Release artifact decision | yes | minor kitcn changeset per user request |
 | Browser tool decision for browser surface | no | N/A: no browser surface |
-| Commit / PR expectation decision | pending | For verified code-changing work, default is commit, push, and PR because `task` explicitly requires it; N/A only for explicit user decline, no local patch, analytical/blocked/inconclusive work, or recorded blocker. |
+| Commit / PR expectation decision | yes | commit `5c264213`; PR #303 |
 | Task-style PR body decision | yes | user-prescribed body overrides template contract |
 | GitHub issue sync expectation decision | no | N/A: no issue supplied |
 | Output budget strategy recorded | yes | focused/capped reads and commands |
@@ -164,173 +164,201 @@ Start Gates:
 | Package build / fixture impact decision recorded | yes | package build required; fixtures N/A |
 
 Work Checklist:
-- [ ] If a duration was requested, it is recorded as minimum active work unless
+- [x] If a duration was requested, it is recorded as minimum active work unless
       explicitly marked hard stop; when no better metric exists, initial and
       final confidence scores are recorded.
-- [ ] Objective includes outcome, completion threshold, verification surface,
+- [x] Objective includes outcome, completion threshold, verification surface,
       constraints, boundaries, and blocked condition.
-- [ ] Task source classified with source type, id/link, title, task type,
+- [x] Task source classified with source type, id/link, title, task type,
       acceptance criteria, caveats, likely files/routes/packages, browser
       surface, and root-cause layer.
-- [ ] Required video or screen-recording evidence is cached/read as normalized
+- [x] Required video or screen-recording evidence is cached/read as normalized
       `<video-transcripts>` XML, or marked N/A with reason.
-- [ ] For public GitHub bug reports, behavior claims, technical diagnoses, or
+- [x] For public GitHub bug reports, behavior claims, technical diagnoses, or
       suggested fixes, reporter claims are challenged before implementation
       with a recorded verdict: `valid`, `not reproduced`, `invalid`,
       `wont-fix`, `partially valid`, or `platform limitation`. Feature, docs,
       support, or cleanup requests with no bug claim may mark reproduction
       `N/A` with reason.
-- [ ] Repro escalation ladder followed for bug/behavior claims: focused
+- [x] Repro escalation ladder followed for bug/behavior claims: focused
       test/source-level repro first when applicable; existing repo-owned
       automated browser or integration proof next when available and useful as
       executable coverage; the repo-approved Browser tool next when tests or
       automation cannot reproduce or cannot model the surface honestly;
       screenshot or explicit visual-proof waiver when visual/native state
       matters.
-- [ ] Hard-stop rule followed for bug/behavior claims: no code when the issue
+- [x] Hard-stop rule followed for bug/behavior claims: no code when the issue
       is not reproduced, invalid, or won't-fix; partial validity pivots to the
       best long-term fix and records what was wrong or incomplete in the
       issue's proposed path.
-- [ ] Nearby repo instructions and implementation patterns read before edits.
-- [ ] Source-listed case matrix is complete and every contradiction has an
+- [x] Nearby repo instructions and implementation patterns read before edits.
+- [x] Source-listed case matrix is complete and every contradiction has an
       owner, harness, and verdict before mutation.
-- [ ] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
+- [x] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
       `invalid` with evidence.
-- [ ] Implementation fixes the right ownership boundary, or the narrower choice
+- [x] Implementation fixes the right ownership boundary, or the narrower choice
       is recorded with reason.
-- [ ] Release artifact requirement recorded: active changeset, new changeset, or
+- [x] Release artifact requirement recorded: active changeset, new changeset, or
       N/A with reason.
-- [ ] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
+- [x] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
       requirements, PR body sync, and issue sync when applicable.
-- [ ] Commit/PR handling recorded for code-changing work: commit and PR
+- [x] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
-- [ ] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
-      recorded, or blocker recorded.
-- [ ] Branch handling recorded for code-changing work: dedicated branch used,
+- [x] PR body shape recorded: N/A: user explicitly supplied the verbatim PR body;
+      that body was used and read back.
+- [x] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
-- [ ] Local-env-rot retry policy recorded for any surprising repo-wide failure:
+- [x] Local-env-rot retry policy recorded for any surprising repo-wide failure:
       reinstall/rerun evidence or N/A with reason.
-- [ ] Workspace authority recorded: every proof command names the cwd/tool that
+- [x] Workspace authority recorded: every proof command names the cwd/tool that
       owns the changed behavior.
-- [ ] Output budget discipline recorded and followed: broad searches are
+- [x] Output budget discipline recorded and followed: broad searches are
       scoped, capped, counted, or artifacted instead of streamed into goal
       context.
-- [ ] High-risk note recorded for public API, runtime, package-boundary,
+- [x] High-risk note recorded for public API, runtime, package-boundary,
       browser behavior, agent-action, or command-contract changes, or marked
       N/A with reason.
-- [ ] Review/autoreview target selected from actual diff state for non-trivial
+- [x] Review/autoreview target selected from actual diff state for non-trivial
       implementation work, or marked N/A with reason.
-- [ ] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
+- [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
-- [ ] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
-- [ ] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
-- [ ] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
-- [ ] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`.
-- [ ] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes.
-- [ ] Package/API pack: affected Convex static import graphs stay narrow and
+- [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
+- [x] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
+- [x] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
+- [x] Package/API pack: no-artifact decision N/A: published delta has a changeset.
+- [x] Package/API pack: compatibility decision is additive, non-breaking API.
+- [x] Package/API pack: affected Convex static import graphs stay narrow and
       plugin/per-module boundaries are used where appropriate.
-- [ ] Package/API pack: CLI commands remain deterministic, `--json` capable,
+- [x] Package/API pack: CLI commands remain deterministic, `--json` capable,
       and non-interactive with explicit confirmation bypass when relevant.
-- [ ] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
+- [x] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
       current-state synchronized when public guidance changes.
-- [ ] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
-- [ ] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
+- [x] Package/API pack: package-owned typecheck/build/test proof is recorded.
+- [x] Package/API pack: `packages/kitcn` build and full repo proof are recorded.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
-| Named verification threshold | pending | Run the command, proof, source audit, or artifact check named in this plan | pending |
-| Pre-solution issue challenge verdict | pending | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | pending |
-| Repro escalation ladder | pending | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | pending |
-| Bug reproduced before fix | pending | Record failing test/repro or N/A with reason | pending |
-| Targeted behavior verification | pending | Run focused test/proof for changed behavior or record N/A | pending |
-| TypeScript or typed config changed | pending | Run relevant typecheck | pending |
-| Package exports or file layout changed | pending | Run the relevant package build before final verification and keep generated updates | pending |
-| Package manifests, lockfile, or install graph changed | pending | Run `bun install` and relevant package checks | pending |
-| Agent rules or skills changed | pending | Run `bun install` and verify generated skill sync | pending |
-| Workspace authority proof | pending | Run verification in the owning repo/package/app/route/tool and record cwd; do not count the wrong workspace as proof | pending |
-| Browser surface changed | pending | Capture Browser Use proof or record explicit waiver/blocker | pending |
-| Browser final proof | pending | Attach screenshot or exact browser verification caveat when browser proof applies | pending |
-| Scaffold or fixture output changed | pending | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | pending |
-| Package behavior or public API changed | pending | Add a changeset or record why no changeset applies | pending |
-| Docs and kitcn skill sync changed | pending | Keep `www/**` and `packages/kitcn/skills/kitcn/**` in sync, or record N/A | pending |
-| Docs or content changed | pending | For docs-heavy work, use `--template docs`; for incidental docs, verify source-backed claims, links, examples, and rendered output or record N/A | pending |
-| High-risk mini gate | pending | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | pending |
-| Agent-native review for agent/tooling changes | pending | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | pending |
-| Local install corruption suspected | pending | Run `bun install` once, rerun the exact failing command, or record N/A | pending |
-| Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
-| PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
-| GitHub issue sync-back | pending | Post concise issue sync after PR exists, or record N/A/blocker | pending |
-| Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
-| Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
-| Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
-| Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
-| Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-07-23-identity-aware-auth-query-reset.md` | pending |
-| Public API / package boundary proof | pending | Source-audit public API, exports, and package boundary impact | pending |
-| Convex bundle/import proof | pending | Audit affected function-entry static graphs or record N/A | pending |
-| CLI/scaffold/generated proof | pending | Prove command contract and regenerate owned output or record N/A | pending |
-| Release artifact classification | pending | Record whether the change is published package behavior/API/types/config/runtime or no published user-visible delta | pending |
-| Published package changeset | pending | If published package users see a delta, load `changeset` and add/update one `.changeset/*.md` per package | pending |
-| No release artifact | pending | If no artifact is needed, record the exact reason: internal-only, docs-only, agent-only, test-only, or no user-visible delta from `main` | pending |
-| Package typecheck/build/test | pending | Run owning package checks or record N/A with reason | pending |
-| Fixture/scaffold generation | pending | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | pending |
-| Docs/package skill sync | pending | Synchronize current-state public guidance or record N/A | pending |
+| Named verification threshold | yes | Run named proof | focused tests, package build/typecheck, and `bun check` passed |
+| Pre-solution issue challenge verdict | yes | Record verdict | valid from current effect and red tests |
+| Repro escalation ladder | yes | Use lowest honest layer | unit/lifecycle tests own behavior; browser N/A |
+| Bug reproduced before fix | yes | Record red proof | focused tests failed on missing soft refresh/API |
+| Targeted behavior verification | yes | Run focused proof | 25 focused tests passed |
+| TypeScript or typed config changed | yes | Run typecheck | package and repo typechecks passed |
+| Package exports or file layout changed | yes | Run build | package build passed; declarations include method |
+| Package manifests, lockfile, or install graph changed | no | N/A | no repository manifest/lock delta |
+| Agent rules or skills changed | no | N/A | no agent source change |
+| Workspace authority proof | yes | Run in owning repo | all commands ran in this kitcn worktree |
+| Browser surface changed | no | N/A | no browser-rendered surface |
+| Browser final proof | no | N/A | package lifecycle behavior |
+| Scaffold or fixture output changed | no | N/A | no scaffold source changed; fixture check passed |
+| Package behavior or public API changed | yes | Add changeset | `.changeset/calm-auth-queries.md` |
+| Docs and kitcn skill sync changed | no | N/A | JSDoc owns this class method; no guide changed |
+| Docs or content changed | no | N/A | execution plan only |
+| High-risk mini gate | yes | Prove cache/identity safety | matrix, sign-out, and lifecycle tests passed |
+| Agent-native review for agent/tooling changes | no | N/A | no agent/tooling changes |
+| Local install corruption suspected | yes | Repair and rerun | installed pinned Bun/deps; CLI lane then passed |
+| Commit created | yes | Commit scope | `5c264213` plus closeout-plan commit |
+| PR create or update | yes | Push/open PR | https://github.com/udecode/kitcn/pull/303 |
+| Task-style PR body verified | no | N/A | user-prescribed verbatim body used and read back |
+| PR proof image hosting | no | N/A | no browser proof |
+| GitHub issue sync-back | no | N/A | no issue supplied |
+| Final handoff contract | yes | Fill fields | completed below |
+| Final lint | yes | Run lint fix | `bun lint:fix` clean |
+| Output budget discipline | yes | Audit output | focused reads; long required gate output was capped |
+| Timed checkpoint | no | N/A | no duration requested |
+| Autoreview for non-trivial implementation changes | yes | Review local diff | one accepted fix; two contract-conflicting findings rejected |
+| Goal plan complete | yes | Run checker | run after this update |
+| Public API / package boundary proof | yes | Audit public declaration | exported class declaration contains new public method |
+| Convex bundle/import proof | no | N/A | no Convex function-entry import graph changed |
+| CLI/scaffold/generated proof | no | N/A | no CLI/scaffold source changed |
+| Release artifact classification | yes | Classify | published additive React API/runtime behavior |
+| Published package changeset | yes | Add changeset | minor `kitcn` changeset |
+| No release artifact | no | N/A | published delta has changeset |
+| Package typecheck/build/test | yes | Run package proof | 1,002 package tests, typecheck, build passed |
+| Fixture/scaffold generation | no | N/A | no scaffold output change; repo fixture gate passed |
+| Docs/package skill sync | no | N/A | no public guide content changed |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
 |-------|--------|----------|------|
-| Intake and source read | in_progress | created plan | implementation |
-| Implementation | pending | | verification |
-| Verification | pending | | closeout |
-| Commit / PR / GitHub sync | pending | | final response |
-| Closeout | pending | | final response |
+| Intake and source read | complete | source, vision, kino patch, and owners read | done |
+| Implementation | complete | effect/client/tests/changeset implemented | done |
+| Verification | complete | focused/package/repo gates passed | done |
+| Commit / PR / GitHub sync | complete | commit pushed; PR #303 open | done |
+| Closeout | complete | plan and handoff finalized | final response |
 
 Findings:
-- None yet.
+- Raw token comparison reset all auth-bound query data during normal same-user
+  JWT rotation.
+- Kino's patch confirmed base64url subject decoding and subscription refresh
+  mechanics; the source implementation additionally fails closed for any ready
+  token change whose identity cannot be proven equal.
 
 Decisions and tradeoffs:
-- None yet.
+- Use JWT `sub` as requested; no extractor option because the current config
+  surface does not make it cheap.
+- Keep same-subject token rotation a no-op; Convex handles live subscriptions.
+- Soft-refresh only same-subject auth flips and active one-shot auth queries.
 
 Implementation notes:
-- None yet.
+- Added public `softRefreshAuthQueries()` with JSDoc.
+- Preserved direct auth-mutation hard resets.
 
 Review fixes:
-- None yet.
+- Accepted: ready token changes with unknown subject hard-reset; added coverage.
+- Rejected: compare issuer plus subject; task explicitly defines identity as
+  `sub`.
+- Rejected: soft-refresh same-subject token-only changes; task explicitly
+  delegates rotation to the WebSocket layer.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
 |------------------------|-------|---------------------|------------|
-| None yet | 0 | | |
+| Bun absent from PATH | 1 | install pinned Bun 1.3.9 | CLI lane passed |
+| Fresh external shadcn button lacked `use client` | 2 | patch ignored temp scenario only | full `bun check` passed |
 
 Verification evidence:
-- Pending.
+- `bun test packages/kitcn/src` -> 1,002 passed.
+- `bun --cwd packages/kitcn typecheck` -> passed.
+- `bun --cwd packages/kitcn build` -> passed.
+- Focused final auth tests -> 25 passed.
+- `bun check` -> passed, including lint, typecheck, Bun/Vitest/CLI/Concave
+  suites, fixture parity, verify, runtime scenarios, and auth smoke.
+- Autoreview -> one accepted finding fixed; remaining findings rejected as
+  explicit contract conflicts; TruffleHog clean.
 
 Source-listed case matrix:
 | Case | Source claim | Harness | Before | Expected after | Evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| pending | pending | pending | pending | pending | pending | pending |
+| Same-subject re-mint | no reset/refresh | context test | hard reset | no-op | passing assertion | complete |
+| Same-subject auth flip | preserve data | context + lifecycle tests | hard reset/data wipe | soft refresh | passing assertions | complete |
+| Anonymous to signed-in | hard reset | context test | hard reset | hard reset | passing assertion | complete |
+| Sign-out | hard reset | context + auth mutation tests | hard reset | hard reset | passing assertions | complete |
+| User A to B | hard reset | context test | hard reset | hard reset | passing assertion | complete |
+| Unknown identity | fail closed | context test | hard reset on auth/token change | hard reset | passing assertions | complete |
+| Exp undecodable | no action | context test | guarded no-op | guarded no-op | passing assertion | complete |
+| Soft refresh | preserve/refetch active one-shot only | lifecycle test | API absent | contract satisfied | passing assertions | complete |
 
 Final handoff contract:
-- Commit line: pending
-- PR line: pending
-- Issue line: pending
-- Confidence line: pending
+- Commit line: `5c264213` plus closeout-plan commit
+- PR line: https://github.com/udecode/kitcn/pull/303
+- Issue line: N/A: no issue supplied
+- Confidence line: high; all requested and repository gates passed
 - Flow table:
-  - Reproduced: tests pending, browser pending
-  - Verified: tests pending, browser pending
-- Browser check: pending
-- Outcome: pending
-- Caveat: pending
+  - Reproduced: focused tests failed before implementation; browser N/A
+  - Verified: focused/package/repo tests passed; browser N/A
+- Browser check: N/A: package lifecycle behavior
+- Outcome: same-identity auth transitions preserve loaded cache
+- Caveat: claim-sensitive same-subject changes retain visible data until live
+  resubscription updates it, as documented in the prescribed PR body
 - Design:
-  - Chosen boundary: pending
-  - Why not quick patch: pending
-  - Why not broader change: pending
-- Verified: pending
-- PR body verified: pending
+  - Chosen boundary: React provider transition decision and shared query client
+  - Why not quick patch: dist patch is generated output, not source ownership
+  - Why not broader change: identity extractor is a follow-up, per task
+- Verified: focused matrix, package tests/typecheck/build, full repo check
+- PR body verified: prescribed body read back from PR #303
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -353,26 +381,29 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
-- Issue: pending
-- Browser proof: pending
-- Caveats: pending
+- Commit: `5c264213` plus closeout-plan commit
+- PR: https://github.com/udecode/kitcn/pull/303
+- Issue: N/A
+- Browser proof: N/A
+- Caveats: no unresolved in-scope defects
 
 Timeline:
 - 2026-07-23T05:35:26.021Z Task goal plan created.
+- 2026-07-23 implementation and focused/package proof completed.
+- 2026-07-23 full repository check passed; review fix applied and reverified.
+- 2026-07-23 commit pushed and PR #303 opened with prescribed body.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Intake and source read |
-| Where am I going? | Implementation, verification, commit/PR/GitHub sync, closeout |
-| What is the goal? | TODO: Fill from Objective |
-| What have I learned? | See Findings |
-| What have I done? | See Timeline |
+| Where am I? | Closeout complete |
+| Where am I going? | Final response |
+| What is the goal? | Ship identity-aware auth query reset in PR #303 |
+| What have I learned? | See Findings and Review fixes |
+| What have I done? | Implemented, verified, reviewed, committed, pushed, opened PR |
 
 Open risks:
-- Pending.
+- None in requested scope.
 
 Hard closeout guard:
 - A local-only final response for verified code-changing work is invalid unless
