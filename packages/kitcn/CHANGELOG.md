@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.15.17
+
+### Patch Changes
+
+- [#305](https://github.com/udecode/kitcn/pull/305) [`b7ccc0b`](https://github.com/udecode/kitcn/commit/b7ccc0b19fb79017a9116bebc548b63b6081b822) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix cRPC infinite queries backed by native Convex pagination loading pages
+    before `fetchNextPage()` is called.
+
 ## 0.15.16
 
 ### Patch Changes
