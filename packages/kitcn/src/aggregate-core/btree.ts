@@ -1003,15 +1003,25 @@ export async function deleteTreeNodes(
   await db.delete(node);
 }
 
+export type DeleteTreesResult = {
+  /** True once this aggregate owns no tree row at all. */
+  done: boolean;
+  /** Documents this call wrote, so callers can charge a real work budget. */
+  documents: number;
+};
+
 /**
  * Deletes up to `limit` nodes from one namespace tree belonging to an
- * aggregate, returning true once none are left. The traversal stack lives on
+ * aggregate, reporting `done` once none are left. The traversal stack lives on
  * the tree document so a large tree resumes across transactions.
+ *
+ * Nodes are dropped whatever they contain, so a caller clearing an aggregate
+ * never has to empty the tree key by key first.
  */
 export async function deleteTreesHandler(
   ctx: { db: DatabaseWriter },
   args: { aggregateName: string; limit: number }
-): Promise<boolean> {
+): Promise<DeleteTreesResult> {
   const trees = (await ctx.db
     .query(AGGREGATE_TREE_TABLE)
     .withIndex('by_aggregate_name', (q) =>
@@ -1020,11 +1030,12 @@ export async function deleteTreesHandler(
     .take(1)) as TreeDoc[];
   const tree = trees[0];
   if (!tree) {
-    return true;
+    return { done: true, documents: 0 };
   }
 
   const stack = [...(tree.deletionStack ?? [tree.root])];
   let remaining = Math.max(1, Math.floor(args.limit));
+  let documents = 0;
   while (stack.length > 0 && remaining > 0) {
     const nodeId = stack.pop()!;
     const node = (await ctx.db.get(nodeId)) as NodeDoc | null;
@@ -1034,6 +1045,7 @@ export async function deleteTreesHandler(
     }
     stack.push(...node.subtrees);
     await ctx.db.delete(nodeId);
+    documents += 1;
   }
 
   if (stack.length > 0) {
@@ -1041,7 +1053,7 @@ export async function deleteTreesHandler(
   } else {
     await ctx.db.delete(tree._id);
   }
-  return false;
+  return { done: false, documents: documents + 1 };
 }
 
 export async function clearTree(

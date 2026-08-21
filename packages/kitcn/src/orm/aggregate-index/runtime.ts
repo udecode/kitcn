@@ -3270,12 +3270,16 @@ export type ClearIndexChunkResult = {
  * reports whether anything is left. Callers drive it to completion across
  * transactions, so clearing a large index never has to fit in one mutation.
  *
- * Members are removed through the normal delta machinery rather than raw
- * deletes, so buckets and extrema stay consistent with the members that remain
- * at every intermediate step. That keeps concurrent writers correct while the
- * clear drains. Residual bucket/extrema rows (drift with no member behind them)
- * are swept only once no members are left, and the loop re-checks members
- * afterwards.
+ * Member rows are deleted outright rather than run back through the delta
+ * machinery. The bucket and extrema branches below drop every row this index
+ * owns whatever it holds, so folding a removal delta into a bucket first would
+ * only rewrite a document this same clear is about to delete.
+ *
+ * Branch order is load-bearing: buckets and extrema are swept only once no
+ * members are left, and the loop re-checks members afterwards. The intermediate
+ * "members gone, buckets still populated" state is safe because `setCountState`
+ * refuses to leave CLEARING while a bucket or extrema row survives, and the
+ * CLEARING write barrier keeps concurrent writers out of the index.
  */
 export const clearCountIndexChunk = async (
   db: GenericDatabaseWriter<any>,
@@ -3290,16 +3294,9 @@ export const clearCountIndexChunk = async (
     batchSize
   );
   if (members.length > 0) {
-    const deltas = members.map((member) =>
-      computeMembershipDelta(member, {
-        tableName,
-        indexName,
-        docId: member.docId,
-        keyParts: null,
-        metricValues: null,
-      })
-    );
-    await flushAggregateMembershipDeltas(db, tableName, indexName, deltas);
+    for (const member of members) {
+      await db.delete(AGGREGATE_MEMBER_TABLE, member._id as any);
+    }
     return { done: false, processed: members.length };
   }
 

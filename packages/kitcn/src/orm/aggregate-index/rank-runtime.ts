@@ -352,14 +352,21 @@ const takeRankMembers = async (
 const rankCtx = (db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>) =>
   ({ db, orm: undefined }) as any;
 
-/** Trees dropped per invocation once every rank member has been removed. */
-const RANK_TREE_DROP_BATCH = 16;
-
 /**
- * Removes at most `batchSize` rank members and reports whether anything is
- * left. Each member is removed from the btree before its row is dropped, so the
- * tree stays consistent with the members that remain and a partially drained
- * clear can safely resume in a later mutation.
+ * Removes at most `batchSize` documents of a rank index's stored state and
+ * reports whether anything is left. Callers drive it to completion across
+ * transactions, so clearing a large index never has to fit in one mutation.
+ *
+ * Member rows are dropped without touching the btree. The tree branch below
+ * deletes every node whatever it contains, so removing a member key first would
+ * only buy a root-to-leaf descent plus an aggregate patch per level on nodes
+ * this same clear is about to delete.
+ *
+ * Branch order is load-bearing: a member delete recreates the tree it lands on,
+ * so the members must be gone before the first node is dropped. The
+ * intermediate "members gone, tree still full" state is safe because
+ * `setCountState` refuses to leave CLEARING while a tree row survives, and the
+ * CLEARING write barrier keeps concurrent writers out of the index.
  */
 export const clearRankIndexChunk = async (
   db: GenericDatabaseWriter<any>,
@@ -367,26 +374,20 @@ export const clearRankIndexChunk = async (
   indexName: string,
   batchSize: number
 ): Promise<{ done: boolean; processed: number }> => {
-  const aggregate = rankAggregate(tableName, indexName);
-  const ctx = rankCtx(db);
   const members = await takeRankMembers(db, tableName, indexName, batchSize);
-
   if (members.length > 0) {
     for (const member of members) {
-      if (member.rankKey !== undefined) {
-        await aggregate.deleteIfExists(ctx, {
-          id: member.docId,
-          key: member.rankKey as any,
-          namespace: member.rankNamespace as any,
-        });
-      }
       await db.delete(AGGREGATE_MEMBER_TABLE, member._id as any);
     }
     return { done: false, processed: members.length };
   }
 
-  const done = await aggregate.deleteTrees(ctx, RANK_TREE_DROP_BATCH);
-  return { done, processed: done ? 0 : RANK_TREE_DROP_BATCH };
+  const aggregate = rankAggregate(tableName, indexName);
+  const { documents, done } = await aggregate.deleteTrees(
+    rankCtx(db),
+    batchSize
+  );
+  return { done, processed: documents };
 };
 
 export const reconcileRankMembership = async (

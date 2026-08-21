@@ -1,3 +1,4 @@
+import { aggregateStorageTables } from '../aggregate-core/schema';
 import {
   convexTable,
   defineRelations,
@@ -292,6 +293,25 @@ test('defineSchema throws when extension-injected table name is already in use',
   expect(() =>
     defineSchema({ users, ratelimitState }).extend(ratelimitExtension())
   ).toThrow(/cannot inject internal table 'ratelimitState'/i);
+});
+
+test('defineSchema accepts a declared table an extension injects by identity', () => {
+  // An app using `kitcn/aggregate` spreads its storage tables into the schema.
+  // A `rankIndex` on any table injects the same btree tables, and both sides
+  // must resolve to the same definition or the collision guard fires on a
+  // combination that is perfectly valid.
+  const users = convexTable('identity_collision_users', {
+    name: text().notNull(),
+  });
+
+  const schema = defineSchema({
+    users,
+    ...aggregateStorageTables,
+  });
+
+  expect(getTableConfig(schema.tables.aggregate_rank_tree).name).toBe(
+    'aggregate_rank_tree'
+  );
 });
 
 test('defineSchema stores relations metadata from chained relations on default schema export', () => {

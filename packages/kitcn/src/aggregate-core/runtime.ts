@@ -18,6 +18,7 @@ import {
   atOffsetHandler,
   type Key as BTreeKey,
   clearTree,
+  type DeleteTreesResult,
   deleteHandler,
   deleteTreesHandler,
   getOrCreateTree,
@@ -540,11 +541,15 @@ export class Aggregate<
   }
 
   /**
-   * Deletes up to `limit` namespace trees without recreating them. Returns true
-   * once this aggregate owns no trees, so callers can drain every namespace
-   * across several mutations instead of walking them all in one.
+   * Deletes up to `limit` nodes from one namespace tree without recreating it,
+   * reporting `done` once this aggregate owns no trees and how many documents
+   * the call wrote. Callers drain every namespace across several mutations
+   * instead of walking them all in one, and charge their budget by `documents`.
    */
-  async deleteTrees(ctx: RunMutationCtx, limit: number): Promise<boolean> {
+  async deleteTrees(
+    ctx: RunMutationCtx,
+    limit: number
+  ): Promise<DeleteTreesResult> {
     return deleteTreesHandler(
       { db: ctx.db },
       { aggregateName: this.aggregateName, limit }

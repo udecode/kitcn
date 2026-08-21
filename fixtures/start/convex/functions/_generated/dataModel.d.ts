@@ -65,7 +65,7 @@ export type DataModel = {
     };
   };
   aggregate_rank_node: {
-    document: { aggregate?: null | { count: number; sum: number }; items: Array<{ k: null | any; v: null | any; s: number }>; subtrees: Array<string>; _id: Id<"aggregate_rank_node">; _creationTime: number };
+    document: { aggregate?: null | { count: number; sum: number }; items: Array<{ k: any; v: any; s: number }>; subtrees: Array<string>; _id: Id<"aggregate_rank_node">; _creationTime: number };
     fieldPaths: "_creationTime" | "_id" | "aggregate" | "aggregate.count" | "aggregate.sum" | "items" | "subtrees";
     indexes: {
       "by_creation_time": ["_creationTime"];
@@ -77,8 +77,8 @@ export type DataModel = {
     };
   };
   aggregate_rank_tree: {
-    document: { aggregateName: string; maxNodeSize: number; namespace?: null | any; root: Id<"aggregate_rank_node">; _id: Id<"aggregate_rank_tree">; _creationTime: number };
-    fieldPaths: "_creationTime" | "_id" | "aggregateName" | "maxNodeSize" | "namespace" | "root";
+    document: { aggregateName: string; deletionStack?: null | Array<Id<"aggregate_rank_node">>; maxNodeSize: number; namespace?: null | any; root: Id<"aggregate_rank_node">; _id: Id<"aggregate_rank_tree">; _creationTime: number };
+    fieldPaths: "_creationTime" | "_id" | "aggregateName" | "deletionStack" | "maxNodeSize" | "namespace" | "root";
     indexes: {
       "by_aggregate_name": ["aggregateName"];
       "by_creation_time": ["_creationTime"];

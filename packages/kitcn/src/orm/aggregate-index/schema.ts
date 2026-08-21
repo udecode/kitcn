@@ -1,4 +1,10 @@
-import { arrayOf, id, integer, json, objectOf, text } from '../builders';
+import {
+  AGGREGATE_NODE_TABLE,
+  AGGREGATE_TREE_TABLE,
+  aggregateNodeTable,
+  aggregateTreeTable,
+} from '../../aggregate-core/schema';
+import { arrayOf, integer, json, objectOf, text } from '../builders';
 import { defineSchemaExtension, type SchemaExtension } from '../extensions';
 import { index } from '../indexes';
 import { convexTable } from '../table';
@@ -6,9 +12,17 @@ import { convexTable } from '../table';
 export const AGGREGATE_BUCKET_TABLE = 'aggregate_bucket';
 export const AGGREGATE_MEMBER_TABLE = 'aggregate_member';
 export const AGGREGATE_EXTREMA_TABLE = 'aggregate_extrema';
-export const AGGREGATE_RANK_TREE_TABLE = 'aggregate_rank_tree';
-export const AGGREGATE_RANK_NODE_TABLE = 'aggregate_rank_node';
 export const AGGREGATE_STATE_TABLE = 'aggregate_state';
+
+// The btree owns its own storage shape; rank indexes are one of its callers.
+// Re-exporting the same table objects (rather than transcribing them) is what
+// keeps `deletionStack` and the node validators from drifting, and it lets an
+// app declare `kitcn/aggregate`'s storage tables alongside a rankIndex without
+// `injectAggregateStorageTables` rejecting the duplicate name.
+export const AGGREGATE_RANK_TREE_TABLE = AGGREGATE_TREE_TABLE;
+export const AGGREGATE_RANK_NODE_TABLE = AGGREGATE_NODE_TABLE;
+export const rankTreeTable = aggregateTreeTable;
+export const rankNodeTable = aggregateNodeTable;
 
 /**
  * Partition key a rank index's btree rows are stored under. Lives next to the
@@ -120,35 +134,6 @@ export const countStateTable = convexTable(
     index('by_table_status').on(t.tableKey, t.status),
   ]
 );
-
-export const rankTreeTable = convexTable(
-  AGGREGATE_RANK_TREE_TABLE,
-  {
-    aggregateName: text().notNull(),
-    maxNodeSize: integer().notNull(),
-    namespace: json(),
-    root: id(AGGREGATE_RANK_NODE_TABLE).notNull(),
-  },
-  (tree) => [
-    index('by_namespace').on(tree.namespace),
-    index('by_aggregate_name').on(tree.aggregateName),
-  ]
-);
-
-export const rankNodeTable = convexTable(AGGREGATE_RANK_NODE_TABLE, {
-  aggregate: objectOf({
-    count: integer().notNull(),
-    sum: integer().notNull(),
-  }),
-  items: arrayOf(
-    objectOf({
-      k: json(),
-      v: json(),
-      s: integer().notNull(),
-    })
-  ).notNull(),
-  subtrees: arrayOf(text().notNull()).notNull(),
-});
 
 export const aggregateStorageTables = {
   [AGGREGATE_BUCKET_TABLE]: countBucketTable,

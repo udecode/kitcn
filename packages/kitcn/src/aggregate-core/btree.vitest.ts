@@ -832,26 +832,39 @@ describe('namespace pagination regression', () => {
       }
 
       const before = await ctx.db.query(AGGREGATE_NODE_TABLE).collect();
-      const firstDone = await deleteTreesHandler(ctx, {
+      const first = await deleteTreesHandler(ctx, {
         aggregateName: '__legacy__',
         limit: 2,
       });
       const afterFirst = await ctx.db.query(AGGREGATE_NODE_TABLE).collect();
 
-      expect(firstDone).toBe(false);
+      expect(first.done).toBe(false);
       expect(before.length - afterFirst.length).toBe(2);
       expect(afterFirst.length).toBeGreaterThan(0);
+      // 2 nodes plus the tree row carrying the resumed traversal stack.
+      expect(first.documents).toBe(3);
 
       let done = false;
+      let documents = first.documents;
+      // The last call finds no tree row, so it neither writes nor counts.
+      let writingCalls = 1;
       while (!done) {
-        done = await deleteTreesHandler(ctx, {
+        const step = await deleteTreesHandler(ctx, {
           aggregateName: '__legacy__',
           limit: 2,
         });
+        done = step.done;
+        documents += step.documents;
+        if (!done) {
+          writingCalls += 1;
+        }
       }
 
       expect(await ctx.db.query(AGGREGATE_NODE_TABLE).collect()).toEqual([]);
       expect(await ctx.db.query(AGGREGATE_TREE_TABLE).collect()).toEqual([]);
+      // A populated tree drains without emptying its keys first, and the
+      // reported budget is exactly every node once plus one tree row per call.
+      expect(documents).toBe(before.length + writingCalls);
     });
   });
 
