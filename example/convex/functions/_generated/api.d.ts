@@ -926,6 +926,38 @@ export declare const internal: {
       >;
     };
     auth: {
+      count: FunctionReference<
+        "query",
+        "internal",
+        {
+          model: string;
+          where?: Array<{
+            connector?: "AND" | "OR";
+            field: string;
+            mode?: "sensitive" | "insensitive";
+            operator?:
+              | "lt"
+              | "lte"
+              | "gt"
+              | "gte"
+              | "eq"
+              | "in"
+              | "not_in"
+              | "ne"
+              | "contains"
+              | "starts_with"
+              | "ends_with";
+            value:
+              | string
+              | number
+              | boolean
+              | Array<string>
+              | Array<number>
+              | null;
+          }>;
+        },
+        any
+      >;
       create: FunctionReference<
         "mutation",
         "internal",

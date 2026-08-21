@@ -14,6 +14,7 @@ import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'kitcn/orm';
 
 const procedureRegistry = {
+  "count": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof import("./auth").count>("generated/auth:count"), () => (require("./auth") as Record<string, unknown>)["count"])],
   "create": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").create>("generated/auth:create"), () => (require("./auth") as Record<string, unknown>)["create"])],
   "deleteMany": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").deleteMany>("generated/auth:deleteMany"), () => (require("./auth") as Record<string, unknown>)["deleteMany"])],
   "deleteOne": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").deleteOne>("generated/auth:deleteOne"), () => (require("./auth") as Record<string, unknown>)["deleteOne"])],

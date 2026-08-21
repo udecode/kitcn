@@ -184,6 +184,7 @@ type ProcedureExportLike = {
 };
 
 const AUTH_RUNTIME_PROCEDURE_TYPES = {
+  count: 'query',
   create: 'mutation',
   deleteMany: 'mutation',
   deleteOne: 'mutation',
@@ -208,6 +209,9 @@ const resolveAuthFunctions = (
   ] ?? {}) as Partial<AuthFunctions>;
 
   return {
+    count:
+      existing.count ??
+      createGeneratedInternalFunctionReference<'query'>(`${moduleName}:count`),
     create:
       existing.create ??
       createGeneratedInternalFunctionReference<'mutation'>(

@@ -308,7 +308,7 @@ describe('httpAdapter', () => {
     });
 
     const adapterFactory = httpAdapter({ runQuery } as any, {
-      authFunctions: { findMany: 'findMany' } as any,
+      authFunctions: { count: 'count', findMany: 'findMany' } as any,
     });
     const adapter = adapterFactory({} as any);
 
@@ -322,6 +322,9 @@ describe('httpAdapter', () => {
 
     const count = await adapter.count({ model: 'user', where });
     expect(count).toBe(1);
+    // A scalar count cannot reproduce the cross-clause de-duplication, so the
+    // OR branch must never reach the bounded count.
+    expect(runQuery).not.toHaveBeenCalledWith('count', expect.anything());
   });
 
   test('findMany throws when offset is provided', async () => {
@@ -690,9 +693,34 @@ describe('httpAdapter', () => {
     expect(runMutation).not.toHaveBeenCalled();
   });
 
-  test('count totals every page without materializing the table', async () => {
+  test('count reads the bounded count instead of walking pages', async () => {
+    const runQuery = mock(async (handle: unknown) => {
+      if (handle !== 'count') {
+        throw new Error(`findMany must not run for a bounded count: ${handle}`);
+      }
+      return 205;
+    });
+    const adapterFactory = httpAdapter({ runQuery } as any, {
+      authFunctions: { count: 'count', findMany: 'findMany' } as any,
+    });
+    const adapter = adapterFactory({} as any);
+
+    await expect(adapter.count({ model: 'user' })).resolves.toBe(205);
+    expect(runQuery).toHaveBeenCalledTimes(1);
+    expect(runQuery).toHaveBeenCalledWith('count', {
+      model: 'user',
+      where: [],
+    });
+  });
+
+  test('count totals every page when the shape cannot be bounded', async () => {
     let index = 0;
-    const runQuery = mock(async () => {
+    const runQuery = mock(async (handle: unknown) => {
+      // `null` is the handler telling the adapter it cannot bound this shape.
+      if (handle === 'count') {
+        return null;
+      }
+
       index++;
       return {
         continueCursor: `cursor-${index}`,
@@ -705,12 +733,17 @@ describe('httpAdapter', () => {
       };
     });
     const adapterFactory = httpAdapter({ runQuery } as any, {
-      authFunctions: { findMany: 'findMany' } as any,
+      authFunctions: { count: 'count', findMany: 'findMany' } as any,
     });
     const adapter = adapterFactory({} as any);
 
-    await expect(adapter.count({ model: 'user' })).resolves.toBe(205);
-    expect(runQuery).toHaveBeenCalledTimes(2);
+    await expect(
+      adapter.count({
+        model: 'user',
+        where: [{ field: 'email', operator: 'contains', value: '@b.com' }],
+      } as any)
+    ).resolves.toBe(205);
+    expect(runQuery).toHaveBeenCalledTimes(3);
   });
 
   test('update dispatches one mutation and no pre-check query', async () => {

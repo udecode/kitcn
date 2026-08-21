@@ -61,6 +61,7 @@ describe('auth/create-api createApi()', () => {
 
     const api = createApi(schema, getAuth as any);
 
+    expect(api).toHaveProperty('count');
     expect(api).toHaveProperty('create');
     expect(api).toHaveProperty('findOne');
     expect(api).toHaveProperty('findMany');
@@ -1074,6 +1075,165 @@ describe('auth/create-api createApi()', () => {
         _id: 'user-1',
         email: 'next@site.com',
       });
+    });
+  });
+
+  describe('count', () => {
+    const getAuth = () => ({ api: {}, options: { plugins: [] } });
+    const emailWhere = [
+      { field: 'email', operator: 'eq', value: 'a@site.com' },
+    ];
+    // Declares the one aggregate index that exactly covers `{ email }`.
+    const indexedSchema = {
+      tables: {
+        user: {
+          ...schema.tables.user,
+          getAggregateIndexes: () => [
+            {
+              avgFields: [],
+              countFields: [],
+              fields: ['email'],
+              maxFields: [],
+              minFields: [],
+              name: 'by_email',
+              sumFields: [],
+            },
+          ],
+        },
+      },
+    } as any;
+    const ormCtx = (count: number) => ({
+      db: {},
+      orm: { query: { user: { count: mock(async () => count) } } },
+    });
+
+    test('counts a whole table through the native syscall', async () => {
+      const api = createApi(schema, getAuth as any);
+      const query = mock(() => ({ count: async () => 42 }));
+
+      await expect(
+        (api.count as any)._handler({ db: { query } }, { model: 'user' })
+      ).resolves.toBe(42);
+      expect(query).toHaveBeenCalledWith('user');
+    });
+
+    test('declines when the deployment has no native count', async () => {
+      const api = createApi(schema, getAuth as any);
+
+      await expect(
+        (api.count as any)._handler(
+          { db: { query: () => ({}) } },
+          { model: 'user' }
+        )
+      ).resolves.toBeNull();
+    });
+
+    test('reaches the ORM because the context hook wraps this query', async () => {
+      const ctx = ormCtx(7);
+      const api = createApi(indexedSchema, getAuth as any, {
+        context: () => ctx as any,
+      });
+
+      await expect(
+        (api.count as any)._handler(
+          { db: {} },
+          {
+            model: 'user',
+            where: emailWhere,
+          }
+        )
+      ).resolves.toBe(7);
+      expect(ctx.orm.query.user.count).toHaveBeenCalledWith({
+        where: { email: 'a@site.com' },
+      });
+    });
+
+    test('declines a filtered count when no context supplies an ORM', async () => {
+      const api = createApi(indexedSchema, getAuth as any);
+
+      await expect(
+        (api.count as any)._handler(
+          { db: {} },
+          {
+            model: 'user',
+            where: emailWhere,
+          }
+        )
+      ).resolves.toBeNull();
+    });
+
+    test('declines when no aggregate index covers the counted fields', async () => {
+      const ctx = ormCtx(7);
+      const api = createApi(schema, getAuth as any, {
+        context: () => ctx as any,
+      });
+
+      await expect(
+        (api.count as any)._handler(
+          { db: {} },
+          {
+            model: 'user',
+            where: emailWhere,
+          }
+        )
+      ).resolves.toBeNull();
+      expect(ctx.orm.query.user.count).not.toHaveBeenCalled();
+    });
+
+    test('declines while the aggregate index is still backfilling', async () => {
+      const ctx = {
+        db: {},
+        orm: {
+          query: {
+            user: {
+              count: mock(async () => {
+                throw new Error('COUNT_INDEX_BUILDING: still building');
+              }),
+            },
+          },
+        },
+      };
+      const api = createApi(indexedSchema, getAuth as any, {
+        context: () => ctx as any,
+      });
+
+      await expect(
+        (api.count as any)._handler(
+          { db: {} },
+          {
+            model: 'user',
+            where: emailWhere,
+          }
+        )
+      ).resolves.toBeNull();
+    });
+
+    test('surfaces a real ORM failure instead of silently paging', async () => {
+      const ctx = {
+        db: {},
+        orm: {
+          query: {
+            user: {
+              count: mock(async () => {
+                throw new Error('boom');
+              }),
+            },
+          },
+        },
+      };
+      const api = createApi(indexedSchema, getAuth as any, {
+        context: () => ctx as any,
+      });
+
+      await expect(
+        (api.count as any)._handler(
+          { db: {} },
+          {
+            model: 'user',
+            where: emailWhere,
+          }
+        )
+      ).rejects.toThrow('boom');
     });
   });
 });

@@ -132,6 +132,7 @@ const AUTH_RUNTIME_PROCEDURES: readonly Omit<
   ProcedureRegistryEntry,
   'moduleName' | 'kind'
 >[] = [
+  { exportName: 'count', internal: true, type: 'query' },
   { exportName: 'create', internal: true, type: 'mutation' },
   { exportName: 'deleteMany', internal: true, type: 'mutation' },
   { exportName: 'deleteOne', internal: true, type: 'mutation' },
@@ -1495,6 +1496,7 @@ export const {
   authClient,
   getAuth,
   auth,
+  count,
   create,
   deleteMany,
   deleteOne,

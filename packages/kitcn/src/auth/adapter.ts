@@ -16,7 +16,7 @@ import type { SetOptional } from 'type-fest';
 import { asyncMap } from '../internal/upstream';
 import type { GenericCtx } from '../server/context-utils';
 import { isRunMutationCtx } from '../server/context-utils';
-import { findManyHandler, findOneHandler } from './create-api';
+import { countHandler, findManyHandler, findOneHandler } from './create-api';
 import type { AuthFunctions } from './create-client';
 
 let didWarnExperimentalJoinsUnsupported = false;
@@ -318,7 +318,6 @@ export const httpAdapter = <
           isRunMutationCtx: isRunMutationCtx(ctx),
         },
         count: async (data) => {
-          // Yes, count is just findMany returning a number.
           assertSupportedOrWhere(data.where, 'count');
           if (hasOrWhere(data.where)) {
             const results = await asyncMap(data.where, async (w) =>
@@ -336,6 +335,17 @@ export const httpAdapter = <
             return docs.length;
           }
 
+          const bounded = await ctx.runQuery(authFunctions.count, {
+            model: data.model,
+            where: parseWhere(data.where),
+          });
+          if (bounded !== null) {
+            return bounded as number;
+          }
+
+          // Nothing could bound this shape, so total the pages. Each page is
+          // its own transaction, which is what keeps a large table from
+          // exceeding the per-transaction read limit.
           const result = await handlePagination(
             async ({ paginationOpts }) =>
               await ctx.runQuery(authFunctions.findMany, {
@@ -641,6 +651,19 @@ export const dbAdapter = <
             return docs.length;
           }
 
+          const bounded = await countHandler(
+            ctx,
+            { model: data.model, where: parseWhere(data.where) },
+            schema,
+            betterAuthSchema
+          );
+          if (bounded !== null) {
+            return bounded;
+          }
+
+          // Unbounded shapes fall back to walking pages. Unlike the http
+          // adapter every page lands in this one transaction, so a large
+          // matching set can still exceed the per-transaction read limit.
           const result = await handlePagination(
             async ({ paginationOpts }) =>
               await findManyHandler(

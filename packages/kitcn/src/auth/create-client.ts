@@ -13,6 +13,7 @@ import { dbAdapter, httpAdapter } from './adapter';
 import type { GenericAuthTriggers } from './define-auth';
 
 export type AuthFunctions = {
+  count: FunctionReference<'query', 'internal', Record<string, any>>;
   create: FunctionReference<'mutation', 'internal', Record<string, any>>;
   deleteMany: FunctionReference<'mutation', 'internal', Record<string, any>>;
   deleteOne: FunctionReference<'mutation', 'internal', Record<string, any>>;

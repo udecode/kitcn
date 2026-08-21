@@ -3037,6 +3037,9 @@ export { httpAction, internalMutation };
       expect(generatedAuth).toContain('const authRuntime: AuthRuntime<');
       expect(generatedAuth).toContain('= createAuthRuntime<');
       expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
+      // The emitted export list and AUTH_RUNTIME_PROCEDURES are maintained by
+      // hand in separate files; nothing else links them.
+      expect(generatedAuth).toContain('\n  count,\n');
       expect(generatedAuth).toContain(
         'const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
       );

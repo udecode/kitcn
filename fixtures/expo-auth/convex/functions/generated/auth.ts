@@ -61,6 +61,7 @@ export const {
   authClient,
   getAuth,
   auth,
+  count,
   create,
   deleteMany,
   deleteOne,

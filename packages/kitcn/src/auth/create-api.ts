@@ -13,6 +13,7 @@ import { asyncMap } from '../internal/upstream';
 import {
   customCtx,
   customMutation,
+  customQuery,
 } from '../internal/upstream/server/customFunctions';
 import { partial } from '../internal/upstream/validators';
 import { eq } from '../orm/filter-expression';
@@ -25,6 +26,11 @@ import {
   paginate,
   selectFields,
 } from './adapter-utils';
+import {
+  hasExactAggregateIndex,
+  isBoundedCountRefusal,
+  toOrmCountWhere,
+} from './count-plan';
 import type {
   GenericAuthBeforeResult,
   GenericAuthTriggerChange,
@@ -581,6 +587,90 @@ export const findOneHandler = async (
   betterAuthSchema: any
 ) => toConvexSafe(await listOne(ctx, schema, betterAuthSchema, args));
 
+/**
+ * Convex's table count is internal API and absent from its published typings,
+ * so probe for it instead of assuming the deployment exposes it.
+ */
+const nativeTableCount = async (ctx: any, tableName: string) => {
+  const query = ctx?.db?.query?.(tableName);
+  if (typeof query?.count !== 'function') {
+    return null;
+  }
+
+  try {
+    return (await query.count()) as number;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Row count for one Better Auth model, or `null` when the requested shape can
+ * only be answered by reading the rows.
+ *
+ * Two shapes are bounded:
+ * - An empty `where` uses Convex's native table count, which reads no
+ *   documents. This is the shape `countTotalUsers` issues, and the only one
+ *   that also works on a plain (non-ORM) auth schema.
+ * - An equality-only `where` whose field set exactly matches a declared
+ *   `aggregateIndex` reads a constant number of bucket rows through the ORM.
+ *
+ * Everything else returns `null` so the caller walks pages instead. That walk
+ * returns the same number; it is only linear in matching rows.
+ */
+export const countHandler = async (
+  ctx: any,
+  args: {
+    model: string;
+    where?: any[];
+  },
+  schema: Schema,
+  betterAuthSchema: any
+): Promise<number | null> => {
+  const tableName = resolveSchemaTableName(
+    schema,
+    betterAuthSchema,
+    args.model
+  );
+  if (!tableName) {
+    return null;
+  }
+
+  const where = toOrmCountWhere(args.where);
+  if (!where) {
+    return null;
+  }
+
+  const fields = Object.keys(where);
+  if (fields.length === 0) {
+    return await nativeTableCount(ctx, tableName);
+  }
+
+  const builder = ctx?.orm?.query?.[tableName];
+  if (typeof builder?.count !== 'function') {
+    return null;
+  }
+  if (
+    !hasExactAggregateIndex(
+      schema.tables[tableName as keyof Schema['tables']],
+      fields
+    )
+  ) {
+    return null;
+  }
+
+  try {
+    return (await builder.count({ where })) as number;
+  } catch (error) {
+    // A refusal (index still backfilling, RLS-scoped table) is not a failure:
+    // the caller's paginated walk answers the same question.
+    if (isBoundedCountRefusal(error)) {
+      return null;
+    }
+    throw error;
+  }
+};
+
 export const findManyHandler = async (
   ctx: any,
   args: {
@@ -1012,6 +1102,20 @@ export const createApi = <
         )
       : mutationBuilderBase
   ) as typeof internalMutationGeneric;
+  // `count` is the only query that needs the caller's context hook: it reaches
+  // the ORM to serve an aggregate-index-backed count. `findMany` and `findOne`
+  // stay on the bare builder because widening their ctx changes every existing
+  // read for no gain here.
+  const countQueryBuilder = (
+    context
+      ? customQuery(
+          internalQueryGeneric,
+          customCtx(
+            async (ctx) => (await context?.(ctx)) ?? (ctx as TriggerCtx)
+          )
+        )
+      : internalQueryGeneric
+  ) as typeof internalQueryGeneric;
   const resolveTableTriggers = (
     model: string,
     triggerCtx: TriggerCtx
@@ -1095,6 +1199,14 @@ export const createApi = <
     : anyInputWithUpdate;
 
   return {
+    count: countQueryBuilder({
+      args: {
+        model: modelValidator,
+        where: v.optional(v.array(adapterWhereValidator)),
+      },
+      handler: async (ctx, args) =>
+        countHandler(ctx, args, schema, getBetterAuthSchema()),
+    }),
     create: mutationBuilder({
       args: {
         input: createInput,
