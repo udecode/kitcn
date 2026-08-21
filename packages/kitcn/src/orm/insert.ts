@@ -5,11 +5,13 @@ import type { FilterExpression } from './filter-expression';
 import { findIndexForColumns, getIndexes } from './index-utils';
 import {
   applyDefaults,
+  createForeignKeyProbeMemo,
   enforceCheckConstraints,
   enforceForeignKeys,
   enforcePolymorphicWrite,
   enforceUniqueIndexes,
   evaluateFilter,
+  type ForeignKeyProbeMemo,
   getColumnName,
   getOrmContext,
   getTableColumns,
@@ -40,6 +42,7 @@ import type {
   UpdateSet,
 } from './types';
 import { isUnsetToken } from './unset-token';
+import { hasLifecycleHooks } from './write-fanout';
 
 export type InsertOnConflictDoNothingConfig<_TTable extends ConvexTable<any>> =
   {
@@ -173,6 +176,21 @@ export class ConvexInsertBuilder<
             this.returningFields as Record<string, unknown>
           )
         : undefined;
+    const statementTableName = getTableName(this.table);
+    // This loop writes nothing but `statementTableName` — an insert, and a
+    // conflict patch that cannot change an `_id` — so a parent proven present
+    // for row 1 is still present for row N. A lifecycle hook on that table
+    // breaks the argument: it runs arbitrary user code between rows and can
+    // delete the parent, which is exactly what update() guards against too.
+    //
+    // Statement-scoped on purpose. A per-transaction memo would survive an
+    // intervening `delete()` and let the next statement write a dangling key.
+    const probedForeignIds: ForeignKeyProbeMemo | undefined = hasLifecycleHooks(
+      this.db,
+      statementTableName
+    )
+      ? undefined
+      : createForeignKeyProbeMemo();
     const results: Record<string, unknown>[] = [];
     for (const value of this.valuesList) {
       const preparedValue = normalizeDateFieldsForWrite(
@@ -201,7 +219,8 @@ export class ConvexInsertBuilder<
 
       const conflictResult = await this.handleConflict(
         preparedValue,
-        rlsResolution
+        rlsResolution,
+        probedForeignIds
       );
 
       if (conflictResult?.status === 'skip') {
@@ -224,6 +243,7 @@ export class ConvexInsertBuilder<
       enforceCheckConstraints(this.table, preparedValue as any);
       await enforceForeignKeys(this.db, this.table, preparedValue as any, {
         changedFields: new Set(Object.keys(preparedValue as any)),
+        probed: probedForeignIds,
       });
       await enforceUniqueIndexes(this.db, this.table, preparedValue as any, {
         changedFields: new Set(Object.keys(preparedValue as any)),
@@ -280,7 +300,8 @@ export class ConvexInsertBuilder<
 
   private async handleConflict(
     value: InsertValue<TTable>,
-    rlsResolution: RlsPolicyResolutionCache
+    rlsResolution: RlsPolicyResolutionCache,
+    probedForeignIds: ForeignKeyProbeMemo | undefined
   ): Promise<
     | {
         status: 'skip';
@@ -412,6 +433,7 @@ export class ConvexInsertBuilder<
       })(),
       {
         changedFields: new Set(Object.keys(writeSet as any)),
+        probed: probedForeignIds,
       }
     );
     await enforceUniqueIndexes(

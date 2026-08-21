@@ -11,6 +11,7 @@ import {
   PUBLIC_CREATED_AT_FIELD,
   usesSystemCreatedAtAlias,
 } from '../timestamp-mode';
+import { createOrmTransactionMemo } from '../transaction-cache';
 import type { TableRelationalConfig, TablesRelationalConfig } from '../types';
 import type {
   AggregateIndexDefinition,
@@ -3087,18 +3088,53 @@ export const getCountState = async (
   };
 };
 
+/**
+ * Bumped by every `setCountState`, which is the only writer that can move a
+ * state row into CLEARING.
+ *
+ * Isolate-scoped mutable state is exactly what the write barrier must not rely
+ * on, so this counter only ever invalidates: a bump can turn a cache hit into a
+ * re-read, never a re-read into a hit. That direction stays safe when a
+ * mutation reaches the backfill through `ctx.runMutation`, whose nested
+ * invocation gets its own `ctx.db` and so cannot be reached by any
+ * transaction-scoped invalidation.
+ */
+let aggregateStateGeneration = 0;
+
+/**
+ * Tables whose CLEARING range was read and found empty, with the generation
+ * that read was valid at.
+ *
+ * The barrier runs from a before-hook, once per written row, so a 40-row
+ * statement re-scanned the same empty range 40 times. Only the empty result is
+ * memoized: a blocking state throws, so it never loops, and refusing to cache
+ * it keeps `convex/orm/count.test.ts`'s interleaved state writes honest.
+ */
+const clearingRangeEmptyAtGeneration = createOrmTransactionMemo<number>();
+
 export const assertAggregateIndexesWritable = async (
   db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>,
   tableName: string,
   metricIndexNames: readonly string[],
   rankIndexNames: readonly string[]
 ): Promise<void> => {
+  // Sampled before the read, so a `setCountState` that lands while it is in
+  // flight leaves the memo stamped at the older generation and the next write
+  // re-reads. Sampling after would stamp a pre-CLEARING answer as current.
+  const generation = aggregateStateGeneration;
+  if (clearingRangeEmptyAtGeneration.get(db, tableName) === generation) {
+    return;
+  }
   const clearingStates = (await db
     .query(AGGREGATE_STATE_TABLE)
     .withIndex('by_table_status', (q: any) =>
       q.eq('tableKey', tableName).eq('status', COUNT_STATUS_CLEARING)
     )
     .collect()) as CountStateRow[];
+  if (clearingStates.length === 0) {
+    clearingRangeEmptyAtGeneration.set(db, tableName, generation);
+    return;
+  }
   const metricNames = new Set(metricIndexNames);
   const rankNames = new Set(rankIndexNames);
   const blockingState = clearingStates.find((state) =>
@@ -3178,6 +3214,9 @@ export const setCountState = async (
   nextState: Omit<CountState, '_id'>,
   kind: string = AGGREGATE_STATE_KIND_METRIC
 ): Promise<void> => {
+  // Retire every memoized "no index is CLEARING" answer, including ones held by
+  // a transaction that reached this backfill through `ctx.runMutation`.
+  aggregateStateGeneration += 1;
   const existing = await getCountState(
     db,
     nextState.tableName,

@@ -1319,11 +1319,28 @@ export async function enforceUniqueIndexes(
   }
 }
 
+/**
+ * Foreign ids already proven present, shared by every row of one statement.
+ *
+ * Holds ids only, never documents: the `_id` probe is a bare existence check,
+ * a patch cannot remove a document, and a missing row throws instead of
+ * returning, so the memo can never serve a stale negative. Rows of one
+ * statement routinely point at the same parent, and without this each of them
+ * re-reads it.
+ *
+ * The owner decides the lifetime. Nothing here makes it safe to outlive a
+ * statement: a later `delete()` in the same transaction can remove a parent
+ * this memo still calls present.
+ */
+export type ForeignKeyProbeMemo = Set<unknown>;
+
+export const createForeignKeyProbeMemo = (): ForeignKeyProbeMemo => new Set();
+
 export async function enforceForeignKeys(
   db: GenericDatabaseWriter<any>,
   table: ConvexTable<any>,
   candidate: Record<string, unknown>,
-  options?: { changedFields?: Set<string> }
+  options?: { changedFields?: Set<string>; probed?: ForeignKeyProbeMemo }
 ): Promise<void> {
   const foreignKeys = getForeignKeys(table);
   if (foreignKeys.length === 0) {
@@ -1332,6 +1349,7 @@ export async function enforceForeignKeys(
 
   const tableName = getTableName(table);
   const changedFields = options?.changedFields;
+  const probed = options?.probed;
 
   for (const foreignKey of foreignKeys) {
     if (
@@ -1355,13 +1373,18 @@ export async function enforceForeignKeys(
       foreignKey.foreignColumns.length === 1 &&
       foreignKey.foreignColumns[0] === '_id'
     ) {
+      // The probe reads nothing but this id, so the id alone identifies it.
       const foreignId = entries[0]?.[1];
+      if (probed?.has(foreignId)) {
+        continue;
+      }
       const existing = await db.get(foreignId as any);
       if (!existing) {
         throw new Error(
           `Foreign key violation on '${tableName}': missing document in '${foreignKey.foreignTableName}'.`
         );
       }
+      probed?.add(foreignId);
       continue;
     }
 

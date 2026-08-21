@@ -589,6 +589,25 @@ export class GelRelationalQuery<
    * hands it to the next run rather than re-probing.
    */
   private _aggregateIndexReadinessByKey = new Map<string, Promise<void>>();
+  /**
+   * Documents resolved by id during one execution, keyed on the normalized id.
+   *
+   * A relation `where` never compiles into the index plan, so it runs as a
+   * post-fetch membership predicate over a residual stream — one row at a time.
+   * Every de-duplication map inside the relation loaders is scoped to the batch
+   * it is handed, and a batch of one makes all of them no-ops, so a page whose
+   * rows share two parents re-read those two documents once per scanned row.
+   *
+   * Scoped to one execution, like `_rlsPolicyResolution`: `_executionClaimed`
+   * diverts later executions to a fresh instance, and an execution reads
+   * without writing, so a hit is always the document the caller would have read
+   * for itself. It must not be handed to the next run by `_forExecution` — an
+   * intervening write would make it stale.
+   */
+  private readonly _documentByNormalizedId = new Map<
+    string,
+    Promise<any | null>
+  >();
 
   constructor(
     private schema: TSchema,
@@ -7303,9 +7322,24 @@ export class GelRelationalQuery<
       return null;
     }
     const normalizedId = this.db.normalizeId(tableName as any, id as any);
-    return normalizedId === null
-      ? null
-      : await this.db.get(normalizedId as any);
+    if (normalizedId === null) {
+      return null;
+    }
+    // A normalized id encodes its table, so it identifies the read on its own.
+    const existing = this._documentByNormalizedId.get(normalizedId);
+    if (existing) {
+      return await existing;
+    }
+    // Stored before it settles so concurrent relation loaders share one
+    // in-flight read; evicted on rejection so a failure is never cached.
+    const pending = Promise.resolve(this.db.get(normalizedId as any)).catch(
+      (error) => {
+        this._documentByNormalizedId.delete(normalizedId);
+        throw error;
+      }
+    );
+    this._documentByNormalizedId.set(normalizedId, pending);
+    return await pending;
   }
 
   private _getRelationConcurrency(): number {
