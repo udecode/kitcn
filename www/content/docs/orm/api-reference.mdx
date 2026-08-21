@@ -380,7 +380,7 @@ await db.query.users.findMany({
 - `orderBy`: `{ field: 'asc' | 'desc' }`
 - `limit`, `offset`
 - `cursor`: `string | null` (cursor pagination; first page is `null`)
-- `maxScan`: `number` (only valid with cursor pagination; caps scan-fallback paths like predicate/object post-filter and index-union pagination)
+- `maxScan`: `number` (only valid with cursor pagination; caps scan-fallback paths like predicate `where` and post-filter-only plans)
 - `allowFullScan`: opt‑in for unsized non-cursor scans and relation fan-out overrides (not supported with cursor pagination; not used with `search` or `vectorSearch`)
 - `with`: relation loading
 - `withVariants`: `true` to auto-load all `one()` relations on tables with `discriminator()` columns

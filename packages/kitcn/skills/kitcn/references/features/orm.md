@@ -644,6 +644,23 @@ const page2 = await ctx.orm.query.posts.findMany({
 
 Return: `{ page, continueCursor, isDone, pageStatus?, splitCursor? }`
 
+### Index-union filters
+
+`in`, `notIn`, `ne`, and same-field equality `OR` compile to one index range per value when the field is one an index leads with. Cursor pages come from those ranges as a merged stream, so `orderBy` sorts across the whole result and no scan budget is needed.
+
+```ts
+const page = await ctx.orm.query.users.withIndex("by_status").findMany({
+  where: { status: { in: ["active", "pending"] } },
+  orderBy: { createdAt: "desc" },
+  cursor: null,
+  limit: 20,
+});
+```
+
+Falls back to a bounded scan (needs `maxScan`) when the probed index cannot supply the requested `orderBy`, or when the union is wider than 64 ranges.
+
+Without an `orderBy`, an index-union page is in the order of the index it walks — grouped by the probed value — not in creation order.
+
 ### Boundary pinning with `endCursor`
 
 ```ts
@@ -731,7 +748,7 @@ const filtered = results.filter((a) => a.publishedAt >= startDate);
 ### Performance
 
 1. **Index first** — constrain leading index fields. Compound indexes follow prefix rules. Put the `orderBy` column right after the constrained prefix so the scan is already sorted and `limit` bounds the read.
-2. **Bound scans** — use `maxScan` for predicate `where` (cursor mode only). A `.select()` ID-list query with `orderBy` needs a single field that an index leads with.
+2. **Bound scans** — use `maxScan` for predicate `where` (cursor mode only). `in`/`notIn`/`ne` on an indexed leading field page from index ranges and need no budget. A `.select()` ID-list query with `orderBy` needs a single field that an index leads with.
 3. **Limit results** — always use `limit` or cursor pagination.
 4. **Cursor stability** — keep same `where`/`orderBy` between page requests.
 5. **`allowFullScan`** — non-cursor only. Cursor mode uses `maxScan` instead.

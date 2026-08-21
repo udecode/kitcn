@@ -207,7 +207,9 @@ return db.query.posts.findMany({
 });
 ```
 
-For cursor queries that need scan fallback paths (for example index-union/multi-probe or post-filter-only plans), use `maxScan`.
+`in`, `notIn`, `ne`, and same-field equality `OR` on a field an index leads with page from one index range per value, so they need no scan budget.
+
+For cursor queries that fall back to a scan (predicate `where` or post-filter-only plans), use `maxScan`.
 `allowFullScan` is non-cursor only.
 With `strict: true`, missing `maxScan` on these fallback paths throws; with `strict: false`, it warns and runs uncapped.
 

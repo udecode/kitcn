@@ -98,6 +98,30 @@ const refreshed = await db.query.posts.findMany({
 
 This keeps adjacent pages stitched correctly as new rows arrive.
 
+### Index-union filters
+
+`in`, `notIn`, `ne`, and same-field equality `OR` compile to one index range per value when the field is one an index leads with. Cursor pages come from those ranges, so the read is bounded by the matches and needs no scan budget:
+
+```ts showLineNumbers
+const page = await db.query.users
+  .withIndex('by_status')
+  .findMany({
+    where: { status: { in: ['active', 'pending'] } },
+    orderBy: { createdAt: 'desc' },
+    cursor: null,
+    limit: 20,
+  });
+```
+
+The ranges are read as one merged stream, so `orderBy` still sorts across the whole result, not per value.
+
+Two shapes fall back to a bounded scan and need `maxScan`:
+
+- An `orderBy` the probed index cannot supply. The index has to lead with the probed field, so only that field, the next index field after it, or `createdAt` on a single-field index is servable.
+- A union wider than 64 ranges. Past that, one scan costs less than the fan-out.
+
+Without an `orderBy`, an index-union page is in the order of the index it walks — grouped by the probed value — not in creation order. Pass `orderBy: { createdAt: 'desc' }` when you want newest-first across values.
+
 ### Scan budget with `maxScan`
 
 `maxScan` is available only in cursor mode. It caps scanned rows instead of throwing when a page would scan too much.

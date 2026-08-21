@@ -246,7 +246,7 @@ test('pagination with WHERE filter', async () => {
   });
 });
 
-test('pagination with index-union filter requires maxScan when strict=true', async () => {
+test('pagination with index-union filter pages without maxScan', async () => {
   const t = convexTest(schema);
 
   await t.run(async (baseCtx) => {
@@ -264,13 +264,15 @@ test('pagination with index-union filter requires maxScan when strict=true', asy
     const ctx = await runCtx(baseCtx);
     const db = ctx.orm;
 
-    await expect(
-      db.query.users.withIndex('by_status').findMany({
-        where: { status: { in: ['active', 'pending'] } },
-        cursor: null,
-        limit: 5,
-      })
-    ).rejects.toThrow(/maxScan/i);
+    // The probes bound the read, so there is no scan to budget.
+    const page = await db.query.users.withIndex('by_status').findMany({
+      where: { status: { in: ['active', 'pending'] } },
+      cursor: null,
+      limit: 5,
+    });
+
+    expect(page.page).toHaveLength(5);
+    expect(page.page.every((row: any) => row.status !== 'inactive')).toBe(true);
   });
 });
 

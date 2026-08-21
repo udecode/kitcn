@@ -87,11 +87,15 @@ export interface IndexLike {
 const INDEX_ORDER_BONUS = 30;
 
 /**
- * Widest `in` list still worth turning into an index union when it is the only
- * indexable term. Each value becomes its own index range, so past this width
- * the fan-out costs more than the single scan it would replace.
+ * Widest index union worth opening. Each probe becomes its own index range, and
+ * a streamed union holds every one of them open at once, so past this width the
+ * fan-out costs more than the single scan it would replace.
+ *
+ * Owns both ends of that decision: whether to promote an `in` inside an AND to
+ * a union here, and whether the executor may read a compiled union as a merged
+ * stream instead of a bounded scan.
  */
-const MAX_PROMOTED_PROBES = 64;
+export const MAX_INDEX_UNION_PROBES = 64;
 
 export class WhereClauseCompiler {
   /**
@@ -231,7 +235,10 @@ export class WhereClauseCompiler {
       const probePlan = this.tryCompileInArray(term as BinaryExpression);
       // A wide `in` opens one index range per value, which past some width
       // costs more than the single scan it replaces. Leave those alone.
-      if (!probePlan || probePlan.probeFilters.length > MAX_PROMOTED_PROBES) {
+      if (
+        !probePlan ||
+        probePlan.probeFilters.length > MAX_INDEX_UNION_PROBES
+      ) {
         continue;
       }
       return { ...probePlan, postFilters: [expression] };
