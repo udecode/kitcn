@@ -176,10 +176,10 @@ const posts2 = await db.query.posts.findMany({
 ```
 
 **Notes:**
-- The first `orderBy` field should have an index for stable ordering
-- Secondary sort fields are applied post-fetch
-- When post-fetch sorting is required (multi-field or non-indexable sort), the ORM sorts before applying `offset`/`limit`, which requires reading the full filtered candidate set first
-- `findMany({ cursor, limit })` uses only the first `orderBy` field for cursor ordering
+- An index that walks in the requested order serves the sort directly, so `limit` reads only the rows it returns. That needs the sort fields to be the index's leading keys, in order, all pointing the same way — `index('by_type_likes').on(t.type, t.numLikes)` serves `orderBy: { type: 'asc', numLikes: 'asc' }`. Fields pinned by an equality in `where` are constant across the scan, so they can appear anywhere in the sort and in either direction
+- `createdAt` is servable as the last sort field once every other index key is pinned or consumed, because Convex appends it as the implicit trailing key
+- Any other sort — mixed directions, a field the index does not sort by next, or a column that can be missing or `null` — is applied post-fetch. The ORM then sorts before applying `offset`/`limit`, which requires reading the full filtered candidate set first
+- `findMany({ cursor, limit })` orders pages by every `orderBy` field the index serves. When the index cannot serve them all, only the first field orders the cursor and the rest are dropped, which the ORM warns about
 
 ## Pagination
 

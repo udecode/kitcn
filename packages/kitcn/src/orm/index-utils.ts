@@ -103,17 +103,32 @@ const hasColumnPrefix = (index: TableIndex, columns: readonly string[]) => {
   return true;
 };
 
-export type OrderSpec = { field: string; direction: 'asc' | 'desc' };
+export type OrderSpec = {
+  field: string;
+  direction: 'asc' | 'desc';
+  /**
+   * Whether the column can be missing or null. Convex sorts absent before null
+   * before any value, so an ascending index scan puts them first; the ORM's
+   * post-fetch comparator puts them last in both directions. Absent is a legal
+   * stored value for every column that is not `.notNull()`, so the two orders
+   * only provably agree when this is `false`.
+   *
+   * Left undefined by callers that cannot answer, which counts as nullable:
+   * declining a pushdown costs reads, claiming a false one moves rows.
+   */
+  nullable?: boolean;
+};
 
 /**
  * Answers "does scanning this index already produce the requested order?".
  *
  * Convex walks an index in full key order, so once a leading run of fields is
  * pinned to a single value by `eq`, the remainder of the scan is already sorted
- * by the next index field — and by `_creationTime` once every declared field is
- * pinned, because Convex appends it as the implicit trailing key. When that
- * field is the one the caller asked to sort by, `.order(dir).take(n)` returns
- * the exact page and nothing has to be collected and sorted afterwards.
+ * by the next index field, then the one after that — and by `_creationTime`
+ * once every declared field is consumed, because Convex appends it as the
+ * implicit trailing key. When that sequence is the one the caller asked to sort
+ * by, `.order(dir).take(n)` returns the exact page and nothing has to be
+ * collected and sorted afterwards.
  *
  * This is the single owner of that decision. The top-level query planner and
  * the relation loader both call it, so a bound one of them can push into the
@@ -123,40 +138,77 @@ export type OrderSpec = { field: string; direction: 'asc' | 'desc' };
  * after the fetch.
  */
 export function resolveIndexOrderPushdown(params: {
-  /** Declared fields of the index being scanned, in key order. */
+  /** Declared fields of the index being scanned, in key order. Empty models
+   * the default `by_creation_time` index, whose only key is the implicit
+   * `_creationTime` suffix. */
   indexFields: readonly string[] | null | undefined;
   /** How many leading index fields are pinned to one value by `eq`. */
   pinnedEqCount: number;
-  /**
-   * Requested sort. `.order()` reverses the whole key tuple rather than one
-   * column, so only a single spec is ever servable.
-   */
+  /** Requested sort, in priority order. */
   orderSpecs: readonly OrderSpec[];
 }): 'asc' | 'desc' | null {
   const { indexFields, pinnedEqCount, orderSpecs } = params;
   // No index means a `.filter()` scan whose order is the table's, not the
   // partition's, so nothing can be pushed down.
-  if (!indexFields || orderSpecs.length !== 1) {
+  if (!indexFields || orderSpecs.length === 0) {
     return null;
   }
-  const primary = orderSpecs[0];
   const eqCount = Math.min(Math.max(pinnedEqCount, 0), indexFields.length);
-
   // An eq-pinned field holds one value for the whole scan, so the rows are
-  // trivially in order by it whichever direction was asked for.
-  for (let i = 0; i < eqCount; i += 1) {
-    if (indexFields[i] === primary.field) {
-      return primary.direction;
+  // trivially in order by it whichever direction was asked for, and wherever
+  // in the sort it appears. It consumes no index position.
+  const pinnedFields = new Set(indexFields.slice(0, eqCount));
+
+  /** Next unpinned index key the scan will sort by. */
+  let cursor = eqCount;
+  /** Direction every unpinned spec has to agree on. */
+  let direction: 'asc' | 'desc' | null = null;
+  let consumedCreationTime = false;
+  let hasNullableSpec = false;
+
+  for (const spec of orderSpecs) {
+    if (pinnedFields.has(spec.field)) {
+      continue;
     }
+    // `.order()` reverses the whole key tuple rather than one column, so a
+    // sort that changes direction partway through is not a scan of anything.
+    if (direction === null) {
+      direction = spec.direction;
+    } else if (direction !== spec.direction) {
+      return null;
+    }
+    if (spec.nullable !== false) {
+      hasNullableSpec = true;
+    }
+    // Nothing follows the implicit `_creationTime` suffix.
+    if (consumedCreationTime) {
+      return null;
+    }
+    if (cursor >= indexFields.length) {
+      if (spec.field !== INTERNAL_CREATION_TIME_FIELD) {
+        return null;
+      }
+      consumedCreationTime = true;
+      continue;
+    }
+    if (spec.field !== indexFields[cursor]) {
+      return null;
+    }
+    cursor += 1;
   }
 
-  // Every declared field pinned means the only key left to walk is the implicit
-  // `_creationTime` suffix Convex appends.
-  const nativeField =
-    eqCount >= indexFields.length
-      ? INTERNAL_CREATION_TIME_FIELD
-      : indexFields[eqCount];
-  return primary.field === nativeField ? primary.direction : null;
+  // A single spec is already served straight from the index today, including
+  // on nullable columns, so gating it here would change shipped output and
+  // give up the read bound at the same time. A multi-spec sort is the one that
+  // currently runs through the comparator, so it may only move into the index
+  // where the two provably agree.
+  if (orderSpecs.length > 1 && hasNullableSpec) {
+    return null;
+  }
+
+  // Every spec was eq-pinned: the scan is constant across all of them, so any
+  // direction serves. Keep the caller's.
+  return direction ?? orderSpecs[0].direction;
 }
 
 export function findRelationIndexOrThrow(

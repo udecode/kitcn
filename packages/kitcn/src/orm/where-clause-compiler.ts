@@ -615,17 +615,23 @@ export class WhereClauseCompiler {
     const candidates = this.availableIndexes
       .filter((index) => index.indexFields[0] === fieldName)
       .sort((a, b) => a.indexFields.length - b.indexFields.length);
-    // Each probe pins the leading field, so an index whose second key is the
-    // sort field serves the order from the scan. Otherwise the narrowest index
-    // wins, since extra keys only widen the range without pinning anything.
+    // Each probe pins the leading field, so an index whose next keys are the
+    // sort fields serves the order from the scan — and the more of the sort it
+    // carries, the more of the per-probe read bound survives. Otherwise the
+    // narrowest index wins, since extra keys only widen the range without
+    // pinning anything.
     if (this.orderFields.length > 0) {
-      const orderField = this.orderFields[0];
-      const serving = candidates.find(
-        (index) =>
-          index.indexFields.length > 1 && index.indexFields[1] === orderField
-      );
-      if (serving) {
-        return serving;
+      let best: IndexLike | null = null;
+      let bestServed = 0;
+      for (const index of candidates) {
+        const served = this.servedOrderFieldCount(index.indexFields, 1);
+        if (served > bestServed) {
+          best = index;
+          bestServed = served;
+        }
+      }
+      if (best) {
+        return best;
       }
     }
     return candidates[0] ?? null;
@@ -928,14 +934,40 @@ export class WhereClauseCompiler {
    * Reward an index that also supplies the requested order. Large enough to
    * clear the 25-point exact-over-prefix premium, so `(orgId, createdAt)` beats
    * `(orgId)` for `where { orgId } orderBy { createdAt }`.
+   *
+   * The reward grows with how much of the sort the index carries, so
+   * `(orgId, createdAt, title)` beats `(orgId, createdAt)` for a two-field
+   * sort: only the longer one lets the scan produce the whole tuple, and
+   * picking the shorter one costs the entire read bound. The extra point per
+   * field is deliberately small — order coverage breaks ties between indexes
+   * that already serve the filter equally well, it does not outrank filtering.
    */
   private indexOrderBonus(indexFields: string[], pinnedLength: number): number {
     if (this.orderFields.length === 0 || pinnedLength >= indexFields.length) {
       return 0;
     }
-    return indexFields[pinnedLength] === this.orderFields[0]
-      ? INDEX_ORDER_BONUS
-      : 0;
+    const served = this.servedOrderFieldCount(indexFields, pinnedLength);
+    return served === 0 ? 0 : INDEX_ORDER_BONUS + (served - 1);
+  }
+
+  /**
+   * How many leading sort fields this index would produce for free, counting
+   * from its first unpinned key. Convex walks an index in full key order, so
+   * the run has to be contiguous and start at `pinnedLength`.
+   */
+  private servedOrderFieldCount(
+    indexFields: string[],
+    pinnedLength: number
+  ): number {
+    let served = 0;
+    while (
+      served < this.orderFields.length &&
+      pinnedLength + served < indexFields.length &&
+      indexFields[pinnedLength + served] === this.orderFields[served]
+    ) {
+      served += 1;
+    }
+    return served;
   }
 
   /**

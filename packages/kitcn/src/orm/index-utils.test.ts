@@ -297,14 +297,15 @@ describe('resolveIndexOrderPushdown', () => {
     ).toBeNull();
   });
 
-  test('declines multi-field sorts because .order() reverses the whole key', () => {
+  test('declines a multi-field sort that changes direction partway', () => {
+    // `.order()` reverses the whole key tuple, so a scan is one direction.
     expect(
       resolveIndexOrderPushdown({
         indexFields: ['authorId', 'numLikes'],
         pinnedEqCount: 1,
         orderSpecs: [
-          { field: 'numLikes', direction: 'desc' },
-          { field: 'title', direction: 'asc' },
+          { field: 'numLikes', direction: 'desc', nullable: false },
+          { field: 'title', direction: 'asc', nullable: false },
         ],
       })
     ).toBeNull();
@@ -318,5 +319,177 @@ describe('resolveIndexOrderPushdown', () => {
         orderSpecs: [],
       })
     ).toBeNull();
+  });
+
+  describe('multi-field sorts', () => {
+    const spec = (field: string, direction: 'asc' | 'desc') => ({
+      field,
+      direction,
+      nullable: false,
+    });
+
+    test('serves a sort that is a prefix of the index, in index order', () => {
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes'],
+          pinnedEqCount: 0,
+          orderSpecs: [spec('type', 'asc'), spec('numLikes', 'asc')],
+        })
+      ).toBe('asc');
+
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes', 'title'],
+          pinnedEqCount: 0,
+          orderSpecs: [spec('type', 'desc'), spec('numLikes', 'desc')],
+        })
+      ).toBe('desc');
+    });
+
+    test('declines a sort that skips or reorders an index key', () => {
+      // (type, numLikes) walks every numLikes inside one type, so sorting by
+      // title next means re-sorting inside each of those buckets.
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes', 'title'],
+          pinnedEqCount: 0,
+          orderSpecs: [spec('type', 'asc'), spec('title', 'asc')],
+        })
+      ).toBeNull();
+
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes'],
+          pinnedEqCount: 0,
+          orderSpecs: [spec('numLikes', 'asc'), spec('type', 'asc')],
+        })
+      ).toBeNull();
+    });
+
+    test('absorbs an eq-pinned field at any position and any direction', () => {
+      // `type` is constant across the scan, so it is already sorted whichever
+      // way the caller asked and wherever it sits in the sort.
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes'],
+          pinnedEqCount: 1,
+          orderSpecs: [spec('type', 'asc'), spec('numLikes', 'desc')],
+        })
+      ).toBe('desc');
+
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes'],
+          pinnedEqCount: 1,
+          orderSpecs: [spec('numLikes', 'desc'), spec('type', 'asc')],
+        })
+      ).toBe('desc');
+    });
+
+    test('serves _creationTime only as the final spec', () => {
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes'],
+          pinnedEqCount: 0,
+          orderSpecs: [
+            spec('type', 'asc'),
+            spec('numLikes', 'asc'),
+            spec('_creationTime', 'asc'),
+          ],
+        })
+      ).toBe('asc');
+
+      // Nothing follows the implicit trailing key.
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type'],
+          pinnedEqCount: 0,
+          orderSpecs: [
+            spec('type', 'asc'),
+            spec('_creationTime', 'asc'),
+            spec('numLikes', 'asc'),
+          ],
+        })
+      ).toBeNull();
+
+      // ...and it is only reached once every declared field is consumed.
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes'],
+          pinnedEqCount: 0,
+          orderSpecs: [spec('type', 'asc'), spec('_creationTime', 'asc')],
+        })
+      ).toBeNull();
+    });
+
+    test('declines when a sort column can be missing or null', () => {
+      // A Convex index sorts absent and null first; the post-fetch comparator
+      // sorts them last. Only a sort the two agree on may move into the index.
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['authorId', 'numLikes'],
+          pinnedEqCount: 0,
+          orderSpecs: [
+            { field: 'authorId', direction: 'asc', nullable: true },
+            spec('numLikes', 'asc'),
+          ],
+        })
+      ).toBeNull();
+
+      // Unknown nullability counts as nullable.
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['type', 'numLikes'],
+          pinnedEqCount: 0,
+          orderSpecs: [
+            { field: 'type', direction: 'asc' },
+            { field: 'numLikes', direction: 'asc' },
+          ],
+        })
+      ).toBeNull();
+
+      // An eq-pinned nullable field is constant across the scan, so the two
+      // orders cannot disagree about it.
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['authorId', 'numLikes'],
+          pinnedEqCount: 1,
+          orderSpecs: [
+            { field: 'authorId', direction: 'asc', nullable: true },
+            spec('numLikes', 'asc'),
+          ],
+        })
+      ).toBe('asc');
+    });
+
+    test('still serves a single nullable spec, as it always has', () => {
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: ['deletedAt'],
+          pinnedEqCount: 0,
+          orderSpecs: [
+            { field: 'deletedAt', direction: 'asc', nullable: true },
+          ],
+        })
+      ).toBe('asc');
+    });
+
+    test('models the default by_creation_time index as an empty key list', () => {
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: [],
+          pinnedEqCount: 0,
+          orderSpecs: [spec('_creationTime', 'desc')],
+        })
+      ).toBe('desc');
+
+      expect(
+        resolveIndexOrderPushdown({
+          indexFields: [],
+          pinnedEqCount: 0,
+          orderSpecs: [spec('_creationTime', 'desc'), spec('numLikes', 'desc')],
+        })
+      ).toBeNull();
+    });
   });
 });

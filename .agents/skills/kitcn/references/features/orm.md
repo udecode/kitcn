@@ -257,9 +257,13 @@ Rules:
 Relation `limit`/`orderBy` are pushed into the relation index when the index
 already walks in that order. After the FK, `index('by_user').on(t.userId)`
 orders by creation time, so `with: { posts: { limit: 5, orderBy: { createdAt:
-'desc' } } }` reads 5 posts per parent. Sorting by any other column reads the
-parent's whole child partition and sorts in memory — put the sort column in the
-relation index (`index('by_user_rank').on(t.userId, t.rank)`) to stay bounded.
+'desc' } } }` reads 5 posts per parent. Multi-field sorts are pushed down too
+when the index carries all of them: `index('by_user_rank').on(t.userId, t.rank)`
+serves `orderBy: { rank: 'asc', createdAt: 'asc' }`, since the FK pins `userId`,
+`rank` is the next key and `createdAt` is Convex's implicit trailing one.
+Sorting by any other column — or by one that can be missing or `null` — reads
+the parent's whole child partition and sorts in memory; put the sort columns in
+the relation index, in sort order, to stay bounded.
 
 ### Nested `with` depth
 

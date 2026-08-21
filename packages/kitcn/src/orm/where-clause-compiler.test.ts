@@ -413,7 +413,9 @@ describe('timestamp mode key normalization', () => {
   test('accepts createdAt in orderBy object', () => {
     const query = createQuery();
     const specs = (query as any)._orderBySpecs({ createdAt: 'asc' });
-    expect(specs).toEqual([{ field: '_creationTime', direction: 'asc' }]);
+    expect(specs).toEqual([
+      { field: '_creationTime', direction: 'asc', nullable: false },
+    ]);
   });
 
   test('rejects _creationTime in orderBy object', () => {
@@ -426,7 +428,9 @@ describe('timestamp mode key normalization', () => {
   test('always maps createdAt to system _creationTime even if a user column exists', () => {
     const query = createQuery(usersWithCreatedAt);
     const specs = (query as any)._orderBySpecs({ createdAt: 'asc' });
-    expect(specs).toEqual([{ field: '_creationTime', direction: 'asc' }]);
+    expect(specs).toEqual([
+      { field: '_creationTime', direction: 'asc', nullable: false },
+    ]);
   });
 
   test('still rejects _creationTime for migration', () => {
