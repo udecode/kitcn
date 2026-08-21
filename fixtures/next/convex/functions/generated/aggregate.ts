@@ -5,7 +5,7 @@
 import { createOrm, type OrmFunctions } from 'kitcn/orm';
 import { aggregateCapability } from 'kitcn/orm/aggregate-index';
 import { createGeneratedFunctionReference } from 'kitcn/server';
-import { internalMutation } from "../_generated/server";
+import { internalMutation, internalQuery } from "../_generated/server";
 import schema from "../schema";
 
 const ormFunctions: OrmFunctions = {
@@ -19,6 +19,7 @@ const orm = createOrm({
   ormFunctions,
   capabilities: [aggregateCapability()],
   internalMutation,
+  internalQuery,
 });
 
 export const {

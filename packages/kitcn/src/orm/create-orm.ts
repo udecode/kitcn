@@ -3,6 +3,7 @@ import {
   type GenericDatabaseWriter,
   internalActionGeneric,
   internalMutationGeneric,
+  internalQueryGeneric,
   type SchedulableFunctionReference,
   type Scheduler,
 } from 'convex/server';
@@ -122,6 +123,7 @@ type CreateOrmConfigBase<TSchema extends OrmSchemaInput> = {
   capabilities?: readonly OrmCapability[];
   migrations?: MigrationSet<any>;
   internalMutation?: typeof internalMutationGeneric;
+  internalQuery?: typeof internalQueryGeneric;
 };
 
 type CreateOrmConfigWithFunctions<TSchema extends OrmSchemaInput> =
@@ -146,10 +148,10 @@ type OrmApiResult = {
   scheduledDelete: ReturnType<typeof internalMutationGeneric>;
   aggregateBackfill: ReturnType<typeof internalMutationGeneric>;
   aggregateBackfillChunk: ReturnType<typeof internalMutationGeneric>;
-  aggregateBackfillStatus: ReturnType<typeof internalMutationGeneric>;
+  aggregateBackfillStatus: ReturnType<typeof internalQueryGeneric>;
   migrationRun: ReturnType<typeof internalMutationGeneric>;
   migrationRunChunk: ReturnType<typeof internalMutationGeneric>;
-  migrationStatus: ReturnType<typeof internalMutationGeneric>;
+  migrationStatus: ReturnType<typeof internalQueryGeneric>;
   migrationCancel: ReturnType<typeof internalMutationGeneric>;
   resetChunk: ReturnType<typeof internalMutationGeneric>;
   reset: ReturnType<typeof internalActionGeneric>;
@@ -335,6 +337,7 @@ export function createOrm<TSchema extends OrmSchemaInput>(
   }
 
   const mutationBuilder = config.internalMutation ?? internalMutationGeneric;
+  const queryBuilder = config.internalQuery ?? internalQueryGeneric;
   return {
     db,
     with: withContext,
@@ -454,7 +457,7 @@ export function createOrm<TSchema extends OrmSchemaInput>(
             (countBackfillHandlers() as any).kickoff(ctx, args)) as any,
         }),
         aggregateBackfillChunk,
-        aggregateBackfillStatus: mutationBuilder({
+        aggregateBackfillStatus: queryBuilder({
           args: v.any(),
           handler: ((ctx: any, args: any) =>
             (countBackfillHandlers() as any).status(ctx, args)) as any,
@@ -465,7 +468,7 @@ export function createOrm<TSchema extends OrmSchemaInput>(
             (migrationHandlers() as any).run(ctx, args)) as any,
         }),
         migrationRunChunk,
-        migrationStatus: mutationBuilder({
+        migrationStatus: queryBuilder({
           args: v.any(),
           handler: ((ctx: any, args: any) =>
             (migrationHandlers() as any).status(ctx, args)) as any,

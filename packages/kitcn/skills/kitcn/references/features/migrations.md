@@ -137,6 +137,23 @@ Applied migrations are immutable. Two drift checks:
 
 Reserved names — do not create tables with these names.
 
+## Status Procedure
+
+`generated/server:migrationStatus` is an internal **query** — reading status
+takes no write transaction and can back a live subscription.
+
+| Arg | Description |
+|-----|-------------|
+| `limit` | Most recent runs to list. Default `25`, capped at `MAX_STATUS_RUN_LIMIT` (`100`); higher values clamp. |
+| `runId` | Return only this run. Ignores `limit`. |
+
+`activeRun` resolves independently of `runId`. `migrations`, `pending`, and
+`drift` always cover every authored migration and ignore `limit`.
+
+```ts
+import { MAX_STATUS_RUN_LIMIT } from 'kitcn/orm/migrations';
+```
+
 ## Runtime Statuses
 
 `pending` → `running` → `completed` | `failed` | `canceled` | `dry_run` | `noop` | `drift_blocked`

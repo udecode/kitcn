@@ -1,4 +1,5 @@
 import type {
+  GenericDatabaseReader,
   GenericDatabaseWriter,
   SchedulableFunctionReference,
   Scheduler,
@@ -21,6 +22,15 @@ import {
 import { MIGRATION_RUN_TABLE, MIGRATION_STATE_TABLE } from './schema';
 
 const DEFAULT_BATCH_SIZE = 128;
+const DEFAULT_STATUS_RUN_LIMIT = 25;
+
+/**
+ * Hard ceiling on how many `migration_run` rows one `status()` call may read.
+ *
+ * `limit` is caller-supplied, so bounding the query without bounding the
+ * argument would just move the unbounded read behind the args surface.
+ */
+export const MAX_STATUS_RUN_LIMIT = 100;
 
 export type MigrationRunArgs = {
   direction?: MigrationDirection;
@@ -50,6 +60,16 @@ type RuntimeCtx = {
   db: GenericDatabaseWriter<any>;
   scheduler?: Scheduler;
 };
+
+/**
+ * `status()` never writes, so it runs on a query ctx where `db` is a reader and
+ * there is no scheduler.
+ */
+type RuntimeReadCtx = {
+  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>;
+};
+
+type MigrationReadDb = GenericDatabaseReader<any> | GenericDatabaseWriter<any>;
 
 type MigrationStateDoc = {
   _id: any;
@@ -103,7 +123,7 @@ export function createMigrationHandlers<TSchema extends TablesRelationalConfig>(
     args: MigrationRunChunkArgs
   ) => Promise<Record<string, unknown>>;
   status: (
-    ctx: RuntimeCtx,
+    ctx: RuntimeReadCtx,
     args?: MigrationStatusArgs
   ) => Promise<Record<string, unknown>>;
   cancel: (
@@ -488,7 +508,10 @@ export function createMigrationHandlers<TSchema extends TablesRelationalConfig>(
     }
   };
 
-  const status = async (ctx: RuntimeCtx, args: MigrationStatusArgs = {}) => {
+  const status = async (
+    ctx: RuntimeReadCtx,
+    args: MigrationStatusArgs = {}
+  ) => {
     if (!migrations) {
       return {
         status: 'noop',
@@ -496,18 +519,20 @@ export function createMigrationHandlers<TSchema extends TablesRelationalConfig>(
       };
     }
 
-    const limit = parseOptionalPositiveInteger(args.limit, 'limit') ?? 25;
+    const limit = Math.min(
+      parseOptionalPositiveInteger(args.limit, 'limit') ??
+        DEFAULT_STATUS_RUN_LIMIT,
+      MAX_STATUS_RUN_LIMIT
+    );
     const runId = parseOptionalString(args.runId, 'runId');
     const stateRows = await getAllStateRows(ctx.db);
-    const runRows = await getAllRunRows(ctx.db);
-    const sortedRuns = [...runRows].sort(
-      (left, right) => right.startedAt - left.startedAt
-    );
     const selectedRuns = runId
-      ? sortedRuns.filter((entry) => entry.runId === runId).slice(0, 1)
-      : sortedRuns.slice(0, limit);
-    const activeRun =
-      sortedRuns.find((entry) => entry.status === 'running') ?? null;
+      ? await getRunsById(ctx.db, runId)
+      : await getRecentRuns(ctx.db, limit);
+    // Deliberately global, not derived from `selectedRuns`: the CLI wait loop
+    // falls back to this when polling a specific runId
+    // (`cli/backend-core.ts`), and `cancel()` targets the same row.
+    const activeRun = await getActiveRun(ctx.db);
     const appliedState = toAppliedStateMap(stateRows);
     const drift = detectMigrationDrift({
       migrationSet: migrations,
@@ -676,20 +701,38 @@ function toAppliedStateMap(stateRows: MigrationStateDoc[]): MigrationStateMap {
   return entries;
 }
 
-async function getAllStateRows(db: GenericDatabaseWriter<any>) {
+/**
+ * Bounded by the number of authored migrations, not by run history, and the
+ * full set is part of the `status()` payload (`migrations`, `pending`,
+ * `drift`), so this one stays a collect.
+ */
+async function getAllStateRows(db: MigrationReadDb) {
   return (await (db.query(MIGRATION_STATE_TABLE as any) as any).collect()) as
     | MigrationStateDoc[]
     | [];
 }
 
-async function getAllRunRows(db: GenericDatabaseWriter<any>) {
-  return (await (db.query(MIGRATION_RUN_TABLE as any) as any).collect()) as
-    | MigrationRunDoc[]
-    | [];
+/** Most recent `limit` runs, read straight off `by_started_at` in reverse. */
+async function getRecentRuns(
+  db: MigrationReadDb,
+  limit: number
+): Promise<MigrationRunDoc[]> {
+  return (await (db.query(MIGRATION_RUN_TABLE as any) as any)
+    .withIndex('by_started_at')
+    .order('desc')
+    .take(limit)) as MigrationRunDoc[];
+}
+
+async function getRunsById(
+  db: MigrationReadDb,
+  runId: string
+): Promise<MigrationRunDoc[]> {
+  const row = await getRunById(db, runId);
+  return row ? [row] : [];
 }
 
 async function getRunById(
-  db: GenericDatabaseWriter<any>,
+  db: MigrationReadDb,
   runId: string
 ): Promise<MigrationRunDoc | null> {
   const row = await (db.query(MIGRATION_RUN_TABLE as any) as any)
@@ -699,7 +742,7 @@ async function getRunById(
 }
 
 async function getActiveRun(
-  db: GenericDatabaseWriter<any>
+  db: MigrationReadDb
 ): Promise<MigrationRunDoc | null> {
   const row = await (db.query(MIGRATION_RUN_TABLE as any) as any)
     .withIndex('by_status', (query: any) => query.eq('status', 'running'))

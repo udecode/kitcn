@@ -15,6 +15,7 @@ import { convexTest, countDocumentReads } from '../setup.testing';
 const schedulerStub = { runAfter: vi.fn(async () => undefined) };
 const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
+const passthroughInternalQuery = ((definition: unknown) => definition) as never;
 
 /**
  * A self-referencing thread is the shape that makes relation depth observable:
@@ -112,6 +113,7 @@ const withThread = async (
         scheduledMutationBatch: {} as any,
       },
       internalMutation: passthroughInternalMutation,
+      internalQuery: passthroughInternalQuery,
     });
     const ctx = client.with({
       db: baseCtx.db,

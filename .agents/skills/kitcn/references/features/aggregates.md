@@ -56,7 +56,7 @@ const orders = convexTable(
 - `.all()` — unfiltered global metrics
 - `.count(field)` / `.sum(field)` / `.avg(field)` / `.min(field)` / `.max(field)` — chainable metrics
 
-After deploying, CLI runs `aggregateBackfill` automatically. Wait for `aggregateBackfillStatus` to report `READY`.
+After deploying, CLI runs `aggregateBackfill` automatically. Wait for `aggregateBackfillStatus` (an internal query) to report `READY`.
 
 ### `count()` — O(1) No-Scan Counts
 

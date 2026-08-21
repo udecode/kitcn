@@ -15,7 +15,7 @@ import type { OrmTriggerContext } from 'kitcn/orm';
 const procedureRegistry = {
   "aggregateBackfill": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./aggregate").aggregateBackfill>("generated/aggregate:aggregateBackfill"), () => (require("./aggregate") as Record<string, unknown>)["aggregateBackfill"])],
   "aggregateBackfillChunk": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./aggregate").aggregateBackfillChunk>("generated/aggregate:aggregateBackfillChunk"), () => (require("./aggregate") as Record<string, unknown>)["aggregateBackfillChunk"])],
-  "aggregateBackfillStatus": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./aggregate").aggregateBackfillStatus>("generated/aggregate:aggregateBackfillStatus"), () => (require("./aggregate") as Record<string, unknown>)["aggregateBackfillStatus"])],
+  "aggregateBackfillStatus": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof import("./aggregate").aggregateBackfillStatus>("generated/aggregate:aggregateBackfillStatus"), () => (require("./aggregate") as Record<string, unknown>)["aggregateBackfillStatus"])],
 } as const;
 
 type ProcedureCallerRegistry = typeof procedureRegistry;

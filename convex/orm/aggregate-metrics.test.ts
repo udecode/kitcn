@@ -19,6 +19,7 @@ const schedulerStub = {
 
 const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
+const passthroughInternalQuery = ((definition: unknown) => definition) as never;
 const METRIC_STATE_KIND = 'metric' as const;
 
 const buildMetricFixtures = (options?: { defaults?: OrmRuntimeDefaults }) => {
@@ -152,6 +153,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -298,6 +300,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -390,6 +393,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -479,6 +483,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -574,6 +579,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -608,6 +614,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -642,6 +649,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -755,6 +763,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -803,6 +812,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -842,6 +852,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -878,6 +889,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -957,6 +969,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1011,6 +1024,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1065,6 +1079,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1135,6 +1150,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1187,6 +1203,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const api = ormClient.api();
 
@@ -1228,6 +1245,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const api = ormClient.api();
 
@@ -1268,6 +1286,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1369,6 +1388,7 @@ describe('ORM aggregate()', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1468,6 +1488,7 @@ describe('aggregateBackfill resume compatibility', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1550,6 +1571,7 @@ describe('aggregateBackfill resume compatibility', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1619,6 +1641,7 @@ describe('ORM count({ select })', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1672,6 +1695,7 @@ describe('ORM count({ select })', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -1713,6 +1737,7 @@ describe('ORM count({ select })', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,

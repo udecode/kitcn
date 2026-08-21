@@ -77,6 +77,7 @@ const relationCountSchedulerStub = {
 
 const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
+const passthroughInternalQuery = ((definition: unknown) => definition) as never;
 
 const runBackfillToReady = async (api: any, ctx: { db: any }) => {
   await (api as any).aggregateBackfill.handler(
@@ -160,6 +161,7 @@ describe('M7 Mutations', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,

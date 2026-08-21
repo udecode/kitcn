@@ -46,7 +46,13 @@ export const migrationRunTable = convexTable(
     cancelRequested: boolean().notNull(),
     lastError: text(),
   },
-  (t) => [index('by_run_id').on(t.runId), index('by_status').on(t.status)]
+  (t) => [
+    index('by_run_id').on(t.runId),
+    index('by_status').on(t.status),
+    // Backs the newest-first run listing in `migrationStatus`. Without it the
+    // listing has to read every run ever recorded to return the most recent N.
+    index('by_started_at').on(t.startedAt),
+  ]
 );
 
 export const migrationStorageTables = {

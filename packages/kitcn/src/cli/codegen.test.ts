@@ -885,7 +885,7 @@ describe('cli/codegen', () => {
         'createGeneratedFunctionReference<"mutation", "internal", typeof import("./aggregate").aggregateBackfillChunk>("generated/aggregate:aggregateBackfillChunk")'
       );
       expect(aggregateRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof import("./aggregate").aggregateBackfillStatus>("generated/aggregate:aggregateBackfillStatus")'
+        'createGeneratedFunctionReference<"query", "internal", typeof import("./aggregate").aggregateBackfillStatus>("generated/aggregate:aggregateBackfillStatus")'
       );
       expect(serverRuntimeGenerated).toContain(
         'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationRun"]>("generated/server:migrationRun")'
@@ -894,7 +894,7 @@ describe('cli/codegen', () => {
         'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationRunChunk"]>("generated/server:migrationRunChunk")'
       );
       expect(serverRuntimeGenerated).toContain(
-        'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationStatus"]>("generated/server:migrationStatus")'
+        'createGeneratedFunctionReference<"query", "internal", typeof generatedInternal["generated"]["server"]["migrationStatus"]>("generated/server:migrationStatus")'
       );
       expect(serverRuntimeGenerated).toContain(
         'createGeneratedFunctionReference<"mutation", "internal", typeof generatedInternal["generated"]["server"]["migrationCancel"]>("generated/server:migrationCancel")'
@@ -2143,6 +2143,7 @@ describe('cli/codegen', () => {
         `
         export const httpAction = () => ({});
         export const internalMutation = () => ({});
+        export const internalQuery = () => ({});
         `.trim()
       );
       // The shape kitcn emitted before createOrm() required capabilities: a
@@ -2444,6 +2445,7 @@ export { httpAction, internalMutation };
         `
         export const httpAction = () => ({});
         export const internalMutation = () => ({});
+        export const internalQuery = () => ({});
         `.trim()
       );
 

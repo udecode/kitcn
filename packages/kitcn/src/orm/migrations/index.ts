@@ -28,7 +28,7 @@ export type {
   MigrationRunChunkArgs,
   MigrationStatusArgs,
 } from './runtime';
-export { createMigrationHandlers } from './runtime';
+export { createMigrationHandlers, MAX_STATUS_RUN_LIMIT } from './runtime';
 export {
   injectMigrationStorageTables,
   migrationExtension,

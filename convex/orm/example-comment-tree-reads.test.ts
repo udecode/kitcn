@@ -60,6 +60,7 @@ const backfillApi = createOrm({
     scheduledMutationBatch: {} as any,
   },
   internalMutation: ((definition: unknown) => definition) as never,
+  internalQuery: ((definition: unknown) => definition) as never,
 }).api() as any;
 
 const runBackfillToReady = async (ctx: { db: any }) => {

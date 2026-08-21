@@ -19,6 +19,7 @@ const schedulerStub = {
 
 const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
+const passthroughInternalQuery = ((definition: unknown) => definition) as never;
 
 const buildRelationCountFixtures = () => {
   const relationCountUsers = convexTable('relationCountUsers', {
@@ -184,6 +185,7 @@ describe('ORM relation with._count', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -345,6 +347,7 @@ describe('ORM relation with._count', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -440,6 +443,7 @@ describe('ORM relation with._count', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -505,6 +509,7 @@ describe('ORM relation with._count', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,
@@ -572,6 +577,7 @@ describe('ORM relation with._count', () => {
           scheduledMutationBatch: {} as any,
         },
         internalMutation: passthroughInternalMutation,
+        internalQuery: passthroughInternalQuery,
       });
       const ctx = ormClient.with({
         db: baseCtx.db,

@@ -37,7 +37,7 @@ export const api = {
   },
   migrationDemo: {
     cancel: createApiLeaf<"mutation", typeof import("../functions/migrationDemo").cancel>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/migrationDemo").cancel>("migrationDemo:cancel"), { auth: "required", type: "mutation" }),
-    getStatus: createApiLeaf<"mutation", typeof import("../functions/migrationDemo").getStatus>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/migrationDemo").getStatus>("migrationDemo:getStatus"), { auth: "required", type: "mutation" }),
+    getStatus: createApiLeaf<"query", typeof import("../functions/migrationDemo").getStatus>(createGeneratedFunctionReference<"query", "public", typeof import("../functions/migrationDemo").getStatus>("migrationDemo:getStatus"), { auth: "required", type: "query" }),
     runDown: createApiLeaf<"mutation", typeof import("../functions/migrationDemo").runDown>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/migrationDemo").runDown>("migrationDemo:runDown"), { auth: "required", type: "mutation" }),
     runUp: createApiLeaf<"mutation", typeof import("../functions/migrationDemo").runUp>(createGeneratedFunctionReference<"mutation", "public", typeof import("../functions/migrationDemo").runUp>("migrationDemo:runUp"), { auth: "required", type: "mutation" }),
   },

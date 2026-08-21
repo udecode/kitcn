@@ -365,9 +365,9 @@ describe('server/procedure-caller', () => {
       }),
     };
 
-    const mutationRef = { path: 'generated.server.migrationStatus' } as any;
+    const mutationRef = { path: 'generated.server.migrationRun' } as any;
     const registry = {
-      'generated.server.migrationStatus': [
+      'generated.server.migrationRun': [
         'mutation',
         typedProcedureResolver(mutationRef, async () => procedure),
       ],
@@ -381,7 +381,7 @@ describe('server/procedure-caller', () => {
 
     const caller = createCaller(mutationCtx);
     await expect(
-      caller.generated.server.migrationStatus({ limit: 200 })
+      caller.generated.server.migrationRun({ limit: 200 })
     ).resolves.toEqual({
       ok: true,
       limit: 200,

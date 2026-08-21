@@ -18,6 +18,7 @@ const schedulerStub = {
 
 const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
+const passthroughInternalQuery = ((definition: unknown) => definition) as never;
 
 /**
  * A nullable column compiles to `v.optional(v.union(v.null(), ...))`, so a row
@@ -113,6 +114,7 @@ const withNullishOrm = async (
         scheduledMutationBatch: {} as any,
       },
       internalMutation: passthroughInternalMutation,
+      internalQuery: passthroughInternalQuery,
     });
     const ctx = ormClient.with({
       db: baseCtx.db,

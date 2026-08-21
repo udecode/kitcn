@@ -15,7 +15,7 @@ import type { OrmTriggerContext } from 'kitcn/orm';
 
 const procedureRegistry = {
   "cancel": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../migrationDemo").cancel>("migrationDemo:cancel"), () => (require("../migrationDemo") as Record<string, unknown>)["cancel"])],
-  "getStatus": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../migrationDemo").getStatus>("migrationDemo:getStatus"), () => (require("../migrationDemo") as Record<string, unknown>)["getStatus"])],
+  "getStatus": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "public", typeof import("../migrationDemo").getStatus>("migrationDemo:getStatus"), () => (require("../migrationDemo") as Record<string, unknown>)["getStatus"])],
   "runDown": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../migrationDemo").runDown>("migrationDemo:runDown"), () => (require("../migrationDemo") as Record<string, unknown>)["runDown"])],
   "runUp": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "public", typeof import("../migrationDemo").runUp>("migrationDemo:runUp"), () => (require("../migrationDemo") as Record<string, unknown>)["runUp"])],
 } as const;

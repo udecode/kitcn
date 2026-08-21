@@ -350,6 +350,27 @@ Migrations use two internal storage tables injected by `defineSchema`:
 
 These are reserved table names. Do not create tables with these names.
 
+### Status Procedure
+
+`generated/server:migrationStatus` is an internal **query**, so reading status
+never takes a write transaction and can back a live subscription.
+
+| Arg | Description |
+|-----|-------------|
+| `limit` | Number of most recent runs to list. Defaults to `25`, capped at `MAX_STATUS_RUN_LIMIT` (`100`). Higher values are clamped to the cap. |
+| `runId` | Return only this run. Ignores `limit`. |
+
+`activeRun` is always resolved independently of `runId`, so a status call
+filtered to one run still reports whether any run is in flight. The
+`migrations`, `pending`, and `drift` fields always cover every authored
+migration and are not affected by `limit`.
+
+Import the cap when you need to assert against it:
+
+```ts showLineNumbers
+import { MAX_STATUS_RUN_LIMIT } from 'kitcn/orm/migrations';
+```
+
 ### Runtime Statuses
 
 | Status | Meaning |

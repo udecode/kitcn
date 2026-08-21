@@ -20,12 +20,12 @@ resolved: 2026-03-22
 
 ## Problem
 
-kitcn startup hooks call internal runtime mutations:
+kitcn startup hooks call internal runtime procedures:
 
-- `generated/server:migrationRun`
-- `generated/server:migrationStatus`
-- `generated/aggregate:aggregateBackfill`
-- `generated/aggregate:aggregateBackfillStatus`
+- `generated/server:migrationRun` (mutation)
+- `generated/server:migrationStatus` (query)
+- `generated/aggregate:aggregateBackfill` (mutation)
+- `generated/aggregate:aggregateBackfillStatus` (query)
 
 On Convex local dev, those startup-time calls work.
 

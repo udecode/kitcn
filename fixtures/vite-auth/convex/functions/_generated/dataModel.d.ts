@@ -140,6 +140,7 @@ export type DataModel = {
       "by_creation_time": ["_creationTime"];
       "by_id": ["_id"];
       "by_run_id": ["runId"];
+      "by_started_at": ["startedAt"];
       "by_status": ["status"];
     };
     searchIndexes: {
