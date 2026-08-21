@@ -12,11 +12,12 @@ import {
   id,
   inArray,
   index,
+  integer,
   scheduledMutationBatchFactory,
   text,
 } from 'kitcn/orm';
 import { describe, expect, test, vi } from 'vitest';
-import { convexTest, withOrm } from '../setup.testing';
+import { convexTest, countDocumentReads, withOrm } from '../setup.testing';
 
 const stressTest = process.env.CONVEX_LIMIT_STRESS === '1' ? test : test.skip;
 
@@ -533,6 +534,124 @@ describe('convex limits stress (env-gated)', () => {
           eqField: 'parentId',
           eqValue: parentId,
         });
+      });
+    },
+    180_000
+  );
+
+  stressTest(
+    'C) async soft cascade delete converges for thousands of descendants',
+    async () => {
+      // Soft cascade leaves processed rows inside the foreign key index range.
+      // A campaign that replays that range from the start burns roughly
+      // N^2/batchSize reads and dies on Convex's per-execution read limit well
+      // before it drains, so this asserts both convergence and the read bound.
+      const parents = convexTable(
+        'limit_stress_parents_soft_delete',
+        { slug: text().notNull(), deletionTime: integer() },
+        (t) => [index('by_slug').on(t.slug)]
+      );
+      const child = convexTable(
+        'limit_stress_children_soft_delete',
+        {
+          parentId: id('limit_stress_parents_soft_delete').notNull(),
+          payload: text().notNull(),
+          deletionTime: integer(),
+        },
+        (t) => [
+          index('by_parent_id').on(t.parentId),
+          foreignKey({
+            columns: [t.parentId],
+            foreignColumns: [parents.id],
+          }).onDelete('cascade'),
+        ]
+      );
+
+      const tables = {
+        limit_stress_parents_soft_delete: parents,
+        limit_stress_children_soft_delete: child,
+      };
+      const batchSize = 150;
+      const schema = defineSchema(tables, {
+        defaults: {
+          mutationExecutionMode: 'async',
+          mutationBatchSize: batchSize,
+          mutationLeafBatchSize: batchSize,
+          mutationMaxRows: 100_000,
+        },
+      });
+      const relations = defineRelations(tables);
+      const edges = extractRelationsConfig(relations);
+      const t = convexTest(schema);
+      const { queue, scheduler } = makeQueueScheduler();
+      const scheduledMutationBatch = {} as SchedulableFunctionReference;
+      const worker = scheduledMutationBatchFactory(
+        relations,
+        edges,
+        scheduledMutationBatch
+      );
+
+      let parentId: any;
+      await t.run(async (baseCtx) => {
+        const ctx = withOrm(baseCtx, relations);
+        const [parent] = await ctx.orm
+          .insert(parents)
+          .values({ slug: 'parent-soft-delete-root' })
+          .returning();
+        parentId = parent.id;
+      });
+
+      const descendants = 4_000;
+      await seedInBatches({
+        total: descendants,
+        batchSize: 500,
+        makeDoc: (i) => ({
+          parentId,
+          payload: `cascade-soft-delete-${i}`,
+        }),
+        insertBatch: async (docs) => {
+          await t.run(async (baseCtx) => {
+            const ctx = withOrm(baseCtx, relations);
+            await ctx.orm.insert(child).values(docs);
+          });
+        },
+      });
+
+      await t.run(async (baseCtx) => {
+        const reads = countDocumentReads(baseCtx, { scanned: true });
+        const ctx = withOrm(baseCtx, relations, {
+          scheduler: scheduler as any,
+          scheduledMutationBatch,
+        });
+
+        await ctx.orm
+          .delete(parents)
+          .soft()
+          .where(eq(parents.id, parentId))
+          .execute();
+
+        expect(queue.length).toBeGreaterThan(0);
+
+        await drainScheduledQueue({
+          queue,
+          worker,
+          db: ctx.db,
+          scheduler,
+          maxIterations: 5_000,
+        });
+
+        const rows = await ctx.db
+          .query('limit_stress_children_soft_delete')
+          .withIndex('by_parent_id', (q) => q.eq('parentId', parentId))
+          .collect();
+        expect(rows).toHaveLength(descendants);
+        expect(
+          rows.every((row: any) => typeof row.deletionTime === 'number')
+        ).toBe(true);
+
+        // Replaying the range scans ~117k rows here; resuming above the last
+        // processed row scans ~8k, half of which is the `collect()` above.
+        expect(reads.scanned).toBeLessThan(descendants * 4);
       });
     },
     180_000

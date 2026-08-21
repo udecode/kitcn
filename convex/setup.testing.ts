@@ -118,6 +118,9 @@ export function convexTest<Schema extends SchemaDefinition<any, any>>(
   return wrapConvexTestDateReturns(baseConvexTest(schema, convexModules));
 }
 
+type QueryStep = { method: string; args: unknown[] };
+type ScannedRow = { _id: string };
+
 /**
  * Count documents pulled out of `ctx.db` from this point on.
  *
@@ -142,25 +145,91 @@ export function convexTest<Schema extends SchemaDefinition<any, any>>(
  * Installing it on a context that already carries an ORM counts only the reads
  * issued directly through `ctx.db`, so an assertion on ORM reads passes against
  * a constant zero.
+ *
+ * `documents` counts rows handed back. `.filter()` runs during the scan, so it
+ * consumes rows that never reach the caller — a filtered page of ten rows can
+ * cost thousands of reads, and `documents` reports ten. Read bounds on filtered
+ * or resumed scans have to be asserted on `scanned`, which counts the rows the
+ * scan walked to produce that page.
+ *
+ * `scanned` is opt-in because measuring it replays the unfiltered half of every
+ * chain, and that is a real cost in read-heavy suites.
  */
 export function countDocumentReads(ctx: { db: GenericDatabaseWriter<any> }): {
   documents: number;
-} {
-  const reads = { documents: 0 };
+};
+export function countDocumentReads(
+  ctx: { db: GenericDatabaseWriter<any> },
+  options: { scanned: true }
+): { documents: number; scanned: number };
+export function countDocumentReads(
+  ctx: { db: GenericDatabaseWriter<any> },
+  options?: { scanned: true }
+): { documents: number; scanned: number } {
+  const reads = { documents: 0, scanned: 0 };
+  const tracksScanned = options?.scanned === true;
   const baseQuery = ctx.db.query.bind(ctx.db);
   const baseGet = ctx.db.get.bind(ctx.db);
 
-  const wrap = (query: object): any =>
-    new Proxy(query, {
+  /** Rows the scan walks, in index order, with every `.filter()` dropped. */
+  const scanRows = async (
+    table: unknown,
+    steps: QueryStep[]
+  ): Promise<ScannedRow[]> => {
+    let query: any = baseQuery(table as never);
+    for (const step of steps) {
+      query = query[step.method](...step.args);
+    }
+    return (await query.collect()) as ScannedRow[];
+  };
+
+  const positionOf = (rows: ScannedRow[], id: string) =>
+    rows.findIndex((row) => row._id === id);
+
+  const wrap = (
+    query: object,
+    table: unknown,
+    steps: QueryStep[],
+    filtered: boolean
+  ): any => {
+    /**
+     * A short page means the scan ran to the end of the range still looking for
+     * matches; a full one stopped at the last row it returned.
+     */
+    const countScan = async (rows: ScannedRow[], limit?: number) => {
+      if (!filtered) {
+        return rows.length;
+      }
+      const scan = await scanRows(table, steps);
+      const last = rows.at(-1);
+      if (!last || limit === undefined || rows.length < limit) {
+        return scan.length;
+      }
+      return positionOf(scan, last._id) + 1;
+    };
+
+    return new Proxy(query, {
       get(target: any, property) {
         if (property === Symbol.asyncIterator) {
           return () => {
             const iterator = target[Symbol.asyncIterator]();
+            let yielded = 0;
             return {
               async next() {
                 const result = await iterator.next();
                 if (!result.done) {
                   reads.documents += 1;
+                  yielded += 1;
+                  if (tracksScanned) {
+                    reads.scanned += 1;
+                  }
+                  return result;
+                }
+                if (tracksScanned && filtered) {
+                  // Draining a filtered query walks the whole range; rows the
+                  // filter dropped never surfaced above.
+                  const scan = await scanRows(table, steps);
+                  reads.scanned += Math.max(scan.length - yielded, 0);
                 }
                 return result;
               },
@@ -176,35 +245,80 @@ export function countDocumentReads(ctx: { db: GenericDatabaseWriter<any> }): {
         return (...args: unknown[]) => {
           const result = value.apply(target, args);
           if (property === 'collect' || property === 'take') {
-            return Promise.resolve(result).then((rows: unknown[]) => {
+            const limit = property === 'take' ? (args[0] as number) : undefined;
+            return Promise.resolve(result).then(async (rows: ScannedRow[]) => {
               reads.documents += rows.length;
+              if (tracksScanned) {
+                reads.scanned += await countScan(rows, limit);
+              }
               return rows;
             });
           }
           if (property === 'first' || property === 'unique') {
-            return Promise.resolve(result).then((row: unknown) => {
+            // `unique()` has to see a second match to reject it.
+            const limit = property === 'first' ? 1 : 2;
+            return Promise.resolve(result).then(async (row: ScannedRow) => {
               if (row) {
                 reads.documents += 1;
               }
+              if (tracksScanned) {
+                reads.scanned += await countScan(row ? [row] : [], limit);
+              }
               return row;
             });
+          }
+          if (property === 'paginate') {
+            const cursor =
+              (args[0] as { cursor?: string | null } | undefined)?.cursor ??
+              null;
+            return Promise.resolve(result).then(
+              async (page: { page: ScannedRow[] }) => {
+                reads.documents += page.page.length;
+                if (tracksScanned) {
+                  if (filtered) {
+                    const scan = await scanRows(table, steps);
+                    const start =
+                      cursor === null ? 0 : positionOf(scan, cursor) + 1;
+                    const last = page.page.at(-1);
+                    reads.scanned += last
+                      ? positionOf(scan, last._id) + 1 - start
+                      : Math.max(scan.length - start, 0);
+                  } else {
+                    reads.scanned += page.page.length;
+                  }
+                }
+                return page;
+              }
+            );
           }
           if (result && typeof (result as any).then === 'function') {
             return result;
           }
           if (result && typeof result === 'object') {
-            return wrap(result);
+            return wrap(
+              result,
+              table,
+              property === 'filter'
+                ? steps
+                : [...steps, { method: property as string, args }],
+              filtered || property === 'filter'
+            );
           }
           return result;
         };
       },
     });
+  };
 
-  (ctx.db as any).query = (table: unknown) => wrap(baseQuery(table as never));
+  (ctx.db as any).query = (table: unknown) =>
+    wrap(baseQuery(table as never), table, [], false);
   (ctx.db as any).get = async (id: unknown) => {
     const row = await baseGet(id as never);
     if (row) {
       reads.documents += 1;
+      if (tracksScanned) {
+        reads.scanned += 1;
+      }
     }
     return row;
   };

@@ -60,6 +60,9 @@ export type ScheduledMutationBatchArgs = {
 /** Column stamped by `softDeleteRow`; see mutation-utils.ts. */
 const DELETION_TIME_FIELD = 'deletionTime';
 
+const isPending = (row: Record<string, unknown>) =>
+  row[DELETION_TIME_FIELD] === undefined || row[DELETION_TIME_FIELD] === null;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -214,14 +217,15 @@ export function scheduledMutationBatchFactory<
     // Every other cascade action stops a processed row from matching this
     // index: hard delete removes it, `set null` / `set default` / cascade
     // update rewrite the foreign key columns. Soft cascade only stamps
-    // `deletionTime`, so without this guard the re-query below keeps returning
-    // the same rows and the worker re-queues itself forever.
-    const skipSoftDeletedRows =
+    // `deletionTime`, so a processed row keeps matching, and a batch that
+    // re-queries the whole range re-reads every row the campaign already
+    // handled — reads grow with the square of the row count.
+    const isSoftCascade =
       workType === 'cascade-delete' &&
       action === 'cascade' &&
       (args.cascadeMode ?? 'hard') === 'soft';
-    const queryWithIndex = () => {
-      const indexed = (ctx.db.query(args.table) as any).withIndex(
+    const queryWithIndex = () =>
+      (ctx.db.query(args.table) as any).withIndex(
         args.foreignIndexName,
         (q: any) => {
           let builder = q.eq(sourceColumns[0], targetValues[0]);
@@ -231,22 +235,23 @@ export function scheduledMutationBatchFactory<
           return builder;
         }
       );
-      if (!skipSoftDeletedRows) {
-        return indexed;
-      }
-      return indexed.filter((q: any) =>
-        q.or(
-          q.eq(q.field(DELETION_TIME_FIELD), undefined),
-          q.eq(q.field(DELETION_TIME_FIELD), null)
-        )
-      );
-    };
-    // Cascade workers patch/delete rows that are selected by the same indexed
-    // foreign key columns. Forwarding cursors can skip remaining rows after
-    // those mutations, so cascade continuation always re-queries from null.
-    const usesCursorContinuation = false;
+    // Continuation is a forwarded pagination cursor only for soft cascade.
+    // Every other action rewrites the indexed foreign key columns or removes the
+    // row outright, which moves rows relative to a cursor taken before those
+    // mutations — and drops them out of the range, so re-querying from null is
+    // already linear there. Soft cascade moves nothing: `deletionTime` is not an
+    // indexed column, so the page resumes exactly where the last batch stopped.
+    //
+    // Rows this campaign already stamped must not be filtered out of the query.
+    // Convex reads them either way — a `.filter()` only hides them from the page
+    // while still paying for the scan — and excluding the cursor's own row from
+    // the result strands the cursor. They are skipped in JS below instead.
+    //
+    // Resuming means a row inserted behind the cursor mid-campaign is not picked
+    // up. That is inherent to not re-reading the range, and the race was never
+    // settled anyway: the campaign could have passed that key before the insert.
     const paged = await queryWithIndex().paginate({
-      cursor: usesCursorContinuation ? args.cursor : null,
+      cursor: isSoftCascade ? args.cursor : null,
       numItems: args.batchSize,
     });
     const resolvedMaxBytesPerBatch = args.maxBytesPerBatch ?? maxBytesPerBatch;
@@ -254,7 +259,11 @@ export function scheduledMutationBatchFactory<
       paged.page as Record<string, unknown>[],
       resolvedMaxBytesPerBatch
     );
-    const rows = bounded.rows;
+    // What the scan consumed and what still has cascade work diverge under soft
+    // cascade: a page can hold rows this campaign, or another writer, already
+    // soft-deleted. They still move the cursor.
+    const consumedRows = bounded.rows;
+    const rows = isSoftCascade ? consumedRows.filter(isPending) : consumedRows;
     const hitByteLimit = bounded.hitLimit;
     const scheduleState = {
       remainingCalls: scheduleCallCap,
@@ -355,12 +364,32 @@ export function scheduledMutationBatchFactory<
       }
     }
 
-    if (usesCursorContinuation) {
+    if (isSoftCascade) {
+      if (hitByteLimit) {
+        // The byte budget stopped this batch short of the page Convex returned,
+        // so `paged.continueCursor` covers rows it never processed. Convex
+        // allows one paginated query per function execution, so this batch
+        // cannot ask for a second cursor that ends where it actually stopped.
+        // Replay the same starting point with the page size that did fit: that
+        // page ends exactly here, so its cursor is exact. `takeRowsWithinByteBudget`
+        // always keeps one row, and a truncated page is strictly shorter than
+        // the one requested, so the size strictly decreases and settles — after
+        // which the rest of the campaign pages at a size that never truncates.
+        await ctx.scheduler.runAfter(args.delayMs, scheduledMutationBatch, {
+          ...args,
+          workType,
+          cursor: args.cursor,
+          batchSize: consumedRows.length,
+          maxBytesPerBatch: resolvedMaxBytesPerBatch,
+        });
+        return;
+      }
       if (!paged.isDone && paged.continueCursor !== null) {
         await ctx.scheduler.runAfter(args.delayMs, scheduledMutationBatch, {
           ...args,
           workType,
           cursor: paged.continueCursor,
+          maxBytesPerBatch: resolvedMaxBytesPerBatch,
         });
       }
       return;
