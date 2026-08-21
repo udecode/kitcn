@@ -26,7 +26,9 @@ import {
   selectReturningRowWithHydration,
   serializeFilterExpression,
   splitReturningSelection,
+  stripUnsetFields,
   toConvexFilter,
+  unsetFieldsOf,
 } from './mutation-utils';
 import { QueryPromise } from './query-promise';
 import {
@@ -663,23 +665,8 @@ export class ConvexUpdateBuilder<
     const canDerivePostImage = !(
       hooksCanWriteMidLoop || cascadeTargetsThisTable
     );
-    // `patch` drops these keys; `{ ...row, ...writeSet }` keeps them as
-    // `undefined`, which `hydrateDateFieldsForRead` would emit.
-    const unsetFields = Object.keys(writeSet as any).filter(
-      (field) => (writeSet as any)[field] === undefined
-    );
-    const derivePostImage = (
-      candidate: Record<string, unknown>
-    ): Record<string, unknown> => {
-      if (unsetFields.length === 0) {
-        return candidate;
-      }
-      const postImage = { ...candidate };
-      for (const field of unsetFields) {
-        delete postImage[field];
-      }
-      return postImage;
-    };
+    // One statement writes one `set()`, so the removed keys are invariant.
+    const unsetFields = unsetFieldsOf(writeSet as any);
 
     /**
      * A single-column `references()` FK to `_id` whose column is supplied by
@@ -766,7 +753,7 @@ export class ConvexUpdateBuilder<
       // The patch wrote exactly `writeSet` and nothing else can touch this
       // document, so the post-image is already in hand.
       const updated = canDerivePostImage
-        ? derivePostImage(updatedRow)
+        ? stripUnsetFields(updatedRow, unsetFields)
         : ((await this.db.get((row as any)._id)) as Record<
             string,
             unknown

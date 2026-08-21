@@ -621,6 +621,63 @@ export class GelRelationalQuery<
   }
 
   /**
+   * Relation counts for a document the caller is already holding.
+   *
+   * `returning({ _count })` runs inside the mutation that just wrote the row,
+   * so resolving it through `execute()` spends one `db.get` re-reading a
+   * document that is already in the transaction's write set. The count engine
+   * only ever reads the counted edges' source fields off its parent, and the
+   * caller's document carries all of them, so the root read is pure waste.
+   * Everything else `execute()` would have done to that row — the select-plan
+   * assertion and the RLS select filter — still runs here.
+   *
+   * Reached through the static seam below rather than exposed on the instance:
+   * `GelRelationalQuery` is the declared return type of the public query
+   * builders, so an instance method would land in every user's autocomplete.
+   */
+  private async _countRelationsForHeldRow(
+    row: Record<string, unknown>,
+    countSelection: Record<string, unknown>
+  ): Promise<Record<string, number>> {
+    this._assertRlsSelectPlan(
+      { _count: countSelection },
+      this.tableConfig,
+      this.edgeMetadata,
+      0,
+      3
+    );
+
+    // `_loadRelationCounts` stamps `_count` onto the rows it is handed, and the
+    // caller's document goes on to be patched, cascaded or soft-deleted. Count
+    // against a copy so nothing of ours reaches the write path.
+    const carrier: Record<string, unknown> = { ...row };
+    const visible = await this._applyRlsSelectFilter(
+      [carrier],
+      this.tableConfig
+    );
+    if (visible.length === 0) {
+      return {};
+    }
+
+    await this._loadRelationCounts(
+      visible,
+      countSelection,
+      this.edgeMetadata,
+      this.tableConfig
+    );
+    return (carrier._count ?? {}) as Record<string, number>;
+  }
+
+  /** @internal Seam for `returning({ _count })`; see `returning-count.ts`. */
+  static countRelationsForHeldRow(
+    query: GelRelationalQuery<any, any, any>,
+    row: Record<string, unknown>,
+    countSelection: Record<string, unknown>
+  ): Promise<Record<string, number>> {
+    return query._countRelationsForHeldRow(row, countSelection);
+  }
+
+  /**
    * The aggregate-index runtime, registered at `createOrm()`.
    *
    * Only `count()`, `aggregate()` and relation counts reach this; plain reads

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { convexTable, text } from './index';
-import { createReturningCountLoader } from './returning-count';
+import {
+  countedEdgesReadCreationTime,
+  createReturningCountLoader,
+} from './returning-count';
 
 const posts = convexTable('returning_count_posts', {
   title: text().notNull(),
@@ -40,5 +43,64 @@ describe('returning count loader', () => {
 
     expect(typeof loader.load).toBe('function');
     expect(afterBuild).toBeGreaterThan(0);
+  });
+});
+
+describe('countedEdgesReadCreationTime', () => {
+  const edge = (overrides: Record<string, unknown>) =>
+    ({
+      edgeName: 'posts',
+      sourceTable: 'returning_count_posts',
+      targetTable: 'other',
+      fieldName: 'authorId',
+      sourceFields: ['authorId'],
+      targetFields: ['_id'],
+      ...overrides,
+    }) as any;
+
+  test('is false for an ordinary column edge and for another table', () => {
+    expect(
+      countedEdgesReadCreationTime([edge({})], 'returning_count_posts')
+    ).toBe(false);
+    expect(
+      countedEdgesReadCreationTime(
+        [edge({ sourceFields: ['_creationTime'] })],
+        'some_other_table'
+      )
+    ).toBe(false);
+    expect(
+      countedEdgesReadCreationTime(undefined, 'returning_count_posts')
+    ).toBe(false);
+  });
+
+  test('is true for an edge keyed on _creationTime under either spelling', () => {
+    expect(
+      countedEdgesReadCreationTime(
+        [edge({ sourceFields: ['_creationTime'] })],
+        'returning_count_posts'
+      )
+    ).toBe(true);
+    expect(
+      countedEdgesReadCreationTime(
+        [edge({ sourceFields: ['createdAt'] })],
+        'returning_count_posts'
+      )
+    ).toBe(true);
+    // Composite edges only need one such column to matter.
+    expect(
+      countedEdgesReadCreationTime(
+        [edge({ sourceFields: ['authorId', '_creationTime'] })],
+        'returning_count_posts'
+      )
+    ).toBe(true);
+  });
+
+  test('falls back to fieldName when sourceFields is empty', () => {
+    expect(
+      countedEdgesReadCreationTime(
+        [edge({ sourceFields: [], fieldName: '_creationTime' })],
+        'returning_count_posts'
+      )
+    ).toBe(true);
   });
 });

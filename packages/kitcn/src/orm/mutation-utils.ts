@@ -2095,6 +2095,57 @@ export function splitReturningSelection(fields: Record<string, unknown>): {
   };
 }
 
+/**
+ * The keys a `patch` payload removes rather than writes.
+ *
+ * `patch` drops a key whose value is `undefined`; a local `{ ...row, ...set }`
+ * merge keeps it, and `hydrateDateFieldsForRead` would then emit it. Hoisted
+ * out of per-row loops by callers: one statement writes one `set()`.
+ */
+export function unsetFieldsOf(writeSet: Record<string, unknown>): string[] {
+  return Object.keys(writeSet).filter((field) => writeSet[field] === undefined);
+}
+
+/**
+ * Removes the keys `patch` would have dropped from a locally derived
+ * post-image. Returns `candidate` untouched when there is nothing to remove.
+ */
+export function stripUnsetFields(
+  candidate: Record<string, unknown>,
+  unsetFields: readonly string[]
+): Record<string, unknown> {
+  if (unsetFields.length === 0) {
+    return candidate;
+  }
+  const postImage = { ...candidate };
+  for (const field of unsetFields) {
+    delete postImage[field];
+  }
+  return postImage;
+}
+
+/**
+ * True when the projection reads `_creationTime`, under either the public
+ * `createdAt` alias or a user column that shadows it.
+ *
+ * `insert()` derives its post-image from the payload it just wrote, and
+ * `_creationTime` is the one field that payload can never carry: Convex's
+ * insert syscall returns the id and nothing else.
+ */
+export function returningSelectionReadsCreationTime(
+  columnSelection: Record<string, unknown> | undefined
+): boolean {
+  if (!columnSelection) {
+    return false;
+  }
+  for (const column of Object.values(columnSelection)) {
+    if (getSelectionColumnName(column) === INTERNAL_CREATION_TIME_FIELD) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function selectReturningRow(
   row: Record<string, unknown>,
   selection: Record<string, unknown>

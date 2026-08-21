@@ -1,7 +1,12 @@
 import type { GenericDatabaseWriter } from 'convex/server';
+import type { EdgeMetadata } from './extractRelationsConfig';
 import { type getOrmContext, getTableName } from './mutation-utils';
 import { GelRelationalQuery } from './query';
 import type { ConvexTable } from './table';
+import {
+  INTERNAL_CREATION_TIME_FIELD,
+  PUBLIC_CREATED_AT_FIELD,
+} from './timestamp-mode';
 
 export type ReturningCountLoader = {
   load(
@@ -46,20 +51,16 @@ export function createReturningCountLoader(
 
   return {
     async load(row, countSelection) {
-      const counted = await new GelRelationalQuery(
+      // Still one query instance per row. It issues no read of its own now, but
+      // an RLS policy expression can embed database state that the next row's
+      // write invalidates, so the resolution cache it carries must not outlive
+      // this row.
+      const query = new GelRelationalQuery(
         schema as any,
         tableConfig as any,
         tableEdges as any,
         db as any,
-        {
-          where: {
-            id: row._id,
-          },
-          columns: {},
-          with: {
-            _count: countSelection,
-          },
-        } as any,
+        {} as any,
         'first',
         edgeMetadata as any,
         ormContext?.rls,
@@ -67,9 +68,41 @@ export function createReturningCountLoader(
         undefined,
         undefined,
         countIndexReadiness
-      ).execute();
+      );
 
-      return ((counted as any)?._count ?? {}) as Record<string, number>;
+      return await GelRelationalQuery.countRelationsForHeldRow(
+        query,
+        row,
+        countSelection
+      );
     },
   };
+}
+
+/**
+ * True when any edge leaving `tableName` keys on `_creationTime`.
+ *
+ * The count engine reads an edge's source fields straight off the row it is
+ * handed, so a caller that derives that row instead of reading it back has to
+ * know whether `_creationTime` is load-bearing — a derived insert post-image
+ * cannot have it, and a missing source value counts zero without erroring.
+ * Asked of every edge on the table rather than only the counted ones: the
+ * count selection varies per statement, the schema does not.
+ */
+export function countedEdgesReadCreationTime(
+  edgeMetadata: EdgeMetadata[] | undefined,
+  tableName: string
+): boolean {
+  return (edgeMetadata ?? []).some((edge) => {
+    if (edge.sourceTable !== tableName) {
+      return false;
+    }
+    const sourceFields =
+      edge.sourceFields.length > 0 ? edge.sourceFields : [edge.fieldName];
+    return sourceFields.some(
+      (field) =>
+        field === INTERNAL_CREATION_TIME_FIELD ||
+        field === PUBLIC_CREATED_AT_FIELD
+    );
+  });
 }
