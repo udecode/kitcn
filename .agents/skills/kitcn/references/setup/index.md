@@ -644,6 +644,12 @@ bunx kitcn aggregate backfill --prod
 bunx kitcn analyze
 ```
 
+`kitcn analyze` ranks each Convex function by the isolate it deploys into.
+`OutMB` is that isolate's bundled size; `DepMB`/`LocMB` are the source size of
+the dependency and own-Convex files inside it; `Files` counts the files
+contributing bytes to it. A file that is imported but fully tree-shaken away is
+counted in none of them. Use `--deploy` for deployment totals instead.
+
 Concave lane:
 
 ```bash

@@ -450,10 +450,24 @@ Options:
 | `--interactive`, `-i` | Enable interactive hotspot UI (default: off, TTY only) |
 | `--all`, `-a` | Include Convex-ignored entries (multi-dot files and `generated/` modules) |
 | `--show-small` | Include tiny dependencies (hidden by default) |
+| `--top-inputs <n>` | Rows for input tables (default: `12`) |
+| `--top-packages <n>` | Rows for package tables (default: `12`) |
 | `--warn-mb <n>` | WARN threshold in MB (default: `6`) |
 | `--danger-mb <n>` | DANGER threshold in MB (default: `8`) |
 | `--fail-mb <n>` | Exit with code `1` if largest output meets threshold |
 | `--width <n>` | Force terminal output width |
+
+Hotspot ranking columns:
+
+| Column | Meaning |
+|--------|---------|
+| `OutMB` | Bundled size of the isolate this entry deploys into |
+| `DepMB` | Source size of the dependency files that land in that isolate |
+| `LocMB` | Source size of your own Convex files that land in that isolate |
+| `Files` | Number of files that contribute bytes to that isolate |
+
+Every column describes the same set: what the entry actually bundles. A file that
+is imported but fully tree-shaken away is counted in none of them.
 
 See [Mode Behavior](#mode-behavior) for the full 12-item behavior reference.
 
@@ -531,8 +545,8 @@ In scoped modes, stale artifacts outside the current scope are removed automatic
 
 ### Mode Behavior
 
-1. Default mode (`kitcn analyze`) ranks least optimized Convex function modules by output size and dependency weight.
-2. `--deploy` mirrors deploy shape by bundling the same selected entry set together with shared chunks.
+1. Default mode (`kitcn analyze`) ranks least optimized Convex function modules by output size and dependency weight. Every selected entry is measured in one bundler pass, and each entry is still sized as its own independently tree-shaken isolate.
+2. `--deploy` mirrors deploy shape by bundling the same selected entry set together with shared chunks. Use it when you want deployment totals rather than per-function isolate sizes.
 3. Convex-ignored entries with detected handlers are included by default in both modes. Add `--all` to include every ignored entry (including ones without detected handlers).
 4. `--details` adds a package graph view (size + top cross-package imports). Add `--input` to include the top internal inputs table.
 5. Filter to specific entries by passing a positional regex: `kitcn analyze polar.*` or `kitcn analyze '^convex/functions/polar.*\\.ts$'`.

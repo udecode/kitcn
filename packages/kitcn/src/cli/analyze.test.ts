@@ -297,6 +297,339 @@ export const run = authAction.action(async () => null);
   });
 });
 
+describe('cli/analyze hotspot bundle options', () => {
+  const projectRoot = '/repo';
+  const entryPoints = ['/repo/convex/functions/todos.ts'];
+
+  test('bundles every entry in one build without code splitting', () => {
+    const options = __test.createHotspotBuildOptions(
+      ['/repo/convex/functions/todos.ts', '/repo/convex/functions/user.ts'],
+      projectRoot,
+      false
+    );
+
+    // Splitting would let shared chunks retain code a lone entry tree-shakes,
+    // inflating the per-entry number this mode ranks by. `--deploy` owns that view.
+    expect(options.splitting).toBeUndefined();
+    expect(options.metafile).toBe(true);
+    expect(options.write).toBe(false);
+    expect(options.absWorkingDir).toBe(projectRoot);
+  });
+
+  test('names each entry output by position so results never key off a path', () => {
+    const options = __test.createHotspotBuildOptions(
+      ['/repo/convex/functions/todos.ts', '/repo/convex/functions/todos.js'],
+      projectRoot,
+      false
+    );
+
+    // esbuild resolves symlinked sources to their real path in
+    // `output.entryPoint`, and `todos.ts` / `todos.js` would collide on one
+    // derived output path. Positional names dodge both.
+    expect(options.entryPoints).toEqual([
+      { in: '/repo/convex/functions/todos.ts', out: 'e0' },
+      { in: '/repo/convex/functions/todos.js', out: 'e1' },
+    ]);
+    expect(options.outdir).toBe('out');
+  });
+
+  test('schema fallback toggles the externalizing plugin', () => {
+    expect(
+      __test.createHotspotBuildOptions(entryPoints, projectRoot, false).plugins
+    ).toEqual([]);
+
+    const withFallback = __test.createHotspotBuildOptions(
+      entryPoints,
+      projectRoot,
+      true
+    );
+    expect(withFallback.plugins?.map((plugin) => plugin.name)).toEqual([
+      'schema-external-fallback',
+    ]);
+  });
+});
+
+const TODOS = '/repo/convex/functions/todos.ts';
+const USER = '/repo/convex/functions/user.ts';
+
+// One shared metafile: `inputs` is the union across entries and includes a file
+// that was parsed but tree-shaken out of every output. Outputs are keyed by the
+// positional names `createHotspotBuildOptions` assigns.
+const SHARED_META = {
+  inputs: {
+    'convex/functions/todos.ts': {
+      bytes: 1000,
+      imports: [
+        { path: '../node_modules/shared/index.js' },
+        { path: 'convex/lib/dead.ts' },
+      ],
+    },
+    'convex/functions/user.ts': {
+      bytes: 500,
+      imports: [{ path: '../node_modules/shared/index.js' }],
+    },
+    '../node_modules/shared/index.js': {
+      bytes: 4000,
+      imports: [{ path: '../node_modules/only-user/index.js' }],
+    },
+    '../node_modules/only-user/index.js': { bytes: 250, imports: [] },
+    'convex/lib/dead.ts': { bytes: 999_999, imports: [] },
+    'convex/lib/weightless.ts': { bytes: 7000, imports: [] },
+  },
+  outputs: {
+    'out/e0.js': {
+      bytes: 3200,
+      entryPoint: 'convex/functions/todos.ts',
+      inputs: {
+        'convex/functions/todos.ts': { bytesInOutput: 800 },
+        '../node_modules/shared/index.js': { bytesInOutput: 2400 },
+        // Linked into the chunk but emits nothing.
+        'convex/lib/weightless.ts': { bytesInOutput: 0 },
+      },
+    },
+    'out/e1.js': {
+      bytes: 2600,
+      entryPoint: 'convex/functions/user.ts',
+      inputs: {
+        'convex/functions/user.ts': { bytesInOutput: 400 },
+        '../node_modules/shared/index.js': { bytesInOutput: 2000 },
+        '../node_modules/only-user/index.js': { bytesInOutput: 200 },
+      },
+    },
+  },
+} as any;
+
+describe('cli/analyze hotspot build attribution', () => {
+  const attribute = (
+    entryPoints: string[],
+    includeDeepData = false,
+    meta: any = SHARED_META
+  ) =>
+    __test.attributeHotspotBuild({
+      entryPoints,
+      includeDeepData,
+      meta,
+      projectRoot: '/repo',
+      schemaExternalized: false,
+    });
+
+  test('row metrics count only inputs that carry weight in that entry output', () => {
+    const todosRow = attribute([TODOS, USER]).get(TODOS);
+
+    expect(todosRow).toMatchObject({
+      entry: 'convex/functions/todos.ts',
+      // 2 of the 6 parsed inputs, not the whole shared graph.
+      inputCount: 2,
+      localInputBytes: 1000,
+      dependencyInputBytes: 4000,
+      outputBytes: 3200,
+      schemaExternalized: false,
+    });
+
+    // Neither the parsed-but-dropped file nor the emit-nothing file inflates a row.
+    expect(
+      (todosRow?.localInputBytes ?? 0) + (todosRow?.dependencyInputBytes ?? 0)
+    ).toBe(5000);
+  });
+
+  test('each entry is attributed from its own output, not the shared union', () => {
+    expect(attribute([TODOS, USER]).get(USER)).toMatchObject({
+      entry: 'convex/functions/user.ts',
+      inputCount: 3,
+      localInputBytes: 500,
+      dependencyInputBytes: 4250,
+      outputBytes: 2600,
+    });
+  });
+
+  test('entries are paired with outputs by position, not by path', () => {
+    // Symlinked sources make `output.entryPoint` unusable as a key, so the
+    // stale paths in this metafile must not affect attribution.
+    const rows = attribute(['/repo/somewhere/else/a.ts'], false, {
+      ...SHARED_META,
+      outputs: { 'out/e0.js': SHARED_META.outputs['out/e1.js'] },
+    });
+
+    expect(rows.get('/repo/somewhere/else/a.ts')).toMatchObject({
+      entry: 'somewhere/else/a.ts',
+      outputBytes: 2600,
+    });
+  });
+
+  test('a missing entry output throws so the caller can retry per entry', () => {
+    expect(() =>
+      attribute([TODOS, USER, '/repo/convex/functions/gone.ts'])
+    ).toThrow('esbuild produced no output for convex/functions/gone.ts.');
+  });
+
+  test('the schema-externalized flag is stamped on every row it degrades', () => {
+    const rows = __test.attributeHotspotBuild({
+      entryPoints: [TODOS],
+      includeDeepData: false,
+      meta: SHARED_META,
+      projectRoot: '/repo',
+      schemaExternalized: true,
+    });
+
+    expect(rows.get(TODOS)?.schemaExternalized).toBe(true);
+  });
+
+  test('deep data is omitted unless requested', () => {
+    expect(attribute([TODOS]).get(TODOS)?.deep).toBeUndefined();
+  });
+
+  test('deep inputs are ranked by bytes in output and keep source bytes', () => {
+    const row = attribute([TODOS, USER], true).get(TODOS);
+
+    expect(row?.deep?.outputInputs).toEqual([
+      {
+        path: '../node_modules/shared/index.js',
+        bytesInOutput: 2400,
+        sourceBytes: 4000,
+      },
+      {
+        path: 'convex/functions/todos.ts',
+        bytesInOutput: 800,
+        sourceBytes: 1000,
+      },
+      {
+        path: 'convex/lib/weightless.ts',
+        bytesInOutput: 0,
+        sourceBytes: 7000,
+      },
+    ]);
+  });
+
+  test('deep import graph is scoped to the inputs that entry actually bundles', () => {
+    const rows = attribute([TODOS, USER], true);
+
+    // `dead.ts` is imported in source but reaches no output, so it is not an edge.
+    expect(rows.get(TODOS)?.deep?.importsByInput).toEqual({
+      'convex/functions/todos.ts': ['../node_modules/shared/index.js'],
+      '../node_modules/shared/index.js': [],
+      'convex/lib/weightless.ts': [],
+    });
+
+    // Same shared input, different edges: `only-user` is bundled only by `user`.
+    expect(rows.get(USER)?.deep?.importsByInput).toEqual({
+      'convex/functions/user.ts': ['../node_modules/shared/index.js'],
+      '../node_modules/shared/index.js': ['../node_modules/only-user/index.js'],
+      '../node_modules/only-user/index.js': [],
+    });
+  });
+});
+
+describe('cli/analyze hotspot sweep', () => {
+  const sweep = (entryPoints: string[], build: any) =>
+    __test.sweepHotspotEntries(entryPoints, '/repo', false, build);
+
+  const okBuild =
+    (schemaExternalized = false) =>
+    async (entryPoints: string[]) => ({
+      result: {
+        metafile: {
+          ...SHARED_META,
+          outputs: Object.fromEntries(
+            entryPoints.map((_, index) => [
+              `out/e${index}.js`,
+              SHARED_META.outputs[`out/e${index === 0 ? 0 : 1}.js`],
+            ])
+          ),
+        },
+      },
+      schemaExternalized,
+    });
+
+  test('an empty selection never reaches the bundler', async () => {
+    let calls = 0;
+    const result = await sweep([], async () => {
+      calls += 1;
+      throw new Error('should not build');
+    });
+
+    expect(calls).toBe(0);
+    expect(result.rowsByEntry.size).toBe(0);
+    expect(result.failedRows).toEqual([]);
+    expect(result.fallbackReason).toBeNull();
+  });
+
+  test('the shared pass runs exactly one build and reports no fallback', async () => {
+    const calls: string[][] = [];
+    const result = await sweep([TODOS, USER], async (entryPoints: string[]) => {
+      calls.push(entryPoints);
+      return okBuild()(entryPoints);
+    });
+
+    expect(calls).toEqual([[TODOS, USER]]);
+    expect(result.rowsByEntry.size).toBe(2);
+    expect(result.fallbackReason).toBeNull();
+  });
+
+  test('a failed shared pass falls back to per-entry builds and names the reason', async () => {
+    const calls: string[][] = [];
+    const result = await sweep([TODOS, USER], async (entryPoints: string[]) => {
+      calls.push(entryPoints);
+      if (entryPoints.length > 1) {
+        throw new Error('Build failed with 1 error:\nsomething broke');
+      }
+      return okBuild()(entryPoints);
+    });
+
+    expect(calls).toEqual([[TODOS, USER], [TODOS], [USER]]);
+    expect(result.rowsByEntry.size).toBe(2);
+    expect(result.failedRows).toEqual([]);
+    expect(result.fallbackReason).toBe('Build failed with 1 error:');
+  });
+
+  test('only the entries that cannot build become failed rows', async () => {
+    const result = await sweep([TODOS, USER], async (entryPoints: string[]) => {
+      if (entryPoints.length > 1 || entryPoints[0] === USER) {
+        throw new Error('cannot resolve ./missing');
+      }
+      return okBuild()(entryPoints);
+    });
+
+    expect([...result.rowsByEntry.keys()]).toEqual([TODOS]);
+    expect(result.failedRows).toEqual([
+      { entry: 'convex/functions/user.ts', error: 'cannot resolve ./missing' },
+    ]);
+  });
+
+  test('the shared pass refuses the schema fallback, the per-entry sweep allows it', async () => {
+    const allowed: boolean[] = [];
+    await sweep(
+      [TODOS, USER],
+      async (
+        entryPoints: string[],
+        _root: string,
+        allowSchemaFallback: boolean
+      ) => {
+        allowed.push(allowSchemaFallback);
+        if (entryPoints.length > 1) {
+          throw new Error('No matching export in schema.ts');
+        }
+        return okBuild(true)(entryPoints);
+      }
+    );
+
+    // Externalizing schema across the shared bundle would shrink every entry
+    // that imports it, so only the per-entry rebuild may do it.
+    expect(allowed).toEqual([false, true, true]);
+  });
+
+  test('the schema fallback marks only the rows it degraded', async () => {
+    const result = await sweep([TODOS, USER], async (entryPoints: string[]) => {
+      if (entryPoints.length > 1) {
+        throw new Error('No matching export in schema.ts');
+      }
+      return okBuild(entryPoints[0] === USER)(entryPoints);
+    });
+
+    expect(result.rowsByEntry.get(TODOS)?.schemaExternalized).toBe(false);
+    expect(result.rowsByEntry.get(USER)?.schemaExternalized).toBe(true);
+  });
+});
+
 describe('cli/analyze entry sweep concurrency', () => {
   test('mapWithConcurrency keeps results in input order', async () => {
     const items = [50, 5, 30, 1, 20, 0, 40];

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import type { BuildResult, Plugin } from 'esbuild';
+import type { BuildOptions, BuildResult, Metafile, Plugin } from 'esbuild';
 import { mapWithConcurrency } from '../internal/concurrency';
 import { isColorEnabled } from './utils/highlighter.js';
 import { loadEsbuild } from './utils/lazy-deps.js';
@@ -94,8 +94,8 @@ type AnalyzeRowBase = {
   inputCount: number;
   localInputBytes: number;
   dependencyInputBytes: number;
-  totalInputBytes: number;
   outputBytes: number;
+  /** This row's `./schema` imports were externalized, so its sizes are low. */
   schemaExternalized: boolean;
 };
 
@@ -124,7 +124,8 @@ type HotspotCollection = {
   entryPoints: string[];
   successRows: HotspotRow[];
   failedRows: FailedRow[];
-  handlerExportsByEntry: Map<string, string[]>;
+  /** Set when the shared pass failed and the per-entry recovery sweep ran. */
+  fallbackReason: string | null;
 };
 
 type FailedRow = {
@@ -698,6 +699,13 @@ Modes:
   (default)            Hotspot analysis (per-function isolate ranking)
   --deploy             Deploy analysis (single isolate bundle, Convex-like)
 
+Hotspot columns (all describe what the entry actually bundles):
+  OutMB                Bundled size of the isolate this entry deploys into
+  DepMB                Source size of the dependency files in that isolate
+  LocMB                Source size of your own Convex files in that isolate
+  Files                Files contributing bytes to that isolate
+  Fns                  Convex handlers exported by the entry
+
 Flags:
   --details            Show extra per-entry/package details
   --input              Include top internal inputs in detail output
@@ -824,14 +832,56 @@ const packageFromInputPath = (inputPath: string): string => {
   return '(other)';
 };
 
-const buildHotspotEntry = (entryPoint: string, externalizeSchema: boolean) =>
-  loadEsbuild().build({
+/** Matches the `out: 'e<index>'` names `createHotspotBuildOptions` assigns. */
+const HOTSPOT_ENTRY_OUTPUT_REGEX = /^out\/e(\d+)\.[^/]+$/;
+
+const isLocalInputPath = (inputPath: string): boolean =>
+  inputPath.startsWith('convex/') ||
+  inputPath.startsWith('example/convex/') ||
+  inputPath.includes('/example/convex/');
+
+/**
+ * Hotspot ranks each Convex function by the isolate it deploys into, so every
+ * entry needs its own fully tree-shaken closure.
+ *
+ * esbuild parses each input once per build no matter how many entry points it
+ * receives, and with splitting OFF every entry output still carries its own
+ * independently tree-shaken closure. Passing the whole entry set to one build
+ * therefore keeps per-entry byte counts identical to building each entry alone
+ * while reading the shared import graph once.
+ *
+ * Do not turn on `splitting` here. Shared chunks retain code a lone entry would
+ * have dropped, which inflates exactly the number this mode ranks by (measured
+ * up to +70% on `example`) and turns dynamic imports into extra outputs that
+ * carry an `entryPoint`. `--deploy` already owns the split-bundle view.
+ *
+ * Each entry is given an explicit output name so its result can be found by
+ * position instead of by path. esbuild resolves a symlinked source file to its
+ * real path before reporting `output.entryPoint`, so matching that field back
+ * against the selected entry would silently lose any entry reached through a
+ * symlink. Explicit names also make `foo.ts` and `foo.js` in one directory
+ * unable to collide on a single output path.
+ *
+ * `attributeHotspotBuild` must be given the same `entryPoints` array, since the
+ * output name is the entry's index in it.
+ */
+const createHotspotBuildOptions = (
+  entryPoints: string[],
+  projectRoot: string,
+  externalizeSchema: boolean
+) =>
+  ({
+    absWorkingDir: projectRoot,
     bundle: true,
-    entryPoints: [entryPoint],
+    entryPoints: entryPoints.map((entryPoint, index) => ({
+      in: entryPoint,
+      out: `e${index}`,
+    })),
     external: ['convex', 'convex/*'],
     format: 'esm',
     logLevel: 'silent',
     metafile: true,
+    outdir: 'out',
     platform: 'browser',
     target: ['esnext'],
     conditions: ['convex', 'module'],
@@ -843,59 +893,89 @@ const buildHotspotEntry = (entryPoint: string, externalizeSchema: boolean) =>
     },
     write: false,
     plugins: externalizeSchema ? [schemaExternalFallbackPlugin] : [],
-  });
+  }) satisfies BuildOptions;
 
-const analyzeHotspotEntry = async (
-  entryPoint: string,
+/**
+ * `allowSchemaFallback` is off for the shared pass on purpose. Externalizing
+ * `./schema` removes real weight from every entry that imports it, not just the
+ * one that failed: forcing it across `example` moved 25 of 26 rows, one by
+ * -98%. Letting the shared pass fail and rebuilding per entry instead keeps the
+ * approximation on the entries that actually need it.
+ */
+const buildHotspotBundle = async (
+  entryPoints: string[],
   projectRoot: string,
-  includeDeepData: boolean
-): Promise<HotspotAnalyzedRow> => {
-  let result: BuildResult;
-  let schemaExternalized = false;
-
+  allowSchemaFallback: boolean
+): Promise<{ result: BuildResult; schemaExternalized: boolean }> => {
   try {
-    result = await buildHotspotEntry(entryPoint, false);
+    return {
+      result: await loadEsbuild().build(
+        createHotspotBuildOptions(entryPoints, projectRoot, false)
+      ),
+      schemaExternalized: false,
+    };
   } catch (error) {
-    if (!shouldRetryWithSchemaExternalized(error)) {
+    if (!(allowSchemaFallback && shouldRetryWithSchemaExternalized(error))) {
       throw error;
     }
-    result = await buildHotspotEntry(entryPoint, true);
-    schemaExternalized = true;
+    return {
+      result: await loadEsbuild().build(
+        createHotspotBuildOptions(entryPoints, projectRoot, true)
+      ),
+      schemaExternalized: true,
+    };
   }
+};
 
-  const meta = result.metafile;
-  if (!meta) {
-    throw new Error(`No metafile generated for ${entryPoint}`);
+/**
+ * Row metrics describe what actually weighs something in the entry's isolate.
+ *
+ * They count the inputs that emit bytes into that entry's output, which is the
+ * same set the `--details` package and input tables below them already report.
+ * The build-wide `meta.inputs` cannot answer this: it lists every file esbuild
+ * parsed, including ones tree-shaking dropped entirely (534 of 1545 on
+ * `example`), and a shared bundle makes it the union across entries rather than
+ * one entry's graph. It stays the lookup table for *source* bytes, so `LocMB`
+ * and `DepMB` keep measuring source weight rather than post-minify weight.
+ */
+const buildHotspotRow = (params: {
+  entryPoint: string;
+  projectRoot: string;
+  inputs: Record<string, MetaInput>;
+  output: MetaOutput;
+  includeDeepData: boolean;
+  schemaExternalized: boolean;
+}): HotspotAnalyzedRow => {
+  const {
+    entryPoint,
+    projectRoot,
+    inputs,
+    output,
+    includeDeepData,
+    schemaExternalized,
+  } = params;
+  const outputInputEntries = Object.entries(output.inputs ?? {});
+
+  let inputCount = 0;
+  let totalInputBytes = 0;
+  let localInputBytes = 0;
+  for (const [inputPath, value] of outputInputEntries) {
+    if ((value.bytesInOutput ?? 0) <= 0) {
+      continue;
+    }
+    inputCount += 1;
+    const sourceBytes = inputs[inputPath]?.bytes ?? 0;
+    totalInputBytes += sourceBytes;
+    if (isLocalInputPath(inputPath)) {
+      localInputBytes += sourceBytes;
+    }
   }
-
-  const output = Object.values(meta.outputs as Record<string, MetaOutput>).at(
-    0
-  );
-  if (!output) {
-    throw new Error(`No output generated for ${entryPoint}`);
-  }
-
-  const inputEntries = Object.entries(meta.inputs as Record<string, MetaInput>);
-  const totalInputBytes = inputEntries.reduce(
-    (sum, [, value]) => sum + (value.bytes ?? 0),
-    0
-  );
-
-  const isLocalInput = (inputPath: string): boolean =>
-    inputPath.startsWith('convex/') ||
-    inputPath.startsWith('example/convex/') ||
-    inputPath.includes('/example/convex/');
-
-  const localInputBytes = inputEntries
-    .filter(([inputPath]) => isLocalInput(inputPath))
-    .reduce((sum, [, value]) => sum + (value.bytes ?? 0), 0);
 
   const row: HotspotAnalyzedRow = {
     entry: path.relative(projectRoot, entryPoint),
-    inputCount: inputEntries.length,
+    inputCount,
     localInputBytes,
     dependencyInputBytes: Math.max(0, totalInputBytes - localInputBytes),
-    totalInputBytes,
     outputBytes: output.bytes,
     schemaExternalized,
   };
@@ -904,25 +984,21 @@ const analyzeHotspotEntry = async (
     return row;
   }
 
-  const bytesByInput = new Map(
-    inputEntries.map(([inputPath, value]) => [inputPath, value.bytes ?? 0])
-  );
-
-  const outputInputs = Object.entries(output.inputs ?? {})
+  const outputInputs = outputInputEntries
     .map(([inputPath, value]) => ({
       path: inputPath,
       bytesInOutput: value.bytesInOutput ?? 0,
-      sourceBytes: bytesByInput.get(inputPath) ?? 0,
+      sourceBytes: inputs[inputPath]?.bytes ?? 0,
     }))
     .sort((a, b) => b.bytesInOutput - a.bytesInOutput);
 
-  const inputSet = new Set(inputEntries.map(([inputPath]) => inputPath));
+  const inputSet = new Set(outputInputEntries.map(([inputPath]) => inputPath));
   const importsByInput = Object.fromEntries(
-    inputEntries.map(([inputPath, value]) => [
+    outputInputEntries.map(([inputPath]) => [
       inputPath,
       Array.from(
         new Set(
-          (value.imports ?? [])
+          (inputs[inputPath]?.imports ?? [])
             .map((entry) => entry.path)
             .filter(
               (importPath): importPath is string =>
@@ -940,6 +1016,65 @@ const analyzeHotspotEntry = async (
       outputInputs,
     },
   };
+};
+
+/**
+ * Pairs each entry with its output through the position `createHotspotBuildOptions`
+ * encoded in the output name, so `entryPoints` must be the array that built `meta`.
+ */
+const attributeHotspotBuild = (params: {
+  entryPoints: string[];
+  projectRoot: string;
+  meta: Metafile;
+  includeDeepData: boolean;
+  schemaExternalized: boolean;
+}): Map<string, HotspotAnalyzedRow> => {
+  const {
+    entryPoints,
+    projectRoot,
+    meta,
+    includeDeepData,
+    schemaExternalized,
+  } = params;
+
+  const inputs = meta.inputs as Record<string, MetaInput>;
+  const outputByEntryIndex = new Map<number, MetaOutput>();
+  for (const [outputPath, output] of Object.entries(
+    meta.outputs as Record<string, MetaOutput>
+  )) {
+    const index = HOTSPOT_ENTRY_OUTPUT_REGEX.exec(outputPath)?.[1];
+    if (index === undefined) {
+      continue;
+    }
+    outputByEntryIndex.set(Number(index), output);
+  }
+
+  const rowsByEntry = new Map<string, HotspotAnalyzedRow>();
+
+  for (const [index, entryPoint] of entryPoints.entries()) {
+    const output = outputByEntryIndex.get(index);
+    if (!output) {
+      // Unreachable for a build that succeeded: every entry is given an output
+      // name. Throwing lets the caller retry per entry instead of silently
+      // reporting a successful build as a wall of failed rows.
+      throw new Error(
+        `esbuild produced no output for ${path.relative(projectRoot, entryPoint)}.`
+      );
+    }
+    rowsByEntry.set(
+      entryPoint,
+      buildHotspotRow({
+        entryPoint,
+        includeDeepData,
+        inputs,
+        output,
+        projectRoot,
+        schemaExternalized,
+      })
+    );
+  }
+
+  return rowsByEntry;
 };
 
 const printHotspotTopInputs = (
@@ -1498,9 +1633,9 @@ const collectAnalyzeEntrySelection = async (
 const MAX_ANALYZE_CONCURRENCY = 8;
 
 /**
- * esbuild bundles are independent, so the entry sweep runs through a bounded
- * pool instead of one build at a time. The cap stays low enough to avoid
- * oversubscribing esbuild's worker pool on small machines.
+ * Only the per-entry recovery sweep still runs multiple builds, so the cap
+ * stays low enough to avoid oversubscribing esbuild's worker pool on small
+ * machines.
  */
 const resolveAnalyzeConcurrency = (taskCount: number): number => {
   if (taskCount <= 1) {
@@ -1511,6 +1646,142 @@ const resolveAnalyzeConcurrency = (taskCount: number): number => {
     1,
     Math.min(MAX_ANALYZE_CONCURRENCY, cpuCount - 1, taskCount)
   );
+};
+
+type HotspotSweep = {
+  rowsByEntry: Map<string, HotspotAnalyzedRow>;
+  failedRows: FailedRow[];
+  /** Set when the shared pass failed and the per-entry recovery sweep ran. */
+  fallbackReason: string | null;
+};
+
+type HotspotBundleBuilder = typeof buildHotspotBundle;
+
+const toErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+const runHotspotBuild = async (
+  entryPoints: string[],
+  projectRoot: string,
+  includeDeepData: boolean,
+  allowSchemaFallback: boolean,
+  build: HotspotBundleBuilder
+): Promise<Map<string, HotspotAnalyzedRow>> => {
+  const { result, schemaExternalized } = await build(
+    entryPoints,
+    projectRoot,
+    allowSchemaFallback
+  );
+  const meta = result.metafile;
+  if (!meta) {
+    throw new Error('esbuild produced no metafile for the hotspot bundle.');
+  }
+  return attributeHotspotBuild({
+    entryPoints,
+    includeDeepData,
+    meta,
+    projectRoot,
+    schemaExternalized,
+  });
+};
+
+/**
+ * Recovery path only. A shared build fails as a unit, so one unbuildable entry
+ * would take the whole report down. Rebuilding one entry at a time is the only
+ * way to say *which* entry is broken, and it reuses the same build options so
+ * surviving rows keep the numbers the shared pass would have produced. It is
+ * also where the schema fallback belongs, since here it only degrades the
+ * entries that actually need it.
+ *
+ * Reaching this path needs esbuild >= 0.27.7. Earlier builds threw
+ * `SyntaxError: Unexpected end of JSON input` out of esbuild's own stdout
+ * handler whenever a `metafile: true` build failed, which is outside any promise
+ * this module can catch, so the CLI died before any sweep could report a failed
+ * row.
+ */
+const sweepHotspotEntriesIndividually = async (
+  entryPoints: string[],
+  projectRoot: string,
+  includeDeepData: boolean,
+  build: HotspotBundleBuilder
+): Promise<{
+  rowsByEntry: Map<string, HotspotAnalyzedRow>;
+  failedRows: FailedRow[];
+}> => {
+  const results = await mapWithConcurrency(
+    entryPoints,
+    resolveAnalyzeConcurrency(entryPoints.length),
+    async (entryPoint) => {
+      try {
+        return {
+          rowsByEntry: await runHotspotBuild(
+            [entryPoint],
+            projectRoot,
+            includeDeepData,
+            true,
+            build
+          ),
+          failedRows: [] as FailedRow[],
+        };
+      } catch (error) {
+        return {
+          rowsByEntry: new Map<string, HotspotAnalyzedRow>(),
+          failedRows: [
+            {
+              entry: path.relative(projectRoot, entryPoint),
+              error: toErrorMessage(error),
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  const rowsByEntry = new Map<string, HotspotAnalyzedRow>();
+  const failedRows: FailedRow[] = [];
+  for (const result of results) {
+    for (const [entryPoint, row] of result.rowsByEntry) {
+      rowsByEntry.set(entryPoint, row);
+    }
+    failedRows.push(...result.failedRows);
+  }
+
+  return { rowsByEntry, failedRows };
+};
+
+const sweepHotspotEntries = async (
+  entryPoints: string[],
+  projectRoot: string,
+  includeDeepData: boolean,
+  build: HotspotBundleBuilder = buildHotspotBundle
+): Promise<HotspotSweep> => {
+  if (entryPoints.length === 0) {
+    return { rowsByEntry: new Map(), failedRows: [], fallbackReason: null };
+  }
+
+  try {
+    return {
+      rowsByEntry: await runHotspotBuild(
+        entryPoints,
+        projectRoot,
+        includeDeepData,
+        false,
+        build
+      ),
+      failedRows: [],
+      fallbackReason: null,
+    };
+  } catch (error) {
+    return {
+      ...(await sweepHotspotEntriesIndividually(
+        entryPoints,
+        projectRoot,
+        includeDeepData,
+        build
+      )),
+      fallbackReason: firstLine(toErrorMessage(error)),
+    };
+  }
 };
 
 const collectHotspotRows = async (
@@ -1525,37 +1796,31 @@ const collectHotspotRows = async (
     handlerExportsByEntry,
   } = await collectAnalyzeEntrySelection(roots, options);
 
-  const rows = await mapWithConcurrency(
+  const { rowsByEntry, failedRows, fallbackReason } = await sweepHotspotEntries(
     entryPoints,
-    resolveAnalyzeConcurrency(entryPoints.length),
-    async (entryPoint): Promise<HotspotRow | FailedRow> => {
-      try {
-        return {
-          ...(await analyzeHotspotEntry(
-            entryPoint,
-            roots.projectRoot,
-            includeDeepData
-          )),
-          handlerExports: handlerExportsByEntry.get(entryPoint) ?? [],
-        };
-      } catch (error) {
-        return {
-          entry: path.relative(roots.projectRoot, entryPoint),
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    }
+    roots.projectRoot,
+    includeDeepData
   );
+
+  const successRows: HotspotRow[] = entryPoints
+    .flatMap((entryPoint) => {
+      const row = rowsByEntry.get(entryPoint);
+      if (!row) {
+        return [];
+      }
+      return [
+        { ...row, handlerExports: handlerExportsByEntry.get(entryPoint) ?? [] },
+      ];
+    })
+    .sort((a, b) => b.outputBytes - a.outputBytes);
 
   return {
     isolateEntries,
     generatedEntries,
     entryPoints,
-    successRows: rows
-      .filter((row): row is HotspotRow => !('error' in row))
-      .sort((a, b) => b.outputBytes - a.outputBytes),
-    failedRows: rows.filter((row): row is FailedRow => 'error' in row),
-    handlerExportsByEntry,
+    successRows,
+    failedRows,
+    fallbackReason,
   };
 };
 
@@ -1808,6 +2073,8 @@ const runHotspotInteractive = async (
     statusMessage: '',
   };
 
+  // One shared build already carries every entry's package/input detail, so the
+  // detail pane reads from the snapshot instead of rebuilding on selection.
   let snapshot = await collectHotspotRows(
     roots,
     {
@@ -1815,7 +2082,7 @@ const runHotspotInteractive = async (
       includeGenerated: state.includeGenerated,
       entryPattern: null,
     },
-    false
+    true
   );
   let visibleRows = sortHotspotRows(
     filterHotspotRows(snapshot.successRows, state.filterQuery),
@@ -1827,7 +2094,6 @@ const runHotspotInteractive = async (
   let refreshQueued = false;
   let shouldQuit = false;
   let listViewportHeight = 10;
-  const deepRowCache = new Map<string, HotspotRow | null>();
 
   const getSelectedEntry = (): string | null =>
     visibleRows.at(state.selectedIndex)?.entry ?? null;
@@ -1880,9 +2146,8 @@ const runHotspotInteractive = async (
           includeGenerated: state.includeGenerated,
           entryPattern: null,
         },
-        false
+        true
       );
-      deepRowCache.clear();
       syncVisibleRows(preferredEntry);
       state = reduceInteractiveState(state, {
         type: 'setStatus',
@@ -1978,39 +2243,7 @@ const runHotspotInteractive = async (
     }
   };
 
-  const ensureDeepRow = async (entry: string): Promise<HotspotRow | null> => {
-    if (deepRowCache.has(entry)) {
-      return deepRowCache.get(entry) ?? null;
-    }
-
-    const entryPoint = path.join(roots.projectRoot, entry);
-    try {
-      const analyzed = await analyzeHotspotEntry(
-        entryPoint,
-        roots.projectRoot,
-        true
-      );
-      const fallbackHandlers = findRowByEntry(entry)?.handlerExports ?? [];
-      const mergedRow: HotspotRow = {
-        ...analyzed,
-        handlerExports:
-          snapshot.handlerExportsByEntry.get(entryPoint) ?? fallbackHandlers,
-      };
-      deepRowCache.set(entry, mergedRow);
-      return mergedRow;
-    } catch (error) {
-      deepRowCache.set(entry, null);
-      state = reduceInteractiveState(state, {
-        type: 'setStatus',
-        message: `Detail load failed for ${entry}: ${firstLine(
-          error instanceof Error ? error.message : String(error)
-        )}`,
-      });
-      return null;
-    }
-  };
-
-  const renderInteractive = async (): Promise<void> => {
+  const renderInteractive = (): void => {
     const layout = resolveInteractiveLayout(
       stdout.columns ?? outputWidth,
       stdout.rows ?? 30
@@ -2028,11 +2261,7 @@ const runHotspotInteractive = async (
 
     const selectedRow = visibleRows.at(state.selectedIndex) ?? null;
     const activeEntry = selectedRow?.entry ?? null;
-    let detailRow = findRowByEntry(activeEntry);
-
-    if (!state.showHelp && activeEntry && state.detailPane !== 'handlers') {
-      detailRow = await ensureDeepRow(activeEntry);
-    }
+    const detailRow = findRowByEntry(activeEntry);
 
     const statusLine = state.statusMessage || 'Ready';
     const headerLine = `entries=${visibleRows.length}/${snapshot.successRows.length} sort=${sortLabel(
@@ -2142,7 +2371,7 @@ const runHotspotInteractive = async (
 
   try {
     while (!shouldQuit) {
-      await renderInteractive();
+      renderInteractive();
       const key = await readKey();
 
       if (key === '\u0003' || key === 'q') {
@@ -2251,6 +2480,7 @@ const runHotspotAnalysis = async (
     entryPoints,
     successRows,
     failedRows,
+    fallbackReason,
   } = await collectHotspotRows(roots, options, includeDeepData);
 
   if (entryPoints.length === 0) {
@@ -2309,6 +2539,26 @@ const runHotspotAnalysis = async (
       outputAverage
     )}${largest ? ` largest=${largest.entry} (${formatBytes(largest.outputBytes)})` : ''}`
   );
+  if (fallbackReason) {
+    console.log(
+      dim(
+        `note: the shared bundle failed, so entries were rebuilt one at a time: ${fallbackReason}`
+      )
+    );
+  }
+  const approximateRows = successRows.filter((row) => row.schemaExternalized);
+  if (approximateRows.length > 0) {
+    console.log(
+      colorize(
+        `note: schema imports were externalized after a build error for ${approximateRows.length} ${
+          approximateRows.length === 1 ? 'entry' : 'entries'
+        }; their dependency sizes are approximate (${approximateRows
+          .map((row) => row.entry)
+          .join(', ')}).`,
+        ANSI.yellow
+      )
+    );
+  }
   console.log('');
 
   if (actionRows.length > 0) {
@@ -2790,6 +3040,8 @@ export async function runAnalyze(argv: string[]): Promise<number> {
 }
 
 export const __test = {
+  attributeHotspotBuild,
+  createHotspotBuildOptions,
   cycleHotspotSort,
   cycleHotspotDetailPane,
   cycleHotspotDetailPaneBackward,
@@ -2804,6 +3056,7 @@ export const __test = {
   resolveAnalyzeConcurrency,
   resolveInteractiveLayout,
   selectHotspotEntryPoints,
+  sweepHotspotEntries,
 };
 
 export type { AnalyzeOptions };
