@@ -88,7 +88,7 @@ type ExampleCtx = { orm: OrmWriter<typeof schema>; db: any };
  * silently reports zero for every read the ORM issues.
  */
 const withCountedExampleOrm = async (
-  run: (ctx: ExampleCtx, reads: { documents: number }) => Promise<void>
+  run: (ctx: ExampleCtx, reads: { scanned: number }) => Promise<void>
 ) => {
   await withExampleEnv(async () => {
     const t = convexTest(schema);
@@ -160,13 +160,13 @@ const seedThreads = async (
   }
 };
 
-/** The exact read `todoComments.getTodoComments` issues, counting documents. */
+/** The exact read `todoComments.getTodoComments` issues, counting scans. */
 const readCommentTree = async (
   ctx: ExampleCtx,
-  reads: { documents: number },
+  reads: { scanned: number },
   todoId: string
 ) => {
-  const before = reads.documents;
+  const before = reads.scanned;
 
   const results = await ctx.orm.query.todoComments.findMany({
     where: { todoId, parentId: { isNull: true } },
@@ -180,9 +180,9 @@ const readCommentTree = async (
     },
   });
 
-  const documents = reads.documents - before;
+  const scanned = reads.scanned - before;
   const rows = CommentRowWithRepliesSchema.array().parse(results.page);
-  return { documents, page: rows.map(toReply) };
+  return { scanned, page: rows.map(toReply) };
 };
 
 const countNodes = (replies: { replies: any[] }[]): number =>
@@ -194,11 +194,18 @@ const countNodes = (replies: { replies: any[] }[]): number =>
  * second count per node, and buys nothing: the relation loader resolves `_count`
  * at every level it returns, including the deepest.
  *
- * Measured marginal cost over 30 extra nodes: 100 documents for the second pass
- * versus 50 for one pass. Fixed setup cost (the author, the root index scan)
- * does not scale, so the bound is on the marginal document cost per node.
+ * The bound is on marginal cost per node, not total: fixed setup (the author,
+ * the root index scan) does not scale with the thread.
+ *
+ * Measured marginal cost over 30 extra nodes is 80 scanned documents, against
+ * 60 returned. The gap is the root page: `todoComments` indexes `todoId` and
+ * `parentId` separately, so `where: { todoId, parentId: { isNull: true } }`
+ * rides `todoId` and leaves `parentId` to a Convex `.filter()` — every reply on
+ * the todo is read and rejected to find the roots. A compound `(todoId,
+ * parentId)` index would erase it. Counting `documents` hid this entirely,
+ * which is the whole point of asserting on `scanned`.
  */
-const MAX_DOCUMENTS_PER_COMMENT = 2;
+const MAX_DOCUMENTS_PER_COMMENT = 3;
 
 test('comment tree cost does not track the number of comments returned', async () => {
   await withCountedExampleOrm(async (ctx, reads) => {
@@ -219,7 +226,7 @@ test('comment tree cost does not track the number of comments returned', async (
     expect(smallNodes).toBe(MAX_REPLY_DEPTH + 1);
     expect(largeNodes).toBe(6 * (MAX_REPLY_DEPTH + 1));
 
-    expect(large.documents - small.documents).toBeLessThanOrEqual(
+    expect(large.scanned - small.scanned).toBeLessThanOrEqual(
       MAX_DOCUMENTS_PER_COMMENT * (largeNodes - smallNodes)
     );
   });

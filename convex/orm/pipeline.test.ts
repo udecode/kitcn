@@ -62,7 +62,7 @@ test('union sources anchor their own index range', async () => {
     expect(result.page.map((p) => p.numLikes)).toEqual([1, 2, 3, 4, 5, 6]);
     // 6 anchored rows plus each source's one-row lookahead past its range.
     // The 20 'author-z' rows sit outside both ranges and are never touched.
-    expect(reads.documents).toBeLessThanOrEqual(8);
+    expect(reads.scanned).toBeLessThanOrEqual(8);
   });
 });
 
@@ -753,7 +753,7 @@ test('flatMap limit reads each child once and stays under maxScan', async () => 
       .paginate({ cursor: null, limit: 5, maxScan: 6 });
 
     // 1 parent + at most 6 child reads for maxScan: 6.
-    expect(reads.documents).toBeLessThanOrEqual(7);
+    expect(reads.scanned).toBeLessThanOrEqual(7);
     // And that walk has to be visible to maxScan, not happen behind it.
     expect(result.pageStatus).toBe('SplitRequired');
   });
@@ -789,7 +789,7 @@ test('flatMap limit stops on the limit-th child, not one past it', async () => {
     expect(rows.map((row) => row.text)).toEqual(['p0', 'p1']);
     // 1 parent + exactly 2 children. A third child read would be a document
     // nothing can emit and maxScan never sees, since only replayed rows count.
-    expect(reads.documents).toBe(3);
+    expect(reads.scanned).toBe(3);
   });
 });
 
@@ -900,7 +900,7 @@ test('select() pipeline reads an id-only where by key, not by scan', async () =>
       .limit(10);
 
     expect(mapped).toEqual([{ onlyTitle: 'title-39' }]);
-    expect(reads.documents).toBe(1);
+    expect(reads.scanned).toBe(1);
   });
 });
 
@@ -936,7 +936,7 @@ test('select() pipeline reads an id `in` where by key, in list order', async () 
       { onlyTitle: 'title-30' },
       { onlyTitle: 'title-5' },
     ]);
-    expect(reads.documents).toBe(2);
+    expect(reads.scanned).toBe(2);
   });
 });
 
@@ -1009,7 +1009,7 @@ test('select() pages an id list without re-reading the whole list', async () => 
         .where({ id: { in: ids } })
         .map((row) => ({ onlyTitle: row.title }))
         .paginate({ cursor, limit: 10 });
-      perPageReads.push(reads.documents);
+      perPageReads.push(reads.scanned);
       walked.push(...result.page.map((row) => row.onlyTitle as string));
       cursor = result.continueCursor;
       if (result.isDone) {
@@ -1054,7 +1054,7 @@ test('select() honors maxScan on id-list pagination', async () => {
 
     expect(result.page).toHaveLength(1);
     expect(result.isDone).toBe(false);
-    expect(reads.documents).toBe(1);
+    expect(reads.scanned).toBe(1);
   });
 });
 
@@ -1091,7 +1091,7 @@ test('select() honors maxScan on an id list ordered by an index', async () => {
         .orderBy({ title: 'asc' })
         .map((row) => ({ onlyTitle: row.title }))
         .paginate({ cursor, limit: 2, maxScan: 2 });
-      perPageReads.push(reads.documents);
+      perPageReads.push(reads.scanned);
       walked.push(...result.page.map((row) => row.onlyTitle as string));
       cursor = result.continueCursor;
       if (result.isDone) {
@@ -1203,7 +1203,7 @@ test('select() flatMap runs off an id-only where without scanning', async () => 
 
     expect(rows.map((row) => row.text)).toEqual(['Bo0', 'Bo1', 'Bo2']);
     // 1 parent read by key + its 3 children. Ada is never touched.
-    expect(reads.documents).toBe(4);
+    expect(reads.scanned).toBe(4);
   });
 });
 

@@ -91,7 +91,7 @@ test('project existence check does not scan projects owned by other users', asyn
       await expect(hasAnyProject(ctx, viewer.id)).resolves.toBe(false);
       // Both legs hit an index range that is empty for this user. The
       // unindexed read model reported OTHER_USER_PROJECTS reads here.
-      expect(reads.documents).toBeLessThanOrEqual(2);
+      expect(reads.scanned).toBeLessThanOrEqual(2);
     });
   });
 });
@@ -150,7 +150,7 @@ test('project existence check reads only the viewer own and member rows', async 
       await expect(hasAnyProject(ctx, viewer.id)).resolves.toBe(true);
       // One membership and one related project row. Nothing proportional to
       // OTHER_USER_PROJECTS.
-      expect(reads.documents).toBeLessThanOrEqual(3);
+      expect(reads.scanned).toBeLessThanOrEqual(3);
     });
   });
 });

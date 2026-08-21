@@ -115,7 +115,7 @@ test('merge cost does not track the target tag size', async () => {
         sourceTagId,
         targetTagId,
       });
-      const mergeReads = reads.documents;
+      const mergeReads = reads.scanned;
 
       const [sourceTag, targetJoins] = await Promise.all([
         ctx.orm.query.tags.findFirst({ where: { id: sourceTagId } }),
@@ -181,7 +181,7 @@ test('merge probe finds a target row the source todo already carries', async () 
       expect(targetJoins).toHaveLength(1);
       // The probe is index-backed: the merge must not scan the target's other
       // rows or insert a duplicate for the shared todo.
-      expect(reads.documents).toBeLessThanOrEqual(20);
+      expect(reads.scanned).toBeLessThanOrEqual(20);
     });
   });
 });

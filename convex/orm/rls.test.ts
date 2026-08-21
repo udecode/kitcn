@@ -349,7 +349,7 @@ describe('RLS', () => {
     ]);
     // Counting survivors is not the same as giving up the bound: the scan
     // stops at the ninth row, it does not collect all 40.
-    expect(reads.documents).toBeLessThanOrEqual(15);
+    expect(reads.scanned).toBeLessThanOrEqual(15);
   });
 
   it('fills a limit past hidden rows when an index serves orderBy', async ({
@@ -383,7 +383,7 @@ describe('RLS', () => {
       'label-07',
       'label-08',
     ]);
-    expect(reads.documents).toBeLessThanOrEqual(15);
+    expect(reads.scanned).toBeLessThanOrEqual(15);
   });
 
   it('filters id-only pipeline rows before user callbacks', async ({ ctx }) => {
@@ -944,7 +944,7 @@ describe('RLS', () => {
     expect((rows[0] as any).secrets).toHaveLength(3);
     // skipRules filters nothing, so the per-parent limit must still be pushed
     // into the read instead of collecting every child.
-    expect(reads.documents).toBeLessThan(25);
+    expect(reads.scanned).toBeLessThan(25);
   });
 
   it('stops RLS relation reads after the requested visible rows', async ({
@@ -973,6 +973,6 @@ describe('RLS', () => {
     });
 
     expect((rows[0] as any).secrets).toHaveLength(3);
-    expect(reads.documents).toBeLessThanOrEqual(5);
+    expect(reads.scanned).toBeLessThanOrEqual(5);
   });
 });

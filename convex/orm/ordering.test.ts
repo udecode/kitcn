@@ -654,7 +654,7 @@ describe('M5: OrderBy - Index Selection', () => {
 
     expect(users.map((user) => user.name)).toEqual(['u59', 'u58']);
     // One bounded read per probe, not the whole matching set.
-    expect(reads.documents).toBeLessThanOrEqual(8);
+    expect(reads.scanned).toBeLessThanOrEqual(8);
   });
 
   test('orderBy an index suffix field reads only the requested window', async ({
@@ -678,7 +678,7 @@ describe('M5: OrderBy - Index Selection', () => {
     });
 
     expect(posts.map((post) => post.numLikes)).toEqual([59, 58]);
-    expect(reads.documents).toBeLessThanOrEqual(4);
+    expect(reads.scanned).toBeLessThanOrEqual(4);
   });
 
   test('orderBy createdAt under an unpinned index suffix sorts by createdAt', async ({

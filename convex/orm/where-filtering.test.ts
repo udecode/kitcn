@@ -1301,9 +1301,16 @@ describe('M4 Where Filtering - Type Safety', () => {
   });
 });
 
+// These bounds are only worth anything if a degraded plan blows through them,
+// so the table is seeded far past every bound: a plan that falls back to a
+// table scan reads three hundred documents and cannot squeeze under eight.
+// `scanned`, not `documents`, is what makes that visible — a `.filter()` drops
+// the rows it rejected before they reach any result.
+const READ_BOUND_SEED = 300;
+
 describe('M4: Read bounds', () => {
   test('in + limit reads a bounded window per probe', async ({ ctx }) => {
-    for (let i = 0; i < 60; i += 1) {
+    for (let i = 0; i < READ_BOUND_SEED; i += 1) {
       await ctx.db.insert('users', {
         name: `u${i}`,
         email: `u${i}@example.com`,
@@ -1318,17 +1325,18 @@ describe('M4: Read bounds', () => {
     });
 
     expect(rows).toHaveLength(2);
-    expect(reads.documents).toBeLessThanOrEqual(8);
+    // One bounded window per probe. A table scan would be three hundred.
+    expect(reads.scanned).toBeLessThanOrEqual(8);
   });
 
   test('in under AND uses the index instead of scanning the table', async ({
     ctx,
   }) => {
-    for (let i = 0; i < 60; i += 1) {
+    for (let i = 0; i < READ_BOUND_SEED; i += 1) {
       await ctx.db.insert('users', {
         name: `u${i}`,
         email: `u${i}@example.com`,
-        status: i >= 57 ? 'zmatch' : 'other',
+        status: i >= READ_BOUND_SEED - 3 ? 'zmatch' : 'other',
       });
     }
 
@@ -1339,7 +1347,9 @@ describe('M4: Read bounds', () => {
     });
 
     expect(rows).toHaveLength(2);
-    // The `zmatch` bucket is three rows; scanning the table would be sixty.
-    expect(reads.documents).toBeLessThanOrEqual(6);
+    // `startsWith` cannot ride the index, so the probe reads its whole bucket:
+    // three rows. Scanning the table would be three hundred, and every one of
+    // those two hundred and ninety seven rejects is a document Convex bills.
+    expect(reads.scanned).toBeLessThanOrEqual(6);
   });
 });
