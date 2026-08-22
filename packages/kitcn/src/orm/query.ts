@@ -139,6 +139,20 @@ const DEFAULT_RELATION_FAN_OUT_MAX_KEYS = 1000;
  * satisfies the limit.
  */
 const RELATION_FILTER_STREAM_CHUNK = 32;
+/**
+ * Marks a relation config that only exists to answer "does a matching child
+ * exist?" for a `where` clause. The lowered load may stop at the first
+ * surviving child, but it must not widen the window it walks to find one --
+ * that window is what decides the answer, so changing it would change results
+ * rather than just their cost.
+ *
+ * A symbol, not a field: the emitted object is fed to the same relation loader
+ * that serves a caller's `with`, and nothing a caller can write should be able
+ * to claim this.
+ */
+const RELATION_EXISTENCE_PROBE = Symbol('kitcn.relationExistenceProbe');
+/** Lowering a subtree with this set emits no existence probes anywhere in it. */
+const NO_PROBE_RELATIONS: ReadonlySet<string> = new Set<string>();
 const DEFAULT_AGGREGATE_CARTESIAN_MAX_KEYS = 4096;
 const DEFAULT_AGGREGATE_WORK_BUDGET = 16_384;
 const PUBLIC_ID_FIELD = 'id';
@@ -1833,9 +1847,66 @@ export class GelRelationalQuery<
     }
   }
 
+  /**
+   * Relation keys the filter tree mentions exactly once, across every OR/AND/NOT
+   * branch at this table level.
+   *
+   * `_mergeWithConfig` collapses the whole tree into one load per relation key,
+   * so a key two branches disagree about has to be loaded the way both branches
+   * can read. Only a key with a single occurrence has one predicate to satisfy,
+   * and only then can that predicate be pushed into the read plan.
+   *
+   * Relation values are not descended into: they belong to the target table and
+   * get their own count when that level is lowered.
+   */
+  private _collectSingleOccurrenceRelations(
+    filter: RelationsFilter<any, any>,
+    tableConfig: TableRelationalConfig
+  ): Set<string> {
+    const counts = new Map<string, number>();
+
+    const walk = (node: unknown): void => {
+      if (!this._isRecord(node)) return;
+      for (const [key, value] of Object.entries(node)) {
+        if (value === undefined) continue;
+        if (key === 'OR' || key === 'AND') {
+          if (!Array.isArray(value)) continue;
+          for (const sub of value) walk(sub);
+          continue;
+        }
+        if (key === 'NOT') {
+          walk(value);
+          continue;
+        }
+        if (!tableConfig.relations[key]) continue;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    };
+    walk(filter);
+
+    const single = new Set<string>();
+    for (const [key, count] of counts) {
+      if (count === 1) single.add(key);
+    }
+    return single;
+  }
+
   private _buildFilterWithConfig(
     filter: RelationsFilter<any, any>,
     tableConfig: TableRelationalConfig
+  ): Record<string, unknown> {
+    if (!this._isRecord(filter)) return {};
+    return this._buildFilterWithConfigForLevel(
+      filter,
+      tableConfig,
+      this._collectSingleOccurrenceRelations(filter, tableConfig)
+    );
+  }
+
+  private _buildFilterWithConfigForLevel(
+    filter: RelationsFilter<any, any>,
+    tableConfig: TableRelationalConfig,
+    probeEligible: ReadonlySet<string>
   ): Record<string, unknown> {
     if (!this._isRecord(filter)) return {};
 
@@ -1849,9 +1920,10 @@ export class GelRelationalQuery<
       if (key === 'OR' || key === 'AND') {
         if (!Array.isArray(value) || value.length === 0) continue;
         for (const sub of value) {
-          const nested = this._buildFilterWithConfig(
+          const nested = this._buildFilterWithConfigForLevel(
             sub as RelationsFilter<any, any>,
-            tableConfig
+            tableConfig,
+            probeEligible
           );
           this._mergeWithConfig(result, nested);
         }
@@ -1859,9 +1931,10 @@ export class GelRelationalQuery<
       }
 
       if (key === 'NOT') {
-        const nested = this._buildFilterWithConfig(
+        const nested = this._buildFilterWithConfigForLevel(
           value as RelationsFilter<any, any>,
-          tableConfig
+          tableConfig,
+          probeEligible
         );
         this._mergeWithConfig(result, nested);
         continue;
@@ -1871,8 +1944,15 @@ export class GelRelationalQuery<
       const relation = tableConfig.relations[key];
       if (!relation) continue;
 
+      // A `one` relation is a single row either way, so there is nothing to
+      // stop early at.
+      const probe =
+        relation.relationType !== 'one' && probeEligible.has(key)
+          ? { [RELATION_EXISTENCE_PROBE]: true }
+          : undefined;
+
       if (typeof value === 'boolean') {
-        result[key] = true;
+        result[key] = probe ?? true;
         continue;
       }
 
@@ -1883,11 +1963,41 @@ export class GelRelationalQuery<
         continue;
       }
 
-      const nested = this._buildFilterWithConfig(
+      // Only a probe-eligible key owns its nested level outright. When the key
+      // repeats, `_mergeWithConfig` folds each branch's nested config together,
+      // so a bound pushed into one branch's grandchild would silently decide
+      // what a sibling branch gets to evaluate. Lower that whole subtree
+      // without probes instead.
+      const nested = this._buildFilterWithConfigForLevel(
         value as RelationsFilter<any, any>,
-        targetTableConfig
+        targetTableConfig,
+        probe
+          ? this._collectSingleOccurrenceRelations(
+              value as RelationsFilter<any, any>,
+              targetTableConfig
+            )
+          : NO_PROBE_RELATIONS
       );
-      result[key] = Object.keys(nested).length > 0 ? { with: nested } : true;
+      const hasNested = Object.keys(nested).length > 0;
+
+      if (!probe) {
+        result[key] = hasNested ? { with: nested } : true;
+        continue;
+      }
+
+      // `where` is what lets the loader stop at the first match; `with` is what
+      // keeps the row readable afterwards. `_evaluateRelationsFilter` re-runs
+      // this same predicate over the loaded children, so the child's own
+      // relation keys must still be attached when it does -- and the filter
+      // loader strips whatever it is not told was requested.
+      const emitted: Record<string | symbol, unknown> = { ...probe };
+      if (Object.keys(value as object).length > 0) {
+        emitted.where = value;
+      }
+      if (hasNested) {
+        emitted.with = nested;
+      }
+      result[key] = emitted;
     }
 
     return result;
@@ -8135,18 +8245,30 @@ export class GelRelationalQuery<
     fetchTargets: (
       keyEntries: [string, unknown[]][]
     ) => Promise<{ key: string; target: any }[]>;
-    applyTargetFilters: (targets: any[]) => Promise<any[]>;
+    /** RLS and the relation's own `where` -- applied whatever the caller asked. */
+    applyAmbientTargetFilters: (targets: any[]) => Promise<any[]>;
+    /** The `where` on this relation config, applied after the ambient pass. */
+    applyConfigTargetFilter: (targets: any[]) => Promise<any[]>;
     /** Per-parent `offset + limit`, in surviving links. */
     fetchLimit: number;
+    /**
+     * Links whose target cleared the ambient filters that this read may walk,
+     * when that differs from `fetchLimit`. An existence probe stops on the
+     * first fully surviving link but must not look past the window the
+     * unbounded read would have decided from.
+     */
+    scanLimit?: number;
     enforceTargetKeyCap: (keyCount: number) => void;
   }): Promise<{ linksBySourceKey: Map<string, any[]>; targets: any[] }> {
     const {
-      applyTargetFilters,
+      applyAmbientTargetFilters,
+      applyConfigTargetFilter,
       edge,
       enforceTargetKeyCap,
       entries,
       fetchLimit,
       fetchTargets,
+      scanLimit,
       targetFields,
       throughIndexName,
       throughTableConfig,
@@ -8154,6 +8276,8 @@ export class GelRelationalQuery<
     const throughTargetFields = edge.through!.targetFields;
 
     const cursors = entries.map(([key, values]) => ({
+      /** Links classified so far whose target cleared the ambient filters. */
+      ambientLinks: 0,
       /** Visible links pulled but not yet classified. Never dropped. */
       buffered: [] as any[],
       exhausted: false,
@@ -8202,6 +8326,8 @@ export class GelRelationalQuery<
 
     /** Target key -> the surviving document, absent when it did not survive. */
     const survivorByKey = new Map<string, any>();
+    /** Target keys that cleared the ambient filters, survivors or not. */
+    const ambientKeys = new Set<string>();
     const resolvedKeys = new Set<string>();
     const survivors: any[] = [];
 
@@ -8209,6 +8335,7 @@ export class GelRelationalQuery<
       const active = cursors.filter(
         (cursor) =>
           cursor.links.length < fetchLimit &&
+          (scanLimit === undefined || cursor.ambientLinks < scanLimit) &&
           !(cursor.exhausted && cursor.buffered.length === 0)
       );
       if (active.length === 0) {
@@ -8245,11 +8372,18 @@ export class GelRelationalQuery<
         for (const key of newKeys.keys()) {
           resolvedKeys.add(key);
         }
-        const surviving = await applyTargetFilters(
+        const ambientTargets = await applyAmbientTargetFilters(
           fetched
             .map((entry) => entry.target)
             .filter((target): target is any => !!target)
         );
+        for (const target of ambientTargets) {
+          const key = this._buildRelationKey(target, targetFields);
+          if (key) {
+            ambientKeys.add(key);
+          }
+        }
+        const surviving = await applyConfigTargetFilter(ambientTargets);
         for (const target of surviving) {
           const key = this._buildRelationKey(target, targetFields);
           if (!key || survivorByKey.has(key)) {
@@ -8266,8 +8400,17 @@ export class GelRelationalQuery<
           if (cursor.links.length >= fetchLimit) {
             break;
           }
+          if (scanLimit !== undefined && cursor.ambientLinks >= scanLimit) {
+            break;
+          }
           const key = this._buildRelationKey(link, throughTargetFields);
-          if (!key || !survivorByKey.has(key)) {
+          if (!key) {
+            continue;
+          }
+          if (ambientKeys.has(key)) {
+            cursor.ambientLinks += 1;
+          }
+          if (!survivorByKey.has(key)) {
             continue;
           }
           cursor.links.push(link);
@@ -8360,16 +8503,25 @@ export class GelRelationalQuery<
     //
     // `mode: 'skip'` returns every row untouched, so it discards nothing and
     // must not cost the read bound.
-    const hasPostFetchTargetFilter =
+    const hasAmbientTargetFilter =
       (this.rls?.mode !== 'skip' &&
         isRlsEnabled(targetTableConfig.table as any)) ||
-      Boolean(relationDefinition?.where) ||
+      Boolean(relationDefinition?.where);
+    const hasPostFetchTargetFilter =
+      hasAmbientTargetFilter ||
       Boolean(
         relationConfig &&
           typeof relationConfig === 'object' &&
           'where' in relationConfig &&
           (relationConfig as { where?: unknown }).where
       );
+
+    // This load only has to prove a matching child exists, so one is enough.
+    const isExistenceProbe =
+      Boolean(relationConfig) &&
+      typeof relationConfig === 'object' &&
+      (relationConfig as Record<symbol, unknown>)[RELATION_EXISTENCE_PROBE] ===
+        true;
 
     let orderSpecs: { field: string; direction: 'asc' | 'desc' }[] = [];
     if (
@@ -8420,6 +8572,21 @@ export class GelRelationalQuery<
       throw new Error('Only numeric offset is supported in kitcn ORM.');
     }
 
+    // One surviving child settles an existence probe, so the read stops there.
+    const probeFetchLimit = isExistenceProbe ? 1 : undefined;
+    // Stopping early may not widen the window. Without the probe this load
+    // would have collected `effectivePerParentLimit` children that passed the
+    // ambient filters and decided the answer from those, so the probe stops
+    // counting at the same point -- otherwise it would match parents the
+    // unbounded read excluded, and drain whole partitions to prove a miss.
+    const probeScanLimit = isExistenceProbe
+      ? effectivePerParentLimit
+      : undefined;
+    // A probe is bounded by its own limit of one, so it can take the bounded
+    // read path even where `allowFullScan` left the per-parent limit open.
+    const canBoundPerParentRead =
+      effectivePerParentLimit !== undefined || isExistenceProbe;
+
     const applyOffsetAndLimit = (items: any[]): any[] => {
       let result = items;
       if (perParentOffset !== undefined && perParentOffset > 0) {
@@ -8431,23 +8598,34 @@ export class GelRelationalQuery<
       return result;
     };
 
-    const applyPostFetchTargetFilters = async (
+    // The filters that apply whatever the caller asked for. Kept separate from
+    // the config `where` because they, not the raw rows, are what the
+    // unbounded read counted against its per-parent limit: an existence probe
+    // has to stop on the same row that read would have stopped on.
+    const applyAmbientTargetFilters = async (
       candidateTargets: any[]
     ): Promise<any[]> => {
-      let filteredTargets = await this._applyRlsSelectFilter(
+      const visibleTargets = await this._applyRlsSelectFilter(
         candidateTargets,
         targetTableConfig
       );
 
-      if (relationDefinition?.where) {
-        filteredTargets = filteredTargets.filter((target) =>
-          this._evaluateTableFilter(
-            target,
-            targetTableConfig,
-            relationDefinition.where as any
-          )
-        );
+      if (!relationDefinition?.where) {
+        return visibleTargets;
       }
+      return visibleTargets.filter((target) =>
+        this._evaluateTableFilter(
+          target,
+          targetTableConfig,
+          relationDefinition.where as any
+        )
+      );
+    };
+
+    const applyConfigTargetFilter = async (
+      ambientTargets: any[]
+    ): Promise<any[]> => {
+      let filteredTargets = ambientTargets;
 
       if (
         relationConfig &&
@@ -8485,6 +8663,13 @@ export class GelRelationalQuery<
 
       return filteredTargets;
     };
+
+    const applyPostFetchTargetFilters = async (
+      candidateTargets: any[]
+    ): Promise<any[]> =>
+      applyConfigTargetFilter(
+        await applyAmbientTargetFilters(candidateTargets)
+      );
 
     let targets: any[] = [];
     let throughBySourceKey: Map<string, any[]> | undefined;
@@ -8569,17 +8754,20 @@ export class GelRelationalQuery<
       // partition. Every other shape can stop at the page the caller asked for
       // instead of reading every link of every parent.
       const boundJunctionRead =
-        orderSpecs.length === 0 && effectivePerParentLimit !== undefined;
+        orderSpecs.length === 0 && canBoundPerParentRead;
 
       if (boundJunctionRead) {
         const bounded = await this._readBoundedThroughLinks({
-          applyTargetFilters: applyPostFetchTargetFilters,
+          applyAmbientTargetFilters,
+          applyConfigTargetFilter,
           edge,
           enforceTargetKeyCap,
           entries,
           fetchLimit:
+            probeFetchLimit ??
             Math.max(perParentOffset ?? 0, 0) + effectivePerParentLimit!,
           fetchTargets: fetchThroughTargets,
+          scanLimit: probeScanLimit,
           targetFields,
           throughIndexName,
           throughTableConfig,
@@ -8663,9 +8851,7 @@ export class GelRelationalQuery<
         orderPushdownDirection ? query.order(orderPushdownDirection) : query;
 
       const streamPostFetchTargetFilters =
-        orderServedByIndex &&
-        hasPostFetchTargetFilter &&
-        effectivePerParentLimit !== undefined;
+        orderServedByIndex && hasPostFetchTargetFilter && canBoundPerParentRead;
       targetFiltersApplied = streamPostFetchTargetFilters;
       const targetGroups = await this._mapWithConcurrency(
         entries,
@@ -8680,9 +8866,10 @@ export class GelRelationalQuery<
           if (
             orderServedByIndex &&
             !hasPostFetchTargetFilter &&
-            effectivePerParentLimit !== undefined
+            canBoundPerParentRead
           ) {
             const fetchLimit =
+              probeFetchLimit ??
               (perParentOffset ?? 0) + (effectivePerParentLimit ?? 0);
             return await applyPushdownOrder(query).take(fetchLimit);
           }
@@ -8690,9 +8877,13 @@ export class GelRelationalQuery<
           if (streamPostFetchTargetFilters) {
             const visibleTargets: any[] = [];
             const fetchLimit =
+              probeFetchLimit ??
               Math.max(perParentOffset ?? 0, 0) +
-              (effectivePerParentLimit ?? 0);
+                (effectivePerParentLimit ?? 0);
             let batch: any[] = [];
+            // Children that cleared the ambient filters. This is the count the
+            // unbounded read bounded, so it is the count a probe bounds too.
+            let ambientSeen = 0;
             // Filtering one row at a time defeats the batching and foreign-key
             // de-duplication `_applyRelationsFilterToRows` does, so drain the
             // cursor in chunks. The chunk is never larger than the number of
@@ -8700,8 +8891,10 @@ export class GelRelationalQuery<
             // one-at-a-time version while still letting the sub-reads batch.
             const drain = async () => {
               if (batch.length === 0) return;
-              const filtered = await applyPostFetchTargetFilters(batch);
+              const ambientTargets = await applyAmbientTargetFilters(batch);
               batch = [];
+              ambientSeen += ambientTargets.length;
+              const filtered = await applyConfigTargetFilter(ambientTargets);
               for (const row of filtered) {
                 if (visibleTargets.length >= fetchLimit) return;
                 visibleTargets.push(row);
@@ -8716,6 +8909,12 @@ export class GelRelationalQuery<
               if (batch.length < chunk) continue;
               await drain();
               if (visibleTargets.length >= fetchLimit) break;
+              if (
+                probeScanLimit !== undefined &&
+                ambientSeen >= probeScanLimit
+              ) {
+                break;
+              }
             }
             if (visibleTargets.length < fetchLimit) {
               await drain();
