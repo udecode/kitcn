@@ -67,7 +67,7 @@ describe('cli/supported-dependencies', () => {
     );
     expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.minimum).toBe('>=1.42');
     expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.minimumType).toBe('1.42.3');
-    expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.peer).toBe('>=1.42 <1.45.0');
+    expect(SUPPORTED_DEPENDENCY_VERSIONS.convex.peer).toBe('>=1.42 <1.46.0');
   });
 
   test('resolves local install spec overrides for supported packages', () => {
@@ -102,7 +102,7 @@ describe('cli/supported-dependencies', () => {
       {
         packageName: 'convex',
         current: '^1.33.0',
-        supported: '>=1.42 <1.45.0',
+        supported: '>=1.42 <1.46.0',
         installSpec: `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`,
       },
     ]);
@@ -128,7 +128,7 @@ describe('cli/supported-dependencies', () => {
       `${dir}/package.json`,
       JSON.stringify({
         dependencies: {
-          convex: '^1.45.0',
+          convex: '^1.46.0',
         },
       })
     );
@@ -136,8 +136,8 @@ describe('cli/supported-dependencies', () => {
     expect(resolveSupportedDependencyWarnings(dir)).toEqual([
       {
         packageName: 'convex',
-        current: '^1.45.0',
-        supported: '>=1.42 <1.45.0',
+        current: '^1.46.0',
+        supported: '>=1.42 <1.46.0',
         installSpec: `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`,
       },
     ]);
@@ -172,7 +172,7 @@ describe('cli/supported-dependencies', () => {
       {
         packageName: 'convex',
         current: '<1.42.0',
-        supported: '>=1.42 <1.45.0',
+        supported: '>=1.42 <1.46.0',
         installSpec: `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`,
       },
     ]);
@@ -201,7 +201,7 @@ describe('cli/supported-dependencies', () => {
       {
         packageName: 'convex',
         current: '1.41.0',
-        supported: '>=1.42 <1.45.0',
+        supported: '>=1.42 <1.46.0',
         installSpec: `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`,
       },
     ]);
@@ -222,15 +222,15 @@ describe('cli/supported-dependencies', () => {
       `${dir}/node_modules/convex/package.json`,
       JSON.stringify({
         name: 'convex',
-        version: '1.45.0',
+        version: '1.46.0',
       })
     );
 
     expect(resolveSupportedDependencyWarnings(dir)).toEqual([
       {
         packageName: 'convex',
-        current: '1.45.0',
-        supported: '>=1.42 <1.45.0',
+        current: '1.46.0',
+        supported: '>=1.42 <1.46.0',
         installSpec: `convex@${SUPPORTED_DEPENDENCY_VERSIONS.convex.exact}`,
       },
     ]);

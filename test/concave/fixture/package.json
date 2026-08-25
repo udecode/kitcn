@@ -2,6 +2,6 @@
   "name": "kitcn-concave-fixture",
   "private": true,
   "dependencies": {
-    "convex": "1.44.0"
+    "convex": "1.45.0"
   }
 }
