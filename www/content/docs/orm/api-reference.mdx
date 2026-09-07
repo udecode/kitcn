@@ -524,6 +524,8 @@ const expanded = await db.query.users
 expanded.page[0].text; // post field
 ```
 
+Children are read through an index that leads with the relation's foreign key. A stage `where` rides that index when one extends it — `where: { numLikes: { gt: 10 } }` on `posts` reads the `by_author_likes` (authorId, numLikes) range instead of every post by the author. Children then arrive in that index's order, so a lowered range field orders them ahead of creation time. Declare an index whose fields are `(...foreign key, ...filtered fields)` for the stage filters you page on.
+
 Use `select()` when you need pre-pagination transforms (`filter`, `map`, `distinct`, relation `flatMap`) or SQL-like unions/interleaving.
 
 ### `findMany({ pageByKey })` (advanced)

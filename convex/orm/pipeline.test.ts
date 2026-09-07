@@ -1230,3 +1230,277 @@ test('pageByKey keeps its shape for an id-only where', async () => {
     expect(page.hasMore).toBe(false);
   });
 });
+
+async function seedStatusUsers(baseCtx: {
+  db: {
+    insert: (table: 'users', doc: Record<string, unknown>) => Promise<any>;
+  };
+}) {
+  await baseCtx.db.insert('users', {
+    name: 'Active',
+    email: 'active@example.com',
+    status: 'active',
+  });
+  await baseCtx.db.insert('users', {
+    name: 'Pending',
+    email: 'pending@example.com',
+    status: 'pending',
+  });
+  // Noise that only a scan would read: neither status matches.
+  for (let i = 0; i < 20; i += 1) {
+    await baseCtx.db.insert('users', {
+      name: `noise-${i}`,
+      email: `union-noise-${i}@example.com`,
+      status: 'archived',
+    });
+  }
+}
+
+test('a union source where rides its own index instead of scanning', async () => {
+  const t = convexTest(schema);
+
+  await t.run(seedStatusUsers);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    const reads = countDocumentReads(baseCtx);
+
+    const rows = await ctx.orm.query.users
+      .select()
+      .union([{ where: { status: 'active' } }])
+      .limit(10);
+
+    expect(rows.map((row) => row.name)).toEqual(['Active']);
+    // The one row in the by_status range. A source that post-filtered a
+    // creation-time scan would read all 22.
+    expect(reads.scanned).toBe(1);
+  });
+});
+
+test('interleaved union sources each ride their own index range', async () => {
+  const t = convexTest(schema);
+
+  await t.run(seedStatusUsers);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    const reads = countDocumentReads(baseCtx);
+
+    const result = await ctx.orm.query.users
+      .select()
+      .union([
+        { where: { status: 'active' } },
+        { where: { status: 'pending' } },
+      ])
+      // by_status pins `status`, so each source is still ordered by creation
+      // time and the merge is legal.
+      .interleaveBy(['createdAt'])
+      .paginate({ cursor: null, limit: 10 });
+
+    expect(result.page.map((row) => row.name)).toEqual(['Active', 'Pending']);
+    expect(reads.scanned).toBe(2);
+  });
+});
+
+test('a union source keeps the scan when the index cannot serve interleaveBy', async () => {
+  const t = convexTest(schema);
+
+  await t.run(seedStatusUsers);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+
+    const result = await ctx.orm.query.users
+      .select()
+      .union([
+        // A range on `status` pins nothing, so a by_status read is ordered by
+        // status first and cannot merge on creation time. The source has to
+        // fall back to the unanchored read rather than throw.
+        { where: { status: { lt: 'ad' } } },
+        { where: { status: { gt: 'p' } } },
+      ])
+      .interleaveBy(['createdAt'])
+      .paginate({ cursor: null, limit: 10 });
+
+    expect(result.page.map((row) => row.name)).toEqual(['Active', 'Pending']);
+  });
+});
+
+test('a flatMap stage where rides an index that extends the join keys', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const author = await baseCtx.db.insert('users', {
+      name: 'Author',
+      email: 'flatmap-stage-index@example.com',
+    });
+    for (let i = 0; i < 20; i += 1) {
+      await baseCtx.db.insert('posts', {
+        text: `p${i}`,
+        numLikes: i,
+        type: 'note',
+        authorId: author,
+      });
+    }
+  });
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    const reads = countDocumentReads(baseCtx);
+
+    const rows = await ctx.orm.query.users
+      .select()
+      .flatMap('posts', {
+        includeParent: false,
+        where: { numLikes: { gt: 17 } },
+      })
+      .limit(10);
+
+    expect(rows.map((row) => row.text)).toEqual(['p18', 'p19']);
+    // 1 parent plus the two children inside the by_author_likes range. Walking
+    // by_author and dropping the misses afterwards would read all 21.
+    expect(reads.scanned).toBe(3);
+  });
+});
+
+test('a flatMap stage where keeps the relation index when nothing extends it', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const author = await baseCtx.db.insert('users', {
+      name: 'Author',
+      email: 'flatmap-no-stage-index@example.com',
+    });
+    for (let i = 0; i < 6; i += 1) {
+      await baseCtx.db.insert('posts', {
+        text: `p${i}`,
+        numLikes: i,
+        type: i % 2 === 0 ? 'note' : 'other',
+        authorId: author,
+      });
+    }
+  });
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+
+    // No index leads with (authorId, type), so `type` stays a post-filter and
+    // the children stay in creation order.
+    const rows = await ctx.orm.query.users
+      .select()
+      .flatMap('posts', { includeParent: false, where: { type: 'note' } })
+      .limit(10);
+
+    expect(rows.map((row) => row.text)).toEqual(['p0', 'p2', 'p4']);
+  });
+});
+
+test('a union source where callback is resolved once for the read and the filter', async () => {
+  const t = convexTest(schema);
+
+  await t.run(seedStatusUsers);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    let calls = 0;
+
+    const rows = await ctx.orm.query.users
+      .select()
+      .union([
+        {
+          // Deliberately unstable: a second resolution would bound the read on
+          // 'active' and then filter it with 'pending', emitting nothing.
+          where: (u: any, { eq }: any) => {
+            calls += 1;
+            return eq(u.status, calls === 1 ? 'active' : 'pending');
+          },
+        },
+      ])
+      .limit(10);
+
+    expect(calls).toBe(1);
+    expect(rows.map((row) => row.name)).toEqual(['Active']);
+  });
+});
+
+test('a flatMap stage where callback is resolved once for the read and the filter', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const author = await baseCtx.db.insert('users', {
+      name: 'Author',
+      email: 'flatmap-single-resolve@example.com',
+    });
+    for (let i = 0; i < 20; i += 1) {
+      await baseCtx.db.insert('posts', {
+        text: `p${i}`,
+        numLikes: i,
+        type: 'note',
+        authorId: author,
+      });
+    }
+  });
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    let calls = 0;
+
+    const rows = await ctx.orm.query.users
+      .select()
+      .flatMap('posts', {
+        includeParent: false,
+        // A second resolution would pick the by_author_likes range from the
+        // first bound and then filter it with the second.
+        where: (p: any, { gt }: any) => {
+          calls += 1;
+          return gt(p.numLikes, calls === 1 ? 17 : 100);
+        },
+      })
+      .limit(10);
+
+    expect(calls).toBe(1);
+    expect(rows.map((row) => row.text)).toEqual(['p18', 'p19']);
+  });
+});
+
+test('a union source where refines a pinned index it can narrow', async () => {
+  const t = convexTest(schema);
+
+  await t.run(seedStatusUsers);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    const reads = countDocumentReads(baseCtx);
+
+    const rows = await ctx.orm.query.users
+      .withIndex('by_status')
+      .select()
+      .union([{ where: { status: 'active' } }])
+      .limit(10);
+
+    expect(rows.map((row) => row.name)).toEqual(['Active']);
+    // The chain pinned by_status but left the range open, so the where may
+    // narrow that same index.
+    expect(reads.scanned).toBe(1);
+  });
+});
+
+test('a union source where never displaces a pinned range', async () => {
+  const t = convexTest(schema);
+
+  await t.run(seedStatusUsers);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+
+    const rows = await ctx.orm.query.users
+      .withIndex('by_status', (q) => q.eq('status', 'archived'))
+      .select()
+      .union([{ where: { status: 'active' } }])
+      .limit(10);
+
+    // The pinned range is the source's scope, not a hint. Lowering the where
+    // onto by_status would silently widen the read past 'archived'.
+    expect(rows).toEqual([]);
+  });
+});
