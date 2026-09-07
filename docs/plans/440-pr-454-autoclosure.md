@@ -118,7 +118,7 @@ Closure matrix:
 | agent workflow | no | N/A: only published product guidance, no general workflow change | N/A |
 | live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
 | cleanup/review | yes | Deslop 179 -> 179; final structured P0/P1 review exits 0, no findings, confidence 0.93 | pass |
-| repository check | yes | First full check passed; four timeout victims pass in isolation; unchanged standard gate rerunning | retry running |
+| repository check | yes | Final unchanged `bun check` exits 0: 1421 Bun, 1027 Vitest, 124 CLI, eight fixtures and verify/runtime | pass |
 | GitHub delivery | yes | Exact-head push/replay/checks/receipt then skip-release merge | pending |
 
 Work Checklist:
@@ -200,7 +200,7 @@ Completion Gates:
 | Deslop | yes | Run bounded cleanup | 179 -> 179, 4 added/4 resolved signal locations; async scope wrappers and error preservation remain necessary |
 | Agent-native reviewer | yes | Source/route/proof map | Public bulk/nested ORM API -> write-batch/cache -> paired reference -> tests/build; no hidden human-only step |
 | Final lint | yes | Run `bun lint:fix` | 969 files; no fixes |
-| Repository check | yes | Run `bun check` | pending |
+| Repository check | yes | Run `bun check` | /tmp/kitcn-pr454-check-retry.log exits 0; all lanes pass |
 | GitHub delivery | yes | Commit/push/update PR and read back | pending |
 | Autoreview | yes | Resolve every accepted actionable finding | Final branch review exits 0, no P0/P1 findings, confidence 0.93 |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/440-pr-454-autoclosure.md` | pending |
@@ -215,11 +215,14 @@ Phase / pass table:
 | --- | --- | --- | --- |
 | Inventory | complete | Exact compliant #454 and raw/helper inventories | proof |
 | Repair | complete | Main integration plus nested-read callback boundary | review |
-| Review/checks | in_progress | Focused proof/docs/build pass | full gate and frozen review |
+| Review/checks | complete | Full check and final P0/P1 review pass | exact-head delivery |
 | Delivery | pending | | final audit |
 | Closeout | pending | | final |
 
 Verification evidence:
+- Final standard `bun check` exits 0 without changing any timeout/assertion:
+  /tmp/kitcn-pr454-check-retry.log, 1421 Bun cases, 1027 Vitest cases, 124 CLI
+  cases, eight fresh fixture comparisons, verify/runtime and 72-file build.
 - Final structured review at 424c49b1 exits 0 with no P0/P1 findings and
   confidence 0.93: /tmp/kitcn-pr454-review-final.md/json. No behavior change
   followed the first review; one regression and an ownership comment clarify
@@ -252,7 +255,7 @@ Verification evidence:
   lifecycle/RLS callbacks flush queues and suspend batching/cache reuse;
   aggregate runtime owns eager memberships and folded bucket/extrema writes;
   transaction anchor canonicalizes wrappers. RLS denies/failures retain their
-  owner. Import-graph tests pass; CLI/scaffolds N/A, no runtime-wide registry.
+  owner. Import-graph tests pass; CLI/scaffolds N/A.
 
 Timeline:
 - 2026-09-07T14:01:11.398Z Autoclosure plan created.
@@ -260,13 +263,13 @@ Timeline:
 Reboot status:
 | Question | Answer |
 | --- | --- |
-| Where am I? | Source repair and focused proof complete; full check/review next |
+| Where am I? | Source/proof/review/check complete; exact-head GitHub delivery next |
 | Where am I going? | Repair, review/checks, delivery, final audit |
 | What is the goal? | Merge #454 with bounded writes and correct nested reads |
 | What have I learned? | See closure matrix |
 | What have I done? | See timeline |
 
 Open risks:
-- Full check, frozen P0/P1 review, hosted gates and final receipt are not yet
-  complete. Callback-heavy writes can flush per row; preserving nested reads
+- Hosted gates and final receipt are not yet complete. Callback-heavy writes
+  can flush per row; preserving nested reads
   wins over batching across arbitrary user code. No new public signatures.
