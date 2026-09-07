@@ -1,7 +1,7 @@
 # 440b statement-scoped aggregate bucket writes
 
 Objective:
-Fix GitHub issue #440 stage (b): make one ORM mutation statement reconcile each aggregate bucket once instead of once per row, without changing what any aggregate read returns inside the same mutation.
+Fix GitHub issue #440 stage (b): fold shared aggregate writes within uninterrupted ORM mutation statements, preserving every aggregate read inside the same mutation.
 
 Current closeout requirements (2026-09-07):
 - Resume `task` for exactly PR #454, then autoclosure. One-shot execution in
@@ -38,7 +38,10 @@ Current closeout requirements (2026-09-07):
 - Fresh proof: 121 integration cases, 58 unit cases, root typecheck 5/5, lint,
   72-file package build, intent gates and rendered Write costs route pass.
   Docs map to published references/features/aggregates.md with no parity drops.
-  Full check, frozen review and final delivery are owned by
+  First full check passed all eight fixtures and runtime scenarios. Final
+  P0/P1 branch review at 424c49b1 exits 0 with no findings, confidence 0.93.
+  An added multi-metric per-row regression passes; query bucket caches are
+  allocated per read, not per statement. Final check/delivery are owned by
   docs/plans/440-pr-454-autoclosure.md; no push or merge is claimed yet.
 
 Goal plan:
@@ -81,8 +84,9 @@ Timed checkpoint:
 Completion threshold:
 - A 40-row ORM `insert()` / `update()` / `delete()` on a table with an
   `aggregateIndex` reads and writes each aggregate bucket and extrema document
-  once per distinct key tuple for the whole statement, proven by a counting
-  regression test that fails on `main`.
+  once per distinct key tuple when no aggregate read or user callback
+  interrupts the statement, proven by the counting regression. Reads and user
+  callbacks drain first, so preserving visibility takes priority over folding.
 - Every aggregate read inside the same mutation still sees the statement's own
   writes, including from a trigger firing between rows, and including through
   `withoutTriggers()` and an ORM rebuilt on the trigger's context.

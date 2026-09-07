@@ -112,13 +112,13 @@ Closure matrix:
 | source behavior | yes | 121 integration and 58 unit cases; nested read red/green | pass |
 | package/API/build | yes | Typecheck 5/5, build 72 files, import graph tests pass | pass |
 | generated output | yes | Published aggregate skill canonically regenerated | pass |
-| fixtures/scenarios | yes | No scaffold change; full check owns fresh comparisons/runtime | pending |
+| fixtures/scenarios | yes | No scaffold change; full check passes all eight comparisons and runtime scenarios | pass |
 | docs/package skill | yes | Paired Write costs, intent gates and rendered real route | pass |
 | changeset | yes | tidy-pugs-shave patch describes current safe batching | pass |
 | agent workflow | no | N/A: only published product guidance, no general workflow change | N/A |
 | live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
-| cleanup/review | yes | Deslop 179 -> 179, local lenses; structured P0/P1 review next | pending |
-| repository check | yes | `bun check` | pending |
+| cleanup/review | yes | Deslop 179 -> 179; final structured P0/P1 review exits 0, no findings, confidence 0.93 | pass |
+| repository check | yes | First full check passed; four timeout victims pass in isolation; unchanged standard gate rerunning | retry running |
 | GitHub delivery | yes | Exact-head push/replay/checks/receipt then skip-release merge | pending |
 
 Work Checklist:
@@ -130,7 +130,7 @@ Work Checklist:
 - [x] Intended behavior and exclusions are reconstructed from real sources.
 - [ ] Each lane is proven or N/A with a concrete reason.
 - [x] Generated output was changed through its owner and regenerated.
-- [ ] Package/docs/skill/fixture/scenario/changeset contracts are synchronized.
+- [x] Package/docs/skill/fixture/scenario/changeset contracts are synchronized.
 - [ ] Full `resolve-pr-feedback` ran for the exact compliant PR; every
       actionable P1-or-higher finding was fixed, proved, replied to, and
       resolved or received the required top-level reply receipt.
@@ -162,7 +162,7 @@ Work Checklist:
       URL lacking a verdict or explicit deferral, except the verified receipt.
 - [ ] Any remaining P2-or-lower item has its exact URL plus the user's explicit
       priority deferral recorded; no feedback was silently ignored.
-- [ ] Accepted cleanup and review findings are closed.
+- [x] Accepted cleanup and review findings are closed.
 - [ ] PR body and check state match the final evidence.
 - [ ] Residual blocker/waiver has exact evidence and next owner.
 - [ ] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
@@ -181,6 +181,7 @@ Error attempts:
 | Five merge conflicts with main | 1 | Source-backed combination of scopes and member write-through | 3f7f29f0; 19 integration + 27 unit tests and typecheck pass |
 | Nested hook read sees [0,0,0,0] | 1 | Flush and suspend at user callback boundary | Regression and sibling RLS/exception proof pass |
 | Initial docs navigation timed out during compile | 1 | Reuse existing loaded tab | AX and screenshot show both paragraphs; tab/server closed |
+| Final check's packaging/type/codegen tests hit 5000ms | 1 | Run the four exact files, then measure npm pack directly and isolate packaging | All four cases pass in isolation. Direct npm pack dry-run exits 0 in 5.171 seconds; packaging test passes unchanged in 4.49 seconds. No deadline/assertion change; standard gate rerunning |
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
@@ -189,7 +190,7 @@ Completion Gates:
 | Noncompliant PR disposition | no | Verify task evidence or close | N/A: compliance passed |
 | Targeted behavior proof | yes | Focused public outcomes and queue invariants | 121 Vitest and 58 Bun cases pass |
 | Source/generated audit | yes | Prove correct source and regenerated mirrors | Package owns behavior/reference; canonical mirror sync passed |
-| Package/docs/scenario closure | yes | Run every applicable local contract | Types/build/docs pass; full fixture/runtime gate still required |
+| Package/docs/scenario closure | yes | Run every applicable local contract | Types/build/docs and full fixture/runtime gate pass |
 | Feedback proof checkout | conditional | Compliant PR only: require local committed `HEAD` = fetched PR ref = live `headRefOid` before proof/reply/resolution and at terminal verification | pending |
 | Live PR feedback resolution | conditional | Compliant PR only: run full `resolve-pr-feedback` and close every actionable P1-or-higher finding; otherwise N/A with noncompliant stop receipts | pending |
 | Feedback priority classification | conditional | Compliant PR only: persist P0-P3 plus rationale for every actionable item; classify ambiguous P1-versus-lower as P1 | pending |
@@ -198,10 +199,10 @@ Completion Gates:
 | External terminal receipt | conditional | Compliant PR only: post/read exact-head receipt; require receipt/live/fetched/local OID equality and no unrecorded helper/raw URL except that verified receipt | pending |
 | Deslop | yes | Run bounded cleanup | 179 -> 179, 4 added/4 resolved signal locations; async scope wrappers and error preservation remain necessary |
 | Agent-native reviewer | yes | Source/route/proof map | Public bulk/nested ORM API -> write-batch/cache -> paired reference -> tests/build; no hidden human-only step |
-| Final lint | yes | Run `bun lint:fix` | pending |
+| Final lint | yes | Run `bun lint:fix` | 969 files; no fixes |
 | Repository check | yes | Run `bun check` | pending |
 | GitHub delivery | yes | Commit/push/update PR and read back | pending |
-| Autoreview | yes | Resolve every accepted actionable finding | pending |
+| Autoreview | yes | Resolve every accepted actionable finding | Final branch review exits 0, no P0/P1 findings, confidence 0.93 |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/440-pr-454-autoclosure.md` | pending |
 | Agent source / generated sync | no | Workflow source changes only | N/A: no rule/workflow changes; published product reference regenerated separately |
 | Installed lock audit | no | Installed-skill changes only | N/A: no installed skill or lock changes |
@@ -219,6 +220,14 @@ Phase / pass table:
 | Closeout | pending | | final |
 
 Verification evidence:
+- Final structured review at 424c49b1 exits 0 with no P0/P1 findings and
+  confidence 0.93: /tmp/kitcn-pr454-review-final.md/json. No behavior change
+  followed the first review; one regression and an ownership comment clarify
+  the questioned cache lifetime. Do not rerun review for evidence-only plans.
+- First full `bun check` exits 0: /tmp/kitcn-pr454-check.log, 1421 Bun tests,
+  1026 Vitest cases, 124 CLI cases, all eight fresh fixture comparisons and
+  verify/runtime scenarios. A final full pass includes the added regression
+  and is tracked in /tmp/kitcn-pr454-check-final.log.
 - First structured P0/P1 review reported one finding at runtime.ts's read
   barrier. Source triage rejects its premise: bucket maps belong to one read,
   not a statement; returning counts allocate a fresh read per row. The cached
