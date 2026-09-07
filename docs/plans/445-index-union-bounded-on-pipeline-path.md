@@ -58,8 +58,11 @@ Integration evidence (2026-09-07, supersedes historical closeout below):
   /tmp/kitcn-pr456-integration-tests.log,
   /tmp/kitcn-pr456-bound-compiler-tests.log,
   /tmp/kitcn-pr456-compiler-tests.log.
-- Typecheck, package build, lint:fix passed. Full bun check is running;
-  external review, exact-head feedback replay, CI and merge remain pending.
+- Typecheck, package build, lint:fix and full bun check passed: 1423 Bun,
+  1047 Vitest, 124 CLI, all eight fixtures, verify and runtime. Independent
+  P0/P1 autoreview of ea939a49 against origin/main passed with no findings
+  (codex gpt-5.6-sol high, 0.9 confidence; /tmp/kitcn-pr456-review.*).
+  Exact-head feedback replay, CI and merge remain pending.
 - Deslop: removed the dead competing reader and shortened temporal rationale.
   Delta scan's other query catches and insert/update/delete findings are
   unchanged from origin/main and outside this patch; no adjacent cleanup.
@@ -74,7 +77,10 @@ Integration evidence (2026-09-07, supersedes historical closeout below):
   `bunx intent validate skills` and `bunx intent stale` both failed to launch:
   `could not determine executable to run for package intent`. Manual mapping,
   discoverability and generated-copy checks above passed; do not claim intent
-  validation passed or modify workflow/dependency scope to bypass it.
+  validation passed or modify workflow/dependency scope to bypass it. Further
+  source-backed check: packages/kitcn/bin/intent.js invokes intent-library,
+  which exposes only list/install; direct validate/stale both exit 1 with that
+  usage. This is an unavailable command contract, not an unexamined retry.
 - Browser loaded http://localhost:3017/docs/orm/queries/pagination, title
   Pagination. Rendered Index-union filters includes the 64-range boundary,
   index-order-only wide union and maxScan exception for cross-value sorting.
