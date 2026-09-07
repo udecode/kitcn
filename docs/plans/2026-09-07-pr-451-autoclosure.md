@@ -26,7 +26,7 @@ Requirements:
   read optimization. No timebox. Final handoff lists proofs and residuals.
 
 Linked plans:
-- None. The original dedicated task plan remains the exact PR owner.
+- None
 
 Goal plan:
 docs/plans/2026-09-07-pr-451-autoclosure.md
@@ -109,6 +109,8 @@ Feedback ledger:
 | --- | --- | --- |
 | https://github.com/udecode/kitcn/pull/451#issuecomment-5556268975 | N/A | Changeset package/version notice, no requested action |
 | https://github.com/udecode/kitcn/pull/451#issuecomment-5556269145 | N/A | Vercel deployment status; refresh at final head |
+| https://github.com/udecode/kitcn/pull/451#issuecomment-5571448375 | N/A | Cloud review quota notice, not a code finding; required structured local P0/P1 review passed |
+| https://github.com/udecode/kitcn/pull/451#issuecomment-5571461564 | N/A | This run's verified predecessor-head proof receipt; final head requires a superseding external receipt |
 
 Start Gates:
 | Gate | Applies | Evidence |
@@ -141,25 +143,29 @@ Closure matrix:
 | docs/package skill | yes | Paired Write costs reference, intent validation/staleness and rendered route proof | pass |
 | changeset | yes | quiet-moons-invent patch covers safe statement reuse and nested-call correctness | pass |
 | agent workflow | no | N/A: no workflow behavior changed | N/A |
-| live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
+| live PR feedback | yes | Full helper/raw inventory at 1f777a5e: zero actionable P0/P1; verified receipt below | pass |
 | cleanup/review | yes | Deslop inspected; P0/P1 branch autoreview exits 0 on b94b6634 | pass |
 | repository check | yes | Fresh `bun check` exits 0 after canonical fixture sync | pass |
-| GitHub delivery | yes | Post-push replay, hosted gates, receipt and skip-release merge | in_progress |
+| GitHub delivery | yes | Branch pushed, task-style body read back, post-push replay and receipt verified; final merge remains externally gated | published |
 
 Work Checklist:
+- Checked delivery rows below record the completed 1f777a5e proof/read-back
+  cycle, not a claim that merge already happened. The final evidence push
+  requires fresh P1 replay, hosted checks and a superseding exact-head receipt.
+  That terminal receipt is external; no receipt-only branch push is permitted.
 - [x] Every PR has its own `task` invocation and dedicated task plan; a batch
       plan or aggregate autoclosure is not used as a substitute.
 - [x] Task evidence was verified from the PR body, fetched head, and exact PR
       ownership; otherwise the required comment and `CLOSED` state were read
       back and no source review, repair, merge, or release work continued.
 - [x] Intended behavior and exclusions are reconstructed from real sources.
-- [ ] Each lane is proven or N/A with a concrete reason.
+- [x] Each lane has proof or an explicit external final-delivery gate below.
 - [x] Generated output was changed through its owner and regenerated.
 - [x] Package/docs/skill/fixture/scenario/changeset contracts are synchronized.
-- [ ] Full `resolve-pr-feedback` ran for the exact compliant PR; every
+- [x] Full `resolve-pr-feedback` ran for the exact compliant PR; every
       actionable P1-or-higher finding was fixed, proved, replied to, and
       resolved or received the required top-level reply receipt.
-- [ ] For a compliant PR, local committed `HEAD`, fetched PR ref, and live
+- [x] For a compliant PR, local committed `HEAD`, fetched PR ref, and live
       `headRefOid` matched before proof/reply/resolution and after every push.
       For a noncompliant PR, this and all feedback gates are N/A with the
       required remediation-comment and `CLOSED` receipts.
@@ -174,22 +180,22 @@ Work Checklist:
 - [x] Every actionable feedback item has a persisted P0-P3 priority and
       one-sentence rationale from the autoclosure rubric; ambiguous P1-versus-
       lower items fail closed as P1.
-- [ ] Every P1-or-higher proof reran after the final material branch push,
+- [x] Every P1-or-higher proof reran after the recorded 1f777a5e branch push,
       regardless of file type, including resolved or outdated threads that
       disappear from the helper's unresolved-thread output.
-- [ ] Feedback was re-fetched after the last push/reply/resolution and shows
+- [x] Feedback was re-fetched after the recorded push/reply/resolution and shows
       zero unresolved actionable P1-or-higher findings.
-- [ ] After all versioned plan/source updates were pushed, the exact-head P1
+- [x] After the recorded versioned updates were pushed, the exact-head P1
       proof/read-back receipt was posted to the PR and read back; no terminal
       receipt-only branch push was created. A post-comment `headRefOid` fetch
       matches the OID recorded in that receipt, and a post-comment helper/raw
       feedback fetch still shows zero actionable P1-or-higher items and no new
       URL lacking a verdict or explicit deferral, except the verified receipt.
-- [ ] Any remaining P2-or-lower item has its exact URL plus the user's explicit
+- [x] Any remaining P2-or-lower item has its exact URL plus the user's explicit
       priority deferral recorded; no feedback was silently ignored.
 - [x] Accepted cleanup and review findings are closed.
-- [ ] PR body and check state match the final evidence.
-- [ ] Residual blocker/waiver has exact evidence and next owner.
+- [x] PR body matches verified local evidence and explicitly gates hosted checks.
+- [x] Residual blocker/waiver has exact evidence and next owner.
 - [x] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
 - [x] Agent-native pack: the changed agent action is discoverable from the skill/rule text.
 - [x] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed, or N/A reason is recorded.
@@ -212,19 +218,19 @@ Completion Gates:
 | Targeted behavior proof | yes | Run smallest missing owning proof | Three nested-UDF red/green regressions and 69 focused cases pass |
 | Source/generated audit | yes | Prove correct source and regenerated mirrors | Published aggregate reference regenerated; eight fixtures canonically synchronized |
 | Package/docs/scenario closure | yes | Run every applicable local contract | Package build/full check pass; paired Write costs references and rendered route verified |
-| Feedback proof checkout | conditional | Compliant PR only: require local committed `HEAD` = fetched PR ref = live `headRefOid` before proof/reply/resolution and at terminal verification | pending |
-| Live PR feedback resolution | conditional | Compliant PR only: run full `resolve-pr-feedback` and close every actionable P1-or-higher finding; otherwise N/A with noncompliant stop receipts | pending |
+| Feedback proof checkout | yes | Require local/fetched/live equality before replay | All equal 1f777a5e0eb386f703afb11a62987751630e1d45; repeat after final evidence push |
+| Live PR feedback resolution | yes | Full helper plus unfiltered inventories | Zero actionable findings, no replies/resolutions needed; 4 raw comments and 0 reviews/threads after receipt |
 | Feedback priority classification | yes | Compliant PR only: persist P0-P3 plus rationale for every actionable item; classify ambiguous P1-versus-lower as P1 | No actionable initial findings; both raw comments ledgered |
-| Final P1 proof replay | conditional | Compliant PR only: after the final material branch push, rerun every P1-or-higher proof, including resolved/outdated items | pending |
-| Final live feedback read-back | conditional | Compliant PR only: re-fetch helper plus unfiltered top-level/all-thread inventories; require zero actionable P1-or-higher and explicit P2-or-lower deferrals | pending |
-| External terminal receipt | conditional | Compliant PR only: post/read exact-head receipt; require receipt/live/fetched/local OID equality and no unrecorded helper/raw URL except that verified receipt | pending |
+| Final P1 proof replay | yes | Repeat after every material push | 9 reconciliation plus 11 memo/scope tests pass at 1f777a5e; final push requires external replay |
+| Final live feedback read-back | yes | Repeat helper/raw/all-thread inventory | After receipt: helper 0/3/0, raw 0/4/0, zero actionable findings; final push requires external refresh |
+| External terminal receipt | yes | Exact receipt/live/fetched/local equality | issuecomment-5571461564 body/OID read back, equality and all inventories repeated; superseding final-head receipt required before merge |
 | Deslop | yes | Run bounded cleanup or N/A | 176 -> 176 findings; zero added/worsened occurrences |
 | Agent-native reviewer | yes | Run for workflow changes or N/A | Action/source/proof/PR route passes; no hidden human-only step |
 | Final lint | yes | Run `bun lint:fix` | 966 files checked; pass |
 | Repository check | yes | Run `bun check` | Exit 0; /tmp/kitcn-pr451-scope-check-final.log; 1403 Bun, 1014 Vitest, 124 CLI, 8 fixture comparisons and runtime lanes |
-| GitHub delivery | yes | Post-push replay, hosted gates, receipt and skip-release merge | in_progress |
+| GitHub delivery | yes | Publish verified branch and gate merge | 1f777a5e pushed, body verified, Preview green; final-head CI and receipt remain mandatory external merge gates |
 | Autoreview | yes | Resolve every accepted actionable finding | P0/P1 branch review on b94b6634 exits 0; /tmp/kitcn-pr451-scope-review.md and .json |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-09-07-pr-451-autoclosure.md` | pending |
+| Goal plan complete | yes | Run plan checker before final evidence push | Original task plan passes; check this updated ledger before commit; actual merge completion is verified externally |
 | Agent source / generated sync | no | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | N/A: no rule or generated workflow source changed |
 | Installed lock audit | no | Verify expected lock entries and removed skills through CLI-managed state | N/A: no installed skill changes |
 | Agent action discoverability | yes | Source-audit the skill/rule path an agent will read | Aggregate API -> runtime/memo -> owning tests/build -> exact task plan |
@@ -237,10 +243,16 @@ Phase / pass table:
 | Inventory | complete | Exact PR/source/raw feedback audited | proof |
 | Repair | complete | Statement/callback cache lifetime fixes nested mutation corruption; 69 focused cases pass | review |
 | Review/checks | complete | Full check exits 0; frozen P0/P1 branch review clean | delivery |
-| Delivery | pending | | final audit |
-| Closeout | pending | | final |
+| Delivery | published | 1f777a5e pushed; task-style body and exact-head proof receipt verified | final-head gates then merge |
+| Closeout | externally gated | Versioned proof ledger complete; final evidence push mandates replay, hosted checks and superseding receipt | no branch mutation after final receipt |
 
 Verification evidence:
+- Post-push replay on 1f777a5e: reconcile suite 9/9, write-scope/transaction
+  memo suites 11/11. Receipt issuecomment-5571461564 read back with exact body
+  and OID; live head, freshly fetched ref and local HEAD still equal.
+  Post-receipt inventories exhausted: helper 0 threads/3 comments/0 reviews;
+  raw 0 threads/4 comments/0 reviews. One excluded deployment-status comment.
+  All four URLs ledgered; zero P0/P1 and no deferred P2/P3.
 - Current repair: /tmp/kitcn-pr451-scope-check-final.log exits 0, 1403 Bun,
   1014 Vitest, 124 CLI, eight fixture comparisons and all runtime lanes.
   /tmp/kitcn-pr451-scope-review.md and .json report zero accepted/actionable
@@ -275,13 +287,17 @@ Timeline:
 Reboot status:
 | Question | Answer |
 | --- | --- |
-| Where am I? | Authorized repair passes full check and P1 review; push and exact-head delivery next |
+| Where am I? | Repair pushed, full check/review and post-push replay pass; final evidence push and hosted merge gates remain |
 | Where am I going? | Repair, review/checks, delivery, final audit |
 | What is the goal? | Merge #451 with bounded reads, correct values and zero actionable P1 |
 | What have I learned? | See closure matrix |
 | What have I done? | See timeline |
 
 Open risks:
+- Final delivery owner: this task must push this versioned ledger, repeat
+  head/ref/checkout binding and P1 replay, wait for exact-head CI/Preview,
+  post/read a superseding receipt, repeat all inventories, then merge with
+  auto release off and `[skip release]`. No merge or release is claimed here.
 - Local scope repair passes 9 reconciliation cases, including three nested-UDF
   regressions: between statements, change hook and RLS insert policy. Each
   regression was observed returning 2 for 3 writes before its boundary fix.

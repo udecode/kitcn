@@ -548,7 +548,8 @@ High-risk note (runtime / package-internal change):
 Open risks:
 - Read reuse ends at statement exit and user lifecycle/RLS callbacks. Callback-
   heavy writes can perform more reads; correctness takes precedence over reuse.
-- Hosted checks, final P1 review and exact-head feedback receipt remain open.
+- Final-head hosted checks and superseding exact-head receipt remain external
+  merge gates; local P0/P1 review passed on b94b6634.
 - `aggregate_extrema` still reads once per row for `min()`/`max()` indexes.
 
 Hard closeout guard:
@@ -580,7 +581,13 @@ Current closeout (2026-09-07):
   lint, package build, intent validation/staleness and rendered docs route pass.
   Published aggregate guidance and its generated mirror are synchronized.
 - Canonical fixture sync completed all 8 templates after upstream lucide-react
-  drift; six generated manifests changed. Frozen repair commit faaa5e8e is
-  under full check and P1 branch review; no closeout push yet.
+  drift; six generated manifests changed. Full check exits 0: 1403 Bun,
+  1014 Vitest, 124 CLI tests, eight fixture comparisons and runtime lanes.
+  Frozen P0/P1 branch review on b94b6634 reports no actionable findings.
+- Head 1f777a5e was pushed and bound to local HEAD/live/fetched ref. Post-push
+  replay passes 9 reconciliation and 11 memo/scope cases. Exact-head receipt
+  issuecomment-5571461564 was read back and inventories repeated: zero P0/P1.
+  This final versioned evidence push requires another external replay/receipt
+  and exact-head hosted checks before merge; no merge is claimed in this plan.
 - User waived walkthrough. Version Packages merge and release are excluded.
   Hosted gates and exact-head delivery remain required.
