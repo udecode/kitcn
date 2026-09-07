@@ -10,7 +10,7 @@
  * nobody can observe half-applied unless they read them, and a reader can be
  * made to drain first.
  *
- * Deliberately dependency-free apart from the anchor, for the same reason as
+ * Depends only on the anchor and row-cache lifetime, for the same reason as
  * `write-fanout`: the mutation builders are reachable from `orm/index`, the
  * aggregate runtime contractually is not (`import-graph.test.ts`), and both
  * ends have to name this module.
@@ -24,8 +24,8 @@
  *    writing around the queue, which makes the drain the single writer and
  *    therefore the serialization point — the role `lifecycle`'s write lock
  *    plays for the documents it wraps.
- * 2. Every reader of the deferred storage drains first, so read-your-own-writes
- *    inside the transaction is preserved.
+ * 2. Aggregate readers and user callbacks drain first. Callback execution
+ *    suspends deferral because nested UDFs cannot access the caller's queue.
  * 3. A flush callback must never itself drain. It runs inside the drain, and a
  *    drain in progress is awaited rather than skipped, so re-entering it would
  *    deadlock instead of returning stale rows. Keep the read barrier on the
@@ -33,6 +33,7 @@
  */
 
 import { resolveOrmTransactionAnchor } from './transaction-cache';
+import { withoutOrmWriteCache } from './write-cache';
 
 export type OrmWriteBatchFlush = () => Promise<void>;
 
@@ -49,6 +50,8 @@ type BatchState = {
 };
 
 const batches = new WeakMap<object, BatchState>();
+const activeBatches = new Set<BatchState>();
+let suspended = 0;
 
 const getState = (db: unknown): BatchState | undefined => {
   const anchor = resolveOrmTransactionAnchor(db);
@@ -128,6 +131,7 @@ export const runInOrmWriteBatch = async <R>(
   }
 
   state.depth += 1;
+  activeBatches.add(state);
   let failure: { error: unknown } | undefined;
   let result: R | undefined;
   try {
@@ -152,6 +156,10 @@ export const runInOrmWriteBatch = async <R>(
     }
     if (failure.error instanceof Error && failure.error.cause === undefined) {
       failure.error.cause = flushError;
+    }
+  } finally {
+    if (state.depth === 0) {
+      activeBatches.delete(state);
     }
   }
 
@@ -182,7 +190,23 @@ export const enqueueOrmWriteBatch = (
 
 /** True while a statement scope is holding the queue back. */
 export const isOrmWriteBatchOpen = (db: unknown): boolean =>
-  (getState(db)?.depth ?? 0) > 0;
+  suspended === 0 && (getState(db)?.depth ?? 0) > 0;
+
+/** Nested UDFs cannot read or drain queues in the caller's JS context. */
+export const runInOrmUserCallback = async <T>(
+  fn: () => T | Promise<T>
+): Promise<Awaited<T>> =>
+  await withoutOrmWriteCache(async () => {
+    suspended += 1;
+    try {
+      for (const state of activeBatches) {
+        await drain(state);
+      }
+      return await fn();
+    } finally {
+      suspended -= 1;
+    }
+  });
 
 /**
  * Applies everything queued. Both the read barrier and the only writer.

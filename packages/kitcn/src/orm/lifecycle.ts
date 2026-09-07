@@ -17,7 +17,7 @@ import {
   type OrmTriggers,
   TriggerCancelledError,
 } from './triggers';
-import { withoutOrmWriteCache } from './write-cache';
+import { runInOrmUserCallback } from './write-batch';
 import { markLifecycleHookedTables } from './write-fanout';
 
 const ORMLIFECYCLE_WRAPPED_DB = Symbol.for('kitcn:OrmLifecycleWrappedDB');
@@ -51,7 +51,7 @@ const wrapUserHook = <TArgs extends unknown[], TResult>(
   hook: ((...args: TArgs) => TResult) | undefined
 ) =>
   hook
-    ? (...args: TArgs) => withoutOrmWriteCache(() => hook(...args))
+    ? (...args: TArgs) => runInOrmUserCallback(() => hook(...args))
     : undefined;
 
 type HookExecutionResult<R> = {

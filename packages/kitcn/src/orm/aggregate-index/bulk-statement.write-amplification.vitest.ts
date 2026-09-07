@@ -1,3 +1,5 @@
+import { makeFunctionReference, mutationGeneric } from 'convex/server';
+import { convexTest as convexTestWithModules } from 'convex-test';
 import { describe, expect, test, vi } from 'vitest';
 import { convexTest } from '../../../../../convex/setup.testing';
 import {
@@ -7,6 +9,7 @@ import {
   defineSchema,
   eq,
   integer,
+  rlsPolicy,
   text,
 } from '..';
 import { aggregateCapability } from './capability';
@@ -152,7 +155,87 @@ const readyCountingCtx = async (baseCtx: any, counts: Counts) => {
   });
 };
 
+const nestedReadCount = mutationGeneric({
+  args: {},
+  handler: async (innerCtx) =>
+    await createOrmClient()
+      .with({ db: innerCtx.db })
+      .orm.query.bs_posts.count({ where: { orgId: 'org-1' } }),
+});
+
+const nestedCountTest = () =>
+  convexTestWithModules(schema, {
+    './_generated/server.ts': async () => ({ mutation: mutationGeneric }),
+    './nested.ts': async () => ({ readCount: nestedReadCount }),
+  });
+
 describe('bulk statement aggregate write amplification', () => {
+  test('a nested mutation called by an insert policy sees prior rows', async () => {
+    const t = nestedCountTest();
+    await t.run(async (baseCtx) => {
+      const observed: number[] = [];
+      const policyPosts = convexTable(
+        'bs_posts',
+        { orgId: text().notNull(), score: integer().notNull(), title: text() },
+        (table) => [
+          aggregateIndex('by_org')
+            .on(table.orgId)
+            .sum(table.score)
+            .max(table.score),
+          rlsPolicy('insert_org', {
+            for: 'insert',
+            withCheck: async () => {
+              observed.push(
+                await baseCtx.runMutation(
+                  makeFunctionReference<'mutation'>('nested:readCount'),
+                  {}
+                )
+              );
+              return eq(table.orgId, 'org-1');
+            },
+          }),
+        ]
+      );
+      await backfillToReady(createOrmClient().api(), baseCtx.db);
+      await createOrmClient(defineSchema({ bs_posts: policyPosts }))
+        .with({ db: baseCtx.db })
+        .orm.insert(policyPosts)
+        .values(Array.from({ length: 4 }, () => ({ orgId: 'org-1', score: 1 })))
+        .execute();
+
+      expect(observed).toEqual([0, 1, 2, 3]);
+    });
+  });
+
+  test('a nested mutation called by a change hook sees the rows already written', async () => {
+    const t = nestedCountTest();
+    await t.run(async (baseCtx) => {
+      const observed: number[] = [];
+      const client = createOrmClient(
+        defineSchema({ bs_posts: bulkPosts }).triggers({
+          bs_posts: {
+            change: async () => {
+              observed.push(
+                await baseCtx.runMutation(
+                  makeFunctionReference<'mutation'>('nested:readCount'),
+                  {}
+                )
+              );
+            },
+          },
+        })
+      );
+      await backfillToReady(client.api(), baseCtx.db);
+      await client
+        .with({ db: baseCtx.db })
+        .orm.insert(bulkPosts)
+        .values(Array.from({ length: 4 }, () => ({ orgId: 'org-1', score: 1 })))
+        .execute();
+
+      expect(observed).toEqual([1, 2, 3, 4]);
+    });
+  });
+
   test('a bulk update writes one bucket per distinct key tuple, not one per row', async () => {
     const t = convexTest(schema);
 

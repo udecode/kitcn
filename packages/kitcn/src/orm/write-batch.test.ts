@@ -3,6 +3,7 @@ import {
   enqueueOrmWriteBatch,
   flushOrmWriteBatch,
   isOrmWriteBatchOpen,
+  runInOrmUserCallback,
   runInOrmWriteBatch,
 } from './write-batch';
 
@@ -24,6 +25,55 @@ const wrapper = (inner: object) => {
 };
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+describe('runInOrmUserCallback', () => {
+  test('flushes before user code and suspends reentrant deferral until a throwing callback settles', async () => {
+    const db = transaction();
+    let applied = 0;
+    await runInOrmWriteBatch(db, async () => {
+      enqueueOrmWriteBatch(db, async () => {
+        applied += 1;
+      });
+      await expect(
+        runInOrmUserCallback(async () => {
+          expect(applied).toBe(1);
+          expect(isOrmWriteBatchOpen(db)).toBe(false);
+          await runInOrmWriteBatch(db, async () => {
+            expect(isOrmWriteBatchOpen(db)).toBe(false);
+          });
+          throw new Error('callback failed');
+        })
+      ).rejects.toThrow('callback failed');
+      expect(isOrmWriteBatchOpen(db)).toBe(true);
+      enqueueOrmWriteBatch(db, async () => {
+        applied += 1;
+      });
+      expect(applied).toBe(1);
+    });
+    expect(applied).toBe(2);
+  });
+
+  test('does not enter user code when its pre-callback flush fails', async () => {
+    const db = transaction();
+    let called = false;
+    await runInOrmWriteBatch(db, async () => {
+      enqueueOrmWriteBatch(db, async () => {
+        throw new Error('flush failed');
+      });
+      await expect(
+        runInOrmUserCallback(() => {
+          called = true;
+        })
+      ).rejects.toThrow('flush failed');
+      expect(called).toBe(false);
+      expect(isOrmWriteBatchOpen(db)).toBe(true);
+    });
+    await runInOrmUserCallback(() => {
+      called = true;
+    });
+    expect(called).toBe(true);
+  });
+});
 
 describe('runInOrmWriteBatch', () => {
   test('holds queued work until the outermost scope closes', async () => {

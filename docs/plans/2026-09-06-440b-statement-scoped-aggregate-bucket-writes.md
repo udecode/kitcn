@@ -31,6 +31,15 @@ Current closeout requirements (2026-09-07):
   https://github.com/udecode/kitcn/pull/454#issuecomment-5556744293 and deployment
   notice https://github.com/udecode/kitcn/pull/454#issuecomment-5556744469 are
   N/A status-only content, not findings. No P0/P1 or deferred P2/P3 items.
+- Main integrated as 3f7f29f0; scope nesting preserves cache lifetime through
+  the final queue drain, and membership write-through keeps table/index keys.
+  The registered nested-read test then failed [0,0,0,0] versus [1,2,3,4].
+  User callbacks now flush and suspend queue/cache reuse, including RLS.
+- Fresh proof: 121 integration cases, 58 unit cases, root typecheck 5/5, lint,
+  72-file package build, intent gates and rendered Write costs route pass.
+  Docs map to published references/features/aggregates.md with no parity drops.
+  Full check, frozen review and final delivery are owned by
+  docs/plans/440-pr-454-autoclosure.md; no push or merge is claimed yet.
 
 Goal plan:
 docs/plans/2026-09-06-440b-statement-scoped-aggregate-bucket-writes.md

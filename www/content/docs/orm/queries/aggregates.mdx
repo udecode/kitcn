@@ -89,6 +89,13 @@ read each bucket once per distinct key tuple and each membership once per
 document. Callbacks and later statements reload stored rows so writes from
 nested mutations stay visible. Raw writer calls do not share these cached rows.
 
+Writes to shared aggregate buckets and extrema entries are folded within the
+statement. Aggregate reads, including returning relation counts, flush pending
+writes first. User hooks and policy callbacks also flush before they run, and
+batching stays suspended until they settle so nested functions see stored
+writes. More reads or callbacks can mean more flushes. Membership rows remain
+one write per changed document.
+
 ### `count()`
 
 Count rows efficiently:
