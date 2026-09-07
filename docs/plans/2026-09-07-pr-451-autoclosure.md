@@ -61,7 +61,9 @@ Verification surface:
 - Full gate attempt passed 1400 Bun, 1014 Vitest and 124 CLI tests, then found
   upstream lucide-react ^1.41.0 -> ^1.42.0 snapshot drift. Canonical fixtures:sync
   completed all 8 templates; only six fixture package.json files changed.
-  Rerun full gate and branch review on the frozen repair before push.
+  Fresh full gate passes: 1403 Bun, 1014 Vitest, 124 CLI tests, all eight
+  fixture comparisons and generated-app runtime lanes. P0/P1 branch review
+  on b94b6634 exits 0 with no accepted/actionable findings.
 - Focused reconcile suite, aggregate integration tests, count.test.ts and
   transaction-cache tests; package build, lint, full bun check, deslop,
   agent-native review and final P0/P1 branch autoreview.
@@ -140,8 +142,8 @@ Closure matrix:
 | changeset | yes | quiet-moons-invent patch covers safe statement reuse and nested-call correctness | pass |
 | agent workflow | no | N/A: no workflow behavior changed | N/A |
 | live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
-| cleanup/review | yes | Deslop inspected; frozen repair branch autoreview running | in_progress |
-| repository check | yes | Fresh `bun check` running after canonical fixture sync | in_progress |
+| cleanup/review | yes | Deslop inspected; P0/P1 branch autoreview exits 0 on b94b6634 | pass |
+| repository check | yes | Fresh `bun check` exits 0 after canonical fixture sync | pass |
 | GitHub delivery | yes | Post-push replay, hosted gates, receipt and skip-release merge | in_progress |
 
 Work Checklist:
@@ -185,7 +187,7 @@ Work Checklist:
       URL lacking a verdict or explicit deferral, except the verified receipt.
 - [ ] Any remaining P2-or-lower item has its exact URL plus the user's explicit
       priority deferral recorded; no feedback was silently ignored.
-- [ ] Accepted cleanup and review findings are closed.
+- [x] Accepted cleanup and review findings are closed.
 - [ ] PR body and check state match the final evidence.
 - [ ] Residual blocker/waiver has exact evidence and next owner.
 - [x] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
@@ -207,9 +209,9 @@ Completion Gates:
 | --- | --- | --- | --- |
 | Per-PR task ownership | yes | Record exact PR and dedicated task-plan path | Exact #451 original task plan and body/head ownership |
 | Noncompliant PR disposition | no | Verify task evidence or comment then close and read back | N/A: valid per-PR task evidence |
-| Targeted behavior proof | yes | Run smallest missing owning proof | New nested-mutation indexed-count test fails: expected 3, received 2; earlier 56 + 8 pass does not close this P1 |
-| Source/generated audit | yes | Prove correct source and regenerated mirrors | Named package source only; install mirror sync left no generated diff |
-| Package/docs/scenario closure | yes | Run every applicable local contract | Package build and full check passed; no public docs/scaffold change |
+| Targeted behavior proof | yes | Run smallest missing owning proof | Three nested-UDF red/green regressions and 69 focused cases pass |
+| Source/generated audit | yes | Prove correct source and regenerated mirrors | Published aggregate reference regenerated; eight fixtures canonically synchronized |
+| Package/docs/scenario closure | yes | Run every applicable local contract | Package build/full check pass; paired Write costs references and rendered route verified |
 | Feedback proof checkout | conditional | Compliant PR only: require local committed `HEAD` = fetched PR ref = live `headRefOid` before proof/reply/resolution and at terminal verification | pending |
 | Live PR feedback resolution | conditional | Compliant PR only: run full `resolve-pr-feedback` and close every actionable P1-or-higher finding; otherwise N/A with noncompliant stop receipts | pending |
 | Feedback priority classification | yes | Compliant PR only: persist P0-P3 plus rationale for every actionable item; classify ambiguous P1-versus-lower as P1 | No actionable initial findings; both raw comments ledgered |
@@ -218,10 +220,10 @@ Completion Gates:
 | External terminal receipt | conditional | Compliant PR only: post/read exact-head receipt; require receipt/live/fetched/local OID equality and no unrecorded helper/raw URL except that verified receipt | pending |
 | Deslop | yes | Run bounded cleanup or N/A | 176 -> 176 findings; zero added/worsened occurrences |
 | Agent-native reviewer | yes | Run for workflow changes or N/A | Action/source/proof/PR route passes; no hidden human-only step |
-| Final lint | yes | Run `bun lint:fix` | 964 files checked; no changes |
-| Repository check | yes | Run `bun check` | Exit 0; /tmp/kitcn-pr451-check.log; 1400 Bun, 1011 Vitest, 124 CLI, 8 fixture comparisons and runtime smoke lanes |
+| Final lint | yes | Run `bun lint:fix` | 966 files checked; pass |
+| Repository check | yes | Run `bun check` | Exit 0; /tmp/kitcn-pr451-scope-check-final.log; 1403 Bun, 1014 Vitest, 124 CLI, 8 fixture comparisons and runtime lanes |
 | GitHub delivery | yes | Post-push replay, hosted gates, receipt and skip-release merge | in_progress |
-| Autoreview | yes | Resolve every accepted actionable finding | Blocked: accepted P1 stale row snapshots across nested mutations; /tmp/kitcn-pr451-review.md and .json |
+| Autoreview | yes | Resolve every accepted actionable finding | P0/P1 branch review on b94b6634 exits 0; /tmp/kitcn-pr451-scope-review.md and .json |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-09-07-pr-451-autoclosure.md` | pending |
 | Agent source / generated sync | no | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | N/A: no rule or generated workflow source changed |
 | Installed lock audit | no | Verify expected lock entries and removed skills through CLI-managed state | N/A: no installed skill changes |
@@ -234,11 +236,16 @@ Phase / pass table:
 | --- | --- | --- | --- |
 | Inventory | complete | Exact PR/source/raw feedback audited | proof |
 | Repair | complete | Statement/callback cache lifetime fixes nested mutation corruption; 69 focused cases pass | review |
-| Review/checks | in_progress | Frozen repair committed as faaa5e8e; full check and P1 review running | delivery |
+| Review/checks | complete | Full check exits 0; frozen P0/P1 branch review clean | delivery |
 | Delivery | pending | | final audit |
 | Closeout | pending | | final |
 
 Verification evidence:
+- Current repair: /tmp/kitcn-pr451-scope-check-final.log exits 0, 1403 Bun,
+  1014 Vitest, 124 CLI, eight fixture comparisons and all runtime lanes.
+  /tmp/kitcn-pr451-scope-review.md and .json report zero accepted/actionable
+  P0/P1 findings on b94b6634. First review was invalidated by concurrent plan
+  edits; no clean result was claimed from it. Replacement checkout stayed frozen.
 - 56 aggregate/count integration tests and 8 transaction memo tests passed.
 - Package build passed before and after the comment-only source cleanup;
   /tmp/kitcn-pr451-build.log. bun install generated no remaining delta.
@@ -268,7 +275,7 @@ Timeline:
 Reboot status:
 | Question | Answer |
 | --- | --- |
-| Where am I? | Authorized repair committed locally; full check and P1 review running; not pushed |
+| Where am I? | Authorized repair passes full check and P1 review; push and exact-head delivery next |
 | Where am I going? | Repair, review/checks, delivery, final audit |
 | What is the goal? | Merge #451 with bounded reads, correct values and zero actionable P1 |
 | What have I learned? | See closure matrix |
@@ -280,7 +287,7 @@ Open risks:
   regression was observed returning 2 for 3 writes before its boundary fix.
   First hook harness used an unsupported createOrm option; an explicit callback
   assertion caught that, then schema.triggers supplied the valid red proof.
-  Broader focused proof passes; full check and final review are running.
+  Broader focused proof, full check and final P0/P1 branch review pass.
 - Docs sync: queries/aggregates.mdx Write costs -> published
   references/features/aggregates.md Write costs; resource section, no parity
   drops, no new setup/core copy. Canonical skill regenerated with its helper.
