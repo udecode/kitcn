@@ -3,6 +3,60 @@
 Objective:
 Restore the `take()` read bound on the non-paginated index-union (multiProbe) `findMany` lane when RLS is enabled or a residual (non-Convex-enforceable) post-filter is present, without regressing rows, order, or read cost.
 
+Current closeout requirements (2026-09-07):
+- Dedicated resumed `task` and `autoclosure` for exactly #455. Root checkout
+  /Users/zbeyens/git/better-convex; no worktrees or parallel agents. Prior
+  completed-state claims below are historical until fresh gates pass.
+- User: close #448-#456 with valid per-PR evidence, passing checks, zero
+  actionable P1, then recheck #430. Latest "never ask, just go" authorizes
+  bounded repairs. P2 may be explicitly deferred; no new product scope.
+- Whole-checkout commit/push, PR updates, quoted replies, resolutions and admin
+  merge authorized. Disable auto release, merge with `[skip release]`, verify
+  release skipped; never merge Version Packages. No browser surface here.
+- Scope baseline: #442, non-paginated index-union membership/read-bound owner
+  in query.ts. Preserve sort, deduplication, offset, RLS and relation fan-out
+  safety. No public shape change, CLI/scaffold work, or cursor-lane expansion.
+  Changeset owns published behavior; docs already describe this read contract.
+- Compliance: body has one exact plan line; this plan at refs/pr/455 identifies
+  #455. HEAD = fetched ref = live d2aa22034670b7c0c650c04f43bab2da1a19c3e8
+  before source triage. Fresh focused proof at that head: 11/11 passed,
+  /tmp/kitcn-pr455-initial-proof.log. Main f399843c merged without conflicts;
+  integration is not yet committed or pushed.
+- Full feedback helper: 0 unresolved threads, 1 comment, 3 review bodies.
+  Unfiltered inventory: 3 resolved threads (1 outdated), 7 inline comments,
+  2 top-level comments, 7 review bodies. All thread/comment pages exhausted.
+  All source content read, including previous author replies.
+- P1 replay must cover fan-out guard and changeset prose after final push.
+  Initial resolved state is not proof. Full check, final autoreview, exact-head
+  external receipt and CI remain pending. Active goal remains externally
+  blocked; do not fake a lifecycle transition.
+- Integrated proof: 27/27 tests across index-union read bounds, pagination and
+  relation-target memo passed. Bounded deslop kept the guards and behavior,
+  shortened redundant comments and corrected a stale claim that streamed
+  probes load relation predicates (that lane is excluded). Lint: 970 files,
+  clean. Slop delta ran; catch/statement-wrapper hits originate in merged main
+  outside this PR's delta and were not changed. No new abstraction or API.
+
+Current feedback ledger:
+| URL | Priority and rationale | Current disposition |
+| --- | --- | --- |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942884336 | P2: singleton relation checks amplify repeated-target reads | Relation predicates excluded from stream; replay with merged #448 |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942893849 | N/A: prior reply explaining measured amplification | Superseded by next reply; no independent request |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942924020 | N/A: prior reply recording restored batching | Verify current owner rather than trust reply |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942902695 | P1: streaming retires relationFanOutMaxKeys safety guard | Resolved; 40-keys/cap-5 regression passed at initial head, replay final head |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942923713 | N/A: prior reply explaining relation exclusion fix | Fresh proof required for parent finding |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942933074 | P1: release artifact exposes private planner mechanisms | Resolved/outdated; current changeset has public outcomes, final source replay required |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942939652 | N/A: prior reply explaining changeset rewrite | No independent request; final artifact review required |
+| https://github.com/udecode/kitcn/pull/455#issuecomment-5556758824 | N/A: changeset status notice only | Verify matching artifact |
+| https://github.com/udecode/kitcn/pull/455#issuecomment-5556758923 | N/A: deployment status only | Refresh final CI/Preview |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124063281 | N/A: wrapper; finding ledgered inline | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124072460 | N/A: empty body | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124081221 | N/A: wrapper; finding ledgered inline | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124101217 | N/A: empty body | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124101486 | N/A: empty body | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124110008 | N/A: wrapper; finding ledgered inline | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124116136 | N/A: empty body | No independent claim |
+
 Goal plan:
 docs/plans/442-index-union-findmany-take-bound.md
 
