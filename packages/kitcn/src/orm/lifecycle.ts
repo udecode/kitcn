@@ -29,7 +29,20 @@ type AnyCtx = {
 type AnyMutationCtx = {
   db: GenericDatabaseWriter<any>;
 } & AnyRecord;
-type HookMap = Map<string, NormalizedOrmTableTriggers<AnyRecord>>;
+/**
+ * A write barrier is a precondition, not a trigger: it reads `aggregate_state`
+ * and either returns or throws, and it never touches the row being written.
+ * Injecting it into a user `before` slot would overload that slot to mean both
+ * "a hook may have rewritten this row" and "this table has an aggregate index",
+ * which is exactly what forced `patch` to re-read a pre-image it already held.
+ * Its own slot keeps `update.before` meaning only the former.
+ */
+type WriteBarrier = (db: GenericDatabaseReader<any>) => Promise<void>;
+
+type LifecycleTableHooks = NormalizedOrmTableTriggers<AnyRecord> & {
+  writeBarrier?: WriteBarrier;
+};
+type HookMap = Map<string, LifecycleTableHooks>;
 type HookOperation = 'create' | 'update' | 'delete';
 type QueuedHook = () => Promise<void>;
 
@@ -374,6 +387,8 @@ function writerWithHooks(
       hooksByTable,
       isWithinHook,
       async (hookCtx) => {
+        // Fail closed before spending a read: a blocked write pays nothing.
+        await tableHooks.writeBarrier?.(innerDb);
         // Only `update.after` and `change` consume the documents; a table
         // hooked solely for another operation must not pay a read here.
         const needsDocuments = Boolean(
@@ -389,9 +404,11 @@ function writerWithHooks(
           value,
           hookCtx
         );
-        // A before hook can write this document through `innerDb`. Re-read
-        // only in that case so after/change hooks derive from the actual
-        // pre-patch document instead of erasing those raw writes locally.
+        // A user before hook can write this document through `innerDb`, so
+        // `newDoc` has to be derived from a fresh read in that case. `oldDoc`
+        // deliberately keeps the statement-entry image: `change` consumers
+        // reconstruct state from a contiguous oldDoc/newDoc chain, and a raw
+        // `innerDb` write emits no change event of its own.
         const currentDoc =
           needsDocuments && tableHooks.update?.before
             ? await innerDb.get(tableName as any, id as any)
@@ -465,6 +482,7 @@ function writerWithHooks(
       hooksByTable,
       isWithinHook,
       async (hookCtx) => {
+        await tableHooks.writeBarrier?.(innerDb);
         const needsDocuments = Boolean(
           tableHooks.update?.after || tableHooks.change
         );
@@ -547,6 +565,10 @@ function writerWithHooks(
       hooksByTable,
       isWithinHook,
       async (hookCtx) => {
+        // Ahead of the `!oldDoc` bail below, so a deleted-row delete on a
+        // CLEARING table fails closed like every other write instead of
+        // slipping past the barrier.
+        await tableHooks.writeBarrier?.(innerDb);
         // `delete.before`, `delete.after` and `change` are the only consumers
         // of the pre-image; without one of them the read is pure waste.
         const needsDocuments = Boolean(tableHooks.delete || tableHooks.change);
@@ -609,6 +631,7 @@ function writerWithHooks(
         hooksByTable,
         isWithinHook,
         async (hookCtx) => {
+          await tableHooks.writeBarrier?.(innerDb);
           const insertPayload = await mergeBeforeData(
             table,
             'create',
@@ -712,7 +735,7 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
     tableNames.add(tableName);
   }
 
-  const tableHooks = new Map<string, NormalizedOrmTableTriggers<AnyRecord>>();
+  const tableHooks: HookMap = new Map<string, LifecycleTableHooks>();
   const normalizedTriggers = normalizeOrmTriggers(triggerDefinitions);
 
   for (const [triggerKey, hooks] of normalizedTriggers.entries()) {
@@ -739,54 +762,45 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
       continue;
     }
 
+    // Deliberately the relations key, matching `defineSchema`'s object key.
+    // Every other aggregate site keys on it too — the backfill targets in
+    // `aggregate-index/backfill.ts` and the `count()`/`rank()` read paths in
+    // `aggregate-index/runtime.ts` and `rank-runtime.ts`. Resolving the table
+    // object's own name here instead would make maintenance write buckets
+    // under a key the backfill and every read never look at.
+    const tableName = tableConfig.name;
+
     // Fail closed: writes to a table with aggregate/rank indexes must maintain
     // them, and the runtime that does so is only in the graph when the app
     // registers the capability.
     const aggregate = requireAggregateCapability(
       capabilities,
-      `Table '${tableConfig.name}' declares an aggregateIndex/rankIndex, which`
+      `Table '${tableName}' declares an aggregateIndex/rankIndex, which`
     );
 
-    const existing = tableHooks.get(tableConfig.name) ?? {};
+    const existing = tableHooks.get(tableName) ?? {};
     const existingChange = existing.change;
+    const existingBarrier = existing.writeBarrier;
     const metricIndexNames = aggregateIndexes.map((entry) => entry.name);
     const rankIndexNames = rankIndexes.map((entry) => entry.name);
-    const prependWriteBarrier =
-      (
-        before?: NonNullable<
-          NormalizedOrmTableTriggers<AnyRecord>['create']
-        >['before']
-      ) =>
-      async (data: AnyRecord, ctx: AnyRecord) => {
+
+    tableHooks.set(tableName, {
+      ...existing,
+      writeBarrier: async (db) => {
+        await existingBarrier?.(db);
         await aggregate.assertAggregateIndexesWritable(
-          ctx.db as GenericDatabaseWriter<any>,
-          tableConfig.name,
+          db as GenericDatabaseWriter<any>,
+          tableName,
           metricIndexNames,
           rankIndexNames
         );
-        return before?.(data, ctx);
-      };
-
-    tableHooks.set(tableConfig.name, {
-      ...existing,
-      create: {
-        ...existing.create,
-        before: prependWriteBarrier(existing.create?.before),
-      },
-      update: {
-        ...existing.update,
-        before: prependWriteBarrier(existing.update?.before),
-      },
-      delete: {
-        ...existing.delete,
-        before: prependWriteBarrier(existing.delete?.before),
       },
       change: async (change, ctx) => {
         if (change.operation === 'delete') {
           if (aggregateIndexes.length > 0) {
             await aggregate.applyAggregateIndexesForChange(
               ctx.db as GenericDatabaseWriter<any>,
-              tableConfig.name,
+              tableName,
               aggregateIndexes,
               {
                 operation: 'delete',
@@ -797,7 +811,7 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
           if (rankIndexes.length > 0) {
             await aggregate.applyRankIndexesForChange(
               ctx.db as GenericDatabaseWriter<any>,
-              tableConfig.name,
+              tableName,
               rankIndexes,
               {
                 operation: 'delete',
@@ -809,7 +823,7 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
           if (aggregateIndexes.length > 0) {
             await aggregate.applyAggregateIndexesForChange(
               ctx.db as GenericDatabaseWriter<any>,
-              tableConfig.name,
+              tableName,
               aggregateIndexes,
               {
                 operation: change.operation,
@@ -821,7 +835,7 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
           if (rankIndexes.length > 0) {
             await aggregate.applyRankIndexesForChange(
               ctx.db as GenericDatabaseWriter<any>,
-              tableConfig.name,
+              tableName,
               rankIndexes,
               {
                 operation: change.operation,

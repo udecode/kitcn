@@ -1,5 +1,17 @@
 # kitcn
 
+## 0.32.2
+
+### Patch Changes
+
+- [#448](https://github.com/udecode/kitcn/pull/448) [`75ceda6`](https://github.com/udecode/kitcn/commit/75ceda65a12b4dfdd525c97a9401a31c54fd89d0) Thanks [@MikeyZhang75](https://github.com/MikeyZhang75)! - ## Patches
+
+  - Improve the read cost of a relation `where` on a relation joined on a column
+    other than the primary id, including `through` targets and `_count` on a
+    `through` relation.
+  - Fix relation targets sharing one loaded document, which could add fields to a
+    relation that only another relation in the same query requested.
+
 ## 0.32.1
 
 ### Patch Changes

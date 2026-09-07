@@ -1753,6 +1753,34 @@ function* getOrderingIndexFields<T extends GenericStreamItem>(
   }
 }
 
+/**
+ * Whether `mergedStream(..., orderByIndexFields)` would accept this stream.
+ *
+ * `MergedStream` wraps every source in an `OrderByStream`, which throws unless
+ * the ordering fields are a suffix of the source's index fields past its
+ * equality-pinned prefix. A caller that is *choosing* which index a source
+ * walks has to know that before it commits to one, so it can fall back instead
+ * of turning a working merge into a runtime error.
+ *
+ * Asks the stream itself rather than re-deriving the rule from an index name,
+ * so the answer cannot drift from what `OrderByStream` actually enforces.
+ */
+export function streamCanOrderBy<T extends GenericStreamItem>(
+  stream: QueryStream<T>,
+  orderByIndexFields: string[]
+): boolean {
+  // `normalizeIndexFields` mutates, and `OrderByStream` normalizes its own
+  // copy, so probe against a copy to leave the caller's array untouched.
+  const normalized = orderByIndexFields.slice();
+  normalizeIndexFields(normalized);
+  for (const orderingIndexFields of getOrderingIndexFields(stream)) {
+    if (equalIndexFields(orderingIndexFields, normalized)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class OrderByStream<T extends GenericStreamItem> extends QueryStream<T> {
   #staticFilter: Value[];
   #stream: QueryStream<T>;
