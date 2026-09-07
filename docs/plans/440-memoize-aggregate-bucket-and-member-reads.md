@@ -17,7 +17,7 @@ Applied packs:
 
 Task source:
 - type: GitHub issue (public bug report with measured numbers + suggested fix)
-- id / link: #440 — https://github.com/zbeyens/kitcn/issues/440 (no comments)
+- id / link: #440 — https://github.com/udecode/kitcn/issues/440
 - title: "ORM: bulk statements reconcile aggregate buckets per document — 80 reads
   + 78 patches against one row for 40 rows"
 - scope: stage **(a) only**. Stage (b) (collapsing the ~78 patches behind a
@@ -103,9 +103,9 @@ Blocked condition:
 Task state:
 - task_type: bug (performance / read amplification)
 - task_complexity: non-trivial
-- current_phase: verification
-- current_phase_status: complete
-- next_phase: closeout
+- current_phase: autoclosure verification
+- current_phase_status: in_progress
+- next_phase: final review and exact-head delivery
 - goal_status: active
 
 Current verdict:
@@ -203,8 +203,7 @@ Work Checklist:
       surface, and root-cause layer.
 - [x] Every GitHub PR in scope has its own task plan. This plan owns one exact
       PR, owns a not-yet-created PR slice, or records N/A because no PR is in
-      scope; a batch plan is not used as a substitute. N/A: no PR is in scope —
-      the user preference explicitly declines PR creation.
+      scope; a batch plan is not used as a substitute. This plan owns exactly #451.
 - [x] Required video or screen-recording evidence is cached/read as normalized
       `<video-transcripts>` XML, or marked N/A with reason. N/A: the issue has
       no video or screen recording.
@@ -240,14 +239,13 @@ Work Checklist:
 - [x] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
-      User explicitly declined: the standing user preference for this session is
-      "Do not create PR under any circumstances, unless user prompts to". The
-      patch is left uncommitted in the worktree and offered at handoff.
+      PR #451 exists; the current sweep authorizes commit/push/admin merge.
+      Version Packages is excluded; auto release must remain disabled.
 - [x] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
-      recorded, or blocker recorded. N/A: no PR.
+      recorded, or blocker recorded. PR #451 uses the task-style format.
 - [x] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
       exists at the PR head, and it identifies the exact PR before autoclosure.
-      N/A: no PR.
+      PR #451 names this committed plan and identifies exact ownership.
 - [x] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason. Dedicated branch `440-task` in the
       `vienna-v3` worktree; never touched `main`.
@@ -296,7 +294,7 @@ Completion Gates:
 | Agent-native review for agent/tooling changes | no | — | N/A: diff touches no agent-native path |
 | Local install corruption suspected | yes | Reinstall/rerun or record N/A | Not install rot: 8 vitest files failed on stale `dist`, cleared by the required `bun --cwd packages/kitcn build`. No `bun install` needed |
 | Commit created | yes | Stage the checkout and commit | `0521b3c2 fix(orm): read each aggregate bucket once per key tuple per transaction`, whole checkout staged |
-| PR create or update | yes | Run check, push, open PR | Branch renamed `440-task` -> `fix/orm-memoize-aggregate-bucket-reads` before first push; pushed to `origin`; https://github.com/udecode/kitcn/pull/451. `bun check` blocked only on upstream `fixtures:check` drift (`expo ~55.0.30` -> `~55.0.31`), recorded in the PR body; all other lanes pass |
+| PR create or update | yes | Run check, push, open PR | PR #451 exists; current sweep requires a fresh passing full check before final push/body update |
 | Task-style PR body verified | yes | Verify with `gh pr view --json body` | Verified: `🐛 Fixes #440`, `🧭 Task plan:`, `🟢 95-100% confidence`, the `Phase / 🧪 Tests / 🌐 Browser` table with Reproduced and Verified rows, and bold emoji Outcome/Design/Caveat/Verified sections. No self-link |
 | PR task evidence verified | yes | Verify plan line, plan at head, exact PR | All three confirmed against PR #451 |
 | PR proof image hosting | no | — | N/A: no images in the PR body |
@@ -315,7 +313,7 @@ Phase / pass table:
 | Implementation | complete | RED repro, then `runtime.ts` memo with write-through + exact invalidation | verification |
 | Verification | complete | targeted suites, full vitest, bun test, typecheck, build, lint | closeout |
 | Commit / PR / GitHub sync | complete | Commit `0521b3c2`, branch `fix/orm-memoize-aggregate-bucket-reads`, PR #451, issue #440 synced | closeout |
-| Closeout | complete | autoreview clean; handoff contract filled | final response |
+| Closeout | in_progress | Current full check and branch review required | delivery |
 
 Findings:
 - The issue's stated root cause is only half right. Wrapping the single delta in
@@ -512,8 +510,8 @@ Timeline:
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Shipped: commit `0521b3c2`, PR #451, issue #440 synced |
-| Where am I going? | Nothing further unless review feedback lands or the user wants stage (b) |
+| Where am I? | PR #451 current-head verification after main integration |
+| Where am I going? | Full check, branch review, exact-head receipt and merge |
 | What is the goal? | Issue #440 stage (a): one aggregate bucket read per distinct key tuple and one member read per document per transaction, with aggregate results unchanged |
 | What have I learned? | See Findings — the issue's `[delta]` root cause is only half right, and four defects in its proposed shape had to be fixed |
 | What have I done? | See Timeline and Verification evidence |
@@ -551,3 +549,22 @@ Hard closeout guard:
 - A local-only final response for verified code-changing work is invalid unless
   this plan records an explicit user decline, no local patch, analytical/
   blocked/inconclusive outcome, or a real commit/PR blocker.
+
+Current closeout (2026-09-07):
+- Separate task invocation for exactly #451; initial head 925e7d90 passed
+  body/head/plan compliance and complete unfiltered feedback inventory.
+- Main 781af65c integrated without conflicts. Owning checkout:
+  /Users/zbeyens/git/better-convex. No runtime behavior change during closeout.
+- Fresh focused proof: 56 aggregate/count integration tests and 8 transaction
+  memo tests passed. Package build and lint passed. Full bun check exited 0:
+  1400 Bun, 1011 Vitest, 124 CLI tests, all 8 fixture comparisons and runtime
+  smoke lanes; /tmp/kitcn-pr451-check.log.
+- Source audit enumerated all metric bucket/member writes: delta writes update
+  the memo, clearing retires entries, and rank membership uses a separate kind.
+- Deslop found zero added/worsened occurrences. Corrected a stale barrier name
+  in a comment and clarified the changeset's nested-mutation warning.
+- Raw nested ctx.runMutation writes can stale subsequent caller maintenance
+  writes; ordinary aggregate queries read storage directly. This limitation
+  remains explicit, with shared-context handler composition as the supported route.
+- User waived walkthrough; no UI changes. Version Packages merge and release
+  are excluded. Final review, hosted gates and delivery remain in progress.

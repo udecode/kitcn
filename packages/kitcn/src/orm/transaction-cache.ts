@@ -2,8 +2,8 @@
  * Per-transaction memo storage for the ORM.
  *
  * The ORM already has isolate-, execution-, statement- and row-scoped memos.
- * The lifetime it lacked is the one a hook needs: `prependWriteBarrier` is
- * built inside `createOrmDbLifecycle`, which `createOrm` runs at module scope,
+ * A hook needs transaction lifetime: the write barrier is built inside
+ * `createOrmDbLifecycle`, which `createOrm` runs at module scope,
  * so a flag in that closure lives as long as the isolate and would leak an
  * answer from one transaction into the next.
  *
