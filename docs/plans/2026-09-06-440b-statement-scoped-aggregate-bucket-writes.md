@@ -38,11 +38,17 @@ Current closeout requirements (2026-09-07):
 - Fresh proof: 121 integration cases, 58 unit cases, root typecheck 5/5, lint,
   72-file package build, intent gates and rendered Write costs route pass.
   Docs map to published references/features/aggregates.md with no parity drops.
-  First full check passed all eight fixtures and runtime scenarios. Final
+  Final full check passed all eight fixtures and runtime scenarios, 1421 Bun,
+  1027 Vitest and 124 CLI cases. Final
   P0/P1 branch review at 424c49b1 exits 0 with no findings, confidence 0.93.
   An added multi-metric per-row regression passes; query bucket caches are
-  allocated per read, not per statement. Final check/delivery are owned by
-  docs/plans/440-pr-454-autoclosure.md; no push or merge is claimed yet.
+  allocated per read, not per statement. Commit 7cd34235 is pushed with the
+  accurate PR body and auto release off. Its 22 integration/29 unit replay and
+  exact-head receipt issuecomment-5572225569 are verified; helper 0/3/0 and raw
+  0/4/0 inventories contain no actionable findings. Both goal checkers pass.
+  Final evidence push, repeat proof/feedback/receipt, hosted gates and merge
+  remain mandatory external gates owned by docs/plans/440-pr-454-autoclosure.md.
+  No merge is claimed here.
 
 Goal plan:
 docs/plans/2026-09-06-440b-statement-scoped-aggregate-bucket-writes.md
