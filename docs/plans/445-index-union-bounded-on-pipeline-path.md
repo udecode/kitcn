@@ -25,7 +25,7 @@ Current closeout requirements (2026-09-07):
 - Full helper: 5 unresolved threads, 1 comment, 4 review bodies. Unfiltered:
   5 unresolved threads (1 outdated), 8 inline comments, 2 top-level comments,
   7 review bodies; all thread/nested pages exhausted. Every item read in full.
-  Four P1 threads and one P2 thread require source-backed dispositions.
+  Four P1 threads and one P2 thread received source-backed dispositions below.
 - Scope owner: `_buildProbeUnionStream`, compiler promotion and internal
   `concatStreams`; preserve index order, disjointness, cursor narrowing, limits,
   RLS and relation fan-out safety. Main now includes #455's per-probe filtered
@@ -62,7 +62,8 @@ Integration evidence (2026-09-07, supersedes historical closeout below):
   1047 Vitest, 124 CLI, all eight fixtures, verify and runtime. Independent
   P0/P1 autoreview of ea939a49 against origin/main passed with no findings
   (codex gpt-5.6-sol high, 0.9 confidence; /tmp/kitcn-pr456-review.*).
-  Exact-head feedback replay, CI and merge remain pending.
+  Published-head replay passed at 1a5aa73d; final plan push requires another
+  replay and external receipt. CI and merge are external delivery guards.
 - Deslop: removed the dead competing reader and shortened temporal rationale.
   Delta scan's other query catches and insert/update/delete findings are
   unchanged from origin/main and outside this patch; no adjacent cleanup.
@@ -84,20 +85,21 @@ Integration evidence (2026-09-07, supersedes historical closeout below):
 - Browser loaded http://localhost:3017/docs/orm/queries/pagination, title
   Pagination. Rendered Index-union filters includes the 64-range boundary,
   index-order-only wide union and maxScan exception for cross-value sorting.
-  Local runtime proof only; hosted exact-head proof remains pending.
+  Hosted Browser proof also passed; Vercel dpl_Hev5UXAXL3KkfxHZXXG8pGmo8w72
+  is READY at exact head 1a5aa73dc9dc377492b94192427ae07ea5d47644.
 - All six changeset bullets begin with Fix, Improve or Support and describe
   public outcomes; retained the required Before/After paging example.
 
 | URL | Priority and rationale | Current disposition |
 | --- | --- | --- |
-| https://github.com/udecode/kitcn/pull/456#discussion_r3942889621 | P1: promoted residual unions eagerly read a common-status population | Current helper claims fixed; reconcile with merged #455 and replay 400-row proof |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942889621 | P1: promoted residual unions eagerly read a common-status population | Fixed-differently: canonical per-probe filterWith before take; 400-row bound/global-top-k/RLS/fan-out tests pass; replied and resolved |
 | https://github.com/udecode/kitcn/pull/456#discussion_r3942910998 | N/A: prior implementation reply and measured claim | Verify current source, not reply alone |
-| https://github.com/udecode/kitcn/pull/456#discussion_r3942889623 | P2: temporal bounds must match stored index representation | Normalization exists; replay temporal proof and reply/resolve |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942889623 | P2: temporal bounds must match stored index representation | Hardening verified: raw Date ordering and normalized overlap tests pass; replied and resolved; no public failure claimed |
 | https://github.com/udecode/kitcn/pull/456#discussion_r3942911517 | N/A: prior source-backed hardening reply | No independent request; verify current normalization |
-| https://github.com/udecode/kitcn/pull/456#discussion_r3942920540 | P1: patch note exposes private executor details and lacks allowed verb | Partially rewritten; normalize all release bullets before resolving |
-| https://github.com/udecode/kitcn/pull/456#discussion_r3942929806 | N/A: prior prose reply | Keep/Require still fail the explicit allowed-verb rule |
-| https://github.com/udecode/kitcn/pull/456#discussion_r3942937129 | P1: breaking bullet starts A long rather than allowed action verb | Accepted; rewrite with same public behavior and migration example |
-| https://github.com/udecode/kitcn/pull/456#discussion_r3942993902 | P1: remaining Keep/Require bullets violate allowed-verb contract | Accepted; rewrite user-facing outcomes |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942920540 | P1: patch note exposes private executor details and lacks allowed verb | Fixed: six approved-verb public outcomes; published artifact audit passed; replied and resolved |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942929806 | N/A: prior prose reply | Superseded by approved-verb rewrite and fresh artifact proof |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942937129 | P1: breaking bullet starts A long rather than allowed action verb | Fixed: Support-led bullet, Before/After preserved; replied and resolved |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942993902 | P1: remaining Keep/Require bullets violate allowed-verb contract | Fixed: both Support-led; approved-verb audit passed; replied and resolved |
 | https://github.com/udecode/kitcn/pull/456#issuecomment-5556763900 | N/A: changeset status only | Verify final artifact/head |
 | https://github.com/udecode/kitcn/pull/456#issuecomment-5556763958 | N/A: deployment status only | Refresh final hosted check |
 | https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124068617 | N/A: review wrapper | Inline findings ledgered separately |
@@ -107,6 +109,31 @@ Integration evidence (2026-09-07, supersedes historical closeout below):
 | https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124106907 | N/A: empty reply review | No independent claim |
 | https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124113819 | N/A: review wrapper | Inline findings ledgered separately |
 | https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124179018 | N/A: review wrapper | Inline findings ledgered separately |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3951208476 | N/A: fresh quoted P1 proof reply | Exact body read back; 143 published-head query tests pass |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3951208626 | N/A: fresh quoted P2 hardening reply | Exact body read back; 29 compiler tests pass |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3951208752 | N/A: fresh quoted changeset reply | Exact body read back; artifact audit passes |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3951208941 | N/A: fresh quoted breaking-bullet reply | Exact body read back; artifact audit passes |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3951209125 | N/A: fresh quoted remaining-bullets reply | Exact body read back; artifact audit passes |
+| https://github.com/udecode/kitcn/pull/456#issuecomment-5573044280 | N/A: hosted review quota notice | No source finding; independent autoreview passed |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5133758396 | N/A: empty reply review | No independent finding |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5133758572 | N/A: empty reply review | No independent finding |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5133758811 | N/A: empty reply review | No independent finding |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5133758983 | N/A: empty reply review | No independent finding |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5133759219 | N/A: empty reply review | No independent finding |
+| https://github.com/udecode/kitcn/pull/456#issuecomment-5573087915 | N/A: verified first-head receipt | Exact body/OID and post-receipt inventories verified; superseded after final plan push |
+
+Final versioned evidence snapshot:
+- Exact first published head: 1a5aa73dc9dc377492b94192427ae07ea5d47644.
+  Post-push 143 Vitest plus 29 Bun and all four P1 artifact/behavior checks
+  passed. Five threads are resolved (three outdated), thirteen inline comments,
+  four top-level comments and twelve review bodies; helper 0/3/4. Every page
+  exhausted; post-receipt raw threads/reviews unchanged, only verified receipt
+  added. Zero actionable P0/P1 and no deferred P2.
+- This plan update records actual proof, not a merge claim. Before merge:
+  push all final plan changes, rerun every P1 proof, bind local/fetched/live
+  OIDs, post and read a superseding exact-head external receipt, repeat full
+  helper/raw inventory, require final-head CI success, then squash with
+  [skip release] and verify merge/release-job state. No receipt-only plan push.
 
 Goal plan:
 docs/plans/445-index-union-bounded-on-pipeline-path.md

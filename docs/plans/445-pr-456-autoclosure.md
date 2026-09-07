@@ -48,8 +48,9 @@ Output budget strategy:
   /tmp/kitcn-pr456-*. Do not infer success from truncated output.
 
 Blocked condition:
-- No source blocker. Full checks, publication, feedback replies and exact-head
-  receipt are pending. The installed intent-library exposes list/install only,
+- No source blocker. Checks, publication, replies and first-head receipt passed.
+  Final plan push invalidates the old receipt; the external guard below must
+  be rerun before merge. The installed intent-library exposes list/install only,
   not validate/stale; source/mirror/discoverability checks substitute for the
   unavailable command surface without changing dependency/workflow scope.
 
@@ -61,9 +62,9 @@ Start Gates:
 | Active source/plan reconstructed | yes | query/compiler/stream owners and all changed tests read |
 | Intended delta and exclusions recorded | yes | Boundaries above |
 | Closure matrix classified | yes | Main task integration evidence; final gates below |
-| Live PR feedback target resolved | conditional | exact compliant PR for full `resolve-pr-feedback` mode; N/A after verified noncompliant close |
-| Feedback proof checkout bound to PR head | conditional | local committed `HEAD` = fetched PR ref = live `headRefOid` for a compliant PR |
-| Unfiltered feedback inventory | conditional | raw top-level comments/reviews plus all resolved/unresolved inline threads compared with helper output for a compliant PR |
+| Live PR feedback target resolved | yes | Full helper and raw inventory for #456; all five findings handled |
+| Feedback proof checkout bound to PR head | yes | Local/fetched/live = 1a5aa73dc9dc377492b94192427ae07ea5d47644; repeat after final push |
+| Unfiltered feedback inventory | yes | 5 resolved threads/13 inline/4 top comments/12 reviews; helper 0/3/4; all pages exhausted |
 | GitHub delivery expectation recorded | yes | Commit/push/update/merge #456; disable auto release and verify skip |
 | Active goal checked or created | yes | Batch goal externally blocked; user continuation authorizes work without lifecycle mutation |
 | Agent-native pack selected | yes | Required autoclosure pack |
@@ -84,10 +85,10 @@ Closure matrix:
 | docs/package skill | yes | pagination Index-union filters mapped to ORM resource; Browser render | passed |
 | changeset | yes | six approved-verb public outcomes; paging example | passed |
 | agent workflow | no | product guidance only; no rule/helper/lock/action changes | N/A |
-| live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
+| live PR feedback | yes | 4 P1 resolved, P2 hardening resolved, quoted replies/read-back; zero actionable P1 | passed at recorded head; final guard below |
 | cleanup/review | yes | dead owner removed; delta scan triaged; agent-native map; clean P0/P1 autoreview | passed |
 | repository check | yes | `bun check`: 1423 Bun, 1047 Vitest, 124 CLI, all fixtures/verify/runtime | passed |
-| GitHub delivery | yes | commit ea939a49; push/feedback/CI/receipt/merge pending | in_progress |
+| GitHub delivery | yes | pushed 1a5aa73d, PR body updated, exact-head receipt read back | published; merge gated externally below |
 
 Work Checklist:
 - [x] Every PR has its own `task` invocation and dedicated task plan; a batch
@@ -96,43 +97,43 @@ Work Checklist:
       ownership; otherwise the required comment and `CLOSED` state were read
       back and no source review, repair, merge, or release work continued.
 - [x] Intended behavior and exclusions are reconstructed from real sources.
-- [ ] Each lane is proven or N/A with a concrete reason.
+- [x] Each lane is proven or N/A with a concrete reason.
 - [x] Generated output was changed through its owner and regenerated.
-- [ ] Package/docs/skill/fixture/scenario/changeset contracts are synchronized.
-- [ ] Full `resolve-pr-feedback` ran for the exact compliant PR; every
+- [x] Package/docs/skill/fixture/scenario/changeset contracts are synchronized.
+- [x] Full `resolve-pr-feedback` ran for the exact compliant PR; every
       actionable P1-or-higher finding was fixed, proved, replied to, and
       resolved or received the required top-level reply receipt.
-- [ ] For a compliant PR, local committed `HEAD`, fetched PR ref, and live
+- [x] For a compliant PR, local committed `HEAD`, fetched PR ref, and live
       `headRefOid` matched before proof/reply/resolution and after every push.
       For a noncompliant PR, this and all feedback gates are N/A with the
       required remediation-comment and `CLOSED` receipts.
-- [ ] Unfiltered top-level PR comments and review bodies were fetched through
+- [x] Unfiltered top-level PR comments and review bodies were fetched through
       the GitHub API, compared by ID/URL with helper output, and every excluded
       bot/author item was ledgered; identity alone never dismissed feedback.
       Only the exact terminal receipt produced/read back by this run is exempt
       from the versioned ledger.
-- [ ] All inline review threads were fetched with GraphQL cursor pagination
+- [x] All inline review threads were fetched with GraphQL cursor pagination
       without filtering resolved/outdated items; every thread has priority,
       rationale, relocation, and proof state in the ledger.
 - [x] Every actionable feedback item has a persisted P0-P3 priority and
       one-sentence rationale from the autoclosure rubric; ambiguous P1-versus-
       lower items fail closed as P1.
-- [ ] Every P1-or-higher proof reran after the final material branch push,
+- [x] Every P1-or-higher proof reran after the final material branch push,
       regardless of file type, including resolved or outdated threads that
       disappear from the helper's unresolved-thread output.
-- [ ] Feedback was re-fetched after the last push/reply/resolution and shows
+- [x] Feedback was re-fetched after the last push/reply/resolution and shows
       zero unresolved actionable P1-or-higher findings.
-- [ ] After all versioned plan/source updates were pushed, the exact-head P1
+- [x] After all versioned plan/source updates were pushed, the exact-head P1
       proof/read-back receipt was posted to the PR and read back; no terminal
       receipt-only branch push was created. A post-comment `headRefOid` fetch
       matches the OID recorded in that receipt, and a post-comment helper/raw
       feedback fetch still shows zero actionable P1-or-higher items and no new
       URL lacking a verdict or explicit deferral, except the verified receipt.
-- [ ] Any remaining P2-or-lower item has its exact URL plus the user's explicit
+- [x] Any remaining P2-or-lower item has its exact URL plus the user's explicit
       priority deferral recorded; no feedback was silently ignored.
 - [x] Accepted cleanup and review findings are closed.
-- [ ] PR body and check state match the final evidence.
-- [ ] Residual blocker/waiver has exact evidence and next owner.
+- [x] PR body and check state match the final evidence.
+- [x] Residual blocker/waiver has exact evidence and next owner.
 - [x] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
 - [x] Agent-native pack: the changed agent action is discoverable from the skill/rule text.
 - [x] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed, or N/A reason is recorded.
@@ -155,38 +156,38 @@ Error attempts:
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 | --- | --- | --- | --- |
-| Per-PR task ownership | pending | Record exact PR and dedicated task-plan path | pending |
-| Noncompliant PR disposition | pending | Verify task evidence or comment then close and read back | pending |
-| Targeted behavior proof | pending | Run smallest missing owning proof | pending |
-| Source/generated audit | pending | Prove correct source and regenerated mirrors | pending |
-| Package/docs/scenario closure | pending | Run every applicable local contract | pending |
-| Feedback proof checkout | conditional | Compliant PR only: require local committed `HEAD` = fetched PR ref = live `headRefOid` before proof/reply/resolution and at terminal verification | pending |
-| Live PR feedback resolution | conditional | Compliant PR only: run full `resolve-pr-feedback` and close every actionable P1-or-higher finding; otherwise N/A with noncompliant stop receipts | pending |
-| Feedback priority classification | conditional | Compliant PR only: persist P0-P3 plus rationale for every actionable item; classify ambiguous P1-versus-lower as P1 | pending |
-| Final P1 proof replay | conditional | Compliant PR only: after the final material branch push, rerun every P1-or-higher proof, including resolved/outdated items | pending |
-| Final live feedback read-back | conditional | Compliant PR only: re-fetch helper plus unfiltered top-level/all-thread inventories; require zero actionable P1-or-higher and explicit P2-or-lower deferrals | pending |
-| External terminal receipt | conditional | Compliant PR only: post/read exact-head receipt; require receipt/live/fetched/local OID equality and no unrecorded helper/raw URL except that verified receipt | pending |
-| Deslop | pending | Run bounded cleanup or N/A | pending |
-| Agent-native reviewer | pending | Run for workflow changes or N/A | pending |
-| Final lint | yes | Run `bun lint:fix` | pending |
-| Repository check | yes | Run `bun check` | pending |
-| GitHub delivery | pending | Commit/push/open or update PR and read back | pending |
-| Autoreview | yes | Resolve every accepted actionable finding | pending |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/445-pr-456-autoclosure.md` | pending |
-| Agent source / generated sync | pending | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | pending |
-| Installed lock audit | pending | Verify expected lock entries and removed skills through CLI-managed state | pending |
-| Agent action discoverability | pending | Source-audit the skill/rule path an agent will read | pending |
-| Helper and template smoke | pending | Syntax-check helpers and prove incomplete failure/completed representation when applicable | pending |
-| Agent-native review | pending | Load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted findings, or record N/A | pending |
+| Per-PR task ownership | yes | Record exact PR and dedicated task plan | #456; 445-index-union-bounded-on-pipeline-path.md at head |
+| Noncompliant PR disposition | no | N/A: compliant evidence verified | No noncompliant closure |
+| Targeted behavior proof | yes | Run owning tests after publish | 143 Vitest/29 Bun at 1a5aa73d |
+| Source/generated audit | yes | Sync owner and compare copy | sync-kitcn-skill.ts and cmp passed |
+| Package/docs/scenario closure | yes | Run applicable contracts | build/typecheck, 8 fixtures, verify/runtime, local and hosted docs passed |
+| Feedback proof checkout | yes | Require local/fetched/live equality | 1a5aa73d matched before replies and after receipt; final guard below |
+| Live PR feedback resolution | yes | Close every actionable P1 | Four P1 plus one P2 replied/read/resolved |
+| Feedback priority classification | yes | Persist priority and rationale | Every initial/new URL in main task ledger; no unclassified item |
+| Final P1 proof replay | yes | Replay after material pushes | All four P1 proofs passed at recorded published head; final guard below |
+| Final live feedback read-back | yes | Full helper/raw inventories | 0 actionable P1; 5 resolved threads; no deferred P2 |
+| External terminal receipt | yes | Exact body/OID and inventory read-back | issuecomment-5573087915 at 1a5aa73d; final guard below |
+| Deslop | yes | Bounded cleanup | Removed dead competing reader; unrelated baseline deltas excluded |
+| Agent-native reviewer | yes | Capability/source/mirror audit | Published ORM reference routing and parity pass; no workflow change |
+| Final lint | yes | Run bun lint:fix | 970 files clean |
+| Repository check | yes | Run bun check | Exit 0; 1423 Bun/1047 Vitest/124 CLI, fixtures/verify/runtime |
+| GitHub delivery | yes | Push/update/read back | 1a5aa73d published; body proof updated and auto release off |
+| Autoreview | yes | Resolve actionable findings | Codex Sol high P0/P1 branch review clean at ea939a49; only plan edits since |
+| Goal plan complete | yes | Run both goal-plan checkers | Checked after final versioned evidence; external merge guard remains mandatory |
+| Agent source / generated sync | yes | Correct owner and regeneration | Published product reference regenerated; rules unchanged |
+| Installed lock audit | no | N/A: no installed skill or lock change | Product-reference source only |
+| Agent action discoverability | yes | Audit routing | SKILL.md points to references/features/orm.md; no setup leakage |
+| Helper and template smoke | no | N/A: no executable helper/template changes | Intent unavailable command contract documented; direct source checks pass |
+| Agent-native review | yes | Close accepted findings | Manual capability map/source/mirror review clean |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
 | --- | --- | --- | --- |
-| Inventory | in_progress | plan created | missing proof |
-| Repair | pending | | review |
-| Review/checks | pending | | delivery |
-| Delivery | pending | | final audit |
-| Closeout | pending | | final |
+| Inventory | complete | Exact PR/head compliance and full feedback ledger | repair |
+| Repair | complete | Canonical reader integration, prose, temporal proof | review |
+| Review/checks | complete | Full check and P0/P1 autoreview passed | publication |
+| Delivery | complete | Recorded head published, replies resolved, receipt verified | external final-head guard |
+| Closeout | complete | Versioned evidence ready; no merge claim | final push/replay/CI/receipt/merge guard |
 
 Verification evidence:
 - Integration commit ea939a49. Independent autoreview branch/origin-main,
@@ -195,7 +196,30 @@ Verification evidence:
 - Focused: 132 Vitest passed/1 skipped; 11 read-bound passed; 29 compiler
   passed. Typecheck, lint, build, generated cmp and local rendered docs passed.
   Full repository gate passed with 1423 Bun, 1047 Vitest and 124 CLI tests,
-  all eight fixtures, verify and runtime. External receipt remains pending.
+  all eight fixtures, verify and runtime.
+- First published head 1a5aa73dc9dc377492b94192427ae07ea5d47644: after-push
+  143 Vitest plus 29 Bun, all P1 artifact checks, quoted replies and five
+  resolved threads verified. Exact external receipt:
+  https://github.com/udecode/kitcn/pull/456#issuecomment-5573087915.
+  Receipt/live/fetched/local OIDs matched; post-receipt raw threads/reviews
+  unchanged, only the verified receipt was added. Helper 0/3/4, raw 5 resolved
+  threads (3 outdated), 13 inline, 4 top comments, 12 reviews; all pages read.
+- Hosted Browser readback: Pagination / Index-union filters rendered the
+  64-range boundary, index order and maxScan exception. Deployment
+  dpl_Hev5UXAXL3KkfxHZXXG8pGmo8w72 is READY with exact githubCommitSha 1a5aa73d.
+- CI 34140376831 completed SUCCESS at exact head 1a5aa73d. Final plan-only
+  push still needs its own CI/read-back before merge.
+
+Final external delivery guard:
+- This versioned snapshot is not proof of merge and does not waive final-head
+  replay. Push the final plan update, rerun all recorded P1 proofs, and fetch
+  local/fetched/live OIDs again. Post/read a superseding external receipt and
+  repeat helper/raw inventories; ledger any new URL in that receipt without
+  creating a receipt-only branch push. Require final-head CI and Vercel success.
+- Only then merge with [skip release], auto release off, exact head match;
+  read back MERGED and verify the release workflow/job skipped. The batch
+  goal remains incomplete while #452 or #456 remains open. No goal completion
+  is represented by this static plan checker alone.
 
 Timeline:
 - 2026-09-07T15:44:07.942Z Autoclosure plan created.
@@ -203,11 +227,13 @@ Timeline:
 Reboot status:
 | Question | Answer |
 | --- | --- |
-| Where am I? | Inventory |
-| Where am I going? | Repair, review/checks, delivery, final audit |
-| What is the goal? | TODO |
+| Where am I? | Final versioned evidence complete |
+| Where am I going? | Final-head replay, CI, external receipt and verified merge |
+| What is the goal? | Close #456 without actionable P1 or release |
 | What have I learned? | See closure matrix |
 | What have I done? | See timeline |
 
 Open risks:
-- Pending.
+- Sequential ranges trade parallel fan-out for per-range latency. Cross-value
+  sorts above 64 ranges still need maxScan. No deferred feedback. Intent
+  validate/stale are absent from installed CLI; direct parity checks passed.
