@@ -83,6 +83,7 @@ Local finding ledger:
 | Finding | Priority and rationale | Proof | Status |
 | --- | --- | --- | --- |
 | Hook nested UDF sees zero counts while rows exist | P1: normal read-your-own-writes outcome is wrong | nested hook regression RED [0,0,0,0], GREEN [1,2,3,4] | fixed locally; post-push replay required |
+| Warm plan-bucket cache allegedly survives writes | Reported P1; rejected because the claimed cache lifetime is factually wrong | query.ts creates maps inside `_executeAggregate` and `_loadRelationCounts`; returning-count.ts creates a query per row; repeated multi-metric reads return sums [1,3,6,10] and maxima [1,2,3,4] | not actionable; 23 focused cases pass; misleading barrier comment corrected |
 
 Start Gates:
 | Gate | Applies | Evidence |
@@ -218,6 +219,15 @@ Phase / pass table:
 | Closeout | pending | | final |
 
 Verification evidence:
+- First structured P0/P1 review reported one finding at runtime.ts's read
+  barrier. Source triage rejects its premise: bucket maps belong to one read,
+  not a statement; returning counts allocate a fresh read per row. The cached
+  metric/relation paths invoke no intervening user write callbacks. A new
+  public multi-metric regression passes without a behavior change; 23 cases
+  across batching, returning counts and relation counts pass in
+  /tmp/kitcn-pr454-cache-lifetime-proof.log. The misleading cache comment was
+  corrected. Raw review exit 1 is retained in /tmp/kitcn-pr454-review.md/json;
+  do not describe that raw run as clean.
 - /tmp/kitcn-pr454-nested-read-red.log: real registered nested mutation sees
   [0,0,0,0] from four change hooks. Green log sees [1,2,3,4]. Insert policy
   nested reads see [0,1,2,3]. Callback failure/pre-flush failure paths pass.

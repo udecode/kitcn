@@ -2523,9 +2523,8 @@ const readPlanBucketsWithCache = async (
   plan: CountQueryPlan | AggregateQueryPlan,
   bucketCache?: PlanBucketReadCache
 ): Promise<CountBucketRow[]> => {
-  // Above the cache, not below it: a warm entry replays a promise created
-  // before the queued writes existed, so a barrier inside `readPlanBuckets`
-  // alone would be skipped exactly when it is needed.
+  // The caller owns a fresh cache per aggregate/relation read, never per
+  // statement. Drain before that read shares bucket promises across metrics.
   await flushOrmWriteBatch(db);
 
   if (!bucketCache) {

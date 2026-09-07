@@ -404,6 +404,46 @@ describe('bulk statement aggregate write amplification', () => {
     });
   });
 
+  test('repeated multi-metric reads observe each intervening statement row', async () => {
+    const t = convexTest(schema);
+
+    await t.run(async (baseCtx) => {
+      const observed: unknown[] = [];
+      const ormClient = createOrmClient(
+        defineSchema({ bs_posts: bulkPosts }).triggers({
+          bs_posts: {
+            change: async () => {
+              observed.push(
+                await ctx.orm.query.bs_posts.aggregate({
+                  where: { orgId: 'org-1' },
+                  _sum: { score: true },
+                  _max: { score: true },
+                })
+              );
+            },
+          },
+        } as any)
+      );
+      await backfillToReady(ormClient.api(), baseCtx.db);
+      const ctx = ormClient.with({
+        db: baseCtx.db,
+        scheduler: schedulerStub as any,
+      });
+
+      await ctx.orm
+        .insert(bulkPosts)
+        .values([1, 2, 3, 4].map((score) => ({ orgId: 'org-1', score })))
+        .execute();
+
+      expect(observed).toEqual([
+        { _sum: { score: 1 }, _max: { score: 1 } },
+        { _sum: { score: 3 }, _max: { score: 2 } },
+        { _sum: { score: 6 }, _max: { score: 3 } },
+        { _sum: { score: 10 }, _max: { score: 4 } },
+      ]);
+    });
+  });
+
   /**
    * The queue is anchored on the transaction, and three first-party ways of
    * reaching an ORM resolve that anchor through different object graphs: the
