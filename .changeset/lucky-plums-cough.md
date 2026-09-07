@@ -14,8 +14,8 @@
 - Improve how that `limit` is counted, so it bounds rows the caller can actually
   see: with 80 rows an RLS policy hides sitting in front of the matches,
   `limit: 3` still returns three rows and reads 86 documents instead of 200.
-- Support that bound for an `in` list of any length, and for an `orderBy` led by
-  the matched field such as `[asc(ownerId), desc(score)]`.
-- Rows and their order are unchanged. A `where` that filters through a relation
-  keeps its previous read cost, as does `ne`, `notIn` or `isNotNull` ordered by a
-  field no index can serve.
+- Support that bound for an `in` list of any length.
+
+Rows and their order are unchanged. A `where` that filters through a relation
+keeps its previous read cost, as does `ne`, `notIn` or `isNotNull` ordered by a
+field no index can serve.

@@ -53,49 +53,49 @@ Blocked condition:
 Start Gates:
 | Gate | Applies | Evidence |
 | --- | --- | --- |
-| Dedicated task invocation and plan for exact PR | pending | pending |
-| Task evidence verified at PR head | pending | body path + head file + exact PR owner |
-| Active source/plan reconstructed | pending | pending |
-| Intended delta and exclusions recorded | pending | pending |
-| Closure matrix classified | pending | pending |
+| Dedicated task invocation and plan for exact PR | yes | Resumed task for #455; 442-index-union-findmany-take-bound.md |
+| Task evidence verified at PR head | yes | Exact single body line; file at d2aa2203 names #455 |
+| Active source/plan reconstructed | yes | Full plan, code, tests and raw feedback read |
+| Intended delta and exclusions recorded | yes | Boundaries above; no cursor or API expansion |
+| Closure matrix classified | yes | See matrix below |
 | Live PR feedback target resolved | conditional | exact compliant PR for full `resolve-pr-feedback` mode; N/A after verified noncompliant close |
 | Feedback proof checkout bound to PR head | conditional | local committed `HEAD` = fetched PR ref = live `headRefOid` for a compliant PR |
 | Unfiltered feedback inventory | conditional | raw top-level comments/reviews plus all resolved/unresolved inline threads compared with helper output for a compliant PR |
-| GitHub delivery expectation recorded | pending | pending |
-| Active goal checked or created | pending | pending |
-| Agent-native pack selected | pending | pending |
-| Agent-facing action surface identified | pending | pending |
-| Source rule versus generated mirror boundary identified | pending | pending |
-| Installed-skill lock versus local-rule owner identified | pending | pending |
-| `agent-native-reviewer` loaded or waiver recorded | pending | pending |
+| GitHub delivery expectation recorded | yes | User authorized commit/push/replies/merge, no release |
+| Active goal checked or created | yes | Existing batch goal externally blocked; user continuation recorded |
+| Agent-native pack selected | yes | Required autoclosure pack; no agent action changes |
+| Agent-facing action surface identified | no | N/A: ORM query runtime only; plans are execution records |
+| Source rule versus generated mirror boundary identified | no | N/A: no rule or skill change |
+| Installed-skill lock versus local-rule owner identified | no | N/A: no skill installation changes |
+| `agent-native-reviewer` loaded or waiver recorded | no | N/A: no agent workflow change |
 
 Closure matrix:
 | Lane | Applies | Owner/proof | Status |
 | --- | --- | --- | --- |
-| per-PR task ownership | pending | exact PR + dedicated task plan | pending |
-| noncompliant close | pending | required comment + `CLOSED` read-back | pending |
-| source behavior | pending | pending | pending |
-| package/API/build | pending | pending | pending |
-| generated output | pending | pending | pending |
-| fixtures/scenarios | pending | pending | pending |
-| docs/package skill | pending | pending | pending |
-| changeset | pending | pending | pending |
-| agent workflow | pending | pending | pending |
+| per-PR task ownership | yes | #455 and exact dedicated plan | passed |
+| noncompliant close | no | N/A: valid task evidence | N/A |
+| source behavior | yes | 11 initial / 27 integrated focused tests | passed |
+| package/API/build | yes | Full check includes builds; typecheck 5/5 | passed |
+| generated output | no | N/A: no generator/scaffold change | N/A |
+| fixtures/scenarios | yes | Full check fresh regeneration and runtime | passed |
+| docs/package skill | no | N/A: restores existing documented read contract | N/A |
+| changeset | yes | lucky-plums-cough.md public outcomes, kitcn patch | passed |
+| agent workflow | no | N/A: no workflow behavior touched | N/A |
 | live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
-| cleanup/review | pending | pending | pending |
-| repository check | yes | `bun check` | pending |
-| GitHub delivery | pending | pending | pending |
+| cleanup/review | yes | Bounded comment cleanup; P0/P1 autoreview exit 0 | passed |
+| repository check | yes | `bun check` exit 0 | passed |
+| GitHub delivery | yes | Whole checkout commit; push/receipt/CI/merge next | pending |
 
 Work Checklist:
-- [ ] Every PR has its own `task` invocation and dedicated task plan; a batch
+- [x] Every PR has its own `task` invocation and dedicated task plan; a batch
       plan or aggregate autoclosure is not used as a substitute.
-- [ ] Task evidence was verified from the PR body, fetched head, and exact PR
+- [x] Task evidence was verified from the PR body, fetched head, and exact PR
       ownership; otherwise the required comment and `CLOSED` state were read
       back and no source review, repair, merge, or release work continued.
-- [ ] Intended behavior and exclusions are reconstructed from real sources.
+- [x] Intended behavior and exclusions are reconstructed from real sources.
 - [ ] Each lane is proven or N/A with a concrete reason.
-- [ ] Generated output was changed through its owner and regenerated.
-- [ ] Package/docs/skill/fixture/scenario/changeset contracts are synchronized.
+- [x] Generated output was changed through its owner and regenerated. N/A: no generator changes.
+- [x] Package/docs/skill/fixture/scenario/changeset contracts are synchronized. Full check passed; no new scaffold guidance.
 - [ ] Full `resolve-pr-feedback` ran for the exact compliant PR; every
       actionable P1-or-higher finding was fixed, proved, replied to, and
       resolved or received the required top-level reply receipt.
@@ -103,15 +103,15 @@ Work Checklist:
       `headRefOid` matched before proof/reply/resolution and after every push.
       For a noncompliant PR, this and all feedback gates are N/A with the
       required remediation-comment and `CLOSED` receipts.
-- [ ] Unfiltered top-level PR comments and review bodies were fetched through
+- [x] Unfiltered top-level PR comments and review bodies were fetched through
       the GitHub API, compared by ID/URL with helper output, and every excluded
       bot/author item was ledgered; identity alone never dismissed feedback.
       Only the exact terminal receipt produced/read back by this run is exempt
       from the versioned ledger.
-- [ ] All inline review threads were fetched with GraphQL cursor pagination
+- [x] All inline review threads were fetched with GraphQL cursor pagination
       without filtering resolved/outdated items; every thread has priority,
       rationale, relocation, and proof state in the ledger.
-- [ ] Every actionable feedback item has a persisted P0-P3 priority and
+- [x] Every actionable feedback item has a persisted P0-P3 priority and
       one-sentence rationale from the autoclosure rubric; ambiguous P1-versus-
       lower items fail closed as P1.
 - [ ] Every P1-or-higher proof reran after the final material branch push,
@@ -125,19 +125,19 @@ Work Checklist:
       matches the OID recorded in that receipt, and a post-comment helper/raw
       feedback fetch still shows zero actionable P1-or-higher items and no new
       URL lacking a verdict or explicit deferral, except the verified receipt.
-- [ ] Any remaining P2-or-lower item has its exact URL plus the user's explicit
+- [x] Any remaining P2-or-lower item has its exact URL plus the user's explicit
       priority deferral recorded; no feedback was silently ignored.
-- [ ] Accepted cleanup and review findings are closed.
+- [x] Accepted cleanup and review findings are closed. Autoreview exit 0, no P0/P1 findings.
 - [ ] PR body and check state match the final evidence.
 - [ ] Residual blocker/waiver has exact evidence and next owner.
-- [ ] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
-- [ ] Agent-native pack: the changed agent action is discoverable from the skill/rule text.
-- [ ] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed, or N/A reason is recorded.
-- [ ] Agent-native pack: installed skills are changed only through
-      `npx skills add/update/remove`; local rules/templates/helpers stay source-owned.
-- [ ] Agent-native pack: routing, required receipts, placeholder failure,
-      completion representability, and forbidden behavior have eval/smoke rows.
-- [ ] Agent-native pack: accepted agent-native review findings are fixed or explicitly rejected with reason.
+- [x] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors. N/A: no rules changed.
+- [x] Agent-native pack: the changed agent action is discoverable from the skill/rule text. N/A: no action changed.
+- [x] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed, or N/A reason is recorded. N/A: no rules changed.
+- [x] Agent-native pack: installed skills are changed only through
+      `npx skills add/update/remove`; local rules/templates/helpers stay source-owned. N/A: no skills changed.
+- [x] Agent-native pack: routing, required receipts, placeholder failure,
+      completion representability, and forbidden behavior have eval/smoke rows. N/A: no workflow changes.
+- [x] Agent-native pack: accepted agent-native review findings are fixed or explicitly rejected with reason. N/A: no workflow changes.
 
 Error attempts:
 | Failure signature | Count | Next different move | Resolution |
@@ -147,41 +147,51 @@ Error attempts:
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 | --- | --- | --- | --- |
-| Per-PR task ownership | pending | Record exact PR and dedicated task-plan path | pending |
-| Noncompliant PR disposition | pending | Verify task evidence or comment then close and read back | pending |
-| Targeted behavior proof | pending | Run smallest missing owning proof | pending |
-| Source/generated audit | pending | Prove correct source and regenerated mirrors | pending |
-| Package/docs/scenario closure | pending | Run every applicable local contract | pending |
+| Per-PR task ownership | yes | Record exact PR and dedicated task-plan path | #455; original task plan verified at head |
+| Noncompliant PR disposition | no | N/A: valid task evidence | No closure comment required |
+| Targeted behavior proof | yes | Run smallest missing owning proof | 11 initial, 27 integrated tests passed |
+| Source/generated audit | no | N/A: no generated source changed | Query runtime and tests only |
+| Package/docs/scenario closure | yes | Run every applicable local contract | Full check, package builds and all 8 fixtures passed; docs unchanged |
 | Feedback proof checkout | conditional | Compliant PR only: require local committed `HEAD` = fetched PR ref = live `headRefOid` before proof/reply/resolution and at terminal verification | pending |
 | Live PR feedback resolution | conditional | Compliant PR only: run full `resolve-pr-feedback` and close every actionable P1-or-higher finding; otherwise N/A with noncompliant stop receipts | pending |
-| Feedback priority classification | conditional | Compliant PR only: persist P0-P3 plus rationale for every actionable item; classify ambiguous P1-versus-lower as P1 | pending |
+| Feedback priority classification | yes | Persist P0-P3 plus rationale | Original task ledger: two P1, one P2, all resolved |
 | Final P1 proof replay | conditional | Compliant PR only: after the final material branch push, rerun every P1-or-higher proof, including resolved/outdated items | pending |
 | Final live feedback read-back | conditional | Compliant PR only: re-fetch helper plus unfiltered top-level/all-thread inventories; require zero actionable P1-or-higher and explicit P2-or-lower deferrals | pending |
 | External terminal receipt | conditional | Compliant PR only: post/read exact-head receipt; require receipt/live/fetched/local OID equality and no unrecorded helper/raw URL except that verified receipt | pending |
-| Deslop | pending | Run bounded cleanup or N/A | pending |
-| Agent-native reviewer | pending | Run for workflow changes or N/A | pending |
-| Final lint | yes | Run `bun lint:fix` | pending |
-| Repository check | yes | Run `bun check` | pending |
+| Deslop | yes | Run bounded cleanup | Slop delta + local lenses; redundant/stale comments shortened |
+| Agent-native reviewer | no | N/A: no workflow behavior changes | Agent-native pack classified above |
+| Final lint | yes | Run `bun lint:fix` | 970 files clean |
+| Repository check | yes | Run `bun check` | Exit 0: 1421 Bun, 1038 Vitest, 124 CLI, 8 fixtures, verify/runtime |
 | GitHub delivery | pending | Commit/push/open or update PR and read back | pending |
-| Autoreview | yes | Resolve every accepted actionable finding | pending |
+| Autoreview | yes | Resolve every accepted actionable finding | Branch review against origin/main at c824e87a, exit 0, no P0/P1 findings, confidence 0.93 |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/442-pr-455-autoclosure.md` | pending |
-| Agent source / generated sync | pending | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | pending |
-| Installed lock audit | pending | Verify expected lock entries and removed skills through CLI-managed state | pending |
-| Agent action discoverability | pending | Source-audit the skill/rule path an agent will read | pending |
-| Helper and template smoke | pending | Syntax-check helpers and prove incomplete failure/completed representation when applicable | pending |
-| Agent-native review | pending | Load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted findings, or record N/A | pending |
+| Agent source / generated sync | no | N/A: no agent source changes | No generated skill edits |
+| Installed lock audit | no | N/A: no skill installation changes | Lock untouched |
+| Agent action discoverability | no | N/A: no agent action changes | Product query runtime only |
+| Helper and template smoke | no | N/A: no helper/template behavior changes | Plans are execution records |
+| Agent-native review | no | N/A: no agent workflow changes | Scope audit complete |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
 | --- | --- | --- | --- |
-| Inventory | in_progress | plan created | missing proof |
-| Repair | pending | | review |
-| Review/checks | pending | | delivery |
+| Inventory | complete | exact-head compliance and full raw inventory | proof |
+| Repair | complete | main integrated; comments only, no new behavior | review |
+| Review/checks | complete | review clean; full check passed | delivery |
 | Delivery | pending | | final audit |
 | Closeout | pending | | final |
 
 Verification evidence:
-- Pending.
+- /tmp/kitcn-pr455-initial-proof.log: 11 passed at published d2aa2203.
+- /tmp/kitcn-pr455-integrated-proof.log: 27 passed with main integrated.
+- /tmp/kitcn-pr455-slop.log: merged-main hits outside this PR were excluded;
+  no unrelated package cleanup. Local three-lens source audit complete.
+- /tmp/kitcn-pr455-lint.log: 970 files clean.
+- /tmp/kitcn-pr455-review.log, review.md, review.json: Codex review, P0/P1,
+  source head c824e87a, exit 0, no findings. Do not rerun without code changes.
+- /tmp/kitcn-pr455-check.log: full repository gate passed, exit 0. Typecheck
+  5/5; 1421 Bun, 1038 Vitest, 124 CLI; builds, 8 fixtures and verify/runtime.
+- Changeset prose pass: three approved action-led public outcomes, no private
+  planner terms, explicit cost caveat. No runtime edits after autoreview.
 
 Timeline:
 - 2026-09-07T15:03:54.646Z Autoclosure plan created.
@@ -196,4 +206,4 @@ Reboot status:
 | What have I done? | See timeline |
 
 Open risks:
-- Pending.
+- No accepted source-review blocker; final repository/GitHub gates outstanding.

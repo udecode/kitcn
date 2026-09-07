@@ -36,6 +36,18 @@ Current closeout requirements (2026-09-07):
   probes load relation predicates (that lane is excluded). Lint: 970 files,
   clean. Slop delta ran; catch/statement-wrapper hits originate in merged main
   outside this PR's delta and were not changed. No new abstraction or API.
+- Final changeset source pass retains the cost caveat as a paragraph, not a
+  non-action bullet, and leaves one outcome in each bullet. Every outcome now
+  starts Fix/Improve/Support; no private planner notes. This prose-only repair
+  completes the prior P1 requirement without describing an unmerged attempt.
+- Autoreview P0/P1 at c824e87a: exit 0, no findings, 0.93 confidence. No runtime
+  or test change after review; subsequent updates are changeset/plan prose.
+- Fresh full `bun check` passed in root: 1421 Bun tests, 1038 Vitest tests,
+  124 CLI tests, typecheck 5/5, package builds, eight matching fixtures and
+  prepared-app verify/runtime lanes. /tmp/kitcn-pr455-check.log, exit 0.
+  No test timeout or fixture failure was waived. Upstream create-convex smoke
+  templates selected Convex 1.45.0 and printed a compatibility warning; the
+  supported fixture lane uses 1.44.0 and both smoke processes passed.
 
 Current feedback ledger:
 | URL | Priority and rationale | Current disposition |
