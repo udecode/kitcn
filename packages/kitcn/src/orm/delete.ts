@@ -46,6 +46,7 @@ import type {
   ReturningSelection,
 } from './types';
 import { WhereClauseCompiler } from './where-clause-compiler';
+import { runInOrmWriteScope } from './write-cache';
 
 const applyIndexFilter = (query: any, filter: FilterExpression<boolean>) => {
   if (filter.type !== 'binary') {
@@ -270,6 +271,14 @@ export class ConvexDeleteBuilder<
       : [config?: never]
   ): Promise<MutationExecuteResult<TTable, TReturning, TMode>>;
   async execute(
+    ...args: TMode extends 'single'
+      ? [config?: MutationExecuteConfig]
+      : [config?: never]
+  ): Promise<MutationExecuteResult<TTable, TReturning, TMode>> {
+    return await runInOrmWriteScope(this.db, () => this._runStatement(...args));
+  }
+
+  private async _runStatement(
     ...args: TMode extends 'single'
       ? [config?: MutationExecuteConfig]
       : [config?: never]

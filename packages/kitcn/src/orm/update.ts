@@ -53,6 +53,7 @@ import type {
 } from './types';
 import { isUnsetToken } from './unset-token';
 import { WhereClauseCompiler } from './where-clause-compiler';
+import { runInOrmWriteScope } from './write-cache';
 import { hasLifecycleHooks } from './write-fanout';
 
 const applyIndexFilter = (query: any, filter: FilterExpression<boolean>) => {
@@ -264,6 +265,14 @@ export class ConvexUpdateBuilder<
       : [config?: never]
   ): Promise<MutationExecuteResult<TTable, TReturning, TMode>>;
   async execute(
+    ...args: TMode extends 'single'
+      ? [config?: MutationExecuteConfig]
+      : [config?: never]
+  ): Promise<MutationExecuteResult<TTable, TReturning, TMode>> {
+    return await runInOrmWriteScope(this.db, () => this._runStatement(...args));
+  }
+
+  private async _runStatement(
     ...args: TMode extends 'single'
       ? [config?: MutationExecuteConfig]
       : [config?: never]

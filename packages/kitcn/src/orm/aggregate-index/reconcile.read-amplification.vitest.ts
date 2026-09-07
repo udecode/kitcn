@@ -1,3 +1,5 @@
+import { makeFunctionReference, mutationGeneric } from 'convex/server';
+import { convexTest as convexTestWithModules } from 'convex-test';
 import { describe, expect, test, vi } from 'vitest';
 import { convexTest } from '../../../../../convex/setup.testing';
 import {
@@ -5,7 +7,9 @@ import {
   convexTable,
   createOrm,
   defineSchema,
+  eq,
   integer,
+  rlsPolicy,
   text,
 } from '..';
 import { aggregateCapability } from './capability';
@@ -28,10 +32,12 @@ const passthroughInternalMutation = ((definition: unknown) =>
   definition) as never;
 const passthroughInternalQuery = ((definition: unknown) => definition) as never;
 
-const createOrmClient = () =>
+const createOrmClient = (triggers?: any) =>
   createOrm({
     capabilities: [aggregateCapability()],
-    schema,
+    schema: triggers
+      ? defineSchema({ ra_users: reconcileUsers }).triggers(triggers)
+      : schema,
     ormFunctions: {
       scheduledDelete: {} as any,
       scheduledMutationBatch: {} as any,
@@ -161,6 +167,129 @@ const bucketsIn = async (db: any) =>
   (await db.query(AGGREGATE_BUCKET_TABLE).collect()) as any[];
 
 describe('aggregate reconciliation read amplification', () => {
+  test('nested writes from an insert policy expire earlier row snapshots', async () => {
+    let calls = 0;
+    let invokeNested: () => Promise<unknown>;
+    const policyUsers = convexTable(
+      'ra_users',
+      { orgId: text().notNull(), score: integer().notNull() },
+      (table) => [
+        aggregateIndex('by_org').on(table.orgId).sum(table.score),
+        rlsPolicy('insert_org', {
+          for: 'insert',
+          withCheck: async () => {
+            calls += 1;
+            if (calls === 2) await invokeNested();
+            return eq(table.orgId, 'org-1');
+          },
+        }),
+      ]
+    );
+    const insertRow = mutationGeneric({
+      args: {},
+      handler: async (innerCtx) => {
+        await createOrmClient()
+          .with({ db: innerCtx.db })
+          .orm.insert(reconcileUsers)
+          .values(rows(1))
+          .execute();
+      },
+    });
+    const t = convexTestWithModules(schema, {
+      './_generated/server.ts': async () => ({ mutation: mutationGeneric }),
+      './nested.ts': async () => ({ insertRow }),
+    });
+    await t.run(async (baseCtx) => {
+      invokeNested = () =>
+        baseCtx.runMutation(
+          makeFunctionReference<'mutation'>('nested:insertRow'),
+          {}
+        );
+      await backfillToReady(createOrmClient().api(), baseCtx.db);
+      const ctx = createOrm({
+        schema: defineSchema({ ra_users: policyUsers }),
+        capabilities: [aggregateCapability()],
+      }).with({ db: baseCtx.db });
+      await ctx.orm.insert(policyUsers).values(rows(2)).execute();
+      expect(calls).toBe(2);
+      expect(
+        await createOrmClient()
+          .with({ db: baseCtx.db })
+          .orm.query.ra_users.count({ where: { orgId: 'org-1' } })
+      ).toBe(3);
+    });
+  });
+
+  test('a nested mutation in a change hook stays visible within a bulk statement', async () => {
+    const insertRow = mutationGeneric({
+      args: {},
+      handler: async (innerCtx) => {
+        const ctx = createOrmClient().with({
+          db: innerCtx.db,
+          scheduler: schedulerStub as never,
+        });
+        await ctx.orm.insert(reconcileUsers).values(rows(1)).execute();
+      },
+    });
+    const t = convexTestWithModules(schema, {
+      './_generated/server.ts': async () => ({ mutation: mutationGeneric }),
+      './nested.ts': async () => ({ insertRow }),
+    });
+    await t.run(async (baseCtx) => {
+      await backfillToReady(createOrmClient().api(), baseCtx.db);
+      let called = false;
+      const ctx = createOrmClient({
+        ra_users: {
+          change: async () => {
+            if (called) return;
+            called = true;
+            await baseCtx.runMutation(
+              makeFunctionReference<'mutation'>('nested:insertRow'),
+              {}
+            );
+          },
+        },
+      }).with({ db: baseCtx.db, scheduler: schedulerStub as never });
+      await ctx.orm.insert(reconcileUsers).values(rows(2)).execute();
+      expect(called).toBe(true);
+      expect(
+        await ctx.orm.query.ra_users.count({ where: { orgId: 'org-1' } })
+      ).toBe(3);
+    });
+  });
+
+  test('nested mutation writes remain visible to later outer writes', async () => {
+    const insertRow = mutationGeneric({
+      args: {},
+      handler: async (innerCtx) => {
+        const ctx = createOrmClient().with({
+          db: innerCtx.db,
+          scheduler: schedulerStub as never,
+        });
+        await ctx.orm.insert(reconcileUsers).values(rows(1)).execute();
+      },
+    });
+    const t = convexTestWithModules(schema, {
+      './_generated/server.ts': async () => ({ mutation: mutationGeneric }),
+      './nested.ts': async () => ({ insertRow }),
+    });
+
+    await t.run(async (baseCtx) => {
+      await backfillToReady(createOrmClient().api(), baseCtx.db);
+      const { ctx } = probeCtx(baseCtx.db);
+      await ctx.orm.insert(reconcileUsers).values(rows(1)).execute();
+      await baseCtx.runMutation(
+        makeFunctionReference<'mutation'>('nested:insertRow'),
+        {}
+      );
+      await ctx.orm.insert(reconcileUsers).values(rows(1)).execute();
+
+      expect(
+        await ctx.orm.query.ra_users.count({ where: { orgId: 'org-1' } })
+      ).toBe(3);
+    });
+  });
+
   test('a bulk insert probes one bucket per distinct key tuple', async () => {
     const t = convexTest(schema);
 
@@ -215,7 +344,7 @@ describe('aggregate reconciliation read amplification', () => {
     });
   });
 
-  test('a document reconciled again in the same transaction re-probes nothing', async () => {
+  test('a later statement reloads members and probes each bucket once', async () => {
     await withSeededRows(async ({ ctx, counts, baseDb }) => {
       await ctx.orm
         .update(reconcileUsers)
@@ -229,10 +358,9 @@ describe('aggregate reconciliation read amplification', () => {
         .set({ orgId: 'org-3' })
         .allowFullScan();
 
-      // Both tuples and all 12 member rows were written by the statement above,
-      // inside this transaction; only the org-3 bucket is new.
-      expect(counts.buckets).toBe(1);
-      expect(counts.members).toBe(0);
+      // User code between statements may write through a nested UDF.
+      expect(counts.buckets).toBe(2);
+      expect(counts.members).toBe(ROW_COUNT);
 
       const buckets = await bucketsIn(baseDb);
       expect(buckets).toHaveLength(1);

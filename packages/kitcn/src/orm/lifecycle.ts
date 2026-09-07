@@ -17,6 +17,7 @@ import {
   type OrmTriggers,
   TriggerCancelledError,
 } from './triggers';
+import { withoutOrmWriteCache } from './write-cache';
 import { markLifecycleHookedTables } from './write-fanout';
 
 const ORMLIFECYCLE_WRAPPED_DB = Symbol.for('kitcn:OrmLifecycleWrappedDB');
@@ -45,6 +46,13 @@ type LifecycleTableHooks = NormalizedOrmTableTriggers<AnyRecord> & {
 type HookMap = Map<string, LifecycleTableHooks>;
 type HookOperation = 'create' | 'update' | 'delete';
 type QueuedHook = () => Promise<void>;
+
+const wrapUserHook = <TArgs extends unknown[], TResult>(
+  hook: ((...args: TArgs) => TResult) | undefined
+) =>
+  hook
+    ? (...args: TArgs) => withoutOrmWriteCache(() => hook(...args))
+    : undefined;
 
 type HookExecutionResult<R> = {
   result: R;
@@ -749,7 +757,21 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
       );
     }
 
-    tableHooks.set(tableName, hooks);
+    tableHooks.set(tableName, {
+      create: hooks.create && {
+        before: wrapUserHook(hooks.create.before),
+        after: wrapUserHook(hooks.create.after),
+      },
+      update: hooks.update && {
+        before: wrapUserHook(hooks.update.before),
+        after: wrapUserHook(hooks.update.after),
+      },
+      delete: hooks.delete && {
+        before: wrapUserHook(hooks.delete.before),
+        after: wrapUserHook(hooks.delete.after),
+      },
+      change: wrapUserHook(hooks.change),
+    });
   }
 
   for (const tableConfig of Object.values(schema)) {

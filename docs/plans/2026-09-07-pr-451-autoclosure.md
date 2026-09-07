@@ -8,6 +8,13 @@ One-shot execution. Resume `task` for exactly #451 and
 docs/plans/440-memoize-aggregate-bucket-and-member-reads.md, then autoclosure.
 
 Requirements:
+- User correction: "never ask, just go" authorizes the requested joint
+  cache-lifetime repair with #454. Execute without another design approval.
+  Keep #451 as the read-cache owner and #454 as the deferred-write owner.
+  Runtime-only and no-lifecycle exclusions below are superseded for this repair.
+  A safe cache segment ends at statement exit or arbitrary user callbacks;
+  transaction-wide reuse across nested UDFs is not a supportable guarantee.
+  Preserve bulk bounds inside uninterrupted statements and prove nested calls.
 - User: "No walk needed . Sweep all other prs"; no walkthrough in this sweep.
 - Earlier authorization permits whole-checkout commit/push, replies,
   resolutions and admin merge without approval prompts. No Version Packages
@@ -36,6 +43,10 @@ Applied packs:
 Completion threshold:
 - Six reconcile read-amplification tests pass: bucket probes 1/2/1/1 and
   correct aggregate values; member probes scale with distinct documents.
+- Superseding safety contract: bulk insert/update/delete retain 1/2/1 bucket
+  probes; separate statements reload their rows. Nested mutation correctness,
+  including calls inside hooks, is mandatory. The old cross-statement 1/0
+  bucket/member bound is withdrawn because it requires stale snapshots.
 - Aggregate/count/transaction memo tests, kitcn build, full check and final
   review pass; exact-head terminal receipt verified before merge.
 - No new product scope. Completion requires every applicable lane below to have
@@ -43,6 +54,14 @@ Completion threshold:
   GitHub delivery complete, and the goal checker passing.
 
 Verification surface:
+- Fresh repair evidence: 66 focused tests and 3 write-scope failure-path unit
+  tests pass; root typecheck 5/5, lint and package build pass. Intent validate
+  passes and intent stale reports both packages current. Browser inspection of
+  /docs/orm/queries/aggregates confirms the Write costs paragraph renders.
+- Full gate attempt passed 1400 Bun, 1014 Vitest and 124 CLI tests, then found
+  upstream lucide-react ^1.41.0 -> ^1.42.0 snapshot drift. Canonical fixtures:sync
+  completed all 8 templates; only six fixture package.json files changed.
+  Rerun full gate and branch review on the frozen repair before push.
 - Focused reconcile suite, aggregate integration tests, count.test.ts and
   transaction-cache tests; package build, lint, full bun check, deslop,
   agent-native review and final P0/P1 branch autoreview.
@@ -112,7 +131,7 @@ Closure matrix:
 | --- | --- | --- | --- |
 | per-PR task ownership | yes | Exact #451 body/head/plan | pass |
 | noncompliant close | no | N/A: compliance passed | N/A |
-| source behavior | yes | 56 integration + 8 memo tests | pass |
+| source behavior | yes | Original 56 integration + 8 memo tests pass; nested-mutation regression returns 2 instead of 3 | blocked |
 | package/API/build | yes | Build passed; entry exports unchanged | pass |
 | generated output | no | N/A: no generated owner changed | N/A |
 | fixtures/scenarios | yes | All 8 fixture comparisons and runtime lanes passed | pass |
@@ -120,7 +139,7 @@ Closure matrix:
 | changeset | yes | quiet-moons-invent patch; nested-mutation limitation explicit | pass |
 | agent workflow | no | N/A: no workflow behavior changed | N/A |
 | live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
-| cleanup/review | yes | Deslop/agent-native pass; final autoreview follows full check | in_progress |
+| cleanup/review | yes | Final branch autoreview found confirmed nested-mutation data corruption | blocked |
 | repository check | yes | `bun check` | pass |
 | GitHub delivery | yes | Post-push replay, hosted gates, receipt and skip-release merge | in_progress |
 
@@ -187,7 +206,7 @@ Completion Gates:
 | --- | --- | --- | --- |
 | Per-PR task ownership | yes | Record exact PR and dedicated task-plan path | Exact #451 original task plan and body/head ownership |
 | Noncompliant PR disposition | no | Verify task evidence or comment then close and read back | N/A: valid per-PR task evidence |
-| Targeted behavior proof | yes | Run smallest missing owning proof | 56 aggregate/count integration tests; 8 transaction-cache tests |
+| Targeted behavior proof | yes | Run smallest missing owning proof | New nested-mutation indexed-count test fails: expected 3, received 2; earlier 56 + 8 pass does not close this P1 |
 | Source/generated audit | yes | Prove correct source and regenerated mirrors | Named package source only; install mirror sync left no generated diff |
 | Package/docs/scenario closure | yes | Run every applicable local contract | Package build and full check passed; no public docs/scaffold change |
 | Feedback proof checkout | conditional | Compliant PR only: require local committed `HEAD` = fetched PR ref = live `headRefOid` before proof/reply/resolution and at terminal verification | pending |
@@ -201,7 +220,7 @@ Completion Gates:
 | Final lint | yes | Run `bun lint:fix` | 964 files checked; no changes |
 | Repository check | yes | Run `bun check` | Exit 0; /tmp/kitcn-pr451-check.log; 1400 Bun, 1011 Vitest, 124 CLI, 8 fixture comparisons and runtime smoke lanes |
 | GitHub delivery | yes | Post-push replay, hosted gates, receipt and skip-release merge | in_progress |
-| Autoreview | yes | Resolve every accepted actionable finding | pending |
+| Autoreview | yes | Resolve every accepted actionable finding | Blocked: accepted P1 stale row snapshots across nested mutations; /tmp/kitcn-pr451-review.md and .json |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-09-07-pr-451-autoclosure.md` | pending |
 | Agent source / generated sync | no | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | N/A: no rule or generated workflow source changed |
 | Installed lock audit | no | Verify expected lock entries and removed skills through CLI-managed state | N/A: no installed skill changes |
@@ -214,7 +233,7 @@ Phase / pass table:
 | --- | --- | --- | --- |
 | Inventory | complete | Exact PR/source/raw feedback audited | proof |
 | Repair | complete | Stale plan claims and release wording corrected; runtime unchanged | review |
-| Review/checks | in_progress | Full check/build/lint/deslop pass; final branch review next | delivery |
+| Review/checks | blocked | Earlier full check passed; fresh nested-mutation regression proves accepted review P1 | user scope decision |
 | Delivery | pending | | final audit |
 | Closeout | pending | | final |
 
@@ -231,19 +250,81 @@ Verification evidence:
   124 CLI tests; 8 fixture comparisons and runtime smoke lanes passed.
 
 Timeline:
+- 2026-09-07: User authorized joint lifetime repair. Using major-task, vision
+  and TDD; existing plan retained rather than replaced after durable work.
+  Fresh nested-mutation red proof returns 2 instead of 3. Goal control remains
+  externally blocked; latest instruction authorizes execution without faking
+  a goal-state transition. No Version Packages merge authorized.
+  Oversized combined skill read was truncated; required omitted instructions
+  reread by bounded slices. Subsequent source reads are capped by owner.
+  Architecture map: public ORM signatures unchanged; builders own scope;
+  lifecycle/user callbacks end reusable segments; aggregate runtime owns row
+  snapshots; canonical data remains Convex tables. Auth identity unchanged,
+  policy callbacks must suspend caching. New helper stays dependency-light.
+  CLI/scaffolds N/A. Package tests/build/check and paired docs own proof.
 - 2026-09-07T09:04:48.264Z Autoclosure plan created.
 
 Reboot status:
 | Question | Answer |
 | --- | --- |
-| Where am I? | Full local verification passed; final branch review next |
+| Where am I? | Blocked on confirmed P1; local regression retained, no closeout push |
 | Where am I going? | Repair, review/checks, delivery, final audit |
 | What is the goal? | Merge #451 with bounded reads, correct values and zero actionable P1 |
 | What have I learned? | See closure matrix |
 | What have I done? | See timeline |
 
 Open risks:
+- Local scope repair passes 9 reconciliation cases, including three nested-UDF
+  regressions: between statements, change hook and RLS insert policy. Each
+  regression was observed returning 2 for 3 writes before its boundary fix.
+  First hook harness used an unsupported createOrm option; an explicit callback
+  assertion caught that, then schema.triggers supplied the valid red proof.
+  Broader focused proof, full check and final review still required.
+- Docs sync: queries/aggregates.mdx Write costs -> published
+  references/features/aggregates.md Write costs; resource section, no parity
+  drops, no new setup/core copy. Canonical skill regenerated with its helper.
+- Agent parity: bulk/nested ORM writes -> public ORM API -> write-cache,
+  builders, lifecycle and evaluator -> nested public count regressions -> PR.
+  No new agent-only or human-only interface. No general workflow change.
+- Deslop: source inspected under rules/type/simplicity lenses; scope wrappers
+  own finally cleanup rather than merely forwarding. Directory hotspot and
+  unchanged branch-baseline hits do not justify unrelated edits.
+- Final branch autoreview on b78a79d7 found one accepted P1 at runtime.ts:2005:
+  nested ctx.runMutation writes can stale caller row snapshots and corrupt
+  later maintenance. This blocks merge; documenting it is insufficient.
+  Diagnosis/TDD will first reproduce the actual nested mutation call and then
+  determine whether the existing runtime/cache owner can fix it without a
+  new public contract or losing the promised read bounds.
 - Raw nested runMutation writes can stale the caller's maintenance cache;
   supported module composition shares ctx through handlers. No fix claimed.
 - Extrema reads and eager patch counts remain outside stage a.
 - Hosted gates, final feedback receipt and merge are not yet complete.
+
+Blocking evidence and next owner:
+- `NO_PROXY=localhost,127.0.0.1 bunx vitest run
+  packages/kitcn/src/orm/aggregate-index/reconcile.read-amplification.vitest.ts
+  -t 'nested mutation writes'`: deterministic failure `expected 2 to be 3`.
+  The test uses real `ctx.runMutation` through registered Convex test modules:
+  outer insert, nested insert, outer insert, then an indexed public count.
+- First harness used unfiltered count and passed because that path did not
+  exercise the affected aggregate index; the final harness filters orgId and
+  directly catches the persisted aggregate corruption. No production fix made.
+- Installed Convex database.ts:378 exposes only vars.commitTs, a commit-time
+  placeholder, not a shared mutable cache or revision. Database writer calls
+  do not expose a transaction revision for safe snapshot validation.
+- Local Convex backend source confirms fresh JS contexts for nested UDFs:
+  crates/isolate/src/environment/udf/mod.rs:390 passes None to run_nested;
+  :604-608 creates a fresh v8::Context. A module-global invalidation counter
+  could fool the in-process test but would not prove real nested-call safety.
+- Returning to uncached reads fixes correctness but removes stage a's promised
+  read bounds. Cache lifetime around controlled statements/hooks would cross
+  this plan's runtime-only/no-lifecycle boundary and interacts with #454.
+- Diagnostic cache bypass confirmed the trade-off: nested-mutation regression
+  passed, but four existing read-bound cases failed (12 vs 1, 24 vs 2,
+  12 vs 1, 24 vs 1 reads). All seven cases: 4 failed, 3 passed. An earlier
+  attempt restored the source before execution and is excluded as invalid.
+  Both cache reads were restored; runtime.ts has no uncommitted diff.
+- Required decision: authorize a joint lifetime redesign with #454, or narrow
+  the stage-a contract. No silent deferral or downgrade of this P1 is allowed.
+- Keep the regression and blocker evidence locally. Do not push the failing
+  branch or merge #451. Other remaining PRs are not claimed closed.

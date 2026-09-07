@@ -13,6 +13,7 @@ import {
 } from '../timestamp-mode';
 import { createOrmTransactionMemo } from '../transaction-cache';
 import type { TableRelationalConfig, TablesRelationalConfig } from '../types';
+import { createOrmWriteMemo } from '../write-cache';
 import type {
   AggregateIndexDefinition,
   CountIndexDefinition,
@@ -1896,12 +1897,9 @@ const getBucketByKey = async (
 };
 
 /**
- * The `aggregate_bucket` and `aggregate_member` rows this transaction has
- * already looked up, so a statement writing many documents pays one lookup per
- * distinct key tuple and per distinct document instead of one per row. Every
- * document of a bulk statement is reconciled in its own hook, so nothing inside
- * a single reconcile call has anything to fold: what removes the amplification
- * is giving the lookup transaction lifetime.
+ * Reuse row snapshots across the ORM-owned segment of a bulk statement.
+ * Statement exit and user callbacks end that segment: nested UDFs run in a
+ * separate JS context and cannot invalidate this caller's cached rows.
  *
  * Only the write path reads through these. `readPlanBuckets` deliberately does
  * not: an aggregate query racing an ORM write in the same transaction could
@@ -1914,16 +1912,12 @@ const getBucketByKey = async (
  * a missing entry is only ever a wasted read, while a stale one is a silently
  * wrong stored count — keep new writers on one of those two paths.
  *
- * The one gap is a raw `ctx.runMutation`: Convex runs it as a sub-transaction
- * with its own `ctx.db` and its own JS context, so aggregate writes it makes
- * share the transaction but are invisible here. kitcn's own rule is to compose
- * modules through `create<Module>Handler(ctx)`, which passes the caller's `ctx`
- * straight through and therefore shares this memo.
+ * Raw writer calls outside a statement do not retain row snapshots.
  */
 type MemoizedRow<TRow> = { row: TRow | null };
 
-const bucketRowByKey = createOrmTransactionMemo<MemoizedRow<CountBucketRow>>();
-const memberRowByDoc = createOrmTransactionMemo<MemoizedRow<CountMemberRow>>();
+const bucketRowByKey = createOrmWriteMemo<MemoizedRow<CountBucketRow>>();
+const memberRowByDoc = createOrmWriteMemo<MemoizedRow<CountMemberRow>>();
 
 // `keyHash` is JSON, which escapes control characters, so no part can contain
 // the separator and no two distinct tuples can collide on one memo key.
@@ -1989,7 +1983,7 @@ const rememberMember = (
   });
 };
 
-/** `getBucketByKey` with transaction lifetime. Write path only. */
+/** `getBucketByKey` within the current write segment. Write path only. */
 const readBucketForWrite = async (
   db: GenericDatabaseWriter<any>,
   tableName: string,
@@ -2006,7 +2000,7 @@ const readBucketForWrite = async (
   return bucket;
 };
 
-/** `getMemberByDoc` with transaction lifetime. Write path only. */
+/** `getMemberByDoc` within the current write segment. Write path only. */
 const readMemberForWrite = async (
   db: GenericDatabaseWriter<any>,
   tableName: string,

@@ -1,7 +1,17 @@
-# 440a memoize aggregate bucket and member reads per transaction
+# 440a bound aggregate bucket and member reads within safe write scopes
 
 Objective:
-Issue #440 stage (a): collapse per-document `aggregate_bucket` / `aggregate_member` index reads in the ORM live write path to one read per distinct key tuple / docId per transaction, without changing aggregate results.
+Issue #440 stage (a): read each aggregate bucket/member once per key/document within uninterrupted ORM statements, preserving aggregate results across statements and nested mutations.
+
+Authorized scope correction:
+- User: "never ask, just go", accepting the requested joint #451/#454 lifetime
+  repair. #451 owns read reuse and #454 retains deferred-write ownership.
+- The runtime-only and no-lifecycle boundaries in the original report are
+  superseded for this repair. A nested UDF has a separate JS context; retaining
+  write-back rows across arbitrary callbacks corrupts counts.
+- Statement end, lifecycle callbacks and RLS policy callbacks expire cached
+  rows. Bulk 1/2/1 bucket bounds remain; later statements reload members.
+- Public signatures, eager writes and aggregate query results are unchanged.
 
 Goal plan:
 docs/plans/440-memoize-aggregate-bucket-and-member-reads.md
@@ -46,7 +56,7 @@ Completion threshold:
   is green with: bulk insert of 12 rows sharing one key tuple = 1 bucket probe
   (was 12); bulk update of 12 rows across two tuples = 2 bucket probes (was 24);
   bulk delete of 12 = 1 bucket probe (was 12); a second statement over the same
-  12 documents = 1 bucket probe and 0 member probes (was 24 and 12);
+  12 documents = 2 bucket probes and 12 member probes;
   aggregate values unchanged.
 - `convex/orm/count.test.ts` and the aggregate vitest suites stay green.
 - Task closure is legal only when the source-of-truth acceptance criteria are
@@ -105,7 +115,7 @@ Task state:
 - task_complexity: non-trivial
 - current_phase: autoclosure verification
 - current_phase_status: in_progress
-- next_phase: final review and exact-head delivery
+- next_phase: final proof and review
 - goal_status: active
 
 Current verdict:
@@ -313,7 +323,7 @@ Phase / pass table:
 | Implementation | complete | RED repro, then `runtime.ts` memo with write-through + exact invalidation | verification |
 | Verification | complete | targeted suites, full vitest, bun test, typecheck, build, lint | closeout |
 | Commit / PR / GitHub sync | complete | Commit `0521b3c2`, branch `fix/orm-memoize-aggregate-bucket-reads`, PR #451, issue #440 synced | closeout |
-| Closeout | in_progress | Current full check and branch review required | delivery |
+| Closeout | blocked | Confirmed P1: nested mutation leaves stale row snapshots | user scope decision |
 
 Findings:
 - The issue's stated root cause is only half right. Wrapping the single delta in
@@ -568,3 +578,9 @@ Current closeout (2026-09-07):
   remains explicit, with shared-context handler composition as the supported route.
 - User waived walkthrough; no UI changes. Version Packages merge and release
   are excluded. Final review, hosted gates and delivery remain in progress.
+- Final branch review found an accepted P1, reproduced by the new nested
+  mutation test: three inserted rows yield indexed count two after the outer
+  mutation resumes. Earlier green checks are insufficient. No closeout push.
+- Current runtime-only/no-lifecycle scope cannot safely observe nested writes
+  across Convex's fresh JS context. A statement/hook lifetime redesign needs
+  explicit scope coordination with #454; no correctness fix is claimed.
