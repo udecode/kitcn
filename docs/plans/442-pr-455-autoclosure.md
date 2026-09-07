@@ -50,6 +50,15 @@ Blocked condition:
 - Missing live feedback or proof access, new contract outside #442, or a
   reproducible environment failure after different safe diagnostics.
 
+External merge guard:
+- The recorded feedback closure is the verified 5c359a0f snapshot below.
+  This final plan commit invalidates that receipt for merge. After pushing,
+  rerun all P1 proofs, refresh all feedback and post/read a superseding receipt
+  with receipt/live/fetched/local OID equality. Only then, with final-head CI
+  green, squash merge using `[skip release]` and verify the Release job skipped.
+- No claim of merge or release is made in this file. Final external delivery
+  belongs to the PR receipt and GitHub state; do not push solely to record it.
+
 Start Gates:
 | Gate | Applies | Evidence |
 | --- | --- | --- |
@@ -58,9 +67,9 @@ Start Gates:
 | Active source/plan reconstructed | yes | Full plan, code, tests and raw feedback read |
 | Intended delta and exclusions recorded | yes | Boundaries above; no cursor or API expansion |
 | Closure matrix classified | yes | See matrix below |
-| Live PR feedback target resolved | conditional | exact compliant PR for full `resolve-pr-feedback` mode; N/A after verified noncompliant close |
-| Feedback proof checkout bound to PR head | conditional | local committed `HEAD` = fetched PR ref = live `headRefOid` for a compliant PR |
-| Unfiltered feedback inventory | conditional | raw top-level comments/reviews plus all resolved/unresolved inline threads compared with helper output for a compliant PR |
+| Live PR feedback target resolved | yes | Full mode #455; exact compliant PR |
+| Feedback proof checkout bound to PR head | yes | d2aa2203 at intake, 5c359a0f after source push; three equal OIDs |
+| Unfiltered feedback inventory | yes | All 3 threads, 9 inline comments, 4 top comments and 9 reviews read back |
 | GitHub delivery expectation recorded | yes | User authorized commit/push/replies/merge, no release |
 | Active goal checked or created | yes | Existing batch goal externally blocked; user continuation recorded |
 | Agent-native pack selected | yes | Required autoclosure pack; no agent action changes |
@@ -81,10 +90,10 @@ Closure matrix:
 | docs/package skill | no | N/A: restores existing documented read contract | N/A |
 | changeset | yes | lucky-plums-cough.md public outcomes, kitcn patch | passed |
 | agent workflow | no | N/A: no workflow behavior touched | N/A |
-| live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
+| live PR feedback | yes | Full helper/raw read-back and P1 replay at 5c359a0f | passed |
 | cleanup/review | yes | Bounded comment cleanup; P0/P1 autoreview exit 0 | passed |
 | repository check | yes | `bun check` exit 0 | passed |
-| GitHub delivery | yes | Whole checkout commit; push/receipt/CI/merge next | pending |
+| GitHub delivery | yes | Source pushed, PR body/replies/receipt read back; external merge guard above | source delivered |
 
 Work Checklist:
 - [x] Every PR has its own `task` invocation and dedicated task plan; a batch
@@ -93,13 +102,13 @@ Work Checklist:
       ownership; otherwise the required comment and `CLOSED` state were read
       back and no source review, repair, merge, or release work continued.
 - [x] Intended behavior and exclusions are reconstructed from real sources.
-- [ ] Each lane is proven or N/A with a concrete reason.
+- [x] Each local closure lane is proven or N/A; external merge guard is explicit.
 - [x] Generated output was changed through its owner and regenerated. N/A: no generator changes.
 - [x] Package/docs/skill/fixture/scenario/changeset contracts are synchronized. Full check passed; no new scaffold guidance.
-- [ ] Full `resolve-pr-feedback` ran for the exact compliant PR; every
+- [x] Full `resolve-pr-feedback` ran for the exact compliant PR; every
       actionable P1-or-higher finding was fixed, proved, replied to, and
       resolved or received the required top-level reply receipt.
-- [ ] For a compliant PR, local committed `HEAD`, fetched PR ref, and live
+- [x] For a compliant PR, local committed `HEAD`, fetched PR ref, and live
       `headRefOid` matched before proof/reply/resolution and after every push.
       For a noncompliant PR, this and all feedback gates are N/A with the
       required remediation-comment and `CLOSED` receipts.
@@ -114,22 +123,20 @@ Work Checklist:
 - [x] Every actionable feedback item has a persisted P0-P3 priority and
       one-sentence rationale from the autoclosure rubric; ambiguous P1-versus-
       lower items fail closed as P1.
-- [ ] Every P1-or-higher proof reran after the final material branch push,
+- [x] Every P1-or-higher proof reran after the delivered source push at 5c359a0f,
       regardless of file type, including resolved or outdated threads that
       disappear from the helper's unresolved-thread output.
-- [ ] Feedback was re-fetched after the last push/reply/resolution and shows
+- [x] Feedback was re-fetched after the source push/reply/resolution and shows
       zero unresolved actionable P1-or-higher findings.
-- [ ] After all versioned plan/source updates were pushed, the exact-head P1
-      proof/read-back receipt was posted to the PR and read back; no terminal
-      receipt-only branch push was created. A post-comment `headRefOid` fetch
-      matches the OID recorded in that receipt, and a post-comment helper/raw
-      feedback fetch still shows zero actionable P1-or-higher items and no new
-      URL lacking a verdict or explicit deferral, except the verified receipt.
+- [x] The 5c359a0f P1 proof/read-back receipt was posted and read back with
+      four equal OIDs and complete post-comment inventory. The external merge
+      guard requires a superseding receipt after this bookkeeping push;
+      its final proof and CI state are not claimed by this snapshot.
 - [x] Any remaining P2-or-lower item has its exact URL plus the user's explicit
       priority deferral recorded; no feedback was silently ignored.
 - [x] Accepted cleanup and review findings are closed. Autoreview exit 0, no P0/P1 findings.
-- [ ] PR body and check state match the final evidence.
-- [ ] Residual blocker/waiver has exact evidence and next owner.
+- [x] PR body matches local proof; final-head CI remains an explicit external merge guard.
+- [x] No source blocker or waiver remains; final merge authority stays behind the external guard.
 - [x] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors. N/A: no rules changed.
 - [x] Agent-native pack: the changed agent action is discoverable from the skill/rule text. N/A: no action changed.
 - [x] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed, or N/A reason is recorded. N/A: no rules changed.
@@ -152,19 +159,19 @@ Completion Gates:
 | Targeted behavior proof | yes | Run smallest missing owning proof | 11 initial, 27 integrated tests passed |
 | Source/generated audit | no | N/A: no generated source changed | Query runtime and tests only |
 | Package/docs/scenario closure | yes | Run every applicable local contract | Full check, package builds and all 8 fixtures passed; docs unchanged |
-| Feedback proof checkout | conditional | Compliant PR only: require local committed `HEAD` = fetched PR ref = live `headRefOid` before proof/reply/resolution and at terminal verification | pending |
-| Live PR feedback resolution | conditional | Compliant PR only: run full `resolve-pr-feedback` and close every actionable P1-or-higher finding; otherwise N/A with noncompliant stop receipts | pending |
+| Feedback proof checkout | yes | Require local/fetched/live equality | d2aa2203 initial and 5c359a0f delivered source verified |
+| Live PR feedback resolution | yes | Full mode and all source-backed findings | All 3 threads resolved; fresh P1 replies 3951000695 and 3951000920 read back |
 | Feedback priority classification | yes | Persist P0-P3 plus rationale | Original task ledger: two P1, one P2, all resolved |
-| Final P1 proof replay | conditional | Compliant PR only: after the final material branch push, rerun every P1-or-higher proof, including resolved/outdated items | pending |
-| Final live feedback read-back | conditional | Compliant PR only: re-fetch helper plus unfiltered top-level/all-thread inventories; require zero actionable P1-or-higher and explicit P2-or-lower deferrals | pending |
-| External terminal receipt | conditional | Compliant PR only: post/read exact-head receipt; require receipt/live/fetched/local OID equality and no unrecorded helper/raw URL except that verified receipt | pending |
+| P1 proof replay snapshot | yes | Rerun every P1 after source push; final replay remains external guard | 27/27 and changeset audit passed at 5c359a0f |
+| Live feedback read-back snapshot | yes | Helper and complete raw inventories | Helper 0/3/3; raw 3 resolved threads, 9 inline, 4 top comments, 9 reviews, no actionable P1 |
+| External receipt snapshot | yes | Read body/OID then refetch OID and feedback | 5572717338 at 5c359a0f; all four OIDs equal, no unknown URLs; final superseding receipt required |
 | Deslop | yes | Run bounded cleanup | Slop delta + local lenses; redundant/stale comments shortened |
 | Agent-native reviewer | no | N/A: no workflow behavior changes | Agent-native pack classified above |
 | Final lint | yes | Run `bun lint:fix` | 970 files clean |
 | Repository check | yes | Run `bun check` | Exit 0: 1421 Bun, 1038 Vitest, 124 CLI, 8 fixtures, verify/runtime |
-| GitHub delivery | pending | Commit/push/open or update PR and read back | pending |
+| GitHub delivery | yes | Commit/push/update PR and read back | 5c359a0f pushed, body auto-release off, quoted replies and receipt verified; merge guard separate |
 | Autoreview | yes | Resolve every accepted actionable finding | Branch review against origin/main at c824e87a, exit 0, no P0/P1 findings, confidence 0.93 |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/442-pr-455-autoclosure.md` | pending |
+| Goal plan complete | yes | Run checker before final bookkeeping commit | Required alongside original task-plan checker; external merge guard is not waived |
 | Agent source / generated sync | no | N/A: no agent source changes | No generated skill edits |
 | Installed lock audit | no | N/A: no skill installation changes | Lock untouched |
 | Agent action discoverability | no | N/A: no agent action changes | Product query runtime only |
@@ -177,8 +184,8 @@ Phase / pass table:
 | Inventory | complete | exact-head compliance and full raw inventory | proof |
 | Repair | complete | main integrated; comments only, no new behavior | review |
 | Review/checks | complete | review clean; full check passed | delivery |
-| Delivery | pending | | final audit |
-| Closeout | pending | | final |
+| Source delivery | complete | 5c359a0f push and verified receipt | final bookkeeping |
+| Local closeout | complete | local proofs/ledger and external merge guard recorded | final push and external verification |
 
 Verification evidence:
 - /tmp/kitcn-pr455-initial-proof.log: 11 passed at published d2aa2203.
@@ -192,6 +199,13 @@ Verification evidence:
   5/5; 1421 Bun, 1038 Vitest, 124 CLI; builds, 8 fixtures and verify/runtime.
 - Changeset prose pass: three approved action-led public outcomes, no private
   planner terms, explicit cost caveat. No runtime edits after autoreview.
+- /tmp/kitcn-pr455-postpush-proof.log: 27/27 passed at 5c359a0f.
+- https://github.com/udecode/kitcn/pull/455#issuecomment-5572717338:
+  body/OID read back via `gh pr view --comments`; then receipt/local/fetched/
+  live equality and full helper/raw inventory verified. Original task plan
+  ledgers every URL, including reply-associated empty reviews and quota notice.
+- Both P1 threads received current quoted proof replies and retain resolved
+  state. No resolution was inferred from the filtered helper alone.
 
 Timeline:
 - 2026-09-07T15:03:54.646Z Autoclosure plan created.
@@ -199,11 +213,12 @@ Timeline:
 Reboot status:
 | Question | Answer |
 | --- | --- |
-| Where am I? | Inventory |
+| Where am I? | Local closure verified; final external merge guard recorded |
 | Where am I going? | Repair, review/checks, delivery, final audit |
 | What is the goal? | Verified #455 merge with no release |
 | What have I learned? | See closure matrix |
 | What have I done? | See timeline |
 
 Open risks:
-- No accepted source-review blocker; final repository/GitHub gates outstanding.
+- No accepted source-review blocker; final post-push receipt, CI and merge
+  read-back are explicitly external. Do not count this PR merged from this file.

@@ -26,10 +26,10 @@ Current closeout requirements (2026-09-07):
   Unfiltered inventory: 3 resolved threads (1 outdated), 7 inline comments,
   2 top-level comments, 7 review bodies. All thread/comment pages exhausted.
   All source content read, including previous author replies.
-- P1 replay must cover fan-out guard and changeset prose after final push.
-  Initial resolved state is not proof. Full check, final autoreview, exact-head
-  external receipt and CI remain pending. Active goal remains externally
-  blocked; do not fake a lifecycle transition.
+- P1 replay covers fan-out guard and changeset prose after each material push.
+  Local closure and the 5c359a0f feedback snapshot passed. Final post-bookkeeping
+  replay, receipt and CI are external merge guards, not waived by this plan.
+  Active goal remains externally blocked; do not fake a lifecycle transition.
 - Integrated proof: 27/27 tests across index-union read bounds, pagination and
   relation-target memo passed. Bounded deslop kept the guards and behavior,
   shortened redundant comments and corrected a stale claim that streamed
@@ -48,16 +48,28 @@ Current closeout requirements (2026-09-07):
   No test timeout or fixture failure was waived. Upstream create-convex smoke
   templates selected Convex 1.45.0 and printed a compatibility warning; the
   supported fixture lane uses 1.44.0 and both smoke processes passed.
+- First delivered source head 5c359a0f has 27/27 post-push proof and a passing
+  changeset audit. Both P1 findings received fresh quoted replies, read back;
+  all three threads remain resolved. Receipt 5572717338 was posted/read back,
+  with receipt/local/fetched/live OID equality. Post-receipt helper 0 threads,
+  3 comments, 3 review bodies; raw 3 resolved threads, 9 inline comments,
+  4 top comments, 9 review bodies, all pages exhausted. Zero actionable P1;
+  no deferred P2. Prior receipt will be superseded after final plan push.
+- Final delivery guard: rerun the same P1 proof after this plan commit, refresh
+  every helper/raw source, post and read an exact-head receipt, require four
+  equal OIDs, then wait for that head's CI before admin squash merge with
+  `[skip release]`. Verify the exact merge's Release job skipped. Those final
+  external receipts must not cause another receipt-only branch commit.
 
 Current feedback ledger:
 | URL | Priority and rationale | Current disposition |
 | --- | --- | --- |
-| https://github.com/udecode/kitcn/pull/455#discussion_r3942884336 | P2: singleton relation checks amplify repeated-target reads | Relation predicates excluded from stream; replay with merged #448 |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942884336 | P2: singleton relation checks amplify repeated-target reads | Fixed: relation predicates excluded; batch/fan-out and merged relation memo proof passed |
 | https://github.com/udecode/kitcn/pull/455#discussion_r3942893849 | N/A: prior reply explaining measured amplification | Superseded by next reply; no independent request |
 | https://github.com/udecode/kitcn/pull/455#discussion_r3942924020 | N/A: prior reply recording restored batching | Verify current owner rather than trust reply |
-| https://github.com/udecode/kitcn/pull/455#discussion_r3942902695 | P1: streaming retires relationFanOutMaxKeys safety guard | Resolved; 40-keys/cap-5 regression passed at initial head, replay final head |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942902695 | P1: streaming retires relationFanOutMaxKeys safety guard | Fixed: 40-keys/cap-5 regression passed after push; quoted reply 3951000695 read back, resolved |
 | https://github.com/udecode/kitcn/pull/455#discussion_r3942923713 | N/A: prior reply explaining relation exclusion fix | Fresh proof required for parent finding |
-| https://github.com/udecode/kitcn/pull/455#discussion_r3942933074 | P1: release artifact exposes private planner mechanisms | Resolved/outdated; current changeset has public outcomes, final source replay required |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3942933074 | P1: release artifact exposes private planner mechanisms | Fixed: public-outcome audit passed after push; quoted reply 3951000920 read back, resolved |
 | https://github.com/udecode/kitcn/pull/455#discussion_r3942939652 | N/A: prior reply explaining changeset rewrite | No independent request; final artifact review required |
 | https://github.com/udecode/kitcn/pull/455#issuecomment-5556758824 | N/A: changeset status notice only | Verify matching artifact |
 | https://github.com/udecode/kitcn/pull/455#issuecomment-5556758923 | N/A: deployment status only | Refresh final CI/Preview |
@@ -68,6 +80,12 @@ Current feedback ledger:
 | https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124101486 | N/A: empty body | No independent claim |
 | https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124110008 | N/A: wrapper; finding ledgered inline | No independent claim |
 | https://github.com/udecode/kitcn/pull/455#pullrequestreview-5124116136 | N/A: empty body | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3951000695 | N/A: current quoted fan-out proof reply | Exact body and resolved thread read back |
+| https://github.com/udecode/kitcn/pull/455#discussion_r3951000920 | N/A: current quoted changeset proof reply | Exact body and resolved thread read back |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5133524539 | N/A: empty reply-associated review | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#pullrequestreview-5133524753 | N/A: empty reply-associated review | No independent claim |
+| https://github.com/udecode/kitcn/pull/455#issuecomment-5572676797 | N/A: hosted review quota notice | No source claim; local P0/P1 review passed |
+| https://github.com/udecode/kitcn/pull/455#issuecomment-5572717338 | N/A: first exact-head proof receipt at 5c359a0f | Body/OID and post-comment inventory verified; supersede after final push |
 
 Goal plan:
 docs/plans/442-index-union-findmany-take-bound.md
