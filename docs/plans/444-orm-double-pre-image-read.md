@@ -19,7 +19,7 @@ Applied packs:
 
 Task source:
 - type: GitHub issue
-- id / link: #444 (https://github.com/.../issues/444), no comments, no labels
+- id / link: #444 (https://github.com/udecode/kitcn/issues/444)
 - title: ORM: every patch on an aggregateIndex/rankIndex table reads the
   pre-image twice
 - acceptance criteria:
@@ -39,11 +39,11 @@ Task source:
   aggregate runtime.
 
 Timed checkpoint:
-- requested duration: pending
-- semantics: pending
-- initial confidence score: pending
-- improvement loop: pending
-- final score / loop closure: pending
+- requested duration: N/A: no duration requested
+- semantics: one-shot execution
+- initial confidence score: direct read-count reproduction
+- improvement loop: scoped proof, full checks and exact-head review
+- final score / loop closure: recorded in current closeout evidence
 
 Completion threshold:
 - A 5-row `orm.update()` on an `aggregateIndex` table issues 5 target-table
@@ -112,9 +112,9 @@ Task state:
 - task_type: bug
 - task_complexity: non-trivial
 - current_phase: closeout
-- current_phase_status: complete
-- next_phase: final response
-- goal_status: complete
+- current_phase_status: in_progress
+- next_phase: exact-head feedback closure and merge
+- goal_status: active
 
 Current verdict:
 - verdict: valid, fixed
@@ -185,7 +185,7 @@ Start Gates:
 | Branch decision for code-changing task | yes | already on dedicated non-main branch task-issue-444 |
 | Release artifact decision | yes | .changeset/olive-donkeys-invite.md, patch |
 | Browser tool decision for browser surface | no | N/A: no browser surface |
-| Commit / PR expectation decision | no | N/A: user preference "Do not create PR under any circumstances, unless user prompts to"; CLAUDE.md forbids committing unless asked |
+| Commit / PR expectation decision | yes | PR #450 closeout is authorized, including whole-checkout commit/push and admin merge; Version Packages excluded |
 | Task-style PR body decision | yes | PR #270 emoji task-style body used for PR #450 |
 | Task-plan PR body evidence | yes | body has `🧭 Task plan: docs/plans/444-orm-double-pre-image-read.md`; plan exists at PR head and names PR #450 |
 | GitHub issue sync expectation decision | yes | PR body carries `🐛 Fixes #444`, which closes the issue on merge |
@@ -281,11 +281,11 @@ Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
 | Named verification threshold | yes | Run the command, proof, source audit, or artifact check named in this plan | AGG 10->5 with CHANGE=5 baseline; see Verification evidence |
-| Exact per-PR task ownership | no | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | N/A: no PR in scope, user forbids PR creation |
+| Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | This plan owns exactly https://github.com/udecode/kitcn/pull/450 |
 | Pre-solution issue challenge verdict | yes | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | valid; recorded before implementation |
 | Repro escalation ladder | yes | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | source-level repro reproduced it; higher rungs N/A |
 | Bug reproduced before fix | yes | Record failing test/repro or N/A with reason | AGG=10 vs CHANGE=5 vs PLAIN=0 |
-| Targeted behavior verification | yes | Run focused test/proof for changed behavior or record N/A | lifecycle.read-amplification.vitest.ts 5/5; write-barrier.vitest.ts 2/2; both proven red on stock lifecycle.ts |
+| Targeted behavior verification | yes | Run focused test/proof for changed behavior or record N/A | Current closeout: 9/9 integration tests across read-amplification and both barrier suites; 22/22 lifecycle Bun tests |
 | TypeScript or typed config changed | yes | Run relevant typecheck | bun typecheck 5/5 packages |
 | Package exports or file layout changed | yes | Run the relevant package build before final verification and keep generated updates | bun --cwd packages/kitcn build, 72 files |
 | Package manifests, lockfile, or install graph changed | no | Run `bun install` and relevant package checks | N/A: no manifest or lockfile change |
@@ -294,15 +294,15 @@ Completion Gates:
 | Browser surface changed | no | Capture Browser Use proof or record explicit waiver/blocker | N/A: no browser surface |
 | Browser final proof | no | Attach screenshot or exact browser verification caveat when browser proof applies | N/A: no browser surface |
 | UI walkthrough | no | If UI or rendered output changed, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | N/A: no UI or rendered output changed |
-| Scaffold or fixture output changed | no | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | N/A: no scaffold or fixture source touched; the fixtures:check failure is an upstream expo bump |
+| Scaffold or fixture output changed | no | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | N/A: PR does not change scaffold owners; current full check validates fixtures integrated from main |
 | Package behavior or public API changed | yes | Add a changeset or record why no changeset applies | .changeset/olive-donkeys-invite.md |
 | Docs and kitcn skill sync changed | no | Keep `www/**` and `packages/kitcn/skills/kitcn/**` in sync, or record N/A | N/A: no www/ docs changed; no public guidance changed |
 | Docs or content changed | no | For docs-heavy work, use `--template docs`; for incidental docs, verify source-backed claims, links, examples, and rendered output or record N/A | N/A: no docs changed |
 | High-risk mini gate | yes | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | see High-risk note |
 | Agent-native review for agent/tooling changes | no | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | N/A: no agent/tooling surface touched |
-| Local install corruption suspected | no | Run `bun install` once, rerun the exact failing command, or record N/A | N/A: no corruption-shaped failure; the one red lane is a proven upstream dep bump |
+| Local install corruption suspected | no | Run `bun install` once, rerun the exact failing command, or record N/A | No corruption-shaped failure; bun install completed after main integration |
 | Commit created | yes | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | 87d37a4f, whole checkout staged |
-| PR create or update | yes | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff | PR #450; `check` red only on the pre-existing upstream expo fixture drift, disclosed in the PR caveat |
+| PR create or update | yes | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff | PR #450; current closeout requires fresh passing check before final update/push |
 | Task-style PR body verified | yes | Verify the PR body with `gh pr view --json body` | verified: auto-release block preserved, no self-link, PR #270 emoji format |
 | PR task evidence verified | yes | Verify body plan line, plan at PR head, and exact PR ownership | verified after the follow-up push |
 | PR proof image hosting | no | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | N/A: no browser proof, no images |
@@ -334,7 +334,7 @@ Phase / pass table:
 | Autoreview | complete | `--mode local --engine claude`, exit 0, no accepted findings, "patch is correct" | closeout |
 | Commit / PR / GitHub sync | complete | commit 87d37a4f, branch `fix/orm-double-pre-image-read`, PR #450 | final response |
 | PR review round 1 | complete | @chatgpt-codex-connector P1 on the alias hunk accepted and reverted; probe evidence recorded | final response |
-| Closeout | complete | | final response |
+| Closeout | in_progress | Fresh local/hosted proof and exact-head feedback receipt required | merge |
 
 High-risk note:
 - Surface: ORM runtime write path. Every insert/patch/replace/delete on a
@@ -343,9 +343,9 @@ High-risk note:
   fail-open hole this change closed, and aggregate/rank indexes accept writes
   while CLEARING. Before this change nothing in the repo would have caught
   that — barrier coverage was insert-only.
-- Proof plan: `aggregate-index/write-barrier.vitest.ts` now exercises the
-  CLEARING guard on insert, patch, replace, delete, delete-of-a-gone-row, and
-  an aliased table name. Every assertion was proven to fail on the stock file.
+- Proof plan: `aggregate-index/write-barrier.vitest.ts` exercises the
+  CLEARING guard on insert, patch, replace, delete and delete-of-a-gone-row.
+  Aliased schemas are outside this PR's fix and proof claims.
 - Why this boundary is right: the barrier is a precondition, not a trigger.
   Modelling it as a user `before` hook is what made `update.before` mean two
   things and forced the re-read. A dedicated slot makes the existing gate
@@ -359,7 +359,7 @@ Follow-ups (deliberately out of scope):
 - A `before` hook writing through `ctx.db` deadlocks on the non-reentrant
   `innerWriteLock`, while `www/content/docs/orm/schema/triggers.mdx:201`
   advertises `ctx.db` as usable in every hook.
-- `fixtures/expo*` need a `bun run fixtures:sync` for the upstream expo bump.
+- Fixture drift was integrated from main; current full-check proof follows.
 - Aliased schemas (`defineSchema({ key: convexTable('other', ...) })`) are
   incoherent: Convex registers the object key, the ORM data path writes the
   `convexTable` name, and the aggregate subsystem keys on the object key. Needs
@@ -444,10 +444,11 @@ Decisions and tradeoffs:
   than introducing new aliasing.
 
 Implementation notes:
-- None yet.
+- Dedicated lifecycle-local writeBarrier runs before user hooks on all writers.
 
 Review fixes:
-- None yet.
+- P1 table-key finding: injection and maintenance use `tableConfig.name`.
+  Current closeout removes stale alias-fix/backfill claims from this plan.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -458,13 +459,10 @@ Verification evidence:
 - cwd for every command below: `/Users/mikey/conductor/workspaces/kitcn/cheyenne`.
 - Repro before fix: AGG=10, CHANGE=5, PLAIN=0 for a 5-row `orm.update()`.
 - Repro after fix: AGG=5, CHANGE=5, PLAIN=0.
-- Aliased-table repro before fix: write succeeded while CLEARING (`thrown: null`).
-  After fix: `AGGREGATE_INDEX_BUILDING: aggregateIndex 'ak_people.by_org' is
-  CLEARING.`
+- Aliased-schema behavior is unchanged and is not verification for this PR.
 - New tests proven to fail on stock `lifecycle.ts` (reverted the file, re-ran,
-  restored): 3/5 read-amplification tests fail `expected 10 to be 5`; both
-  write-barrier contract tests fail with `'Delete on non-existent doc'` and
-  `promise resolved "undefined" instead of rejecting`.
+  restored): 3/5 read-amplification tests fail `expected 10 to be 5`; the
+  current write-barrier contract catches `'Delete on non-existent doc'`.
 - `npx vitest run --project integration`: 77 files, 845 passed, 14 skipped.
 - `bun run test`: 1400 bun tests across 150 files, 0 fail; vitest 988 passed,
   14 skipped, no type errors.
@@ -500,9 +498,9 @@ Final handoff contract:
   - Verified: tests 🟢 (1400 bun + 988 vitest), browser ➖ N/A
 - Browser check: N/A — no UI or rendered output.
 - Outcome: a patch on an aggregateIndex/rankIndex table reads its pre-image
-  once per row instead of twice; two fail-open holes in the same guard closed.
-- Caveat: `bun check` still fails at `fixtures:check` on an upstream
-  `expo ~55.0.30 -> ~55.0.31` bump, unrelated to this diff.
+  once per row instead of twice; CLEARING checks precede gone-row deletes.
+- Caveat: tables with a user update.before hook retain two pre-image reads;
+  aliased schemas are not repaired by this PR.
 - Design:
   - Chosen boundary: a dedicated internal `writeBarrier` slot on the lifecycle
     hook map, run at the top of every write path.
@@ -512,7 +510,7 @@ Final handoff contract:
   - Why not broader change: option D (move the read after the hook) would cut
     reads further but redefines `change.oldDoc`, which `TableAggregate.trigger`
     — a public export — uses to derive the btree key to remove.
-- PR body verified: N/A — no PR.
+- PR body: #450 exists and names this exact plan; final proof update required.
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -536,11 +534,11 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
-- Issue: pending
-- Browser proof: pending
-- Caveats: pending
+- Commit: original 87d37a4f plus table-key correction fe15c7d7; current closeout in progress
+- PR: https://github.com/udecode/kitcn/pull/450
+- Issue: #444, linked through Fixes in the PR body
+- Browser proof: N/A: no UI or rendered-output change
+- Caveats: user update.before preserves two reads; aliased schemas remain out of scope
 
 Timeline:
 - 2026-09-05T06:08:34.309Z Task goal plan created.
@@ -548,14 +546,14 @@ Timeline:
 - Commit 87d37a4f pushed; PR #450 opened against main.
 - Repro confirmed the reported 2x pre-image read exactly.
 - 21-agent design/attack workflow ran; option D rejected on 5 blockers.
-- Option C implemented; two extra fail-open bugs found and fixed.
+- Dedicated writeBarrier implemented; gone-row delete respects CLEARING.
 - Full verification green; autoreview clean.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Closeout complete; reporting to the user |
-| Where am I going? | Final response only. PR #450 open against main. |
+| Where am I? | PR #450 exact-head closeout in progress |
+| Where am I going? | Fresh checks, review, push, feedback replay and merge |
 | What is the goal? | Make an N-row patch on an aggregateIndex/rankIndex table cost N pre-image reads instead of 2N, pinned by a read-bound vitest |
 | What have I learned? | See Findings and Decisions and tradeoffs |
 | What have I done? | See Timeline and Verification evidence |
@@ -567,9 +565,23 @@ Open risks:
   `change` hook reads. This already holds for every plain change-hook table, so
   the change converges aggregate tables onto shipped behavior rather than
   introducing new aliasing. Not pinned by a test either way.
-- Apps with an aliased aggregate-indexed table need one `aggregateBackfill` run
-  after upgrading, because their index never tracked rows written while the
-  table was unguarded. Called out in the changeset.
+- Aliased schemas are not repaired here; no backfill or migration claim is
+  made for them. Lifecycle uses the same tableConfig.name owner as main.
+
+Current closeout (2026-09-07):
+- User authorized the sequential sweep with no walkthrough and no Version
+  Packages merge. Auto release must remain disabled; use `[skip release]`.
+- This exact task was resumed after PR #449 merged. Main b8df2da4 integrated
+  without conflicts. No lifecycle source change needed during closeout.
+- Owning checkout: /Users/zbeyens/git/better-convex.
+- Fresh focused proof: 9/9 integration tests, 22/22 lifecycle Bun tests.
+- Full `bun check` passed, exit 0: 1400 Bun tests, 1005 Vitest tests, 124 CLI
+  tests, all 8 fixture comparisons and runtime smoke lanes. Log:
+  /tmp/kitcn-pr450-check.log. Package build and lint also passed.
+- Deslop retained only the test-directory fan-out warning; no source cleanup
+  warranted. Agent-native source/route/proof review passed.
+- Final branch review and delivery receipts remain in progress; older
+  verification elsewhere in this plan does not substitute for these gates.
 
 Hard closeout guard:
 - A local-only final response for verified code-changing work is invalid unless
