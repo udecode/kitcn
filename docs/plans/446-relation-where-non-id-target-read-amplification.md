@@ -4,6 +4,21 @@ Objective:
 Stop a relation `where` from re-resolving a non-`_id` relation target once per
 drain. Extend #420's execution-scoped memo to the `.first()` branch.
 
+Current closeout:
+- Task #448 resumed under docs/plans/2026-09-07-pr-448-autoclosure.md.
+- The earlier failing full-check lane was not a merge waiver. Delivery requires
+  a fresh green `bun check`, exact-head P1 replay and verified GitHub receipts.
+- Merged #453's fixture refresh from main; no fixture was edited by hand here.
+- Fresh `NO_PROXY=localhost,127.0.0.1 bun check` passed on the integrated
+  branch: 1400 Bun tests, 990 Vitest tests (14 skipped), 124 CLI tests,
+  Concave smoke, 8/8 fixtures, CLI verification and all runtime scenarios.
+  Log: /tmp/kitcn-pr448-check.log. This supersedes the initial failed gate.
+- Focused relation-read and isolation suites passed 12/12; package build
+  passed. Implementation and local proof are complete; the closeout plan
+  owns final push/review/feedback/merge receipts.
+- User authorized admin merge after proof and excluded Version Packages;
+  Auto release must be unchecked before this PR merges.
+
 Goal plan:
 docs/plans/446-relation-where-non-id-target-read-amplification.md
 
@@ -116,16 +131,17 @@ Task state:
 - task_complexity: non-trivial
 - current_phase: closeout
 - current_phase_status: complete
-- next_phase: final response
+- next_phase: exact-head feedback closeout and merge
 - goal_status: complete
 
 Current verdict:
 - verdict: valid
 - confidence: 95-100%
-- next owner: reviewers of PR #448
+- next owner: autoclosure for PR #448
 - reason: reproduced at the exact reported boundary, fixed at the owning
   boundary, proven by a test that fails pre-fix and passes post-fix, with the
-  full repo gate green apart from one pre-existing upstream-drift lane.
+  full repo gate passed after integrating the fixture owner fix; final
+  external closeout is explicitly tracked separately.
 
 Implementation readiness:
 - verdict: ready
@@ -232,7 +248,8 @@ Work Checklist:
       `_getById`, applied to all three single-target `.first()` sites.
 - [x] Release artifact requirement recorded: new changeset
       `.changeset/rotten-donkeys-shave.md` (`patch`).
-- [x] Final handoff shape decided: bug shape, no PR body, no issue sync.
+- [x] Final handoff shape decided: task-style PR body, exact proof and merge
+      state; issue #446 closes through the PR body on merge.
 - [x] Commit/PR handling recorded: committed, pushed to
       `fix/orm-non-id-relation-target-memo`, and opened as PR #448.
 - [x] PR body shape recorded: PR #270 emoji task-style body used on #448.
@@ -278,7 +295,7 @@ Phase / pass table:
 | Implementation | complete | `_firstDocumentByFieldKey` + `_firstByFields`; 3 call sites rerouted | verification |
 | Verification | complete | See Verification evidence | closeout |
 | Commit / PR / GitHub sync | complete | Committed; branch renamed to `fix/orm-non-id-relation-target-memo` and pushed; PR #448 opened with the task-style body | closeout |
-| Closeout | complete | Adversarial workflow (29 agents, 0 surviving findings) + autoreview clean | final response |
+| Closeout | complete | Local full check passed; final external delivery receipts belong to the closeout plan | verified delivery |
 
 Findings:
 - The issue's `:9221` pointer names `_loadManyRelation`'s stream drain. The
@@ -392,7 +409,10 @@ Error attempts:
 | `bun check` -> `fixtures:check` fixture drift in `expo` | 1 | Prove provenance before touching it | `expo@55.0.31` published 2026-08-31, five days after base commit `14bab503` (2026-08-26); fixture pins `~55.0.30`. Pre-existing on `origin/main`, unrelated to this diff. Not fixed here. |
 
 Verification evidence:
-All commands run from `/Users/mikey/conductor/workspaces/kitcn/phoenix`.
+The following initial-run commands were run from
+`/Users/mikey/conductor/workspaces/kitcn/phoenix`; they are historical evidence,
+not a waiver for the final check. Fresh closeout runs use
+`/Users/zbeyens/git/better-convex` and the linked closeout plan.
 - `bunx vitest run packages/kitcn/src/orm/query.relation-where-reads.vitest.ts`
   - pre-fix: 2 failed / 5 passed — `expected 50 to be less than or equal to 2`
     and `expected 19 to be less than or equal to 2`
@@ -446,13 +466,12 @@ Final handoff contract:
 - Confidence line: 🟢 95-100% confidence
 - Flow table:
   - Reproduced: tests 🔴 (50 and 19 target reads), browser ➖ N/A
-  - Verified: tests 🟢 (7/7 file, 157 ORM, 1400+985 repo), browser ➖ N/A
+  - Verified: tests 🟢 (12/12 focused, 1400 Bun + 990 Vitest, full check), browser ➖ N/A
 - Browser check: N/A — no browser-rendered or native output.
 - Outcome: a relation `where` on a `one` relation joined on a non-`_id` column
   now reads each distinct target once per execution instead of once per drain.
-- Caveat: `bun check` still fails its `fixtures:check` lane on pre-existing
-  upstream Expo drift (`expo@55.0.31`, published five days after the base
-  commit) that is unrelated to and untouched by this diff.
+- Caveat: floating upstream fixtures can drift again; all eight matched in
+  the fresh full check. Auto release stays unchecked by user instruction.
 - Design:
   - Chosen boundary: `_firstByFields`, a private execution-memoized sibling of
     `_getById`, used by all three single-target `.first()` resolutions.
@@ -482,7 +501,7 @@ Final handoff / sync:
 - PR: #448 — https://github.com/udecode/kitcn/pull/448
 - Issue: #446 closed on merge via `🐛 Fixes #446`
 - Browser proof: N/A
-- Caveats: pre-existing `fixtures:check` Expo drift, unrelated to this diff
+- Caveats: floating fixture dependencies; Version Packages is excluded.
 
 Timeline:
 - 2026-09-05T06:07:37.683Z Task goal plan created.
@@ -506,15 +525,16 @@ Timeline:
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Closeout complete |
-| Where am I going? | Final response |
+| Where am I? | Implementation and local full check complete; external merge closeout in progress |
+| Where am I going? | Exact-head review/feedback replay and merge without release |
 | What is the goal? | Stop a relation `where` from re-resolving a non-`_id` relation target once per drain |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
 
 Open risks:
-- None for this change. The only unresolved repo-level item is the pre-existing
-  Expo fixture drift, which belongs to a separate `fixtures:sync` task.
+- No known unresolved product defect in this change. #453 repaired the
+  initial fixture drift and fresh check passed. Upstream fixtures can move
+  again; final exact-head proof and release exclusion remain closeout gates.
 
 Hard closeout guard:
 - Satisfied: this is not a local-only handoff. The verified change is committed
