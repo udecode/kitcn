@@ -8,7 +8,7 @@
  */
 
 import type { GenericDatabaseReader } from 'convex/server';
-import { compareValues } from 'convex/values';
+import { compareValues, convexToJson, type Value } from 'convex/values';
 import { mapWithConcurrency } from '../internal/concurrency';
 import {
   AGGREGATE_ERROR,
@@ -678,6 +678,23 @@ export class GelRelationalQuery<
    * intervening write would make it stale.
    */
   private readonly _documentByNormalizedId = new Map<
+    string,
+    Promise<any | null>
+  >();
+  /**
+   * Single target documents resolved by an eq-pinned key during one execution,
+   * keyed on the read itself: table, index, join columns and their values.
+   *
+   * `_documentByNormalizedId` only covers a join on the primary id. A relation
+   * joined on any other column resolves its target with `.first()` instead, and
+   * the same one-row-at-a-time membership predicate re-issues that read once per
+   * drain. The index is fixed for the whole relation and the key is pinned by
+   * `eq`, so the first row is a pure function of this key within an execution.
+   *
+   * Same scope and staleness argument as `_documentByNormalizedId`: not handed
+   * to the next run by `_forExecution`, so an intervening write is still seen.
+   */
+  private readonly _firstDocumentByFieldKey = new Map<
     string,
     Promise<any | null>
   >();
@@ -7905,6 +7922,20 @@ export class GelRelationalQuery<
     return this._allEdges.filter((edge) => edge.sourceTable === tableName);
   }
 
+  /**
+   * A memo entry is a snapshot, so every caller has to get its own document.
+   *
+   * Relation loaders write nested `with` results and `extras` straight onto the
+   * target they were handed, and `hydrateDateFieldsForRead` copies every own key
+   * it finds. Two loads that share one entry would therefore publish each
+   * other's fields — a relation asked for as `true` coming back carrying a
+   * nested relation only the `where` requested. Those writes are all top-level,
+   * so a shallow copy is exactly as much isolation as they need.
+   */
+  private _ownedCopy(doc: any | null | undefined): any | null {
+    return doc === null || doc === undefined ? null : { ...doc };
+  }
+
   private async _getById(tableName: string, id: unknown): Promise<any | null> {
     if (id === null || id === undefined) {
       return null;
@@ -7916,7 +7947,7 @@ export class GelRelationalQuery<
     // A normalized id encodes its table, so it identifies the read on its own.
     const existing = this._documentByNormalizedId.get(normalizedId);
     if (existing) {
-      return await existing;
+      return this._ownedCopy(await existing);
     }
     // Stored before it settles so concurrent relation loaders share one
     // in-flight read; evicted on rejection so a failure is never cached.
@@ -7927,7 +7958,85 @@ export class GelRelationalQuery<
       }
     );
     this._documentByNormalizedId.set(normalizedId, pending);
-    return await pending;
+    return this._ownedCopy(await pending);
+  }
+
+  /**
+   * Identity of one `_firstByFields` read, or null when the join values cannot
+   * be encoded losslessly.
+   *
+   * `JSON.stringify` alone is not safe here. It renders every `ArrayBuffer` as
+   * `{}` and `NaN`/`Infinity`/`-Infinity` as `null`, so two distinct join values
+   * would share one entry, and it throws outright on `int64`. The relation
+   * loader's own per-batch key map cannot catch that, because the residual
+   * relation `where` hands it one row at a time — a map of one never compares
+   * two values. This key is the only thing that tells them apart.
+   *
+   * `convexToJson` is the same wire encoding the client uses for query keys, so
+   * every Convex value round-trips distinctly. Anything it rejects is not a
+   * Convex value and simply goes unmemoized.
+   */
+  private _firstByFieldsMemoKey(
+    tableName: string,
+    fields: string[],
+    values: unknown[],
+    indexName: string | null
+  ): string | null {
+    try {
+      return JSON.stringify([
+        tableName,
+        indexName,
+        fields,
+        values.map((value) => convexToJson(value as Value)),
+      ]);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * `_getById` for a relation joined on something other than the primary id:
+   * resolve one target document by an eq-pinned key, memoized per execution.
+   */
+  private async _firstByFields(
+    tableName: string,
+    fields: string[],
+    values: unknown[],
+    indexName: string | null
+  ): Promise<any | null> {
+    const read = () =>
+      this._queryByFields(
+        this.db.query(tableName as any),
+        fields,
+        values,
+        indexName
+      ).first();
+
+    // The index decides which row is first, so it belongs in the key alongside
+    // the columns and their values.
+    const key = this._firstByFieldsMemoKey(
+      tableName,
+      fields,
+      values,
+      indexName
+    );
+    // No encodable key means no memo, not a shared entry: the read still runs,
+    // it just runs uncached.
+    if (key === null) {
+      return await read();
+    }
+    const existing = this._firstDocumentByFieldKey.get(key);
+    if (existing) {
+      return this._ownedCopy(await existing);
+    }
+    // Stored before it settles so concurrent relation loaders share one
+    // in-flight read; evicted on rejection so a failure is never cached.
+    const pending = Promise.resolve(read()).catch((error) => {
+      this._firstDocumentByFieldKey.delete(key);
+      throw error;
+    });
+    this._firstDocumentByFieldKey.set(key, pending);
+    return this._ownedCopy(await pending);
   }
 
   private _getRelationConcurrency(): number {
@@ -8354,13 +8463,12 @@ export class GelRelationalQuery<
         if (useGetById) {
           target = await this._getById(edge.targetTable, values[0]);
         } else {
-          const query = this._queryByFields(
-            this.db.query(edge.targetTable),
+          target = await this._firstByFields(
+            edge.targetTable,
             targetFields,
             values,
             targetIndexName
           );
-          target = await query.first();
         }
         if (!target) {
           return false;
@@ -8609,13 +8717,12 @@ export class GelRelationalQuery<
         if (useGetById) {
           target = await this._getById(edge.targetTable, values[0]);
         } else {
-          const query = this._queryByFields(
-            this.db.query(edge.targetTable),
+          target = await this._firstByFields(
+            edge.targetTable,
             targetFields,
             values,
             indexName
           );
-          target = await query.first();
         }
         return { key, target };
       }
@@ -9249,12 +9356,12 @@ export class GelRelationalQuery<
             if (useGetById) {
               target = await this._getById(edge.targetTable, values[0]);
             } else {
-              target = await this._queryByFields(
-                this.db.query(edge.targetTable),
+              target = await this._firstByFields(
+                edge.targetTable,
                 targetFields,
                 values,
                 indexName
-              ).first();
+              );
             }
             return { key, target };
           }
