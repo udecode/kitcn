@@ -44,7 +44,7 @@ Completion threshold:
 - Union repro: `users.select().union([{ where: { status: 'active' } }]).limit(10)` over 1 match + 20 noise rows reads `scanned === 1` (was 21).
 - flatMap repro: `users.select().flatMap('posts', { where: { numLikes: { gt: 17 } } }).limit(10)` over 1 parent + 20 children reads `scanned === 3` (was 21).
 - `convex/orm/pipeline.test.ts` fully green with no per-source `.withIndex(...)` workaround added to `:175` or `:796`.
-- `bun check` green, except `fixtures:check`, which is red on clean `origin/main` too: the committed fixture pins a range and sync regenerates against today's npm, so an upstream patch reddens the lane. Attributable only when the diff touches `fixtures/`, `tooling/`, or `packages/kitcn/src/cli/`, and it touches none of them.
+- Full `bun check` must pass; no fixture-drift exception. Passed after main integration on 2026-09-07.
 - Task closure is legal only when the source-of-truth acceptance criteria are
   satisfied or explicitly narrowed, required verification evidence is recorded,
   code-review and release-artifact gates are closed when applicable, verified
@@ -80,7 +80,7 @@ Constraints:
 Boundaries:
 - Source of truth: GitHub issue #447 + `packages/kitcn/src/orm/query.ts`.
 - Allowed edit scope: `packages/kitcn/src/orm/**`, `convex/orm/*.test.ts`, `convex/schema.ts` (test schema indexes), `packages/kitcn/skills/kitcn/references/features/orm.md`, `www/content/docs/orm/**`, `.changeset/*`, this plan.
-- Browser surface: N/A: server-side ORM read planning has no rendered output.
+- Browser surface: filters, pagination and API reference docs; desktop/narrow proof passed on 2026-09-07. Walkthrough explicitly waived by the user.
 - GitHub issue sync: allowed (comment on #447). PR: https://github.com/udecode/kitcn/pull/449.
 - Non-goals: the separate chain-level-`where`-dropped-under-`union` bug (see Findings), honoring `stage.orderBy`, relation-loader (`with:`) where lowering.
 
@@ -200,7 +200,7 @@ Work Checklist:
       reached from both pipeline stream sites instead of patching call sites.
 - [x] Release artifact requirement recorded: new changeset
       `.changeset/wild-pears-repeat.md`.
-- [x] Final handoff shape decided: bug handoff + issue-sync offer, no PR.
+- [x] Final handoff: PR state, focused/full proof and residuals; no walkthrough per user.
 - [x] Commit/PR handling recorded for code-changing work: commit `3131bb5c`
       pushed; PR #449 created after the user explicitly prompted for one.
 - [x] PR body shape recorded: PR #270 emoji task-style body, verified with
@@ -249,9 +249,9 @@ Completion Gates:
 | Package manifests, lockfile, or install graph changed | no | N/A | No manifest or lockfile change. |
 | Agent rules or skills changed | yes | Verify generated skill sync | `bun tooling/sync-kitcn-skill.ts` → "Synced packages/kitcn/skills/kitcn to .agents/skills/kitcn". |
 | Workspace authority proof | yes | Record cwd | All commands run from `/Users/mikey/conductor/workspaces/kitcn/belmopan`; package build scoped with `--cwd packages/kitcn`. The changed behavior is owned by `packages/kitcn/src/orm`, exercised by `convex/**` integration tests in the same workspace. |
-| Browser surface changed | no | N/A | No browser surface. |
-| Browser final proof | no | N/A | No browser surface. |
-| UI walkthrough | no | N/A | No UI or rendered output changed. |
+| Browser surface changed | yes | Verify docs routes | Filters, pagination and API reference verified desktop/narrow. |
+| Browser final proof | yes | Browser then Chrome | Three HTTP-200 routes; 390px no page overflow; console clear. |
+| UI walkthrough | no | User waiver | User: No walk needed. |
 | Scaffold or fixture output changed | no | N/A | No `init -t` template or scaffold source touched; `git diff --name-only` shows no `fixtures/`, `tooling/`, or `packages/kitcn/src/cli/` path. |
 | Package behavior or public API changed | yes | Add a changeset | `.changeset/wild-pears-repeat.md` (`kitcn: minor`). |
 | Docs and kitcn skill sync changed | yes | Keep `www/**` and skill docs in sync | `www/content/docs/orm/queries/filters.mdx`, `www/content/docs/orm/api-reference.mdx`, `packages/kitcn/skills/kitcn/references/features/orm.md` all updated; generated mirror regenerated. |
@@ -288,7 +288,7 @@ Phase / pass table:
 | Reproduction and challenge | complete | scratch repro: `scanned: 21` at both sites, control at 1 | implementation |
 | Implementation | complete | `packages/kitcn/src/orm/query.ts`, `stream.ts` | verification |
 | Verification | complete | 986 vitest + 1400 bun tests; mutation tests on all 5 new cases | closeout |
-| Commit / PR / GitHub sync | complete | commit created; PR and issue comment intentionally not created | closeout |
+| Commit / PR / GitHub sync | complete | PR #449 created; final exact-head closeout tracked in PR receipts | closeout |
 | Closeout | complete | autoreview run; plan closed | final response |
 
 Findings:
@@ -335,6 +335,12 @@ Error attempts:
 | First version of the interleave-fallback test asserted the wrong rows (`status > 'ac'` matches every seeded status) | 1 | Pick bounds that select exactly one row per source | Changed to `lt: 'ad'` / `gt: 'p'`; test passes and is mutation-verified. |
 
 Verification evidence:
+- Closeout, 2026-09-07, cwd `/Users/zbeyens/git/better-convex`:
+  pipeline 41/41; package build; full `bun check` exit 0; skill mirror equal.
+  Three docs routes passed desktop/390px visual proof, HTTP 200 and console
+  checks. User waived walkthrough. Branch autoreview against `kitcn/main`
+  through P1 passed with no accepted/actionable findings. Earlier records
+  below describe the original implementation runs, not the current gate.
 - `gh issue view 447` (cwd: repo root) -> issue + empty comment list read before edits.
 - Scratch repro before the fix (cwd: repo root) -> union `{"documents":21,"scanned":21}` expected 1; flatMap `{"documents":21,"scanned":21}` expected 3; control `findMany({where:{status:'active'}})` `scanned: 1` PASS. Reproduced.
 - `npx vitest run convex/orm/pipeline.test.ts` (cwd: repo root) -> 37 passed, 0 failed. `:175` and `:796` unchanged and green.
