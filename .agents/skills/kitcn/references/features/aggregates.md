@@ -58,6 +58,13 @@ const orders = convexTable(
 
 After deploying, CLI runs `aggregateBackfill` automatically. Wait for `aggregateBackfillStatus` (an internal query) to report `READY`.
 
+### Write costs
+
+Bulk ORM statements reuse aggregate bucket/member reads within uninterrupted
+statements: one bucket read per distinct tuple and one membership read per
+document. User hooks, policy callbacks and statement exit end reuse, preserving
+nested-mutation writes. Raw writer calls do not share cached rows.
+
 ### `count()` — O(1) No-Scan Counts
 
 ```ts

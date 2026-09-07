@@ -47,6 +47,7 @@ import type {
 } from './types';
 import { WhereClauseCompiler } from './where-clause-compiler';
 import { runInOrmWriteBatch } from './write-batch';
+import { runInOrmWriteScope } from './write-cache';
 
 const applyIndexFilter = (query: any, filter: FilterExpression<boolean>) => {
   if (filter.type !== 'binary') {
@@ -275,9 +276,9 @@ export class ConvexDeleteBuilder<
       ? [config?: MutationExecuteConfig]
       : [config?: never]
   ): Promise<MutationExecuteResult<TTable, TReturning, TMode>> {
-    // One statement, one fold of the aggregate storage its rows share. See
-    // `write-batch`.
-    return await runInOrmWriteBatch(this.db, () => this._runStatement(...args));
+    return await runInOrmWriteScope(this.db, () =>
+      runInOrmWriteBatch(this.db, () => this._runStatement(...args))
+    );
   }
 
   private async _runStatement(

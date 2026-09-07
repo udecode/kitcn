@@ -3,6 +3,35 @@
 Objective:
 Fix GitHub issue #440 stage (b): make one ORM mutation statement reconcile each aggregate bucket once instead of once per row, without changing what any aggregate read returns inside the same mutation.
 
+Current closeout requirements (2026-09-07):
+- Resume `task` for exactly PR #454, then autoclosure. One-shot execution in
+  /Users/zbeyens/git/better-convex; no separate worktree or parallel agents.
+- User: "never ask, just go" authorizes the joint #451/#454 lifetime repair.
+  #451 is merged at 80f7609c; integrate that cache-lifetime owner before final
+  proof. It reuses reads only within uninterrupted statements, not raw writes.
+- A deferred queue must flush before arbitrary user lifecycle/RLS callbacks
+  and avoid retaining invisible writes while user code can call a nested UDF.
+  Existing no-lifecycle exclusions are superseded for this correctness repair.
+  Keep public API signatures and read-your-own-writes behavior unchanged.
+- User waived walkthrough. Preserve explicit P2 deferral; fix every actionable
+  P1 and replay after the final material push. No new product scope or timebox.
+- Whole-checkout commit/push, PR update, feedback replies/resolutions and admin
+  merge are authorized. Disable auto release and use `[skip release]`; verify
+  the release job is skipped. Never merge Version Packages.
+- Existing batch goal is externally blocked; the latest user instruction
+  authorizes continuation. No fake goal lifecycle transition is used.
+- Completion requires fresh focused tests, build, full check, paired docs/skill
+  guidance when changed, deslop, agent-native audit and clean P0/P1 autoreview,
+  then exact-head feedback inventories/receipt, hosted checks and merge proof.
+- Initial compliance: exactly one body task-plan line, this complete plan exists
+  at refs/pr/454 and names #454. Local HEAD = fetched head = live head
+  dca6efb94654b8cdadfda1e606fa2266a497e390 before source/feedback triage.
+- Initial feedback: helper 0 threads/1 comment/0 reviews; unfiltered 0 threads/
+  2 comments/0 reviews, all pages exhausted. Changeset notice
+  https://github.com/udecode/kitcn/pull/454#issuecomment-5556744293 and deployment
+  notice https://github.com/udecode/kitcn/pull/454#issuecomment-5556744469 are
+  N/A status-only content, not findings. No P0/P1 or deferred P2/P3 items.
+
 Goal plan:
 docs/plans/2026-09-06-440b-statement-scoped-aggregate-bucket-writes.md
 
@@ -107,9 +136,9 @@ Blocked condition:
 Task state:
 - task_type: bug / performance
 - task_complexity: non-trivial
-- current_phase: closeout
-- current_phase_status: done
-- next_phase: final response
+- current_phase: integration and lifetime proof
+- current_phase_status: in_progress
+- next_phase: final review and delivery
 - goal_status: active
 
 Current verdict:

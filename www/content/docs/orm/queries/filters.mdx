@@ -77,6 +77,8 @@ export const listConversation = publicQuery
 
 Each source pins `from` and `to` with `eq`, which is what leaves both ordered by `createdAt, id` — the fields `interleaveBy` merges on.
 
+A source may also carry a `where` instead of an `index`. It is compiled against the table's indexes the same way a `findMany` where is, so `{ where: { status: 'active' } }` reads the `by_status` range rather than filtering a scan. Two rules bound that: a `where` is never lowered onto an index that the source or the chain already pinned with a range, and it is only lowered when the result can still supply `interleaveBy`. Anchor a source with `index: { name, range }` whenever you need a specific range read.
+
 If you need page-boundary pinning in reactive UIs, pass `endCursor` on the follow-up call.
 
 ## Full-Text Search

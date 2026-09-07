@@ -2,8 +2,8 @@
  * Per-transaction memo storage for the ORM.
  *
  * The ORM already has isolate-, execution-, statement- and row-scoped memos.
- * The lifetime it lacked is the one a hook needs: `prependWriteBarrier` is
- * built inside `createOrmDbLifecycle`, which `createOrm` runs at module scope,
+ * A hook needs transaction lifetime: the write barrier is built inside
+ * `createOrmDbLifecycle`, which `createOrm` runs at module scope,
  * so a flag in that closure lives as long as the isolate and would leak an
  * answer from one transaction into the next.
  *
@@ -60,12 +60,10 @@ export const markOrmTransactionAnchor = <TTarget extends object>(
  * because it is the only way a db rooted on the raw writer can name the
  * transaction at all.
  *
- * A nested `ctx.runMutation` shares the transaction but gets its own `ctx.db`
- * and its own JS context, so it starts a fresh memo and a fresh write queue.
- * For a memo that only costs extra reads. For queued writes it means the nested
- * side neither sees nor drains the outer side's pending work — which is why
- * kitcn composes modules through `create<Module>Handler(ctx)` (SKILL.md items 7
- * and 21) instead of a raw `ctx.runMutation`.
+ * A nested `ctx.runMutation` shares the transaction but gets its own writer
+ * and JS context. It cannot see caller-local memos or queued writes, nor can it
+ * invalidate caller snapshots. Callers must flush deferred writes and expire
+ * row snapshots before handing control to arbitrary user code.
  */
 export const resolveOrmTransactionAnchor = (
   db: unknown

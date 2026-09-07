@@ -5,6 +5,7 @@ import {
 } from '../mutation-utils';
 import { EnableRLS, RlsPolicies } from '../symbols';
 import type { ConvexTable } from '../table';
+import { withoutOrmWriteCache } from '../write-cache';
 import type { RlsPolicy, RlsPolicyToOption } from './policies';
 import { isRlsRole } from './roles';
 import type { RlsContext } from './types';
@@ -176,7 +177,9 @@ async function resolveExpression(
 
   if (!candidate) return;
   if (typeof candidate === 'function') {
-    return await candidate(ctx as any, table as any);
+    return await withoutOrmWriteCache(() =>
+      candidate(ctx as any, table as any)
+    );
   }
   return candidate as FilterExpression<boolean>;
 }

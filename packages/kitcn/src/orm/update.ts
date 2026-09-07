@@ -54,6 +54,7 @@ import type {
 import { isUnsetToken } from './unset-token';
 import { WhereClauseCompiler } from './where-clause-compiler';
 import { runInOrmWriteBatch } from './write-batch';
+import { runInOrmWriteScope } from './write-cache';
 import { hasLifecycleHooks } from './write-fanout';
 
 const applyIndexFilter = (query: any, filter: FilterExpression<boolean>) => {
@@ -269,11 +270,9 @@ export class ConvexUpdateBuilder<
       ? [config?: MutationExecuteConfig]
       : [config?: never]
   ): Promise<MutationExecuteResult<TTable, TReturning, TMode>> {
-    // The statement is the fold boundary for derived storage: every row this
-    // loop writes reconciles the same aggregate buckets, so holding those
-    // writes to the end collapses one storage write per row into one per key
-    // tuple. Anything that reads them in between drains the batch first.
-    return await runInOrmWriteBatch(this.db, () => this._runStatement(...args));
+    return await runInOrmWriteScope(this.db, () =>
+      runInOrmWriteBatch(this.db, () => this._runStatement(...args))
+    );
   }
 
   private async _runStatement(
