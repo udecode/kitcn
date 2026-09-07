@@ -3,6 +3,105 @@
 Objective:
 A compiled index-union plan must stay index-bounded on the `select()` pipeline path. Today a union declined by probe width degrades to a full table scan there while `findMany` answers the same query from its probes.
 
+Current closeout requirements (2026-09-07):
+- Dedicated resumed `task` and `autoclosure` for exactly #456, using the
+  current root checkout /Users/zbeyens/git/better-convex. No worktrees, parallel
+  agents, timebox, or new product scope. Historical completion claims below
+  are superseded until fresh closeout gates pass.
+- User goal: close #448-#456 with per-PR evidence, passing checks, zero
+  actionable P1, then recheck #430. Latest "never ask, just go" authorizes
+  bounded repairs; P2 may be deferred explicitly. #455 merged at a73de28b,
+  release workflow 34138573524 and Release job verified skipped. Seven of nine
+  PRs merged; #452 rollout remains held, not silently waived.
+- Whole-checkout commit/push, PR updates, quoted replies, resolutions and admin
+  merge authorized. Disable auto release, merge with `[skip release]`, verify
+  release skipped; never merge Version Packages.
+- Compliance passed: one exact body plan line, this full plan at refs/pr/456
+  identifies #456. HEAD = fetched ref = live
+  65002eebdcb4f197ed00b4d2049f93372c48f63a before source/feedback triage.
+- Initial proof at that published head: 22/22 index-union pagination tests
+  passed, /tmp/kitcn-pr456-initial-proof.log. Prior red cases remain in the
+  source plan; fresh integration proof is still required.
+- Full helper: 5 unresolved threads, 1 comment, 4 review bodies. Unfiltered:
+  5 unresolved threads (1 outdated), 8 inline comments, 2 top-level comments,
+  7 review bodies; all thread/nested pages exhausted. Every item read in full.
+  Four P1 threads and one P2 thread require source-backed dispositions.
+- Scope owner: `_buildProbeUnionStream`, compiler promotion and internal
+  `concatStreams`; preserve index order, disjointness, cursor narrowing, limits,
+  RLS and relation fan-out safety. Main now includes #455's per-probe filtered
+  reads; reconcile that canonical implementation with this branch's separate
+  residual-union helper, rather than retain competing or dead readers.
+- Package/skill/docs owners are touched: keep the published ORM reference,
+  generated local copy and www pagination page synchronized. Use agent-native
+  review and verify the rendered docs. User waived walkthrough only; the old
+  plan's blanket no-rendered-output classification is not a waiver.
+- All three changeset-prose P1s need approved action-led public outcomes,
+  retained Before/After example and no private executor narrative. Fresh P1
+  replay and helper/raw inventory after each material push, followed by an
+  exact-head external receipt, CI and merge/read-back. No completion claim yet.
+- Active batch goal remains externally blocked; execute the user continuation
+  without inventing a lifecycle transition. Logs in /tmp, named source ranges
+  only. Truncated plan output was repaired by reading lines 300-410 separately.
+
+Current feedback ledger:
+
+Integration evidence (2026-09-07, supersedes historical closeout below):
+- Merged origin/main a73de28b into this task branch. The only conflict was
+  the non-cursor multi-probe reader; retained #455's per-probe filterWith/take
+  owner. Removed `_takeResidualProbeUnion` and its unreachable caller: its
+  limit/order predicate already guarantees probeBound is defined after #455.
+  No new API, configuration or relation/RLS contract introduced.
+- Fresh tests: 132 passed/1 skipped across index-union pagination, pipeline,
+  pagination, stream and where-filtering; 11/11 index-union-read-bound;
+  29/29 compiler tests including wide raw Date ordering in both directions
+  and timestamp-string overlap after normalization. Logs:
+  /tmp/kitcn-pr456-integration-tests.log,
+  /tmp/kitcn-pr456-bound-compiler-tests.log,
+  /tmp/kitcn-pr456-compiler-tests.log.
+- Typecheck, package build, lint:fix passed. Full bun check is running;
+  external review, exact-head feedback replay, CI and merge remain pending.
+- Deslop: removed the dead competing reader and shortened temporal rationale.
+  Delta scan's other query catches and insert/update/delete findings are
+  unchanged from origin/main and outside this patch; no adjacent cleanup.
+- Agent-native capability map: public findMany/select indexed filtering maps
+  to published references/features/orm.md, discoverable from SKILL.md lines
+  170/278/297/485. Docs source is pagination.mdx / Index-union filters, reached
+  through docs/meta.json and orm/queries/meta.json. Classification: advanced
+  resource; no parity blocks dropped and no setup/core expansion.
+- Regenerated the local skill via tooling/sync-kitcn-skill.ts; cmp confirms
+  exact equality. No stale setup references, legacy API examples or setup
+  leakage; the only legacy-token hits are the check's own doc-guidelines.
+  `bunx intent validate skills` and `bunx intent stale` both failed to launch:
+  `could not determine executable to run for package intent`. Manual mapping,
+  discoverability and generated-copy checks above passed; do not claim intent
+  validation passed or modify workflow/dependency scope to bypass it.
+- Browser loaded http://localhost:3017/docs/orm/queries/pagination, title
+  Pagination. Rendered Index-union filters includes the 64-range boundary,
+  index-order-only wide union and maxScan exception for cross-value sorting.
+  Local runtime proof only; hosted exact-head proof remains pending.
+- All six changeset bullets begin with Fix, Improve or Support and describe
+  public outcomes; retained the required Before/After paging example.
+
+| URL | Priority and rationale | Current disposition |
+| --- | --- | --- |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942889621 | P1: promoted residual unions eagerly read a common-status population | Current helper claims fixed; reconcile with merged #455 and replay 400-row proof |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942910998 | N/A: prior implementation reply and measured claim | Verify current source, not reply alone |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942889623 | P2: temporal bounds must match stored index representation | Normalization exists; replay temporal proof and reply/resolve |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942911517 | N/A: prior source-backed hardening reply | No independent request; verify current normalization |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942920540 | P1: patch note exposes private executor details and lacks allowed verb | Partially rewritten; normalize all release bullets before resolving |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942929806 | N/A: prior prose reply | Keep/Require still fail the explicit allowed-verb rule |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942937129 | P1: breaking bullet starts A long rather than allowed action verb | Accepted; rewrite with same public behavior and migration example |
+| https://github.com/udecode/kitcn/pull/456#discussion_r3942993902 | P1: remaining Keep/Require bullets violate allowed-verb contract | Accepted; rewrite user-facing outcomes |
+| https://github.com/udecode/kitcn/pull/456#issuecomment-5556763900 | N/A: changeset status only | Verify final artifact/head |
+| https://github.com/udecode/kitcn/pull/456#issuecomment-5556763958 | N/A: deployment status only | Refresh final hosted check |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124068617 | N/A: review wrapper | Inline findings ledgered separately |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124089368 | N/A: empty reply review | No independent claim |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124089814 | N/A: empty reply review | No independent claim |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124098264 | N/A: review wrapper | Inline findings ledgered separately |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124106907 | N/A: empty reply review | No independent claim |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124113819 | N/A: review wrapper | Inline findings ledgered separately |
+| https://github.com/udecode/kitcn/pull/456#pullrequestreview-5124179018 | N/A: review wrapper | Inline findings ledgered separately |
+
 Goal plan:
 docs/plans/445-index-union-bounded-on-pipeline-path.md
 

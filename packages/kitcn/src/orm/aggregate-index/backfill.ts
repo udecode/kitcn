@@ -5,6 +5,7 @@ import type {
   Scheduler,
 } from 'convex/server';
 import type { TablesRelationalConfig } from '../relations';
+import { flushOrmWriteBatch } from '../write-batch';
 import {
   clearRankIndexChunk,
   getRankIndexDefinitions,
@@ -383,6 +384,12 @@ export function createCountBackfillHandlers(
     if (args.tableName && args.indexName) {
       const tableName = args.tableName;
       const indexName = args.indexName;
+      // "No stored rows" has to include rows a statement has queued but not
+      // written, or the prune drops the state row and the flush then inserts a
+      // bucket only another exact manual prune can find. Unreachable today —
+      // this is its own mutation, so no statement scope is open — but the
+      // reachability, not the probe, is what would change.
+      await flushOrmWriteBatch(ctx.db);
       const [bucket, extrema, metricMember, rankMember] = await Promise.all([
         ctx.db
           .query(AGGREGATE_BUCKET_TABLE)

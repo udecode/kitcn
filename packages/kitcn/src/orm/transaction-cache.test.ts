@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { createOrmTransactionMemo } from './transaction-cache';
+import {
+  createOrmTransactionMemo,
+  markOrmTransactionAnchor,
+} from './transaction-cache';
 
 const ORMLIFECYCLE_INNER_DB = Symbol.for('kitcn:OrmLifecycleInnerDB');
 
@@ -101,5 +104,38 @@ describe('createOrmTransactionMemo', () => {
     expect(() => memo.set(undefined, 'users', true)).not.toThrow();
     expect(memo.get(undefined, 'users')).toBeUndefined();
     expect(memo.get(null, 'users')).toBeUndefined();
+  });
+});
+
+describe('resolveOrmTransactionAnchor', () => {
+  test('follows the inner-db chain to a fixed point', () => {
+    const memo = createOrmTransactionMemo<number>();
+    const raw = transaction();
+    // `orm.with(hookCtx)` wraps a writer that is already a hook wrapper, so the
+    // chain is two links, not one.
+    const doubleWrapped = wrapper(wrapper(raw));
+
+    memo.set(raw, 'count', 7);
+    expect(memo.get(doubleWrapped, 'count')).toBe(7);
+  });
+
+  test('a pinned anchor names the transaction a raw-rooted db cannot resolve', () => {
+    const memo = createOrmTransactionMemo<number>();
+    const raw = transaction();
+    // What `withoutTriggers` builds: derived from the raw writer, which carries
+    // no inner-db symbol of its own.
+    const derived = markOrmTransactionAnchor(Object.create(raw), wrapper(raw));
+
+    memo.set(raw, 'count', 7);
+    expect(memo.get(derived, 'count')).toBe(7);
+  });
+
+  test('a pin deeper in the chain still wins', () => {
+    const memo = createOrmTransactionMemo<number>();
+    const raw = transaction();
+    const derived = markOrmTransactionAnchor(Object.create(raw), wrapper(raw));
+
+    memo.set(raw, 'count', 7);
+    expect(memo.get(wrapper(derived), 'count')).toBe(7);
   });
 });

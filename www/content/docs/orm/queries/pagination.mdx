@@ -179,7 +179,7 @@ const page = await db.query.messages
 Each source takes `index` and `where`:
 
 - `index: { name, range }` anchors that source on its own index range. It overrides `.withIndex(...)` on the chain, and sources that omit it fall back to the chain index.
-- `where` filters the rows the source's range produces, after the read.
+- `where` is compiled against the table's indexes like a `findMany` where. It bounds the read when it can be lowered onto the index that source walks; whatever no index covers is filtered after the read.
 
 `interleaveBy` fields must be the trailing fields each source is already ordered by — everything before them has to be pinned with `eq` in that source's range. Sources may name different indexes as long as they land on the same trailing fields:
 
@@ -200,7 +200,13 @@ const page = await db.query.posts
   .paginate({ cursor: null, limit: 20 });
 ```
 
-Anchoring each source is what keeps the read bounded. A shared `.withIndex(...)` plus a per-source `where` makes every source walk the same range and drop the misses after reading them.
+Whether a source `where` bounds the read depends on the index that source ends up walking:
+
+- **No index pinned** — the `where` picks one. `{ where: { status: 'active' } }` reads the `by_status` range.
+- **A pinned index the `where` can narrow** — `.withIndex('by_status')` plus `{ where: { status: 'active' } }` narrows that same index to the matching range.
+- **A pinned index the `where` cannot narrow** — `.withIndex('by_name')` plus `{ where: { status: 'active' } }` walks `by_name` and drops the misses after reading them.
+
+A pinned `range` is the source's scope, never a hint: a `where` alongside one always filters after the read rather than widening it. Lowering also has to preserve the merge, so a `where` is only lowered when the resulting order can still supply `interleaveBy`. Anchor a source with `index: { name, range }` whenever you need a specific range read.
 
 ### Pre-pagination transforms
 

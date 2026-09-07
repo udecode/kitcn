@@ -13,6 +13,12 @@ import {
 } from '../timestamp-mode';
 import { createOrmTransactionMemo } from '../transaction-cache';
 import type { TableRelationalConfig, TablesRelationalConfig } from '../types';
+import {
+  enqueueOrmWriteBatch,
+  flushOrmWriteBatch,
+  isOrmWriteBatchOpen,
+} from '../write-batch';
+import { createOrmWriteMemo } from '../write-cache';
 import type {
   AggregateIndexDefinition,
   CountIndexDefinition,
@@ -133,7 +139,7 @@ export type CountState = {
   lastError?: string | null;
 };
 
-type CountMemberRow = {
+export type CountMemberRow = {
   _id: GenericId<any>;
   kind: string;
   tableKey: string;
@@ -1895,6 +1901,127 @@ const getBucketByKey = async (
   );
 };
 
+/**
+ * Reuse row snapshots across the ORM-owned segment of a bulk statement.
+ * Statement exit and user callbacks end that segment: nested UDFs run in a
+ * separate JS context and cannot invalidate this caller's cached rows.
+ *
+ * Only the write path reads through these. `readPlanBuckets` deliberately does
+ * not: an aggregate query racing an ORM write in the same transaction could
+ * store its pre-write row on top of a write-through entry, and the query path
+ * contributes none of the amplification this exists to remove.
+ *
+ * Correctness rests on one invariant: every writer of these two tables either
+ * writes through (`applyBucketDelta`, `flushAggregateMembershipDeltas`) or
+ * invalidates exactly (`clearCountIndexChunk`). Convex reads its own writes, so
+ * a missing entry is only ever a wasted read, while a stale one is a silently
+ * wrong stored count — keep new writers on one of those two paths.
+ *
+ * Raw writer calls outside a statement do not retain row snapshots.
+ */
+type MemoizedRow<TRow> = { row: TRow | null };
+
+const bucketRowByKey = createOrmWriteMemo<MemoizedRow<CountBucketRow>>();
+const memberRowByDoc = createOrmWriteMemo<MemoizedRow<CountMemberRow>>();
+
+// `keyHash` is JSON, which escapes control characters, so no part can contain
+// the separator and no two distinct tuples can collide on one memo key.
+const aggregateRowMemoKey = (...parts: string[]): string =>
+  parts.join('\u0000');
+
+const bucketMemoKey = (
+  tableName: string,
+  indexName: string,
+  keyHash: string
+): string => aggregateRowMemoKey(tableName, indexName, keyHash);
+
+/**
+ * `kind` leads, because the member table stores a metric and a rank row for the
+ * same document under index names the schema lets collide.
+ */
+const memberMemoKey = (
+  tableName: string,
+  indexName: string,
+  docId: string
+): string =>
+  aggregateRowMemoKey(AGGREGATE_STATE_KIND_METRIC, tableName, indexName, docId);
+
+/**
+ * A stored row is the backend's object, and Convex's test backend hands out the
+ * document it holds rather than a copy. One shallow clone of the row and of the
+ * containers it owns makes the memo entry the memo's own, so an entry means the
+ * same thing whatever the backend does with the document afterwards.
+ */
+const cloneStoredRow = <TRow extends Record<string, unknown>>(
+  row: TRow
+): TRow => {
+  const clone: Record<string, unknown> = { ...row };
+  for (const [field, value] of Object.entries(clone)) {
+    if (Array.isArray(value)) {
+      clone[field] = [...value];
+      continue;
+    }
+    if (typeof value === 'object' && value !== null) {
+      clone[field] = { ...value };
+    }
+  }
+  return clone as TRow;
+};
+
+const rememberBucket = (
+  db: unknown,
+  memoKey: string,
+  row: CountBucketRow | null
+): void => {
+  bucketRowByKey.set(db, memoKey, {
+    row: row === null ? null : cloneStoredRow(row),
+  });
+};
+
+const rememberMember = (
+  db: unknown,
+  memoKey: string,
+  row: CountMemberRow | null
+): void => {
+  memberRowByDoc.set(db, memoKey, {
+    row: row === null ? null : cloneStoredRow(row),
+  });
+};
+
+/** `getBucketByKey` within the current write segment. Write path only. */
+const readBucketForWrite = async (
+  db: GenericDatabaseWriter<any>,
+  tableName: string,
+  indexName: string,
+  keyParts: unknown[],
+  memoKey: string
+): Promise<CountBucketRow | null> => {
+  const memoized = bucketRowByKey.get(db, memoKey);
+  if (memoized) {
+    return memoized.row;
+  }
+  const bucket = await getBucketByKey(db, tableName, indexName, keyParts);
+  rememberBucket(db, memoKey, bucket);
+  return bucket;
+};
+
+/** `getMemberByDoc` within the current write segment. Write path only. */
+const readMemberForWrite = async (
+  db: GenericDatabaseWriter<any>,
+  tableName: string,
+  indexName: string,
+  docId: string,
+  memoKey: string
+): Promise<CountMemberRow | null> => {
+  const memoized = memberRowByDoc.get(db, memoKey);
+  if (memoized) {
+    return memoized.row;
+  }
+  const member = await getMemberByDoc(db, tableName, indexName, docId);
+  rememberMember(db, memoKey, member);
+  return member;
+};
+
 /** A prefix scan, resumable from the last `keyHash` a previous page returned. */
 type PrefixScanCursor = {
   prefixParts: unknown[];
@@ -2010,29 +2137,40 @@ const applyBucketDelta = async (
     return;
   }
 
-  const existing = await getBucketByKey(db, tableName, indexName, keyParts);
+  const keyHash = serializeCountKeyParts(keyParts);
+  const memoKey = bucketMemoKey(tableName, indexName, keyHash);
+  const existing = await readBucketForWrite(
+    db,
+    tableName,
+    indexName,
+    keyParts,
+    memoKey
+  );
   const now = Date.now();
 
   if (!existing) {
     if (deltaCount < 0) {
       return;
     }
-    await db.insert(AGGREGATE_BUCKET_TABLE, {
+    const inserted = {
       tableKey: tableName,
       indexName,
-      keyHash: serializeCountKeyParts(keyParts),
+      keyHash,
       keyParts,
       count: deltaCount,
       sumValues: deltaSums,
       nonNullCountValues: deltaNonNullCounts,
       updatedAt: now,
-    });
+    };
+    const id = await db.insert(AGGREGATE_BUCKET_TABLE, inserted);
+    rememberBucket(db, memoKey, { ...inserted, _id: id });
     return;
   }
 
   const nextCount = existing.count + deltaCount;
   if (nextCount <= 0) {
     await db.delete(AGGREGATE_BUCKET_TABLE, existing._id as any);
+    rememberBucket(db, memoKey, null);
     return;
   }
 
@@ -2045,12 +2183,16 @@ const applyBucketDelta = async (
     deltaNonNullCounts
   );
 
-  await db.patch(AGGREGATE_BUCKET_TABLE, existing._id as any, {
+  const patch = {
     count: nextCount,
     sumValues: nextSumValues,
     nonNullCountValues: nextNonNullCountValues,
     updatedAt: now,
-  });
+  };
+  await db.patch(AGGREGATE_BUCKET_TABLE, existing._id as any, patch);
+  // Merged onto the whole prior row: the patch payload alone carries no
+  // `keyHash`, which the extrema reads take off the bucket.
+  rememberBucket(db, memoKey, { ...existing, ...patch });
 };
 
 const encodeNumberSortKey = (value: number): string => {
@@ -2218,6 +2360,11 @@ export const readPlanBuckets = async (
   db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>,
   plan: CountQueryPlan | AggregateQueryPlan
 ): Promise<CountBucketRow[]> => {
+  // The read barrier for deferred bucket writes. Every bucket-backed metric
+  // reaches storage through here, so draining once at the top is what makes a
+  // statement-scoped write batch invisible to readers.
+  await flushOrmWriteBatch(db);
+
   if (!plan.rangeConstraint) {
     const keyCandidates =
       plan.keyCandidates ??
@@ -2376,6 +2523,10 @@ const readPlanBucketsWithCache = async (
   plan: CountQueryPlan | AggregateQueryPlan,
   bucketCache?: PlanBucketReadCache
 ): Promise<CountBucketRow[]> => {
+  // The caller owns a fresh cache per aggregate/relation read, never per
+  // statement. Drain before that read shares bucket promises across metrics.
+  await flushOrmWriteBatch(db);
+
   if (!bucketCache) {
     return await readPlanBuckets(db, plan);
   }
@@ -2520,6 +2671,10 @@ export const readExtremaFromBuckets = async (
       'readExtremaFromBuckets() requires a min/max aggregate plan.'
     );
   }
+
+  // `readPlanBucketsWithCache` below drains too, but the per-bucket extrema
+  // reads after it are a second storage table with its own queued writes.
+  await flushOrmWriteBatch(db);
 
   let selected: unknown | null = null;
 
@@ -2677,13 +2832,25 @@ export type AggregateExtremaDelta = {
   delta: number;
 };
 
+/**
+ * `post` is what the write leaves in the member table, so the flush can bring
+ * the member memo forward without reading the row back. The `_id` is missing
+ * because an insert only learns it once the insert returns.
+ */
 export type AggregateMemberWrite =
   | { kind: 'none' }
   | { kind: 'delete'; id: GenericId<any> }
-  | { kind: 'patch'; id: GenericId<any>; doc: Record<string, unknown> }
-  | { kind: 'insert'; doc: Record<string, unknown> };
+  | {
+      kind: 'patch';
+      id: GenericId<any>;
+      doc: Record<string, unknown>;
+      post: Omit<CountMemberRow, '_id'>;
+    }
+  | { kind: 'insert'; doc: Omit<CountMemberRow, '_id'> };
 
 export type AggregateMembershipDelta = {
+  /** The document this delta reconciles, and the member memo's key. */
+  docId: string;
   buckets: AggregateBucketDelta[];
   extrema: AggregateExtremaDelta[];
   member: AggregateMemberWrite;
@@ -2735,9 +2902,10 @@ const computeMembershipDelta = (
 
   if (!keyParts || !metricValues) {
     if (!existing) {
-      return { buckets: [], extrema: [], member: { kind: 'none' } };
+      return { docId, buckets: [], extrema: [], member: { kind: 'none' } };
     }
     return {
+      docId,
       buckets: [
         {
           keyHash: serializeCountKeyParts(existing.keyParts),
@@ -2789,7 +2957,7 @@ const computeMembershipDelta = (
   ) {
     // Member row is value-identical. Nothing reads `updatedAt`, so writing it
     // would be a document write carrying no information.
-    return { buckets: [], extrema: [], member: { kind: 'none' } };
+    return { docId, buckets: [], extrema: [], member: { kind: 'none' } };
   }
 
   const buckets: AggregateBucketDelta[] = [];
@@ -2833,20 +3001,34 @@ const computeMembershipDelta = (
     updatedAt: now,
   };
 
+  if (existing) {
+    const { _id, ...priorFields } = existing;
+    return {
+      docId,
+      buckets,
+      extrema,
+      member: {
+        kind: 'patch',
+        id: _id,
+        doc: memberFields,
+        post: { ...priorFields, ...memberFields },
+      },
+    };
+  }
+
   return {
+    docId,
     buckets,
     extrema,
-    member: existing
-      ? { kind: 'patch', id: existing._id, doc: memberFields }
-      : {
-          kind: 'insert',
-          doc: {
-            ...memberFields,
-            tableKey: tableName,
-            indexName,
-            docId,
-          },
-        },
+    member: {
+      kind: 'insert',
+      doc: {
+        ...memberFields,
+        tableKey: tableName,
+        indexName,
+        docId,
+      },
+    },
   };
 };
 
@@ -2860,26 +3042,29 @@ export const computeAggregateMembershipDelta = async (
     metricValues: AggregateMetricValues | null;
   }
 ): Promise<AggregateMembershipDelta> => {
-  const existing = await getMemberByDoc(
+  const existing = await readMemberForWrite(
     db,
     params.tableName,
     params.indexName,
-    params.docId
+    params.docId,
+    memberMemoKey(params.tableName, params.indexName, params.docId)
   );
   return computeMembershipDelta(existing, params);
 };
 
+type FoldedStorageDeltas = {
+  buckets: Map<string, AggregateBucketDelta>;
+  extrema: Map<string, AggregateExtremaDelta>;
+};
+
 /**
- * Write half of aggregate reconciliation. Folds bucket deltas by key tuple and
- * extrema deltas by (keyHash, field, value) so each storage document is read and
- * written once regardless of how many source documents contributed to it.
+ * Folds bucket deltas by key tuple and extrema deltas by
+ * (keyHash, field, value), so each storage document is read and written once
+ * regardless of how many source documents contributed to it.
  */
-export const flushAggregateMembershipDeltas = async (
-  db: GenericDatabaseWriter<any>,
-  tableName: string,
-  indexName: string,
-  deltas: AggregateMembershipDelta[]
-): Promise<void> => {
+const foldStorageDeltas = (
+  deltas: readonly AggregateMembershipDelta[]
+): FoldedStorageDeltas => {
   const bucketDeltas = new Map<string, AggregateBucketDelta>();
   const extremaDeltas = new Map<string, AggregateExtremaDelta>();
 
@@ -2919,7 +3104,17 @@ export const flushAggregateMembershipDeltas = async (
     }
   }
 
-  for (const bucket of bucketDeltas.values()) {
+  return { buckets: bucketDeltas, extrema: extremaDeltas };
+};
+
+/** Applies a fold to the bucket and extrema documents it names. */
+const applyFoldedStorageDeltas = async (
+  db: GenericDatabaseWriter<any>,
+  tableName: string,
+  indexName: string,
+  folded: FoldedStorageDeltas
+): Promise<void> => {
+  for (const bucket of folded.buckets.values()) {
     await applyBucketDelta(
       db,
       tableName,
@@ -2931,7 +3126,7 @@ export const flushAggregateMembershipDeltas = async (
     );
   }
 
-  for (const entry of extremaDeltas.values()) {
+  for (const entry of folded.extrema.values()) {
     await applyExtremaDelta(
       db,
       tableName,
@@ -2942,11 +3137,29 @@ export const flushAggregateMembershipDeltas = async (
       entry.delta
     );
   }
+};
 
+/**
+ * One member row per source document. Nothing folds here — the member table
+ * stores the per-document post-image the next reconciliation of that document
+ * subtracts, so it is written eagerly even when the bucket write is deferred.
+ */
+const applyMemberWrites = async (
+  db: GenericDatabaseWriter<any>,
+  tableName: string,
+  indexName: string,
+  deltas: readonly AggregateMembershipDelta[]
+): Promise<void> => {
   for (const delta of deltas) {
     const member = delta.member;
+    // `none` leaves the row exactly as the read-through already recorded it.
+    if (member.kind === 'none') {
+      continue;
+    }
+    const memoKey = memberMemoKey(tableName, indexName, delta.docId);
     if (member.kind === 'delete') {
       await db.delete(AGGREGATE_MEMBER_TABLE, member.id as any);
+      rememberMember(db, memoKey, null);
       continue;
     }
     if (member.kind === 'patch') {
@@ -2955,17 +3168,130 @@ export const flushAggregateMembershipDeltas = async (
         member.id as any,
         member.doc as any
       );
+      rememberMember(db, memoKey, { ...member.post, _id: member.id });
       continue;
     }
-    if (member.kind === 'insert') {
-      await db.insert(AGGREGATE_MEMBER_TABLE, member.doc as any);
-    }
+    const id = await db.insert(AGGREGATE_MEMBER_TABLE, member.doc as any);
+    rememberMember(db, memoKey, { ...member.doc, _id: id });
   }
 };
 
 /**
- * Single-document reconciliation. Flushes eagerly so user code reading an
- * aggregate later in the same mutation sees its own writes.
+ * Write half of aggregate reconciliation. Folds bucket deltas by key tuple and
+ * extrema deltas by (keyHash, field, value) so each storage document is read and
+ * written once regardless of how many source documents contributed to it.
+ */
+export const flushAggregateMembershipDeltas = async (
+  db: GenericDatabaseWriter<any>,
+  tableName: string,
+  indexName: string,
+  deltas: AggregateMembershipDelta[]
+): Promise<void> => {
+  await applyFoldedStorageDeltas(
+    db,
+    tableName,
+    indexName,
+    foldStorageDeltas(deltas)
+  );
+  await applyMemberWrites(db, tableName, indexName, deltas);
+};
+
+const PENDING_STORAGE_WRITES_KEY = 'aggregateStorageWrites';
+
+type PendingIndexDeltas = {
+  tableName: string;
+  indexName: string;
+  deltas: AggregateMembershipDelta[];
+};
+
+type PendingStorageWrites = {
+  byIndex: Map<string, PendingIndexDeltas>;
+  flush: () => Promise<void>;
+};
+
+/**
+ * Bucket and extrema deltas the open write batch has not applied yet, keyed by
+ * the index that owns them.
+ *
+ * Reconciliation runs once per document, so there is nothing for the fold to
+ * collapse inside a single call. Holding the deltas until the statement ends is
+ * what gives the fold something to fold: a 40-row statement over one key tuple
+ * becomes one bucket read and one bucket write instead of forty of each.
+ */
+const pendingStorageWrites = createOrmTransactionMemo<PendingStorageWrites>();
+
+/**
+ * Grouped per index, never flat. `serializeCountKeyParts` is `JSON.stringify` of
+ * the key tuple alone, so two indexes on different single string fields both
+ * holding `"a"` produce the identical `keyHash`; a flat fold would write one
+ * index's counts onto the other's bucket.
+ */
+const pendingIndexKey = (tableName: string, indexName: string): string =>
+  // Both are identifiers, so neither can contain the escaped separator and no
+  // two pairs can collide on the joined key.
+  `${tableName}\u0000${indexName}`;
+
+const getPendingStorageWrites = (
+  db: GenericDatabaseWriter<any>
+): PendingStorageWrites => {
+  const existing = pendingStorageWrites.get(db, PENDING_STORAGE_WRITES_KEY);
+  if (existing) {
+    return existing;
+  }
+
+  const created: PendingStorageWrites = {
+    byIndex: new Map(),
+    flush: async () => {
+      // Removed before it is applied, so a delta queued while the flush runs is
+      // picked up by this same loop instead of being dropped or applied twice.
+      for (;;) {
+        const next = created.byIndex.entries().next();
+        if (next.done) {
+          return;
+        }
+        const [key, entry] = next.value;
+        created.byIndex.delete(key);
+        await applyFoldedStorageDeltas(
+          db,
+          entry.tableName,
+          entry.indexName,
+          foldStorageDeltas(entry.deltas)
+        );
+      }
+    },
+  };
+  pendingStorageWrites.set(db, PENDING_STORAGE_WRITES_KEY, created);
+  return created;
+};
+
+const isEmptyMembershipDelta = (delta: AggregateMembershipDelta): boolean =>
+  delta.buckets.length === 0 &&
+  delta.extrema.length === 0 &&
+  delta.member.kind === 'none';
+
+/**
+ * Single-document reconciliation.
+ *
+ * The bucket and extrema writes always go on the transaction's write queue,
+ * never straight to storage: `applyBucketDelta` writes an absolute count
+ * computed from the row it just read, so two of them interleaving would be a
+ * lost update, and routing every one of them through a single drain is what
+ * keeps them serialized. Inside a mutation statement the queue is held to the
+ * end of the statement, which is what lets the fold collapse a page of
+ * documents into one write per key tuple; outside one it is drained
+ * immediately, so a raw `ctx.db` write behaves exactly as it did before.
+ *
+ * The member row is written per document either way, because it is the
+ * pre-image the next reconciliation of this document subtracts. Outside a
+ * statement it is still written after the bucket, preserving the previous
+ * order; inside one it necessarily lands first, and a flush that throws
+ * part-way leaves the index needing a backfill — which a partially applied fold
+ * would anyway, whichever order the two halves ran in.
+ *
+ * Deferral is invisible to aggregate readers: every bucket- and extrema-backed
+ * read path drains the queue first, so user code reading a count later in the
+ * same mutation — including from a trigger firing mid-statement — still sees
+ * its own writes.
  */
 export const reconcileAggregateMembership = async (
   db: GenericDatabaseWriter<any>,
@@ -2977,10 +3303,37 @@ export const reconcileAggregateMembership = async (
     metricValues: AggregateMetricValues | null;
   }
 ): Promise<void> => {
+  const { tableName, indexName } = params;
   const delta = await computeAggregateMembershipDelta(db, params);
-  await flushAggregateMembershipDeltas(db, params.tableName, params.indexName, [
-    delta,
-  ]);
+  // A write that touched no key field and no metric field reconciles to
+  // nothing. Queueing it would turn a statement of them into a drain over an
+  // empty fold instead of no work at all.
+  if (isEmptyMembershipDelta(delta)) {
+    return;
+  }
+
+  const pending = getPendingStorageWrites(db);
+  if (!enqueueOrmWriteBatch(db, pending.flush)) {
+    // No resolvable transaction to hang a queue on. Nothing else can be writing
+    // these documents either, so applying inline is still serialized.
+    await flushAggregateMembershipDeltas(db, tableName, indexName, [delta]);
+    return;
+  }
+
+  const key = pendingIndexKey(tableName, indexName);
+  const entry = pending.byIndex.get(key);
+  if (entry) {
+    entry.deltas.push(delta);
+  } else {
+    pending.byIndex.set(key, { tableName, indexName, deltas: [delta] });
+  }
+
+  if (isOrmWriteBatchOpen(db)) {
+    await applyMemberWrites(db, tableName, indexName, [delta]);
+    return;
+  }
+  await flushOrmWriteBatch(db);
+  await applyMemberWrites(db, tableName, indexName, [delta]);
 };
 
 export const computeCountKeyParts = (
@@ -3170,6 +3523,11 @@ const isIndexStateDrained = async (
   tableName: string,
   indexName: string
 ): Promise<boolean> => {
+  // "Nothing is left" has to account for storage a statement has queued but not
+  // written; otherwise an index could leave CLEARING and then have a pending
+  // bucket land on top of the drained state.
+  await flushOrmWriteBatch(db);
+
   const member = await db
     .query(AGGREGATE_MEMBER_TABLE)
     .withIndex('by_kind_table_index', (q: any) =>
@@ -3326,6 +3684,10 @@ export const clearCountIndexChunk = async (
   indexName: string,
   batchSize: number
 ): Promise<ClearIndexChunkResult> => {
+  // A queued bucket delta would resurrect a document this chunk just deleted,
+  // so apply everything pending before deciding what is left.
+  await flushOrmWriteBatch(db);
+
   const members = await takeMembersForIndex(
     db,
     tableName,
@@ -3335,6 +3697,15 @@ export const clearCountIndexChunk = async (
   if (members.length > 0) {
     for (const member of members) {
       await db.delete(AGGREGATE_MEMBER_TABLE, member._id as any);
+      // The one bucket/member writer that does not go through the delta
+      // machinery, so it is the one that has to retire memo entries itself.
+      // `takeMembersForIndex` selects on the metric kind, so every row here
+      // owns the metric memo key and none can retire a rank row's entry.
+      rememberMember(
+        db,
+        memberMemoKey(member.tableKey, member.indexName, member.docId),
+        null
+      );
     }
     return { done: false, processed: members.length };
   }
@@ -3348,6 +3719,11 @@ export const clearCountIndexChunk = async (
   if (buckets.length > 0) {
     for (const bucket of buckets) {
       await db.delete(AGGREGATE_BUCKET_TABLE, bucket._id as any);
+      rememberBucket(
+        db,
+        bucketMemoKey(bucket.tableKey, bucket.indexName, bucket.keyHash),
+        null
+      );
     }
     return { done: false, processed: buckets.length };
   }

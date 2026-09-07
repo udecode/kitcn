@@ -4,7 +4,7 @@
 
 ## Breaking changes
 
-- A long `in`, `notIn`, `ne`, or same-field equality `OR` filter — past 64 values — now pages from its index ranges instead of scanning the table. Those pages are in the order of the index the union walks, grouped by the probed value, rather than in creation order, and they no longer need `maxScan`. Add `orderBy` to keep newest-first paging.
+- Support index-ordered pagination for indexed filters with more than 64 values. Pages follow index order, grouped by the filtered value, rather than creation order. Add `orderBy` and `maxScan` to preserve newest-first paging.
 
 ```ts
 // Before
@@ -27,8 +27,8 @@ const page = await db.query.users.withIndex("by_status").findMany({
 
 ## Patches
 
-- Fix `select()` reading the whole table when its `where` compiled to an index union of more than 64 values. On a 120-row table with a single match, `select().where({ status: { in: [...65 values] } }).limit(1)` read 120 documents where the equivalent `findMany` read 1. Both read 1.
-- Fix an `in` next to another condition — `where: { status: { in: [...] }, name: { contains: 'x' } }` — falling back to a table scan once the list passed 64 values.
-- Fix a `limit` on that same shape reading every row carrying a probed value before applying the other condition. On 400 rows sharing one status where the first row already matched, `limit: 1` read 400 documents; it reads 1.
-- Keep an indexed `in`, `notIn`, `ne`, or same-field `OR` read index-bounded however long its value list is.
-- Require `maxScan` past 64 values only when the sort has to interleave them, such as `orderBy: { createdAt: 'desc' }`.
+- Fix unnecessary full-table reads for `select()` filters containing more than 64 values.
+- Fix unnecessary full-table reads for long `in` lists combined with another condition, such as `name: { contains: 'x' }`.
+- Improve limited reads with additional conditions so they stop after enough matching rows are found when index order satisfies the requested sort.
+- Support index-bounded reads for indexed `in`, `notIn`, `ne`, and same-field equality `OR` filters regardless of list length.
+- Support pagination without `maxScan` for wide filters whose requested order follows their indexed values; cross-value sorting, such as `orderBy: { createdAt: 'desc' }`, still requires `maxScan` past 64 values.

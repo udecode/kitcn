@@ -1,4 +1,5 @@
 import { text } from './builders/text';
+import { timestamp } from './builders/timestamp';
 import {
   and,
   between,
@@ -465,6 +466,50 @@ describe('timestamp mode key normalization', () => {
     expect(specs).toEqual([
       { field: '_creationTime', direction: 'asc', nullable: false },
     ]);
+  });
+
+  test('orders wide temporal probes using their stored numeric keys', () => {
+    const temporal = convexTable('temporal_union_order', {
+      occurredAt: timestamp().notNull(),
+    });
+    const query = createQuery(temporal);
+    const probes = Array.from({ length: 65 }, (_, index) => [
+      eq(fieldRef<Date>('occurredAt'), new Date((64 - index) * 1000)),
+    ]);
+
+    expect(
+      query._orderDisjointProbes({
+        probeFilters: probes,
+        indexField: 'occurredAt',
+        order: 'asc',
+      })
+    ).toEqual(probes.slice().reverse());
+    expect(
+      query._orderDisjointProbes({
+        probeFilters: probes,
+        indexField: 'occurredAt',
+        order: 'desc',
+      })
+    ).toEqual(probes);
+  });
+
+  test('declines temporal probes that overlap after normalization', () => {
+    const temporal = convexTable('temporal_union_overlap', {
+      occurredAt: timestamp({ mode: 'string' }).notNull(),
+    });
+    const query = createQuery(temporal);
+    const probes = [
+      [eq(fieldRef<string>('occurredAt'), '2026-01-01T00:00:00Z')],
+      [eq(fieldRef<string>('occurredAt'), '2026-01-01T01:00:00+01:00')],
+    ];
+
+    expect(
+      query._orderDisjointProbes({
+        probeFilters: probes,
+        indexField: 'occurredAt',
+        order: 'asc',
+      })
+    ).toBeNull();
   });
 
   test('rejects _creationTime in orderBy object', () => {
