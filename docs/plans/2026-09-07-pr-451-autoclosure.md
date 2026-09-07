@@ -77,11 +77,12 @@ Constraints:
 Boundaries:
 - intended delta: write-path-only aggregate bucket/member row memo with
   write-through updates and exact invalidation during clearing.
-- allowed repairs: runtime.ts, transaction-cache.ts, owning regression tests,
+- allowed repairs: runtime.ts, transaction-cache.ts, write-cache.ts, statement
+  builders, lifecycle/user-policy boundaries, owning tests, paired docs,
   changeset and both #451 task/closeout plans.
 - unrelated files: preserve; do not treat as blockers
-- non-goals: stage (b) batching, lifecycle contract changes, raw nested
-  mutation support, extrema read caching, new public APIs and release.
+- non-goals: stage (b) batching, new lifecycle/public APIs, extrema read caching
+  and release. Nested mutation correctness is part of the authorized repair.
 
 Output budget strategy:
 - Read the named owner/test files and bounded diffs; full check/review logs in
@@ -131,16 +132,16 @@ Closure matrix:
 | --- | --- | --- | --- |
 | per-PR task ownership | yes | Exact #451 body/head/plan | pass |
 | noncompliant close | no | N/A: compliance passed | N/A |
-| source behavior | yes | Original 56 integration + 8 memo tests pass; nested-mutation regression returns 2 instead of 3 | blocked |
+| source behavior | yes | 66 focused tests plus 3 write-scope unit tests; nested mutations, hooks and RLS preserve counts | pass |
 | package/API/build | yes | Build passed; entry exports unchanged | pass |
-| generated output | no | N/A: no generated owner changed | N/A |
+| generated output | yes | Published aggregate reference regenerated into local skill; fixture sync completed | pass |
 | fixtures/scenarios | yes | All 8 fixture comparisons and runtime lanes passed | pass |
-| docs/package skill | no | N/A: no public docs or usage API change | N/A |
-| changeset | yes | quiet-moons-invent patch; nested-mutation limitation explicit | pass |
+| docs/package skill | yes | Paired Write costs reference, intent validation/staleness and rendered route proof | pass |
+| changeset | yes | quiet-moons-invent patch covers safe statement reuse and nested-call correctness | pass |
 | agent workflow | no | N/A: no workflow behavior changed | N/A |
 | live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
-| cleanup/review | yes | Final branch autoreview found confirmed nested-mutation data corruption | blocked |
-| repository check | yes | `bun check` | pass |
+| cleanup/review | yes | Deslop inspected; frozen repair branch autoreview running | in_progress |
+| repository check | yes | Fresh `bun check` running after canonical fixture sync | in_progress |
 | GitHub delivery | yes | Post-push replay, hosted gates, receipt and skip-release merge | in_progress |
 
 Work Checklist:
@@ -232,8 +233,8 @@ Phase / pass table:
 | Phase | Status | Evidence | Next |
 | --- | --- | --- | --- |
 | Inventory | complete | Exact PR/source/raw feedback audited | proof |
-| Repair | complete | Stale plan claims and release wording corrected; runtime unchanged | review |
-| Review/checks | blocked | Earlier full check passed; fresh nested-mutation regression proves accepted review P1 | user scope decision |
+| Repair | complete | Statement/callback cache lifetime fixes nested mutation corruption; 69 focused cases pass | review |
+| Review/checks | in_progress | Frozen repair committed as faaa5e8e; full check and P1 review running | delivery |
 | Delivery | pending | | final audit |
 | Closeout | pending | | final |
 
@@ -267,7 +268,7 @@ Timeline:
 Reboot status:
 | Question | Answer |
 | --- | --- |
-| Where am I? | Blocked on confirmed P1; local regression retained, no closeout push |
+| Where am I? | Authorized repair committed locally; full check and P1 review running; not pushed |
 | Where am I going? | Repair, review/checks, delivery, final audit |
 | What is the goal? | Merge #451 with bounded reads, correct values and zero actionable P1 |
 | What have I learned? | See closure matrix |
@@ -279,7 +280,7 @@ Open risks:
   regression was observed returning 2 for 3 writes before its boundary fix.
   First hook harness used an unsupported createOrm option; an explicit callback
   assertion caught that, then schema.triggers supplied the valid red proof.
-  Broader focused proof, full check and final review still required.
+  Broader focused proof passes; full check and final review are running.
 - Docs sync: queries/aggregates.mdx Write costs -> published
   references/features/aggregates.md Write costs; resource section, no parity
   drops, no new setup/core copy. Canonical skill regenerated with its helper.
@@ -295,12 +296,12 @@ Open risks:
   Diagnosis/TDD will first reproduce the actual nested mutation call and then
   determine whether the existing runtime/cache owner can fix it without a
   new public contract or losing the promised read bounds.
-- Raw nested runMutation writes can stale the caller's maintenance cache;
-  supported module composition shares ctx through handlers. No fix claimed.
+- Earlier raw nested runMutation corruption is fixed locally by statement and
+  callback boundaries; hosted gates and independent review remain required.
 - Extrema reads and eager patch counts remain outside stage a.
 - Hosted gates, final feedback receipt and merge are not yet complete.
 
-Blocking evidence and next owner:
+Historical blocking evidence (superseded by authorized scope repair):
 - `NO_PROXY=localhost,127.0.0.1 bunx vitest run
   packages/kitcn/src/orm/aggregate-index/reconcile.read-amplification.vitest.ts
   -t 'nested mutation writes'`: deterministic failure `expected 2 to be 3`.

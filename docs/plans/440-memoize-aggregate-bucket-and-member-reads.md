@@ -442,7 +442,7 @@ Source-listed case matrix:
 | Bulk insert, one key tuple | reads scale 1:1 with rows | `reconcile.read-amplification.vitest.ts` "a bulk insert probes one bucket per distinct key tuple" | 12 bucket probes | 1 | RED 12, GREEN 1 | done |
 | Bulk update across two tuples | 2:1 on key change (issue's 80 reads / 40 rows) | same file, "a bulk update probes each key tuple once, not twice per row", cold memo seeded in its own transaction | 24 bucket probes | 2 | RED 24, GREEN 2 | done |
 | Bulk delete | reads scale 1:1 with rows | same file, "a bulk delete probes one bucket per distinct key tuple" | 12 bucket probes | 1 | RED 12, GREEN 1 | done |
-| Document reconciled twice in one transaction | member row re-read per reconcile | same file, "a document reconciled again in the same transaction re-probes nothing" | 24 bucket / 12 member probes | 1 / 0 | RED 24, GREEN 1 and 0 | done |
+| Later statement over the same documents | snapshots must expire between statements | same file, later-statement regression | stale snapshots across nested calls | 2 bucket / 12 member probes | Authorized safe-scope contract passes | done |
 | Read-your-own-writes preserved | eager patching must survive | same file, "reconciliation still serves the transaction its own writes" | passed | passed | count() correct after insert, update and delete in one transaction | done |
 | Cleared index leaves no stale entry | not in the issue; found by the audit | same file, "a cleared index does not leave memoized rows behind" | crashed with "Patch on non-existent document" before exact invalidation | passes | GREEN | done |
 | ~78 patches against one row | issue's stage (b) | N/A | 78 | unchanged | out of scope by the reporter's own split | deferred |
@@ -522,7 +522,7 @@ Reboot status:
 |----------|--------|
 | Where am I? | PR #451 current-head verification after main integration |
 | Where am I going? | Full check, branch review, exact-head receipt and merge |
-| What is the goal? | Issue #440 stage (a): one aggregate bucket read per distinct key tuple and one member read per document per transaction, with aggregate results unchanged |
+| What is the goal? | Issue #440 stage (a): bounded reads within uninterrupted statements, with correct counts across nested calls |
 | What have I learned? | See Findings — the issue's `[delta]` root cause is only half right, and four defects in its proposed shape had to be fixed |
 | What have I done? | See Timeline and Verification evidence |
 
@@ -546,13 +546,9 @@ High-risk note (runtime / package-internal change):
   memo to the write path costs nothing and removes that hazard outright.
 
 Open risks:
-- A raw `ctx.runMutation` that writes the same aggregate-indexed table shares
-  the transaction but not the JS context, so its writes are invisible to the
-  caller's memo and the caller's next reconcile would compound on a stale bucket.
-  kitcn already forbids raw `ctx.runMutation` for module composition, and the
-  limitation is stated in the source comment and the changeset. Closing it needs
-  the statement boundary stage (b) introduces, where deltas compose instead of
-  absolute rows being cached.
+- Read reuse ends at statement exit and user lifecycle/RLS callbacks. Callback-
+  heavy writes can perform more reads; correctness takes precedence over reuse.
+- Hosted checks, final P1 review and exact-head feedback receipt remain open.
 - `aggregate_extrema` still reads once per row for `min()`/`max()` indexes.
 
 Hard closeout guard:
@@ -573,14 +569,18 @@ Current closeout (2026-09-07):
   the memo, clearing retires entries, and rank membership uses a separate kind.
 - Deslop found zero added/worsened occurrences. Corrected a stale barrier name
   in a comment and clarified the changeset's nested-mutation warning.
-- Raw nested ctx.runMutation writes can stale subsequent caller maintenance
-  writes; ordinary aggregate queries read storage directly. This limitation
-  remains explicit, with shared-context handler composition as the supported route.
-- User waived walkthrough; no UI changes. Version Packages merge and release
-  are excluded. Final review, hosted gates and delivery remain in progress.
-- Final branch review found an accepted P1, reproduced by the new nested
-  mutation test: three inserted rows yield indexed count two after the outer
-  mutation resumes. Earlier green checks are insufficient. No closeout push.
-- Current runtime-only/no-lifecycle scope cannot safely observe nested writes
-  across Convex's fresh JS context. A statement/hook lifetime redesign needs
-  explicit scope coordination with #454; no correctness fix is claimed.
+- User authorized joint #451/#454 lifetime repair with "never ask, just go".
+  #451 keeps eager writes and owns statement/callback read-cache boundaries.
+  #454 remains the deferred-write owner. Public signatures remain unchanged.
+- Three nested-UDF regressions (between statements, lifecycle change hook and
+  insert RLS policy) each reproduced indexed count 2 for 3 writes before their
+  boundary repair. All pass with cache expiration/suspension. Bulk 1/2/1 bucket
+  probes remain; later statements reload 2 buckets and 12 members.
+- 66 focused cases and 3 failure-path unit tests pass. Root typecheck 5/5,
+  lint, package build, intent validation/staleness and rendered docs route pass.
+  Published aggregate guidance and its generated mirror are synchronized.
+- Canonical fixture sync completed all 8 templates after upstream lucide-react
+  drift; six generated manifests changed. Frozen repair commit faaa5e8e is
+  under full check and P1 branch review; no closeout push yet.
+- User waived walkthrough. Version Packages merge and release are excluded.
+  Hosted gates and exact-head delivery remain required.
