@@ -118,7 +118,7 @@ Closure matrix:
 | changeset | yes | olive-donkeys-invite patch; two user-facing outcomes | pass |
 | agent workflow | no | N/A: no workflow behavior changed | N/A |
 | live PR feedback | conditional | compliant: `resolve-pr-feedback` + final P1 read-back; noncompliant: N/A with comment/CLOSED receipts | pending |
-| cleanup/review | yes | Deslop completed; final branch autoreview follows full check | in_progress |
+| cleanup/review | yes | Deslop and final P0/P1 branch autoreview passed | pass |
 | repository check | yes | `bun check` | pass |
 | GitHub delivery | yes | Final-head replay/receipt then skip-release admin merge | in_progress |
 
@@ -216,7 +216,7 @@ Completion Gates:
 | Final lint | yes | Run `bun lint:fix` | bun lint:fix: 963 files; no changes |
 | Repository check | yes | Run `bun check` | bun check exit 0; /tmp/kitcn-pr450-check.log; 1400 Bun, 1005 Vitest, 124 CLI, 8 fixtures and runtime checks |
 | GitHub delivery | pending | Commit/push/open or update PR and read back | pending |
-| Autoreview | yes | Resolve every accepted actionable finding | pending |
+| Autoreview | yes | Resolve every accepted actionable finding | Exit 0 on f2d422eb against kitcn/main; no P0/P1 finding; /tmp/kitcn-pr450-review.md and .json |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-09-07-pr-450-autoclosure.md` | pending |
 | Agent source / generated sync | no | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | N/A: no rule source changed; install mirror sync clean |
 | Installed lock audit | no | Verify expected lock entries and removed skills through CLI-managed state | N/A: no installed skill or lock change |
@@ -229,7 +229,7 @@ Phase / pass table:
 | --- | --- | --- | --- |
 | Inventory | complete | Issue, head plan and all raw feedback audited | proof |
 | Repair | complete | Plan false claims removed; changeset clarified; lifecycle source unchanged | review |
-| Review/checks | in_progress | Full check passed; final branch review next | delivery |
+| Review/checks | complete | Full check and P0/P1 branch review passed | delivery |
 | Delivery | pending | | final audit |
 | Closeout | pending | | final |
 
@@ -237,7 +237,9 @@ Verification evidence:
 - Full `bun check` exit 0 on 2026-09-07, /tmp/kitcn-pr450-check.log: 1400 Bun,
   1005 Vitest, 124 CLI tests; all 8 fixture comparisons and runtime smoke lanes.
 - Package build, 9 focused integration tests, 22 lifecycle tests, source P1
-  invariant and lint passed. Final branch review and post-push replay follow.
+  invariant and lint passed. Final branch review passed on f2d422eb; only
+  internal result/status notes changed afterward and were directly checked.
+  Post-push replay and hosted gates remain required.
 
 Timeline:
 - 2026-09-07T08:45:06.432Z Autoclosure plan created.
@@ -245,7 +247,7 @@ Timeline:
 Reboot status:
 | Question | Answer |
 | --- | --- |
-| Where am I? | Full local checks passed; final branch review next |
+| Where am I? | Full local checks and final branch review passed; push next |
 | Where am I going? | Repair, review/checks, delivery, final audit |
 | What is the goal? | Merge #450 with zero actionable P1 and no release |
 | What have I learned? | See closure matrix |

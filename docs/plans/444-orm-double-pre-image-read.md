@@ -112,9 +112,9 @@ Task state:
 - task_type: bug
 - task_complexity: non-trivial
 - current_phase: closeout
-- current_phase_status: in_progress
-- next_phase: exact-head feedback closure and merge
-- goal_status: active
+- current_phase_status: complete
+- next_phase: exact-head autoclosure feedback receipt and merge
+- goal_status: complete
 
 Current verdict:
 - verdict: valid, fixed
@@ -334,7 +334,7 @@ Phase / pass table:
 | Autoreview | complete | `--mode local --engine claude`, exit 0, no accepted findings, "patch is correct" | closeout |
 | Commit / PR / GitHub sync | complete | commit 87d37a4f, branch `fix/orm-double-pre-image-read`, PR #450 | final response |
 | PR review round 1 | complete | @chatgpt-codex-connector P1 on the alias hunk accepted and reverted; probe evidence recorded | final response |
-| Closeout | in_progress | Fresh local/hosted proof and exact-head feedback receipt required | merge |
+| Closeout | complete | Task proof and branch review passed; existing PR #450 delivered | autoclosure receipt and merge |
 
 High-risk note:
 - Surface: ORM runtime write path. Every insert/patch/replace/delete on a
@@ -552,8 +552,8 @@ Timeline:
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | PR #450 exact-head closeout in progress |
-| Where am I going? | Fresh checks, review, push, feedback replay and merge |
+| Where am I? | Task proof complete; exact-head autoclosure delivery next |
+| Where am I going? | Push, feedback replay, hosted gates, receipt and merge |
 | What is the goal? | Make an N-row patch on an aggregateIndex/rankIndex table cost N pre-image reads instead of 2N, pinned by a read-bound vitest |
 | What have I learned? | See Findings and Decisions and tradeoffs |
 | What have I done? | See Timeline and Verification evidence |
@@ -580,8 +580,11 @@ Current closeout (2026-09-07):
   /tmp/kitcn-pr450-check.log. Package build and lint also passed.
 - Deslop retained only the test-directory fan-out warning; no source cleanup
   warranted. Agent-native source/route/proof review passed.
-- Final branch review and delivery receipts remain in progress; older
-  verification elsewhere in this plan does not substitute for these gates.
+- Final branch autoreview against kitcn/main on f2d422eb: exit 0, no P0/P1
+  findings; /tmp/kitcn-pr450-review.md and .json. Only internal proof-status
+  notes changed afterward; direct diff and goal checker verify those notes.
+- Exact-head push/replay, hosted gates, terminal receipt and merge belong to
+  docs/plans/2026-09-07-pr-450-autoclosure.md and remain unfinished.
 
 Hard closeout guard:
 - A local-only final response for verified code-changing work is invalid unless
