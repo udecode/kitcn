@@ -8,7 +8,7 @@ const PLAIN_VERSION_SPEC_RE = /^[\^~]?v?\d+\.\d+(?:\.\d+)?$/;
 const UPPER_BOUND_RE = /(?:^|\s)<={0,1}\s*v?(\d+)\.(\d+)(?:\.\d+)?/g;
 const LOWER_BOUND_RE = /(?:^|\s)>={0,1}\s*v?(\d+)\.(\d+)(?:\.\d+)?/g;
 const SUPPORTED_CONCAVE_CLI_VERSION = '0.0.1-alpha.14';
-const SUPPORTED_CONVEX_VERSION = '1.44.0';
+const SUPPORTED_CONVEX_VERSION = '1.45.0';
 const SUPPORTED_CONVEX_MIN_VERSION = '1.42';
 const SUPPORTED_CONVEX_MIN_TYPE_VERSION = '1.42.3';
 const SUPPORTED_BETTER_AUTH_VERSION = '1.7.1';
