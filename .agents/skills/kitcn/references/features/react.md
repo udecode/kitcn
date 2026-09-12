@@ -374,20 +374,19 @@ export const list = publicQuery
   .input(z.object({ userId: z.string().optional() }))
   .paginated({ limit: 20, item: SessionSchema })
   .query(async ({ ctx, input }) => {
-    // input.cursor and input.limit auto-added
     return ctx.orm.query.session.findMany({
       where: input.userId ? { userId: input.userId } : undefined,
       orderBy: { createdAt: 'desc' },
       cursor: input.cursor,
+      endCursor: input.endCursor,
       limit: input.limit,
     });
-    // output auto-wrapped as { continueCursor, isDone, page }
   });
 ```
 
 `.paginated({ limit, item })`:
-- Adds `cursor` (string|null) and `limit` (number) to input
-- Auto-sets output schema: `{ continueCursor: string, isDone: boolean, page: T[] }`
+- Adds `cursor`, optional `endCursor`, and `limit` to input
+- Accepts the full Convex page result, including `pageStatus` and `splitCursor`
 - Must be called before `.query()`
 
 ### Return Value
@@ -414,7 +413,7 @@ const { data, isPlaceholderData } = useInfiniteQuery(
 
 ### Real-time & Error Recovery
 
-Each page maintains its own WebSocket subscription. Auto-recovers on `InvalidCursor` (resets to page 0) and `splitCursor` (auto-splits page). Pagination state persists in `queryClient` for scroll restoration.
+Each page maintains its own WebSocket subscription. Split pages use `endCursor` to keep adjacent subscriptions bounded. An `InvalidCursor` on a loaded page resets the list cleanly to page 0. Pagination state persists in `queryClient` for scroll restoration.
 
 ---
 

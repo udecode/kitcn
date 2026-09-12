@@ -291,7 +291,7 @@ export const listOrganizations = authQuery
 
 ### Paginated Queries
 
-For large datasets, use `.paginated()` for cursor-based pagination. It automatically adds `cursor` and `limit` to your input, and wraps output with pagination metadata.
+For large datasets, use `.paginated()` for cursor-based pagination. It adds `cursor`, `endCursor`, and `limit` to your input and accepts Convex split metadata in the output.
 
 ```ts showLineNumbers {7-8,14}
 const SessionSchema = z.object({
@@ -308,12 +308,13 @@ export const list = publicQuery
 	      where: input.userId ? { userId: input.userId } : {},
 	      orderBy: { createdAt: 'desc' },
 	      cursor: input.cursor,
+	      endCursor: input.endCursor,
 	      limit: input.limit,
 	    });
 	  });
 ```
 
-The handler receives flat `input.cursor` and `input.limit`. Pass them to `findMany({ cursor, limit })`. The output is automatically typed as `{ continueCursor: string, isDone: boolean, page: T[] }`.
+The handler receives flat `input.cursor`, `input.endCursor`, and `input.limit`. Pass all three to `findMany()`. The output accepts `{ continueCursor, isDone, page, pageStatus?, splitCursor? }` so infinite-query clients can maintain reactive page boundaries.
 
 See [Infinite Queries](/docs/react/infinite-queries) for client-side usage with `useInfiniteQuery`.
 

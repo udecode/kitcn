@@ -34,7 +34,7 @@ Only remember these non-parity deltas:
 2. No `z.void()` outputs; omit `.output(...)` for no-value mutations.
 3. `.output(...)` parses the handler's value as-is and substitutes nothing: a handler must return the schema's *input* type, so `z.string().nullable()` needs an explicit `null` (`?? null`), not `undefined`. Model absent values as `.nullable()`, never a top-level `.optional()` — Convex wires `undefined` as `null` and cannot express top-level optionality, so `.output(z.string().optional())` publishes `v.string()` and the deployment rejects the `null` whenever the handler returns `undefined`. `.optional()` inside an object is fine. The low-level `returns:` option on `zCustomQuery`/`zCustomMutation`/`zCustomAction` differs — it substitutes `null` for `undefined` before parsing.
 4. Stacked `.input(...)` calls merge input shapes.
-5. `.paginated({ limit, item })` must be before `.query()` and auto-adds `input.cursor` + `input.limit`, output `{ page, continueCursor, isDone }`.
+5. `.paginated({ limit, item })` must be before `.query()` and adds `input.cursor`, `input.endCursor`, and `input.limit`; pass all three to ORM cursor queries so live splits stay bounded.
 6. Metadata is codegen’d onto `@convex/api` leaves (`api.namespace.fn.meta`) so never put secrets in `.meta(...)`; chaining `.meta(...)` is shallow merge and supports `defaultMeta`.
 7. Auth metadata drives client behavior: `auth: "optional"` waits for auth load then runs, `auth: "required"` waits then skips when logged out.
 8. `ctx.orm` enforces constraints + RLS; `ctx.db` bypasses them.
@@ -245,6 +245,7 @@ export const listProjects = authQuery
       where: { ownerId: ctx.userId },
       orderBy: { updatedAt: "desc" },
       cursor: input.cursor,
+      endCursor: input.endCursor,
       limit: input.limit,
     })
   );

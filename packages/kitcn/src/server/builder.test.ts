@@ -1055,6 +1055,50 @@ describe('server/builder', () => {
     ).rejects.toBeInstanceOf(CRPCError);
   });
 
+  test('paginated() preserves Convex page split metadata', async () => {
+    const c = initCRPC.create({
+      query: queryGeneric,
+      mutation: mutationGeneric,
+    } as any);
+
+    const fn = c.query
+      .paginated({ limit: 10, item: z.object({ id: z.string() }) })
+      .query(async () => ({
+        continueCursor: 'page-end',
+        isDone: false,
+        page: [{ id: 'one' }],
+        pageStatus: 'SplitRequired' as const,
+        splitCursor: 'page-midpoint',
+      }));
+
+    await expect((fn as any)._handler({}, {})).resolves.toEqual({
+      continueCursor: 'page-end',
+      isDone: false,
+      page: [{ id: 'one' }],
+      pageStatus: 'SplitRequired',
+      splitCursor: 'page-midpoint',
+    });
+  });
+
+  test('paginated() passes an optional end cursor to the handler', async () => {
+    const c = initCRPC.create({
+      query: queryGeneric,
+      mutation: mutationGeneric,
+    } as any);
+
+    const fn = c.query
+      .paginated({ limit: 10, item: z.object({ id: z.string() }) })
+      .query(async ({ input }) => ({
+        continueCursor: 'page-end',
+        isDone: true,
+        page: [{ id: String((input as any).endCursor) }],
+      }));
+
+    await expect(
+      (fn as any)._handler({}, { endCursor: 'page-boundary' })
+    ).resolves.toMatchObject({ page: [{ id: 'page-boundary' }] });
+  });
+
   test('output validation does not swallow a ZodError thrown by the handler', async () => {
     const c = initCRPC.create({
       query: queryGeneric,
