@@ -27,6 +27,7 @@ Task source:
 - acceptance criteria: preserve `pageStatus` and `splitCursor`; pass page
   boundaries through `endCursor`; recover stale page cursors without silently
   losing previously loaded range coverage.
+- owned PR: https://github.com/udecode/kitcn/pull/462
 
 Timed checkpoint:
 - requested duration: N/A: none requested
@@ -91,10 +92,10 @@ Blocked condition:
 Task state:
 - task_type: bug
 - task_complexity: non-trivial package/runtime/API work
-- current_phase: verification
+- current_phase: commit / PR / GitHub sync
 - current_phase_status: in_progress
-- next_phase: commit / PR / GitHub sync
-- goal_status: active
+- next_phase: closeout
+- goal_status: active pending GitHub readback
 
 Current verdict:
 - verdict: valid and fixed locally
@@ -146,7 +147,7 @@ Start Gates:
 | Skill analysis before edits | yes | `task`, `autogoal`, `vision`, `react-query`, `testing`, `tdd`, and `changeset`; `agent-native-reviewer` and `autoreview` applied at closeout |
 | Active goal checked or created | yes | unrelated PR #459 goal is blocked; user explicitly started #460, so this plan records degraded control state |
 | Source of truth read before edits | yes | issue #460 and its one comment read in full |
-| Exact per-PR task ownership | yes | this plan owns one not-yet-created PR for issue #460 |
+| Exact per-PR task ownership | yes | this plan owns https://github.com/udecode/kitcn/pull/462 for issue #460 |
 | GitHub comments and attachments read | yes | one comment read; no attachments |
 | Video transcript evidence required | no | N/A: no video or recording |
 | Pre-solution issue challenge required | yes | three falsifiable cases and durable owners recorded |
@@ -160,7 +161,7 @@ Start Gates:
 | Browser tool decision for browser surface | no | N/A: package transport/state machine has direct automated proof |
 | Commit / PR expectation decision | yes | commit whole checkout, push branch, create dedicated PR |
 | Task-style PR body decision | yes | use required emoji task format and preserve auto-release block |
-| Task-plan PR body evidence | yes | add exact PR after creation; body must name this plan at PR head |
+| Task-plan PR body evidence | yes | PR #462 body names this plan; this update puts the exact PR in the plan at head |
 | GitHub issue sync expectation decision | yes | PR closes #460; issue QA comment after verified delivery |
 | Output budget strategy recorded | yes | exact reads/scoped searches; logs saved under `/tmp` |
 | Package/API pack selected | yes | package-api pack materialized in this plan |
@@ -172,83 +173,83 @@ Start Gates:
 | Package build / fixture impact decision recorded | yes | package build/typecheck/tests required; fixture sync/check N/A |
 
 Work Checklist:
-- [ ] If a duration was requested, it is recorded as minimum active work unless
+- [x] If a duration was requested, it is recorded as minimum active work unless
       explicitly marked hard stop; when no better metric exists, initial and
       final confidence scores are recorded.
-- [ ] Objective includes outcome, completion threshold, verification surface,
+- [x] Objective includes outcome, completion threshold, verification surface,
       constraints, boundaries, and blocked condition.
-- [ ] Task source classified with source type, id/link, title, task type,
+- [x] Task source classified with source type, id/link, title, task type,
       acceptance criteria, caveats, likely files/routes/packages, browser
       surface, and root-cause layer.
-- [ ] Every GitHub PR in scope has its own task plan. This plan owns one exact
+- [x] Every GitHub PR in scope has its own task plan. This plan owns one exact
       PR, owns a not-yet-created PR slice, or records N/A because no PR is in
       scope; a batch plan is not used as a substitute.
-- [ ] Required video or screen-recording evidence is cached/read as normalized
+- [x] Required video or screen-recording evidence is cached/read as normalized
       `<video-transcripts>` XML, or marked N/A with reason.
-- [ ] For public GitHub bug reports, behavior claims, technical diagnoses, or
+- [x] For public GitHub bug reports, behavior claims, technical diagnoses, or
       suggested fixes, reporter claims are challenged before implementation
       with a recorded verdict: `valid`, `not reproduced`, `invalid`,
       `wont-fix`, `partially valid`, or `platform limitation`. Feature, docs,
       support, or cleanup requests with no bug claim may mark reproduction
       `N/A` with reason.
-- [ ] Repro escalation ladder followed for bug/behavior claims: focused
+- [x] Repro escalation ladder followed for bug/behavior claims: focused
       test/source-level repro first when applicable; existing repo-owned
       automated browser or integration proof next when available and useful as
       executable coverage; the repo-approved Browser tool next when tests or
       automation cannot reproduce or cannot model the surface honestly;
       screenshot or explicit visual-proof waiver when visual/native state
       matters.
-- [ ] Hard-stop rule followed for bug/behavior claims: no code when the issue
+- [x] Hard-stop rule followed for bug/behavior claims: no code when the issue
       is not reproduced, invalid, or won't-fix; partial validity pivots to the
       best long-term fix and records what was wrong or incomplete in the
       issue's proposed path.
-- [ ] Nearby repo instructions and implementation patterns read before edits.
-- [ ] Source-listed case matrix is complete and every contradiction has an
+- [x] Nearby repo instructions and implementation patterns read before edits.
+- [x] Source-listed case matrix is complete and every contradiction has an
       owner, harness, and verdict before mutation.
-- [ ] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
+- [x] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
       `invalid` with evidence.
-- [ ] Implementation fixes the right ownership boundary, or the narrower choice
+- [x] Implementation fixes the right ownership boundary, or the narrower choice
       is recorded with reason.
-- [ ] Release artifact requirement recorded: active changeset, new changeset, or
+- [x] Release artifact requirement recorded: active changeset, new changeset, or
       N/A with reason.
-- [ ] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
+- [x] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
       requirements, PR body sync, and issue sync when applicable.
-- [ ] Commit/PR handling recorded for code-changing work: commit and PR
+- [x] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
-- [ ] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
+- [x] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
       recorded, or blocker recorded.
-- [ ] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
+- [x] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
       exists at the PR head, and it identifies the exact PR before autoclosure.
-- [ ] Branch handling recorded for code-changing work: dedicated branch used,
+- [x] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
-- [ ] Local-env-rot retry policy recorded for any surprising repo-wide failure:
+- [x] Local-env-rot retry policy recorded for any surprising repo-wide failure:
       reinstall/rerun evidence or N/A with reason.
-- [ ] Workspace authority recorded: every proof command names the cwd/tool that
+- [x] Workspace authority recorded: every proof command names the cwd/tool that
       owns the changed behavior.
-- [ ] Output budget discipline recorded and followed: broad searches are
+- [x] Output budget discipline recorded and followed: broad searches are
       scoped, capped, counted, or artifacted instead of streamed into goal
       context.
-- [ ] High-risk note recorded for public API, runtime, package-boundary,
+- [x] High-risk note recorded for public API, runtime, package-boundary,
       browser behavior, agent-action, or command-contract changes, or marked
       N/A with reason.
-- [ ] Review/autoreview target selected from actual diff state for non-trivial
+- [x] Review/autoreview target selected from actual diff state for non-trivial
       implementation work, or marked N/A with reason.
-- [ ] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
+- [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
-- [ ] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
-- [ ] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
-- [ ] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
-- [ ] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`.
-- [ ] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes.
-- [ ] Package/API pack: affected Convex static import graphs stay narrow and
+- [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
+- [x] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
+- [x] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
+- [x] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`.
+- [x] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes.
+- [x] Package/API pack: affected Convex static import graphs stay narrow and
       plugin/per-module boundaries are used where appropriate.
-- [ ] Package/API pack: CLI commands remain deterministic, `--json` capable,
+- [x] Package/API pack: CLI commands remain deterministic, `--json` capable,
       and non-interactive with explicit confirmation bypass when relevant.
-- [ ] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
+- [x] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
       current-state synchronized when public guidance changes.
-- [ ] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
-- [ ] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
+- [x] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
+- [x] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
