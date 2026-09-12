@@ -34,7 +34,7 @@ Timed checkpoint:
 - semantics: N/A: no timed checkpoint
 - initial confidence score: N/A: binary three-case matrix
 - improvement loop: N/A: one-shot issue execution
-- final score / loop closure: all three cases pass; delivery closeout pending
+- final score / loop closure: 98%; all three cases and delivery gates pass
 
 Completion threshold:
 - All three issue cases fail before the fix and pass after it in public-boundary
@@ -92,10 +92,10 @@ Blocked condition:
 Task state:
 - task_type: bug
 - task_complexity: non-trivial package/runtime/API work
-- current_phase: commit / PR / GitHub sync
-- current_phase_status: in_progress
-- next_phase: closeout
-- goal_status: active pending GitHub readback
+- current_phase: closeout
+- current_phase_status: complete
+- next_phase: final response
+- goal_status: complete
 
 Current verdict:
 - verdict: valid and fixed locally
@@ -157,7 +157,7 @@ Start Gates:
 | `docs/solutions` checked for non-trivial existing-code work | yes | no matching live-pagination solution; existing auth pagination and parse-time pagination notes are adjacent only |
 | TDD decision before behavior change or bug fix | yes | vertical red/green tests for transport, boundaries, then stale reset |
 | Branch decision for code-changing task | yes | dedicated `codex/460-live-pagination` from current `origin/main` |
-| Release artifact decision | yes | update existing `.changeset/wide-index-union-stays-indexed.md` patch section |
+| Release artifact decision | yes | add `.changeset/calm-cursors-split.md` after the release consumed the prior draft |
 | Browser tool decision for browser surface | no | N/A: package transport/state machine has direct automated proof |
 | Commit / PR expectation decision | yes | commit whole checkout, push branch, create dedicated PR |
 | Task-style PR body decision | yes | use required emoji task format and preserve auto-release block |
@@ -168,7 +168,7 @@ Start Gates:
 | Public surface or package boundary identified | yes | cRPC `.paginated()` input/output and framework infinite-query page args |
 | Convex entry/import graph impact identified | no | N/A: schema/state changes add no imports or deployed bundle owner |
 | CLI/scaffold/generated impact identified | no | N/A: no templates, CLI, scaffold, or generated output |
-| Release artifact path selected | yes | existing `.changeset/wide-index-union-stays-indexed.md` |
+| Release artifact path selected | yes | `.changeset/calm-cursors-split.md` |
 | `changeset` skill loaded when `.changeset` is required | yes | read before package mutation |
 | Package build / fixture impact decision recorded | yes | package build/typecheck/tests required; fixture sync/check N/A |
 
@@ -254,48 +254,48 @@ Work Checklist:
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
-| Named verification threshold | pending | Run the command, proof, source audit, or artifact check named in this plan | pending |
-| Exact per-PR task ownership | pending | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | pending |
-| Pre-solution issue challenge verdict | pending | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | pending |
-| Repro escalation ladder | pending | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | pending |
-| Bug reproduced before fix | pending | Record failing test/repro or N/A with reason | pending |
-| Targeted behavior verification | pending | Run focused test/proof for changed behavior or record N/A | pending |
-| TypeScript or typed config changed | pending | Run relevant typecheck | pending |
-| Package exports or file layout changed | pending | Run the relevant package build before final verification and keep generated updates | pending |
-| Package manifests, lockfile, or install graph changed | pending | Run `bun install` and relevant package checks | pending |
-| Agent rules or skills changed | pending | Run `bun install` and verify generated skill sync | pending |
-| Workspace authority proof | pending | Run verification in the owning repo/package/app/route/tool and record cwd; do not count the wrong workspace as proof | pending |
-| Browser surface changed | pending | Capture Browser Use proof or record explicit waiver/blocker | pending |
-| Browser final proof | pending | Attach screenshot or exact browser verification caveat when browser proof applies | pending |
-| UI walkthrough | pending | If UI or rendered output changed, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | pending |
-| Scaffold or fixture output changed | pending | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | pending |
-| Package behavior or public API changed | pending | Add a changeset or record why no changeset applies | pending |
-| Docs and kitcn skill sync changed | pending | Keep `www/**` and `packages/kitcn/skills/kitcn/**` in sync, or record N/A | pending |
-| Docs or content changed | pending | For docs-heavy work, use `--template docs`; for incidental docs, verify source-backed claims, links, examples, and rendered output or record N/A | pending |
-| High-risk mini gate | pending | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | pending |
-| Agent-native review for agent/tooling changes | pending | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | pending |
-| Local install corruption suspected | pending | Run `bun install` once, rerun the exact failing command, or record N/A | pending |
-| Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
-| PR task evidence verified | pending | Verify body plan line, plan at PR head, and exact PR ownership | pending |
-| PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
-| GitHub issue sync-back | pending | Post concise issue sync after PR exists, or record N/A/blocker | pending |
-| Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
-| Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
-| Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
-| Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
-| Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-09-12-460-live-pagination-transport-and-recovery.md` | pending |
-| Public API / package boundary proof | pending | Source-audit public API, exports, and package boundary impact | pending |
-| Convex bundle/import proof | pending | Audit affected function-entry static graphs or record N/A | pending |
-| CLI/scaffold/generated proof | pending | Prove command contract and regenerate owned output or record N/A | pending |
-| Release artifact classification | pending | Record whether the change is published package behavior/API/types/config/runtime or no published user-visible delta | pending |
-| Published package changeset | pending | If published package users see a delta, load `changeset` and add/update one `.changeset/*.md` per package | pending |
-| No release artifact | pending | If no artifact is needed, record the exact reason: internal-only, docs-only, agent-only, test-only, or no user-visible delta from `main` | pending |
-| Package typecheck/build/test | pending | Run owning package checks or record N/A with reason | pending |
-| Fixture/scaffold generation | pending | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | pending |
-| Docs/package skill sync | pending | Synchronize current-state public guidance or record N/A | pending |
+| Named verification threshold | yes | Run named proof | three-case matrix, focused lanes, package proof, full gate, CI pass |
+| Exact per-PR task ownership | yes | Record exact PR | #462 and this dedicated plan |
+| Pre-solution issue challenge verdict | yes | Record challenge | valid; source and red tests confirmed all three claims |
+| Repro escalation ladder | yes | Apply selected ladder | source/tests pass; browser and screenshots N/A |
+| Bug reproduced before fix | yes | Preserve red evidence | builder, hook boundary, reconnect, and type reds recorded |
+| Targeted behavior verification | yes | Run focused proof | 73 Bun + 13 Solid tests pass |
+| TypeScript or typed config changed | yes | Typecheck | package and direct type-contract checks pass |
+| Package exports or file layout changed | yes | Build | 72-file package build passes |
+| Package manifests, lockfile, or install graph changed | yes | Install/check | `bun install` and final package proof pass |
+| Agent rules or skills changed | yes | Sync and compare | owned skill sync plus three exact mirror comparisons pass |
+| Workspace authority proof | yes | Use owning workspace | all proof ran from repository root/package owner |
+| Browser surface changed | no | N/A | transport/state machine has direct tests |
+| Browser final proof | no | N/A | no rendered behavior |
+| UI walkthrough | no | N/A | no UI/output change |
+| Scaffold or fixture output changed | yes | Sync/check | all eight generated fixtures pass |
+| Package behavior or public API changed | yes | Changeset | `.changeset/calm-cursors-split.md` |
+| Docs and kitcn skill sync changed | yes | Synchronize | current-state docs and skill mirrors match |
+| Docs or content changed | yes | Source audit | examples forward `endCursor`; links unchanged |
+| High-risk mini gate | yes | Record risk and proof | split loss/truncation covered at builder and both hooks |
+| Agent-native review for agent/tooling changes | yes | Run parity review | capability map passes; no findings |
+| Local install corruption suspected | no | N/A | no install corruption; only external Git transport/registry churn |
+| Commit created | yes | Commit checkout | `0ac9e65e` plus task-evidence commit `bc883234` |
+| PR create or update | yes | Push verified branch | #462 updated against current `main` |
+| Task-style PR body verified | yes | Read body | required emoji format and auto-release block verified |
+| PR task evidence verified | yes | Read plan/body/head | body names plan; plan names #462; source head `bc883234`; this closeout commit keeps the plan at PR head |
+| PR proof image hosting | no | N/A | no browser images |
+| GitHub issue sync-back | yes | Comment for QA | issue comment 5645764699 verified |
+| Final handoff contract | yes | Fill exact evidence | section below complete |
+| Final lint | yes | Run lint | `bun lint:fix` and full `bun check` pass |
+| Output budget discipline | yes | Keep logs bounded | high-volume proof artifacted under `/tmp`; accidental broad diff was truncated once |
+| Timed checkpoint | no | N/A | none requested |
+| Autoreview for non-trivial implementation changes | yes | Clean final review | branch review against `origin/main` clean at 0.98 |
+| Goal plan complete | yes | Run mechanical checker | command updated to this exact plan path |
+| Public API / package boundary proof | yes | Audit transport/types | emitted declarations preserve fields and hide hook-owned input |
+| Convex bundle/import proof | no | N/A | no new deployed static import graph |
+| CLI/scaffold/generated proof | yes | Regenerate owned output | skill/fixture generators and exact checks pass |
+| Release artifact classification | yes | Classify delta | published kitcn runtime/API fix |
+| Published package changeset | yes | Add patch entry | fresh patch changeset after release consumed prior draft |
+| No release artifact | no | N/A | published delta has changeset |
+| Package typecheck/build/test | yes | Run package proof | all pass on rebased head |
+| Fixture/scaffold generation | yes | Sync/check | generated manifests refreshed and all comparisons pass |
+| Docs/package skill sync | yes | Synchronize | source/generated/public guidance aligned |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
@@ -303,8 +303,8 @@ Phase / pass table:
 | Intake and source read | complete | issue/comment, doctrine, Convex contract, and owners read | implementation |
 | Implementation | complete | builder transport plus React/Solid split and reset owners changed | verification |
 | Verification | complete | focused tests, typecheck, build, artifact audit, lint, skill sync, clean autoreview, and `bun check` | commit / PR |
-| Commit / PR / GitHub sync | pending | | final response |
-| Closeout | pending | | final response |
+| Commit / PR / GitHub sync | complete | rebased PR #462, verified issue comment, and all GitHub checks passed | closeout |
+| Closeout | complete | every checklist and evidence gate is closed | final response |
 
 Findings:
 - `.paginated()` accepted only `cursor`/`limit` and its output validator removed
@@ -389,22 +389,22 @@ Source-listed case matrix:
 | reconnect | oversized recovery is clamped and loses loaded range | React/Solid stale-error state harness | one capped replacement treated complete | clean reset to first page | Bun + Solid stale-cursor tests | pass |
 
 Final handoff contract:
-- Commit line: pending
-- PR line: pending
-- Issue line: pending
-- Confidence line: pending
+- Commit line: `0ac9e65e` implementation; `bc883234` task evidence
+- PR line: https://github.com/udecode/kitcn/pull/462
+- Issue line: https://github.com/udecode/kitcn/issues/460 with verified QA comment
+- Confidence line: 98%; local/full/CI proof and clean autoreview
 - Flow table:
-  - Reproduced: tests pending, browser pending
-  - Verified: tests pending, browser pending
-- Browser check: pending
-- Outcome: pending
-- Caveat: pending
+  - Reproduced: red builder, React/Solid boundary/reset, and type-contract tests; browser N/A
+  - Verified: green focused/package/full/CI proof; browser N/A
+- Browser check: N/A: no rendered surface
+- Outcome: live split metadata and adjacent bounds preserved; stale invalid cursors reset cleanly
+- Caveat: generated fixture manifests track the registry versions required by the final gate
 - Design:
-  - Chosen boundary: pending
-  - Why not quick patch: pending
-  - Why not broader change: pending
-- Verified: pending
-- PR body verified: pending
+  - Chosen boundary: cRPC builder wire schema plus shared React/Solid page-state invariant
+  - Why not quick patch: caller-side hints cannot survive a schema that strips them
+  - Why not broader change: ORM/search pagination and UI presentation are different owners
+- Verified: focused tests, type contract, package typecheck/build, artifact/skill sync, `bun check`, CI, Vercel, autoreview
+- PR body verified: exact task format, plan line, changeset checkbox, and no self-link
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -428,20 +428,22 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
-- Issue: pending
-- Browser proof: pending
-- Caveats: pending
+- Commit: `0ac9e65e`, `bc883234`
+- PR: https://github.com/udecode/kitcn/pull/462; mergeable; all checks pass
+- Issue: QA comment https://github.com/udecode/kitcn/issues/460#issuecomment-5645764699
+- Browser proof: N/A: package-only transport/state behavior
+- Caveats: fixture manifests contain current generated dependency versions
 
 Timeline:
 - 2026-09-12T10:44:41.304Z Task goal plan created.
+- 2026-09-12T12:07:13Z PR #462 rebased onto current `main` and checks started.
+- 2026-09-12T12:13Z CI, Vercel, review, issue sync, and package proof complete.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Three-case implementation and focused proof complete; full gate running |
-| Where am I going? | Commit/PR/GitHub sync and closeout |
+| Where am I? | PR #462 delivered, mergeable, and green |
+| Where am I going? | Final response |
 | What is the goal? | Fix #460 and ship one verified PR |
 | What have I learned? | Builder strips hints/rejects endCursor; both hooks keep boundaries outside args; recovery over-requests past server cap |
 | What have I done? | Reproduced and fixed all cases, synchronized docs/skill, built the package, and closed review gates |
