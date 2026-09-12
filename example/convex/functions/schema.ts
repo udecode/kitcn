@@ -349,10 +349,74 @@ export const projectsTable = convexTable(
     index('isPublic').on(t.isPublic),
     index('archived').on(t.archived),
     index('ownerId').on(t.ownerId),
+    // `{ isPublic, archived }` and `{ ownerId, archived }` each tie two
+    // single-field indexes at the same planner score, and the stable sort hands
+    // the win to whichever was declared first -- leaving the other field as a
+    // JS post-filter over the whole partition. These compound indexes make both
+    // an exact match. They also serve `orderBy: { createdAt: 'desc' }`: every
+    // declared field is pinned by an equality, so Convex's implicit trailing
+    // `_creationTime` key orders the range and the scan returns the page.
+    index('isPublic_archived').on(t.isPublic, t.archived),
+    index('ownerId_archived').on(t.ownerId, t.archived),
     aggregateIndex('by_owner').on(t.ownerId),
     searchIndex('search_name_description')
       .on(t.name)
       .filter(t.isPublic, t.archived),
+  ]
+);
+
+/**
+ * Denormalized "which projects can this user see", one row per (user, project).
+ *
+ * `projects.list` has to order owner-or-member projects by project creation
+ * time. Ownership lives on `projects.ownerId` and membership lives on
+ * `projectMembers`, and no index spans both, so the question used to be answered
+ * by scanning `projects` and post-filtering in JS -- O(table) reads, with every
+ * scanned row joining the subscription's read set. This table answers it with a
+ * single index walk instead.
+ *
+ * Maintained by `_helpers/project_access.ts`, which owns every write that grants
+ * or revokes access, rather than by schema triggers: async cascade continuation
+ * batches build their ORM from the raw `ctx.db` and drop triggers past the first
+ * batch, so a trigger-maintained copy would drift. Deletion needs neither -- both
+ * foreign keys cascade, and cascades still run in those batches.
+ */
+export const projectAccessTable = convexTable(
+  'projectAccess',
+  {
+    createdAt: timestamp().notNull().defaultNow(),
+    userId: text()
+      .references(() => userTable.id, { onDelete: 'cascade' })
+      .notNull(),
+    projectId: text()
+      .references(() => projectsTable.id, { onDelete: 'cascade' })
+      .notNull(),
+    /**
+     * The project's creation time, as a plain number, so it can be an index
+     * field. A `timestamp()` here would be redundant: the value is only ever
+     * compared, never read back as a date.
+     *
+     * Millisecond resolution. `_creationTime` carries a sub-millisecond
+     * fraction, but it reaches this column through a hydrated `Date`, which
+     * cannot hold it, so two projects created in the same millisecond share a
+     * key and are separated by the access row's own creation order.
+     */
+    projectCreatedAt: integer().notNull(),
+    /** Mirrors `projects.archived` so the toggle is part of the index range. */
+    archived: boolean().notNull(),
+    isOwner: boolean().notNull(),
+  },
+  (t) => [
+    // `userId` and `archived` pinned by equality, then `projectCreatedAt` is the
+    // next index field, so `orderBy: { projectCreatedAt: 'desc' }` is served by
+    // walking the range backwards. Reads become O(page).
+    index('userId_archived_projectCreatedAt').on(
+      t.userId,
+      t.archived,
+      t.projectCreatedAt
+    ),
+    uniqueIndex('userId_projectId').on(t.userId, t.projectId),
+    index('projectId').on(t.projectId),
   ]
 );
 
@@ -639,6 +703,7 @@ export const tables = {
   subscriptions: subscriptionsTable,
   todos: todosTable,
   projects: projectsTable,
+  projectAccess: projectAccessTable,
   tags: tagsTable,
   todoComments: todoCommentsTable,
   projectMembers: projectMembersTable,
@@ -756,6 +821,10 @@ const schema = defineSchema(tables, {
         to: r.projects.id.through(r.projectMembers.projectId),
         alias: 'ProjectMembers',
       }),
+      projectAccess: r.many.projectAccess({
+        from: r.user.id,
+        to: r.projectAccess.userId,
+      }),
       todoComments: r.many.todoComments({
         from: r.user.id,
         to: r.todoComments.userId,
@@ -824,11 +893,25 @@ const schema = defineSchema(tables, {
         to: r.todoComments.todoId,
       }),
     },
+    projectAccess: {
+      project: r.one.projects({
+        from: r.projectAccess.projectId,
+        to: r.projects.id,
+      }),
+      user: r.one.user({
+        from: r.projectAccess.userId,
+        to: r.user.id,
+      }),
+    },
     projects: {
       owner: r.one.user({
         from: r.projects.ownerId,
         to: r.user.id,
         alias: 'ProjectOwner',
+      }),
+      access: r.many.projectAccess({
+        from: r.projects.id,
+        to: r.projectAccess.projectId,
       }),
       todos: r.many.todos({
         from: r.projects.id,

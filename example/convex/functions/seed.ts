@@ -3,6 +3,7 @@ import * as z from 'zod';
 import { createUser } from '../lib/auth/auth-helpers';
 import { authAction, privateMutation } from '../lib/crpc';
 import { getEnv } from '../lib/get-env';
+import { grantProjectAccess } from './_helpers/project_access';
 import { createSeedCaller, createSeedHandler } from './generated/seed.runtime';
 import {
   projectsTable,
@@ -367,7 +368,7 @@ export const generateSamplesBatch = privateMutation
       const isPublic = Math.random() > 0.7; // 30% public
       const isArchived = Math.random() > 0.9; // 10% archived
 
-      const [{ id: projectId }] = await ctx.orm
+      const [project] = await ctx.orm
         .insert(projectsTable)
         .values({
           name,
@@ -376,7 +377,10 @@ export const generateSamplesBatch = privateMutation
           isPublic,
           archived: isArchived,
         })
-        .returning({ id: projectsTable.id });
+        .returning();
+      const projectId = project.id;
+
+      await grantProjectAccess(ctx, { project, userId: input.userId });
 
       created++;
 

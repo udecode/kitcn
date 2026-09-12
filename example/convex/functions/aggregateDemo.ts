@@ -1,6 +1,7 @@
 import { eq } from 'kitcn/orm';
 import * as z from 'zod';
 import { authMutation, authQuery } from '../lib/crpc';
+import { grantProjectAccess } from './_helpers/project_access';
 import {
   AGGREGATE_PARITY_DEFINITIONS,
   type AggregateParityDefinition,
@@ -875,9 +876,11 @@ async function seedDemoData(ctx: AggregateDemoMutationCtx): Promise<number> {
         archived: false,
         ownerId: ctx.userId,
       })
-      .returning({ id: projectsTable.id });
+      .returning();
 
     projectIds.push(project.id);
+
+    await grantProjectAccess(ctx, { project, userId: ctx.userId });
 
     const [member] = await ctx.orm
       .insert(projectMembersTable)
