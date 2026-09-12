@@ -162,28 +162,29 @@ export const list = publicQuery
   .input(z.object({ userId: z.string().optional() }))
   .paginated({ limit: 20, item: SessionSchema })
   .query(async ({ ctx, input }) => {
-    // cursor and limit are automatically added to input
-    // output is auto-wrapped as { continueCursor, isDone, page }
+    // cursor, endCursor, and limit are automatically added to input
     return ctx.orm.query.session.findMany({
       where: input.userId ? { userId: input.userId } : undefined,
       orderBy: { createdAt: 'desc' },
       cursor: input.cursor,
+      endCursor: input.endCursor,
       limit: input.limit,
     });
   });
 ```
 
 The `.paginated({ limit, item })` method:
-- Adds flat pagination fields to your input: `cursor` and `limit`
-- Auto-sets output schema: `{ continueCursor: string, isDone: boolean, page: T[] }`
+- Adds flat pagination fields to your input: `cursor`, `endCursor`, and `limit`
+- Accepts the full Convex page result, including `pageStatus` and `splitCursor`
 
 | Input Field | Type | Description |
 |-------------|------|-------------|
 | `cursor` | `string \| null` | Pagination cursor |
+| `endCursor` | `string \| null \| undefined` | Reactive page boundary controlled by the infinite-query hook |
 | `limit` | `number` | Items to fetch (capped at server limit) |
 
 <Callout icon={<InfoIcon />}>
-**Important:** Always call `.paginated({ limit, item })` before `.query()`. The handler receives flat `input.cursor` and `input.limit` - pass them to ORM `findMany({ cursor, limit })`.
+**Important:** Always call `.paginated({ limit, item })` before `.query()`. Pass `input.cursor`, `input.endCursor`, and `input.limit` to the matching ORM `findMany()` fields so reactive page splits stay bounded.
 </Callout>
 
 ## Conditional Queries
@@ -209,7 +210,8 @@ Each page maintains its own WebSocket subscription. When data changes on the ser
 - Items are automatically updated in place
 - New items appear in the appropriate page
 - Deleted items are removed
-- Page cursors are automatically recovered if invalidated
+- Oversized reactive pages split into adjacent, boundary-pinned subscriptions
+- An invalid loaded-page cursor resets the list cleanly to its first page
 
 ```tsx showLineNumbers {4-6}
 const crpc = useCRPC();
@@ -250,4 +252,3 @@ Here's what `useInfiniteQuery` returns:
 | `isSuccess` | `boolean` | Query succeeded |
 
 Extends TanStack Query's `UseQueryResult`.
-

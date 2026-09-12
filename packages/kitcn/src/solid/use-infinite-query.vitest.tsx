@@ -430,11 +430,18 @@ describe('useInfiniteQuery', () => {
       { wrapper }
     );
 
-    await vi.waitFor(() => expect(convexPageArgs(queryClient)).toHaveLength(2));
+    await vi.waitFor(() => expect(convexPageArgs(queryClient)).toHaveLength(3));
 
-    const [, splitArgs] = convexPageArgs(queryClient);
-    expect(splitArgs.cursor).toBe('cursor-1');
-    expect(Object.hasOwn(splitArgs, '__paginationId')).toBe(false);
+    const [, firstHalfArgs, secondHalfArgs] = convexPageArgs(queryClient);
+    expect(firstHalfArgs).toMatchObject({
+      cursor: null,
+      endCursor: 'cursor-1',
+    });
+    expect(secondHalfArgs).toMatchObject({
+      cursor: 'cursor-1',
+      endCursor: 'cursor-2',
+    });
+    expect(Object.hasOwn(secondHalfArgs, '__paginationId')).toBe(false);
 
     // Deduplicated across the split boundary.
     await vi.waitFor(() => expect(result.status).toBe('Exhausted'));
@@ -442,6 +449,55 @@ describe('useInfiniteQuery', () => {
       'post-1',
       'post-2',
     ]);
+  });
+
+  test('resets cleanly when a loaded page cursor becomes invalid', async () => {
+    let cursorIsStale = false;
+    const queryClient = makeQueryClient((args) => {
+      if (args.cursor === null) {
+        return {
+          page: [{ _id: 'post-1' }],
+          isDone: false,
+          continueCursor: 'cursor-1',
+        };
+      }
+      if (args.cursor === 'cursor-1') {
+        if (cursorIsStale) throw new Error('InvalidCursor');
+        return {
+          page: [{ _id: 'post-2' }],
+          isDone: false,
+          continueCursor: 'cursor-2',
+        };
+      }
+      return {
+        page: [{ _id: 'post-3' }],
+        isDone: true,
+        continueCursor: 'cursor-3',
+      };
+    });
+    const wrapper = makeWrapper(queryClient);
+    const { result } = renderHook(
+      () => useInfiniteQuery(createOptions({ limit: 2 })),
+      { wrapper }
+    );
+
+    await vi.waitFor(() => expect(result.status).toBe('CanLoadMore'));
+    result.fetchNextPage();
+    await vi.waitFor(() => expect(result.status).toBe('CanLoadMore'));
+    result.fetchNextPage();
+    await vi.waitFor(() => expect(result.status).toBe('Exhausted'));
+    expect(result.data.map((item: any) => item._id)).toEqual([
+      'post-1',
+      'post-2',
+      'post-3',
+    ]);
+
+    cursorIsStale = true;
+    await queryClient.refetchQueries();
+
+    await vi.waitFor(() => expect(result.isError).toBe(false));
+    expect(result.data.map((item: any) => item._id)).toEqual(['post-1']);
+    expect(result.status).toBe('CanLoadMore');
   });
 
   test('fetchNextPage adds a page query with continueCursor and limit', async () => {

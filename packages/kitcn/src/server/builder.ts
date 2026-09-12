@@ -68,15 +68,17 @@ import { parseOutput, zodIssuesToConvexValue } from './validation';
  */
 const paginatedSchemaForTypes = z.object({
   cursor: z.union([z.string(), z.null()]),
+  endCursor: z.union([z.string(), z.null()]).optional(),
   limit: z.number(),
 });
 
 /** Paginated schema type - both cursor and limit are required after .paginated() */
 type PaginatedInputSchema = typeof paginatedSchemaForTypes;
 
-/** Paginated schema type for external callers - both fields are optional due defaults. */
+/** Paginated schema type for external callers before defaults are applied. */
 const paginatedSchemaForClientTypes = z.object({
   cursor: z.union([z.string(), z.null()]).optional(),
+  endCursor: z.union([z.string(), z.null()]).optional(),
   limit: z.number().optional(),
 });
 
@@ -1048,8 +1050,8 @@ export class QueryProcedureBuilder<
   /**
    * Add pagination input (chainable before .query())
    *
-   * Creates flat { cursor, limit } input like tRPC and auto-wraps output.
-   * User accesses args.cursor and args.limit directly.
+   * Creates flat { cursor, endCursor, limit } input like tRPC and auto-wraps
+   * output. User accesses the pagination fields directly from args.
    *
    * @param opts.limit - Default/max items per page
    * @param opts.item - Zod schema for each item in the page array
@@ -1067,12 +1069,23 @@ export class QueryProcedureBuilder<
       continueCursor: z.ZodUnion<[z.ZodString, z.ZodNull]>;
       isDone: z.ZodBoolean;
       page: z.ZodArray<TItem>;
+      pageStatus: z.ZodOptional<
+        z.ZodUnion<
+          [
+            z.ZodLiteral<'SplitRecommended'>,
+            z.ZodLiteral<'SplitRequired'>,
+            z.ZodNull,
+          ]
+        >
+      >;
+      splitCursor: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodNull]>>;
     }>,
     TMeta
   > {
-    // Flat pagination schema - user sees { cursor, limit } at top level
+    // Flat pagination schema - user sees the fields at the input top level
     const paginationSchemaWithDefault = z.object({
       cursor: z.union([z.string(), z.null()]).default(null),
+      endCursor: z.union([z.string(), z.null()]).optional(),
       limit: z
         .number()
         .default(opts.limit)
@@ -1084,6 +1097,14 @@ export class QueryProcedureBuilder<
       continueCursor: z.union([z.string(), z.null()]),
       isDone: z.boolean(),
       page: z.array(opts.item),
+      pageStatus: z
+        .union([
+          z.literal('SplitRecommended'),
+          z.literal('SplitRequired'),
+          z.null(),
+        ])
+        .optional(),
+      splitCursor: z.union([z.string(), z.null()]).optional(),
     });
 
     return new QueryProcedureBuilder({
