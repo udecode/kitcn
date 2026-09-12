@@ -1,5 +1,107 @@
 # kitcn
 
+## 0.33.0
+
+### Minor Changes
+
+- [#456](https://github.com/udecode/kitcn/pull/456) [`5b0bd5a`](https://github.com/udecode/kitcn/commit/5b0bd5a1debb4a0e0bb87f79ef1a18f357b614c1) Thanks [@MikeyZhang75](https://github.com/MikeyZhang75)! - ## Breaking changes
+
+  - Support index-ordered pagination for indexed filters with more than 64 values. Pages follow index order, grouped by the filtered value, rather than creation order. Add `orderBy` and `maxScan` to preserve newest-first paging.
+
+  ```ts
+  // Before
+  const page = await db.query.users.withIndex("by_status").findMany({
+    where: { status: { in: manyStatuses } },
+    cursor: null,
+    limit: 20,
+    maxScan: 500,
+  });
+
+  // After
+  const page = await db.query.users.withIndex("by_status").findMany({
+    where: { status: { in: manyStatuses } },
+    orderBy: { createdAt: "desc" },
+    cursor: null,
+    limit: 20,
+    maxScan: 500,
+  });
+  ```
+
+  ## Patches
+
+  - Fix authenticated cRPC query results disappearing when a server-rendered page
+    hydrates.
+  - Fix unnecessary full-table reads for `select()` filters containing more than 64 values.
+  - Fix unnecessary full-table reads for long `in` lists combined with another condition, such as `name: { contains: 'x' }`.
+  - Improve limited reads with additional conditions so they stop after enough matching rows are found when index order satisfies the requested sort.
+  - Support index-bounded reads for indexed `in`, `notIn`, `ne`, and same-field equality `OR` filters regardless of list length.
+  - Support pagination without `maxScan` for wide filters whose requested order follows their indexed values; cross-value sorting, such as `orderBy: { createdAt: 'desc' }`, still requires `maxScan` past 64 values.
+
+- [#449](https://github.com/udecode/kitcn/pull/449) [`b8df2da`](https://github.com/udecode/kitcn/commit/b8df2da49a8733b545f02b84bb538b1cbef275b0) Thanks [@MikeyZhang75](https://github.com/MikeyZhang75)! - ## Breaking changes
+
+  - Read a `select().flatMap(relation, { where })` stage through an index that extends the relation's foreign key when the schema declares one. Children arrive in that index's order, so a lowered range field now orders them ahead of creation time, and outstanding page cursors for those queries do not carry over.
+
+  ```ts
+  // Before: every post by the author is read, then filtered, in creation order.
+  // After: only the by_author_likes range is read, in numLikes order.
+  index("by_author_likes").on(t.authorId, t.numLikes);
+
+  await ctx.orm.query.users
+    .select()
+    .flatMap("posts", { includeParent: false, where: { numLikes: { gt: 10 } } })
+    .paginate({ cursor: null, limit: 20 });
+  ```
+
+  ## Patches
+
+  - Compile a `select().union([{ where }])` source `where` against the table's indexes instead of filtering every scanned row, so an object `where` on an indexed field bounds the read. A source keeps its unanchored read when the lowered one could not supply `interleaveBy`, and a `where` never displaces an index the source or the chain pinned with a range.
+  - Report what a caller can actually do when a `predicate(...)` `where` runs over an unbounded pipeline read: a union source names its own `index` option, and a `flatMap` stage names the relation index it needs.
+  - Resolve a `select()` union source or `flatMap` stage `where` once per read. A callback `where` runs a single time instead of twice, and an object `where` compiles once instead of once per row.
+
+### Patch Changes
+
+- [#455](https://github.com/udecode/kitcn/pull/455) [`a73de28`](https://github.com/udecode/kitcn/commit/a73de28bacf3e518a38762442270d2c54f6989e8) Thanks [@MikeyZhang75](https://github.com/MikeyZhang75)! - ## Patches
+
+  - Fix `findMany` losing its read bound when a `limit` is combined with `in`, `ne`,
+    `notIn` or a same-field `OR` on a table that has RLS enabled, or alongside a
+    filter Convex cannot evaluate such as `contains`. Either one used to make the
+    query read every row it matched against, so
+    `findMany({ where: { ownerId: { in: [a, b] } }, limit: 3 })` read 500 documents
+    on a 500-row table and 200 on a 200-row table. It now reads 6 at either size,
+    and the count no longer grows with the table.
+  - Improve how that `limit` is counted, so it bounds rows the caller can actually
+    see: with 80 rows an RLS policy hides sitting in front of the matches,
+    `limit: 3` still returns three rows and reads 86 documents instead of 200.
+  - Support that bound for an `in` list of any length.
+
+  Rows and their order are unchanged. A `where` that filters through a relation
+  keeps its previous read cost, as does `ne`, `notIn` or `isNotNull` ordered by a
+  field no index can serve.
+
+- [#450](https://github.com/udecode/kitcn/pull/450) [`781af65`](https://github.com/udecode/kitcn/commit/781af65c6e2f9128362378f0cf358d2c8e509b7d) Thanks [@MikeyZhang75](https://github.com/MikeyZhang75)! - ## Patches
+
+  - Improve update read costs on `aggregateIndex` and `rankIndex` tables: read
+    each row once unless a user `update.before` hook requires a fresh read.
+  - Fix CLEARING checks for deletes of already-deleted rows: report the
+    transient aggregate-index state instead of `Delete on non-existent doc`.
+
+- [#451](https://github.com/udecode/kitcn/pull/451) [`80f7609`](https://github.com/udecode/kitcn/commit/80f7609cb107d23e4688b6877f35787107dd0a39) Thanks [@MikeyZhang75](https://github.com/MikeyZhang75)! - ## Patches
+
+  - Improve `aggregateIndex` bulk-write read costs by reusing bucket and member
+    reads within uninterrupted ORM statements. User hooks and policy callbacks
+    end reuse so nested mutation writes remain visible to later maintenance.
+
+- [#454](https://github.com/udecode/kitcn/pull/454) [`f399843`](https://github.com/udecode/kitcn/commit/f399843c6bfb46e080558bc22d2cc4a77842cd16) Thanks [@MikeyZhang75](https://github.com/MikeyZhang75)! - ## Patches
+
+  - Improve bulk aggregate writes by folding shared bucket and extrema updates
+    within uninterrupted statements. A 40-row key migration writes two shared
+    buckets and two extrema entries, plus forty membership rows.
+  - Preserve read-your-own-writes through aggregate reads and nested functions
+    called by lifecycle hooks or RLS policies. Reads and callbacks flush pending
+    writes; callbacks suspend batching until they settle.
+  - Fix mid-statement aggregate reads through `withoutTriggers()` and an ORM
+    rebuilt from a hook context to observe the same rows as `ctx.orm`.
+
 ## 0.32.2
 
 ### Patch Changes
