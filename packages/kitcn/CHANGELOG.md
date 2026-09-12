@@ -1,5 +1,12 @@
 # kitcn
 
+## 0.33.1
+
+### Patch Changes
+
+- [#462](https://github.com/udecode/kitcn/pull/462) [`41eb956`](https://github.com/udecode/kitcn/commit/41eb9567ebea2ae0b6340624897815f54c51e0aa) Thanks [@zbeyens](https://github.com/zbeyens)! - Fix cRPC live pagination so reactive page splits preserve adjacent page
+  boundaries and invalid loaded cursors reset cleanly.
+
 ## 0.33.0
 
 ### Minor Changes
