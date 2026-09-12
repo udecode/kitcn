@@ -196,8 +196,8 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
     const token = useAuthValue('token');
     const isAuthenticated = useAuthValue('isAuthenticated');
     const previousAuthRef = useRef<{
-      isAuthenticated: boolean;
       identity: string | null;
+      isAuthenticated: boolean;
     } | null>(null);
     // Get fetchAccessToken from context (immediately available, no race condition)
     const fetchAccessToken = useFetchAccessToken();
@@ -214,20 +214,18 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
       // Non-JWT strings (the opaque SSR session token) keep their own signature
       // so the opaque -> JWT and opaque -> logout transitions still reset.
       const identity = resolveAuthIdentity(token);
-      previousAuthRef.current = {
-        isAuthenticated,
-        identity,
-      };
+      previousAuthRef.current = { identity, isAuthenticated };
 
       if (!previous) {
         return;
       }
 
-      if (
-        tokenReady &&
-        (previous.identity !== identity ||
-          previous.isAuthenticated !== isAuthenticated)
-      ) {
+      // Convex initially reports false while confirming the token supplied by
+      // SSR, so false -> true for the same identity preserves hydrated data.
+      // Once accepted, true -> false means Convex rejected the existing token
+      // and its auth-bound cache must be cleared even if the token is retained.
+      const tokenRejected = previous.isAuthenticated && !isAuthenticated;
+      if ((tokenReady && previous.identity !== identity) || tokenRejected) {
         void convexQueryClient.resetAuthQueries();
       }
     }, [convexQueryClient, isAuthenticated, token]);

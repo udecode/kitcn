@@ -27,6 +27,8 @@ const page = await db.query.users.withIndex("by_status").findMany({
 
 ## Patches
 
+- Fix authenticated cRPC query results disappearing when a server-rendered page
+  hydrates.
 - Fix unnecessary full-table reads for `select()` filters containing more than 64 values.
 - Fix unnecessary full-table reads for long `in` lists combined with another condition, such as `name: { contains: 'x' }`.
 - Improve limited reads with additional conditions so they stop after enough matching rows are found when index order satisfies the requested sort.

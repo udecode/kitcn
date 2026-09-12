@@ -303,6 +303,95 @@ describe('createCRPCContext', () => {
     expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(3);
   });
 
+  test('keeps hydrated queries when Convex confirms the same token', () => {
+    const api = {} as any;
+    const convexClient = {} as any;
+    const convexQueryClient = {
+      resetAuthQueries: mock(async () => {}),
+    } as any;
+
+    // A server-rendered page reaches the browser carrying a token. The auth
+    // state reports it as unauthenticated while Convex checks it, then as
+    // authenticated once Convex accepts it. The reader did not change, so the
+    // queries the server render hydrated must stay in the cache.
+    const ssrToken = `a.${Buffer.from(
+      JSON.stringify({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        jti: 'ssr-token',
+        sub: 'account-a',
+      })
+    ).toString('base64')}.b`;
+
+    let authState = {
+      isAuthenticated: false,
+      token: ssrToken as string | null,
+    };
+    useAuthValueSpy.mockImplementation(
+      ((key: 'token' | 'isAuthenticated') => authState[key]) as any
+    );
+
+    const { CRPCProvider } = createCRPCContext({ api });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <CRPCProvider
+        convexClient={convexClient}
+        convexQueryClient={convexQueryClient}
+      >
+        {children}
+      </CRPCProvider>
+    );
+
+    const hook = renderHook(() => useMeta(), { wrapper });
+    expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
+
+    authState = { isAuthenticated: true, token: ssrToken };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
+
+    // Signing out drops the token, which is a different identity.
+    authState = { isAuthenticated: false, token: null };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(1);
+  });
+
+  test('resets auth queries when Convex rejects an existing token', () => {
+    const api = {} as any;
+    const convexClient = {} as any;
+    const convexQueryClient = {
+      resetAuthQueries: mock(async () => {}),
+    } as any;
+    const token = `a.${Buffer.from(
+      JSON.stringify({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        sub: 'account-a',
+      })
+    ).toString('base64')}.b`;
+
+    let authState = {
+      isAuthenticated: true,
+      token: token as string | null,
+    };
+    useAuthValueSpy.mockImplementation(
+      ((key: 'token' | 'isAuthenticated') => authState[key]) as any
+    );
+
+    const { CRPCProvider } = createCRPCContext({ api });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <CRPCProvider
+        convexClient={convexClient}
+        convexQueryClient={convexQueryClient}
+      >
+        {children}
+      </CRPCProvider>
+    );
+
+    const hook = renderHook(() => useMeta(), { wrapper });
+    expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
+
+    authState = { isAuthenticated: false, token };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(1);
+  });
+
   test('ignores token rotation but resets when identity claims change', () => {
     const api = {} as any;
     const convexClient = {} as any;
