@@ -28,6 +28,7 @@ import {
   resolveScenarioKeysForCheck,
   resolveScenarioKeysForRuntime,
   resolveScenarioProcessEnv,
+  resolveScenarioProcessSpawnOptions,
   resolveScenarioProofPath,
   resolveScenarioStepEnv,
   runScenarioDev,
@@ -100,6 +101,15 @@ describe('tooling/scenarios', () => {
 
   test('scenario runtime readiness allows slow Vite cold starts', () => {
     expect(SCENARIO_READY_TIMEOUT_MS).toBe(60_000);
+  });
+
+  test('interactive scenario processes stay attached for interrupt forwarding', () => {
+    expect(resolveScenarioProcessSpawnOptions({ interactive: true })).toEqual({
+      detached: false,
+    });
+    expect(resolveScenarioProcessSpawnOptions({ interactive: false })).toEqual({
+      detached: process.platform !== 'win32',
+    });
   });
 
   test('stopRunningScenarioProcesses force kills processes that ignore SIGINT', async () => {

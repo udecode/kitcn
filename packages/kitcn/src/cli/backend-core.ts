@@ -79,7 +79,7 @@ import { renderInitNextMessagesTemplate } from './registry/init/next/init-next-m
 import { INIT_NEXT_MESSAGES_PAGE_TEMPLATE } from './registry/init/next/init-next-messages-page.template.js';
 import {
   renderInitNextPackageJsonTemplate,
-  resolveInitNextEslintVersion,
+  resolveInitNextEslintVersionFromPackageJson,
 } from './registry/init/next/init-next-package-json.template.js';
 import { INIT_NEXT_PROVIDERS_TEMPLATE } from './registry/init/next/init-next-providers.template.js';
 import { INIT_NEXT_QUERY_CLIENT_TEMPLATE } from './registry/init/next/init-next-query-client.template.js';
@@ -1436,6 +1436,7 @@ function overrideConfigBackend(
 }
 
 type DependencyInstallItem = {
+  installFromManifest?: boolean;
   installSpec: string;
   packageName: string;
   requiredVersion?: string;
@@ -3325,12 +3326,14 @@ function buildDependencyInstallPlan(
     ...(pkg.devDependencies ?? {}),
   };
   const missing = dependencies.filter(
-    (dependency) => !(dependency.packageName in existing)
+    (dependency) =>
+      !dependency.installFromManifest && !(dependency.packageName in existing)
   );
   const requiresReconcile = dependencies.some(
     (dependency) =>
       dependency.requiredVersion !== undefined &&
-      existing[dependency.packageName] !== undefined &&
+      (dependency.installFromManifest ||
+        existing[dependency.packageName] !== undefined) &&
       existing[dependency.packageName] !== dependency.requiredVersion
   );
   if (missing.length === 0 && !requiresReconcile) {
@@ -3514,12 +3517,13 @@ export function buildInitializationPlan(params: {
 
   const nextEslintVersion =
     projectContext?.mode === 'next-app'
-      ? resolveInitNextEslintVersion(
-          (
-            JSON.parse(
-              fs.readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
-            ) as { devDependencies?: Record<string, string> }
-          ).devDependencies?.['eslint-config-next']
+      ? resolveInitNextEslintVersionFromPackageJson(
+          JSON.parse(
+            fs.readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
+          ) as {
+            dependencies?: Record<string, string>;
+            devDependencies?: Record<string, string>;
+          }
         )
       : undefined;
 
@@ -3540,6 +3544,7 @@ export function buildInitializationPlan(params: {
         ...(nextEslintVersion
           ? [
               {
+                installFromManifest: true,
                 installSpec: `eslint@${nextEslintVersion}`,
                 packageName: 'eslint',
                 requiredVersion: nextEslintVersion,

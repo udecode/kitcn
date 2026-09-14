@@ -356,6 +356,14 @@ Review fixes:
 - Accepted final local P1: do not treat the direct process leader's exit as
   proof that its descendants exited; poll the process group itself and apply a
   bounded SIGKILL fallback when it remains alive.
+- Accepted exact-head P2 `discussion_r4010526496`: install a missing managed
+  ESLint from the rewritten manifest instead of passing it to production
+  dependency arguments.
+- Accepted exact-head P1 `discussion_r4010526499`: keep interactive
+  `scenario:dev` children attached so terminal interrupts reach them; detached
+  process groups remain exclusive to bounded runtime proof.
+- Accepted exact-head P2 `discussion_r4010526507`: resolve
+  `eslint-config-next` from both dependency sections before selecting ESLint.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -368,12 +376,14 @@ Error attempts:
 | detached process-group test timed out because only the direct process was signalled | 1 | signal the owned process group by negative PID | resolved; SIGINT/SIGKILL group proof passes |
 | `bun lint:fix` rejected an inline version regex | 1 | move the regex to module scope | resolved; lint passes |
 | autoreview found direct-leader exit could hide a live descendant group | 1 | verify group existence with signal 0 before and after force-stop | resolved; leader-exits-first regression test passes |
+| config-in-`dependencies`, missing-ESLint, and interactive-spawn focused tests failed | 1 each | use both manifest sections, install managed ESLint from the manifest, and separate interactive/runtime spawn modes | resolved; all three focused tests pass |
+| lint rejected `delete` in the missing-ESLint test fixture | 1 | filter the dependency entries into a new record | resolved; lint passes |
 
 Verification evidence:
 - Red: the new manifest-template test expected `9.39.5` and received `^9`.
-- Green: focused manifest template suite passed 6/6, including Next 14 and
-  Next 16 compatibility.
-- `bun test ./tooling/scenarios.test.ts`: 34 tests, 102 expectations passed.
+- Green: focused manifest template suite passed 7/7, including Next 14, Next
+  16, and dependency-section compatibility.
+- `bun test ./tooling/scenarios.test.ts`: 35 tests, 104 expectations passed.
 - After review fixes, the same suite passed 33 tests / 100 expectations,
   including missing-`lsof` and current-project-only cleanup coverage.
 - `bun run fixtures:sync` regenerated every committed fixture from package
@@ -386,7 +396,8 @@ Verification evidence:
 - The post-review-fix root `bun check` passed the full fixture and runtime
   matrix, including repeated reuse of port 3210 without sibling sweeps.
 - Next adoption reconciliation test was red with no package-manager install,
-  then green; the full init command suite passed 57/57 and package build passed.
+  then green; missing ESLint was red with production `bun add` and green with
+  manifest-driven `bun install`; the full init command suite passed 58/58.
 - npm registry peer proof: `eslint-config-next@14.2.35` accepts ESLint 7/8;
   `eslint-config-next@15.0.0` adds ESLint 9 support.
 - The detached process-group test was red by timeout before the owner repair,
@@ -395,6 +406,8 @@ Verification evidence:
   group still receives SIGKILL.
 - Final post-reconciliation `bun check` passed in 326 seconds; TruffleHog was
   clean and final dirty-local P0/P1 autoreview was clean (overall 0.9).
+- Final post-edge-case `bun check` passed in 378 seconds; TruffleHog was clean
+  and P0/P1 autoreview was clean (overall 0.92).
 - TruffleHog found no secrets; final P0/P1 autoreview found no actionable issue.
 
 Source-listed case matrix:
@@ -406,6 +419,9 @@ Source-listed case matrix:
 | existing Next adoption | manifest rewrite must reconcile lockfile/node_modules | init command integration test | no install when every package name existed | package-manager install after ESLint normalization | focused red/green and full init suite 57/57 | passed |
 | supported Next 14 adoption | `eslint-config-next@14` requires ESLint 7/8 | manifest template unit test + npm peer metadata | unconditional pin wrote ESLint 9 | preserve existing ESLint 8 | red mismatch, peer proof, then green | passed |
 | cleanup without `lsof` | scenario descendants must terminate on every supported runner | process-group unit test | direct parent signal left descendants alive | terminate the owned detached group | red timeout, then SIGINT/SIGKILL green | passed |
+| config in `dependencies` | Next apps may place tooling in either manifest section | manifest template test | loose ESLint range preserved | resolve config from either section | red mismatch, then green | passed |
+| missing managed ESLint | template writes ESLint to `devDependencies` | init integration test | generic `bun add` made it a production dependency | reconcile from rewritten manifest | red command mismatch, then green | passed |
+| interactive interrupt | terminal Ctrl+C must reach all `scenario:dev` children | spawn-mode unit test | children detached from terminal group | keep interactive children attached | red missing mode owner, then green | passed |
 
 Final handoff contract:
 - Commit line: `d4c24966` (`fix next scaffold eslint resolution`)

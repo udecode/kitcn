@@ -71,6 +71,30 @@ describe('init-next-package-json.template', () => {
     });
   });
 
+  test('normalizes ESLint when eslint-config-next is a dependency', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          'eslint-config-next': '16.3.4',
+        },
+        devDependencies: {
+          eslint: '^9',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        'eslint-config-next': '16.3.4',
+      },
+      devDependencies: {
+        eslint: '9.39.5',
+      },
+    });
+  });
+
   test('falls back to convex:codegen when codegen already exists', () => {
     const rendered = renderInitNextPackageJsonTemplate(
       JSON.stringify({

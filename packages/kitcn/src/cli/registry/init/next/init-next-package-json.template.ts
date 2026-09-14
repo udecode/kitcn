@@ -63,14 +63,20 @@ export const resolveInitNextEslintVersion = (
     : undefined;
 };
 
+export const resolveInitNextEslintVersionFromPackageJson = (
+  packageJson: Pick<ProjectPackageJson, 'dependencies' | 'devDependencies'>
+) =>
+  resolveInitNextEslintVersion(
+    packageJson.devDependencies?.['eslint-config-next'] ??
+      packageJson.dependencies?.['eslint-config-next']
+  );
+
 const getInitNextPackageJsonDevDependencies = (
   options: InitPackageJsonTemplateOptions,
   existing: ProjectPackageJson
 ) => ({
   ...INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES,
-  ...(resolveInitNextEslintVersion(
-    existing.devDependencies?.['eslint-config-next']
-  )
+  ...(resolveInitNextEslintVersionFromPackageJson(existing)
     ? { eslint: INIT_NEXT_ESLINT_VERSION }
     : {}),
   ...(options.backend === 'concave'

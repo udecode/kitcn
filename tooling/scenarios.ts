@@ -402,15 +402,24 @@ export const resolveScenarioProcessEnv = (scenarioKey: ScenarioKey) => {
   };
 };
 
+export const resolveScenarioProcessSpawnOptions = (params: {
+  interactive: boolean;
+}) => ({
+  detached: !params.interactive && process.platform !== 'win32',
+});
+
 const spawnScenarioCommand = (
   scenarioKey: ScenarioKey,
   cmd: string[],
-  cwd: string
+  cwd: string,
+  options: { interactive?: boolean } = {}
 ): ScenarioSpawnedProcess =>
   Bun.spawn({
     cmd,
     cwd,
-    detached: process.platform !== 'win32',
+    ...resolveScenarioProcessSpawnOptions({
+      interactive: options.interactive ?? false,
+    }),
     env: resolveScenarioProcessEnv(scenarioKey),
     stdio: ['ignore', 'inherit', 'inherit'],
   });
@@ -1211,7 +1220,10 @@ export const runScenarioDev = async (
     scenarioKey,
     params.runCommand ?? run
   );
-  const spawnCommand = params.spawnCommand ?? spawnScenarioCommand;
+  const spawnCommand =
+    params.spawnCommand ??
+    ((key: ScenarioKey, cmd: string[], cwd: string) =>
+      spawnScenarioCommand(key, cmd, cwd, { interactive: true }));
   const { commands, projectDir } = resolveScenarioDevCommands(scenarioKey, {
     backend: params.backend,
     outputRoot: params.outputRoot,
