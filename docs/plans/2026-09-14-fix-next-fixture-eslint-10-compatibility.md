@@ -338,6 +338,11 @@ Implementation notes:
 Review fixes:
 - Autoreview ran after both behavior changes and reported no actionable
   findings (overall correctness confidence 0.98).
+- Accepted live P1 `discussion_r4010211795`: treat missing `lsof` as
+  best-effort cleanup instead of failing an otherwise successful scenario.
+- Accepted live P2 `discussion_r4010211806`: stop only the current scenario's
+  project-owned backend; do not sweep sibling prepared scenarios.
+- Final dirty-local P0/P1 autoreview after both repairs is clean (overall 0.9).
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -350,6 +355,8 @@ Verification evidence:
 - Red: the new manifest-template test expected `9.39.5` and received `^9`.
 - Green: focused manifest template suite passed 5/5.
 - `bun test ./tooling/scenarios.test.ts`: 32 tests, 99 expectations passed.
+- After review fixes, the same suite passed 33 tests / 100 expectations,
+  including missing-`lsof` and current-project-only cleanup coverage.
 - `bun run fixtures:sync` regenerated every committed fixture from package
   owners; `bun run fixtures:check` passed every fixture and showed Next and
   Next-auth installing ESLint 9.39.5.
@@ -357,7 +364,9 @@ Verification evidence:
   `tmp/scenarios/next/project`, passed with exact ESLint 9.39.5.
 - `bun --cwd packages/kitcn build`, `bun typecheck`, `bun lint:fix`, and the
   final root `bun check` passed.
-- TruffleHog found no secrets; final autoreview found no actionable issue.
+- The post-review-fix root `bun check` passed the full fixture and runtime
+  matrix, including repeated reuse of port 3210 without sibling sweeps.
+- TruffleHog found no secrets; final P0/P1 autoreview found no actionable issue.
 
 Source-listed case matrix:
 | Case | Source claim | Harness | Before | Expected after | Evidence | Status |

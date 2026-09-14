@@ -190,13 +190,27 @@ const extractLocalConvexPort = (projectDir: string) => {
   return match?.[1];
 };
 
+const isMissingExecutableError = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  error.code === 'ENOENT';
+
 export const isProcessOwnedByProject = (pid: string, projectDir: string) => {
-  const result = Bun.spawnSync({
-    cmd: ['lsof', '-a', '-p', pid, '-d', 'cwd', '-Fn'],
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'ignore',
-  });
+  let result: ReturnType<typeof Bun.spawnSync>;
+  try {
+    result = Bun.spawnSync({
+      cmd: ['lsof', '-a', '-p', pid, '-d', 'cwd', '-Fn'],
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    });
+  } catch (error) {
+    if (isMissingExecutableError(error)) {
+      return false;
+    }
+    throw error;
+  }
   if (result.exitCode !== 0) {
     return false;
   }
@@ -221,12 +235,20 @@ export const stopLocalConvexBackendForProject = (projectDir: string) => {
     return;
   }
 
-  const result = Bun.spawnSync({
-    cmd: ['lsof', '-ti', `tcp:${port}`],
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'ignore',
-  });
+  let result: ReturnType<typeof Bun.spawnSync>;
+  try {
+    result = Bun.spawnSync({
+      cmd: ['lsof', '-ti', `tcp:${port}`],
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    });
+  } catch (error) {
+    if (isMissingExecutableError(error)) {
+      return;
+    }
+    throw error;
+  }
   if (result.exitCode !== 0) {
     return;
   }
@@ -1184,14 +1206,12 @@ export const runScenarioTest = async (
     runScenarioRuntimeProofFn?: typeof runScenarioRuntimeProof;
     runAuthSmokeFn?: typeof runAuthSmoke;
     stopLocalConvexBackendForProjectFn?: typeof stopLocalConvexBackendForProject;
-    stopScenarioBackendsFn?: typeof stopScenarioBackends;
   } = {}
 ) => {
   const proofPath = resolveScenarioProofPath(scenarioKey);
   const stopLocalBackendFn =
     params.stopLocalConvexBackendForProjectFn ??
     stopLocalConvexBackendForProject;
-  const stopBackendsFn = params.stopScenarioBackendsFn ?? stopScenarioBackends;
 
   try {
     if (proofPath === 'check') {
@@ -1223,7 +1243,6 @@ export const runScenarioTest = async (
     );
   } finally {
     stopLocalBackendFn(getScenarioProjectDir(scenarioKey, params.outputRoot));
-    stopBackendsFn(params.outputRoot);
   }
 };
 

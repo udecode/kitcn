@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
@@ -222,7 +222,7 @@ describe('tooling/scenarios', () => {
     expect(calls).toEqual(['prepare', 'runtime']);
   });
 
-  test('runScenarioTest always clears project-owned local backends', async () => {
+  test('runScenarioTest only clears its project-owned local backend', async () => {
     const calls: string[] = [];
     const outputRoot = '/tmp/kitcn-scenario-cleanup-test';
 
@@ -242,7 +242,7 @@ describe('tooling/scenarios', () => {
       } as never)
     ).rejects.toThrow('runtime failed');
 
-    expect(calls).toEqual([`project:${outputRoot}/next/project`, 'all']);
+    expect(calls).toEqual([`project:${outputRoot}/next/project`]);
   });
 
   test('resolveScenarioKeysForCheck keeps CI checks scoped to non-committed scenarios', () => {
@@ -746,6 +746,29 @@ describe('tooling/scenarios', () => {
       child.kill('SIGKILL');
       await child.exited.catch(() => {});
       await Bun.$`rm -rf ${rootDir}`.quiet();
+    }
+  });
+
+  test('stopLocalConvexBackendForProject tolerates missing lsof', async () => {
+    const rootDir = `/tmp/kitcn-scenario-no-lsof-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const spawnSync = spyOn(Bun, 'spawnSync').mockImplementation(() => {
+      throw Object.assign(new Error('Executable not found'), {
+        code: 'ENOENT',
+      });
+    });
+
+    await Bun.write(
+      `${rootDir}/.env.local`,
+      'NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+
+    try {
+      expect(() => stopLocalConvexBackendForProject(rootDir)).not.toThrow();
+    } finally {
+      spawnSync.mockRestore();
+      fs.rmSync(rootDir, { force: true, recursive: true });
     }
   });
 
