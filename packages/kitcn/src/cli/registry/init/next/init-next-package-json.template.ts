@@ -42,9 +42,11 @@ const INIT_NEXT_PACKAGE_JSON_DEPENDENCIES = {
   superjson: '2.2.6',
 } as const;
 
+export const INIT_NEXT_ESLINT_VERSION = '9.39.5';
+
 const INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES = {
   '@types/bun': 'latest',
-  eslint: '9.39.5',
+  eslint: INIT_NEXT_ESLINT_VERSION,
 } as const;
 
 const getInitNextPackageJsonDevDependencies = (

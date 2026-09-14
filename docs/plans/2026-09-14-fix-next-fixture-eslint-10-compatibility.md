@@ -343,6 +343,10 @@ Review fixes:
 - Accepted live P2 `discussion_r4010211806`: stop only the current scenario's
   project-owned backend; do not sweep sibling prepared scenarios.
 - Final dirty-local P0/P1 autoreview after both repairs is clean (overall 0.9).
+- Accepted second-pass live P1 `discussion_r4010256721`: when Next adoption
+  normalizes an already-present ESLint version and no baseline package is
+  missing, schedule the package manager's install command so lockfile and
+  installed graph match the rewritten manifest.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -350,6 +354,7 @@ Error attempts:
 | Required CI rerun produced the same ESLint 10 failure | 2 PRs / 4 attempts | stop retrying; fix the package owner | resolved; Ubuntu CI `34904489302` passed |
 | focused Bun test path omitted the required `./` prefix | 1 | rerun with the repository's accepted path form | resolved; focused suite passed |
 | `bun check` runtime matrix hit port 3210 after all earlier lanes passed | 2 | reproduce owner, add finally cleanup, rerun exact gate | resolved; full runtime matrix and `bun check` passed |
+| adoption reconciliation test initially still had missing baseline dependencies and therefore exercised `bun add` | 2 | make the harness represent the reported all-dependencies-present branch | resolved; red on no install, green on `bun install` |
 
 Verification evidence:
 - Red: the new manifest-template test expected `9.39.5` and received `^9`.
@@ -366,6 +371,10 @@ Verification evidence:
   final root `bun check` passed.
 - The post-review-fix root `bun check` passed the full fixture and runtime
   matrix, including repeated reuse of port 3210 without sibling sweeps.
+- Next adoption reconciliation test was red with no package-manager install,
+  then green; the full init command suite passed 57/57 and package build passed.
+- Final post-reconciliation `bun check` passed in 326 seconds; TruffleHog was
+  clean and final dirty-local P0/P1 autoreview was clean (overall 0.9).
 - TruffleHog found no secrets; final P0/P1 autoreview found no actionable issue.
 
 Source-listed case matrix:
@@ -374,6 +383,7 @@ Source-listed case matrix:
 | upstream loose range | shadcn output may contain `eslint: ^9` | manifest template unit test | preserved unchanged | exact `9.39.5` | red mismatch, then 5/5 green | passed |
 | generated fixture | committed Next fixture represents CLI output | fixture sync/check + scenario lint | CI can resolve 10.10.0 | deterministic ESLint 9 and clean lint | fixture check, prepared Next lint, and Ubuntu CI `34904489302` pass | passed |
 | runtime cleanup | runtime scenarios own local Convex backend lifecycle | scenario runner unit test + root runtime matrix | failure path left port 3210 occupied | cleanup on success and failure | focused 32/32 and full `bun check` runtime matrix | passed |
+| existing Next adoption | manifest rewrite must reconcile lockfile/node_modules | init command integration test | no install when every package name existed | package-manager install after ESLint normalization | focused red/green and full init suite 57/57 | passed |
 
 Final handoff contract:
 - Commit line: `d4c24966` (`fix next scaffold eslint resolution`)
@@ -425,8 +435,8 @@ Final handoff / sync:
 - PR: https://github.com/udecode/kitcn/pull/467
 - Issue: N/A; prerequisite discovered from PR CI, no standalone issue
 - Browser proof: N/A; no rendered/browser behavior
-- Caveats: the final evidence-only plan commit requires one terminal exact-head
-  CI/read-back in parent autoclosure before merge
+- Caveats: the final material push requires one terminal exact-head CI,
+  feedback read-back, and receipt in parent autoclosure before merge
 
 Timeline:
 - 2026-09-14T21:55:07.341Z Task goal plan created.

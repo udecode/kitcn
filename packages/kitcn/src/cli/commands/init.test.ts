@@ -2205,6 +2205,59 @@ export default defineConfig({
     }
   });
 
+  test('handleInitCommand reinstalls normalized ESLint during Next adoption', async () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'kitcn-init-command-next-eslint-')
+    );
+    writeShadcnNextApp(tmpDir);
+    const packageJsonPath = path.join(tmpDir, 'package.json');
+    const packageJson = JSON.parse(
+      fs.readFileSync(packageJsonPath, 'utf8')
+    ) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    packageJson.dependencies = {
+      ...packageJson.dependencies,
+      '@opentelemetry/api': '1.9.0',
+      '@tanstack/react-query': '5.95.2',
+      convex: '1.44.0',
+      hono: '4.12.9',
+      kitcn: '0.33.1',
+      superjson: '2.2.6',
+      zod: '^4.6.5',
+    };
+    packageJson.devDependencies.eslint = '10.10.0';
+    fs.writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify(packageJson, null, 2)}\n`
+    );
+
+    const execaCalls: Array<{ cmd: string; args: string[] }> = [];
+    const execaStub = mock(async (cmd: string, args: string[]) => {
+      execaCalls.push({ cmd, args });
+      return { exitCode: 0, stdout: '', stderr: '' } as any;
+    });
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+
+    try {
+      const exitCode = await handleInitCommand(['init', '--yes'], {
+        realConvex: '/fake/convex/main.js',
+        execa: execaStub as any,
+        generateMeta: mock(async () => {}) as any,
+        syncEnv: mock(async () => {}) as any,
+        loadCliConfig: mock(() => createDefaultConfig()) as any,
+        runLocalBootstrap: mock(async () => 0) as any,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(execaCalls).toContainEqual({ cmd: 'bun', args: ['install'] });
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test('handleInitCommand auto-detects vite apps and scaffolds react mode', async () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-init-command-detect-vite-')

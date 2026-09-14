@@ -77,7 +77,10 @@ import { INIT_NEXT_CONVEX_PROVIDER_TEMPLATE } from './registry/init/next/init-ne
 import { renderInitNextEnvLocalTemplate } from './registry/init/next/init-next-env-local.template.js';
 import { renderInitNextMessagesTemplate } from './registry/init/next/init-next-messages.template.js';
 import { INIT_NEXT_MESSAGES_PAGE_TEMPLATE } from './registry/init/next/init-next-messages-page.template.js';
-import { renderInitNextPackageJsonTemplate } from './registry/init/next/init-next-package-json.template.js';
+import {
+  INIT_NEXT_ESLINT_VERSION,
+  renderInitNextPackageJsonTemplate,
+} from './registry/init/next/init-next-package-json.template.js';
 import { INIT_NEXT_PROVIDERS_TEMPLATE } from './registry/init/next/init-next-providers.template.js';
 import { INIT_NEXT_QUERY_CLIENT_TEMPLATE } from './registry/init/next/init-next-query-client.template.js';
 import { INIT_NEXT_RSC_TEMPLATE } from './registry/init/next/init-next-rsc.template.js';
@@ -1435,6 +1438,7 @@ function overrideConfigBackend(
 type DependencyInstallItem = {
   installSpec: string;
   packageName: string;
+  requiredVersion?: string;
 };
 
 type DependencyInstallPlan = {
@@ -3323,16 +3327,22 @@ function buildDependencyInstallPlan(
   const missing = dependencies.filter(
     (dependency) => !(dependency.packageName in existing)
   );
-  if (missing.length === 0) {
+  const requiresReconcile = dependencies.some(
+    (dependency) =>
+      dependency.requiredVersion !== undefined &&
+      existing[dependency.packageName] !== undefined &&
+      existing[dependency.packageName] !== dependency.requiredVersion
+  );
+  if (missing.length === 0 && !requiresReconcile) {
     return null;
   }
 
   const packageManager = detectPackageManager(projectDir);
   const missingSpecs = missing.map((dependency) => dependency.installSpec);
-  const installCommand = resolveDependencyInstallCommand(
-    packageManager,
-    missingSpecs
-  );
+  const installCommand =
+    missingSpecs.length > 0
+      ? resolveDependencyInstallCommand(packageManager, missingSpecs)
+      : { command: packageManager, args: ['install'] };
 
   return {
     packageManager,
@@ -3516,6 +3526,15 @@ export function buildInitializationPlan(params: {
           installSpec,
           packageName: getPackageNameFromInstallSpec(installSpec),
         })),
+        ...(projectContext.mode === 'next-app'
+          ? [
+              {
+                installSpec: `eslint@${INIT_NEXT_ESLINT_VERSION}`,
+                packageName: 'eslint',
+                requiredVersion: INIT_NEXT_ESLINT_VERSION,
+              },
+            ]
+          : []),
       ]
     : [
         ...BASELINE_DEPENDENCY_INSTALL_SPECS.map((installSpec) => ({
