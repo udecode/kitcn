@@ -31,6 +31,26 @@ describe('init-next-package-json.template', () => {
     });
   });
 
+  test('pins ESLint 9 for deterministic Next scaffolds', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        devDependencies: {
+          eslint: '^9',
+          'eslint-config-next': '16.3.4',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '9.39.5',
+        'eslint-config-next': '16.3.4',
+      },
+    });
+  });
+
   test('falls back to convex:codegen when codegen already exists', () => {
     const rendered = renderInitNextPackageJsonTemplate(
       JSON.stringify({

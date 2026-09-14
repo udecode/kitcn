@@ -44,6 +44,7 @@ const INIT_NEXT_PACKAGE_JSON_DEPENDENCIES = {
 
 const INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES = {
   '@types/bun': 'latest',
+  eslint: '9.39.5',
 } as const;
 
 const getInitNextPackageJsonDevDependencies = (

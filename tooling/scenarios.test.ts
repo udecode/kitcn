@@ -222,6 +222,29 @@ describe('tooling/scenarios', () => {
     expect(calls).toEqual(['prepare', 'runtime']);
   });
 
+  test('runScenarioTest always clears project-owned local backends', async () => {
+    const calls: string[] = [];
+    const outputRoot = '/tmp/kitcn-scenario-cleanup-test';
+
+    await expect(
+      runScenarioTest('next', {
+        outputRoot,
+        prepareScenarioFn: mock(async () => undefined) as never,
+        runScenarioRuntimeProofFn: mock(async () => {
+          throw new Error('runtime failed');
+        }) as never,
+        stopLocalConvexBackendForProjectFn: mock((projectDir: string) => {
+          calls.push(`project:${projectDir}`);
+        }) as never,
+        stopScenarioBackendsFn: mock(() => {
+          calls.push('all');
+        }) as never,
+      } as never)
+    ).rejects.toThrow('runtime failed');
+
+    expect(calls).toEqual([`project:${outputRoot}/next/project`, 'all']);
+  });
+
   test('resolveScenarioKeysForCheck keeps CI checks scoped to non-committed scenarios', () => {
     expect(DEFAULT_CHECK_SCENARIO_KEYS).toEqual([
       'convex-next-auth-bootstrap',

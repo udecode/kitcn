@@ -1183,35 +1183,48 @@ export const runScenarioTest = async (
     checkScenarioFn?: typeof checkScenario;
     runScenarioRuntimeProofFn?: typeof runScenarioRuntimeProof;
     runAuthSmokeFn?: typeof runAuthSmoke;
+    stopLocalConvexBackendForProjectFn?: typeof stopLocalConvexBackendForProject;
+    stopScenarioBackendsFn?: typeof stopScenarioBackends;
   } = {}
 ) => {
   const proofPath = resolveScenarioProofPath(scenarioKey);
+  const stopLocalBackendFn =
+    params.stopLocalConvexBackendForProjectFn ??
+    stopLocalConvexBackendForProject;
+  const stopBackendsFn = params.stopScenarioBackendsFn ?? stopScenarioBackends;
 
-  if (proofPath === 'check') {
-    await (params.checkScenarioFn ?? checkScenario)(scenarioKey, {
+  try {
+    if (proofPath === 'check') {
+      await (params.checkScenarioFn ?? checkScenario)(scenarioKey, {
+        backend: params.backend,
+        outputRoot: params.outputRoot,
+      });
+      return;
+    }
+
+    await (params.prepareScenarioFn ?? prepareScenario)(scenarioKey, {
       backend: params.backend,
       outputRoot: params.outputRoot,
     });
-    return;
+    await (params.runScenarioRuntimeProofFn ?? runScenarioRuntimeProof)(
+      scenarioKey,
+      {
+        backend: params.backend,
+        outputRoot: params.outputRoot,
+        afterReadyFn:
+          proofPath === 'auth-demo'
+            ? async (readyScenarioKey) => {
+                await (params.runAuthSmokeFn ?? runAuthSmoke)([
+                  readyScenarioKey,
+                ]);
+              }
+            : undefined,
+      }
+    );
+  } finally {
+    stopLocalBackendFn(getScenarioProjectDir(scenarioKey, params.outputRoot));
+    stopBackendsFn(params.outputRoot);
   }
-
-  await (params.prepareScenarioFn ?? prepareScenario)(scenarioKey, {
-    backend: params.backend,
-    outputRoot: params.outputRoot,
-  });
-  await (params.runScenarioRuntimeProofFn ?? runScenarioRuntimeProof)(
-    scenarioKey,
-    {
-      backend: params.backend,
-      outputRoot: params.outputRoot,
-      afterReadyFn:
-        proofPath === 'auth-demo'
-          ? async (readyScenarioKey) => {
-              await (params.runAuthSmokeFn ?? runAuthSmoke)([readyScenarioKey]);
-            }
-          : undefined,
-    }
-  );
 };
 
 export const testScenarios = async (
