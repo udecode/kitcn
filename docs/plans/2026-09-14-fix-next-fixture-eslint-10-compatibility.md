@@ -33,8 +33,8 @@ Timed checkpoint:
 - semantics: no timed request
 - initial confidence score: 92%
 - improvement loop: red/green unit proof, generated fixture proof, then Ubuntu CI
-- final score / loop closure: 98%; local source, fixture, scenario, package,
-  review, and full-repo gates pass; exact-head PR CI remains the final loop
+- final score / loop closure: 99%; local source, fixture, scenario, package,
+  review, full-repo gates, and Ubuntu PR CI all pass
 
 Completion threshold:
 - Exact ESLint 9 ownership exists in the package Next manifest overlay, focused
@@ -93,10 +93,10 @@ Blocked condition:
 Task state:
 - task_type: bug fix / scaffold determinism
 - task_complexity: standard
-- current_phase: commit / PR / GitHub sync
-- current_phase_status: in_progress
-- next_phase: closeout
-- goal_status: active
+- current_phase: closeout
+- current_phase_status: complete
+- next_phase: parent autoclosure merges prerequisite and resumes #464/#465
+- goal_status: achieved
 
 Current verdict:
 - verdict: ready
@@ -254,7 +254,7 @@ Work Checklist:
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
-| Named verification threshold | yes | Run the named local and GitHub proof | local threshold passed; exact-head GitHub CI pending |
+| Named verification threshold | yes | Run the named local and GitHub proof | local threshold and Ubuntu CI run `34904489302` passed |
 | Exact per-PR task ownership | yes | Record exact PR and dedicated plan | PR #467; this plan exists at head after the plan-binding push |
 | Pre-solution issue challenge verdict | yes | Record claim, repro, validity, boundary, and hard-stop decision | complete above: valid, reproduced, package overlay owner |
 | Repro escalation ladder | yes | Record test/integration/browser/visual outcomes | focused red and Ubuntu integration repro; browser/visual N/A |
@@ -276,17 +276,17 @@ Completion Gates:
 | Agent-native review for agent/tooling changes | no | Run specialist review if applicable | N/A: tooling process cleanup is not an agent/user-action workflow |
 | Local install corruption suspected | no | Reinstall once if suspected | N/A: failures reproduced deterministically and had source owners |
 | Commit created | yes | Commit entire verified checkout | `d4c24966` |
-| PR create or update | yes | Push and create task PR | PR #467 created after green `bun check`; plan-binding push pending |
-| Task-style PR body verified | yes | Read back emoji body | pending final read-back after plan-binding push |
-| PR task evidence verified | yes | Verify body line, head plan, exact PR | body line present; exact-head plan verification pending push |
+| PR create or update | yes | Push and create task PR | PR #467 created and plan-binding commit pushed after green `bun check` |
+| Task-style PR body verified | yes | Read back emoji body | `gh pr view 467 --json body` confirms required auto-release, task-plan, confidence, flow, and emoji sections |
+| PR task evidence verified | yes | Verify body line, head plan, exact PR | body names this path; pushed plan names exactly PR #467 |
 | PR proof image hosting | no | Host browser proof if applicable | N/A: no browser proof |
 | GitHub issue sync-back | no | Sync issue if applicable | N/A: no standalone issue |
-| Final handoff contract | yes | Fill exact fields | filled below; exact head/CI receipt pending |
+| Final handoff contract | yes | Fill exact fields | complete below; parent autoclosure owns terminal receipt and merge |
 | Final lint | yes | Run lint fix | `bun lint:fix` passed before commit |
 | Output budget discipline | yes | Keep broad output bounded | used capped output; one earlier CI log truncation is ledgered in parent plan |
 | Timed checkpoint | no | Honor requested duration | N/A: no duration requested |
 | Autoreview for non-trivial implementation changes | yes | Run final review | clean; overall correctness confidence 0.98 |
-| Goal plan complete | yes | Run goal checker | pending after exact-head PR CI |
+| Goal plan complete | yes | Run goal checker | run after this evidence update; result recorded in commit history/terminal handoff |
 | Public API / package boundary proof | yes | Audit public/package effect | generated Next devDependency only; no exports or runtime bundle changed |
 | Convex bundle/import proof | no | Audit static import graph | N/A: no Convex entry import changed |
 | CLI/scaffold/generated proof | yes | Regenerate and verify | fixture sync/check and prepared Next lint passed |
@@ -303,8 +303,8 @@ Phase / pass table:
 | Intake and source read | complete | owner, repro, peer boundary, doctrine, and prior solutions read | implementation |
 | Implementation | complete | package overlay and runtime cleanup owners fixed with tests | verification |
 | Verification | complete | focused, fixture, scenario, package, lint/typecheck, and root check pass | delivery |
-| Commit / PR / GitHub sync | in progress | commit `d4c24966`; PR #467 created | bind exact plan and await CI |
-| Closeout | pending | exact-head CI, feedback, receipt, and merge | unblock #464/#465 |
+| Commit / PR / GitHub sync | complete | implementation `d4c24966`, plan binding `0f0da6c4`, PR #467, required body read-back | closeout |
+| Closeout | complete | Ubuntu CI `34904489302` passed; parent autoclosure owns feedback receipt and merge | unblock #464/#465 |
 
 Findings:
 - `eslint-plugin-react@7.37.5` declares ESLint support through `^9.7`, while
@@ -342,7 +342,7 @@ Review fixes:
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
 |------------------------|-------|---------------------|------------|
-| Required CI rerun produced the same ESLint 10 failure | 2 PRs / 4 attempts | stop retrying; fix the package owner | resolved locally by the exact manifest overlay pin; PR CI pending |
+| Required CI rerun produced the same ESLint 10 failure | 2 PRs / 4 attempts | stop retrying; fix the package owner | resolved; Ubuntu CI `34904489302` passed |
 | focused Bun test path omitted the required `./` prefix | 1 | rerun with the repository's accepted path form | resolved; focused suite passed |
 | `bun check` runtime matrix hit port 3210 after all earlier lanes passed | 2 | reproduce owner, add finally cleanup, rerun exact gate | resolved; full runtime matrix and `bun check` passed |
 
@@ -363,7 +363,7 @@ Source-listed case matrix:
 | Case | Source claim | Harness | Before | Expected after | Evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | upstream loose range | shadcn output may contain `eslint: ^9` | manifest template unit test | preserved unchanged | exact `9.39.5` | red mismatch, then 5/5 green | passed |
-| generated fixture | committed Next fixture represents CLI output | fixture sync/check + scenario lint | CI can resolve 10.10.0 | deterministic ESLint 9 and clean lint | fixture check and prepared Next lint install 9.39.5 and pass | passed locally; PR CI pending |
+| generated fixture | committed Next fixture represents CLI output | fixture sync/check + scenario lint | CI can resolve 10.10.0 | deterministic ESLint 9 and clean lint | fixture check, prepared Next lint, and Ubuntu CI `34904489302` pass | passed |
 | runtime cleanup | runtime scenarios own local Convex backend lifecycle | scenario runner unit test + root runtime matrix | failure path left port 3210 occupied | cleanup on success and failure | focused 32/32 and full `bun check` runtime matrix | passed |
 
 Final handoff contract:
@@ -387,7 +387,8 @@ Final handoff contract:
   - Why not broader change: no need to bump shadcn, Next, or lint rules
 - Verified: focused red/green, fixture sync/check, scenario lint, package build,
   typecheck/lint, full `bun check`, secrets scan, and autoreview
-- PR body verified: initial body created in required format; final read-back pending
+- PR body verified: `gh pr view 467 --json body` confirms the task-style body;
+  Codesmith appended only its standard footer
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -415,7 +416,8 @@ Final handoff / sync:
 - PR: https://github.com/udecode/kitcn/pull/467
 - Issue: N/A; prerequisite discovered from PR CI, no standalone issue
 - Browser proof: N/A; no rendered/browser behavior
-- Caveats: exact-head GitHub CI and PR body read-back pending
+- Caveats: the final evidence-only plan commit requires one terminal exact-head
+  CI/read-back in parent autoclosure before merge
 
 Timeline:
 - 2026-09-14T21:55:07.341Z Task goal plan created.
