@@ -24,7 +24,8 @@ Task source:
 - owned PR: https://github.com/udecode/kitcn/pull/467
 - title: Generated Next fixture resolves incompatible ESLint 10 on Ubuntu CI
 - acceptance criteria: `kitcn init -t next` writes an exact compatible ESLint 9
-  dependency; the focused template test is red before and green after; generated
+  dependency for Next 15+ while preserving the ESLint 8 stack required by Next
+  14; the focused template tests are red before and green after; generated
   fixtures sync and verify; the Next scenario lint and package/full gates pass;
   the fix is committed, pushed, and opened as one task-compliant PR.
 
@@ -37,8 +38,9 @@ Timed checkpoint:
   review, full-repo gates, and Ubuntu PR CI all pass
 
 Completion threshold:
-- Exact ESLint 9 ownership exists in the package Next manifest overlay, focused
-  tests prove normalization, generated fixtures are current, package build and
+- Version-aware ESLint ownership exists in the package Next manifest overlay,
+  focused tests prove Next 14 preservation and Next 15+ normalization, generated
+  fixtures are current, package build and
   `bun check` pass, one changeset exists, and the task-compliant PR is green.
 - Task closure is legal only when the source-of-truth acceptance criteria are
   satisfied or explicitly narrowed, required verification evidence is recorded,
@@ -318,22 +320,21 @@ Findings:
   only performs it for check-mode scenarios, not runtime-mode scenarios.
 
 Decisions and tradeoffs:
-- Pin only ESLint to exact 9.39.5 in the package overlay. Do not change shadcn or
-  eslint-config-next: their current versions work when the peer-compatible major
-  is deterministic.
-- Repair cleanup in `runScenarioTest` itself so every runtime scenario releases
-  project-owned local backends on success or failure; do not add sleeps or
-  weaken the root gate.
+- Pin ESLint to exact 9.39.5 only when `eslint-config-next` supports ESLint 9
+  (Next 15+). Preserve the ESLint 8 stack required by supported Next 14 apps.
+- Repair cleanup in the scenario process owner: spawn a detached process group
+  and stop that group directly, so descendants terminate without relying on
+  `lsof`, global sweeps, sleeps, or a weakened root gate.
 
 Implementation notes:
-- Added exact `eslint: 9.39.5` ownership to the package Next manifest overlay,
-  with a focused red/green normalization test.
+- Added version-aware `eslint: 9.39.5` ownership to the package Next manifest
+  overlay, with focused red/green normalization and Next 14 preservation tests.
 - Regenerated all committed fixtures through `fixtures:sync`; current upstream
   shadcn output also refreshed its generated dependency versions.
-- Added a `runScenarioTest` `finally` boundary that stops both the scenario's
-  project-owned local Convex backend and any remaining scenario backends.
-- Added failure-path coverage proving cleanup still runs when runtime proof
-  throws.
+- Added a `runScenarioTest` `finally` boundary and detached process-group
+  ownership so the scenario and its child backends stop together.
+- Added failure-path and process-group coverage proving cleanup still runs when
+  runtime proof throws and when `lsof` is unavailable.
 
 Review fixes:
 - Autoreview ran after both behavior changes and reported no actionable
@@ -347,6 +348,14 @@ Review fixes:
   normalizes an already-present ESLint version and no baseline package is
   missing, schedule the package manager's install command so lockfile and
   installed graph match the rewritten manifest.
+- Accepted late live P1 `discussion_r4010309942`: preserve ESLint 8 for
+  `eslint-config-next` 14; npm peer metadata proves ESLint 9 support starts at
+  `eslint-config-next` 15.
+- Accepted late live P1 `discussion_r4010309951`: terminate the detached
+  scenario process group directly so cleanup does not depend on `lsof`.
+- Accepted final local P1: do not treat the direct process leader's exit as
+  proof that its descendants exited; poll the process group itself and apply a
+  bounded SIGKILL fallback when it remains alive.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -355,11 +364,16 @@ Error attempts:
 | focused Bun test path omitted the required `./` prefix | 1 | rerun with the repository's accepted path form | resolved; focused suite passed |
 | `bun check` runtime matrix hit port 3210 after all earlier lanes passed | 2 | reproduce owner, add finally cleanup, rerun exact gate | resolved; full runtime matrix and `bun check` passed |
 | adoption reconciliation test initially still had missing baseline dependencies and therefore exercised `bun add` | 2 | make the harness represent the reported all-dependencies-present branch | resolved; red on no install, green on `bun install` |
+| Next 14 compatibility test received ESLint `9.39.5` instead of `^8.57.0` | 1 | derive normalization from `eslint-config-next` major | resolved; Next 14 preserves ESLint 8 and Next 16 pins ESLint 9 |
+| detached process-group test timed out because only the direct process was signalled | 1 | signal the owned process group by negative PID | resolved; SIGINT/SIGKILL group proof passes |
+| `bun lint:fix` rejected an inline version regex | 1 | move the regex to module scope | resolved; lint passes |
+| autoreview found direct-leader exit could hide a live descendant group | 1 | verify group existence with signal 0 before and after force-stop | resolved; leader-exits-first regression test passes |
 
 Verification evidence:
 - Red: the new manifest-template test expected `9.39.5` and received `^9`.
-- Green: focused manifest template suite passed 5/5.
-- `bun test ./tooling/scenarios.test.ts`: 32 tests, 99 expectations passed.
+- Green: focused manifest template suite passed 6/6, including Next 14 and
+  Next 16 compatibility.
+- `bun test ./tooling/scenarios.test.ts`: 34 tests, 102 expectations passed.
 - After review fixes, the same suite passed 33 tests / 100 expectations,
   including missing-`lsof` and current-project-only cleanup coverage.
 - `bun run fixtures:sync` regenerated every committed fixture from package
@@ -373,6 +387,12 @@ Verification evidence:
   matrix, including repeated reuse of port 3210 without sibling sweeps.
 - Next adoption reconciliation test was red with no package-manager install,
   then green; the full init command suite passed 57/57 and package build passed.
+- npm registry peer proof: `eslint-config-next@14.2.35` accepts ESLint 7/8;
+  `eslint-config-next@15.0.0` adds ESLint 9 support.
+- The detached process-group test was red by timeout before the owner repair,
+  then green with SIGINT followed by bounded SIGKILL fallback; its final shape
+  makes the leader exit on SIGINT while the group remains alive and proves the
+  group still receives SIGKILL.
 - Final post-reconciliation `bun check` passed in 326 seconds; TruffleHog was
   clean and final dirty-local P0/P1 autoreview was clean (overall 0.9).
 - TruffleHog found no secrets; final P0/P1 autoreview found no actionable issue.
@@ -384,6 +404,8 @@ Source-listed case matrix:
 | generated fixture | committed Next fixture represents CLI output | fixture sync/check + scenario lint | CI can resolve 10.10.0 | deterministic ESLint 9 and clean lint | fixture check, prepared Next lint, and Ubuntu CI `34904489302` pass | passed |
 | runtime cleanup | runtime scenarios own local Convex backend lifecycle | scenario runner unit test + root runtime matrix | failure path left port 3210 occupied | cleanup on success and failure | focused 32/32 and full `bun check` runtime matrix | passed |
 | existing Next adoption | manifest rewrite must reconcile lockfile/node_modules | init command integration test | no install when every package name existed | package-manager install after ESLint normalization | focused red/green and full init suite 57/57 | passed |
+| supported Next 14 adoption | `eslint-config-next@14` requires ESLint 7/8 | manifest template unit test + npm peer metadata | unconditional pin wrote ESLint 9 | preserve existing ESLint 8 | red mismatch, peer proof, then green | passed |
+| cleanup without `lsof` | scenario descendants must terminate on every supported runner | process-group unit test | direct parent signal left descendants alive | terminate the owned detached group | red timeout, then SIGINT/SIGKILL green | passed |
 
 Final handoff contract:
 - Commit line: `d4c24966` (`fix next scaffold eslint resolution`)

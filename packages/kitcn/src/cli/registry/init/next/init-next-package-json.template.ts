@@ -43,16 +43,36 @@ const INIT_NEXT_PACKAGE_JSON_DEPENDENCIES = {
 } as const;
 
 export const INIT_NEXT_ESLINT_VERSION = '9.39.5';
+const MIN_ESLINT_9_NEXT_CONFIG_MAJOR = 15;
+const VERSION_MAJOR_RE = /\d+/;
 
 const INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES = {
   '@types/bun': 'latest',
-  eslint: INIT_NEXT_ESLINT_VERSION,
 } as const;
 
+export const resolveInitNextEslintVersion = (
+  eslintConfigNextVersion: string | undefined
+) => {
+  const majorMatch = eslintConfigNextVersion?.match(VERSION_MAJOR_RE);
+  if (!majorMatch) {
+    return undefined;
+  }
+
+  return Number(majorMatch[0]) >= MIN_ESLINT_9_NEXT_CONFIG_MAJOR
+    ? INIT_NEXT_ESLINT_VERSION
+    : undefined;
+};
+
 const getInitNextPackageJsonDevDependencies = (
-  options: InitPackageJsonTemplateOptions
+  options: InitPackageJsonTemplateOptions,
+  existing: ProjectPackageJson
 ) => ({
   ...INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES,
+  ...(resolveInitNextEslintVersion(
+    existing.devDependencies?.['eslint-config-next']
+  )
+    ? { eslint: INIT_NEXT_ESLINT_VERSION }
+    : {}),
   ...(options.backend === 'concave'
     ? {
         '@concavejs/cli': SUPPORTED_DEPENDENCY_VERSIONS.concaveCli.exact,
@@ -97,7 +117,7 @@ export function renderInitNextPackageJsonTemplate(
       },
       devDependencies: {
         ...existing.devDependencies,
-        ...getInitNextPackageJsonDevDependencies(options),
+        ...getInitNextPackageJsonDevDependencies(options, existing),
       },
     },
     null,

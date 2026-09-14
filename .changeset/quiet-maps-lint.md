@@ -4,4 +4,4 @@
 
 ## Patches
 
-- Fix Next.js scaffolds to install and reconcile a compatible ESLint 9 release.
+- Fix Next.js scaffolds to select and reconcile a compatible ESLint release.

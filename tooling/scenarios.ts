@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
+import { kill as killProcess } from 'node:process';
 import { parseEnv } from 'node:util';
 import {
   KITCN_INSTALL_SPEC_ENV,
@@ -58,6 +59,7 @@ type ScenarioSpawnedProcess = {
   exited: Promise<number>;
   kill: (signal?: string) => void;
   killed?: boolean;
+  pid?: number;
 };
 
 type RunningScenarioProcess = ScenarioSpawnedProcess & {
@@ -408,6 +410,7 @@ const spawnScenarioCommand = (
   Bun.spawn({
     cmd,
     cwd,
+    detached: process.platform !== 'win32',
     env: resolveScenarioProcessEnv(scenarioKey),
     stdio: ['ignore', 'inherit', 'inherit'],
   });
@@ -584,6 +587,7 @@ const startScenarioProcesses = (
         process.kill(signal);
       },
       killed: process.killed,
+      pid: process.pid,
       exitCode: undefined,
     };
     process.exited.then((exitCode) => {
@@ -594,32 +598,101 @@ const startScenarioProcesses = (
 
 export const stopRunningScenarioProcesses = async (
   processes: readonly RunningScenarioProcess[],
-  forceStopTimeoutMs = SCENARIO_FORCE_STOP_TIMEOUT_MS
+  forceStopTimeoutMs = SCENARIO_FORCE_STOP_TIMEOUT_MS,
+  killProcessGroupFn: typeof killProcess = killProcess
 ) => {
-  for (const process of processes) {
-    if (!process.killed && process.exitCode === undefined) {
-      process.kill(SCENARIO_STOP_SIGNAL);
+  const isNoSuchProcessError = (error: unknown) =>
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'ESRCH';
+  const ownsProcessGroup = (runningProcess: RunningScenarioProcess) =>
+    runningProcess.pid !== undefined && process.platform !== 'win32';
+  const isProcessGroupRunning = (runningProcess: RunningScenarioProcess) => {
+    if (!ownsProcessGroup(runningProcess)) {
+      return false;
+    }
+
+    try {
+      killProcessGroupFn(-runningProcess.pid!, 0);
+      return true;
+    } catch (error) {
+      return !isNoSuchProcessError(error);
+    }
+  };
+  const waitForProcessGroupExit = async (
+    runningProcess: RunningScenarioProcess
+  ) => {
+    const deadline = Date.now() + forceStopTimeoutMs;
+    while (isProcessGroupRunning(runningProcess) && Date.now() < deadline) {
+      await sleep(Math.min(25, Math.max(1, deadline - Date.now())));
+    }
+    return !isProcessGroupRunning(runningProcess);
+  };
+  const stopProcess = (
+    runningProcess: RunningScenarioProcess,
+    signal: NodeJS.Signals
+  ) => {
+    if (ownsProcessGroup(runningProcess)) {
+      try {
+        killProcessGroupFn(-runningProcess.pid!, signal);
+        return;
+      } catch (error) {
+        if (isNoSuchProcessError(error)) {
+          return;
+        }
+      }
+    }
+    runningProcess.kill(signal);
+  };
+
+  for (const runningProcess of processes) {
+    if (
+      isProcessGroupRunning(runningProcess) ||
+      (!runningProcess.killed && runningProcess.exitCode === undefined)
+    ) {
+      stopProcess(runningProcess, SCENARIO_STOP_SIGNAL);
     }
   }
 
-  await Promise.allSettled(
-    processes.map(async (process) => {
-      if (process.exitCode !== undefined) {
+  const stopResults = await Promise.allSettled(
+    processes.map(async (runningProcess) => {
+      if (ownsProcessGroup(runningProcess)) {
+        const groupExited = await waitForProcessGroupExit(runningProcess);
+        if (!groupExited) {
+          stopProcess(runningProcess, SCENARIO_FORCE_STOP_SIGNAL);
+          if (!(await waitForProcessGroupExit(runningProcess))) {
+            throw new Error(
+              `Scenario process group ${runningProcess.pid} did not stop.`
+            );
+          }
+        }
+        await runningProcess.exited;
+        return;
+      }
+
+      if (runningProcess.exitCode !== undefined) {
         return;
       }
 
       const exited = await Promise.race([
-        process.exited.then(() => true),
+        runningProcess.exited.then(() => true),
         sleep(forceStopTimeoutMs).then(() => false),
       ]);
 
-      if (!exited && process.exitCode === undefined) {
-        process.kill(SCENARIO_FORCE_STOP_SIGNAL);
+      if (!exited && runningProcess.exitCode === undefined) {
+        stopProcess(runningProcess, SCENARIO_FORCE_STOP_SIGNAL);
       }
 
-      await process.exited;
+      await runningProcess.exited;
     })
   );
+  const stopFailure = stopResults.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  );
+  if (stopFailure) {
+    throw stopFailure.reason;
+  }
 };
 
 const waitForScenarioReady = async (

@@ -78,8 +78,8 @@ import { renderInitNextEnvLocalTemplate } from './registry/init/next/init-next-e
 import { renderInitNextMessagesTemplate } from './registry/init/next/init-next-messages.template.js';
 import { INIT_NEXT_MESSAGES_PAGE_TEMPLATE } from './registry/init/next/init-next-messages-page.template.js';
 import {
-  INIT_NEXT_ESLINT_VERSION,
   renderInitNextPackageJsonTemplate,
+  resolveInitNextEslintVersion,
 } from './registry/init/next/init-next-package-json.template.js';
 import { INIT_NEXT_PROVIDERS_TEMPLATE } from './registry/init/next/init-next-providers.template.js';
 import { INIT_NEXT_QUERY_CLIENT_TEMPLATE } from './registry/init/next/init-next-query-client.template.js';
@@ -3512,6 +3512,17 @@ export function buildInitializationPlan(params: {
 
   files.push(...templateFiles);
 
+  const nextEslintVersion =
+    projectContext?.mode === 'next-app'
+      ? resolveInitNextEslintVersion(
+          (
+            JSON.parse(
+              fs.readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
+            ) as { devDependencies?: Record<string, string> }
+          ).devDependencies?.['eslint-config-next']
+        )
+      : undefined;
+
   const dependencyPackages = projectContext
     ? [
         ...BASELINE_DEPENDENCY_INSTALL_SPECS.map((installSpec) => ({
@@ -3526,12 +3537,12 @@ export function buildInitializationPlan(params: {
           installSpec,
           packageName: getPackageNameFromInstallSpec(installSpec),
         })),
-        ...(projectContext.mode === 'next-app'
+        ...(nextEslintVersion
           ? [
               {
-                installSpec: `eslint@${INIT_NEXT_ESLINT_VERSION}`,
+                installSpec: `eslint@${nextEslintVersion}`,
                 packageName: 'eslint',
-                requiredVersion: INIT_NEXT_ESLINT_VERSION,
+                requiredVersion: nextEslintVersion,
               },
             ]
           : []),

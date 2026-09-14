@@ -124,6 +124,52 @@ describe('tooling/scenarios', () => {
     expect(kills).toEqual(['SIGINT', 'SIGKILL']);
   });
 
+  test('stopRunningScenarioProcesses kills detached process groups', async () => {
+    const groupKills: Array<{ pid: number; signal: string }> = [];
+    const directKills: string[] = [];
+    let groupRunning = true;
+    let resolveExit: ((code: number) => void) | undefined;
+    const spawnedProcess = {
+      pid: 4242,
+      exitCode: undefined,
+      exited: new Promise<number>((resolve) => {
+        resolveExit = resolve;
+      }),
+      kill: (signal?: string) => {
+        directKills.push(signal ?? '');
+      },
+      killed: false,
+    };
+
+    await stopRunningScenarioProcesses([spawnedProcess] as never, 1, ((
+      pid: number,
+      signal: string | number
+    ) => {
+      if (signal === 0) {
+        if (!groupRunning) {
+          throw Object.assign(new Error('No such process group'), {
+            code: 'ESRCH',
+          });
+        }
+        return;
+      }
+
+      groupKills.push({ pid, signal });
+      if (signal === 'SIGINT') {
+        resolveExit?.(0);
+      }
+      if (signal === 'SIGKILL') {
+        groupRunning = false;
+      }
+    }) as never);
+
+    expect(groupKills).toEqual([
+      { pid: -4242, signal: 'SIGINT' },
+      { pid: -4242, signal: 'SIGKILL' },
+    ]);
+    expect(directKills).toEqual([]);
+  });
+
   test('runScenarioTest uses check for bootstrap-heavy convex scenarios', async () => {
     const calls: string[] = [];
 

@@ -51,6 +51,26 @@ describe('init-next-package-json.template', () => {
     });
   });
 
+  test('preserves the ESLint 8 stack for supported Next 14 apps', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        devDependencies: {
+          eslint: '^8.57.0',
+          'eslint-config-next': '14.2.35',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '^8.57.0',
+        'eslint-config-next': '14.2.35',
+      },
+    });
+  });
+
   test('falls back to convex:codegen when codegen already exists', () => {
     const rendered = renderInitNextPackageJsonTemplate(
       JSON.stringify({
