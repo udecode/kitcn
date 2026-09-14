@@ -21,6 +21,7 @@ Task source:
 - type: internal bug discovered by exact-head required CI on PRs #464 and #465
 - id / link: no standalone issue; evidence is required CI runs 34830750129 and
   34833218958, attempts 1 and 2
+- owned PR: https://github.com/udecode/kitcn/pull/467
 - title: Generated Next fixture resolves incompatible ESLint 10 on Ubuntu CI
 - acceptance criteria: `kitcn init -t next` writes an exact compatible ESLint 9
   dependency; the focused template test is red before and green after; generated
@@ -146,7 +147,7 @@ Start Gates:
 | Skill analysis before edits | yes | `task`, `tdd`, `scenarios`, and `changeset` read |
 | Active goal checked or created | yes | active autoclosure goal checked; this is its prerequisite slice |
 | Source of truth read before edits | yes | `VISION.md`, owner template/tests, fixture tooling, and relevant solutions read |
-| Exact per-PR task ownership | yes | owns one prerequisite PR slice; exact PR number is filled after creation |
+| Exact per-PR task ownership | yes | PR #467, owned only by this plan |
 | GitHub comments and attachments read | no | N/A: no issue or prerequisite PR exists yet |
 | Video transcript evidence required | no | N/A: no video attached |
 | Pre-solution issue challenge required | yes | valid/reproduced verdict recorded above |
@@ -172,138 +173,138 @@ Start Gates:
 | Package build / fixture impact decision recorded | yes | package build and both fixture lanes required |
 
 Work Checklist:
-- [ ] If a duration was requested, it is recorded as minimum active work unless
+- [x] If a duration was requested, it is recorded as minimum active work unless
       explicitly marked hard stop; when no better metric exists, initial and
       final confidence scores are recorded.
-- [ ] Objective includes outcome, completion threshold, verification surface,
+- [x] Objective includes outcome, completion threshold, verification surface,
       constraints, boundaries, and blocked condition.
-- [ ] Task source classified with source type, id/link, title, task type,
+- [x] Task source classified with source type, id/link, title, task type,
       acceptance criteria, caveats, likely files/routes/packages, browser
       surface, and root-cause layer.
-- [ ] Every GitHub PR in scope has its own task plan. This plan owns one exact
+- [x] Every GitHub PR in scope has its own task plan. This plan owns one exact
       PR, owns a not-yet-created PR slice, or records N/A because no PR is in
       scope; a batch plan is not used as a substitute.
-- [ ] Required video or screen-recording evidence is cached/read as normalized
+- [x] Required video or screen-recording evidence is cached/read as normalized
       `<video-transcripts>` XML, or marked N/A with reason.
-- [ ] For public GitHub bug reports, behavior claims, technical diagnoses, or
+- [x] For public GitHub bug reports, behavior claims, technical diagnoses, or
       suggested fixes, reporter claims are challenged before implementation
       with a recorded verdict: `valid`, `not reproduced`, `invalid`,
       `wont-fix`, `partially valid`, or `platform limitation`. Feature, docs,
       support, or cleanup requests with no bug claim may mark reproduction
       `N/A` with reason.
-- [ ] Repro escalation ladder followed for bug/behavior claims: focused
+- [x] Repro escalation ladder followed for bug/behavior claims: focused
       test/source-level repro first when applicable; existing repo-owned
       automated browser or integration proof next when available and useful as
       executable coverage; the repo-approved Browser tool next when tests or
       automation cannot reproduce or cannot model the surface honestly;
       screenshot or explicit visual-proof waiver when visual/native state
       matters.
-- [ ] Hard-stop rule followed for bug/behavior claims: no code when the issue
+- [x] Hard-stop rule followed for bug/behavior claims: no code when the issue
       is not reproduced, invalid, or won't-fix; partial validity pivots to the
       best long-term fix and records what was wrong or incomplete in the
       issue's proposed path.
-- [ ] Nearby repo instructions and implementation patterns read before edits.
-- [ ] Source-listed case matrix is complete and every contradiction has an
+- [x] Nearby repo instructions and implementation patterns read before edits.
+- [x] Source-listed case matrix is complete and every contradiction has an
       owner, harness, and verdict before mutation.
-- [ ] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
+- [x] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
       `invalid` with evidence.
-- [ ] Implementation fixes the right ownership boundary, or the narrower choice
+- [x] Implementation fixes the right ownership boundary, or the narrower choice
       is recorded with reason.
-- [ ] Release artifact requirement recorded: active changeset, new changeset, or
+- [x] Release artifact requirement recorded: active changeset, new changeset, or
       N/A with reason.
-- [ ] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
+- [x] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
       requirements, PR body sync, and issue sync when applicable.
-- [ ] Commit/PR handling recorded for code-changing work: commit and PR
+- [x] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
-- [ ] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
+- [x] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
       recorded, or blocker recorded.
-- [ ] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
+- [x] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
       exists at the PR head, and it identifies the exact PR before autoclosure.
-- [ ] Branch handling recorded for code-changing work: dedicated branch used,
+- [x] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
-- [ ] Local-env-rot retry policy recorded for any surprising repo-wide failure:
+- [x] Local-env-rot retry policy recorded for any surprising repo-wide failure:
       reinstall/rerun evidence or N/A with reason.
-- [ ] Workspace authority recorded: every proof command names the cwd/tool that
+- [x] Workspace authority recorded: every proof command names the cwd/tool that
       owns the changed behavior.
-- [ ] Output budget discipline recorded and followed: broad searches are
+- [x] Output budget discipline recorded and followed: broad searches are
       scoped, capped, counted, or artifacted instead of streamed into goal
       context.
-- [ ] High-risk note recorded for public API, runtime, package-boundary,
+- [x] High-risk note recorded for public API, runtime, package-boundary,
       browser behavior, agent-action, or command-contract changes, or marked
       N/A with reason.
-- [ ] Review/autoreview target selected from actual diff state for non-trivial
+- [x] Review/autoreview target selected from actual diff state for non-trivial
       implementation work, or marked N/A with reason.
-- [ ] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
+- [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
-- [ ] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
-- [ ] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
-- [ ] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
-- [ ] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`.
-- [ ] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes.
-- [ ] Package/API pack: affected Convex static import graphs stay narrow and
+- [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
+- [x] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
+- [x] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
+- [x] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`.
+- [x] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes.
+- [x] Package/API pack: affected Convex static import graphs stay narrow and
       plugin/per-module boundaries are used where appropriate.
-- [ ] Package/API pack: CLI commands remain deterministic, `--json` capable,
+- [x] Package/API pack: CLI commands remain deterministic, `--json` capable,
       and non-interactive with explicit confirmation bypass when relevant.
-- [ ] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
+- [x] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
       current-state synchronized when public guidance changes.
-- [ ] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
-- [ ] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
+- [x] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
+- [x] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
-| Named verification threshold | pending | Run the command, proof, source audit, or artifact check named in this plan | pending |
-| Exact per-PR task ownership | pending | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | pending |
-| Pre-solution issue challenge verdict | pending | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | pending |
-| Repro escalation ladder | pending | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | pending |
-| Bug reproduced before fix | pending | Record failing test/repro or N/A with reason | pending |
-| Targeted behavior verification | pending | Run focused test/proof for changed behavior or record N/A | pending |
-| TypeScript or typed config changed | pending | Run relevant typecheck | pending |
-| Package exports or file layout changed | pending | Run the relevant package build before final verification and keep generated updates | pending |
-| Package manifests, lockfile, or install graph changed | pending | Run `bun install` and relevant package checks | pending |
-| Agent rules or skills changed | pending | Run `bun install` and verify generated skill sync | pending |
-| Workspace authority proof | pending | Run verification in the owning repo/package/app/route/tool and record cwd; do not count the wrong workspace as proof | pending |
-| Browser surface changed | pending | Capture Browser Use proof or record explicit waiver/blocker | pending |
-| Browser final proof | pending | Attach screenshot or exact browser verification caveat when browser proof applies | pending |
-| UI walkthrough | pending | If UI or rendered output changed, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | pending |
-| Scaffold or fixture output changed | pending | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | pending |
-| Package behavior or public API changed | pending | Add a changeset or record why no changeset applies | pending |
-| Docs and kitcn skill sync changed | pending | Keep `www/**` and `packages/kitcn/skills/kitcn/**` in sync, or record N/A | pending |
-| Docs or content changed | pending | For docs-heavy work, use `--template docs`; for incidental docs, verify source-backed claims, links, examples, and rendered output or record N/A | pending |
-| High-risk mini gate | pending | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | pending |
-| Agent-native review for agent/tooling changes | pending | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | pending |
-| Local install corruption suspected | pending | Run `bun install` once, rerun the exact failing command, or record N/A | pending |
-| Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
-| PR task evidence verified | pending | Verify body plan line, plan at PR head, and exact PR ownership | pending |
-| PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
-| GitHub issue sync-back | pending | Post concise issue sync after PR exists, or record N/A/blocker | pending |
-| Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
-| Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
-| Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
-| Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
-| Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-09-14-fix-next-fixture-eslint-10-compatibility.md` | pending |
-| Public API / package boundary proof | pending | Source-audit public API, exports, and package boundary impact | pending |
-| Convex bundle/import proof | pending | Audit affected function-entry static graphs or record N/A | pending |
-| CLI/scaffold/generated proof | pending | Prove command contract and regenerate owned output or record N/A | pending |
-| Release artifact classification | pending | Record whether the change is published package behavior/API/types/config/runtime or no published user-visible delta | pending |
-| Published package changeset | pending | If published package users see a delta, load `changeset` and add/update one `.changeset/*.md` per package | pending |
-| No release artifact | pending | If no artifact is needed, record the exact reason: internal-only, docs-only, agent-only, test-only, or no user-visible delta from `main` | pending |
-| Package typecheck/build/test | pending | Run owning package checks or record N/A with reason | pending |
-| Fixture/scaffold generation | pending | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | pending |
-| Docs/package skill sync | pending | Synchronize current-state public guidance or record N/A | pending |
+| Named verification threshold | yes | Run the named local and GitHub proof | local threshold passed; exact-head GitHub CI pending |
+| Exact per-PR task ownership | yes | Record exact PR and dedicated plan | PR #467; this plan exists at head after the plan-binding push |
+| Pre-solution issue challenge verdict | yes | Record claim, repro, validity, boundary, and hard-stop decision | complete above: valid, reproduced, package overlay owner |
+| Repro escalation ladder | yes | Record test/integration/browser/visual outcomes | focused red and Ubuntu integration repro; browser/visual N/A |
+| Bug reproduced before fix | yes | Record failing proof | exact mismatch red test plus four CI failures |
+| Targeted behavior verification | yes | Run focused proof | manifest 5/5 and scenario runner 32/32 passed |
+| TypeScript or typed config changed | yes | Run relevant typecheck | `bun typecheck` passed |
+| Package exports or file layout changed | no | Build if applicable | N/A: no export/layout change; package build passed anyway |
+| Package manifests, lockfile, or install graph changed | yes | Run install/fixture graph checks | fixture sync/check and prepared install passed; lockfile unchanged |
+| Agent rules or skills changed | no | Sync generated skill | N/A: no agent source changed |
+| Workspace authority proof | yes | Run proof in owning workspace | package, prepared scenario, and root repo commands recorded above |
+| Browser surface changed | no | Capture Browser proof or waive | N/A: CLI dependency and process lifecycle only |
+| Browser final proof | no | Attach browser proof or waive | N/A: no browser-rendered behavior |
+| UI walkthrough | no | Run walkthrough for rendered output | N/A: no UI or rendered output |
+| Scaffold or fixture output changed | yes | Run fixture sync/check | both passed |
+| Package behavior or public API changed | yes | Add changeset | `.changeset/quiet-maps-lint.md` adds a `kitcn` patch |
+| Docs and kitcn skill sync changed | no | Sync current-state guidance | N/A: no public guidance or skill contract changed |
+| Docs or content changed | no | Verify docs | N/A: plans are execution evidence, not user docs |
+| High-risk mini gate | yes | Record failure mode, proof, and boundary | resolver variance/port leak; fixture CI and runtime matrix prove owning boundaries |
+| Agent-native review for agent/tooling changes | no | Run specialist review if applicable | N/A: tooling process cleanup is not an agent/user-action workflow |
+| Local install corruption suspected | no | Reinstall once if suspected | N/A: failures reproduced deterministically and had source owners |
+| Commit created | yes | Commit entire verified checkout | `d4c24966` |
+| PR create or update | yes | Push and create task PR | PR #467 created after green `bun check`; plan-binding push pending |
+| Task-style PR body verified | yes | Read back emoji body | pending final read-back after plan-binding push |
+| PR task evidence verified | yes | Verify body line, head plan, exact PR | body line present; exact-head plan verification pending push |
+| PR proof image hosting | no | Host browser proof if applicable | N/A: no browser proof |
+| GitHub issue sync-back | no | Sync issue if applicable | N/A: no standalone issue |
+| Final handoff contract | yes | Fill exact fields | filled below; exact head/CI receipt pending |
+| Final lint | yes | Run lint fix | `bun lint:fix` passed before commit |
+| Output budget discipline | yes | Keep broad output bounded | used capped output; one earlier CI log truncation is ledgered in parent plan |
+| Timed checkpoint | no | Honor requested duration | N/A: no duration requested |
+| Autoreview for non-trivial implementation changes | yes | Run final review | clean; overall correctness confidence 0.98 |
+| Goal plan complete | yes | Run goal checker | pending after exact-head PR CI |
+| Public API / package boundary proof | yes | Audit public/package effect | generated Next devDependency only; no exports or runtime bundle changed |
+| Convex bundle/import proof | no | Audit static import graph | N/A: no Convex entry import changed |
+| CLI/scaffold/generated proof | yes | Regenerate and verify | fixture sync/check and prepared Next lint passed |
+| Release artifact classification | yes | Classify published delta | published `kitcn` scaffold behavior, patch release |
+| Published package changeset | yes | Add package changeset | `.changeset/quiet-maps-lint.md` |
+| No release artifact | no | Record no-artifact reason | N/A: published package delta has a changeset |
+| Package typecheck/build/test | yes | Run owning proof | focused test, root typecheck, and package build passed |
+| Fixture/scaffold generation | yes | Run fixture sync/check | both passed |
+| Docs/package skill sync | no | Sync guidance if changed | N/A: no guidance changed |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
 |-------|--------|----------|------|
 | Intake and source read | complete | owner, repro, peer boundary, doctrine, and prior solutions read | implementation |
-| Implementation | pending | | verification |
-| Verification | pending | | closeout |
-| Commit / PR / GitHub sync | pending | | final response |
-| Closeout | pending | | final response |
+| Implementation | complete | package overlay and runtime cleanup owners fixed with tests | verification |
+| Verification | complete | focused, fixture, scenario, package, lint/typecheck, and root check pass | delivery |
+| Commit / PR / GitHub sync | in progress | commit `d4c24966`; PR #467 created | bind exact plan and await CI |
+| Closeout | pending | exact-head CI, feedback, receipt, and merge | unblock #464/#465 |
 
 Findings:
 - `eslint-plugin-react@7.37.5` declares ESLint support through `^9.7`, while
@@ -366,9 +367,9 @@ Source-listed case matrix:
 | runtime cleanup | runtime scenarios own local Convex backend lifecycle | scenario runner unit test + root runtime matrix | failure path left port 3210 occupied | cleanup on success and failure | focused 32/32 and full `bun check` runtime matrix | passed |
 
 Final handoff contract:
-- Commit line: exact commit recorded after creation
-- PR line: exact PR recorded after creation
-- Issue line: pending
+- Commit line: `d4c24966` (`fix next scaffold eslint resolution`)
+- PR line: https://github.com/udecode/kitcn/pull/467
+- Issue line: N/A; no standalone issue
 - Confidence line: 98%
 - Flow table:
   - Reproduced: red normalization test plus repeated Ubuntu ESLint 10 crash;
@@ -386,7 +387,7 @@ Final handoff contract:
   - Why not broader change: no need to bump shadcn, Next, or lint rules
 - Verified: focused red/green, fixture sync/check, scenario lint, package build,
   typecheck/lint, full `bun check`, secrets scan, and autoreview
-- PR body verified: pending
+- PR body verified: initial body created in required format; final read-back pending
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -410,8 +411,8 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
+- Commit: `d4c24966`
+- PR: https://github.com/udecode/kitcn/pull/467
 - Issue: N/A; prerequisite discovered from PR CI, no standalone issue
 - Browser proof: N/A; no rendered/browser behavior
 - Caveats: exact-head GitHub CI and PR body read-back pending
