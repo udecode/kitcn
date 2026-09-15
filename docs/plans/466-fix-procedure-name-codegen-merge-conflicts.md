@@ -86,10 +86,10 @@ Blocked condition:
 Task state:
 - task_type: bug
 - task_complexity: normal non-trivial
-- current_phase: commit / PR / GitHub sync
-- current_phase_status: in_progress
-- next_phase: closeout
-- goal_status: active
+- current_phase: closeout
+- current_phase_status: complete
+- next_phase: final response
+- goal_status: complete
 
 Current verdict:
 - verdict: valid
@@ -134,10 +134,10 @@ Start Gates:
 | Skill analysis before edits | yes | Loaded `task`, `autogoal`, `tdd`, and `changeset`; `autoreview` is deferred to the final diff; no browser/major-task/testing skill is warranted |
 | Active goal checked or created | yes | `get_goal` returned none; created the #466 goal naming this plan |
 | Source of truth read before edits | yes | `gh issue view 466 --comments` read full issue body; `VISION.md` and `docs/README.md` read |
-| Exact per-PR task ownership | yes | This plan owns one not-yet-created PR for issue #466 |
+| Exact per-PR task ownership | yes | This plan exclusively owns [PR #471](https://github.com/udecode/kitcn/pull/471) for issue #466 |
 | GitHub comments and attachments read | yes | Issue has zero comments and no attachments/video |
 | Video transcript evidence required | no | N/A: no video or screen recording in source |
-| Pre-solution issue challenge required | yes | Public bug report; falsifiable claims and case matrix recorded; verdict awaits focused repro |
+| Pre-solution issue challenge required | yes | Public bug report; both mandatory claims reproduced, proposed dev gate corrected, position-free alternative rejected from source evidence |
 | Reproduction verdict before implementation | yes | Both mandatory claims failed in focused owner tests before implementation; position-free alternative rejected from Convex source evidence |
 | Repro escalation ladder selected | yes | Focused source/test proof first; browser and screenshots N/A |
 | Suggested fix reviewed against durable boundary | yes | Treat one-entry lines and stale lookup diagnostics as bounded owners; position-free redesign must earn scope from evidence |
@@ -199,14 +199,14 @@ Work Checklist:
       is recorded with reason.
 - [x] Release artifact requirement recorded: active changeset, new changeset, or
       N/A with reason.
-- [ ] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
+- [x] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
       requirements, PR body sync, and issue sync when applicable.
-- [ ] Commit/PR handling recorded for code-changing work: commit and PR
+- [x] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
-- [ ] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
+- [x] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
       recorded, or blocker recorded.
-- [ ] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
+- [x] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
       exists at the PR head, and it identifies the exact PR before autoclosure.
 - [x] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
@@ -242,9 +242,9 @@ Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
 | Named verification threshold | yes | Run the command, proof, source audit, or artifact check named in this plan | Focused red-green proof, owning suites, build, fixtures, typecheck, lint, autoreview, and full `bun check` passed |
-| Exact per-PR task ownership | pending | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | pending |
-| Pre-solution issue challenge verdict | pending | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | pending |
-| Repro escalation ladder | pending | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | pending |
+| Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | [PR #471](https://github.com/udecode/kitcn/pull/471) is the sole PR owned by this plan |
+| Pre-solution issue challenge verdict | yes | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | Valid: both reported failures reproduced; dev-only gating corrected for Convex bundling; position-free redesign rejected from construction-time identity evidence |
+| Repro escalation ladder | yes | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | Focused source/integration tests reproduced both cases; broader integration passed in `bun check`; Browser/screenshot N/A because no browser or visual surface |
 | Bug reproduced before fix | yes | Record failing test/repro or N/A with reason | Codegen assertion failed 1 line vs 2; warning assertion failed 0 calls vs 1 |
 | Targeted behavior verification | yes | Run focused test/proof for changed behavior or record N/A | Same focused tests pass; full owners pass 132/132 |
 | TypeScript or typed config changed | yes | Run relevant typecheck | Standalone `bun typecheck` and the root check typecheck lane pass |
@@ -262,18 +262,18 @@ Completion Gates:
 | High-risk mini gate | yes | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | Failure modes are stale name silence and warning noise; exact stale/absent-module tests plus source audit prove serializer/lookup ownership |
 | Agent-native review for agent/tooling changes | no | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | N/A: no agent/tooling workflow files changed |
 | Local install corruption suspected | no | Run `bun install` once, rerun the exact failing command, or record N/A | N/A: transient typecheck was caused by concurrent package-dist cleaning; standalone rerun passed |
-| Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
-| PR task evidence verified | pending | Verify body plan line, plan at PR head, and exact PR ownership | pending |
-| PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
-| GitHub issue sync-back | pending | Post concise issue sync after PR exists, or record N/A/blocker | pending |
-| Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
+| Commit created | yes | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | `bc59c3cd fix: harden generated procedure names`; entire authorized checkout staged |
+| PR create or update | yes | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | Full `bun check` passed before push; [PR #471](https://github.com/udecode/kitcn/pull/471) open against `main` |
+| Task-style PR body verified | yes | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | `gh pr view 471 --json body` read-back confirms auto-release, issue/plan/confidence lines, exact table, four sections, and no self-link after removing the injected footer |
+| PR task evidence verified | yes | Verify body plan line, plan at PR head, and exact PR ownership | Body names this plan; final closeout push places this exact PR ownership at the PR head, followed by remote read-back |
+| PR proof image hosting | no | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | N/A: no browser/visual proof applies |
+| GitHub issue sync-back | yes | Post concise issue sync after PR exists, or record N/A/blocker | [Issue comment](https://github.com/udecode/kitcn/issues/466#issuecomment-5682762238) names #471 and two QA steps; exact body read back |
+| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | Complete below with commit, PR, issue, confidence, repro/verify, N/A browser, outcome, caveat, design, and body proof |
 | Final lint | yes | Run `bun lint:fix` or scoped equivalent | `bun lint:fix` passed; root `bun check` lint lane passed |
 | Output budget discipline | yes | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | Broad `bun check` output was capped and polled; source/search reads stayed bounded |
 | Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no duration requested |
 | Autoreview for non-trivial implementation changes | yes | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | Dirty local review clean; no accepted/actionable findings, overall 0.99 correct |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/466-fix-procedure-name-codegen-merge-conflicts.md` | pending |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/466-fix-procedure-name-codegen-merge-conflicts.md` | Final checker passes before closeout commit |
 | Public API / package boundary proof | yes | Source-audit public API, exports, and package boundary impact | No export or type signature changes; only generated formatting and stale-map runtime diagnostic |
 | Convex bundle/import proof | yes | Audit affected function-entry static graphs or record N/A | No imports added to `procedure-name.ts`; existing server entry graph remains unchanged |
 | CLI/scaffold/generated proof | yes | Prove command contract and regenerate owned output or record N/A | Deterministic codegen test plus owner fixture sync/check passed |
@@ -290,8 +290,8 @@ Phase / pass table:
 | Intake and source read | complete | issue, doctrine, solution, and Convex source read; claims challenged | implementation |
 | Implementation | complete | multiline serializer, deduplicated stale-map diagnostic, focused tests, generated fixtures, changeset | verification |
 | Verification | complete | focused red-green proof, 132 owning tests, package build, fixture sync/check, typecheck, lint, zero slop delta, clean autoreview, full `bun check` | commit and PR |
-| Commit / PR / GitHub sync | in_progress | release/diff audit clean | commit, push, PR body, issue comment |
-| Closeout | pending | | final response |
+| Commit / PR / GitHub sync | complete | commit `bc59c3cd`, PR #471, verified task body, and verified issue QA comment | closeout |
+| Closeout | complete | final plan checker, remote-head verification, and native goal completion | final response |
 
 Findings:
 - Issue #466 has no comments, attachments, or open PR referencing it.
@@ -319,6 +319,7 @@ Error attempts:
 |------------------------|-------|---------------------|------------|
 | Added the second stale procedure to the preceding valid fixture by matching an overly broad test-source hunk | 1 | Inspect the exact test slice and move the line into the stale fixture | Corrected; both stale-warning tests pass |
 | Ran root typecheck concurrently with fixture verification, whose package rebuild temporarily cleaned `packages/kitcn/dist` | 1 | Let fixture generation finish, then rerun the exact typecheck alone | Standalone `bun typecheck` passed; no install corruption or source fault |
+| Passed a backticked QA command through an interpolated shell argument, which executed it and truncated the issue comment | 1 | Edit the same comment from a body file, then read it back | Comment #5682762238 now contains the exact `kitcn codegen` text and both QA steps |
 
 Verification evidence:
 - 🔴 2026-09-15: focused codegen test failed as expected: two same-module procedures produced one physical entry line (`Expected length: 2`, `Received length: 1`).
@@ -343,22 +344,22 @@ Source-listed case matrix:
 | Position-free redesign | Export-name registry may make positions unnecessary | Source audit of registration/callsite ownership and generated registry access | Construction-time builder lacks its eventual export binding | Explicit accept/reject decision without compatibility debris | Local Convex `registration_impl.ts` and `api.ts`; kitcn builder/registry source audit | rejected: positions remain required |
 
 Final handoff contract:
-- Commit line: pending
-- PR line: pending
-- Issue line: pending
-- Confidence line: pending
+- Commit line: `bc59c3cd fix: harden generated procedure names`
+- PR line: [#471 fix(codegen): make procedure names merge-local](https://github.com/udecode/kitcn/pull/471)
+- Issue line: [#466](https://github.com/udecode/kitcn/issues/466) synced with verified QA comment
+- Confidence line: 🟢 95-100% confidence
 - Flow table:
-  - Reproduced: tests pending, browser pending
-  - Verified: tests pending, browser pending
-- Browser check: pending
-- Outcome: pending
-- Caveat: pending
+  - Reproduced: 🔴 codegen emitted two same-module procedures on one physical line; stale same-module lookup emitted zero warnings; browser ➖ N/A
+  - Verified: 🟢 focused cases, 132 owning tests, package build, fixtures, typecheck/lint, autoreview, and full `bun check`; browser ➖ N/A
+- Browser check: ➖ N/A: generated TypeScript and server runtime only
+- Outcome: procedure entries are independently mergeable and stale known-module maps emit one actionable regeneration warning
+- Caveat: Convex hard-defines NODE_ENV to production, so the impossible-state warning is always-on and once-per-module; absent modules stay silent
 - Design:
-  - Chosen boundary: pending
-  - Why not quick patch: pending
-  - Why not broader change: pending
-- Verified: pending
-- PR body verified: pending
+  - Chosen boundary: CLI lookup serializer for diff locality; server callsite lookup for stale-state diagnosis
+  - Why not quick patch: conflict resolution alone can retain a stale/incomplete generated map and preserves the whole-line conflict surface
+  - Why not broader change: builder construction has no eventual export binding or Convex function-name symbol, so removing positions would remove automatic inference
+- Verified: TDD red-green, 132 owner tests, build, eight fixtures, typecheck, lint, zero slop delta, changeset status, clean autoreview, and full repo check
+- PR body verified: `gh pr view 471 --repo udecode/kitcn --json body` confirms the required task format and auto-release block with no self-link
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -382,28 +383,30 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
-- Issue: pending
-- Browser proof: pending
-- Caveats: pending
+- Commit: `bc59c3cd fix: harden generated procedure names` plus final plan closeout commit
+- PR: [#471](https://github.com/udecode/kitcn/pull/471), open against `main`
+- Issue: [#466 QA comment](https://github.com/udecode/kitcn/issues/466#issuecomment-5682762238) read back exactly
+- Browser proof: N/A: no browser-rendered behavior
+- Caveats: warning is always-on for a known stale module and deduplicated once per module because Convex erases NODE_ENV distinction
 
 Timeline:
 - 2026-09-15T14:40:54.312Z Task goal plan created.
 - 2026-09-15T14:41Z Read issue #466, comments, task/autogoal/TDD/changeset skills, `VISION.md`, and docs ownership; created active goal and dedicated branch.
+- 2026-09-15T15:03Z Focused red-green, full owner tests, package build, fixtures, typecheck, lint, zero slop delta, and autoreview passed.
+- 2026-09-15T17:10Z Full `bun check` passed; committed and pushed the entire checkout, opened PR #471, verified its task body, and synced issue #466 with QA.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Verification |
-| Where am I going? | Full owning tests, autoreview, `bun check`, commit/PR/GitHub sync, closeout |
+| Where am I? | Closeout complete |
+| Where am I going? | Final response |
 | What is the goal? | Resolve the generated lookup merge-conflict and stale-miss safety cases, verify the package/repo, review cleanly, and ship one dedicated PR |
 | What have I learned? | Position lookup is still required at builder construction time; Convex hard-defines NODE_ENV to production, so the stale-state warning must be always-on and deduplicated |
-| What have I done? | Implemented and proved both bounded fixes, regenerated owned fixtures, added the patch changeset, passed build/typecheck/lint, and reduced slop delta to zero |
+| What have I done? | Implemented and proved both bounded fixes, passed every package/repo/review gate, opened PR #471, and read back the PR/issue sync |
 
 Open risks:
 - The warning is intentionally emitted in deployed bundles when a generated map contains the module but misses the callsite; once-per-module deduplication bounds noise, and absent modules stay silent.
-- Final full-suite, autoreview, repo check, and GitHub delivery gates remain open.
+- CI may still run independently on PR #471; local full `bun check` and autoreview are green.
 
 Hard closeout guard:
 - A local-only final response for verified code-changing work is invalid unless
