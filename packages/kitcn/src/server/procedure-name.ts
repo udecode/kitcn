@@ -14,6 +14,7 @@ type StackFrameLike = {
 
 const LOOKUP_KEY = '__KITCN_PROCEDURE_NAME_LOOKUP__';
 const HINTS_KEY = '__KITCN_PROCEDURE_NAME_HINTS__';
+const WARNED_MISSES_KEY = '__KITCN_PROCEDURE_NAME_WARNED_MISSES__';
 const PATH_SEPARATOR_RE = /\\/g;
 const TRIM_SLASHES_RE = /^\/+|\/+$/g;
 const PACKAGE_FRAME_MARKERS = ['/node_modules/kitcn/', '/packages/kitcn/'];
@@ -62,6 +63,19 @@ function getGlobalHints(): string[] {
   const hints: string[] = [];
   globalScope[HINTS_KEY] = hints;
   return hints;
+}
+
+function getGlobalWarnedMisses(): Set<string> {
+  const globalScope = globalThis as Record<string, unknown>;
+  const existing = globalScope[WARNED_MISSES_KEY];
+
+  if (existing instanceof Set) {
+    return existing as Set<string>;
+  }
+
+  const warnedMisses = new Set<string>();
+  globalScope[WARNED_MISSES_KEY] = warnedMisses;
+  return warnedMisses;
 }
 
 export function registerProcedureNameLookup(
@@ -182,6 +196,21 @@ function findBestEntry(
   });
 }
 
+function warnAboutStaleLookup(
+  relativeFilePath: string,
+  location: SourceLocation
+): void {
+  const warnedMisses = getGlobalWarnedMisses();
+  if (warnedMisses.has(relativeFilePath)) {
+    return;
+  }
+
+  warnedMisses.add(relativeFilePath);
+  console.warn(
+    `kitcn could not infer a procedure name at ${relativeFilePath}:${location.line} because generated/procedure-names.gen.ts has no matching entry. Run \`kitcn codegen\` to regenerate it.`
+  );
+}
+
 export function inferProcedureNameFromCallsite(): string | undefined {
   const location = captureCallsite();
   if (!location) {
@@ -198,5 +227,11 @@ export function inferProcedureNameFromCallsite(): string | undefined {
     return;
   }
 
-  return findBestEntry(entries, location)?.name;
+  const entry = findBestEntry(entries, location);
+  if (!entry) {
+    warnAboutStaleLookup(relativeFilePath, location);
+    return;
+  }
+
+  return entry.name;
 }

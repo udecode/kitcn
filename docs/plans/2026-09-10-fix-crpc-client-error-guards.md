@@ -109,17 +109,17 @@ Work Checklist:
 - [x] Resolve the full-check blocker or record a maintainer disposition.
 
 Completion Gates:
-| Gate | Result | Evidence |
-| --- | --- | --- |
-| Focused regression | passed | 36 cRPC tests pass after rebuilding |
-| Package build | passed | All four build groups |
-| Typechecks | passed | Package and repository root |
-| Lint | passed | `biome check && eslint` |
-| Code review | recorded | Implementation review reported no actionable findings |
-| Release artifact | present | `.changeset/crpc-guards-across-entrypoints.md` |
-| Full repository check | passed before final review repair | Exact-head CI run `34914786162` passed in 6m28s; final repaired-head CI pending |
-| PR ownership | recorded | #464 |
-| PR plan reference | passed | Body names this plan and fetched head contains it with exact PR #464 |
+| Gate | Applies | Result | Evidence |
+| --- | --- | --- | --- |
+| Focused regression | yes | passed | 36 cRPC tests pass after rebuilding |
+| Package build | yes | passed | All four build groups |
+| Typechecks | yes | passed | Package and repository root |
+| Lint | yes | passed | `biome check && eslint` |
+| Code review | yes | passed | Local P0/P1 autoreview clean at 0.94; automated final-head review clean |
+| Release artifact | yes | present | `.changeset/crpc-guards-across-entrypoints.md` at final head |
+| Full repository check | yes | passed | Exact-head CI run `34916336275` passed in 6m38s |
+| PR ownership | yes | recorded | #464 |
+| PR plan reference | yes | passed | Body names this plan and fetched head contains exact PR #464 |
 
 Phase / pass table:
 | Phase | Status | Evidence |
@@ -127,8 +127,8 @@ Phase / pass table:
 | Reproduction | complete | Built React and Solid tests fail on base `c12407fc` |
 | Implementation | complete | Validated shape check; shared guard delegation |
 | Focused verification | complete | cRPC tests, build, typechecks and lint pass |
-| Full repository verification | in progress | PR #467 removed the fixture blocker; repaired-head CI pending |
-| PR delivery | in progress | #464; exact task evidence and updated-head approval verified |
+| Full repository verification | complete | Local `bun check` and exact-head CI passed |
+| PR delivery | complete | Receipt `5673217013`; merged as `ac73cc6a` |
 
 Verification evidence:
 Results recorded during implementation on 2026-09-14:
@@ -176,3 +176,12 @@ Open risks:
 - Errors from another JavaScript realm fail `instanceof Error`.
   The reproduced package-entrypoint failure occurs within one realm.
 - An unsupported code supplied by bypassing TypeScript is rejected.
+
+Reboot status:
+| Question | Answer |
+| --- | --- |
+| Where am I? | Complete; PR #464 is merged |
+| Where am I going? | Parent autoclosure goal completion |
+| What is the goal? | Recognize cRPC client errors across built package entrypoints |
+| What have I learned? | Release #468 consumed the earlier living changeset before final merge |
+| What have I done? | Passed final proof, resolved feedback, posted receipt, and merged `ac73cc6a` |

@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { encodeWire } from '../crpc/transformer';
 import { initCRPC } from './builder';
 import { CRPCError } from './error';
+import type { ProcedureNameLookup } from './procedure-name';
 
 function getLocationForMarker(source: string, marker: string) {
   const index = source.indexOf(marker);
@@ -30,6 +31,63 @@ function getLocationForMarker(source: string, marker: string) {
     line: lines.length,
   };
 }
+
+async function importProcedureNameFixture(params: {
+  fileName: string;
+  functionsDirHint: string;
+  lookup: ProcedureNameLookup;
+  source: string;
+}) {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'kitcn-procedure-name-fixture-')
+  );
+  const functionsDir = path.join(dir, params.functionsDirHint);
+  const filePath = path.join(functionsDir, params.fileName);
+  const serverUrl = pathToFileURL(
+    path.join(process.cwd(), 'packages/kitcn/src/server/index.ts')
+  ).href;
+
+  fs.mkdirSync(path.join(functionsDir, 'generated'), { recursive: true });
+  fs.symlinkSync(
+    path.join(process.cwd(), 'node_modules'),
+    path.join(dir, 'node_modules'),
+    'dir'
+  );
+  fs.writeFileSync(
+    path.join(functionsDir, 'generated', 'server.ts'),
+    `
+    import {
+      initCRPC as baseInitCRPC,
+      registerProcedureNameLookup,
+    } from ${JSON.stringify(serverUrl)};
+
+    registerProcedureNameLookup(
+      ${JSON.stringify(params.lookup, null, 2)},
+      ${JSON.stringify(params.functionsDirHint)}
+    );
+
+    export const initCRPC = baseInitCRPC;
+    `
+  );
+  fs.writeFileSync(filePath, params.source);
+
+  return await import(`${pathToFileURL(filePath).href}?t=${Date.now()}`);
+}
+
+const captureConsoleWarnings = () => {
+  const originalWarn = console.warn;
+  const warnings: unknown[][] = [];
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args);
+  };
+
+  return {
+    restore: () => {
+      console.warn = originalWarn;
+    },
+    warnings,
+  };
+};
 
 describe('server/builder', () => {
   test('create() with no args exposes full procedure surface', () => {
@@ -209,12 +267,6 @@ describe('server/builder', () => {
   });
 
   test('middleware infers procedure info from exported module path by default', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-procedure-name-'));
-    const functionsDir = path.join(dir, 'convex', 'functions');
-    const filePath = path.join(functionsDir, 'posts.ts');
-    const serverUrl = pathToFileURL(
-      path.join(process.cwd(), 'packages/kitcn/src/server/index.ts')
-    ).href;
     const source = `
       import { queryGeneric, internalQueryGeneric } from 'convex/server';
       import { initCRPC } from './generated/server';
@@ -238,59 +290,26 @@ describe('server/builder', () => {
         .query(async () => 'ok');
       `;
     const location = getLocationForMarker(source, ".query(async () => 'ok')");
-
-    fs.mkdirSync(functionsDir, { recursive: true });
-    fs.mkdirSync(path.join(functionsDir, 'generated'), { recursive: true });
-    fs.symlinkSync(
-      path.join(process.cwd(), 'node_modules'),
-      path.join(dir, 'node_modules'),
-      'dir'
-    );
-    fs.writeFileSync(
-      path.join(dir, 'convex.json'),
-      `${JSON.stringify({ functions: 'convex/functions' }, null, 2)}\n`
-    );
-    fs.writeFileSync(
-      path.join(functionsDir, 'generated', 'server.ts'),
-      `
-      import {
-        initCRPC as baseInitCRPC,
-        registerProcedureNameLookup,
-      } from ${JSON.stringify(serverUrl)};
-
-      registerProcedureNameLookup(
-        {
-          'posts.ts': [
-            {
-              column: ${location.column},
-              line: ${location.line},
-              name: 'posts:list',
-            },
-          ],
-        },
-        'convex/functions'
-      );
-
-      export const initCRPC = baseInitCRPC;
-      `
-    );
-    fs.writeFileSync(filePath, source);
-
-    const mod = await import(`${pathToFileURL(filePath).href}?t=${Date.now()}`);
+    const mod = await importProcedureNameFixture({
+      fileName: 'posts.ts',
+      functionsDirHint: 'convex/functions',
+      lookup: {
+        'posts.ts': [
+          {
+            column: location.column,
+            line: location.line,
+            name: 'posts:list',
+          },
+        ],
+      },
+      source,
+    });
 
     await expect((mod as any).list._handler({}, {})).resolves.toBe('ok');
     expect((mod as any).seen).toEqual([{ type: 'query', name: 'posts:list' }]);
   });
 
   test('middleware infers procedure info with default convex root when convex.json is absent', async () => {
-    const dir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'kitcn-procedure-name-default-root-')
-    );
-    const functionsDir = path.join(dir, 'convex');
-    const filePath = path.join(functionsDir, 'posts.ts');
-    const serverUrl = pathToFileURL(
-      path.join(process.cwd(), 'packages/kitcn/src/server/index.ts')
-    ).href;
     const source = `
       import { queryGeneric, internalQueryGeneric } from 'convex/server';
       import { initCRPC } from './generated/server';
@@ -314,44 +333,118 @@ describe('server/builder', () => {
         .query(async () => 'ok');
       `;
     const location = getLocationForMarker(source, ".query(async () => 'ok')");
-
-    fs.mkdirSync(functionsDir, { recursive: true });
-    fs.mkdirSync(path.join(functionsDir, 'generated'), { recursive: true });
-    fs.symlinkSync(
-      path.join(process.cwd(), 'node_modules'),
-      path.join(dir, 'node_modules'),
-      'dir'
-    );
-    fs.writeFileSync(
-      path.join(functionsDir, 'generated', 'server.ts'),
-      `
-      import {
-        initCRPC as baseInitCRPC,
-        registerProcedureNameLookup,
-      } from ${JSON.stringify(serverUrl)};
-
-      registerProcedureNameLookup(
-        {
-          'posts.ts': [
-            {
-              column: ${location.column},
-              line: ${location.line},
-              name: 'posts:list',
-            },
-          ],
-        },
-        'convex'
-      );
-
-      export const initCRPC = baseInitCRPC;
-      `
-    );
-    fs.writeFileSync(filePath, source);
-
-    const mod = await import(`${pathToFileURL(filePath).href}?t=${Date.now()}`);
+    const mod = await importProcedureNameFixture({
+      fileName: 'posts.ts',
+      functionsDirHint: 'convex',
+      lookup: {
+        'posts.ts': [
+          {
+            column: location.column,
+            line: location.line,
+            name: 'posts:list',
+          },
+        ],
+      },
+      source,
+    });
 
     await expect((mod as any).list._handler({}, {})).resolves.toBe('ok');
     expect((mod as any).seen).toEqual([{ type: 'query', name: 'posts:list' }]);
+  });
+
+  test('middleware warns when a generated procedure name entry is stale', async () => {
+    const source = `
+      import { queryGeneric, internalQueryGeneric } from 'convex/server';
+      import { initCRPC } from './generated/server';
+
+      export const seen = [];
+
+      const c = initCRPC
+        .context({
+          query: () => ({ userId: null }),
+        })
+        .create({
+          query: queryGeneric,
+          internalQuery: internalQueryGeneric,
+        });
+
+      export const list = c.query
+        .use(async ({ ctx, procedure, next }) => {
+          seen.push(procedure);
+          return next({ ctx });
+        })
+        .query(async () => 'ok');
+
+      export const count = c.query.query(async () => 1);
+      `;
+    const location = getLocationForMarker(source, ".query(async () => 'ok')");
+
+    const warningCapture = captureConsoleWarnings();
+    try {
+      const mod = await importProcedureNameFixture({
+        fileName: 'stale-posts.ts',
+        functionsDirHint: 'convex/functions',
+        lookup: {
+          'stale-posts.ts': [
+            {
+              column: location.column,
+              line: location.line + 1,
+              name: 'stale-posts:list',
+            },
+          ],
+        },
+        source,
+      });
+
+      await expect((mod as any).list._handler({}, {})).resolves.toBe('ok');
+      await expect((mod as any).count._handler({}, {})).resolves.toBe(1);
+      expect((mod as any).seen).toEqual([{ type: 'query', name: undefined }]);
+      expect(warningCapture.warnings).toHaveLength(1);
+      expect(warningCapture.warnings[0]?.[0]).toContain('Run `kitcn codegen`');
+    } finally {
+      warningCapture.restore();
+    }
+  });
+
+  test('middleware does not warn when its module has no generated entries', async () => {
+    const source = `
+      import { queryGeneric, internalQueryGeneric } from 'convex/server';
+      import { initCRPC } from './generated/server';
+
+      export const seen = [];
+
+      const c = initCRPC
+        .context({ query: () => ({ userId: null }) })
+        .create({
+          query: queryGeneric,
+          internalQuery: internalQueryGeneric,
+        });
+
+      export const list = c.query
+        .use(async ({ ctx, procedure, next }) => {
+          seen.push(procedure);
+          return next({ ctx });
+        })
+        .query(async () => 'ok');
+      `;
+
+    const warningCapture = captureConsoleWarnings();
+    try {
+      const mod = await importProcedureNameFixture({
+        fileName: 'untracked-posts.ts',
+        functionsDirHint: 'convex/functions',
+        lookup: {
+          'other.ts': [{ column: 1, line: 1, name: 'other:list' }],
+        },
+        source,
+      });
+
+      await expect((mod as any).list._handler({}, {})).resolves.toBe('ok');
+      expect((mod as any).seen).toEqual([{ type: 'query', name: undefined }]);
+      expect(warningCapture.warnings).toHaveLength(0);
+    } finally {
+      warningCapture.restore();
+    }
   });
 
   test('input schemas are merged when chained', async () => {

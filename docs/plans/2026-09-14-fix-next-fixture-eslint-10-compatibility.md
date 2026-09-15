@@ -306,7 +306,7 @@ Phase / pass table:
 | Implementation | complete | package overlay and runtime cleanup owners fixed with tests | verification |
 | Verification | complete | focused, fixture, scenario, package, lint/typecheck, and final 362-second root check pass | delivery |
 | Commit / PR / GitHub sync | complete | implementation `d4c24966`, plan binding `0f0da6c4`, PR #467, required body read-back | closeout |
-| Closeout | in progress | prior Ubuntu CI passed; two final P2 review repairs require a new exact-head gate | rerun, push, receipt, merge |
+| Closeout | complete | exact-head CI, terminal receipt, and merged state verified | none |
 
 Findings:
 - `eslint-plugin-react@7.37.5` declares ESLint support through `^9.7`, while
@@ -520,15 +520,14 @@ Timeline:
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Final review repair and verification |
-| Where am I going? | Rerun the full gate, push the exact repair head, close review, merge #467, then unblock #464/#465 |
+| Where am I? | Complete; PR #467 is merged |
+| Where am I going? | Parent autoclosure goal completion |
 | What is the goal? | Deterministically pin compatible ESLint 9 in generated Next scaffolds and ship the prerequisite PR |
 | What have I learned? | The loose upstream range behaves differently on Ubuntu CI and violates the plugin peer range |
-| What have I done? | Reproduced four CI failures, implemented the owner fixes, closed prior review cycles, and added green proof for the final two P2 edge cases |
+| What have I done? | Reproduced the failures, repaired the owner, closed review, passed exact-head CI, and merged `5794ed38` |
 
 Open risks:
-- GitHub Ubuntu resolution may expose a second install-order issue after the
-  exact pin; the prerequisite PR CI is the authoritative final proof.
+None for this prerequisite. Exact-head Ubuntu CI passed before merge.
 
 Hard closeout guard:
 - A local-only final response for verified code-changing work is invalid unless

@@ -244,6 +244,7 @@ describe('cli/codegen', () => {
         import { publicQuery } from './lib/crpc';
 
         export const list = publicQuery.query(async () => []);
+        export const count = publicQuery.query(async () => 0);
         `.trim()
       );
 
@@ -270,6 +271,12 @@ describe('cli/codegen', () => {
       expect(generatedProcedureNames).toContain('export const procedureNames');
       expect(generatedProcedureNames).toContain('"todos.ts"');
       expect(generatedProcedureNames).toContain('"todos:list"');
+      expect(generatedProcedureNames).toContain('"todos:count"');
+      expect(
+        generatedProcedureNames
+          .split('\n')
+          .filter((line) => line.includes('name: "todos:'))
+      ).toHaveLength(2);
     } finally {
       process.chdir(oldCwd);
     }
