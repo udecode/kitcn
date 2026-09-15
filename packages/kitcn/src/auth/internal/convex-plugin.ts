@@ -16,6 +16,20 @@ import { omit } from '../../internal/upstream';
 
 export const JWT_COOKIE_NAME = 'convex_jwt';
 
+type JwtCookieTokenRequest = {
+  headers: Headers;
+};
+
+export const getJwtCookieToken = async <Token>(
+  session: unknown,
+  getToken: (request: JwtCookieTokenRequest) => Promise<Token>
+) => {
+  if (!session) {
+    return;
+  }
+  return await getToken({ headers: new Headers() });
+};
+
 const getJwksAlg = (authProvider: AuthProvider) => {
   const isCustomJwt =
     'type' in authProvider && authProvider.type === 'customJwt';
@@ -261,22 +275,39 @@ export const convex = (opts: {
             );
           },
           handler: createAuthMiddleware(async (ctx) => {
+            // OAuth redirect starts have no session to mint a token for.
+            if (!(ctx.context.session ?? ctx.context.newSession)) {
+              return;
+            }
             const originalSession = ctx.context.session;
             try {
               ctx.context.session =
                 ctx.context.session ?? ctx.context.newSession;
-              const { token } = await jwt.endpoints.getToken({
-                ...ctx,
-                asResponse: false,
-                headers: {},
-                method: 'GET',
-                returnHeaders: false,
-                returnStatus: false,
-              });
-              const jwtCookie = ctx.context.createAuthCookie(JWT_COOKIE_NAME, {
-                maxAge: jwtExpirationSeconds,
-              });
-              ctx.setCookie(jwtCookie.name, token, jwtCookie.attributes);
+              const tokenResponse = await getJwtCookieToken(
+                ctx.context.session,
+                async ({ headers }) =>
+                  await jwt.endpoints.getToken({
+                    ...ctx,
+                    asResponse: false,
+                    headers,
+                    method: 'GET',
+                    returnHeaders: false,
+                    returnStatus: false,
+                  })
+              );
+              if (tokenResponse) {
+                const jwtCookie = ctx.context.createAuthCookie(
+                  JWT_COOKIE_NAME,
+                  {
+                    maxAge: jwtExpirationSeconds,
+                  }
+                );
+                ctx.setCookie(
+                  jwtCookie.name,
+                  tokenResponse.token,
+                  jwtCookie.attributes
+                );
+              }
             } catch (_error) {}
             ctx.context.session = originalSession;
           }),
