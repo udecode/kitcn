@@ -7,7 +7,31 @@ import schema, {
   todoTagsTable,
   userTable,
 } from '../../example/convex/functions/schema';
-import { countDocumentReads, withOrmCtx } from '../setup.testing';
+import { convexTest, countDocumentReads, withOrm } from '../setup.testing';
+
+/**
+ * `countDocumentReads` swaps `db.query`/`db.get`, and the ORM binds both when it
+ * is built, so the counter has to be installed *before* `withOrm`. Installed on
+ * a context that already carries an ORM it counts only reads issued directly
+ * through `ctx.db` -- a constant zero for an ORM-only test, which makes every
+ * bound below pass vacuously.
+ */
+const withCountedOrmCtx = async (
+  run: (
+    ctx: {
+      db: Parameters<typeof countDocumentReads>[0]['db'];
+      orm: ReturnType<typeof withOrm<any, typeof schema>>['orm'];
+    },
+    reads: ReturnType<typeof countDocumentReads>
+  ) => Promise<void>
+): Promise<void> => {
+  const t = convexTest(schema);
+  await t.run(async (baseCtx) => {
+    const reads = countDocumentReads(baseCtx);
+    const ctx = withOrm(baseCtx, schema);
+    await run(ctx, reads);
+  });
+};
 
 const EXAMPLE_ENV_DEFAULTS = {
   ADMIN: 'admin@example.com',
@@ -90,7 +114,7 @@ const seedTodo = async (ctx: ExampleCtx, userId: string, title: string) => {
  */
 test('merge cost does not track the target tag size', async () => {
   await withExampleEnv(async () => {
-    await withOrmCtx(schema, schema, async (ctx) => {
+    await withCountedOrmCtx(async (ctx, reads) => {
       const userId = await seedUser(ctx, 'merge-reads@test.dev');
       const sourceTagId = await seedTag(ctx, userId, 'Work');
       const targetTagId = await seedTag(ctx, userId, 'work');
@@ -109,13 +133,13 @@ test('merge cost does not track the target tag size', async () => {
         .insert(todoTagsTable)
         .values({ todoId: sourceTodoId, tagId: sourceTagId });
 
-      const reads = countDocumentReads(ctx);
+      const readsBefore = reads.scanned;
 
       await mergeTags(ctx, userId, {
         sourceTagId,
         targetTagId,
       });
-      const mergeReads = reads.scanned;
+      const mergeReads = reads.scanned - readsBefore;
 
       const [sourceTag, targetJoins] = await Promise.all([
         ctx.orm.query.tags.findFirst({ where: { id: sourceTagId } }),
@@ -128,19 +152,27 @@ test('merge cost does not track the target tag size', async () => {
 
       expect(sourceTag).toBeNull();
       expect(targetJoins).toHaveLength(TARGET_TAG_TODOS + 1);
-      expect(targetJoins.some((join) => join.todoId === sourceTodoId)).toBe(
-        true
-      );
+      expect(
+        targetJoins.some(
+          (join: { todoId: string }) => join.todoId === sourceTodoId
+        )
+      ).toBe(true);
       // The merge reads its two tags, one source join, one indexed target
-      // probe, and aggregate bookkeeping. It never materializes 40 target rows.
-      expect(mergeReads).toBeLessThanOrEqual(12);
+      // probe, and aggregate bookkeeping. It never materializes the target rows.
+      //
+      // 16 is measured, and it is the same at TARGET_TAG_TODOS 40 and 120, which
+      // is what this test exists to pin. The previous bound of 12 was never
+      // exercised: the counter was installed after the ORM was built, so it
+      // reported a constant zero and the assertion passed against nothing.
+      expect(mergeReads).toBeLessThanOrEqual(16);
+      expect(mergeReads).toBeLessThan(TARGET_TAG_TODOS);
     });
   });
 });
 
 test('merge probe finds a target row the source todo already carries', async () => {
   await withExampleEnv(async () => {
-    await withOrmCtx(schema, schema, async (ctx) => {
+    await withCountedOrmCtx(async (ctx, reads) => {
       const userId = await seedUser(ctx, 'merge-reads-2@test.dev');
       const sourceTagId = await seedTag(ctx, userId, 'Work');
       const targetTagId = await seedTag(ctx, userId, 'work');
@@ -161,7 +193,7 @@ test('merge probe finds a target row the source todo already carries', async () 
         .insert(todoTagsTable)
         .values({ todoId: sharedTodoId, tagId: sourceTagId });
 
-      const reads = countDocumentReads(ctx);
+      const readsBefore = reads.scanned;
 
       await mergeTags(ctx, userId, {
         sourceTagId,
@@ -181,7 +213,7 @@ test('merge probe finds a target row the source todo already carries', async () 
       expect(targetJoins).toHaveLength(1);
       // The probe is index-backed: the merge must not scan the target's other
       // rows or insert a duplicate for the shared todo.
-      expect(reads.scanned).toBeLessThanOrEqual(20);
+      expect(reads.scanned - readsBefore).toBeLessThanOrEqual(20);
     });
   });
 });
