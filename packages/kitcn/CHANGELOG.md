@@ -1,5 +1,14 @@
 # kitcn
 
+## 0.33.4
+
+### Patch Changes
+
+- [#465](https://github.com/udecode/kitcn/pull/465) [`5dc460b`](https://github.com/udecode/kitcn/commit/5dc460ba0ae760ea96dba052496a01ffb61f88c3) Thanks [@tjramage](https://github.com/tjramage)! - ## Patches
+
+  - Fix spurious internal errors during sessionless social sign-in redirects
+    while preserving Convex JWT cookie issuance for authenticated sessions.
+
 ## 0.33.3
 
 ### Patch Changes
