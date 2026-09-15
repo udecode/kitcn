@@ -139,6 +139,28 @@ describe('init-next-package-json.template', () => {
     });
   });
 
+  test('uses the Next major to resolve a wide config range', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: '16.3.4',
+        },
+        devDependencies: {
+          eslint: 'latest',
+          'eslint-config-next': '>=14',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '9.39.5',
+      },
+    });
+  });
+
   test('moves normalized ESLint out of production dependencies', () => {
     const rendered = renderInitNextPackageJsonTemplate(
       JSON.stringify({

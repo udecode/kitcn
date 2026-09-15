@@ -1439,6 +1439,7 @@ type DependencyInstallItem = {
   installFromManifest?: boolean;
   installSpec: string;
   packageName: string;
+  requiredSection?: 'dependencies' | 'devDependencies';
   requiredVersion?: string;
 };
 
@@ -3331,10 +3332,14 @@ function buildDependencyInstallPlan(
   );
   const requiresReconcile = dependencies.some(
     (dependency) =>
-      dependency.requiredVersion !== undefined &&
-      (dependency.installFromManifest ||
-        existing[dependency.packageName] !== undefined) &&
-      existing[dependency.packageName] !== dependency.requiredVersion
+      (dependency.requiredVersion !== undefined &&
+        (dependency.installFromManifest ||
+          existing[dependency.packageName] !== undefined) &&
+        existing[dependency.packageName] !== dependency.requiredVersion) ||
+      (dependency.requiredSection === 'devDependencies' &&
+        pkg.dependencies?.[dependency.packageName] !== undefined) ||
+      (dependency.requiredSection === 'dependencies' &&
+        pkg.devDependencies?.[dependency.packageName] !== undefined)
   );
   if (missing.length === 0 && !requiresReconcile) {
     return null;
@@ -3547,6 +3552,7 @@ export function buildInitializationPlan(params: {
                 installFromManifest: true,
                 installSpec: `eslint@${nextEslintVersion}`,
                 packageName: 'eslint',
+                requiredSection: 'devDependencies' as const,
                 requiredVersion: nextEslintVersion,
               },
             ]

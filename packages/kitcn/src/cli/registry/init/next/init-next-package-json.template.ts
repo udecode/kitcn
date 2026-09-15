@@ -44,21 +44,27 @@ const INIT_NEXT_PACKAGE_JSON_DEPENDENCIES = {
 
 export const INIT_NEXT_ESLINT_VERSION = '9.39.5';
 const MIN_ESLINT_9_NEXT_CONFIG_MAJOR = 15;
-const VERSION_MAJOR_RE = /\d+/;
+const SIMPLE_VERSION_MAJOR_RE =
+  /^(?:[v=~^]\s*)?(\d+)(?:\.(?:\d+|x|\*)){0,2}(?:-[0-9A-Za-z.-]+)?$/i;
 
 const INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES = {
   '@types/bun': 'latest',
 } as const;
 
+const resolveSimpleVersionMajor = (version: string | undefined) => {
+  const major = version?.trim().match(SIMPLE_VERSION_MAJOR_RE)?.[1];
+  return major === undefined ? undefined : Number(major);
+};
+
 export const resolveInitNextEslintVersion = (
   eslintConfigNextVersion: string | undefined
 ) => {
-  const majorMatch = eslintConfigNextVersion?.match(VERSION_MAJOR_RE);
-  if (!majorMatch) {
+  const major = resolveSimpleVersionMajor(eslintConfigNextVersion);
+  if (major === undefined) {
     return undefined;
   }
 
-  return Number(majorMatch[0]) >= MIN_ESLINT_9_NEXT_CONFIG_MAJOR
+  return major >= MIN_ESLINT_9_NEXT_CONFIG_MAJOR
     ? INIT_NEXT_ESLINT_VERSION
     : undefined;
 };
@@ -73,28 +79,26 @@ export const resolveInitNextEslintVersionFromPackageJson = (
     return undefined;
   }
 
-  const configVersion = resolveInitNextEslintVersion(eslintConfigNextVersion);
-  if (configVersion !== undefined) {
-    return configVersion;
-  }
-  if (VERSION_MAJOR_RE.test(eslintConfigNextVersion)) {
-    return undefined;
-  }
-
-  const eslintVersion =
-    packageJson.devDependencies?.eslint ?? packageJson.dependencies?.eslint;
-  const eslintMajor = eslintVersion?.match(VERSION_MAJOR_RE)?.[0];
-  if (eslintMajor !== undefined && Number(eslintMajor) < 9) {
-    return undefined;
+  const configMajor = resolveSimpleVersionMajor(eslintConfigNextVersion);
+  if (configMajor !== undefined) {
+    return configMajor >= MIN_ESLINT_9_NEXT_CONFIG_MAJOR
+      ? INIT_NEXT_ESLINT_VERSION
+      : undefined;
   }
 
   const nextVersion =
     packageJson.dependencies?.next ?? packageJson.devDependencies?.next;
-  const nextMajor = nextVersion?.match(VERSION_MAJOR_RE)?.[0];
-  if (
-    nextMajor !== undefined &&
-    Number(nextMajor) < MIN_ESLINT_9_NEXT_CONFIG_MAJOR
-  ) {
+  const nextMajor = resolveSimpleVersionMajor(nextVersion);
+  if (nextMajor !== undefined) {
+    return nextMajor >= MIN_ESLINT_9_NEXT_CONFIG_MAJOR
+      ? INIT_NEXT_ESLINT_VERSION
+      : undefined;
+  }
+
+  const eslintVersion =
+    packageJson.devDependencies?.eslint ?? packageJson.dependencies?.eslint;
+  const eslintMajor = resolveSimpleVersionMajor(eslintVersion);
+  if (eslintMajor !== undefined && eslintMajor < 9) {
     return undefined;
   }
 

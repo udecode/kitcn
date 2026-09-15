@@ -261,7 +261,7 @@ Completion Gates:
 | Pre-solution issue challenge verdict | yes | Record claim, repro, validity, boundary, and hard-stop decision | complete above: valid, reproduced, package overlay owner |
 | Repro escalation ladder | yes | Record test/integration/browser/visual outcomes | focused red and Ubuntu integration repro; browser/visual N/A |
 | Bug reproduced before fix | yes | Record failing proof | exact mismatch red test plus four CI failures |
-| Targeted behavior verification | yes | Run focused proof | manifest 10/10 and scenario runner 35/35 passed |
+| Targeted behavior verification | yes | Run focused proof | manifest 11/11, init 59/59, and scenario runner 35/35 passed |
 | TypeScript or typed config changed | yes | Run relevant typecheck | `bun typecheck` passed |
 | Package exports or file layout changed | no | Build if applicable | N/A: no export/layout change; package build passed anyway |
 | Package manifests, lockfile, or install graph changed | yes | Run install/fixture graph checks | fixture sync/check and prepared install passed; lockfile unchanged |
@@ -371,6 +371,12 @@ Review fixes:
 - Accepted exact-head P2 `discussion_r4010627175`: when normalization is
   required, remove ESLint from production dependencies before writing the
   managed version to `devDependencies`.
+- Accepted exact-head P2 `discussion_r4010720063`: a matching version in the
+  wrong manifest section still requires a package-manager reconciliation so
+  the lockfile updates its production/dev classification.
+- Accepted exact-head P2 `discussion_r4010720066`: treat only simple anchored
+  versions as installed-major evidence; wide ranges defer to a concrete Next
+  major instead of using their first numeric lower bound.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -386,6 +392,7 @@ Error attempts:
 | config-in-`dependencies`, missing-ESLint, and interactive-spawn focused tests failed | 1 each | use both manifest sections, install managed ESLint from the manifest, and separate interactive/runtime spawn modes | resolved; all three focused tests pass |
 | lint rejected `delete` in the missing-ESLint test fixture | 1 | filter the dependency entries into a new record | resolved; lint passes |
 | symbolic config spec and production-owned ESLint tests failed | 1 each | infer legacy compatibility from explicit majors and move normalized ESLint between manifest sections | resolved; focused manifest suite passes |
+| wide config range and exact-version section-move tests failed | 1 each | distinguish anchored versions from ranges and track required dependency section during reconciliation | resolved; focused tests pass |
 
 Verification evidence:
 - Red: the new manifest-template test expected `9.39.5` and received `^9`.
@@ -418,6 +425,8 @@ Verification evidence:
   and P0/P1 autoreview was clean (overall 0.92).
 - Final post-symbolic-spec repair `bun check` passed in 333 seconds;
   TruffleHog was clean and P0/P1 autoreview was clean (overall 0.91).
+- Final post-section-reconciliation repair `bun check` passed in 357 seconds;
+  TruffleHog was clean and P0/P1 autoreview was clean (overall 0.91).
 - TruffleHog found no secrets; final P0/P1 autoreview found no actionable issue.
 
 Source-listed case matrix:
@@ -434,6 +443,8 @@ Source-listed case matrix:
 | interactive interrupt | terminal Ctrl+C must reach all `scenario:dev` children | spawn-mode unit test | children detached from terminal group | keep interactive children attached | red missing mode owner, then green | passed |
 | symbolic config spec | package managers may use `latest`, `*`, or `catalog:` | manifest template unit tests | no numeric major meant no normalization | preserve explicit legacy stacks; otherwise pin ESLint 9 | red current-spec mismatch, then 10/10 green | passed |
 | production-owned ESLint | lint tooling belongs in `devDependencies` | manifest template unit test | normalization duplicated ESLint across sections | remove production entry and write managed dev entry | red duplicate, then green | passed |
+| wide config range | a range lower bound is not the installed config major | manifest template unit test | `>=14` short-circuited as Next 14 | use concrete Next 16 to pin ESLint 9 | red preserved `latest`, then green | passed |
+| dependency section reconciliation | lockfile records production/dev classification | init integration test | exact version hid a production-to-dev move | run package-manager install after section move | red missing install, then green | passed |
 
 Final handoff contract:
 - Commit line: `d4c24966` (`fix next scaffold eslint resolution`)
@@ -455,7 +466,7 @@ Final handoff contract:
   - Why not quick patch: editing generated fixtures would be overwritten
   - Why not broader change: no need to bump shadcn, Next, or lint rules
 - Verified: focused red/green, fixture sync/check, scenario lint, package build,
-  typecheck/lint, final 333-second `bun check`, secrets scan, and 0.91
+  typecheck/lint, final 357-second `bun check`, secrets scan, and 0.91
   autoreview
 - PR body verified: `gh pr view 467 --json body` confirms the task-style body;
   Codesmith appended only its standard footer
