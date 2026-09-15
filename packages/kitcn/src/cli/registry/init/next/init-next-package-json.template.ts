@@ -65,20 +65,48 @@ export const resolveInitNextEslintVersion = (
 
 export const resolveInitNextEslintVersionFromPackageJson = (
   packageJson: Pick<ProjectPackageJson, 'dependencies' | 'devDependencies'>
-) =>
-  resolveInitNextEslintVersion(
+) => {
+  const eslintConfigNextVersion =
     packageJson.devDependencies?.['eslint-config-next'] ??
-      packageJson.dependencies?.['eslint-config-next']
-  );
+    packageJson.dependencies?.['eslint-config-next'];
+  if (eslintConfigNextVersion === undefined) {
+    return undefined;
+  }
+
+  const configVersion = resolveInitNextEslintVersion(eslintConfigNextVersion);
+  if (configVersion !== undefined) {
+    return configVersion;
+  }
+  if (VERSION_MAJOR_RE.test(eslintConfigNextVersion)) {
+    return undefined;
+  }
+
+  const eslintVersion =
+    packageJson.devDependencies?.eslint ?? packageJson.dependencies?.eslint;
+  const eslintMajor = eslintVersion?.match(VERSION_MAJOR_RE)?.[0];
+  if (eslintMajor !== undefined && Number(eslintMajor) < 9) {
+    return undefined;
+  }
+
+  const nextVersion =
+    packageJson.dependencies?.next ?? packageJson.devDependencies?.next;
+  const nextMajor = nextVersion?.match(VERSION_MAJOR_RE)?.[0];
+  if (
+    nextMajor !== undefined &&
+    Number(nextMajor) < MIN_ESLINT_9_NEXT_CONFIG_MAJOR
+  ) {
+    return undefined;
+  }
+
+  return INIT_NEXT_ESLINT_VERSION;
+};
 
 const getInitNextPackageJsonDevDependencies = (
   options: InitPackageJsonTemplateOptions,
-  existing: ProjectPackageJson
+  eslintVersion: string | undefined
 ) => ({
   ...INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES,
-  ...(resolveInitNextEslintVersionFromPackageJson(existing)
-    ? { eslint: INIT_NEXT_ESLINT_VERSION }
-    : {}),
+  ...(eslintVersion ? { eslint: eslintVersion } : {}),
   ...(options.backend === 'concave'
     ? {
         '@concavejs/cli': SUPPORTED_DEPENDENCY_VERSIONS.concaveCli.exact,
@@ -91,6 +119,14 @@ export function renderInitNextPackageJsonTemplate(
   options: InitPackageJsonTemplateOptions = {}
 ): string {
   const existing = source ? (JSON.parse(source) as ProjectPackageJson) : {};
+  const eslintVersion = resolveInitNextEslintVersionFromPackageJson(existing);
+  const existingDependencies = eslintVersion
+    ? Object.fromEntries(
+        Object.entries(existing.dependencies ?? {}).filter(
+          ([packageName]) => packageName !== 'eslint'
+        )
+      )
+    : existing.dependencies;
   const nextScripts: Record<string, string> = {
     ...existing.scripts,
     ...INIT_NEXT_PACKAGE_JSON_SCRIPTS,
@@ -118,12 +154,12 @@ export function renderInitNextPackageJsonTemplate(
       ...existing,
       scripts: nextScripts,
       dependencies: {
-        ...existing.dependencies,
+        ...existingDependencies,
         ...INIT_NEXT_PACKAGE_JSON_DEPENDENCIES,
       },
       devDependencies: {
         ...existing.devDependencies,
-        ...getInitNextPackageJsonDevDependencies(options, existing),
+        ...getInitNextPackageJsonDevDependencies(options, eslintVersion),
       },
     },
     null,

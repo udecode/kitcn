@@ -95,10 +95,10 @@ Blocked condition:
 Task state:
 - task_type: bug fix / scaffold determinism
 - task_complexity: standard
-- current_phase: closeout
-- current_phase_status: complete
-- next_phase: parent autoclosure merges prerequisite and resumes #464/#465
-- goal_status: achieved
+- current_phase: exact-head delivery
+- current_phase_status: in progress
+- next_phase: push, close feedback, exact-head CI, receipt, and merge
+- goal_status: active
 
 Current verdict:
 - verdict: ready
@@ -261,7 +261,7 @@ Completion Gates:
 | Pre-solution issue challenge verdict | yes | Record claim, repro, validity, boundary, and hard-stop decision | complete above: valid, reproduced, package overlay owner |
 | Repro escalation ladder | yes | Record test/integration/browser/visual outcomes | focused red and Ubuntu integration repro; browser/visual N/A |
 | Bug reproduced before fix | yes | Record failing proof | exact mismatch red test plus four CI failures |
-| Targeted behavior verification | yes | Run focused proof | manifest 5/5 and scenario runner 32/32 passed |
+| Targeted behavior verification | yes | Run focused proof | manifest 10/10 and scenario runner 35/35 passed |
 | TypeScript or typed config changed | yes | Run relevant typecheck | `bun typecheck` passed |
 | Package exports or file layout changed | no | Build if applicable | N/A: no export/layout change; package build passed anyway |
 | Package manifests, lockfile, or install graph changed | yes | Run install/fixture graph checks | fixture sync/check and prepared install passed; lockfile unchanged |
@@ -304,9 +304,9 @@ Phase / pass table:
 |-------|--------|----------|------|
 | Intake and source read | complete | owner, repro, peer boundary, doctrine, and prior solutions read | implementation |
 | Implementation | complete | package overlay and runtime cleanup owners fixed with tests | verification |
-| Verification | complete | focused, fixture, scenario, package, lint/typecheck, and root check pass | delivery |
+| Verification | complete | focused, fixture, scenario, package, lint/typecheck, and 333-second root check pass | delivery |
 | Commit / PR / GitHub sync | complete | implementation `d4c24966`, plan binding `0f0da6c4`, PR #467, required body read-back | closeout |
-| Closeout | complete | Ubuntu CI `34904489302` passed; parent autoclosure owns feedback receipt and merge | unblock #464/#465 |
+| Closeout | in progress | prior Ubuntu CI passed; two final P2 review repairs require a new exact-head gate | rerun, push, receipt, merge |
 
 Findings:
 - `eslint-plugin-react@7.37.5` declares ESLint support through `^9.7`, while
@@ -364,6 +364,13 @@ Review fixes:
   process groups remain exclusive to bounded runtime proof.
 - Accepted exact-head P2 `discussion_r4010526507`: resolve
   `eslint-config-next` from both dependency sections before selecting ESLint.
+- Accepted exact-head P2 `discussion_r4010627169`: when
+  `eslint-config-next` uses a symbolic spec such as `latest`, `*`, or
+  `catalog:`, infer supported legacy ownership from an explicit ESLint/Next
+  major and otherwise normalize to the compatible ESLint 9 pin.
+- Accepted exact-head P2 `discussion_r4010627175`: when normalization is
+  required, remove ESLint from production dependencies before writing the
+  managed version to `devDependencies`.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -378,11 +385,12 @@ Error attempts:
 | autoreview found direct-leader exit could hide a live descendant group | 1 | verify group existence with signal 0 before and after force-stop | resolved; leader-exits-first regression test passes |
 | config-in-`dependencies`, missing-ESLint, and interactive-spawn focused tests failed | 1 each | use both manifest sections, install managed ESLint from the manifest, and separate interactive/runtime spawn modes | resolved; all three focused tests pass |
 | lint rejected `delete` in the missing-ESLint test fixture | 1 | filter the dependency entries into a new record | resolved; lint passes |
+| symbolic config spec and production-owned ESLint tests failed | 1 each | infer legacy compatibility from explicit majors and move normalized ESLint between manifest sections | resolved; focused manifest suite passes |
 
 Verification evidence:
 - Red: the new manifest-template test expected `9.39.5` and received `^9`.
-- Green: focused manifest template suite passed 7/7, including Next 14, Next
-  16, and dependency-section compatibility.
+- Green: focused manifest template suite passed 10/10, including Next 14,
+  Next 16, symbolic config specs, and dependency-section ownership.
 - `bun test ./tooling/scenarios.test.ts`: 35 tests, 104 expectations passed.
 - After review fixes, the same suite passed 33 tests / 100 expectations,
   including missing-`lsof` and current-project-only cleanup coverage.
@@ -408,6 +416,8 @@ Verification evidence:
   clean and final dirty-local P0/P1 autoreview was clean (overall 0.9).
 - Final post-edge-case `bun check` passed in 378 seconds; TruffleHog was clean
   and P0/P1 autoreview was clean (overall 0.92).
+- Final post-symbolic-spec repair `bun check` passed in 333 seconds;
+  TruffleHog was clean and P0/P1 autoreview was clean (overall 0.91).
 - TruffleHog found no secrets; final P0/P1 autoreview found no actionable issue.
 
 Source-listed case matrix:
@@ -422,6 +432,8 @@ Source-listed case matrix:
 | config in `dependencies` | Next apps may place tooling in either manifest section | manifest template test | loose ESLint range preserved | resolve config from either section | red mismatch, then green | passed |
 | missing managed ESLint | template writes ESLint to `devDependencies` | init integration test | generic `bun add` made it a production dependency | reconcile from rewritten manifest | red command mismatch, then green | passed |
 | interactive interrupt | terminal Ctrl+C must reach all `scenario:dev` children | spawn-mode unit test | children detached from terminal group | keep interactive children attached | red missing mode owner, then green | passed |
+| symbolic config spec | package managers may use `latest`, `*`, or `catalog:` | manifest template unit tests | no numeric major meant no normalization | preserve explicit legacy stacks; otherwise pin ESLint 9 | red current-spec mismatch, then 10/10 green | passed |
+| production-owned ESLint | lint tooling belongs in `devDependencies` | manifest template unit test | normalization duplicated ESLint across sections | remove production entry and write managed dev entry | red duplicate, then green | passed |
 
 Final handoff contract:
 - Commit line: `d4c24966` (`fix next scaffold eslint resolution`)
@@ -443,7 +455,8 @@ Final handoff contract:
   - Why not quick patch: editing generated fixtures would be overwritten
   - Why not broader change: no need to bump shadcn, Next, or lint rules
 - Verified: focused red/green, fixture sync/check, scenario lint, package build,
-  typecheck/lint, full `bun check`, secrets scan, and autoreview
+  typecheck/lint, final 333-second `bun check`, secrets scan, and 0.91
+  autoreview
 - PR body verified: `gh pr view 467 --json body` confirms the task-style body;
   Codesmith appended only its standard footer
 
@@ -482,11 +495,11 @@ Timeline:
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Commit / PR / GitHub sync |
-| Where am I going? | Create the prerequisite PR, bind this plan to it, verify exact-head CI, then unblock #464/#465 |
+| Where am I? | Final review repair and verification |
+| Where am I going? | Rerun the full gate, push the exact repair head, close review, merge #467, then unblock #464/#465 |
 | What is the goal? | Deterministically pin compatible ESLint 9 in generated Next scaffolds and ship the prerequisite PR |
 | What have I learned? | The loose upstream range behaves differently on Ubuntu CI and violates the plugin peer range |
-| What have I done? | Reproduced four CI failures, implemented both owner fixes, regenerated fixtures, and passed focused/package/full-repo proof |
+| What have I done? | Reproduced four CI failures, implemented the owner fixes, closed prior review cycles, and added green proof for the final two P2 edge cases |
 
 Open risks:
 - GitHub Ubuntu resolution may expose a second install-order issue after the

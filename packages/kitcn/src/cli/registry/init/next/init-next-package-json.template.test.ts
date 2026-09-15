@@ -95,6 +95,73 @@ describe('init-next-package-json.template', () => {
     });
   });
 
+  test('normalizes ESLint for nonnumeric current Next specs', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: 'latest',
+        },
+        devDependencies: {
+          eslint: '^9',
+          'eslint-config-next': 'latest',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '9.39.5',
+      },
+    });
+  });
+
+  test('preserves ESLint 8 when a nonnumeric config spec targets Next 14', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: '^14.2.35',
+        },
+        devDependencies: {
+          eslint: '^8.57.0',
+          'eslint-config-next': 'catalog:',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '^8.57.0',
+      },
+    });
+  });
+
+  test('moves normalized ESLint out of production dependencies', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          eslint: '^9',
+          next: '16.3.4',
+        },
+        devDependencies: {
+          'eslint-config-next': '16.3.4',
+        },
+      })
+    );
+    const packageJson = JSON.parse(rendered) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+
+    expect(packageJson.dependencies.eslint).toBeUndefined();
+    expect(packageJson.devDependencies.eslint).toBe('9.39.5');
+  });
+
   test('falls back to convex:codegen when codegen already exists', () => {
     const rendered = renderInitNextPackageJsonTemplate(
       JSON.stringify({
