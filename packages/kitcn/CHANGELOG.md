@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.33.2
+
+### Patch Changes
+
+- [#467](https://github.com/udecode/kitcn/pull/467) [`5794ed3`](https://github.com/udecode/kitcn/commit/5794ed381c0a3074e74585269eb7c24a030497cc) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Fix Next.js scaffolds to select and reconcile a compatible ESLint release.
+
 ## 0.33.1
 
 ### Patch Changes
