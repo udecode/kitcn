@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.33.5
+
+### Patch Changes
+
+- [#471](https://github.com/udecode/kitcn/pull/471) [`04346ae`](https://github.com/udecode/kitcn/commit/04346ae4c7f207f2e57eed56bffb3100472fb649) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Improve generated procedure-name lookups with merge-local entries and stale-state warnings.
+
 ## 0.33.4
 
 ### Patch Changes
