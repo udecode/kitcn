@@ -1,5 +1,16 @@
 # kitcn
 
+## 0.33.3
+
+### Patch Changes
+
+- [#464](https://github.com/udecode/kitcn/pull/464) [`ac73cc6`](https://github.com/udecode/kitcn/commit/ac73cc6a9ffcb95a6d4ce89f9ef9a591eeacf883) Thanks [@tjramage](https://github.com/tjramage)! - ## Patches
+
+  - Fix cRPC client-error guards (`isCRPCClientError`, `isCRPCError`,
+    `isCRPCErrorCode`) rejecting errors thrown through other entrypoints such as
+    `kitcn/react` and `kitcn/solid`, so deterministic refusals like
+    `UNAUTHORIZED` are no longer retried as transport failures.
+
 ## 0.33.2
 
 ### Patch Changes
