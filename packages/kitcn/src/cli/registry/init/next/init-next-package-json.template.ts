@@ -44,6 +44,7 @@ const INIT_NEXT_PACKAGE_JSON_DEPENDENCIES = {
 
 export const INIT_NEXT_ESLINT_VERSION = '9.39.5';
 const MIN_ESLINT_9_NEXT_CONFIG_MAJOR = 15;
+const EXTERNALLY_MANAGED_VERSION_RE = /^(?:catalog|workspace):/;
 const SIMPLE_VERSION_MAJOR_RE =
   /^(?:[v=~^]\s*)?(\d+)(?:\.(?:\d+|x|\*)){0,2}(?:-[0-9A-Za-z.-]+)?$/i;
 
@@ -99,6 +100,15 @@ export const resolveInitNextEslintVersionFromPackageJson = (
     packageJson.devDependencies?.eslint ?? packageJson.dependencies?.eslint;
   const eslintMajor = resolveSimpleVersionMajor(eslintVersion);
   if (eslintMajor !== undefined && eslintMajor < 9) {
+    return undefined;
+  }
+
+  if (
+    [eslintConfigNextVersion, nextVersion, eslintVersion].every(
+      (version) =>
+        version !== undefined && EXTERNALLY_MANAGED_VERSION_RE.test(version)
+    )
+  ) {
     return undefined;
   }
 

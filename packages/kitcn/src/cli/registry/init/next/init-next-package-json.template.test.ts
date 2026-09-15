@@ -139,6 +139,49 @@ describe('init-next-package-json.template', () => {
     });
   });
 
+  test('preserves externally catalog-managed ESLint without major evidence', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: 'catalog:',
+        },
+        devDependencies: {
+          eslint: 'catalog:',
+          'eslint-config-next': 'catalog:',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: 'catalog:',
+      },
+    });
+  });
+
+  test('pins ESLint when external catalog ownership is incomplete', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: 'catalog:',
+        },
+        devDependencies: {
+          'eslint-config-next': 'catalog:',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '9.39.5',
+      },
+    });
+  });
+
   test('uses the Next major to resolve a wide config range', () => {
     const rendered = renderInitNextPackageJsonTemplate(
       JSON.stringify({

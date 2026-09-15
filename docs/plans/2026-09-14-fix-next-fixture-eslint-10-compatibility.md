@@ -261,7 +261,7 @@ Completion Gates:
 | Pre-solution issue challenge verdict | yes | Record claim, repro, validity, boundary, and hard-stop decision | complete above: valid, reproduced, package overlay owner |
 | Repro escalation ladder | yes | Record test/integration/browser/visual outcomes | focused red and Ubuntu integration repro; browser/visual N/A |
 | Bug reproduced before fix | yes | Record failing proof | exact mismatch red test plus four CI failures |
-| Targeted behavior verification | yes | Run focused proof | manifest 11/11, init 59/59, and scenario runner 35/35 passed |
+| Targeted behavior verification | yes | Run focused proof | manifest 13/13, init 59/59, and scenario runner 35/35 passed |
 | TypeScript or typed config changed | yes | Run relevant typecheck | `bun typecheck` passed |
 | Package exports or file layout changed | no | Build if applicable | N/A: no export/layout change; package build passed anyway |
 | Package manifests, lockfile, or install graph changed | yes | Run install/fixture graph checks | fixture sync/check and prepared install passed; lockfile unchanged |
@@ -287,7 +287,7 @@ Completion Gates:
 | Final lint | yes | Run lint fix | `bun lint:fix` passed before commit |
 | Output budget discipline | yes | Keep broad output bounded | used capped output; one earlier CI log truncation is ledgered in parent plan |
 | Timed checkpoint | no | Honor requested duration | N/A: no duration requested |
-| Autoreview for non-trivial implementation changes | yes | Run final review | clean; overall correctness confidence 0.98 |
+| Autoreview for non-trivial implementation changes | yes | Run final review | clean after the partial-catalog repair; overall correctness confidence 0.94 |
 | Goal plan complete | yes | Run goal checker | run after this evidence update; result recorded in commit history/terminal handoff |
 | Public API / package boundary proof | yes | Audit public/package effect | generated Next devDependency only; no exports or runtime bundle changed |
 | Convex bundle/import proof | no | Audit static import graph | N/A: no Convex entry import changed |
@@ -304,7 +304,7 @@ Phase / pass table:
 |-------|--------|----------|------|
 | Intake and source read | complete | owner, repro, peer boundary, doctrine, and prior solutions read | implementation |
 | Implementation | complete | package overlay and runtime cleanup owners fixed with tests | verification |
-| Verification | complete | focused, fixture, scenario, package, lint/typecheck, and 333-second root check pass | delivery |
+| Verification | complete | focused, fixture, scenario, package, lint/typecheck, and final 362-second root check pass | delivery |
 | Commit / PR / GitHub sync | complete | implementation `d4c24966`, plan binding `0f0da6c4`, PR #467, required body read-back | closeout |
 | Closeout | in progress | prior Ubuntu CI passed; two final P2 review repairs require a new exact-head gate | rerun, push, receipt, merge |
 
@@ -377,6 +377,12 @@ Review fixes:
 - Accepted exact-head P2 `discussion_r4010720066`: treat only simple anchored
   versions as installed-major evidence; wide ranges defer to a concrete Next
   major instead of using their first numeric lower bound.
+- Accepted exact-head P2 `discussion_r4010814239`: when every relevant version
+  is externally managed through `catalog:` or `workspace:`, preserve that
+  ownership instead of inventing an ESLint major without compatibility proof.
+- Accepted final local P1: external ownership is complete only when Next,
+  `eslint-config-next`, and ESLint are all catalog/workspace-managed; a partial
+  catalog manifest still receives the safe ESLint 9 pin.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -393,6 +399,8 @@ Error attempts:
 | lint rejected `delete` in the missing-ESLint test fixture | 1 | filter the dependency entries into a new record | resolved; lint passes |
 | symbolic config spec and production-owned ESLint tests failed | 1 each | infer legacy compatibility from explicit majors and move normalized ESLint between manifest sections | resolved; focused manifest suite passes |
 | wide config range and exact-version section-move tests failed | 1 each | distinguish anchored versions from ranges and track required dependency section during reconciliation | resolved; focused tests pass |
+| all-catalog Next 14 compatibility test failed | 1 | preserve externally managed versions when no local major evidence exists | resolved; focused manifest suite passes |
+| autoreview found partial catalog ownership was mistaken for complete external ownership | 1 | require all three relevant version specs before preserving the catalog | resolved; red regression and manifest 13/13 pass |
 
 Verification evidence:
 - Red: the new manifest-template test expected `9.39.5` and received `^9`.
@@ -427,6 +435,10 @@ Verification evidence:
   TruffleHog was clean and P0/P1 autoreview was clean (overall 0.91).
 - Final post-section-reconciliation repair `bun check` passed in 357 seconds;
   TruffleHog was clean and P0/P1 autoreview was clean (overall 0.91).
+- The catalog regression suite is green at 13/13 after proving both complete
+  external ownership and an incomplete-catalog fallback to ESLint 9.
+- Final post-catalog repair `bun check` passed in 362 seconds; TruffleHog was
+  clean and P0/P1 autoreview was clean (overall 0.94).
 - TruffleHog found no secrets; final P0/P1 autoreview found no actionable issue.
 
 Source-listed case matrix:
@@ -445,12 +457,14 @@ Source-listed case matrix:
 | production-owned ESLint | lint tooling belongs in `devDependencies` | manifest template unit test | normalization duplicated ESLint across sections | remove production entry and write managed dev entry | red duplicate, then green | passed |
 | wide config range | a range lower bound is not the installed config major | manifest template unit test | `>=14` short-circuited as Next 14 | use concrete Next 16 to pin ESLint 9 | red preserved `latest`, then green | passed |
 | dependency section reconciliation | lockfile records production/dev classification | init integration test | exact version hid a production-to-dev move | run package-manager install after section move | red missing install, then green | passed |
+| external catalog ownership | workspace catalog may resolve a compatible Next 14/ESLint 8 stack | manifest template unit test | unknown catalog majors defaulted to ESLint 9 | preserve catalog ownership without contrary local evidence | red forced 9.39.5, then green | passed |
+| incomplete catalog ownership | preserving a missing ESLint spec would leave the generated app nondeterministic | manifest template unit test | filtered missing entries made partial ownership look complete | pin ESLint 9 unless all three relevant specs are external | red preserved missing ESLint, then 13/13 green | passed |
 
 Final handoff contract:
 - Commit line: `d4c24966` (`fix next scaffold eslint resolution`)
 - PR line: https://github.com/udecode/kitcn/pull/467
 - Issue line: N/A; no standalone issue
-- Confidence line: 98%
+- Confidence line: 94%
 - Flow table:
   - Reproduced: red normalization test plus repeated Ubuntu ESLint 10 crash;
     browser N/A
