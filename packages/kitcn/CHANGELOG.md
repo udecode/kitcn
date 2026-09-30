@@ -1,5 +1,16 @@
 # kitcn
 
+## 0.33.6
+
+### Patch Changes
+
+- [#473](https://github.com/udecode/kitcn/pull/473) [`16e0bb4`](https://github.com/udecode/kitcn/commit/16e0bb46d66a4d7166d577793fcb47f8161efa5d) Thanks [@EfficiencyCorp](https://github.com/EfficiencyCorp)! - - Add opt-in optimistic auth and document identity admission to
+  `ConvexAuthProvider`, with the same guarded token source for Convex and cRPC
+  HTTP requests.
+  - Add Convex-native `optimisticUpdate` support to cRPC `mutationOptions`.
+  - Reuse the Convex client's logger for server HTTP clients so construction is
+    deterministic during prerendering.
+
 ## 0.33.5
 
 ### Patch Changes
