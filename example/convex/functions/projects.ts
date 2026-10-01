@@ -3,7 +3,14 @@ import { CRPCError } from 'kitcn/server';
 import * as z from 'zod';
 import { authMutation, authQuery, optionalAuthQuery } from '../lib/crpc';
 import type { Insert, Select } from '../shared/api';
-import { hasAnyProject } from './_helpers/project_existence';
+import {
+  grantProjectAccess,
+  hasAnyProject,
+  listAccessibleProjects,
+  listProjectsForDropdown,
+  revokeProjectAccess,
+  syncProjectArchived,
+} from './_helpers/project_access';
 import { projectMembersTable, projectsTable } from './schema';
 
 // Schema for project list items
@@ -153,34 +160,15 @@ export const list = optionalAuthQuery
       };
     }
 
-    const memberships = await ctx.orm.query.projectMembers.findMany({
-      where: { userId },
-      limit: 1000,
-      columns: { projectId: true },
+    // One index walk over the viewer's own access rows. The previous read model
+    // scanned `projects` and post-filtered owner-or-member in JS, so it cost
+    // O(table) per page and every scanned row joined this subscription.
+    const results = await listAccessibleProjects(ctx, {
+      userId,
+      archived: input.includeArchived === true,
+      cursor: input.cursor,
+      limit: input.limit,
     });
-    const memberProjectIds = new Set(memberships.map((m) => m.projectId));
-
-    const results = await ctx.orm.query.projects
-      .select()
-      .orderBy({ createdAt: 'desc' })
-      .filter(async (project: ProjectRow) => {
-        const isOwner = project.ownerId === userId;
-        const isMember = memberProjectIds.has(project.id);
-
-        if (!(isOwner || isMember)) {
-          return false;
-        }
-
-        if (input.includeArchived) {
-          return project.archived;
-        }
-
-        return !project.archived;
-      })
-      .paginate({
-        cursor: input.cursor,
-        limit: input.limit,
-      });
 
     const projectIds = results.page.map((p) => p.id);
     const statsByProject = await getProjectStats(projectIds);
@@ -342,6 +330,8 @@ export const create = authMutation
       .values(values)
       .returning();
 
+    await grantProjectAccess(ctx, { project, userId: ctx.userId });
+
     return project.id;
   });
 
@@ -398,6 +388,11 @@ export const archive = authMutation
       .update(projectsTable)
       .set({ archived: true })
       .where(eq(projectsTable.id, input.projectId));
+
+    await syncProjectArchived(ctx, {
+      projectId: input.projectId,
+      archived: true,
+    });
   });
 
 export const restore = authMutation
@@ -419,6 +414,11 @@ export const restore = authMutation
       .update(projectsTable)
       .set({ archived: false })
       .where(eq(projectsTable.id, input.projectId));
+
+    await syncProjectArchived(ctx, {
+      projectId: input.projectId,
+      archived: false,
+    });
   });
 
 export const addMember = authMutation
@@ -466,6 +466,8 @@ export const addMember = authMutation
       projectId: input.projectId,
       userId: userToAdd.id,
     });
+
+    await grantProjectAccess(ctx, { project, userId: userToAdd.id });
   });
 
 export const removeMember = authMutation
@@ -495,6 +497,11 @@ export const removeMember = authMutation
     await ctx.orm
       .delete(projectMembersTable)
       .where(eq(projectMembersTable.id, member.id));
+
+    await revokeProjectAccess(ctx, {
+      projectId: input.projectId,
+      userId: input.userId,
+    });
   });
 
 export const leave = authMutation
@@ -508,6 +515,11 @@ export const leave = authMutation
     await ctx.orm
       .delete(projectMembersTable)
       .where(eq(projectMembersTable.id, member.id));
+
+    await revokeProjectAccess(ctx, {
+      projectId: input.projectId,
+      userId: ctx.userId,
+    });
   });
 
 export const transfer = authMutation
@@ -560,6 +572,21 @@ export const transfer = authMutation
       .update(projectsTable)
       .set({ ownerId: input.newOwnerId })
       .where(eq(projectsTable.id, input.projectId));
+
+    // Both users keep access; only the `isOwner` flag moves. `grantProjectAccess`
+    // derives that flag from the project it is handed, so it has to see the
+    // post-transfer owner. Writing each row from the final state keeps this
+    // correct whatever order the steps above ran in, and re-granting an existing
+    // row is an update, not a duplicate.
+    const transferred = { ...project, ownerId: input.newOwnerId };
+    await grantProjectAccess(ctx, {
+      project: transferred,
+      userId: input.newOwnerId,
+    });
+    await grantProjectAccess(ctx, {
+      project: transferred,
+      userId: ctx.userId,
+    });
   });
 
 export const listForDropdown = authQuery
@@ -572,45 +599,9 @@ export const listForDropdown = authQuery
       })
     )
   )
-  .query(async ({ ctx }) => {
-    const userId = ctx.userId;
-
-    const owned = await ctx.orm.query.projects.findMany({
-      where: { ownerId: userId, archived: false },
-      limit: 1000,
-      columns: { id: true, name: true },
-      extras: { isOwner: true },
-    });
-
-    const memberRows = await ctx.orm.query.projectMembers.findMany({
-      where: { userId },
-      limit: 1000,
-      columns: { projectId: true },
-    });
-
-    const memberProjectIds = Array.from(
-      new Set(memberRows.map((row) => row.projectId))
-    );
-
-    const memberProjects = memberProjectIds.length
-      ? await ctx.orm.query.projects.findMany({
-          where: { id: { in: memberProjectIds }, archived: false },
-          limit: memberProjectIds.length,
-          columns: { id: true, name: true },
-          extras: { isOwner: false },
-        })
-      : [];
-
-    const byId = new Map<
-      string,
-      { id: string; isOwner: boolean; name: string }
-    >();
-    for (const project of memberProjects) byId.set(project.id, project);
-    for (const project of owned) byId.set(project.id, project);
-
-    return Array.from(byId.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
+  .query(({ ctx }) => {
+    // 1000 owned + 1000 member, the capacity the two-query read had.
+    return listProjectsForDropdown(ctx, { userId: ctx.userId, limit: 2000 });
   });
 
 export const hasAny = authQuery.output(z.boolean()).query(({ ctx }) => {

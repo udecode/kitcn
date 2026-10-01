@@ -3,5 +3,10 @@
 // Do not edit manually.
 
 import { defineMigrationSet } from 'kitcn/orm';
+import { migration as migration_0 } from './20260906_022807_backfill_project_access';
+import { migration as migration_1 } from './20260906_035251_backfill_project_access_members';
 
-export const migrations = defineMigrationSet([]);
+export const migrations = defineMigrationSet([
+  migration_0,
+  migration_1,
+]);
