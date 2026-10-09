@@ -539,7 +539,11 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 | `createCaller` | Server-side caller factory |
 | `handler` | Next.js API route handler (`export const { GET, POST, OPTIONS } = handler;`) |
 
-Options: `api`, `convexSiteUrl`, `auth.jwtCache` (default true), `auth.isUnauthorized`.
+Options: `api`, `convexSiteUrl`, `auth.jwtCache` (boolean or `{ now }`, default true),
+`auth.expirationToleranceSeconds` (default 60), `auth.isUnauthorized`.
+`now` returns finite Unix seconds or a promise of seconds. For Next partial
+prefetching and request-time versus private-cache clocks, follow
+[Next setup](../setup/next.md#8a4-jwt-cache-and-partial-prefetching).
 
 ### Client Provider with Auth
 

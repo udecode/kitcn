@@ -25,7 +25,7 @@
     "fixtures:check:full": "bun --cwd packages/kitcn build && KITCN_SKIP_LOCAL_BUILD=1 bun tooling/fixtures.ts check --scope full --backend concave",
     "fixtures:sync": "bun tooling/dependency-pins.ts sync --skip-validate && bun tooling/fixtures.ts sync --backend concave",
     "gen": "bun --cwd example gen",
-    "postinstall": "bun tooling/sync-kitcn-skill.ts && bunx skiller@latest apply || true",
+    "postinstall": "bun tooling/sync-kitcn-skill.ts && bunx skiller@0.9.14 apply || true",
     "intent:build": "bun --cwd packages/kitcn build && touch example/convex/functions/schema.ts",
     "intent:check": "bun run intent:validate && bun run intent:stale && bun run intent:pack && bun run intent:build && bun lint:fix",
     "intent:pack": "npm pack --json --dry-run ./packages/kitcn",

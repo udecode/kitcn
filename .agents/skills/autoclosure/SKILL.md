@@ -11,8 +11,10 @@ metadata:
 
 Autoclosure finishes already-started work. It does not invent the next feature.
 It also does not replace `task`: every PR must enter through its own `task`
-invocation and dedicated task plan. A PR without verifiable task evidence is
-commented on and closed, not reviewed, repaired, or merged.
+invocation and dedicated task plan. When that evidence is incomplete but the PR
+contains usable work, autoclosure starts the exact-PR `task` run from the
+existing branch and repairs the evidence before closeout. It closes only when
+there is no usable task state to adopt.
 
 ## Use When
 
@@ -34,48 +36,84 @@ Create or resume a goal plan from the `autoclosure` template with the
 `agent-native` pack. Inventory the current intended delta from the active plan,
 source owners, and actual files. Do not absorb unrelated product scope.
 
-## Task Compliance Gate
+## Task Recovery Gate
 
-Before reading the implementation diff or review feedback:
+Run this gate before full implementation review or review-feedback triage:
 
-1. Read `state`, `body`, `headRefOid`, and `url` with `gh pr view`. If the PR is
-   not `OPEN`, record its state and stop without adding another comment.
-2. Require all three:
+1. Read `state`, `body`, `headRefOid`, `commits`, and `url` with `gh pr view`.
+   If the PR is not `OPEN`, record its state and stop without adding another
+   comment.
+2. Fetch `pull/<number>/head` into a local `refs/pr/<number>` ref. Bind every
+   intake claim to that immutable head; do not browse GitHub files or trust a
+   mutable branch.
+3. Run bounded adoption triage. Read the PR body and linked task source, commit
+   subjects, changed paths/stat, candidate `docs/plans/*.md` files at the
+   fetched head, and only enough implementation diff to answer whether the
+   existing delta is coherent and advances a concrete task contract. Do not
+   start normal review or feedback triage yet.
+4. Classify exactly one state:
 
-   - The PR body includes exactly one
-     `🧭 Task plan: docs/plans/<plan>.md` line.
-   - That plan file exists at the exact fetched PR head. Fetch
-     `pull/<number>/head` into a local `refs/pr/<number>` ref and inspect the
-     path with `git show`; do not browse GitHub files or trust a mutable branch.
-   - The plan identifies the exact PR number or URL in its task source or exact
-     per-PR ownership evidence. A batch plan is invalid evidence.
+   - `complete`: the body includes exactly one
+     `🧭 Task plan: docs/plans/<plan>.md` line, that file exists at the fetched
+     PR head, and the plan identifies this exact PR number or URL. A batch plan
+     is invalid evidence.
+   - `recoverable`: complete evidence is missing, but the fetched head contains
+     a substantive coherent delta and the PR's available body, linked issue,
+     commit history, plan fragments, and diff provide enough source-backed
+     intent to run `task` for this exact PR without inventing product scope.
+   - `absent`: bounded triage cannot recover both a coherent delta and a
+     concrete task contract. Empty, placeholder, unrelated, random, or work
+     with no concrete source belongs here.
 
-Do not infer compliance from the author, labels, CI, comments, review state, or
-generic prose. If any requirement is missing or invalid:
+Incomplete task evidence alone is never `absent`. Do not infer a state from the
+author, labels, CI, comments, review state, diff size alone, or generic prose.
+Record the exact sources and rationale for the classification.
 
-1. Build this comment, substituting the exact PR URL or number:
+For `complete`, continue to the live PR feedback gate.
 
-   > Closing because this PR has no verifiable per-PR `task` run. Every PR must
-   > include `🧭 Task plan: docs/plans/<plan>.md` in its body, that plan must
-   > exist at the PR head, and it must identify this exact PR. Run
-   > `$kitcn:task <PR URL or #>` and add the evidence before reopening or
-   > submitting a replacement. We recommend GPT-5.6 with high-or-higher
-   > reasoning effort.
+For `recoverable`:
+
+1. Invoke or resume `task` for the exact PR in the same run. Preserve the
+   existing branch and coherent work; do not start a replacement PR.
+2. Use the PR and linked source as the task source, create or resume one
+   dedicated per-PR task plan, and record which acceptance, proof, or ownership
+   gaps still need work. Existing valid evidence is input, not a reason to
+   restart.
+3. Complete the normal `task` readiness, implementation, proof, and PR-body
+   rules. Commit and push the repaired plan/body evidence through that task
+   workflow.
+4. Refetch the immutable PR head and require all three `complete` conditions
+   before returning to autoclosure. If recovery disproves the task contract or
+   delta coherence, reclassify with evidence. If access or external
+   state blocks recovery, stop and report it; do not convert a tooling blocker
+   into `absent`.
+
+Do not run full source review, feedback resolution, merge, or release while the
+state remains `recoverable`; recovery repairs the entry contract first.
+
+For `absent`:
+
+1. Build a comment that names the exact missing usable state, the PR URL or
+   number, and this recovery path:
+
+   > Closing because autoclosure could not find usable task state to adopt:
+   > <exact missing coherent delta or task contract>. Start
+   > `$kitcn:task <PR URL or #>` from a concrete source and substantive work
+   > before reopening or submitting a replacement.
 
 2. Read existing comments first. If the exact remediation comment already
    exists, reuse it; otherwise post it once with `gh pr comment`.
 3. Read the comment back and verify the exact explanation is present.
 4. Only after comment verification succeeds, close the PR with `gh pr close`.
 5. Read back `state: CLOSED` and the comment with `gh pr view`, record both
-   receipts, and stop.
+   receipts, and stop without review, repair, merge, or release.
 
-If commenting fails, do not close. Missing task evidence is not a waiver and
-must never continue into source review, repair, checks, merge, or release.
+If commenting fails, do not close.
 
 ## Live PR Feedback Gate
 
-Run this gate only after the PR passes task compliance. Local review and green
-checks do not prove that live GitHub feedback is closed.
+Run this gate only after the task recovery gate reaches `complete`. Local
+review and green checks do not prove that live GitHub feedback is closed.
 
 1. Resolve `headRefOid`, fetch the PR head into an immutable local ref, and
    require the proof checkout's committed `HEAD` to equal both before source
@@ -160,8 +198,9 @@ Do not merge, close out, or release the PR without the required receipts.
 
 | Lane | Applies | Owner/proof | Status |
 | --- | --- | --- | --- |
-| per-PR task ownership | yes | body path + head file + exact PR owner | pending |
-| noncompliant close | conditional | comment + `CLOSED` read-back | pending |
+| task intake classification | yes | immutable-head `complete` / `recoverable` / `absent` evidence | pending |
+| per-PR task ownership | conditional | complete evidence or recovered body path + head file + exact PR owner | pending |
+| absent-state close | conditional | exact missing-state comment + `CLOSED` read-back | pending |
 | source behavior | yes/no | focused tests/runtime | pending |
 | package API/build | yes/no | exports/build/types | pending |
 | generated output | yes/no | source + regenerate + diff | pending |
@@ -178,9 +217,10 @@ Mark N/A only with a concrete reason.
 
 ## Closure Loop
 
-1. Run the task compliance gate. If it fails, comment, verify, close, verify,
-   record receipts, and stop.
-2. Reconstruct intended behavior and exclusions only for a compliant PR.
+1. Run the task recovery gate. Continue complete state, adopt recoverable state
+   through exact-PR `task` until it becomes complete, or comment/close verified
+   absent state and stop.
+2. Reconstruct intended behavior and exclusions for the complete PR.
 3. Run `resolve-pr-feedback` in full mode for the exact PR. Repair and close all
    P1-or-higher findings; record any explicitly deferred P2-or-lower URLs.
 4. Run the smallest missing proof first; classify failures before editing.
@@ -222,8 +262,9 @@ Mark N/A only with a concrete reason.
 Clean means:
 
 - requested behavior exists with regression proof;
-- a compliant PR has body/head/exact-owner task evidence, or a noncompliant PR
-  has the required comment and verified `CLOSED` state;
+- task intake has an immutable-head classification receipt;
+- complete or recovered PRs have body/head/exact-owner task evidence, while
+  absent PRs have the exact missing-state comment and verified `CLOSED` state;
 - source/generated ownership is correct;
 - public exports, docs, package skill, examples, fixtures, and scenarios agree;
 - no stale alias, placeholder, skipped required gate, or accepted review finding

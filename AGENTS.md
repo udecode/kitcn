@@ -25,11 +25,16 @@
   dedicated task plan. The PR body must name that plan, the plan must exist at
   the PR head, and it must identify the exact PR. A batch plan may order PRs,
   but one batch-level `task`, `auto`, or `autoclosure` run never substitutes.
-- **Noncompliant PR:** `autoclosure` must comment and close any PR without valid
-  per-PR task evidence. The comment must explain the requirement, show how to
-  run `task`, and recommend GPT-5.6 with high-or-higher reasoning effort. The
-  comment must succeed before closing; read back both the comment and `CLOSED`
-  state, then stop without reviewing, repairing, or merging the PR.
+- **PR task recovery:** `autoclosure` classifies exact-head task state as
+  complete, recoverable, or absent. Complete evidence continues. Recoverable
+  work has a substantive coherent delta and enough source-backed intent to run
+  `task` for that exact PR without inventing scope; preserve it, create or
+  repair its dedicated plan and PR-body evidence, read the repaired evidence
+  back at the new head, then continue. Incomplete evidence alone is never a
+  reason to close. Close only absent state, where bounded intake cannot recover
+  both a coherent delta and a concrete task contract. Comment
+  with the exact missing state before closing and read back both the comment
+  and `CLOSED` state.
 - **Push scope:** When you do commit and push, include unrelated dirty files outside src; those are often manual user changes or synced skill/docs updates, so do not silently leave them behind.
 - **PR:** Before creating or updating a PR, run `check`. If it fails, stop and fix it or report the blocker. Do not open a PR with failing `check` unless the user explicitly says to.
 - **PR branch:** If the user explicitly says to open or create a PR, do not ask for confirmation. If the current branch is `main`, create a new `codex/` branch first, then commit/push/open the PR. If already on a non-`main` branch, proceed directly.
@@ -97,7 +102,8 @@ Use those skills when relevant:
 - `architecture-cleanup` for public exports, package boundaries, Convex import
   graphs, plugins, CLI/scaffolds, generated ownership, and navigation cost.
 - `autoclosure` to finish the current tree without creating new product scope,
-  or to comment and close a PR that lacks verifiable per-PR `task` evidence.
+  adopt recoverable PR work through its own `task` plan, or comment and close a
+  PR only when no usable task state exists.
 - `design` for live `www`/`example` UI decisions and Browser proof.
 - `react-query` for cRPC query/mutation options, live subscription ownership,
   RSC preloading, and bounded invalidation.
