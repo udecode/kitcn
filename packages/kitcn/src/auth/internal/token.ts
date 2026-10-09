@@ -16,6 +16,8 @@ export type GetTokenOptions = {
     enabled: boolean;
     expirationToleranceSeconds?: number;
     isAuthError: (error: unknown) => boolean;
+    /** Current Unix time in seconds. Defaults to the system clock. */
+    now?: () => number | Promise<number>;
   };
 };
 
@@ -47,18 +49,36 @@ export const getToken = async (
     return await fetchToken();
   }
 
+  let claims: jose.JWTPayload;
   try {
-    const claims = jose.decodeJwt(token);
-    if (
-      !isTokenExpired(
-        claims?.exp,
-        opts?.jwtCache?.expirationToleranceSeconds ?? 60
-      )
-    ) {
-      return { isFresh: false, token };
-    }
+    claims = jose.decodeJwt(token);
   } catch (error) {
     console.error('Error decoding JWT', error);
+    return await fetchToken();
+  }
+
+  if (!claims.exp) {
+    return await fetchToken();
+  }
+
+  let now: number | undefined;
+  if (opts.jwtCache.now) {
+    now = await opts.jwtCache.now();
+    if (!Number.isFinite(now)) {
+      throw new RangeError(
+        'JWT cache now must return finite Unix time in seconds'
+      );
+    }
+  }
+
+  if (
+    !isTokenExpired(
+      claims.exp,
+      opts.jwtCache.expirationToleranceSeconds ?? 60,
+      now
+    )
+  ) {
+    return { isFresh: false, token };
   }
 
   return await fetchToken();

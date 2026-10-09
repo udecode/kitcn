@@ -98,7 +98,54 @@ export function HydrateClient({ children }: { children: React.ReactNode }) {
 }
 ```
 
-### 8.A.4 Pass server token to provider
+### 8.A.4 JWT cache and partial prefetching
+
+With Next 16 `cacheComponents` and `partialPrefetching`, the default JWT expiry
+clock can trigger a Blocking Route error even after `await headers()`. The
+app owns clock timing. For request-time contexts, configure the server factory:
+
+```ts
+import { connection } from 'next/server';
+
+export const { createContext, createCaller, handler } = convexBetterAuth({
+  api,
+  convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
+  auth: {
+    jwtCache: {
+      now: async () => {
+        await connection();
+        return Math.floor(Date.now() / 1000);
+      },
+    },
+  },
+});
+```
+
+`auth.jwtCache` accepts a boolean or `{ now?: () => number | Promise<number> }`.
+The clock returns finite **Unix seconds**, not milliseconds. The reader awaits
+it only for a decoded cached JWT with an expiry. Disabled caching, forced
+refresh, missing/malformed cookies, and absent expiry bypass the hook.
+`auth.expirationToleranceSeconds` remains a sibling option (default 60).
+Clock throws/rejections propagate unchanged; `NaN` and infinities are rejected.
+
+Keep `await headers()` in the RSC context creator. Put request-time token reads
+under `Suspense`, including a provider or route gate that awaits `caller.getToken()`.
+For `'use cache: private'`, use a separate factory with the default or a sync
+clock; **never call `connection()` inside private cache**. A private token helper
+can use `cacheLife({ stale: 30 })`, read headers, create that context, and return
+`context.token`. A token-blocking layout must defer its token-dependent subtree
+with `Suspense`, including when awaiting a private-cache helper. Private caching
+allows the clock read but does not make runtime auth data static.
+
+`auth: { jwtCache: false }` avoids the cookie expiry clock but fetches a token
+on every context creation. Kitcn does not import Next, detect render stages, or
+suppress render aborts. An app that runs a `connection()` clock through TanStack
+queries owns abort handling because recording a query failure can also read
+`Date.now()`. Do not suppress ordinary auth failures.
+
+Full examples: [Next.js JWT cache guidance](https://kitcn.dev/docs/nextjs#jwt-cache-and-partial-prefetching).
+
+### 8.A.5 Pass server token to provider
 
 ```tsx
 // app/(app)/layout.tsx

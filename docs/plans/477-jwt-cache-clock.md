@@ -25,6 +25,7 @@ Applied packs:
 - package-api (docs/plans/templates/packs/package-api.md)
 - docs (docs/plans/templates/packs/docs.md)
 - browser (docs/plans/templates/packs/browser.md)
+- agent-native (docs/plans/templates/packs/agent-native.md); materialized after preserving inherited workflow changes and adding published setup guidance.
 
 Task source:
 - type: GitHub bug
@@ -113,7 +114,7 @@ Pre-solution issue challenge:
   - Browser plugin: Next16.4 /dashboard shows Blocking Route Date.now at token-utils.ts after headers.
   - screenshot / visual proof: tmp/walkthrough/477/00-blocking-route-original.jpg.
 - reproduction verdict: reproduced.
-- validity verdict: valid.
+- validity verdict: partially valid; clock issue reproduced, but private-cache helper alone does not replace Suspense for token-blocking layouts.
 - best long-term fix boundary: factory jwtCache clock injected into generic expiry reader; Next stage remains app-owned.
 - harsh honest feedback: the clock diagnosis is correct; do not make the library recognize Next abort internals or create permanently pending promises.
 - hard-stop decision: proceed after reproduced overlay and independent design selection.
@@ -171,7 +172,22 @@ Start Gates:
 | Console/network caveat policy recorded | yes | Require no post-fix error overlay/server clock diagnostics; distinguish old logs from fresh navigation. |
 | UI state/accessibility matrix recorded | yes | Cached/expired/disabled states unit tests; runtime/private-cache real proof. Responsive/focus/motion N/A for server auth API. |
 
+| Agent-native pack selected | yes | Published setup skill docs plus inherited autoclosure workflow delta. |
+| Agent-facing action surface identified | yes | Configure JWT clock; adopt recoverable PR work rather than close. |
+| Source rule versus generated mirror boundary identified | yes | .agents/rules/autoclosure.mdc and published kitcn skill source; generated copies synced, never manually edited. |
+| Installed-skill lock versus local-rule owner identified | no | N/A: no installed skill dependency changes; repo-owned policy/source only. |
+| `agent-native-reviewer` loaded or waiver recorded | yes | Read main-agent skill; independent parity audit PASS with no accepted findings. |
+
 Work Checklist:
+- [ ] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
+- [ ] Agent-native pack: the changed agent action is discoverable from the skill/rule text.
+- [ ] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed, or N/A reason is recorded.
+- [ ] Agent-native pack: installed skills are changed only through
+      `npx skills add/update/remove`; local rules/templates/helpers stay source-owned.
+- [ ] Agent-native pack: routing, required receipts, placeholder failure,
+      completion representability, and forbidden behavior have eval/smoke rows.
+- [ ] Agent-native pack: accepted agent-native review findings are fixed or explicitly rejected with reason.
+
 - [ ] If a duration was requested, it is recorded as minimum active work unless
       explicitly marked hard stop; when no better metric exists, initial and
       final confidence scores are recorded.
@@ -316,38 +332,65 @@ Completion Gates:
 | Browser state/accessibility proof | pending | Exercise applicable honest states, keyboard/focus, motion, and sizes | pending |
 | Browser final proof artifact | pending | Record screenshot/trace/route proof or exact caveat | pending |
 
+| Agent source / generated sync | pending | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | pending |
+| Installed lock audit | pending | Verify expected lock entries and removed skills through CLI-managed state | pending |
+| Agent action discoverability | pending | Source-audit the skill/rule path an agent will read | pending |
+| Helper and template smoke | pending | Syntax-check helpers and prove incomplete failure/completed representation when applicable | pending |
+| Agent-native review | pending | Load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted findings, or record N/A | pending |
+
 Phase / pass table:
 | Phase | Status | Evidence | Next |
 |-------|--------|----------|------|
-| Intake and source read | in_progress | created plan | implementation |
-| Implementation | pending | | verification |
-| Verification | pending | | closeout |
+| Intake and source read | complete | Issue, source, real dev and production repro; challenge posted | implementation |
+| Implementation | complete | Four owned files; 30 passing regressions; docs/skill sync and changeset | verification |
+| Verification | in_progress | Focused tests/build/typecheck/MDX/browser passed; full check reached fixture drift, regeneration running | closeout |
 | Commit / PR / GitHub sync | pending | | final response |
 | Closeout | pending | | final response |
 
 Findings:
-- None yet.
+- Real Next16.4 dev overlay and production next start logs both reproduce the reported Date.now issue. Header access alone does not leave runtime prerendering.
+- Private-cache clock reads are valid, but awaiting a private helper outside Suspense still reports Blocking Route runtime data. Corrected the issue's proposed route-gate alternative in docs; both demonstrated paths use Suspense.
+- Pre-solution issue challenge is partially valid: clock hook/ownership is correct; private caching alone is not an alternative to the boundary for the demonstrated layout/helper pattern.
+- Repo full check passed lint, five source typecheck tasks, Bun/Vitest, CLI and Concave lanes, then found registry-driven generated Next fixture dependency drift. Regenerate fixtures through their owner, never patch snapshots manually.
 
 Decisions and tradeoffs:
-- Architect phases: Ground complete (HOW source trace); Sketch/arena complete (two independent inherited-model candidates); Agree automatic (no user checkpoint requested); Implement next; Scrap only if ownership proves wrong.
+- Architect phases: Ground complete (HOW source trace); Sketch/arena complete (two independent inherited-model candidates); Agree automatic (no user checkpoint requested); Implement complete without structural deviations; Scrap N/A because ownership held.
 - Candidate A wins 23/25 vs B 19/25 (read-only cross-judge agreed): factory `auth.jwtCache: boolean | { now?: () => number | Promise<number> }`, with optional matching internal clock and existing sibling tolerance. Per-context generic auth transport rejected as disproportionate. Graft B's explicit runtime/private-cache examples, not its plumbing.
 - Usage: runtime factory clock awaits app-owned connection then returns Unix seconds; private factory uses default/sync clock. Internal decode-only catch, fast paths skip clock; callback errors propagate. Reject non-finite custom results so NaN cannot classify stale JWTs as fresh. No milliseconds inference or framework imports.
 - Entire existing checkout is included at shipping as required. Pre-existing autoclosure workflow and package script changes are preserved, not redesigned by #477; final review/check covers them.
 
 Implementation notes:
-- None yet.
+- `AuthOptions.jwtCache` derives its optional clock via Pick of internal cache options; no duplicated clock signature or extra generic caller transport.
+- `getToken` isolates decode catch, skips absent expiry, awaits/validates app clock outside recovery, then uses the existing seconds/tolerance comparator. No Next imports, stage detection, abort swallowing or clock-unit inference.
+- TDD in isolated writer worktree: cached-token 1 fail -> pass; rejection identities 3 fail -> pass; missing-expiry 1 fail -> pass; non-finite 3 fail -> pass. Parent inspected and applied only four owned files, then reran 30 tests in owning checkout.
+- Docs source mapping: www/content/docs/nextjs/index.mdx -> published references/setup/next.md (full kitcn clock/rendering deltas); references/features/react.md links to setup. No dropped parity sections; generated mirrors synced.
+- High-risk note: a swallowed rendering abort would fetch unexpectedly; non-finite time could admit stale cache. Exact rejection/no-fetch tests, finite validation and real Next stages prove the chosen generic clock boundary.
+- Deslop scope: changed code/docs only, 30-test behavior lock. Local lenses checked doctrine, single clock type owner, and minimal flow. No speculative abstractions or unrelated cleanup accepted.
 
 Review fixes:
-- None yet.
+- Final review target: frozen committed branch kitcn/main...HEAD; production implementation is 33 additions/11 deletions across two files. Includes inherited workflow repair and owner-regenerated fixture manifests per checkout shipping policy. No semantic edits while autoreview runs.
+- Agent-native reviewer PASS: source/mirror equality, recoverable/absent routes and authority explicit; unfilled template rejected (49 failures), completed representation accepted with 70 rows retained. No accepted findings.
+- Runtime proof corrected docs: a private helper outside Suspense still produces Blocking Route runtime-data error. Both verified examples now use Suspense; no automatic blocking-route opt-out introduced.
+- Deslop against kitcn/main: 186 -> 185 findings; score 557.21 -> 554.21; 0 added/worsened, one error-swallowing finding resolved. Initial default-base report included unrelated historical files; reran with exact kitcn/main and discarded that noise.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
 |------------------------|-------|---------------------|------------|
-| None yet | 0 | | |
+| Public regression harness defects | 2 | Return a real boundary response and assert context.token, not proxy-containing context | Correct assertion failed before implementation, then passed |
+| Isolated Next typecheck used generated ES2017/non-strict defaults | 1 | Match owning package ES2022/strict/strictFunctionTypes flags | Next production build passed without skipping types |
+| Bun next start CommonJS wrapper bug | 1 | Use supported Node v24.14.1 runtime | Production baseline and final server proof succeeded |
+| Browser blocked port 3478 | 2 | Inspect server failure, use Node production server on explicit port 3481/3482 | Browser production proof succeeded |
+| Full check generated fixture registry drift | 1 | Run fixtures:sync owner and repeat full check | Six generated fixture manifests refreshed; final gate running |
 
 Verification evidence:
 - Public createContext tracer regression: 1 failed, 2 passed before implementation; expected cached JWT but got refreshed-token. Log tmp/pr477-red.log. Early mock return/matcher defects repaired before accepting red evidence.
 - Browser Next16.4 localhost:3477/dashboard: documented headers-first context with fresh synthetic cookie reports Blocking Route Date.now at token-utils.ts; screenshot saved. Public challenge posted at https://github.com/udecode/kitcn/issues/477#issuecomment-6087237287.
+- Parent focused Vitest: 2 files, 30 passed, 0 failed; log tmp/pr477-focused.log. Writer package source-first typecheck passed; parent root typecheck five tasks passed.
+- Package build passed (tmp/pr477-build.log); lint:fix passed with no changes; git diff --check passed. Intent validate/stale passed; MDX parser www postinstall passed; docs /docs/nextjs rendered with no console errors.
+- Next16.4 production BEFORE: Node next start /dashboard returned HTTP200 but logged Blocking Route Date.now (tmp/pr477-next-start-node-before.log). AFTER: strict production build passes; Browser localhost:3482/dashboard and /private show cached JWT available; final server log has no errors (tmp/pr477-next-start-after.log). Synthetic JWT only, no live auth-backend sign-in claimed.
+- Docs source mapping and generated equality verified. Walkthrough original tmp/walkthrough/477/03-docs-clock-original.jpg shows actual rendered clock example; annotation in progress.
+- Full check first run: Bun1556/0, Vitest1081/0 (14 skipped), CLI124/0, typecheck/lint/Concave passed; stopped on generated fixture dependency drift. Owner fixtures:sync passed and refreshed only six fixture package.json files. Final check rerunning.
+- Behavioral-validator skill unavailable in configured local/installed skill set. Use explicit behavior contract, public API tests and real dev/production Browser proof; do not represent source review as behavior proof.
 
 Source-listed case matrix:
 | Case | Source claim | Harness | Before | Expected after | Evidence | Status |

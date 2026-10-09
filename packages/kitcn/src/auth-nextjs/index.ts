@@ -62,8 +62,8 @@ const nextJsHandler = (siteUrl: string) => ({
 type AuthOptions = {
   /** Better Auth auth route base path. Defaults to `/api/auth`. */
   basePath?: string;
-  /** Enable/disable JWT caching. Default: true */
-  jwtCache?: boolean;
+  /** Enable/disable JWT caching or provide a Unix-seconds clock. Default: true. */
+  jwtCache?: boolean | Pick<NonNullable<GetTokenOptions['jwtCache']>, 'now'>;
   /** Custom function to detect UNAUTHORIZED errors. Default checks code property. */
   isUnauthorized?: (error: unknown) => boolean;
   /** Expiration tolerance in seconds. */
@@ -121,6 +121,8 @@ export function convexBetterAuth<TApi extends Record<string, unknown>>(
             enabled: jwtCacheEnabled,
             expirationToleranceSeconds: auth.expirationToleranceSeconds,
             isAuthError: auth.isUnauthorized ?? defaultIsUnauthorized,
+            now:
+              typeof auth.jwtCache === 'object' ? auth.jwtCache.now : undefined,
           },
         });
       },

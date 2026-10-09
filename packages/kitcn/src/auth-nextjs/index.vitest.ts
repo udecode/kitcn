@@ -1,10 +1,11 @@
 import { createServer } from 'node:http';
-
-import { afterEach, describe, expect, test, vi } from 'vitest';
 import { base64url } from 'jose';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import * as tokenModule from '../auth/internal/token';
 import { convexBetterAuth } from './index';
+
+const cachedToken = `eyJhbGciOiJIUzI1NiJ9.${base64url.encode(JSON.stringify({ exp: 2000 }))}.cHJvb2Y`;
 
 describe('convexBetterAuth (Node)', () => {
   afterEach(() => {
@@ -13,8 +14,10 @@ describe('convexBetterAuth (Node)', () => {
   });
 
   test('reuses a cached JWT with an app-owned async clock', async () => {
-    const token = `eyJhbGciOiJIUzI1NiJ9.${base64url.encode(JSON.stringify({ exp: 2000 }))}.cHJvb2Y`;
-    const fetch = vi.fn(async () => Response.json({ token: 'refreshed-token' }));
+    const token = cachedToken;
+    const fetch = vi.fn(async () =>
+      Response.json({ token: 'refreshed-token' })
+    );
     vi.stubGlobal('fetch', fetch);
     const { createContext } = convexBetterAuth({
       api: {},
@@ -30,6 +33,109 @@ describe('convexBetterAuth (Node)', () => {
     expect(context.token).toBe(token);
     expect(clock).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('reuses a cached JWT with an app-owned synchronous clock', async () => {
+    const fetch = vi.fn(async () =>
+      Response.json({ token: 'refreshed-token' })
+    );
+    vi.stubGlobal('fetch', fetch);
+    const { createContext } = convexBetterAuth({
+      api: {},
+      auth: { jwtCache: { now: () => 1000 } },
+      convexSiteUrl: 'https://example.convex.site',
+    });
+    const context = await createContext({
+      headers: new Headers({ cookie: `better-auth.convex_jwt=${cachedToken}` }),
+    });
+
+    expect(context.token).toBe(cachedToken);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    new Error('clock unavailable'),
+    Object.assign(new Error('render aborted'), { name: 'AbortError' }),
+    Object.assign(new Error('render aborted'), {
+      digest: 'HANGING_PROMISE_REJECTION',
+    }),
+  ])('propagates an app-owned clock rejection unchanged (%s)', async (error) => {
+    const fetch = vi.fn(async () =>
+      Response.json({ token: 'refreshed-token' })
+    );
+    vi.stubGlobal('fetch', fetch);
+    const decodeError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { createContext } = convexBetterAuth({
+      api: {},
+      auth: {
+        jwtCache: {
+          now: () => Promise.reject(error),
+        },
+      },
+      convexSiteUrl: 'https://example.convex.site',
+    });
+
+    const rejected = await createContext({
+      headers: new Headers({ cookie: `better-auth.convex_jwt=${cachedToken}` }),
+    }).then(
+      () => undefined,
+      (reason: unknown) => reason
+    );
+    expect(rejected).toBe(error);
+    expect(decodeError).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    undefined,
+    true,
+    {},
+  ])('preserves system-clock caching for jwtCache %s', async (jwtCache) => {
+    const fetch = vi.fn(async () =>
+      Response.json({ token: 'refreshed-token' })
+    );
+    vi.stubGlobal('fetch', fetch);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const { createContext } = convexBetterAuth({
+      api: {},
+      auth: { jwtCache },
+      convexSiteUrl: 'https://example.convex.site',
+    });
+    const headers = new Headers({
+      cookie: `better-auth.convex_jwt=${cachedToken}`,
+    });
+
+    expect((await createContext({ headers })).token).toBe(cachedToken);
+    expect(fetch).not.toHaveBeenCalled();
+    clock.mockReturnValue(2_000_000);
+    expect((await createContext({ headers })).token).toBe('refreshed-token');
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  test('applies the configured tolerance with an app-owned clock', async () => {
+    const fetch = vi.fn(async () =>
+      Response.json({ token: 'refreshed-token' })
+    );
+    vi.stubGlobal('fetch', fetch);
+    const { createContext } = convexBetterAuth({
+      api: {},
+      auth: {
+        expirationToleranceSeconds: 15,
+        jwtCache: { now: () => 1985 },
+      },
+      convexSiteUrl: 'https://example.convex.site',
+    });
+
+    expect(
+      (
+        await createContext({
+          headers: new Headers({
+            cookie: `better-auth.convex_jwt=${cachedToken}`,
+          }),
+        })
+      ).token
+    ).toBe('refreshed-token');
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
   test('jwtCache false disables caching without disabling auth', async () => {
