@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.33.8
+
+### Patch Changes
+
+- [#478](https://github.com/udecode/kitcn/pull/478) [`03b1ad1`](https://github.com/udecode/kitcn/commit/03b1ad1bd72333ce3867f79d8f079193cf77c170) Thanks [@zbeyens](https://github.com/zbeyens)! - ## Patches
+
+  - Support app-owned synchronous or asynchronous JWT cache clocks for Next.js partial prefetching and private-cache rendering.
+
 ## 0.33.7
 
 ### Patch Changes
