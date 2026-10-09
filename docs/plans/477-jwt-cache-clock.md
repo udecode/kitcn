@@ -88,10 +88,10 @@ Blocked condition:
 Task state:
 - task_type: bug-fix
 - task_complexity: bounded public API/runtime change
-- current_phase: delivery
-- current_phase_status: in_progress
-- next_phase: closeout
-- goal_status: active
+- current_phase: closeout
+- current_phase_status: complete
+- next_phase: final handoff
+- goal_status: complete (plan-only; no native goal)
 
 Current verdict:
 - verdict: ready
@@ -136,7 +136,7 @@ Start Gates:
 | Skill analysis before edits | yes | task, autogoal, poteto bug-fix, HOW, architect/arena, tdd, changeset, walkthrough, docs guidance read; final autoreview later. |
 | Active goal checked or created | yes | get_goal null; task plan only under native-tool authority. |
 | Source of truth read before edits | yes | Issue #477 including no comments/attachments; VISION and docs README; auth/Next source. |
-| Exact per-PR task ownership | yes | Single new PR slice #477; exact number at creation. |
+| Exact per-PR task ownership | yes | Single exact PR #478 for issue #477; this plan owns it. |
 | GitHub comments and attachments read | yes | No source comments or attachments. |
 | Video transcript evidence required | no | N/A: no video. |
 | Pre-solution issue challenge required | yes | Valid: Next16.4 Browser overlay reproduces Date.now at token-utils.ts. |
@@ -150,8 +150,8 @@ Start Gates:
 | Browser tool decision for browser surface | yes | @Browser on isolated localhost:3477 Next16.4. |
 | Commit / PR expectation decision | yes | Task requires full-check verified checkout commit/push/PR. No merge authorization for this new PR. |
 | Task-style PR body decision | yes | Task #270 emoji contract, confidence evidence-bound, preserve release block. |
-| Task-plan PR body evidence | yes | Add docs/plans/477-jwt-cache-clock.md line and exact PR ownership after creation. |
-| GitHub issue sync expectation decision | yes | Public source-backed reproduction comment posted; final link after PR. |
+| Task-plan PR body evidence | yes | PR #478 body names docs/plans/477-jwt-cache-clock.md; dedicated plan identifies #478. |
+| GitHub issue sync expectation decision | yes | Pre-solution challenge and final PR #478 link/correction posted and read back. |
 | Output budget strategy recorded | yes | Bounded reads/log files; recorded in Output budget strategy. |
 | Package/API pack selected | yes | Published auth-nextjs clock API. |
 | Public surface or package boundary identified | yes | AuthOptions.jwtCache optional clock -> GetTokenOptions.jwtCache. |
@@ -179,164 +179,164 @@ Start Gates:
 | `agent-native-reviewer` loaded or waiver recorded | yes | Read main-agent skill; independent parity audit PASS with no accepted findings. |
 
 Work Checklist:
-- [ ] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
-- [ ] Agent-native pack: the changed agent action is discoverable from the skill/rule text.
-- [ ] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed, or N/A reason is recorded.
-- [ ] Agent-native pack: installed skills are changed only through
+- [x] Agent-native pack: source-of-truth rule files are edited instead of generated skill mirrors.
+- [x] Agent-native pack: the changed agent action is discoverable from the skill/rule text.
+- [x] Agent-native pack: generated mirrors are synced when `.agents/rules/**` changed, or N/A reason is recorded.
+- [x] Agent-native pack: installed skills are changed only through
       `npx skills add/update/remove`; local rules/templates/helpers stay source-owned.
-- [ ] Agent-native pack: routing, required receipts, placeholder failure,
+- [x] Agent-native pack: routing, required receipts, placeholder failure,
       completion representability, and forbidden behavior have eval/smoke rows.
-- [ ] Agent-native pack: accepted agent-native review findings are fixed or explicitly rejected with reason.
+- [x] Agent-native pack: accepted agent-native review findings are fixed or explicitly rejected with reason.
 
-- [ ] If a duration was requested, it is recorded as minimum active work unless
+- [x] If a duration was requested, it is recorded as minimum active work unless
       explicitly marked hard stop; when no better metric exists, initial and
       final confidence scores are recorded.
-- [ ] Objective includes outcome, completion threshold, verification surface,
+- [x] Objective includes outcome, completion threshold, verification surface,
       constraints, boundaries, and blocked condition.
-- [ ] Task source classified with source type, id/link, title, task type,
+- [x] Task source classified with source type, id/link, title, task type,
       acceptance criteria, caveats, likely files/routes/packages, browser
       surface, and root-cause layer.
-- [ ] Every GitHub PR in scope has its own task plan. This plan owns one exact
+- [x] Every GitHub PR in scope has its own task plan. This plan owns one exact
       PR, owns a not-yet-created PR slice, or records N/A because no PR is in
       scope; a batch plan is not used as a substitute.
-- [ ] Required video or screen-recording evidence is cached/read as normalized
+- [x] Required video or screen-recording evidence is cached/read as normalized
       `<video-transcripts>` XML, or marked N/A with reason.
-- [ ] For public GitHub bug reports, behavior claims, technical diagnoses, or
+- [x] For public GitHub bug reports, behavior claims, technical diagnoses, or
       suggested fixes, reporter claims are challenged before implementation
       with a recorded verdict: `valid`, `not reproduced`, `invalid`,
       `wont-fix`, `partially valid`, or `platform limitation`. Feature, docs,
       support, or cleanup requests with no bug claim may mark reproduction
       `N/A` with reason.
-- [ ] Repro escalation ladder followed for bug/behavior claims: focused
+- [x] Repro escalation ladder followed for bug/behavior claims: focused
       test/source-level repro first when applicable; existing repo-owned
       automated browser or integration proof next when available and useful as
       executable coverage; the repo-approved Browser tool next when tests or
       automation cannot reproduce or cannot model the surface honestly;
       screenshot or explicit visual-proof waiver when visual/native state
       matters.
-- [ ] Hard-stop rule followed for bug/behavior claims: no code when the issue
+- [x] Hard-stop rule followed for bug/behavior claims: no code when the issue
       is not reproduced, invalid, or won't-fix; partial validity pivots to the
       best long-term fix and records what was wrong or incomplete in the
       issue's proposed path.
-- [ ] Nearby repo instructions and implementation patterns read before edits.
-- [ ] Source-listed case matrix is complete and every contradiction has an
+- [x] Nearby repo instructions and implementation patterns read before edits.
+- [x] Source-listed case matrix is complete and every contradiction has an
       owner, harness, and verdict before mutation.
-- [ ] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
+- [x] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
       `invalid` with evidence.
-- [ ] Implementation fixes the right ownership boundary, or the narrower choice
+- [x] Implementation fixes the right ownership boundary, or the narrower choice
       is recorded with reason.
-- [ ] Release artifact requirement recorded: active changeset, new changeset, or
+- [x] Release artifact requirement recorded: active changeset, new changeset, or
       N/A with reason.
-- [ ] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
+- [x] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
       requirements, PR body sync, and issue sync when applicable.
-- [ ] Commit/PR handling recorded for code-changing work: commit and PR
+- [x] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
-- [ ] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
+- [x] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
       recorded, or blocker recorded.
-- [ ] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
+- [x] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
       exists at the PR head, and it identifies the exact PR before autoclosure.
-- [ ] Branch handling recorded for code-changing work: dedicated branch used,
+- [x] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
-- [ ] Local-env-rot retry policy recorded for any surprising repo-wide failure:
+- [x] Local-env-rot retry policy recorded for any surprising repo-wide failure:
       reinstall/rerun evidence or N/A with reason.
-- [ ] Workspace authority recorded: every proof command names the cwd/tool that
+- [x] Workspace authority recorded: every proof command names the cwd/tool that
       owns the changed behavior.
-- [ ] Output budget discipline recorded and followed: broad searches are
+- [x] Output budget discipline recorded and followed: broad searches are
       scoped, capped, counted, or artifacted instead of streamed into goal
       context.
-- [ ] High-risk note recorded for public API, runtime, package-boundary,
+- [x] High-risk note recorded for public API, runtime, package-boundary,
       browser behavior, agent-action, or command-contract changes, or marked
       N/A with reason.
-- [ ] Review/autoreview target selected from actual diff state for non-trivial
+- [x] Review/autoreview target selected from actual diff state for non-trivial
       implementation work, or marked N/A with reason.
-- [ ] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
+- [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
-- [ ] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
-- [ ] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
-- [ ] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
-- [ ] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`.
-- [ ] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes.
-- [ ] Package/API pack: affected Convex static import graphs stay narrow and
+- [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
+- [x] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
+- [x] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
+- [x] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`.
+- [x] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes.
+- [x] Package/API pack: affected Convex static import graphs stay narrow and
       plugin/per-module boundaries are used where appropriate.
-- [ ] Package/API pack: CLI commands remain deterministic, `--json` capable,
+- [x] Package/API pack: CLI commands remain deterministic, `--json` capable,
       and non-interactive with explicit confirmation bypass when relevant.
-- [ ] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
+- [x] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
       current-state synchronized when public guidance changes.
-- [ ] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
-- [ ] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
-- [ ] Docs pack: docs lane, target docs, nearest sibling docs, and source owner are recorded.
-- [ ] Docs pack: every named API, import, option, route, component, transform, demo, and preview is source-backed or marked N/A with reason.
-- [ ] Docs pack: docs use current-state reference voice, not changelog voice.
-- [ ] Docs pack: links, anchors, and previews target real leaf pages or are marked N/A with reason.
-- [ ] Browser pack: route, interaction path, and expected visible outcome are recorded before proof.
-- [ ] Browser pack: browser proof uses the repo-approved browser tool or records a blocker/waiver.
-- [ ] Browser pack: console and network errors are checked or explicitly out of scope.
-- [ ] Browser pack: screenshot, trace, or exact verification caveat is ready for final handoff.
-- [ ] Browser pack: loading, empty, error, permission, mutation, keyboard/focus,
+- [x] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
+- [x] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
+- [x] Docs pack: docs lane, target docs, nearest sibling docs, and source owner are recorded.
+- [x] Docs pack: every named API, import, option, route, component, transform, demo, and preview is source-backed or marked N/A with reason.
+- [x] Docs pack: docs use current-state reference voice, not changelog voice.
+- [x] Docs pack: links, anchors, and previews target real leaf pages or are marked N/A with reason.
+- [x] Browser pack: route, interaction path, and expected visible outcome are recorded before proof.
+- [x] Browser pack: browser proof uses the repo-approved browser tool or records a blocker/waiver.
+- [x] Browser pack: console and network errors are checked or explicitly out of scope.
+- [x] Browser pack: screenshot, trace, or exact verification caveat is ready for final handoff.
+- [x] Browser pack: loading, empty, error, permission, mutation, keyboard/focus,
       reduced motion, and responsive cases are covered or N/A with reason.
-- [ ] Browser pack: Browser is used first for ordinary app QA; Chrome/Computer
+- [x] Browser pack: Browser is used first for ordinary app QA; Chrome/Computer
       own native browser/OS behavior when applicable.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
-| Named verification threshold | pending | Run the command, proof, source audit, or artifact check named in this plan | pending |
-| Exact per-PR task ownership | pending | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | pending |
-| Pre-solution issue challenge verdict | pending | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | pending |
-| Repro escalation ladder | pending | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | pending |
-| Bug reproduced before fix | pending | Record failing test/repro or N/A with reason | pending |
-| Targeted behavior verification | pending | Run focused test/proof for changed behavior or record N/A | pending |
-| TypeScript or typed config changed | pending | Run relevant typecheck | pending |
-| Package exports or file layout changed | pending | Run the relevant package build before final verification and keep generated updates | pending |
-| Package manifests, lockfile, or install graph changed | pending | Run `bun install` and relevant package checks | pending |
-| Agent rules or skills changed | pending | Run `bun install` and verify generated skill sync | pending |
-| Workspace authority proof | pending | Run verification in the owning repo/package/app/route/tool and record cwd; do not count the wrong workspace as proof | pending |
-| Browser surface changed | pending | Capture Browser Use proof or record explicit waiver/blocker | pending |
-| Browser final proof | pending | Attach screenshot or exact browser verification caveat when browser proof applies | pending |
-| UI walkthrough | pending | If UI or rendered output changed, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | pending |
-| Scaffold or fixture output changed | pending | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | pending |
-| Package behavior or public API changed | pending | Add a changeset or record why no changeset applies | pending |
-| Docs and kitcn skill sync changed | pending | Keep `www/**` and `packages/kitcn/skills/kitcn/**` in sync, or record N/A | pending |
-| Docs or content changed | pending | For docs-heavy work, use `--template docs`; for incidental docs, verify source-backed claims, links, examples, and rendered output or record N/A | pending |
-| High-risk mini gate | pending | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | pending |
-| Agent-native review for agent/tooling changes | pending | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | pending |
-| Local install corruption suspected | pending | Run `bun install` once, rerun the exact failing command, or record N/A | pending |
-| Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
-| PR task evidence verified | pending | Verify body plan line, plan at PR head, and exact PR ownership | pending |
-| PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
-| GitHub issue sync-back | pending | Post concise issue sync after PR exists, or record N/A/blocker | pending |
-| Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
-| Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
-| Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
-| Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
-| Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/477-jwt-cache-clock.md` | pending |
-| Public API / package boundary proof | pending | Source-audit public API, exports, and package boundary impact | pending |
-| Convex bundle/import proof | pending | Audit affected function-entry static graphs or record N/A | pending |
-| CLI/scaffold/generated proof | pending | Prove command contract and regenerate owned output or record N/A | pending |
-| Release artifact classification | pending | Record whether the change is published package behavior/API/types/config/runtime or no published user-visible delta | pending |
-| Published package changeset | pending | If published package users see a delta, load `changeset` and add/update one `.changeset/*.md` per package | pending |
-| No release artifact | pending | If no artifact is needed, record the exact reason: internal-only, docs-only, agent-only, test-only, or no user-visible delta from `main` | pending |
-| Package typecheck/build/test | pending | Run owning package checks or record N/A with reason | pending |
-| Fixture/scaffold generation | pending | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | pending |
-| Docs/package skill sync | pending | Synchronize current-state public guidance or record N/A | pending |
-| Docs source-backed claim audit | pending | Verify docs claims against current source or record N/A | pending |
-| Docs links / routes / previews | pending | Verify leaf links, routes, anchors, and preview names or record N/A | pending |
-| Docs MDX/content parser | pending | Run the relevant `www` docs parser/build for MDX/content changes, or record N/A | pending |
-| Kitcn docs sync | pending | If `www/**` changed, update matching `packages/kitcn/skills/kitcn/**` content or record N/A | pending |
-| Browser interaction proof | pending | Exercise the target route/interaction with the approved browser tool or record blocker | pending |
-| Browser console/network check | pending | Record console/network state or why it is not applicable | pending |
-| Browser state/accessibility proof | pending | Exercise applicable honest states, keyboard/focus, motion, and sizes | pending |
-| Browser final proof artifact | pending | Record screenshot/trace/route proof or exact caveat | pending |
+| Named verification threshold | yes | Run the command, proof, source audit, or artifact check named in this plan | Full bun check exit0; 30 focused tests; strict Next16.4 dev/production Browser proof; package build; required review clean. |
+| Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | PR #478 https://github.com/udecode/kitcn/pull/478; sole owner docs/plans/477-jwt-cache-clock.md. |
+| Pre-solution issue challenge verdict | yes | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | Partially valid: real clock failure reproduced; private-cache-only alternative corrected. Pre-implementation comment 6087237287. |
+| Repro escalation ladder | yes | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | Public clock-trap red regression; no existing stage harness; actual Next16.4 Browser overlay; saved original screenshot. |
+| Bug reproduced before fix | yes | Record failing test/repro or N/A with reason | Public regression failed before implementation; actual Next16.4 dev and production Date.now diagnostics. |
+| Targeted behavior verification | yes | Run focused test/proof for changed behavior or record N/A | 30 focused regressions pass; built async-clock smoke passes. |
+| TypeScript or typed config changed | yes | Run relevant typecheck | Owning package source-first typecheck and root five-task typecheck pass; full check repeats. |
+| Package exports or file layout changed | no | Run the relevant package build before final verification and keep generated updates | N/A: exports/layout unchanged; required package build still passed and built API smoke passed. |
+| Package manifests, lockfile, or install graph changed | yes | Run `bun install` and relevant package checks | bun install passed; generated fixture installs and all fixture checks passed in final bun check. |
+| Agent rules or skills changed | yes | Run `bun install` and verify generated skill sync | bun install and sync-kitcn-skill passed; source/mirror parity audited. |
+| Workspace authority proof | yes | Run verification in the owning repo/package/app/route/tool and record cwd; do not count the wrong workspace as proof | All package/root checks in /Users/zbeyens/git/better-convex; Browser proof on source-importing isolated Next16.4 app and owning www docs. |
+| Browser surface changed | yes | Capture Browser Use proof or record explicit waiver/blocker | Browser Next16.4 /dashboard and /private pass; rendered docs /docs/nextjs#jwt-cache-and-partial-prefetching verified. |
+| Browser final proof | yes | Attach screenshot or exact browser verification caveat when browser proof applies | Saved production private/request screenshots plus actual rendered docs original; synthetic JWT caveat explicit. |
+| UI walkthrough | yes | If UI or rendered output changed, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | Baseline and diff receipt saved; actual docs screenshot annotated and compared; final response embeds annotated absolute path. |
+| Scaffold or fixture output changed | yes | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | Owner fixtures:sync exit0; all eight generated fixtures match fresh output in final fixtures:check. |
+| Package behavior or public API changed | yes | Add a changeset or record why no changeset applies | Patch .changeset/quiet-jwt-clocks.md; additive optional sync/async finite Unix-seconds clock. |
+| Docs and kitcn skill sync changed | yes | Keep `www/**` and `packages/kitcn/skills/kitcn/**` in sync, or record N/A | www Next page synchronized to published setup/next and features/react; generated mirrors equal. |
+| Docs or content changed | yes | For docs-heavy work, use `--template docs`; for incidental docs, verify source-backed claims, links, examples, and rendered output or record N/A | Supporting docs pack; source claims, official Next links, parser and Browser rendered guidance verified. |
+| High-risk mini gate | yes | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | Exact callback rejection and no-fetch tests prevent abort swallowing; finite clock tests prevent invalid expiry; no Next library imports. |
+| Agent-native review for agent/tooling changes | yes | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | agent-native-reviewer PASS; no accepted findings; mirror parity and template/checker evals recorded. |
+| Local install corruption suspected | no | Run `bun install` once, rerun the exact failing command, or record N/A | N/A: no corruption-shaped failure; initial install done, fixture registry drift repaired through generation owner. |
+| Commit created | yes | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | c5a5e65a red regression + inherited checkout; e67cefd9 implementation; 620626cc verification; final plan-only closeout commit follows. |
+| PR create or update | yes | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | Full bun check exit0 before creation; branch pushed; PR #478 open and attached to chat. |
+| Task-style PR body verified | yes | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | gh pr view readback confirms emoji issue/confidence, exact proof table, Outcome/Caveat/Design/Verified sections and checked auto-release block; no self-link. |
+| PR task evidence verified | yes | Verify body plan line, plan at PR head, and exact PR ownership | PR body names this plan; local committed head contains plan; this closeout identifies exact PR #478 and will be read back at pushed head. |
+| PR proof image hosting | no | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | N/A: PR body uses exact command/route proof, no image attachments or local image paths. Annotated local proof shown in final handoff only. |
+| GitHub issue sync-back | yes | Post concise issue sync after PR exists, or record N/A/blocker | Posted and read back https://github.com/udecode/kitcn/issues/477#issuecomment-6087536486, fix link and private-cache correction. |
+| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | Fields below specify PR #478, issue #477, confidence, proof and synthetic-token caveat; final response includes annotated image. |
+| Final lint | yes | Run `bun lint:fix` or scoped equivalent | bun lint:fix passed with no fixes; full check lint lane passed. Final plan-only lint rerun follows. |
+| Output budget discipline | yes | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | Bounded source reads/log tails; full outputs saved locally. One template read truncation recovered with scoped reads; no unbounded search output. |
+| Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no duration requested. |
+| Autoreview for non-trivial implementation changes | yes | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | Branch kitcn/main...e67cefd9 clean at configured P0 threshold; trufflehog clean; no accepted/actionable findings. Only plan evidence changed after review. |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/477-jwt-cache-clock.md` | check-complete.mjs run after this evidence update; success required before shipping closeout. |
+| Public API / package boundary proof | yes | Source-audit public API, exports, and package boundary impact | AuthOptions derives now from GetTokenOptions; no duplicate signature owner, exports or generic transport changes; built API smoke. |
+| Convex bundle/import proof | yes | Audit affected function-entry static graphs or record N/A | No new imports or function-entry graph changes; Next dependency stays entirely in app callback. |
+| CLI/scaffold/generated proof | yes | Prove command contract and regenerate owned output or record N/A | N/A for CLI/scaffold source contract changes; generated fixture manifests owner-regenerated and checked. |
+| Release artifact classification | yes | Record whether the change is published package behavior/API/types/config/runtime or no published user-visible delta | Published auth-nextjs option/runtime behavior; patch changeset required and present. |
+| Published package changeset | yes | If published package users see a delta, load `changeset` and add/update one `.changeset/*.md` per package | Changeset skill/rule followed; quiet-jwt-clocks.md releases kitcn patch. |
+| No release artifact | no | If no artifact is needed, record the exact reason: internal-only, docs-only, agent-only, test-only, or no user-visible delta from `main` | N/A: this public package change does require and includes a patch changeset. |
+| Package typecheck/build/test | yes | Run owning package checks or record N/A with reason | Package build, root/source typechecks, 30 focused tests and full check all pass. |
+| Fixture/scaffold generation | yes | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | fixtures:sync exit0; final fixtures:check all eight fixtures match fresh owner output. |
+| Docs/package skill sync | yes | Synchronize current-state public guidance or record N/A | www -> published setup/next and features/react -> generated copies; exact parity audited. |
+| Docs source-backed claim audit | yes | Verify docs claims against current source or record N/A | Public API and token source match docs; real Next16.4 proofs establish connection/private-cache/Suspense constraints. |
+| Docs links / routes / previews | yes | Verify leaf links, routes, anchors, and preview names or record N/A | Actual docs leaf route/anchor rendered; official Next connection/private-cache links verified; no invented previews. |
+| Docs MDX/content parser | yes | Run the relevant `www` docs parser/build for MDX/content changes, or record N/A | bun --cwd www run postinstall MDX parser passed. |
+| Kitcn docs sync | yes | If `www/**` changed, update matching `packages/kitcn/skills/kitcn/**` content or record N/A | Published setup/next and features/react updated in same implementation commit; generated mirrors synced. |
+| Browser interaction proof | yes | Exercise the target route/interaction with the approved browser tool or record blocker | Approved @Browser navigated synthetic session, request-clock and private-cache routes in dev/production. |
+| Browser console/network check | yes | Record console/network state or why it is not applicable | Post-fix production server log has no errors; Browser routes render cached-token success. Docs console errors/warnings empty; prior baseline errors excluded. |
+| Browser state/accessibility proof | yes | Exercise applicable honest states, keyboard/focus, motion, and sizes | Token cache/expiry/disable/error states tested; request/private stage states Browser-proven. N/A responsive/motion/focus/permissions/mutations: server auth API and reference docs only. |
+| Browser final proof artifact | yes | Record screenshot/trace/route proof or exact caveat | tmp/walkthrough/477/04-production-private-original.jpg, 05-production-request-original.jpg, 03-docs-clock-annotated.png; synthetic fixture explicit. |
 
-| Agent source / generated sync | pending | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | pending |
-| Installed lock audit | pending | Verify expected lock entries and removed skills through CLI-managed state | pending |
-| Agent action discoverability | pending | Source-audit the skill/rule path an agent will read | pending |
-| Helper and template smoke | pending | Syntax-check helpers and prove incomplete failure/completed representation when applicable | pending |
-| Agent-native review | pending | Load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted findings, or record N/A | pending |
+| Agent source / generated sync | yes | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | bun install and source sync passed; autoclosure rule/generated body and root/source instructions parity verified. |
+| Installed lock audit | no | Verify expected lock entries and removed skills through CLI-managed state | N/A: no installed skill additions/removals or lock edits; source-owned repo rules and published docs only. |
+| Agent action discoverability | yes | Source-audit the skill/rule path an agent will read | Issue clock hook appears in www/setup/features path; inherited recoverable/absent PR routes explicitly discoverable in autoclosure rule. |
+| Helper and template smoke | yes | Syntax-check helpers and prove incomplete failure/completed representation when applicable | Incomplete template rejected with 49 failures; completed in-memory representation accepted with all 70 rows preserved; unchanged checker syntax/behavior source-backed. |
+| Agent-native review | yes | Load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted findings, or record N/A | Independent inherited-model agent-native audit PASS; no accepted findings; no model-diversity claim. |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
@@ -344,8 +344,8 @@ Phase / pass table:
 | Intake and source read | complete | Issue, source, real dev and production repro; challenge posted | implementation |
 | Implementation | complete | Four owned files; 30 passing regressions; docs/skill sync and changeset | verification |
 | Verification | complete | Full bun check exit0; tests/build/MDX/Browser/audits passed; generated fixtures sync/check passed | closeout |
-| Commit / PR / GitHub sync | pending | | final response |
-| Closeout | pending | | final response |
+| Commit / PR / GitHub sync | complete | PR #478 created, attached, body read back; issue sync posted/read back | final response |
+| Closeout | complete | Plan checker, final pushed-head readback and annotated handoff | final response |
 
 Findings:
 - Real Next16.4 dev overlay and production next start logs both reproduce the reported Date.now issue. Header access alone does not leave runtime prerendering.
@@ -398,33 +398,33 @@ Verification evidence:
 Source-listed case matrix:
 | Case | Source claim | Harness | Before | Expected after | Evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Cached JWT after headers | Next runtime Date.now fails | Next16.4 Browser | Blocking Route | Async app clock after connection succeeds under Suspense | Saved pre-fix screenshot | reproduced |
-| Private cache | Clock allowed, connection forbidden | Next16.4 Browser | Source confirms exemption | Default/sync clock succeeds without connection | Real route proof required | planned |
-| Sync/async clock + tolerance | Proposed now hook | Public context + token tests | No hook | Unix seconds decide reuse/refresh, including equality | Focused tests required | planned |
-| Defaults/true/empty/false | Preserve existing API | Public context + token tests | Boolean supported | Default cache preserved; false fetches | Focused tests required | planned |
-| Fast paths | No unnecessary clock | Token tests | Unconditional expiry clock when decoded | Disabled/force/missing/malformed/missing-exp skip hook | Focused tests required | planned |
-| Callback rejection/Next abort | App controls lifecycle | Public context + token tests | Clock errors swallowed as decode failure | Exact errors propagate; no log/fetch fallback | Focused tests required | planned |
-| Non-finite clock | New hook must not treat NaN as unexpired | Token tests | No injected clock | Reject non-finite values without refresh | Focused tests required | planned |
-| Auth route gate | Deferred token requires boundary | Next Browser + docs | Unbounded route read blocks | Suspense request path or private-cache path | Docs and route proof required | planned |
+| Cached JWT after headers | Next runtime Date.now fails | Next16.4 Browser | Blocking Route | Async app clock after connection succeeds under Suspense | Red regression + dev overlay; post-fix dev/production cached token | verified |
+| Private cache | Clock allowed, connection forbidden | Next16.4 Browser | Private clock valid; helper without Suspense blocks | Default/sync clock succeeds without connection | Browser /private cached token in dev/production under Suspense | verified |
+| Sync/async clock + tolerance | Proposed now hook | Public context + token tests | No hook | Unix seconds decide reuse/refresh, including equality | 30 focused regressions pass | verified |
+| Defaults/true/empty/false | Preserve existing API | Public context + token tests | Boolean supported | Default cache preserved; false fetches | 30 focused regressions pass | verified |
+| Fast paths | No unnecessary clock | Token tests | Unconditional expiry clock when decoded | Disabled/force/missing/malformed/missing-exp skip hook | 30 focused regressions pass | verified |
+| Callback rejection/Next abort | App controls lifecycle | Public context + token tests | Clock errors swallowed as decode failure | Exact errors propagate; no log/fetch fallback | 30 focused regressions pass | verified |
+| Non-finite clock | New hook must not treat NaN as unexpired | Token tests | No injected clock | Reject non-finite values without refresh | 30 focused regressions pass | verified |
+| Auth route gate | Deferred token requires boundary | Next Browser + docs | Unbounded route read blocks | Suspense request path or private-cache path | Docs Browser rendering and both Next16.4 production routes pass | verified |
 | TanStack secondary clock | Failed queries record Date.now | Source + docs | Query core owns error timestamp | App owns abort policy; no generic swallowing | Not claimed as library fix | narrowed |
 
 Final handoff contract:
-- Commit line: pending
-- PR line: pending
-- Issue line: pending
-- Confidence line: pending
+- Commit line: c5a5e65a, e67cefd9, 620626cc; final plan-only closeout recorded in Git.
+- PR line: https://github.com/udecode/kitcn/pull/478 (open; not merged).
+- Issue line: #477; sync comment 6087536486 read back.
+- Confidence line: 95-100% for bounded clock ownership contract; synthetic fixture limitation remains explicit.
 - Flow table:
-  - Reproduced: tests pending, browser pending
-  - Verified: tests pending, browser pending
-- Browser check: pending
-- Outcome: pending
-- Caveat: pending
+  - Reproduced: public clock-trap test red; Next16.4 dev and production Blocking Route Date.now.
+  - Verified: 30 focused tests/full check green; Next16.4 request/private production routes and docs green.
+- Browser check: approved Browser; cached JWT success without clock diagnostics; docs no console errors/warnings.
+- Outcome: optional app-owned sync/async finite Unix-seconds JWT cache clock; bool/default behavior preserved.
+- Caveat: synthetic fresh JWT, no live backend sign-in; Next stages/abort policy app-owned; Suspense required in demonstrated patterns.
 - Design:
-  - Chosen boundary: pending
-  - Why not quick patch: pending
-  - Why not broader change: pending
-- Verified: pending
-- PR body verified: pending
+  - Chosen boundary: public auth factory forwards clock to generic expiry reader.
+  - Why not quick patch: library cannot choose an app's runtime/private-cache stage.
+  - Why not broader change: no per-context transport generic, Next imports or internal-abort recognition needed.
+- Verified: build/built API, tests, full check, docs/parser/sync, agent-native audit and configured P0 autoreview.
+- PR body verified: gh pr view confirms exact task-style body, plan line, release block and no self-link.
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -448,26 +448,27 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
-- Issue: pending
-- Browser proof: pending
-- Caveats: pending
+- Commit: implementation e67cefd9; subsequent commits only record evidence.
+- PR: #478 https://github.com/udecode/kitcn/pull/478; attached, open, not merged.
+- Issue: #477 final comment 6087536486 read back.
+- Browser proof: Next16.4 request/private dev and production; real rendered docs annotated.
+- Caveats: synthetic JWT only; configured P0 review threshold; inherited workflow and generated fixture manifests included per policy.
 
 Timeline:
 - 2026-10-09T18:49:59.678Z Task goal plan created.
+- 2026-10-09 Final full check passed; PR #478 created and issue synced. Isolated runtime servers stopped; implementation worktree archived recoverably.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Intake and source read |
-| Where am I going? | Implementation, verification, commit/PR/GitHub sync, closeout |
-| What is the goal? | TODO: Fill from Objective |
+| Where am I? | Verified and delivered as PR #478 |
+| Where am I going? | Final handoff; wait for user merge decision |
+| What is the goal? | App-owned JWT cache time with default behavior preserved, verified and PR-delivered |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
 
 Open risks:
-- Pending.
+- Synthetic JWT runtime proof does not claim a live backend sign-in flow. App owns render abort policy. Required autoreview is P0-only; 30 focused tests and real Next proof cover the bounded behavior. No remaining implementation blocker.
 
 Hard closeout guard:
 - A local-only final response for verified code-changing work is invalid unless
