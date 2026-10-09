@@ -133,15 +133,25 @@ const AUTH_RUNTIME_PROCEDURES: readonly Omit<
   'moduleName' | 'kind'
 >[] = [
   { exportName: 'count', internal: true, type: 'query' },
+  { exportName: 'consumeOne', internal: true, type: 'mutation' },
   { exportName: 'create', internal: true, type: 'mutation' },
   { exportName: 'deleteMany', internal: true, type: 'mutation' },
   { exportName: 'deleteOne', internal: true, type: 'mutation' },
   { exportName: 'findMany', internal: true, type: 'query' },
   { exportName: 'findOne', internal: true, type: 'query' },
   { exportName: 'getLatestJwks', internal: true, type: 'action' },
+  { exportName: 'incrementOne', internal: true, type: 'mutation' },
   { exportName: 'rotateKeys', internal: true, type: 'action' },
   { exportName: 'updateMany', internal: true, type: 'mutation' },
   { exportName: 'updateOne', internal: true, type: 'mutation' },
+];
+
+const AUTH_RUNTIME_EXPORTS = [
+  'authEnabled',
+  'authClient',
+  'getAuth',
+  'auth',
+  ...AUTH_RUNTIME_PROCEDURES.map((entry) => entry.exportName),
 ];
 
 const GENERATED_ORM_RUNTIME_PROCEDURES: readonly Omit<
@@ -1494,20 +1504,7 @@ const authRuntime: ${
   };
 
 export const {
-  authEnabled,
-  authClient,
-  getAuth,
-  auth,
-  count,
-  create,
-  deleteMany,
-  deleteOne,
-  findMany,
-  findOne,
-  updateMany,
-  updateOne,
-  getLatestJwks,
-  rotateKeys,
+${AUTH_RUNTIME_EXPORTS.map((name) => `  ${name},`).join('\n')}
 } = authRuntime;
 `;
 }

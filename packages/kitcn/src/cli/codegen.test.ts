@@ -4,12 +4,29 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getFunctionName } from 'convex/server';
+import { createDisabledAuthRuntime } from '../auth/generated-contract-disabled';
 import { generateMeta, getConvexConfig } from './codegen';
 
 const RESERVED_HTTP_NAMESPACE_ERROR = /root "http" namespace is reserved/i;
 const RESERVED_RUNTIME_NAMESPACE_ERROR = /reserved runtime caller namespace/i;
 const HASHED_RUNTIME_CALLER_RE =
   /export function createFooBarPlugins_[0-9a-f]{6}Caller<TCtx extends ProcedureCallerContext>\(/;
+
+const GENERATED_AUTH_EXPORTS_RE = /export const \{([^}]*)\} = authRuntime;/;
+const AUTH_RUNTIME_NON_PROCEDURE_EXPORTS = new Set([
+  'auth',
+  'authClient',
+  'authEnabled',
+  'getAuth',
+]);
+
+function getGeneratedAuthExportNames(source: string) {
+  const match = source.match(GENERATED_AUTH_EXPORTS_RE);
+  return (match?.[1] ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
 
 function mkTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-codegen-'));
@@ -3046,9 +3063,10 @@ export { httpAction, internalMutation };
       expect(generatedAuth).toContain('const authRuntime: AuthRuntime<');
       expect(generatedAuth).toContain('= createAuthRuntime<');
       expect(generatedAuth).toContain('ReturnType<AuthDefinitionFromFile>');
-      // The emitted export list and AUTH_RUNTIME_PROCEDURES are maintained by
-      // hand in separate files; nothing else links them.
-      expect(generatedAuth).toContain('\n  count,\n');
+      const authRuntimeKeys = Object.keys(createDisabledAuthRuntime()).sort();
+      expect(getGeneratedAuthExportNames(generatedAuth).sort()).toEqual(
+        authRuntimeKeys
+      );
       expect(generatedAuth).toContain(
         'const authDefinition = resolveGeneratedAuthDefinition<AuthDefinitionFromFile>('
       );
@@ -3072,6 +3090,11 @@ export { httpAction, internalMutation };
       expect(generatedRuntime).toContain(
         '"findOne": ["query", typedProcedureResolver('
       );
+      for (const name of authRuntimeKeys) {
+        if (!AUTH_RUNTIME_NON_PROCEDURE_EXPORTS.has(name)) {
+          expect(generatedRuntime).toContain(`"${name}": [`);
+        }
+      }
       expect(generatedRuntime).not.toContain('"beforeCreate": [');
       expect(generatedRuntime).not.toContain('"onCreate": [');
       expect(generatedRuntime).toContain(
