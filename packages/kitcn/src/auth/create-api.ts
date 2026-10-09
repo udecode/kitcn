@@ -677,6 +677,7 @@ export const findManyHandler = async (
     paginationOpts: any;
     limit?: number;
     offset?: number;
+    select?: string[];
     sortBy?: {
       direction: 'asc' | 'desc';
       field: string;
@@ -1371,6 +1372,7 @@ export const createApi = <
         model: modelValidator,
         offset: v.optional(v.number()),
         paginationOpts: paginationOptsValidator,
+        select: v.optional(v.array(v.string())),
         sortBy: v.optional(
           v.object({
             direction: v.union(v.literal('asc'), v.literal('desc')),
