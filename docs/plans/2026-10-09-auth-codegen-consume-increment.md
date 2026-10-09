@@ -13,7 +13,8 @@ Primary template:
 docs/plans/templates/task.md
 
 Applied packs:
-- none: no docs, browser, agent-native or package export surface changes; generated user code is covered by the fixture rows below.
+- package-api: the generated auth module's exports change for every kitcn auth app and a patch changeset ships (added after review; rows materialized from `docs/plans/templates/packs/package-api.md`).
+- Not applied: docs (no `www/**` or skill content changed), agent-native (no `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands or prompts changed), browser (no route, UI or native browser behavior).
 
 Task source:
 - type: plain task text (downstream report; no GitHub issue)
@@ -148,6 +149,13 @@ Start Gates:
 | Task-plan PR body evidence | yes | Body carries `🧭 Task plan: docs/plans/2026-10-09-auth-codegen-consume-increment.md` |
 | GitHub issue sync expectation decision | no | N/A: no GitHub issue |
 | Output budget strategy recorded | yes | See Output budget strategy |
+| Package/API pack selected | yes | Generated auth exports change and a changeset ships; added on review |
+| Public surface or package boundary identified | yes | Public delta: user-generated `generated/auth.ts` exports two more internal mutations and `createAuthCaller` gains both procedures. `kitcn` and `kitcn/auth` package entry exports unchanged |
+| Convex entry/import graph impact identified | yes | Same `authRuntime` destructure and the same `./auth` lazy `require` in `auth.runtime.ts`; no new imports in any function entry |
+| CLI/scaffold/generated impact identified | yes | `kitcn codegen` output changes; fixtures, example and root generated files regenerated |
+| Release artifact path selected | yes | `.changeset`: `.changeset/auth-codegen-consume-increment.md` |
+| `changeset` skill loaded when `.changeset` is required | yes | `.agents/rules/changeset.mdc` read: patch, `## Patches`, action-verb bullet, no internals |
+| Package build / fixture impact decision recorded | yes | `bun --cwd packages/kitcn build`, `bun run fixtures:sync`, `fixtures:check` required and run |
 
 Work Checklist:
 - [x] If a duration was requested, it is recorded as minimum active work unless
@@ -214,6 +222,19 @@ Work Checklist:
       implementation work, or marked N/A with reason.
 - [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling. N/A: none touched.
+- [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
+- [x] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason. `.changeset`.
+- [x] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
+- [x] Package/API pack: no-artifact decisions state why the diff has no published package user-visible delta from `main`. N/A: a changeset ships.
+- [x] Package/API pack: compatibility, migration, or hard-cut decision is explicit when public shape changes. Additive only: two new generated exports, nothing removed; apps rerun `kitcn codegen` and redeploy.
+- [x] Package/API pack: affected Convex static import graphs stay narrow and
+      plugin/per-module boundaries are used where appropriate. No new imports in generated entries.
+- [x] Package/API pack: CLI commands remain deterministic, `--json` capable,
+      and non-interactive with explicit confirmation bypass when relevant. `kitcn codegen` flags and behavior unchanged apart from its output.
+- [x] Package/API pack: docs and `packages/kitcn/skills/kitcn/**` stay
+      current-state synchronized when public guidance changes. N/A: no doc or skill lists the generated auth exports.
+- [x] Package/API pack: package-owned typecheck/build/test proof is recorded or marked N/A with reason.
+- [x] Package/API pack: `packages/kitcn` build, fixture sync/check, or other owning package proof is recorded when required.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
@@ -250,6 +271,15 @@ Completion Gates:
 | Output budget discipline | yes | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | Logs under `/tmp/kitcn-*.log`; one long generated diff printed once |
 | Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no duration |
 | Autoreview for non-trivial implementation changes | yes | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
+| Public API / package boundary proof | yes | Source-audit public API, exports, and package boundary impact | Package entry exports unchanged; generated module gains `consumeOne` and `incrementOne`, matching `AuthRuntime` (contract test) |
+| Convex bundle/import proof | yes | Audit affected function-entry static graphs or record N/A | Generated `auth.ts` and `auth.runtime.ts` import lists unchanged; only destructure names and registry entries added |
+| CLI/scaffold/generated proof | yes | Prove command contract and regenerate owned output or record N/A | Codegen test plus regenerated fixtures, example and root output |
+| Release artifact classification | yes | Record whether the change is published package behavior/API/types/config/runtime or no published user-visible delta | Published package behavior: `kitcn codegen` output |
+| Published package changeset | yes | If published package users see a delta, load `changeset` and add/update one `.changeset/*.md` per package | `.changeset/auth-codegen-consume-increment.md` (`kitcn`: patch) |
+| No release artifact | no | If no artifact is needed, record the exact reason: internal-only, docs-only, agent-only, test-only, or no user-visible delta from `main` | N/A: a changeset ships |
+| Package typecheck/build/test | yes | Run owning package checks or record N/A with reason | Package build passes; typecheck and tests pass inside `check:ci` |
+| Fixture/scaffold generation | yes | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | `fixtures:sync` updated 12 generated auth files; `fixtures:check` 8 of 8 match |
+| Docs/package skill sync | no | Synchronize current-state public guidance or record N/A | N/A: no doc or skill lists the generated auth exports |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-09-auth-codegen-consume-increment.md` | pending |
 
 Phase / pass table:
@@ -277,7 +307,7 @@ Implementation notes:
 - `packages/kitcn/src/cli/codegen.test.ts`: the generated destructure equals `createDisabledAuthRuntime()` keys; `auth.runtime.ts` lists every procedure key.
 
 Review fixes:
-- None yet.
+- Pre-PR review: plan lacked the package-api pack although generated exports change and a changeset ships. Applied the pack; swept the other task-skill pack triggers (docs, agent-native, browser): none apply.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
