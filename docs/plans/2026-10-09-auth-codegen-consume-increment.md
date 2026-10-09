@@ -85,15 +85,15 @@ Task state:
 - task_type: bug
 - task_complexity: non-trivial (small code change; generated outputs across fixtures and example)
 - current_phase: closeout
-- current_phase_status: awaiting autoreview
+- current_phase_status: done
 - next_phase: closeout
-- goal_status: active
+- goal_status: complete
 
 Current verdict:
 - verdict: implemented and verified locally
 - confidence: 95%
-- next owner: task (record autoreview, close plan)
-- reason: PR #480 open with verified body; autoreview result pending
+- next owner: maintainer review and merge
+- reason: PR #480 open with verified body; autoreview clean; plan complete
 
 Implementation readiness:
 - verdict: ready
@@ -218,8 +218,8 @@ Work Checklist:
 - [x] High-risk note recorded for public API, runtime, package-boundary,
       browser behavior, agent-action, or command-contract changes, or marked
       N/A with reason.
-- [ ] Review/autoreview target selected from actual diff state for non-trivial
-      implementation work, or marked N/A with reason.
+- [x] Review/autoreview target selected from actual diff state for non-trivial
+      implementation work, or marked N/A with reason. Branch mode against `upstream/main`; clean.
 - [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling. N/A: none touched.
 - [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
@@ -266,11 +266,11 @@ Completion Gates:
 | PR task evidence verified | yes | Verify body plan line, plan at PR head, and exact PR ownership | Body line `🧭 Task plan: docs/plans/2026-10-09-auth-codegen-consume-increment.md`; the plan names PR #480 at the PR head after this commit |
 | PR proof image hosting | no | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | N/A: no images |
 | GitHub issue sync-back | no | Post concise issue sync after PR exists, or record N/A/blocker | N/A: no GitHub issue |
-| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | Final handoff fields below filled; autoreview result recorded when it arrives |
+| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | Final handoff fields below filled, including the autoreview result |
 | Final lint | yes | Run `bun lint:fix` or scoped equivalent | `bun lint` clean inside `bun check` |
 | Output budget discipline | yes | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | Logs under `/tmp/kitcn-*.log`; one long generated diff printed once |
 | Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no duration |
-| Autoreview for non-trivial implementation changes | yes | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
+| Autoreview for non-trivial implementation changes | yes | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | `.agents/skills/autoreview/scripts/autoreview --mode branch --base upstream/main` (codex, thinking high): trufflehog clean (2.7s); bundle 63710 bytes; 1 review pass; no accepted/actionable findings; overall: patch is correct (0.99). Code unchanged since 47e82519; later commits touch only this plan |
 | Public API / package boundary proof | yes | Source-audit public API, exports, and package boundary impact | Package entry exports unchanged; generated module gains `consumeOne` and `incrementOne`, matching `AuthRuntime` (contract test) |
 | Convex bundle/import proof | yes | Audit affected function-entry static graphs or record N/A | Generated `auth.ts` and `auth.runtime.ts` import lists unchanged; only destructure names and registry entries added |
 | CLI/scaffold/generated proof | yes | Prove command contract and regenerate owned output or record N/A | Codegen test plus regenerated fixtures, example and root output |
@@ -280,7 +280,7 @@ Completion Gates:
 | Package typecheck/build/test | yes | Run owning package checks or record N/A with reason | Package build passes; typecheck and tests pass inside `check:ci` |
 | Fixture/scaffold generation | yes | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | `fixtures:sync` updated 12 generated auth files; `fixtures:check` 8 of 8 match |
 | Docs/package skill sync | no | Synchronize current-state public guidance or record N/A | N/A: no doc or skill lists the generated auth exports |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-09-auth-codegen-consume-increment.md` | pending |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-09-auth-codegen-consume-increment.md` | `check-complete.mjs` prints `complete` after this update |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
@@ -289,7 +289,7 @@ Phase / pass table:
 | Implementation | done | `codegen.ts`, `codegen.test.ts`, regenerated outputs, changeset | verification |
 | Verification | done | Focused tests, build, fixtures sync, `check:ci`, `test:verify`, example push; `test:runtime` left to CI | closeout |
 | Commit / PR / GitHub sync | done | PR #480 open; body verified; plan names the PR | final response |
-| Closeout | pending | Awaits autoreview result | final response |
+| Closeout | done | Autoreview clean; plan complete; PR #480 body re-verified | final response |
 
 Findings:
 - The runtime contract has 12 procedures (`AUTH_RUNTIME_PROCEDURE_TYPES`, `AuthFunctions`, `createDisabledAuthRuntime`); codegen listed 10 in two hand lists.
@@ -349,7 +349,7 @@ Final handoff contract:
   - Chosen boundary: codegen's single procedure list, pinned to the runtime contract by a test
   - Why not quick patch: two hand lists would drift again
   - Why not broader change: importing the runtime contract into the CLI would pull auth runtime code into codegen
-- Verified: see Verification evidence
+- Verified: see Verification evidence; autoreview clean (0.99, no actionable findings)
 - PR body verified: `gh pr view 480 --json body` matches the draft
 
 Task-style PR body contract:
@@ -384,12 +384,13 @@ Timeline:
 - 2026-10-09T20:20:31.395Z Task goal plan created.
 - 2026-10-09 Red contract test; codegen fix; fixtures, example and root regenerated; changeset; `check:ci` and `test:verify` green on bun 1.3.9; `test:runtime` blocked by a host port.
 - 2026-10-09 PR #480 opened; body verified; plan rows filled.
+- 2026-10-09 Autoreview clean; plan closed.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Closeout: PR #480 open, awaiting autoreview |
-| Where am I going? | Record autoreview, close the plan, re-verify the body |
+| Where am I? | Done: PR #480 open, autoreview clean, plan complete |
+| Where am I going? | Maintainer review, merge and release |
 | What is the goal? | Generated auth modules export every auth runtime procedure, pinned by a test |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
