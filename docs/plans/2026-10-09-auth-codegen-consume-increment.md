@@ -84,16 +84,16 @@ Blocked condition:
 Task state:
 - task_type: bug
 - task_complexity: non-trivial (small code change; generated outputs across fixtures and example)
-- current_phase: commit / PR
-- current_phase_status: awaiting PR open
+- current_phase: closeout
+- current_phase_status: awaiting autoreview
 - next_phase: closeout
 - goal_status: active
 
 Current verdict:
 - verdict: implemented and verified locally
 - confidence: 95%
-- next owner: task (open PR, record it here, verify body, autoreview)
-- reason: code, test, fixtures and gate are green; PR held for the caller's review
+- next owner: task (record autoreview, close plan)
+- reason: PR #480 open with verified body; autoreview result pending
 
 Implementation readiness:
 - verdict: ready
@@ -132,7 +132,7 @@ Start Gates:
 | Skill analysis before edits | yes | `task` read; `autogoal` plan created; changeset rule read; red test first per `tdd` |
 | Active goal checked or created | yes | This plan |
 | Source of truth read before edits | yes | Task text, `codegen.ts`, `generated-contract.ts`, `generated-contract-disabled.ts`, `adapter.ts`, `create-api.ts`, PR #423 precedent |
-| Exact per-PR task ownership | yes | Not-yet-created single-PR slice on `fix/auth-codegen-consume-increment`; the PR number is recorded here once opened |
+| Exact per-PR task ownership | yes | PR #480 (https://github.com/udecode/kitcn/pull/480); this plan is its dedicated task plan |
 | GitHub comments and attachments read | no | N/A: no GitHub source |
 | Video transcript evidence required | no | N/A: no video |
 | Pre-solution issue challenge required | yes | Recorded above: valid, reproduced |
@@ -199,12 +199,12 @@ Work Checklist:
       N/A with reason.
 - [x] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
       requirements, PR body sync, and issue sync when applicable.
-- [ ] Commit/PR handling recorded for code-changing work: commit and PR
+- [x] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
 - [x] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
       recorded, or blocker recorded.
-- [ ] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
+- [x] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
       exists at the PR head, and it identifies the exact PR before autoclosure.
 - [x] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
@@ -240,7 +240,7 @@ Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
 | Named verification threshold | yes | Run the command, proof, source audit, or artifact check named in this plan | Focused tests 263 pass; on bun 1.3.9 `check:ci` (lint, typecheck, 1556 bun + 102 vitest files, CLI, Concave smoke, `fixtures:check`) and `test:verify` pass; `test:runtime` blocked locally, see Error attempts |
-| Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | pending |
+| Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | PR #480 (https://github.com/udecode/kitcn/pull/480) from `EfficiencyCorp:fix/auth-codegen-consume-increment`; this plan owns only that PR |
 | Pre-solution issue challenge verdict | yes | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | Recorded above: valid, reproduced, proceed |
 | Repro escalation ladder | yes | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | Source-level red test; browser and visual N/A (codegen only) |
 | Bug reproduced before fix | yes | Record failing test/repro or N/A with reason | Contract assertion failed: expected `consumeOne` and `incrementOne`, received neither |
@@ -260,13 +260,13 @@ Completion Gates:
 | High-risk mini gate | yes | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | Failure mode: generated exports drift from the runtime again. Proof: the test compares the destructure with `createDisabledAuthRuntime()` keys and checks `auth.runtime.ts` entries. Boundary: codegen owns the list, runtime owns the contract. |
 | Agent-native review for agent/tooling changes | no | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | N/A: none touched |
 | Local install corruption suspected | no | Run `bun install` once, rerun the exact failing command, or record N/A | N/A: the first `convex/server` resolution error was a fresh worktree without install; `bun install` fixed it |
-| Commit created | yes | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | yes | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | yes | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
-| PR task evidence verified | yes | Verify body plan line, plan at PR head, and exact PR ownership | pending |
+| Commit created | yes | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | 47e82519 (fix), 388d2177 (package-api pack); plan updates follow on the same branch |
+| PR create or update | yes | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | PR #480 opened from the fork branch with the drafted body; pre-PR `bun check`: `check:ci` and `test:verify` pass, `test:runtime` left to CI |
+| Task-style PR body verified | yes | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | `gh pr view 480 -R udecode/kitcn --json body`: auto-release block, `🐛 Fixes ➖ N/A`, plan line, `🟢 95% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, bold Outcome/Caveat/Design/Verified; identical to the draft; no self-link in authored text (only the bot-appended codesmith footer) |
+| PR task evidence verified | yes | Verify body plan line, plan at PR head, and exact PR ownership | Body line `🧭 Task plan: docs/plans/2026-10-09-auth-codegen-consume-increment.md`; the plan names PR #480 at the PR head after this commit |
 | PR proof image hosting | no | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | N/A: no images |
 | GitHub issue sync-back | no | Post concise issue sync after PR exists, or record N/A/blocker | N/A: no GitHub issue |
-| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
+| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | Final handoff fields below filled; autoreview result recorded when it arrives |
 | Final lint | yes | Run `bun lint:fix` or scoped equivalent | `bun lint` clean inside `bun check` |
 | Output budget discipline | yes | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | Logs under `/tmp/kitcn-*.log`; one long generated diff printed once |
 | Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no duration |
@@ -288,8 +288,8 @@ Phase / pass table:
 | Intake and source read | done | Sources listed in Start Gates | implementation |
 | Implementation | done | `codegen.ts`, `codegen.test.ts`, regenerated outputs, changeset | verification |
 | Verification | done | Focused tests, build, fixtures sync, `check:ci`, `test:verify`, example push; `test:runtime` left to CI | closeout |
-| Commit / PR / GitHub sync | in_progress | Branch pushed; PR held for the caller's review | final response |
-| Closeout | pending | Awaits PR | final response |
+| Commit / PR / GitHub sync | done | PR #480 open; body verified; plan names the PR | final response |
+| Closeout | pending | Awaits autoreview result | final response |
 
 Findings:
 - The runtime contract has 12 procedures (`AUTH_RUNTIME_PROCEDURE_TYPES`, `AuthFunctions`, `createDisabledAuthRuntime`); codegen listed 10 in two hand lists.
@@ -335,8 +335,8 @@ Source-listed case matrix:
 | 4 | Lists must not drift again | destructure derived from the list; contract test | two hand lists | one list plus test | code and test | done |
 
 Final handoff contract:
-- Commit line: pending
-- PR line: pending
+- Commit line: 47e82519 (fix), 388d2177 (package-api pack)
+- PR line: PR #480 https://github.com/udecode/kitcn/pull/480
 - Issue line: N/A: no GitHub issue
 - Confidence line: 🟢 95% confidence
 - Flow table:
@@ -350,7 +350,7 @@ Final handoff contract:
   - Why not quick patch: two hand lists would drift again
   - Why not broader change: importing the runtime contract into the CLI would pull auth runtime code into codegen
 - Verified: see Verification evidence
-- PR body verified: pending
+- PR body verified: `gh pr view 480 --json body` matches the draft
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -374,8 +374,8 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
+- Commit: 47e82519 (fix), 388d2177 (package-api pack)
+- PR: #480 https://github.com/udecode/kitcn/pull/480
 - Issue: N/A: no GitHub issue
 - Browser proof: N/A: no browser surface
 - Caveats: apps rerun `kitcn codegen` and redeploy
@@ -383,12 +383,13 @@ Final handoff / sync:
 Timeline:
 - 2026-10-09T20:20:31.395Z Task goal plan created.
 - 2026-10-09 Red contract test; codegen fix; fixtures, example and root regenerated; changeset; `check:ci` and `test:verify` green on bun 1.3.9; `test:runtime` blocked by a host port.
+- 2026-10-09 PR #480 opened; body verified; plan rows filled.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Commit / PR: branch pushed, PR held for the caller's review |
-| Where am I going? | Open the PR, record its number here, verify the body, autoreview, closeout |
+| Where am I? | Closeout: PR #480 open, awaiting autoreview |
+| Where am I going? | Record autoreview, close the plan, re-verify the body |
 | What is the goal? | Generated auth modules export every auth runtime procedure, pinned by a test |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
