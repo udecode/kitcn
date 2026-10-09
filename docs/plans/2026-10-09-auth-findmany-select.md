@@ -86,15 +86,15 @@ Task state:
 - task_type: bug
 - task_complexity: non-trivial (validator change with an integration-level test)
 - current_phase: closeout
-- current_phase_status: awaiting autoreview
+- current_phase_status: done
 - next_phase: closeout
-- goal_status: active
+- goal_status: complete
 
 Current verdict:
 - verdict: implemented and verified locally
 - confidence: 95%
-- next owner: task (record autoreview, close plan)
-- reason: PR #481 open with verified body; autoreview result pending
+- next owner: maintainer review and merge
+- reason: PR #481 open with verified body; autoreview clean; plan complete
 
 Implementation readiness:
 - verdict: ready
@@ -219,8 +219,8 @@ Work Checklist:
 - [x] High-risk note recorded for public API, runtime, package-boundary,
       browser behavior, agent-action, or command-contract changes, or marked
       N/A with reason.
-- [ ] Review/autoreview target selected from actual diff state for non-trivial
-      implementation work, or marked N/A with reason.
+- [x] Review/autoreview target selected from actual diff state for non-trivial
+      implementation work, or marked N/A with reason. Branch mode against `upstream/main`; clean.
 - [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling. N/A: none touched.
 - [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
@@ -267,11 +267,11 @@ Completion Gates:
 | PR task evidence verified | yes | Verify body plan line, plan at PR head, and exact PR ownership | Body line `🧭 Task plan: docs/plans/2026-10-09-auth-findmany-select.md`; the plan names PR #481 at the PR head after this commit |
 | PR proof image hosting | no | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | N/A: no images |
 | GitHub issue sync-back | no | Post concise issue sync after PR exists, or record N/A/blocker | N/A: no GitHub issue |
-| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | Final handoff fields below filled; autoreview result recorded when it arrives |
+| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | Final handoff fields below filled, including the autoreview result |
 | Final lint | yes | Run `bun lint:fix` or scoped equivalent | `bun lint` clean (981 files) |
 | Output budget discipline | yes | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | Logs under `/tmp/kitcn15-*.log` |
 | Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no duration |
-| Autoreview for non-trivial implementation changes | yes | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
+| Autoreview for non-trivial implementation changes | yes | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | `.agents/skills/autoreview/scripts/autoreview --mode branch --base upstream/main` (codex, thinking high): trufflehog clean (1.6s); bundle 37361 bytes; 1 review pass; no accepted/actionable findings; overall: patch is correct (0.99). Code unchanged since 9ef2000a; later commits touch only this plan |
 | Public API / package boundary proof | yes | Source-audit public API, exports, and package boundary impact | Entry exports unchanged; `findMany` args gain optional `select` (example `api.d.ts` entry) |
 | Convex bundle/import proof | no | Audit affected function-entry static graphs or record N/A | N/A: no import changes |
 | CLI/scaffold/generated proof | yes | Prove command contract and regenerate owned output or record N/A | Codegen output unchanged; example `_generated/api.d.ts` regenerated from a local Convex push, `findMany` hunk kept |
@@ -281,7 +281,7 @@ Completion Gates:
 | Package typecheck/build/test | yes | Run owning package checks or record N/A with reason | Package build passes; focused auth suites pass; typecheck inside `bun check` |
 | Fixture/scaffold generation | no | Run `bun run fixtures:sync` and `bun run fixtures:check` when scaffold output changed, otherwise N/A | N/A: scaffold output unchanged; `fixtures:check` inside `bun check` |
 | Docs/package skill sync | no | Synchronize current-state public guidance or record N/A | N/A: no doc or skill describes the auth procedure arguments |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-09-auth-findmany-select.md` | pending |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-09-auth-findmany-select.md` | `check-complete.mjs` prints `complete` after this update |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
@@ -290,7 +290,7 @@ Phase / pass table:
 | Implementation | done | `create-api.ts`, `create-api.vitest.ts`, example `api.d.ts`, changeset | verification |
 | Verification | done | Focused suites, build, example push, `check:ci`, `test:verify`; `test:runtime` left to CI | closeout |
 | Commit / PR / GitHub sync | done | PR #481 open; body verified; plan names the PR | final response |
-| Closeout | pending | Awaits autoreview result | final response |
+| Closeout | done | Autoreview clean; plan complete; PR #481 body re-verified | final response |
 
 Findings:
 - Both adapters forward `select` to `findMany` on the non-OR path (`httpAdapter` through `ctx.runQuery(authFunctions.findMany, { ...data })`, `dbAdapter` through `findManyHandler`). The OR path strips `select` before querying and applies it after merge and sort.
@@ -346,7 +346,7 @@ Final handoff contract:
   - Chosen boundary: the `findMany` validator, the only owner that disagreed with adapter and handler
   - Why not quick patch: it is the quick patch, and the right one
   - Why not broader change: the sweep found no other missing argument
-- Verified: see Verification evidence
+- Verified: see Verification evidence; autoreview clean (0.99, no actionable findings)
 - PR body verified: `gh pr view 481 --json body` matches the draft
 
 Task-style PR body contract:
@@ -381,12 +381,13 @@ Timeline:
 - 2026-10-09 Task goal plan created with the package-api pack.
 - 2026-10-09 Red convex-test; validator and handler type fix; example `api.d.ts` regenerated; changeset; focused suites, `check:ci` and `test:verify` green on bun 1.3.9; `test:runtime` blocked by a host port.
 - 2026-10-09 PR #481 opened; body verified; plan rows filled.
+- 2026-10-09 Autoreview clean; plan closed.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Closeout: PR #481 open, awaiting autoreview |
-| Where am I going? | Record autoreview, close the plan, re-verify the body |
+| Where am I? | Done: PR #481 open, autoreview clean, plan complete |
+| Where am I going? | Maintainer review, merge and release |
 | What is the goal? | Generated auth `findMany` accepts `select` and returns only the selected fields |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
