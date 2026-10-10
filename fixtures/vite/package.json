@@ -10,7 +10,7 @@
     "convex": "1.44.0",
     "hono": "4.12.9",
     "kitcn": "workspace:*",
-    "lucide-react": "^1.54.0",
+    "lucide-react": "^1.55.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "shadcn": "latest",

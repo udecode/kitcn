@@ -247,11 +247,84 @@ default clock reads `Math.floor(Date.now() / 1000)`. With Next 16
 `cacheComponents` and `partialPrefetching`, awaiting `headers()` does not make
 that clock read safe in the runtime prerendering stage.
 
-For request-time token reads, provide `auth.jwtCache.now`. The callback returns
-Unix time in **seconds**, synchronously or as a promise. Kitcn awaits the callback
-before comparing the cached JWT's expiry. The callback runs only when a decoded
-cookie has an expiry to check; disabled caching, forced refresh, and missing or
-malformed cookies bypass it.
+### Gate the complete token read
+
+For request-time auth, await `connection()` before the complete token read.
+This covers both cached JWT reuse and token fetching when the JWT cookie is
+missing. Keep the default caller factory and the headers-first context from
+[RSC Setup](#rsc-setup). Add this helper after its `caller` declaration:
+
+```ts title="src/lib/convex/rsc.tsx"
+import { getSessionCookie } from 'better-auth/cookies';
+import { headers } from 'next/headers';
+import { connection } from 'next/server';
+import { cache } from 'react';
+
+export const getToken = cache(async () => {
+  const heads = await headers();
+  if (getSessionCookie(heads) === null) {
+    return undefined;
+  }
+  await connection();
+  return caller.getToken();
+});
+```
+
+Match any custom session-cookie name or prefix in `getSessionCookie`. The
+session check avoids token fetching for signed-out requests. A session cookie
+without a JWT cookie still waits for `connection()` before fetching a token.
+
+Use this same helper for server queries. In `createServerQueryClient`, replace
+`getToken: caller.getToken` with `getToken`:
+
+```ts
+getServerQueryClientOptions({
+  getToken,
+  convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
+});
+```
+
+Put a component that awaits request-time auth beneath a `Suspense` boundary:
+
+```tsx title="app/(app)/layout.tsx"
+import { Suspense } from 'react';
+import { ConvexProvider } from '@/lib/convex/convex-provider';
+import { getToken } from '@/lib/convex/rsc';
+
+async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
+  const token = await getToken();
+  return <ConvexProvider token={token}>{children}</ConvexProvider>;
+}
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <AuthenticatedShell>{children}</AuthenticatedShell>
+    </Suspense>
+  );
+}
+```
+
+Next can abort a validation render in development. If your TanStack integration
+handles those aborts by leaving the read pending, apply that app-owned policy
+around the `connection()` await above, before `caller.getToken()`. Handling an
+abort only inside `jwtCache.now` does not cover token-fetch paths that bypass
+the clock. The example above does not suppress aborts. Do not suppress ordinary
+auth or network failures, or treat every `AbortError` as a Next render abort.
+Recording a rejected TanStack query can itself read `Date.now()`.
+
+### Override the expiry clock
+
+`auth.jwtCache.now` controls only the cached JWT expiry comparison. The callback
+returns finite Unix time in **seconds**, synchronously or as a promise. Kitcn
+awaits the callback before comparing a decoded JWT's expiry. Disabled caching,
+forced refresh, and missing, malformed, or expiry-less JWT cookies bypass it
+and fetch a token. A decoded expired JWT with an expiry calls the clock, then
+fetches a token.
+
+A complete token read that already waits for `connection()` does not need an
+extra clock hook. If you configure a request-time expiry clock separately, it
+can await `connection()`:
 
 ```ts title="src/lib/convex/server.ts"
 import { api } from '@convex/api';
@@ -272,33 +345,12 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 });
 ```
 
-Keep the headers-first `createRSCContext` from [RSC Setup](#rsc-setup). Put a
-component that awaits request-time auth beneath a `Suspense` boundary:
-
-```tsx title="app/(app)/layout.tsx"
-import { Suspense } from 'react';
-import { ConvexProvider } from '@/lib/convex/convex-provider';
-import { caller } from '@/lib/convex/rsc';
-
-async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
-  const token = await caller.getToken();
-  return <ConvexProvider token={token}>{children}</ConvexProvider>;
-}
-
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <Suspense fallback={null}>
-      <AuthenticatedShell>{children}</AuthenticatedShell>
-    </Suspense>
-  );
-}
-```
-
 ### Private-cache token reads
 
 `'use cache: private'` allows clock reads but forbids `connection()`. Use a
 separate caller factory with the default clock or a synchronous clock for that
-path. Do not reuse the request-time clock above inside private cache.
+path. Do not call the request-time `getToken` helper or reuse the request-time
+clock above inside private cache.
 
 ```ts title="src/lib/convex/private-token.ts"
 import { api } from '@convex/api';
@@ -327,10 +379,7 @@ cache with `auth: { jwtCache: false }` avoids its clock read but fetches a token
 from the auth endpoint on every context creation.
 
 Clock errors propagate unchanged. Kitcn does not call `connection()`, inspect
-Next's render context, or suppress render aborts. If a clock awaits
-`connection()` through a TanStack query, keep Next abort handling in the app's
-query integration: recording a rejected query can itself read `Date.now()`.
-Do not suppress ordinary auth errors. Clock results must be finite Unix seconds;
+Next's render context, or suppress render aborts. Clock results must be finite Unix seconds;
 kitcn rejects `NaN` and infinities instead of reusing a token with an invalid
 expiry comparison.
 

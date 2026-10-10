@@ -102,7 +102,40 @@ export function HydrateClient({ children }: { children: React.ReactNode }) {
 
 With Next 16 `cacheComponents` and `partialPrefetching`, the default JWT expiry
 clock can trigger a Blocking Route error even after `await headers()`. The
-app owns clock timing. For request-time contexts, configure the server factory:
+app owns request timing. Keep the default server factory and headers-first
+context. Add this helper after `caller` in the RSC module:
+
+```ts
+import { getSessionCookie } from 'better-auth/cookies';
+import { headers } from 'next/headers';
+import { connection } from 'next/server';
+import { cache } from 'react';
+
+export const getToken = cache(async () => {
+  const heads = await headers();
+  if (getSessionCookie(heads) === null) {
+    return undefined;
+  }
+  await connection();
+  return caller.getToken();
+});
+```
+
+Match custom session-cookie settings in `getSessionCookie`. Use this same
+`getToken` in the provider/route gate and `getServerQueryClientOptions({
+getToken, convexSiteUrl })`, not `caller.getToken`. The session check skips
+signed-out requests. A session without a JWT cookie still waits before fetching.
+Put token-dependent components under `Suspense`.
+
+If a TanStack integration holds Next development validation aborts pending,
+apply that app-owned policy around this `connection()` await before token
+retrieval. The snippet does not suppress aborts. Do not suppress ordinary auth
+or network failures, or classify every `AbortError` as a Next render abort.
+Recording a rejected query can itself read `Date.now()`.
+
+`jwtCache.now` controls the expiry comparison, not the complete token operation.
+A read already gated by `connection()` does not need an extra clock hook. A
+separately configured request-time clock can await it:
 
 ```ts
 import { connection } from 'next/server';
@@ -124,14 +157,16 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 `auth.jwtCache` accepts a boolean or `{ now?: () => number | Promise<number> }`.
 The clock returns finite **Unix seconds**, not milliseconds. The reader awaits
 it only for a decoded cached JWT with an expiry. Disabled caching, forced
-refresh, missing/malformed cookies, and absent expiry bypass the hook.
+refresh, missing/malformed cookies, and absent expiry bypass the hook and fetch
+a token. A decoded expired JWT with `exp` calls the clock, then fetches.
 `auth.expirationToleranceSeconds` remains a sibling option (default 60).
 Clock throws/rejections propagate unchanged; `NaN` and infinities are rejected.
 
 Keep `await headers()` in the RSC context creator. Put request-time token reads
 under `Suspense`, including a provider or route gate that awaits `caller.getToken()`.
 For `'use cache: private'`, use a separate factory with the default or a sync
-clock; **never call `connection()` inside private cache**. A private token helper
+clock; **never call `connection()` inside private cache**. Do not use the
+request-time `getToken` helper in private cache. A private token helper
 can use `cacheLife({ stale: 30 })`, read headers, create that context, and return
 `context.token`. A token-blocking layout must defer its token-dependent subtree
 with `Suspense`, including when awaiting a private-cache helper. Private caching
@@ -139,9 +174,8 @@ allows the clock read but does not make runtime auth data static.
 
 `auth: { jwtCache: false }` avoids the cookie expiry clock but fetches a token
 on every context creation. Kitcn does not import Next, detect render stages, or
-suppress render aborts. An app that runs a `connection()` clock through TanStack
-queries owns abort handling because recording a query failure can also read
-`Date.now()`. Do not suppress ordinary auth failures.
+suppress render aborts. Handling aborts only inside `jwtCache.now` leaves the
+token-fetch paths that bypass the clock uncovered.
 
 Full examples: [Next.js JWT cache guidance](https://kitcn.dev/docs/nextjs#jwt-cache-and-partial-prefetching).
 
