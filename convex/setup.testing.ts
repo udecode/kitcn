@@ -118,6 +118,47 @@ export function convexTest<Schema extends SchemaDefinition<any, any>>(
   return wrapConvexTestDateReturns(baseConvexTest(schema, convexModules));
 }
 
+/**
+ * Placeholder values for the environment `example`'s `getEnv()` demands.
+ *
+ * Every suite that drives example source needs these present, and none of them
+ * cares what they contain. They live here so the same block is not copied into
+ * each test file.
+ */
+const EXAMPLE_ENV_DEFAULTS = {
+  ADMIN: 'admin@example.com',
+  BETTER_AUTH_SECRET: 'test-secret',
+  GITHUB_CLIENT_ID: 'github-client-id',
+  GITHUB_CLIENT_SECRET: 'test-secret',
+  GOOGLE_CLIENT_ID: 'google-client-id',
+  GOOGLE_CLIENT_SECRET: 'test-secret',
+} as const;
+
+/** Run `fn` with the example app's required env vars set, then restore them. */
+export const withExampleEnv = async (
+  fn: () => Promise<void>
+): Promise<void> => {
+  const original = Object.fromEntries(
+    Object.keys(EXAMPLE_ENV_DEFAULTS).map((key) => [key, process.env[key]])
+  );
+
+  for (const [key, value] of Object.entries(EXAMPLE_ENV_DEFAULTS)) {
+    process.env[key] = value;
+  }
+
+  try {
+    await fn();
+  } finally {
+    for (const [key, value] of Object.entries(original)) {
+      if (typeof value === 'string') {
+        process.env[key] = value;
+      } else {
+        delete process.env[key];
+      }
+    }
+  }
+};
+
 export type DocumentReadCounts = {
   /**
    * Documents handed back to the caller.
@@ -518,8 +559,16 @@ export function countDocumentReads(ctx: {
     });
 
   (ctx.db as any).query = (table: unknown) => wrap(baseQuery(table as never));
-  (ctx.db as any).get = async (id: unknown) => {
-    const row = await baseGet(id as never);
+  // Forward every argument. `db.get` has a 1-arg and a 2-arg overload, and the
+  // lifecycle writer only ever calls the 2-arg one -- `innerDb.get(table, id)`
+  // at lifecycle.ts:383, 397, 472, 554, 627. A 1-arg forwarder drops the id, so
+  // `oldDoc`/`newDoc` come back null and the writer skips every trigger without
+  // erroring: installing the counter silently disabled all triggers, and any
+  // read bound measured over a trigger-maintained table passed against zero.
+  (ctx.db as any).get = async (...args: unknown[]) => {
+    const row = await (
+      baseGet as (...forwarded: unknown[]) => Promise<unknown>
+    )(...args);
     if (row) {
       reads.documents += 1;
       reads.scanned += 1;

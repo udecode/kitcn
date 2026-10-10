@@ -1,5 +1,6 @@
 import { eq, type InferInsertModel } from 'kitcn/orm';
 import { authMutation, authQuery } from '../lib/crpc';
+import { grantProjectAccess } from './_helpers/project_access';
 import type { MutationCtx, QueryCtx } from './generated/server';
 import {
   ormPolymorphicEventTable,
@@ -134,21 +135,27 @@ async function ensureDemoArtifacts(ctx: OrmDemoMutationCtx): Promise<{
     columns: { id: true },
   });
 
-  const projectId =
-    existingProject?.id ??
-    (
-      await ctx.orm
-        .insert(projectsTable)
-        .values({
-          name: `ORM polymorphic project ${now}`,
-          description: 'Created by orm demo coverage.',
-          isPublic: false,
-          archived: false,
-          ownerId: ctx.userId,
-        })
-        .returning({ id: projectsTable.id })
-        .execute()
-    )[0]?.id;
+  let projectId = existingProject?.id;
+  if (!projectId) {
+    const [createdProject] = await ctx.orm
+      .insert(projectsTable)
+      .values({
+        name: `ORM polymorphic project ${now}`,
+        description: 'Created by orm demo coverage.',
+        isPublic: false,
+        archived: false,
+        ownerId: ctx.userId,
+      })
+      .returning()
+      .execute();
+
+    await grantProjectAccess(ctx, {
+      project: createdProject,
+      userId: ctx.userId,
+    });
+
+    projectId = createdProject?.id;
+  }
 
   const existingTag = await ctx.orm.query.tags.findFirst({
     where: { createdBy: ctx.userId },
