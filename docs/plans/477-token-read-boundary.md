@@ -77,10 +77,10 @@ Blocked condition:
 Docs state:
 - task_type: docs
 - task_complexity: bounded docs correction with executable examples
-- current_phase: delivery
-- current_phase_status: in_progress
-- next_phase: PR readback and issue reply
-- goal_status: active
+- current_phase: closeout
+- current_phase_status: complete
+- next_phase: final handoff
+- goal_status: complete
 
 Current verdict:
 - verdict: ready
@@ -200,7 +200,7 @@ Completion Gates:
 | Agent-native reviewer | yes | Run for agent workflow docs or record N/A | Read-only parity/action audit PASS; no accepted findings. |
 | UI walkthrough | yes | If docs changed a rendered UI or visual output, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | tmp/walkthrough/477-followup original, annotated image and diff receipt; final handoff embeds annotated image. |
 | Autoreview for non-trivial docs changes | yes | Load `.agents/skills/autoreview/SKILL.md` and run the right target, or record N/A for tiny/no-local-patch work | Local helper exits 0; findings empty; /tmp/kitcn-477-followup-review.R5XhBj/review.json. Stop after clean review. |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/477-token-read-boundary.md` | pending |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/477-token-read-boundary.md` | PASS after closeout update; checker exits 0. |
 | Agent source / generated sync | yes | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | Exact mirror parity; install N/A because no rules edited. |
 | Installed lock audit | no | Verify expected lock entries and removed skills through CLI-managed state | N/A: no installed skills added, removed or changed. |
 | Agent action discoverability | yes | Source-audit the skill/rule path an agent will read | Published setup 8.A.4 names complete helper and query/provider wiring. |
@@ -217,8 +217,8 @@ Phase / pass table:
 | Intake and source read | complete | Comment and source establish a docs gap, not a new library regression. | writing |
 | Writing | complete | Complete-token helper first; expiry-clock and private-cache limits separate; published/generated guide synchronized. | verification |
 | Verification | complete | Focused tests, parser, rendered docs/dev probe, strict example build, full bun check and clean autoreview pass. | closeout |
-| PR / GitHub sync | pending | | final response |
-| Closeout | pending | | final response |
+| PR / GitHub sync | complete | PR #482 body read back; plan names exact PR; QA reply 6102816718 read back; issue remains closed, PR unmerged. | final response |
+| Closeout | complete | Full repository gate and review pass; final plan validation and pushed-head readback required below. | final response |
 
 Source-listed case matrix:
 | Case | Source-backed verdict | Proof |
@@ -287,7 +287,9 @@ Verification evidence:
 - Generated setup mirror byte-identical to published source. intent:validate passes one published skill; intent:stale reports both skills up to date.
 - Final bun lint:fix passes; tmp/pr477-followup-lint-final.log. Deslop has no delta findings; tmp/pr477-followup-slop.log. Agent-native/parity/comment audit passes without accepted findings.
 - Walkthrough original and annotated image saved under tmp/walkthrough/477-followup. Annotation explains the complete token read without changing rendered content. Final handoff must embed annotated image. PR image hosting N/A: no repository upload requirement; route and steps supplied instead.
-- Autoreview local helper exits 0 with empty findings; /tmp/kitcn-477-followup-review.R5XhBj/review.json. No further review required for closeout bookkeeping. Dedicated PR/readback and issue reply remain open.
+- Autoreview local helper exits 0 with empty findings; /tmp/kitcn-477-followup-review.R5XhBj/review.json. No further review required for closeout bookkeeping.
+- PR https://github.com/udecode/kitcn/pull/482 created and attached; task-style body, plan path, base main and branch read back. QA comment https://github.com/udecode/kitcn/issues/477#issuecomment-6102816718 read back. Final plan-only commit identifies this exact PR; compare pushed head after delivery.
+- Dedicated plan completion checker passes after all checklists/gates are resolved. Final delivery changes only this receipt, not reviewed examples or manifests.
 
 Agent action smoke matrix:
 | Action / boundary | Receipt |
@@ -301,8 +303,8 @@ Agent action smoke matrix:
 | Receipt/placeholder/workflow enforcement | N/A: no workflow/helper/template contract changed. |
 
 Final handoff contract:
-- PR line: pending
-- Issue line: pending
+- PR line: https://github.com/udecode/kitcn/pull/482 (open, not merged).
+- Issue line: #477 follow-up; QA reply https://github.com/udecode/kitcn/issues/477#issuecomment-6102816718. Existing closed state unchanged.
 - Confidence line: 90% for bounded docs clarification, not universal abort suppression.
 - Docs lane: guide/system; fastest complete request-time helper precedes clock mechanics.
 - Source-backed claims: token.ts bypasses now except decoded JWT with exp; caller/provider/query helper contracts checked against source.
@@ -314,19 +316,20 @@ Final handoff contract:
 - Verified: focused 30 tests, parser/render/dev, generated parity, intent, lint, package build, full root check and clean autoreview.
 
 Final handoff / sync:
-- PR: pending
-- Issue: pending
+- PR: https://github.com/udecode/kitcn/pull/482. Dedicated task plan docs/plans/477-token-read-boundary.md lives at PR head.
+- Issue: https://github.com/udecode/kitcn/issues/477#issuecomment-6102816718. Read back posted QA-facing documentation clarification.
 - Browser proof: tmp/walkthrough/477-followup/01-complete-boundary-annotated.png; actual docs route and synthetic dev states above.
 - Caveats: No universal abort detection; no fresh reporter TanStack, router.push or production runtime proof.
 
 Timeline:
 - 2026-10-11 (client date): source read, baseline and dedicated task plan created; docs and mirrored guidance changed; focused/render/dev proof pass; fixture gate drift regenerated; final root check and review pass; delivery follows.
+- 2026-10-11 (client date): PR #482 created and attached; body and issue reply read back. No merge requested. Final plan closeout uses plan checker, commit/push and exact-head readback.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Verified, ready for dedicated PR |
-| Where am I going? | PR and issue reply readback |
+| Where am I? | Verified docs clarification delivered in PR #482, not merged |
+| Where am I going? | Final plan-only commit, pushed-head readback and handoff |
 | What is the goal? | Correct complete token-read timing docs and synchronized published guidance |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
