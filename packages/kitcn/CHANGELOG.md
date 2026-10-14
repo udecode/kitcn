@@ -1,5 +1,15 @@
 # kitcn
 
+## 0.33.9
+
+### Patch Changes
+
+- [#484](https://github.com/udecode/kitcn/pull/484) [`153e95a`](https://github.com/udecode/kitcn/commit/153e95a4956dc4715da0dfd14d3ced7045ad1214) Thanks [@EfficiencyCorp](https://github.com/EfficiencyCorp)! - ## Patches
+
+  - Support Convex `1.45` and `1.46`.
+  - Scaffold new apps with Convex `1.46.0`.
+  - Require Node 20 or newer when running Convex `1.45` or later.
+
 ## 0.33.8
 
 ### Patch Changes
