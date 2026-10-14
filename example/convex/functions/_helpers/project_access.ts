@@ -13,7 +13,10 @@ type ProjectAccessCtx = Pick<AuthCtx, 'orm'>;
  * schema chain, so the two describe the same runtime object under different
  * type arguments.
  */
-export type ProjectAccessWriteCtx = { orm: OrmWriter<typeof schema> };
+export type ProjectAccessWriteCtx = {
+  db: Pick<AuthCtx['db'], 'get' | 'normalizeId'>;
+  orm: OrmWriter<typeof schema>;
+};
 type ProjectRow = Select<'projects'>;
 
 /**
@@ -35,19 +38,6 @@ type ProjectRow = Select<'projects'>;
  */
 
 /**
- * The project's creation time as the number `projectAccess` sorts on.
- *
- * `Select<'projects'>.createdAt` is a `Date` hydrated from `_creationTime`, and
- * `_creationTime` carries a sub-millisecond fraction that a `Date` cannot hold,
- * so this key is millisecond-resolution. Two projects created in the same
- * millisecond share a key and fall back to the access row's own creation order.
- * That is one stable total order across pages; it only decides which of two
- * same-millisecond projects sorts first.
- */
-const sortKeyFor = (project: Pick<ProjectRow, 'createdAt'>): number =>
-  project.createdAt.getTime();
-
-/**
  * Grant `userId` access to `project`, or refresh the row if it already exists.
  *
  * `isOwner` is derived from `project.ownerId` rather than passed in, so a caller
@@ -62,10 +52,16 @@ export const grantProjectAccess = async (
     userId: string;
   }
 ): Promise<void> => {
+  const projectId = ctx.db.normalizeId('projects', input.project.id);
+  const rawProject = projectId ? await ctx.db.get('projects', projectId) : null;
+  if (!rawProject) {
+    throw new Error('Cannot grant access to a missing project');
+  }
+
   const values: Insert<'projectAccess'> = {
     userId: input.userId,
     projectId: input.project.id,
-    projectCreatedAt: sortKeyFor(input.project),
+    projectCreatedAt: rawProject._creationTime,
     archived: input.project.archived,
     isOwner: input.project.ownerId === input.userId,
   };
@@ -211,28 +207,31 @@ export const listProjectsForDropdown = async (
     where: { userId: input.userId, archived: false },
     orderBy: { projectCreatedAt: 'desc' },
     limit: input.limit,
-    columns: { isOwner: true },
-    with: { project: { columns: { id: true, name: true } } },
+    columns: { projectId: true, isOwner: true },
   });
+  const ownership = new Map(access.map((row) => [row.projectId, row.isOwner]));
+  const projects: { id: string; isOwner: boolean; name: string }[] = [];
 
-  return access
-    .map((row) =>
-      row.project
-        ? { id: row.project.id, isOwner: row.isOwner, name: row.project.name }
-        : null
-    )
-    .filter((row): row is NonNullable<typeof row> => row !== null)
-    .sort((a, b) => a.name.localeCompare(b.name));
-};
+  // Hydrate bounded batches without a relation fan-out over the entire union.
+  for (let offset = 0; offset < access.length; offset += 1000) {
+    const projectIds = access
+      .slice(offset, offset + 1000)
+      .map((row) => row.projectId);
+    const rows = await ctx.orm.query.projects.findMany({
+      where: { id: { in: projectIds } },
+      columns: { id: true, name: true },
+      limit: projectIds.length,
+    });
+    for (const row of rows) {
+      projects.push({
+        id: row.id,
+        name: row.name,
+        isOwner: ownership.get(row.id) === true,
+      });
+    }
+  }
 
-/** Drop every access row for a project, without re-deriving. */
-export const clearProjectAccess = async (
-  ctx: ProjectAccessWriteCtx,
-  input: { projectId: string }
-): Promise<void> => {
-  await ctx.orm
-    .delete(projectAccessTable)
-    .where(eq(projectAccessTable.projectId, input.projectId));
+  return projects.sort((a, b) => a.name.localeCompare(b.name));
 };
 
 /** Drop one user's access row for a project, without re-deriving. */
@@ -283,52 +282,4 @@ export const grantMembershipProjectAccess = async (
 
   await grantProjectAccess(ctx, { project, userId: membership.userId });
   return true;
-};
-
-/**
- * Rebuild every access row in the deployment, for tests.
- *
- * The deploy path is the pair of backfill migrations, which page both tables in
- * the runner's own batches. This walks them in one bounded call each and throws
- * rather than truncating, so a test can never quietly under-backfill and then
- * assert against the short result.
- */
-export const backfillProjectAccess = async (
-  ctx: ProjectAccessWriteCtx,
-  options?: { limit?: number }
-): Promise<number> => {
-  const limit = options?.limit ?? 1000;
-
-  // Read one past the bound so a deployment that holds exactly `limit` rows is
-  // not mistaken for a truncated read.
-  const projects = await ctx.orm.query.projects.findMany({ limit: limit + 1 });
-  if (projects.length > limit) {
-    throw new Error(
-      `backfillProjectAccess: more than ${limit} projects. Raise limit, or use the backfill migrations.`
-    );
-  }
-
-  let written = 0;
-  for (const project of projects) {
-    await grantOwnerProjectAccess(ctx, project);
-    written += 1;
-  }
-
-  const memberships = await ctx.orm.query.projectMembers.findMany({
-    limit: limit + 1,
-    columns: { projectId: true, userId: true },
-  });
-  if (memberships.length > limit) {
-    throw new Error(
-      `backfillProjectAccess: more than ${limit} memberships. Raise limit, or use the backfill migrations.`
-    );
-  }
-
-  for (const membership of memberships) {
-    if (await grantMembershipProjectAccess(ctx, membership)) {
-      written += 1;
-    }
-  }
-
-  return written;
 };

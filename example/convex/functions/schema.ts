@@ -396,10 +396,8 @@ export const projectAccessTable = convexTable(
      * field. A `timestamp()` here would be redundant: the value is only ever
      * compared, never read back as a date.
      *
-     * Millisecond resolution. `_creationTime` carries a sub-millisecond
-     * fraction, but it reaches this column through a hydrated `Date`, which
-     * cannot hold it, so two projects created in the same millisecond share a
-     * key and are separated by the access row's own creation order.
+     * Preserve raw `_creationTime`, including its fractional milliseconds.
+     * Hydrated Dates would reorder same-millisecond projects after backfill.
      */
     projectCreatedAt: integer().notNull(),
     /** Mirrors `projects.archived` so the toggle is part of the index range. */

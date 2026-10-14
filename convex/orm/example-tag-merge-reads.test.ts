@@ -7,7 +7,12 @@ import schema, {
   todoTagsTable,
   userTable,
 } from '../../example/convex/functions/schema';
-import { convexTest, countDocumentReads, withOrm } from '../setup.testing';
+import {
+  convexTest,
+  countDocumentReads,
+  withExampleEnv,
+  withOrm,
+} from '../setup.testing';
 
 /**
  * `countDocumentReads` swaps `db.query`/`db.get`, and the ORM binds both when it
@@ -20,7 +25,7 @@ const withCountedOrmCtx = async (
   run: (
     ctx: {
       db: Parameters<typeof countDocumentReads>[0]['db'];
-      orm: ReturnType<typeof withOrm<any, typeof schema>>['orm'];
+      orm: OrmWriter<typeof schema>;
     },
     reads: ReturnType<typeof countDocumentReads>
   ) => Promise<void>
@@ -31,37 +36,6 @@ const withCountedOrmCtx = async (
     const ctx = withOrm(baseCtx, schema);
     await run(ctx, reads);
   });
-};
-
-const EXAMPLE_ENV_DEFAULTS = {
-  ADMIN: 'admin@example.com',
-  BETTER_AUTH_SECRET: 'test-secret',
-  GITHUB_CLIENT_ID: 'github-client-id',
-  GITHUB_CLIENT_SECRET: 'github-client-secret',
-  GOOGLE_CLIENT_ID: 'google-client-id',
-  GOOGLE_CLIENT_SECRET: 'google-client-secret',
-} as const;
-
-const withExampleEnv = async (run: () => Promise<void>) => {
-  const original = Object.fromEntries(
-    Object.keys(EXAMPLE_ENV_DEFAULTS).map((key) => [key, process.env[key]])
-  );
-
-  for (const [key, value] of Object.entries(EXAMPLE_ENV_DEFAULTS)) {
-    process.env[key] = value;
-  }
-
-  try {
-    await run();
-  } finally {
-    for (const [key, value] of Object.entries(original)) {
-      if (typeof value === 'string') {
-        process.env[key] = value;
-      } else {
-        delete process.env[key];
-      }
-    }
-  }
 };
 
 const TARGET_TAG_TODOS = 40;

@@ -14,31 +14,10 @@ const writeCtx = (ctx: { orm: unknown }): ProjectAccessWriteCtx =>
   ctx as ProjectAccessWriteCtx;
 
 /**
- * Populate the owner half of `projectAccess` for data that predates it.
- *
- * `projects.list`, `listForDropdown` and `hasAny` all read the derived table, so
- * on a deployment that already holds projects it starts empty and every one of
- * them returns nothing until this and its `_members` companion have run.
- *
- * Owners here, memberships in the companion migration. Splitting them lets the
- * runner page each source table itself, so neither is bounded by a fixed limit,
- * and it keeps a second `.paginate()` out of a `migrateOne` that already runs
- * inside the runner's own paginated read.
- *
- * `grantProjectAccess` updates an existing row rather than inserting a second
- * one, so re-running is safe.
- *
- * ROLLOUT: `kitcn deploy` pushes the backend first and only then runs migrations
- * (`packages/kitcn/src/cli/commands/deploy.ts` deploys, checks the exit code,
- * and calls `runMigrationFlow` afterwards). So on a deployment that already
- * holds projects there is a window where the new reads are live and this table
- * is still empty or half-filled, and `/projects` looks empty to users who do
- * have projects. It closes as soon as both backfills finish.
- *
- * That window is acceptable here because the example app is re-seedable and its
- * data set is small. An app where it is not should do a proper expand/backfill/
- * contract rollout instead: ship the writes, run the backfill to completion,
- * and only then switch the reads over.
+ * Backfill owners while public reads still use projects and projectMembers.
+ * The companion migration pages memberships separately, so large projects do
+ * not truncate the member half. Complete both migrations on each deployment
+ * before activating the projectAccess readers in PR #452.
  */
 export const migration = defineMigration({
   id: '20260906_022807_backfill_project_access',

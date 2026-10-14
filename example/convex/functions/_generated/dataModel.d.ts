@@ -215,7 +215,7 @@ export type DataModel = {
   aggregate_rank_node: {
     document: {
       aggregate?: null | { count: number; sum: number };
-      items: Array<{ k: null | any; s: number; v: null | any }>;
+      items: Array<{ k: any; s: number; v: any }>;
       subtrees: Array<string>;
       _id: Id<"aggregate_rank_node">;
       _creationTime: number;
@@ -238,6 +238,7 @@ export type DataModel = {
   aggregate_rank_tree: {
     document: {
       aggregateName: string;
+      deletionStack?: null | Array<Id<"aggregate_rank_node">>;
       maxNodeSize: number;
       namespace?: null | any;
       root: Id<"aggregate_rank_node">;
@@ -248,6 +249,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "aggregateName"
+      | "deletionStack"
       | "maxNodeSize"
       | "namespace"
       | "root";
@@ -616,6 +618,41 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  projectAccess: {
+    document: {
+      archived: boolean;
+      createdAt?: number;
+      isOwner: boolean;
+      projectCreatedAt: number;
+      projectId: string;
+      userId: string;
+      _id: Id<"projectAccess">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "archived"
+      | "createdAt"
+      | "isOwner"
+      | "projectCreatedAt"
+      | "projectId"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      projectId: ["projectId", "_creationTime"];
+      userId_archived_projectCreatedAt: [
+        "userId",
+        "archived",
+        "projectCreatedAt",
+        "_creationTime",
+      ];
+      userId_projectId: ["userId", "projectId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   projectMembers: {
     document: {
       createdAt?: number;
@@ -661,7 +698,9 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       archived: ["archived", "_creationTime"];
       isPublic: ["isPublic", "_creationTime"];
+      isPublic_archived: ["isPublic", "archived", "_creationTime"];
       ownerId: ["ownerId", "_creationTime"];
+      ownerId_archived: ["ownerId", "archived", "_creationTime"];
     };
     searchIndexes: {
       search_name_description: {

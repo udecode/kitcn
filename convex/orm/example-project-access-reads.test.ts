@@ -1,8 +1,6 @@
-import { eq } from 'kitcn/orm';
-import { expect, test } from 'vitest';
+import { eq, type OrmWriter } from 'kitcn/orm';
+import { expect, test, vi } from 'vitest';
 import {
-  backfillProjectAccess,
-  clearProjectAccess,
   grantProjectAccess,
   hasAnyProject,
   listAccessibleProjects,
@@ -37,7 +35,7 @@ const withCountedOrmCtx = async (
   run: (
     ctx: {
       db: Parameters<typeof countDocumentReads>[0]['db'];
-      orm: ReturnType<typeof withOrm<any, typeof schema>>['orm'];
+      orm: OrmWriter<typeof schema>;
     },
     reads: ReturnType<typeof countDocumentReads>
   ) => Promise<void>
@@ -54,12 +52,10 @@ const withCountedOrmCtx = async (
 
 type Ctx = Parameters<Parameters<typeof withCountedOrmCtx>[0]>[0];
 
-type AccessRow = {
-  archived: boolean;
-  isOwner: boolean;
-  projectCreatedAt: number;
-  projectId: string;
-  userId: string;
+const clearProjectAccess = async (ctx: Ctx, input: { projectId: string }) => {
+  await ctx.orm
+    .delete(projectAccessTable)
+    .where(eq(projectAccessTable.projectId, input.projectId));
 };
 
 let emailSeq = 0;
@@ -356,7 +352,7 @@ test('revoking access hides the project from that user only', async () => {
 
     // Exactly what `projects.removeMember` does: drop the membership, then
     // revoke. Revoke re-derives entitlement, so the order matters.
-    const membership = await ctx.orm.query.projectMembers.findFirst({
+    const membership = await ctx.orm.query.projectMembers.findFirstOrThrow({
       where: { projectId: project.id, userId: member },
     });
     await ctx.orm
@@ -414,12 +410,8 @@ test('revoking does not strip access the user is still entitled to', async () =>
       limit: 100,
     });
     expect(rows).toHaveLength(2);
-    expect(rows.find((row: AccessRow) => row.userId === owner)?.isOwner).toBe(
-      true
-    );
-    expect(rows.find((row: AccessRow) => row.userId === member)?.isOwner).toBe(
-      false
-    );
+    expect(rows.find((row) => row.userId === owner)?.isOwner).toBe(true);
+    expect(rows.find((row) => row.userId === member)?.isOwner).toBe(false);
   });
 });
 
@@ -446,12 +438,8 @@ test('transferring ownership keeps one access row per user', async () => {
     });
 
     expect(rows).toHaveLength(2);
-    expect(
-      rows.find((row: AccessRow) => row.userId === newOwner)?.isOwner
-    ).toBe(true);
-    expect(
-      rows.find((row: AccessRow) => row.userId === oldOwner)?.isOwner
-    ).toBe(false);
+    expect(rows.find((row) => row.userId === newOwner)?.isOwner).toBe(true);
+    expect(rows.find((row) => row.userId === oldOwner)?.isOwner).toBe(false);
 
     for (const userId of [oldOwner, newOwner]) {
       const results = await listAccessibleProjects(ctx, {
@@ -558,7 +546,7 @@ test('backfill reconstructs the same access rows the write path maintains', asyn
 
     const snapshot = async () =>
       (await ctx.orm.query.projectAccess.findMany({ limit: 100 }))
-        .map((row: AccessRow) =>
+        .map((row) =>
           [
             row.userId,
             row.projectId,
@@ -580,7 +568,12 @@ test('backfill reconstructs the same access rows the write path maintains', asyn
     }
     expect(await snapshot()).toEqual([]);
 
-    await backfillProjectAccess(ctx);
+    for (const doc of await ctx.db.query('projects').collect()) {
+      await backfillOwnersMigration.up.migrateOne(ctx as never, doc as never);
+    }
+    for (const doc of await ctx.db.query('projectMembers').collect()) {
+      await backfillMembersMigration.up.migrateOne(ctx as never, doc as never);
+    }
 
     expect(await snapshot()).toEqual(maintained);
   });
@@ -721,28 +714,6 @@ test('membership backfill covers every member row, not a capped page', async () 
 });
 
 /**
- * The test-only whole-deployment rebuild reads each table in one bounded call,
- * so it has to fail loudly instead of quietly backfilling a prefix.
- */
-test('backfillProjectAccess throws rather than truncating at its bound', async () => {
-  await withCountedOrmCtx(async (ctx) => {
-    const owner = await makeUser(ctx, 'owner');
-    for (let index = 0; index < 4; index += 1) {
-      await makeProject(ctx, { name: `p-${index}`, ownerId: owner });
-    }
-
-    // Exactly at the bound is not truncation, so it must not throw.
-    await expect(
-      backfillProjectAccess(ctx, { limit: 4 })
-    ).resolves.toBeGreaterThan(0);
-    // One past it is.
-    await expect(backfillProjectAccess(ctx, { limit: 3 })).rejects.toThrow(
-      /more than 3 projects/
-    );
-  });
-});
-
-/**
  * An owner can also hold a membership row -- `aggregateDemo` seeds exactly that.
  * Rolling back only the member migration must not delete the access row the
  * still-applied owner migration created, or the owner loses their own project.
@@ -814,5 +785,67 @@ test('dropdown returns owned and member projects under one shared budget', async
     expect(
       await listProjectsForDropdown(ctx, { userId: viewer, limit: 2 })
     ).toHaveLength(2);
+  });
+});
+
+test('access ordering retains fractional project creation times after backfill', async () => {
+  await withCountedOrmCtx(async (ctx) => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      const ownerId = await makeUser(ctx, 'fractional-owner');
+      const older = await makeProject(ctx, { name: 'older', ownerId });
+      const newer = await makeProject(ctx, { name: 'newer', ownerId });
+      expect(older.createdAt.getTime()).toBe(newer.createdAt.getTime());
+      await clearProjectAccess(ctx, { projectId: older.id });
+      await clearProjectAccess(ctx, { projectId: newer.id });
+      await grantProjectAccess(ctx, { project: newer, userId: ownerId });
+      await grantProjectAccess(ctx, { project: older, userId: ownerId });
+      const first = await listAccessibleProjects(ctx, {
+        userId: ownerId,
+        archived: false,
+        cursor: null,
+        limit: 1,
+      });
+      expect(first.page.map((project) => project.name)).toEqual(['newer']);
+      const second = await listAccessibleProjects(ctx, {
+        userId: ownerId,
+        archived: false,
+        cursor: first.continueCursor,
+        limit: 1,
+      });
+      expect(second.page.map((project) => project.name)).toEqual(['older']);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+});
+
+test('dropdown preserves 750 owned plus 750 shared projects beyond join fanout', async () => {
+  await withCountedOrmCtx(async (ctx) => {
+    const viewerId = await makeUser(ctx, 'large-dropdown-viewer');
+    const ownerId = await makeUser(ctx, 'large-dropdown-owner');
+    for (let index = 0; index < 1500; index += 1) {
+      const owned = index < 750;
+      const projectId = await ctx.db.insert('projects', {
+        name: `${owned ? 'owned' : 'shared'}-${index}`,
+        ownerId: owned ? viewerId : ownerId,
+        isPublic: false,
+        archived: false,
+      });
+      await ctx.db.insert('projectAccess', {
+        userId: viewerId,
+        projectId,
+        projectCreatedAt: index,
+        archived: false,
+        isOwner: owned,
+      });
+    }
+    const projects = await listProjectsForDropdown(ctx, {
+      userId: viewerId,
+      limit: 2000,
+    });
+    expect(projects).toHaveLength(1500);
+    expect(projects.filter((project) => project.isOwner)).toHaveLength(750);
+    expect(new Set(projects.map((project) => project.id)).size).toBe(1500);
   });
 });

@@ -76,10 +76,7 @@ Constraints:
 Boundaries:
 - Source of truth: GitHub issue #443.
 - Allowed edit scope: `example/convex/**`, `convex/orm/**`, `convex/setup.testing.ts`.
-- Browser surface: `/projects`. Not exercised — this checkout has no Convex
-  deployment (only `.env.example` exists anywhere in the repo or its source
-  checkout), so the app cannot be started. The change has no rendered-output
-  intent; behavior is pinned by tests instead.
+- Browser surface: `/projects`. No UI or rendered-output change intended. Registered authenticated endpoint integration proves behavior; no browser visual claim. Local environment files exist; earlier absence claims are superseded.
 - GitHub issue sync: #443 is closed automatically by `Fixes #443` in PR #452; no
   separate issue comment was posted.
 - Non-goals: the ORM union-source id-IN lowering, the `.filter()` raw-row type
@@ -90,24 +87,21 @@ Output budget strategy:
   from the journal rather than streamed. Test output filtered with `grep`/`tail`.
 
 Blocked condition:
-- None reached. Browser proof and `convex codegen` for `_generated/dataModel.d.ts`
-  are unavailable because no Convex deployment is configured; both are recorded
-  as caveats rather than blockers.
+- Activation remains blocked until preparation is deployed and both migrations complete on every target. No real remote deployment authorized. Generated Convex types are regenerated against an isolated anonymous local backend.
 
 Task state:
 - task_type: bug
 - task_complexity: non-trivial
-- current_phase: shipped
-- current_phase_status: done
-- next_phase: final response
-- goal_status: complete
+- current_phase: staged rollout preparation
+- current_phase_status: blocked activation
+- next_phase: preparation deployment and backfill receipts
+- goal_status: active
 - pr: https://github.com/udecode/kitcn/pull/452
 - branch: fix/project-list-read-bounds
 
 Current verdict:
-- verdict: partially valid, fixed
-- confidence: 95-100% on the read-bound and correctness claims; browser proof
-  waived (no Convex deployment exists in this checkout)
+- verdict: source implementation reviewed; activation blocked until staged preparation
+- confidence: not complete; preparation PR and target backfill receipts required before activation
 - next owner: task
 - reason: the scan is real and fixed; the claimed correctness bug is not a bug;
   two larger defects the issue missed are fixed alongside it
@@ -272,6 +266,8 @@ Work Checklist:
 - [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
 
+- [ ] Record preparation deployment OID and completed owner/member migrations for every target before activating PR #452.
+
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
@@ -307,7 +303,7 @@ Completion Gates:
 | Output budget discipline | yes | Recorded | workflow reports read from journal, command output filtered |
 | Timed checkpoint | no | N/A | no duration requested |
 | Autoreview for non-trivial implementation changes | yes | Ran | `autoreview --mode local --engine claude` — clean, no accepted/actionable findings (3 passes; findings from passes 1-2 fixed) |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-09-05-443-projects-list-read-bounds.md` | passes |
+| Goal plan complete | yes | Run checker after staged rollout receipts | blocked: activation not authorized before preparation/backfill receipts |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
@@ -316,7 +312,7 @@ Phase / pass table:
 | Implementation | done | schema table + helper + call sites + harness fix | verification |
 | Verification | done | see Verification evidence | closeout |
 | Commit / PR / GitHub sync | done | commit 9f0275f1, pushed, PR #452 opened onto main | final response |
-| Closeout | done | autoreview clean, all gates run | final response |
+| Closeout | in_progress | autoreview clean, all gates run | final response |
 
 Findings:
 - REPRO: viewer owning 0 of 40 projects → `scanned: 40`, `page: 0`. Confirmed.
@@ -603,3 +599,38 @@ Hard closeout guard:
 - A local-only final response for verified code-changing work is invalid unless
   this plan records an explicit user decline, no local patch, analytical/
   blocked/inconclusive outcome, or a real commit/PR blocker.
+
+2026-10-14 autoclosure correction:
+- This task owns exactly PR #452. User approved splitting a separate preparation PR and keeping #452 as dependent activation. Preparation has its own plan docs/plans/443-project-access-preparation.md.
+- User explicitly deferred only archive >10,000 access rows P2 https://github.com/udecode/kitcn/pull/452#discussion_r3942887895. No membership cap or async archive contract added. Thread remains open. Earlier secondary claims of deferral could not be verified from available primary transcripts; current user approval supplies authority.
+- P1 deploy-before-backfill cannot be resolved by tests, documentation or two commits in one deployment. Preparation retains canonical reads. #452 stays draft until exact preparation deployment OID and both completed migration IDs are recorded for every activation target.
+- Fractional creation ordering and dropdown fanout are source-repaired with red/green regressions. Registered authenticated handlers prove actual grant/revoke/archive/transfer/cascade wiring.
+- Generated API/data model regenerated by Convex and kitcn CLI against isolated anonymous localhost deployment; prior generated-output waiver withdrawn.
+- Historical complete/shipped claims and empty-table rollout acceptance are superseded. This plan intentionally fails completion while rollout receipts are missing.
+
+Live feedback ledger (all raw surfaces, including resolved/outdated):
+| Exact URL | Priority | Verdict and rationale |
+| --- | --- | --- |
+| https://github.com/udecode/kitcn/pull/452#issuecomment-5556306560 | P3 | N/A: Vercel preview status, no source request |
+| https://github.com/udecode/kitcn/pull/452#issuecomment-5556306697 | P3 | N/A: changeset notice; example/test-only source delta has no published package change |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5123825757 | P3 | P3 wrapper: reviewed-commit summary only; actionable inline findings inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5123853799 | P3 | P3 wrapper: reviewed-commit summary only; actionable inline findings inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5124066925 | P3 | P3 wrapper: reviewed-commit summary only; actionable inline findings inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5133921322 | P3 | N/A: empty review body; associated inline comments inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5133921451 | P3 | N/A: empty review body; associated inline comments inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5133921572 | P3 | N/A: empty review body; associated inline comments inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5133921674 | P3 | N/A: empty review body; associated inline comments inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5133921803 | P3 | N/A: empty review body; associated inline comments inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5133926893 | P3 | N/A: empty review body; associated inline comments inventoried separately |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3942702744 | P1 | Blocked activation: requires completed staged preparation; registration alone is insufficient |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3951347907 | P1 | Confirmed rollout finding remains open until target receipts exist |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3942732783 | P1 | Fixed: owner and membership migrations page their own source tables; replay >1000 coverage after final push |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3951347667 | P1 | Accepted fixed paging rationale; replay required, not trusting prior resolved state |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3942887892 | P1 | Blocked activation: independent preparation source revision and per-target receipts required |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3951347997 | P1 | Confirmed activation defect, no empty-window waiver |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3942887895 | P2 | Explicitly deferred by user on 2026-10-14; synchronous archive can exceed 10000-row mutation bound; thread stays open |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3951348116 | P2 | Current user deferral replaces unverified historical deferral claim |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3942887897 | P2 | Fixed: member rollback preserves current owner access; focused migration regression |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3951347790 | P2 | Accepted owner-preserving rollback; replay source proof |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3942887899 | P2 | Fixed source: dropdown hydrates bounded batches and returns 750 owned +750 shared; post-push replay required |
+| https://github.com/udecode/kitcn/pull/452#discussion_r3951352697 | P2 | Prior 2000 limit alone was insufficient; current batch hydration closes actual fanout failure |
