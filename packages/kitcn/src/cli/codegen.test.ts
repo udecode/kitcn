@@ -5,7 +5,12 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getFunctionName } from 'convex/server';
 import { createDisabledAuthRuntime } from '../auth/generated-contract-disabled';
-import { generateMeta, getConvexConfig } from './codegen';
+import {
+  generateMeta,
+  getConvexConfig,
+  writeRuntimePlaceholder,
+} from './codegen';
+import { createProjectJiti } from './utils/project-jiti';
 
 const RESERVED_HTTP_NAMESPACE_ERROR = /root "http" namespace is reserved/i;
 const RESERVED_RUNTIME_NAMESPACE_ERROR = /reserved runtime caller namespace/i;
@@ -171,6 +176,277 @@ function writeRealOrmFixture(dir: string) {
   );
   fs.symlinkSync(sourceRoot, path.join(kitcnDir, 'src'), 'dir');
   fs.symlinkSync(repoNodeModules, path.join(kitcnDir, 'node_modules'), 'dir');
+}
+
+function writeRuntimeImportFixture(dir: string) {
+  const functionsDir = path.join(dir, 'convex');
+  writeScopedFixture(dir);
+  const schemaPath = path.join(functionsDir, 'schema.ts');
+  writeFile(
+    schemaPath,
+    `import { createTodosCaller } from './generated/todos.runtime';
+void createTodosCaller;
+${fs.readFileSync(schemaPath, 'utf8')}`
+  );
+  writeFile(
+    path.join(functionsDir, 'todos.ts'),
+    `
+    import { createApiLeaf } from 'kitcn/server';
+    import { createTodosCaller } from './generated/todos.runtime';
+    void createApiLeaf;
+    void createTodosCaller;
+
+    export const list = {
+      _crpcMeta: {
+        type: 'query',
+      },
+    };
+    `.trim()
+  );
+  writeFile(
+    path.join(functionsDir, 'model', 'helpers.ts'),
+    'export const helper = 1;'
+  );
+  writeFile(path.join(functionsDir, '_generated', 'server.js'), 'export {};');
+}
+
+type RuntimeMapCase = {
+  name: string;
+  packageJson?: Record<string, unknown>;
+  specifier: string;
+  declarationFile?: boolean;
+  importer?: string;
+  only?: 'bun' | 'node';
+  outcome?: 'Cannot find module';
+  workspaceImporter?: 'linked' | 'hoisted';
+};
+
+const TMP_IS_CASE_INSENSITIVE = (() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitcn-case-'));
+  try {
+    return fs.existsSync(
+      path.join(path.dirname(dir), path.basename(dir).toUpperCase())
+    );
+  } finally {
+    fs.rmSync(dir, { force: true, recursive: true });
+  }
+})();
+
+const TODOS_RUNTIME_TARGET = './convex/generated/todos.runtime.ts';
+
+const RUNTIME_MAP_CASES: RuntimeMapCase[] = [
+  {
+    name: '#imports exact',
+    packageJson: { imports: { '#todos-runtime': TODOS_RUNTIME_TARGET } },
+    specifier: '#todos-runtime',
+  },
+  {
+    name: '#imports pattern with nested node condition',
+    packageJson: {
+      imports: {
+        '#generated/*': {
+          node: {
+            import: './convex/generated/*.ts',
+            require: './convex/generated/*.ts',
+          },
+          default: './missing/*.ts',
+        },
+      },
+    },
+    specifier: '#generated/todos.runtime',
+  },
+  {
+    name: 'self-reference subpath pattern',
+    packageJson: { exports: { './convex/*': './convex/*.ts' } },
+    specifier: 'runtime-map-app/convex/generated/todos.runtime',
+  },
+  {
+    name: 'self-reference equal-prefix patterns',
+    packageJson: {
+      exports: {
+        './gen/*': './missing/*',
+        './gen/*.runtime': './convex/generated/*.runtime.ts',
+      },
+    },
+    specifier: 'runtime-map-app/gen/todos.runtime',
+  },
+  {
+    name: 'self-reference root string',
+    packageJson: { exports: TODOS_RUNTIME_TARGET },
+    specifier: 'runtime-map-app',
+  },
+  {
+    name: 'self-reference root array',
+    packageJson: { exports: [TODOS_RUNTIME_TARGET] },
+    specifier: 'runtime-map-app',
+  },
+  {
+    name: 'self-reference root conditions',
+    packageJson: {
+      exports: { node: TODOS_RUNTIME_TARGET, default: './missing.ts' },
+    },
+    specifier: 'runtime-map-app',
+  },
+  {
+    name: 'workspace package exports',
+    packageJson: { exports: { './convex/*': './convex/*.ts' } },
+    specifier: 'runtime-map-app/convex/generated/todos.runtime',
+    workspaceImporter: 'linked',
+  },
+  {
+    name: 'hoisted workspace package exports',
+    packageJson: { exports: { './convex/*': './convex/*.ts' } },
+    specifier: 'runtime-map-app/convex/generated/todos.runtime',
+    workspaceImporter: 'hoisted',
+  },
+  {
+    name: 'tsconfig paths',
+    specifier: '@convex/generated/todos.runtime',
+  },
+  {
+    name: 'types condition with an existing declaration',
+    declarationFile: true,
+    packageJson: {
+      imports: {
+        '#typed-runtime': {
+          types: './convex/generated/todos.runtime.d.ts',
+          default: TODOS_RUNTIME_TARGET,
+        },
+      },
+    },
+    specifier: '#typed-runtime',
+  },
+  {
+    name: 'missing default ahead of require stays selected',
+    packageJson: {
+      imports: {
+        '#first-default': {
+          default: './missing.ts',
+          require: TODOS_RUNTIME_TARGET,
+        },
+      },
+    },
+    specifier: '#first-default',
+    outcome: 'Cannot find module',
+  },
+  {
+    name: 'missing first array entry stays selected',
+    packageJson: {
+      imports: { '#first-entry': ['./missing.ts', TODOS_RUNTIME_TARGET] },
+    },
+    specifier: '#first-entry',
+    outcome: 'Cannot find module',
+  },
+  {
+    name: 'bun condition',
+    only: 'bun',
+    packageJson: {
+      imports: {
+        '#bun-runtime': { bun: TODOS_RUNTIME_TARGET, default: './missing.ts' },
+      },
+    },
+    specifier: '#bun-runtime',
+  },
+  {
+    name: 'module-sync condition',
+    only: 'node',
+    packageJson: {
+      imports: {
+        '#sync-runtime': {
+          'module-sync': TODOS_RUNTIME_TARGET,
+          default: './missing.ts',
+        },
+      },
+    },
+    specifier: '#sync-runtime',
+  },
+  {
+    name: '.ts target under a missing directory',
+    importer: 'model/todos.ts',
+    packageJson: {
+      imports: {
+        '#model-runtime': './convex/generated/model/todos.runtime.ts',
+      },
+    },
+    specifier: '#model-runtime',
+  },
+  {
+    name: '.js target under a missing directory',
+    only: 'bun',
+    importer: 'model/todos.ts',
+    packageJson: {
+      imports: {
+        '#model-runtime': './convex/generated/model/todos.runtime.js',
+      },
+    },
+    specifier: '#model-runtime',
+  },
+];
+
+const MISSING_MODULE_MESSAGE_RE = /Cannot find (?:module|package)/;
+const toRuntimeMapOutcome = (outcome: string) =>
+  MISSING_MODULE_MESSAGE_RE.test(outcome) ? 'Cannot find module' : outcome;
+
+const runtimeMapCasesFor = (runtime: 'bun' | 'node') =>
+  RUNTIME_MAP_CASES.filter(({ only }) => !only || only === runtime);
+
+const expectedRuntimeMapOutcomes = (cases: RuntimeMapCase[]) =>
+  Object.fromEntries(cases.map(({ name, outcome }) => [name, outcome ?? 'ok']));
+
+function writeRuntimeMapFixture(dir: string, mapCase: RuntimeMapCase) {
+  writeScopedFixture(dir);
+  writeFile(
+    path.join(dir, 'package.json'),
+    JSON.stringify({
+      name: 'runtime-map-app',
+      type: 'module',
+      ...mapCase.packageJson,
+    })
+  );
+  writeFile(
+    path.join(dir, 'tsconfig.json'),
+    JSON.stringify({
+      compilerOptions: { baseUrl: '.', paths: { '@convex/*': ['./convex/*'] } },
+    })
+  );
+  if (mapCase.declarationFile) {
+    writeFile(
+      path.join(dir, 'convex', 'generated', 'todos.runtime.d.ts'),
+      'export declare function createTodosCaller(ctx: unknown): unknown;'
+    );
+  }
+  let specifier = mapCase.specifier;
+  if (mapCase.workspaceImporter) {
+    const helperDir = path.join(dir, 'packages', 'helper');
+    writeFile(
+      path.join(helperDir, 'package.json'),
+      JSON.stringify({ name: 'helper', type: 'module' })
+    );
+    writeFile(
+      path.join(helperDir, 'index.ts'),
+      `export { createTodosCaller } from '${specifier}';`
+    );
+    const linkDir =
+      mapCase.workspaceImporter === 'linked'
+        ? path.join(helperDir, 'node_modules')
+        : path.join(dir, 'node_modules');
+    fs.mkdirSync(linkDir, { recursive: true });
+    fs.symlinkSync(dir, path.join(linkDir, 'runtime-map-app'));
+    specifier = '../packages/helper/index';
+  }
+  writeFile(
+    path.join(dir, 'convex', mapCase.importer ?? 'todos.ts'),
+    `
+    import * as runtime from '${specifier}';
+    void runtime;
+
+    export const list = {
+      _crpcMeta: {
+        type: 'query',
+      },
+    };
+    `.trim()
+  );
 }
 
 describe('cli/codegen', () => {
@@ -2697,6 +2973,420 @@ export { httpAction, internalMutation };
     } finally {
       process.chdir(oldCwd);
     }
+  });
+
+  test('generateMeta never writes temporary runtime files into the functions dir', async () => {
+    const dir = fs.realpathSync(mkTempDir());
+    const oldCwd = process.cwd();
+    const functionsDir = path.join(dir, 'convex');
+    const inFunctionsDir = (targets: unknown[]) =>
+      targets
+        .map((target) => path.resolve(String(target)))
+        .filter((target) => target.startsWith(`${functionsDir}${path.sep}`));
+    const writeSpy = vi.spyOn(fs, 'writeFileSync');
+    const rmSync = fs.rmSync;
+    const removed: string[] = [];
+    const rmSpy = vi
+      .spyOn(fs, 'rmSync')
+      .mockImplementation((target, options) => {
+        if (fs.existsSync(target)) {
+          removed.push(String(target));
+        }
+        rmSync(target, options);
+      });
+
+    process.chdir(dir);
+    try {
+      writeRuntimeImportFixture(dir);
+
+      for (const run of ['bootstrap', 'unchanged']) {
+        writeSpy.mockClear();
+        removed.length = 0;
+        await generateMeta(undefined, { silent: true });
+
+        const written = inFunctionsDir(
+          writeSpy.mock.calls.map(([target]) => target)
+        );
+        expect({ run, removed: inFunctionsDir(removed) }).toEqual({
+          run,
+          removed: [],
+        });
+        expect({
+          run,
+          missing: written.filter((target) => !fs.existsSync(target)),
+        }).toEqual({ run, missing: [] });
+        if (run === 'unchanged') {
+          expect(written).toEqual([]);
+        }
+      }
+
+      expect(
+        fs.existsSync(path.join(functionsDir, 'generated', 'todos.runtime.ts'))
+      ).toBe(true);
+      expect(fs.existsSync(path.join(functionsDir, 'generated', 'model'))).toBe(
+        false
+      );
+    } finally {
+      writeSpy.mockRestore();
+      rmSpy.mockRestore();
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('writeRuntimePlaceholder publishes one complete file across racing processes', async () => {
+    const dir = fs.realpathSync(mkTempDir());
+    const placeholdersDir = path.join(dir, 'placeholders');
+    const goFile = path.join(dir, 'go');
+    const workers = 4;
+    const rounds = 200;
+    const script = `
+      import fs from 'node:fs';
+      import { writeRuntimePlaceholder } from './src/cli/codegen.ts';
+      const [dir, placeholdersDir, goFile, id, rounds] = process.argv.slice(1);
+      fs.writeFileSync(dir + '/ready-' + id, '');
+      while (!fs.existsSync(goFile)) {}
+      for (let round = 0; round < Number(rounds); round++) {
+        const content = '// placeholder ' + round + '\\n' + 'x'.repeat(65536);
+        const file = writeRuntimePlaceholder(placeholdersDir, content);
+        if (fs.readFileSync(file, 'utf8') !== content) {
+          throw new Error('partial placeholder at round ' + round);
+        }
+      }
+    `;
+    const children = Array.from({ length: workers }, (_, id) =>
+      Bun.spawn(
+        [
+          'bun',
+          '-e',
+          script,
+          dir,
+          placeholdersDir,
+          goFile,
+          String(id),
+          String(rounds),
+        ],
+        {
+          cwd: path.join(process.cwd(), 'packages', 'kitcn'),
+          stderr: 'pipe',
+          stdout: 'pipe',
+        }
+      )
+    );
+    const deadline = Date.now() + 30_000;
+    while (
+      fs.readdirSync(dir).filter((file) => file.startsWith('ready-')).length <
+        workers &&
+      Date.now() < deadline
+    ) {
+      await Bun.sleep(10);
+    }
+    fs.writeFileSync(goFile, '');
+    const results = await Promise.all(
+      children.map(async (child) => ({
+        exitCode: await child.exited,
+        stderr: await new Response(child.stderr).text(),
+      }))
+    );
+
+    expect(results).toEqual(
+      Array.from({ length: workers }, () => ({ exitCode: 0, stderr: '' }))
+    );
+    const files = fs.readdirSync(placeholdersDir);
+    expect(files.filter((file) => !file.endsWith('.ts'))).toEqual([]);
+    expect(files).toHaveLength(rounds);
+  });
+
+  test('writeRuntimePlaceholder treats a rename lost to another publisher as success', () => {
+    const dir = fs.realpathSync(mkTempDir());
+    const content = 'export function createTodosCaller() {}\n';
+    const renameSync = fs.renameSync;
+    const writeSpy = vi.spyOn(fs, 'writeFileSync');
+
+    try {
+      for (const code of ['EEXIST', 'EPERM']) {
+        const placeholdersDir = path.join(dir, code);
+        const renameSpy = vi
+          .spyOn(fs, 'renameSync')
+          .mockImplementation((from, to) => {
+            renameSync(from, to);
+            throw Object.assign(new Error(code), { code });
+          });
+        try {
+          const file = writeRuntimePlaceholder(placeholdersDir, content);
+          expect(fs.readFileSync(file, 'utf8')).toBe(content);
+          expect(fs.readdirSync(placeholdersDir)).toEqual([
+            path.basename(file),
+          ]);
+          expect(
+            writeSpy.mock.calls.map(([target]) => String(target))
+          ).not.toContain(file);
+        } finally {
+          renameSpy.mockRestore();
+        }
+      }
+
+      const placeholdersDir = path.join(dir, 'failed');
+      const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+        throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+      });
+      try {
+        expect(() => writeRuntimePlaceholder(placeholdersDir, content)).toThrow(
+          'EPERM'
+        );
+        expect(fs.readdirSync(placeholdersDir)).toEqual([]);
+      } finally {
+        renameSpy.mockRestore();
+      }
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  test('generateMeta reuses placeholders without growing the jiti cache', async () => {
+    const dir = fs.realpathSync(mkTempDir());
+    const oldCwd = process.cwd();
+    const placeholdersDir = path.join(
+      dir,
+      'node_modules',
+      '.kitcn',
+      'runtime-placeholders'
+    );
+
+    process.chdir(dir);
+    try {
+      writeRuntimeImportFixture(dir);
+      const schemaPath = path.join(dir, 'convex', 'schema.ts');
+      writeFile(
+        schemaPath,
+        `import { createModelHelpersCaller } from './generated/model/helpers.runtime';
+void createModelHelpersCaller;
+${fs.readFileSync(schemaPath, 'utf8')}`
+      );
+
+      const jitiCacheDir = createProjectJiti(dir).options.fsCache;
+      if (typeof jitiCacheDir !== 'string') {
+        throw new Error('project Jiti transform cache must be enabled');
+      }
+      const snapshots: Array<{ cache: number; placeholders: string[] }> = [];
+      for (let run = 0; run < 3; run++) {
+        await generateMeta(undefined, { silent: true });
+        snapshots.push({
+          cache: fs.existsSync(jitiCacheDir)
+            ? fs.readdirSync(jitiCacheDir).length
+            : 0,
+          placeholders: fs.readdirSync(placeholdersDir).sort(),
+        });
+      }
+
+      expect(snapshots[2]?.cache).toBeGreaterThan(0);
+      expect(snapshots[2]).toEqual(snapshots[1]);
+      expect(snapshots[2]?.placeholders).toEqual(snapshots[0]?.placeholders);
+      expect(
+        fs.existsSync(
+          path.join(dir, 'convex', 'generated', 'model', 'helpers.runtime.ts')
+        )
+      ).toBe(false);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta resolves missing runtimes through package and tsconfig maps', async () => {
+    const oldCwd = process.cwd();
+    const outcomes: Record<string, string> = {};
+
+    try {
+      for (const mapCase of runtimeMapCasesFor('bun')) {
+        const dir = fs.realpathSync(mkTempDir());
+        process.chdir(dir);
+        writeRuntimeMapFixture(dir, mapCase);
+        outcomes[mapCase.name] = toRuntimeMapOutcome(
+          await generateMeta(undefined, { silent: true }).then(
+            () => 'ok',
+            (error: Error) => error.message
+          )
+        );
+      }
+    } finally {
+      process.chdir(oldCwd);
+    }
+
+    expect(outcomes).toEqual(
+      expectedRuntimeMapOutcomes(runtimeMapCasesFor('bun'))
+    );
+  });
+
+  test('generateMeta resolves missing runtimes through package and tsconfig maps on node', () => {
+    const cases = runtimeMapCasesFor('node');
+    const dirs = cases.map((mapCase) => {
+      const dir = fs.realpathSync(mkTempDir());
+      writeRuntimeMapFixture(dir, mapCase);
+      return dir;
+    });
+
+    const result = Bun.spawnSync(
+      [
+        'node',
+        '--import',
+        'jiti/register',
+        '-e',
+        `const { default: codegen } = await import('./src/cli/codegen.ts');
+        const outcomes = [];
+        for (const dir of process.argv.slice(1)) {
+          process.chdir(dir);
+          outcomes.push(await codegen.generateMeta(undefined, { silent: true }).then(
+            () => 'ok',
+            (error) => error.message
+          ));
+        }
+        console.log(JSON.stringify(outcomes));`,
+        ...dirs,
+      ],
+      {
+        cwd: path.join(process.cwd(), 'packages', 'kitcn'),
+        stderr: 'pipe',
+        stdout: 'pipe',
+      }
+    );
+
+    expect(result.stderr.toString()).toBe('');
+    const outcomes = JSON.parse(result.stdout.toString()) as string[];
+    expect(
+      Object.fromEntries(
+        cases.map((mapCase, index) => [
+          mapCase.name,
+          toRuntimeMapOutcome(outcomes[index] ?? ''),
+        ])
+      )
+    ).toEqual(expectedRuntimeMapOutcomes(cases));
+  });
+
+  test.skipIf(!TMP_IS_CASE_INSENSITIVE)(
+    'generateMeta resolves a case-flipped runtime import on a case-insensitive volume (skipped on case-sensitive volumes)',
+    async () => {
+      const dir = fs.realpathSync(mkTempDir());
+      const oldCwd = process.cwd();
+
+      process.chdir(dir);
+      try {
+        writeScopedFixture(dir);
+        writeFile(
+          path.join(dir, 'convex', 'todos.ts'),
+          `
+          import * as runtime from './generated/TODOS.runtime';
+          void runtime;
+
+          export const list = {
+            _crpcMeta: {
+              type: 'query',
+            },
+          };
+          `.trim()
+        );
+
+        await expect(
+          generateMeta(undefined, { silent: true })
+        ).resolves.toBeUndefined();
+      } finally {
+        process.chdir(oldCwd);
+      }
+    }
+  );
+
+  test('generateMeta resolves missing runtimes through a symlinked functions dir', async () => {
+    const dir = fs.realpathSync(mkTempDir());
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      fs.mkdirSync(path.join(dir, 'real-convex'));
+      fs.symlinkSync('real-convex', path.join(dir, 'convex'));
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'helper.ts'),
+        `
+        import { createTodosCaller } from '../generated/todos.runtime';
+        export const helper = createTodosCaller;
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', 'todos.ts'),
+        `
+        import { helper } from './lib/helper';
+        void helper;
+
+        export const list = {
+          _crpcMeta: {
+            type: 'query',
+          },
+        };
+        `.trim()
+      );
+
+      await expect(
+        generateMeta(undefined, { silent: true })
+      ).resolves.toBeUndefined();
+      expect(
+        fs.existsSync(
+          path.join(dir, 'real-convex', 'generated', 'todos.runtime.ts')
+        )
+      ).toBe(true);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta keeps an existing runtime imported with a .js extension on node', () => {
+    const dir = fs.realpathSync(mkTempDir());
+    writeScopedFixture(dir);
+    writeFile(
+      path.join(dir, 'convex', '_generated', 'server.js'),
+      'export {};'
+    );
+    writeFile(
+      path.join(dir, 'convex', 'generated', 'todos.runtime.ts'),
+      `
+      export const marker = true;
+      export function createTodosCaller() {}
+      export function createTodosHandler() {}
+      `.trim()
+    );
+    writeFile(
+      path.join(dir, 'convex', 'todos.ts'),
+      `
+      import * as runtime from './generated/todos.runtime.js';
+      if (!('marker' in runtime)) {
+        throw new Error('placeholder shadowed the real runtime');
+      }
+
+      export const list = {
+        _crpcMeta: {
+          type: 'query',
+        },
+      };
+      `.trim()
+    );
+
+    const result = Bun.spawnSync(
+      [
+        'node',
+        '--import',
+        'jiti/register',
+        '-e',
+        'const { default: codegen } = await import("./src/cli/codegen.ts"); process.chdir(process.argv[1]); await codegen.generateMeta(undefined, { silent: true });',
+        dir,
+      ],
+      {
+        cwd: path.join(process.cwd(), 'packages', 'kitcn'),
+        stderr: 'pipe',
+        stdout: 'pipe',
+      }
+    );
+
+    expect({
+      exitCode: result.exitCode,
+      stderr: result.stderr.toString(),
+    }).toEqual({ exitCode: 0, stderr: '' });
   });
 
   test('generateMeta rejects dedicated triggers file exports', async () => {

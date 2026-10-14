@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getSchemaRelations, getSchemaTriggers } from '../orm/schema';
@@ -14,8 +14,10 @@ import {
 import { CRPC_BUILDER_STUB_SOURCE } from './utils/crpc-builder-stub.js';
 import { logger } from './utils/logger.js';
 import {
+  createMissingModuleResolver,
   createProjectJiti,
   getProjectServerParserShimPath,
+  registerMissingModuleFallback,
 } from './utils/project-jiti.js';
 import { schemaDeclaresAggregateIndexes } from './utils/schema-tables.js';
 
@@ -955,8 +957,74 @@ export function ${handlerExportName}(_ctx: unknown) {
 `;
 }
 
-function ensureGeneratedRuntimePlaceholders(
-  fileCache: CodegenFileCache,
+const RUNTIME_IMPORT_EXTENSION_RE = /\.[cm]?[jt]sx?$/;
+const RUNTIME_SOURCE_EXTENSIONS = [
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.mjs',
+  '.cjs',
+];
+
+function isCaseInsensitiveDir(dir: string): boolean {
+  const name = path.basename(dir);
+  const flipped = [...name]
+    .map((char) =>
+      char === char.toLowerCase() ? char.toUpperCase() : char.toLowerCase()
+    )
+    .join('');
+  return (
+    flipped !== name && fs.existsSync(path.join(path.dirname(dir), flipped))
+  );
+}
+
+function toCanonicalPath(filePath: string): string {
+  const missingSegments: string[] = [];
+  let existing = filePath;
+  while (!fs.existsSync(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) {
+      return filePath;
+    }
+    missingSegments.unshift(path.basename(existing));
+    existing = parent;
+  }
+  return path.join(fs.realpathSync(existing), ...missingSegments);
+}
+
+export function writeRuntimePlaceholder(
+  placeholdersDir: string,
+  content: string
+): string {
+  const placeholderFile = path.join(
+    placeholdersDir,
+    `${createHash('sha256').update(content).digest('hex').slice(0, 16)}.ts`
+  );
+  if (fs.existsSync(placeholderFile)) {
+    return placeholderFile;
+  }
+  fs.mkdirSync(placeholdersDir, { recursive: true });
+  const tempFile = `${placeholderFile}.${process.pid}-${randomUUID()}.tmp`;
+  fs.writeFileSync(tempFile, content);
+  try {
+    fs.renameSync(tempFile, placeholderFile);
+  } catch (error) {
+    fs.rmSync(tempFile, { force: true });
+    if (!fs.existsSync(placeholderFile)) {
+      throw error;
+    }
+  }
+  return placeholderFile;
+}
+
+/**
+ * Missing runtimes resolve to content-addressed placeholders under
+ * `node_modules/.kitcn`, never inside the functions dir, where a co-running
+ * `convex dev` would redeploy.
+ */
+function registerRuntimePlaceholders(
   functionsDir: string,
   moduleNames: string[],
   runtimeExportNames: ReadonlyMap<
@@ -966,27 +1034,60 @@ function ensureGeneratedRuntimePlaceholders(
       handlerExportName: string;
     }
   >
-): string[] {
-  const createdPlaceholderFiles: string[] = [];
-  for (const moduleName of moduleNames) {
-    const runtimeOutputFile = getGeneratedRuntimeOutputFile(
-      functionsDir,
-      moduleName
-    );
-    if (fileCache.read(runtimeOutputFile) !== null) {
-      continue;
+): () => void {
+  const placeholdersDir = path.join(
+    process.cwd(),
+    'node_modules',
+    '.kitcn',
+    'runtime-placeholders'
+  );
+  const canonicalFunctionsDir = fs.realpathSync(functionsDir);
+  const foldCase = isCaseInsensitiveDir(canonicalFunctionsDir)
+    ? (filePath: string) => filePath.toLowerCase()
+    : (filePath: string) => filePath;
+  const moduleNameByRuntimeFile = new Map(
+    moduleNames.map((moduleName) => [
+      foldCase(
+        getGeneratedRuntimeOutputFile(
+          canonicalFunctionsDir,
+          moduleName
+        ).replace(TS_EXTENSION_RE, '')
+      ),
+      moduleName,
+    ])
+  );
+  const resolveBareRequest = createMissingModuleResolver();
+
+  return registerMissingModuleFallback((request, parentFile) => {
+    const parent = parentFile ?? path.join(process.cwd(), 'index.ts');
+    const target =
+      request.startsWith('.') || path.isAbsolute(request)
+        ? path.resolve(path.dirname(parent), request)
+        : resolveBareRequest(request, parent);
+    if (!target) {
+      return;
     }
-    const exportNames =
-      runtimeExportNames.get(moduleName) ??
-      getModuleRuntimeExportNames(moduleName);
-    fs.mkdirSync(path.dirname(runtimeOutputFile), { recursive: true });
-    fileCache.write(
-      runtimeOutputFile,
-      emitGeneratedRuntimePlaceholderFile(exportNames)
+    const runtimeFile = toCanonicalPath(target).replace(
+      RUNTIME_IMPORT_EXTENSION_RE,
+      ''
     );
-    createdPlaceholderFiles.push(runtimeOutputFile);
-  }
-  return createdPlaceholderFiles;
+    const moduleName = moduleNameByRuntimeFile.get(foldCase(runtimeFile));
+    if (
+      moduleName === undefined ||
+      RUNTIME_SOURCE_EXTENSIONS.some((extension) =>
+        fs.existsSync(`${runtimeFile}${extension}`)
+      )
+    ) {
+      return;
+    }
+    return writeRuntimePlaceholder(
+      placeholdersDir,
+      emitGeneratedRuntimePlaceholderFile(
+        runtimeExportNames.get(moduleName) ??
+          getModuleRuntimeExportNames(moduleName)
+      )
+    );
+  });
 }
 
 function listGeneratedRuntimeFiles(functionsDir: string): string[] {
@@ -2257,7 +2358,6 @@ export async function generateMeta(
   const procedureEntries: ProcedureRegistryEntry[] = [];
   const procedureNameLookup: ProcedureNameLookup = {};
   const fatalParseFailures: Array<{ file: string; error: unknown }> = [];
-  let createdRuntimePlaceholders: string[] = [];
   let supportPlaceholderState: GeneratedSupportPlaceholderState = {
     createdFiles: [],
     replacedFiles: [],
@@ -2286,8 +2386,7 @@ export async function generateMeta(
   const schemaRuntimeModules = convexModuleFiles.map((file) =>
     file.replace(TS_EXTENSION_RE, '')
   );
-  const schemaRuntimePlaceholders = ensureGeneratedRuntimePlaceholders(
-    fileCache,
+  const releaseSchemaRuntimePlaceholders = registerRuntimePlaceholders(
     functionsDir,
     schemaRuntimeModules,
     resolveModuleRuntimeExportNames(
@@ -2305,9 +2404,7 @@ export async function generateMeta(
         )
       );
     } finally {
-      for (const schemaRuntimePlaceholder of schemaRuntimePlaceholders) {
-        fileCache.remove(schemaRuntimePlaceholder);
-      }
+      releaseSchemaRuntimePlaceholders();
     }
   })();
   const hasOrmSchemaMetadata = schemaMetadata.hasOrmSchema;
@@ -2388,6 +2485,7 @@ export async function generateMeta(
     // scanner never sees this as a required dashboard variable.
     (globalThis as Record<string, unknown>).__KITCN_CODEGEN__ = true;
 
+    let releaseRuntimePlaceholders = () => {};
     try {
       const jitiInstance = getSharedJitiInstance();
       // Resolved once instead of once per parsed module.
@@ -2418,8 +2516,7 @@ export async function generateMeta(
         runtimePlaceholderModules,
         normalizedTrimSegments
       );
-      createdRuntimePlaceholders = ensureGeneratedRuntimePlaceholders(
-        fileCache,
+      releaseRuntimePlaceholders = registerRuntimePlaceholders(
         functionsDir,
         runtimePlaceholderModules,
         placeholderRuntimeExportNames
@@ -2502,15 +2599,13 @@ export async function generateMeta(
         }
       }
     } finally {
+      releaseRuntimePlaceholders();
       // biome-ignore lint/performance/noDelete: globalThis property, not a plain object — delete is correct here
       delete (globalThis as Record<string, unknown>).__KITCN_CODEGEN__;
     }
   }
 
   if (fatalParseFailures.length > 0) {
-    for (const createdRuntimePlaceholder of createdRuntimePlaceholders) {
-      fileCache.remove(createdRuntimePlaceholder);
-    }
     for (const createdSupportPlaceholder of supportPlaceholderState.createdFiles) {
       fileCache.remove(createdSupportPlaceholder);
     }
@@ -2766,15 +2861,6 @@ ${optionalTypeExports}
       continue;
     }
     fileCache.remove(existingRuntimeFile);
-  }
-  for (const createdRuntimePlaceholder of createdRuntimePlaceholders) {
-    if (
-      runtimeOutputFileSet.has(createdRuntimePlaceholder) ||
-      runtimeFilesPreservedFromParseFailures.has(createdRuntimePlaceholder)
-    ) {
-      continue;
-    }
-    fileCache.remove(createdRuntimePlaceholder);
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
