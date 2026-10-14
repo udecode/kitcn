@@ -1,5 +1,13 @@
 # kitcn
 
+## 0.33.10
+
+### Patch Changes
+
+- [#480](https://github.com/udecode/kitcn/pull/480) [`7d976bd`](https://github.com/udecode/kitcn/commit/7d976bd84c5012c115f00f7bc89a5f93a37e886d) Thanks [@EfficiencyCorp](https://github.com/EfficiencyCorp)! - ## Patches
+
+  - Fix generated auth modules missing the internal `consumeOne` and `incrementOne` mutations that the Better Auth adapter calls. Rerun `kitcn codegen` and redeploy.
+
 ## 0.33.9
 
 ### Patch Changes
