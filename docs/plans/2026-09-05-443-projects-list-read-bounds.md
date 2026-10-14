@@ -92,12 +92,12 @@ Blocked condition:
 Task state:
 - task_type: bug
 - task_complexity: non-trivial
-- current_phase: staged rollout preparation
-- current_phase_status: blocked activation
-- next_phase: preparation deployment and backfill receipts
+- current_phase: activation source review and proof
+- current_phase_status: blocked deployment receipts
+- next_phase: operator deploys PR487 preparation and records both applied/completed migrations
 - goal_status: active
 - pr: https://github.com/udecode/kitcn/pull/452
-- branch: fix/project-list-read-bounds
+- branch: fix/project-list-read-bounds (local codex/autoclosure-452); base codex/project-access-preparation
 
 Current verdict:
 - verdict: source implementation reviewed; activation blocked until staged preparation
@@ -636,3 +636,25 @@ Live feedback ledger (all raw surfaces, including resolved/outdated):
 | https://github.com/udecode/kitcn/pull/452#discussion_r3951352697 | P2 | Prior 2000 limit alone was insufficient; current batch hydration closes actual fanout failure |
 
 Preparation source is https://github.com/udecode/kitcn/pull/487, dedicated plan docs/plans/443-project-access-preparation.md. PR #452 remains the activation owner and cannot become ready before per-target preparation/backfill receipts.
+
+Activation source closeout (2026-10-14):
+- User approved split and explicitly held activation until deployment receipts. Preparation PR487 is head b555b70406ffb79e486d24e50d36b596f805e6b1 and has verified external receipt https://github.com/udecode/kitcn/pull/487#issuecomment-6169054642.
+- This PR depends on codex/project-access-preparation, replaces only the three canonical readers, and removes the obsolete existence helper/test. Production handler lifecycle now verifies authenticated member list and archive/restore as well as maintained access rows.
+- listAccessibleProjects retains the ORM pagination envelope before replacing page; pageStatus/splitCursor are preserved. No new endCursor protocol added.
+- New independent ownership, types and simplification reviews found no additional source defect in the activation delta. Two rollout P1 findings remain valid until per-target receipts. Archive P2 remains explicitly deferred.
+- Final full bun check and committed-branch autoreview run against activation source before cleanup push; post-push replay covers resolved/outdated P1 migration paging too.
+- No source fallback, readiness flag, membership cap, remote deployment or merge performed.
+- Separate pre-existing ORM native/stream endCursor disagreement is tracked as https://github.com/udecode/kitcn/issues/488; no package change added to this task.
+
+Deployment receipt matrix:
+| Target | Preparation OID | Owner migration applied/completed | Member migration applied/completed | Activation permitted |
+| --- | --- | --- | --- | --- |
+| Not supplied | missing | missing | missing | no; keep draft |
+
+Final source delivery is a cleanup push only. Autoclosure remains incomplete for activation until that matrix is filled from the actual target. Green CI or a clean P0 autoreview cannot waive either rollout P1.
+
+Final source proof checkpoint:
+- Full bun check passed on2026-10-14 at owning root, including lint/types/tests, eight fixture checks, verify and runtime scenarios. Fresh activation focused22 tests pass in three suites.
+- Generated procedure locations regenerated through real Convex/kitcn CLI. Three independent activation source lenses found no additional source defect. Slop delta only reports generated directory fanout; no source rewrite warranted.
+- The completion checker intentionally fails on the missing target-receipt checkbox and open Closeout phase. This is the agreed activation hold, not a source-check failure.
+- Committed-branch autoreview runs next against preparation base; cleanup push cannot resolve rollout findings.
