@@ -276,7 +276,7 @@ function AuthStatus() {
 | Property | Description |
 |----------|-------------|
 | `hasSession` | Has a session token (may not be verified) |
-| `isAuthenticated` | Token exists AND Convex auth verified |
+| `isAuthenticated` | Token exists AND Convex auth verified. With `optimisticAuth`, also `true` for a held, unexpired JWT before Convex confirms it; the server still enforces auth |
 | `isLoading` | Convex auth is still loading |
 
 ### useMaybeAuth
@@ -294,7 +294,7 @@ function Component() {
 
 ### useIsAuth
 
-Check if user is authenticated (server-verified):
+Check if user is authenticated (server-verified; with `optimisticAuth`, also during the optimistic window, while the server still enforces auth):
 
 ```tsx showLineNumbers {1,4}
 import { useIsAuth } from 'kitcn/react';
@@ -396,7 +396,7 @@ function App() {
 
 ### Authenticated
 
-Render children only when server-verified:
+Render children only when server-verified (with `optimisticAuth`, also during the optimistic window):
 
 ```tsx showLineNumbers {1,5-7}
 import { Authenticated } from 'kitcn/react';
@@ -460,6 +460,8 @@ function App() {
       client={convexClient}
       authClient={authClient}
       initialToken={serverToken}
+      optimisticAuth
+      onTokenIdentityChange={() => window.location.reload()}
       onMutationUnauthorized={() => {
         // Custom handler for unauthorized mutations
         openLoginModal();
@@ -483,8 +485,68 @@ function App() {
 | `authClient` | `AuthClient` | Better Auth client instance |
 | `convexQueryClient` | `ConvexQueryClient?` | Shared TanStack Query client bridge |
 | `initialToken` | `string?` | Initial session token (from SSR) |
+| `optimisticAuth` | `boolean?` | Opens auth-bound query gates for a held, unexpired JWT while Convex confirms it. Defaults to `false`. |
+| `onTokenIdentityChange` | `() => void` | Enables the document identity guard. Called after the client is closed when a token changes JWT `sub` or `sessionId`. Reload the document here. |
+| `tokenIdentityBaseline` | `string \| null \| (() => string \| null)` | Optional `sub|sessionId` identity owned by the document. A getter is checked for every token admission. Requires `onTokenIdentityChange`. |
+| `onTokenIdentityAdmitted` | `(token: string) => void` | Called for every decodable token admitted by the identity guard, including cached tokens. Requires `onTokenIdentityChange`. |
 | `onMutationUnauthorized` | `() => void` | Called when mutation is blocked |
 | `onQueryUnauthorized` | `({ queryName }) => void` | Called when query is blocked |
+
+### Optimistic auth and document identity
+
+`optimisticAuth` removes the client-side confirmation wait for a held,
+unexpired JWT. Convex still processes authentication before queries on the
+same connection. An expired, opaque, or refused token never opens the gate.
+The window lasts until the Convex client reports its first auth result; after
+that, for the client's lifetime, the gate follows Convex's confirmed state.
+Use one `optimisticAuth` setting for every provider over a Convex client
+(results reported before an optimistic provider mounts are not seen), and
+expect no optimism over a client the TanStack Start loader already
+authenticated.
+
+Use `onTokenIdentityChange` when one document must never send queued work under
+a different user or session. The provider compares the JWT `sub` and
+`sessionId`, refuses a mismatch before caching or forwarding it, closes the
+Convex client, and calls the callback. HTTP cRPC requests use the same guarded
+token source. What the guard guarantees:
+
+1. A JWT of another user or session (whatever its `exp`) is never cached,
+   published, or handed to Convex, cRPC HTTP or the TanStack Start loader.
+   Once an identity is established, a JWT without one is refused too, and an
+   opaque session token is only exchanged for a JWT, never handed to Convex.
+2. Admission rechecks the current baselines after `onTokenIdentityAdmitted`
+   returns, before publishing or handing out the token.
+3. When a trip happens (any provider or the Start loader refuses such a
+   token), every mounted provider hands out no token and publishes
+   `isAuthenticated: false`; each one with `onTokenIdentityChange` closes its
+   client and calls it once. The trip covers the page in the browser (never
+   the server): providers and clients mounted later start tripped, a guarded
+   provider that mounts or shows again on a tripped page also closes its
+   client and calls `onTokenIdentityChange` once (so a trip that happened
+   while none was mounted still reaches the app). Enabling the guard after a
+   trip also closes the client and calls back once. Sign-in mutations fail
+   with `TOKEN_IDENTITY_CHANGED` until the reload.
+
+The guard covers the token kitcn supplies, not an `Authorization` header the
+app sets in `httpOptions.headers`.
+
+For multiple provider mounts in one document, pass the shared identity as
+`tokenIdentityBaseline`. Its format is `sub|sessionId`. Every admission (the
+SSR token, fresh and cached tokens, sign-in tokens, HTTP headers and the Start
+loader) holds a token to the page identity (the first one a provider knew),
+the provider's own baseline, and the current answer of every mounted
+provider's getter. Held tokens are reconciled when a provider joins the page
+and at every admission, so a provider that mounts with an SSR token of
+another identity trips the page. A page that never enables
+`onTokenIdentityChange` is unchanged. Once a guarded provider establishes the
+page identity, it persists until the reload and binds every provider (with or
+without the option) and the Start loader, even after that provider unmounts.
+
+Two kitcn versions or revisions on one page (including dev HMR across
+revisions) are unsupported: their entries share no page identity until the
+reload, and an entry that finds page state it cannot read refuses its guarded
+tokens. Use `onTokenIdentityAdmitted` to observe admitted
+tokens and update the shared document identity.
 
 ## Auth Flow
 

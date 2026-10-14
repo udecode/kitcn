@@ -1,12 +1,15 @@
+const CLIENT_ERROR_CODES = [
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'BAD_REQUEST',
+  'TOO_MANY_REQUESTS',
+] as const;
+
 /**
  * Client error codes (subset of CRPC codes for client-side use)
  */
-type ClientErrorCode =
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
-  | 'NOT_FOUND'
-  | 'BAD_REQUEST'
-  | 'TOO_MANY_REQUESTS';
+type ClientErrorCode = (typeof CLIENT_ERROR_CODES)[number];
 
 /**
  * Client-side CRPC error.
@@ -28,9 +31,22 @@ export class CRPCClientError extends Error {
   }
 }
 
-/** Type guard for CRPCClientError */
-export const isCRPCClientError = (error: unknown): error is CRPCClientError =>
-  error instanceof CRPCClientError;
+/**
+ * Type guard for CRPCClientError.
+ * Checks shape, not constructor: package entrypoints bundle separate copies
+ * of the class, so `instanceof` fails across them.
+ */
+export const isCRPCClientError = (error: unknown): error is CRPCClientError => {
+  if (!(error instanceof Error)) return false;
+
+  const candidate = error as unknown as Record<string, unknown>;
+  return (
+    candidate.name === 'CRPCClientError' &&
+    (CLIENT_ERROR_CODES as readonly unknown[]).includes(candidate.code) &&
+    typeof candidate.functionName === 'string' &&
+    typeof candidate.message === 'string'
+  );
+};
 
 /**
  * Unified check for any deterministic CRPC error (Convex or HTTP).
@@ -38,7 +54,7 @@ export const isCRPCClientError = (error: unknown): error is CRPCClientError =>
  */
 export const isCRPCError = (error: unknown): boolean => {
   // CRPCClientError - Convex client errors
-  if (error instanceof CRPCClientError) return true;
+  if (isCRPCClientError(error)) return true;
 
   // HttpClientError - check by name + status (avoids circular import)
   if (

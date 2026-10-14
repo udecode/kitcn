@@ -1064,6 +1064,24 @@ export function mergedStream<T extends GenericStreamItem>(
 }
 
 /**
+ * Read streams over disjoint index ranges one after another, as one stream.
+ *
+ * Produces the same sequence a `mergedStream` over the whole index key would,
+ * for sources that cannot interleave — but a source is only opened once the one
+ * before it runs dry, so the fan-out a merge pays up front, one live query per
+ * source, never happens. That is what makes a very wide union affordable.
+ *
+ * The caller owes disjointness and index order. Both are checked as rows come
+ * out: a key that goes backwards throws rather than silently returning an
+ * unordered stream.
+ */
+export function concatStreams<T extends GenericStreamItem>(
+  streams: QueryStream<T>[]
+): QueryStream<T> {
+  return new ConcatStreams(...streams);
+}
+
+/**
  * Marks sources that are already `OrderByStream`s, so `narrow` reuses them
  * instead of adding a redundant delegation layer per call.
  *
@@ -1751,6 +1769,34 @@ function* getOrderingIndexFields<T extends GenericStreamItem>(
   for (let i = 0; i <= streamEqualityIndexLength; i++) {
     yield streamIndexFields.slice(i);
   }
+}
+
+/**
+ * Whether `mergedStream(..., orderByIndexFields)` would accept this stream.
+ *
+ * `MergedStream` wraps every source in an `OrderByStream`, which throws unless
+ * the ordering fields are a suffix of the source's index fields past its
+ * equality-pinned prefix. A caller that is *choosing* which index a source
+ * walks has to know that before it commits to one, so it can fall back instead
+ * of turning a working merge into a runtime error.
+ *
+ * Asks the stream itself rather than re-deriving the rule from an index name,
+ * so the answer cannot drift from what `OrderByStream` actually enforces.
+ */
+export function streamCanOrderBy<T extends GenericStreamItem>(
+  stream: QueryStream<T>,
+  orderByIndexFields: string[]
+): boolean {
+  // `normalizeIndexFields` mutates, and `OrderByStream` normalizes its own
+  // copy, so probe against a copy to leave the caller's array untouched.
+  const normalized = orderByIndexFields.slice();
+  normalizeIndexFields(normalized);
+  for (const orderingIndexFields of getOrderingIndexFields(stream)) {
+    if (equalIndexFields(orderingIndexFields, normalized)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 class OrderByStream<T extends GenericStreamItem> extends QueryStream<T> {

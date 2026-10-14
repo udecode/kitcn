@@ -176,6 +176,14 @@ crpc.organization.list.queryOptions({ unexpected: 'x' });
 
 const updateMutation = crpc.organization.update.mutationOptions();
 updateMutation.mutationFn?.({ id: 'org_1', name: 'New Name' }, {} as any);
+crpc.organization.update.mutationOptions({
+  optimisticUpdate: (_store, args) => {
+    const id: string = args.id;
+    const name: string = args.name;
+    id;
+    name;
+  },
+});
 // @ts-expect-error missing required field
 updateMutation.mutationFn?.({ id: 'org_1' }, {} as any);
 // @ts-expect-error wrong field type

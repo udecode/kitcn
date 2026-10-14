@@ -77,7 +77,10 @@ import { INIT_NEXT_CONVEX_PROVIDER_TEMPLATE } from './registry/init/next/init-ne
 import { renderInitNextEnvLocalTemplate } from './registry/init/next/init-next-env-local.template.js';
 import { renderInitNextMessagesTemplate } from './registry/init/next/init-next-messages.template.js';
 import { INIT_NEXT_MESSAGES_PAGE_TEMPLATE } from './registry/init/next/init-next-messages-page.template.js';
-import { renderInitNextPackageJsonTemplate } from './registry/init/next/init-next-package-json.template.js';
+import {
+  renderInitNextPackageJsonTemplate,
+  resolveInitNextEslintVersionFromPackageJson,
+} from './registry/init/next/init-next-package-json.template.js';
 import { INIT_NEXT_PROVIDERS_TEMPLATE } from './registry/init/next/init-next-providers.template.js';
 import { INIT_NEXT_QUERY_CLIENT_TEMPLATE } from './registry/init/next/init-next-query-client.template.js';
 import { INIT_NEXT_RSC_TEMPLATE } from './registry/init/next/init-next-rsc.template.js';
@@ -1433,8 +1436,11 @@ function overrideConfigBackend(
 }
 
 type DependencyInstallItem = {
+  installFromManifest?: boolean;
   installSpec: string;
   packageName: string;
+  requiredSection?: 'dependencies' | 'devDependencies';
+  requiredVersion?: string;
 };
 
 type DependencyInstallPlan = {
@@ -3321,18 +3327,30 @@ function buildDependencyInstallPlan(
     ...(pkg.devDependencies ?? {}),
   };
   const missing = dependencies.filter(
-    (dependency) => !(dependency.packageName in existing)
+    (dependency) =>
+      !dependency.installFromManifest && !(dependency.packageName in existing)
   );
-  if (missing.length === 0) {
+  const requiresReconcile = dependencies.some(
+    (dependency) =>
+      (dependency.requiredVersion !== undefined &&
+        (dependency.installFromManifest ||
+          existing[dependency.packageName] !== undefined) &&
+        existing[dependency.packageName] !== dependency.requiredVersion) ||
+      (dependency.requiredSection === 'devDependencies' &&
+        pkg.dependencies?.[dependency.packageName] !== undefined) ||
+      (dependency.requiredSection === 'dependencies' &&
+        pkg.devDependencies?.[dependency.packageName] !== undefined)
+  );
+  if (missing.length === 0 && !requiresReconcile) {
     return null;
   }
 
   const packageManager = detectPackageManager(projectDir);
   const missingSpecs = missing.map((dependency) => dependency.installSpec);
-  const installCommand = resolveDependencyInstallCommand(
-    packageManager,
-    missingSpecs
-  );
+  const installCommand =
+    missingSpecs.length > 0
+      ? resolveDependencyInstallCommand(packageManager, missingSpecs)
+      : { command: packageManager, args: ['install'] };
 
   return {
     packageManager,
@@ -3502,6 +3520,18 @@ export function buildInitializationPlan(params: {
 
   files.push(...templateFiles);
 
+  const nextEslintVersion =
+    projectContext?.mode === 'next-app'
+      ? resolveInitNextEslintVersionFromPackageJson(
+          JSON.parse(
+            fs.readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
+          ) as {
+            dependencies?: Record<string, string>;
+            devDependencies?: Record<string, string>;
+          }
+        )
+      : undefined;
+
   const dependencyPackages = projectContext
     ? [
         ...BASELINE_DEPENDENCY_INSTALL_SPECS.map((installSpec) => ({
@@ -3516,6 +3546,17 @@ export function buildInitializationPlan(params: {
           installSpec,
           packageName: getPackageNameFromInstallSpec(installSpec),
         })),
+        ...(nextEslintVersion
+          ? [
+              {
+                installFromManifest: true,
+                installSpec: `eslint@${nextEslintVersion}`,
+                packageName: 'eslint',
+                requiredSection: 'devDependencies' as const,
+                requiredVersion: nextEslintVersion,
+              },
+            ]
+          : []),
       ]
     : [
         ...BASELINE_DEPENDENCY_INSTALL_SPECS.map((installSpec) => ({

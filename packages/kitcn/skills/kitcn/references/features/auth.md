@@ -363,7 +363,7 @@ All from `kitcn/react`:
 |------|---------|-------------|
 | `useAuth()` | `{ hasSession, isAuthenticated, isLoading }` | Full auth state |
 | `useMaybeAuth()` | `boolean` | Has token (optimistic, may not be verified) |
-| `useIsAuth()` | `boolean` | Server-verified authentication |
+| `useIsAuth()` | `boolean` | Server-verified authentication (with `optimisticAuth`, also during the optimistic window) |
 | `useAuthGuard()` | `() => boolean` | Guard mutations, returns true if blocked |
 | `useConvexAuthRecovery()` | `{ recover, status, error }` | Rebind Convex auth after a transient token failure |
 
@@ -389,7 +389,7 @@ All from `kitcn/react`:
 | Component | Renders when |
 |-----------|-------------|
 | `MaybeAuthenticated` | Has session token (optimistic) |
-| `Authenticated` | Server-verified authenticated |
+| `Authenticated` | Server-verified authenticated (with `optimisticAuth`, also during the optimistic window) |
 | `MaybeUnauthenticated` | No session token (optimistic) |
 | `Unauthenticated` | Server-verified not authenticated |
 
@@ -406,10 +406,43 @@ All from `kitcn/react`:
   authClient={authClient}
   convexQueryClient={convexQueryClient} // when using TanStack Query
   initialToken={token}           // from SSR (caller.getToken())
+  optimisticAuth                 // opt in: open gates while Convex confirms a held JWT
+  onTokenIdentityChange={() => window.location.reload()}
   onMutationUnauthorized={() => router.push('/login')}
   onQueryUnauthorized={({ queryName }) => console.log(`Unauth: ${queryName}`)}
 >
 ```
+
+`optimisticAuth` only opens auth-bound query gates for a held, unexpired JWT;
+expired, opaque, and refused tokens stay closed. The window ends at the Convex
+client's first auth result; use one `optimisticAuth` setting per client; no
+optimism over a client the Start loader authenticated. Enable
+`onTokenIdentityChange` to refuse a JWT whose `sub` or `sessionId` differs from
+the document identity (whatever its `exp`) before Convex, HTTP or the Start
+loader sees it. On a trip, every mounted provider hands out no token and
+publishes unauthenticated; each guarded one closes its client, then calls the
+callback once, so reload the document there. Browser only, page-wide: later
+providers start tripped, and a guarded one that mounts or shows again on a
+tripped page also closes its client and calls the callback once. Enabling the
+guard on a tripped page delivers that close and callback once too; sign-in
+mutations fail with `TOKEN_IDENTITY_CHANGED`.
+
+For multiple provider mounts, pass `tokenIdentityBaseline` as
+`sub|sessionId`, or a getter returning the document's current identity. Every
+admission (SSR, fresh and cached tokens, sign-in, HTTP, Start loader) binds a
+token to the page identity, the provider's own baseline and every mounted
+provider's current getter answer; an opaque session token is only exchanged,
+never handed to Convex. Held tokens are reconciled when a provider joins the
+page and at every admission. A page that never enables the guard is
+unchanged; once a guarded provider establishes the page identity it persists
+until reload, binding every provider and the Start loader, even after that
+provider unmounts. Two kitcn versions or revisions on one page (dev HMR
+across revisions included) are unsupported: no shared page identity until
+reload.
+`onTokenIdentityAdmitted(token)` observes admitted JWTs so the app can update
+that shared baseline. Admission rechecks the baseline after the callback before
+publishing or handing out the token. All three identity options require
+`onTokenIdentityChange`.
 
 For `@convex-dev/auth` (React Native):
 ```tsx

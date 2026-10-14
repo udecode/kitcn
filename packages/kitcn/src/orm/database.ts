@@ -39,6 +39,7 @@ import {
   OrmSchemaOptions,
 } from './symbols';
 import type { ConvexTable } from './table';
+import { markOrmTransactionAnchor } from './transaction-cache';
 import type { VectorSearchProvider } from './types';
 import { ConvexUpdateBuilder } from './update';
 
@@ -227,9 +228,15 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
 
     // Preserve the original `ctx.db` behavior without mutating it.
     // We only need to attach internal ORM runtime context via a symbol.
-    const baseDb = Object.assign(Object.create(db), {
-      [OrmContext]: ormContext,
-    }) as unknown as GenericDatabaseWriter<any>;
+    // The anchor is pinned rather than inherited because `withoutTriggers`
+    // builds this over the raw `ctx.db`, which carries nothing to resolve
+    // through — see `markOrmTransactionAnchor`.
+    const baseDb = markOrmTransactionAnchor(
+      Object.assign(Object.create(db), {
+        [OrmContext]: ormContext,
+      }),
+      db
+    ) as unknown as GenericDatabaseWriter<any>;
 
     const query: any = {};
     const edgesBySourceTable = getEdgesBySourceTable(edgeMetadata);

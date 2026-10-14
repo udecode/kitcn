@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import path from "path"
+import { resolve } from "node:path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
@@ -11,7 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@convex': fileURLToPath(new URL('./convex/shared', import.meta.url)),
-      "@": path.resolve(__dirname, "./src"),
+      "@": resolve(import.meta.dirname, "./src"),
     },
   },
 })

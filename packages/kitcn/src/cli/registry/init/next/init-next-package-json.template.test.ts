@@ -31,6 +31,202 @@ describe('init-next-package-json.template', () => {
     });
   });
 
+  test('pins ESLint 9 for deterministic Next scaffolds', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        devDependencies: {
+          eslint: '^9',
+          'eslint-config-next': '16.3.4',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '9.39.5',
+        'eslint-config-next': '16.3.4',
+      },
+    });
+  });
+
+  test('preserves the ESLint 8 stack for supported Next 14 apps', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        devDependencies: {
+          eslint: '^8.57.0',
+          'eslint-config-next': '14.2.35',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '^8.57.0',
+        'eslint-config-next': '14.2.35',
+      },
+    });
+  });
+
+  test('normalizes ESLint when eslint-config-next is a dependency', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          'eslint-config-next': '16.3.4',
+        },
+        devDependencies: {
+          eslint: '^9',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      dependencies: {
+        'eslint-config-next': '16.3.4',
+      },
+      devDependencies: {
+        eslint: '9.39.5',
+      },
+    });
+  });
+
+  test('normalizes ESLint for nonnumeric current Next specs', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: 'latest',
+        },
+        devDependencies: {
+          eslint: '^9',
+          'eslint-config-next': 'latest',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '9.39.5',
+      },
+    });
+  });
+
+  test('preserves ESLint 8 when a nonnumeric config spec targets Next 14', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: '^14.2.35',
+        },
+        devDependencies: {
+          eslint: '^8.57.0',
+          'eslint-config-next': 'catalog:',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '^8.57.0',
+      },
+    });
+  });
+
+  test('preserves externally catalog-managed ESLint without major evidence', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: 'catalog:',
+        },
+        devDependencies: {
+          eslint: 'catalog:',
+          'eslint-config-next': 'catalog:',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: 'catalog:',
+      },
+    });
+  });
+
+  test('pins ESLint when external catalog ownership is incomplete', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: 'catalog:',
+        },
+        devDependencies: {
+          'eslint-config-next': 'catalog:',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '9.39.5',
+      },
+    });
+  });
+
+  test('uses the Next major to resolve a wide config range', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          next: '16.3.4',
+        },
+        devDependencies: {
+          eslint: 'latest',
+          'eslint-config-next': '>=14',
+        },
+      })
+    );
+
+    expect(JSON.parse(rendered)).toMatchObject({
+      devDependencies: {
+        eslint: '9.39.5',
+      },
+    });
+  });
+
+  test('moves normalized ESLint out of production dependencies', () => {
+    const rendered = renderInitNextPackageJsonTemplate(
+      JSON.stringify({
+        name: 'app',
+        private: true,
+        dependencies: {
+          eslint: '^9',
+          next: '16.3.4',
+        },
+        devDependencies: {
+          'eslint-config-next': '16.3.4',
+        },
+      })
+    );
+    const packageJson = JSON.parse(rendered) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+
+    expect(packageJson.dependencies.eslint).toBeUndefined();
+    expect(packageJson.devDependencies.eslint).toBe('9.39.5');
+  });
+
   test('falls back to convex:codegen when codegen already exists', () => {
     const rendered = renderInitNextPackageJsonTemplate(
       JSON.stringify({

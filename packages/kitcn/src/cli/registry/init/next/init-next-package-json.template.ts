@@ -42,14 +42,85 @@ const INIT_NEXT_PACKAGE_JSON_DEPENDENCIES = {
   superjson: '2.2.6',
 } as const;
 
+export const INIT_NEXT_ESLINT_VERSION = '9.39.5';
+const MIN_ESLINT_9_NEXT_CONFIG_MAJOR = 15;
+const EXTERNALLY_MANAGED_VERSION_RE = /^(?:catalog|workspace):/;
+const SIMPLE_VERSION_MAJOR_RE =
+  /^(?:[v=~^]\s*)?(\d+)(?:\.(?:\d+|x|\*)){0,2}(?:-[0-9A-Za-z.-]+)?$/i;
+
 const INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES = {
   '@types/bun': 'latest',
 } as const;
 
+const resolveSimpleVersionMajor = (version: string | undefined) => {
+  const major = version?.trim().match(SIMPLE_VERSION_MAJOR_RE)?.[1];
+  return major === undefined ? undefined : Number(major);
+};
+
+export const resolveInitNextEslintVersion = (
+  eslintConfigNextVersion: string | undefined
+) => {
+  const major = resolveSimpleVersionMajor(eslintConfigNextVersion);
+  if (major === undefined) {
+    return undefined;
+  }
+
+  return major >= MIN_ESLINT_9_NEXT_CONFIG_MAJOR
+    ? INIT_NEXT_ESLINT_VERSION
+    : undefined;
+};
+
+export const resolveInitNextEslintVersionFromPackageJson = (
+  packageJson: Pick<ProjectPackageJson, 'dependencies' | 'devDependencies'>
+) => {
+  const eslintConfigNextVersion =
+    packageJson.devDependencies?.['eslint-config-next'] ??
+    packageJson.dependencies?.['eslint-config-next'];
+  if (eslintConfigNextVersion === undefined) {
+    return undefined;
+  }
+
+  const configMajor = resolveSimpleVersionMajor(eslintConfigNextVersion);
+  if (configMajor !== undefined) {
+    return configMajor >= MIN_ESLINT_9_NEXT_CONFIG_MAJOR
+      ? INIT_NEXT_ESLINT_VERSION
+      : undefined;
+  }
+
+  const nextVersion =
+    packageJson.dependencies?.next ?? packageJson.devDependencies?.next;
+  const nextMajor = resolveSimpleVersionMajor(nextVersion);
+  if (nextMajor !== undefined) {
+    return nextMajor >= MIN_ESLINT_9_NEXT_CONFIG_MAJOR
+      ? INIT_NEXT_ESLINT_VERSION
+      : undefined;
+  }
+
+  const eslintVersion =
+    packageJson.devDependencies?.eslint ?? packageJson.dependencies?.eslint;
+  const eslintMajor = resolveSimpleVersionMajor(eslintVersion);
+  if (eslintMajor !== undefined && eslintMajor < 9) {
+    return undefined;
+  }
+
+  if (
+    [eslintConfigNextVersion, nextVersion, eslintVersion].every(
+      (version) =>
+        version !== undefined && EXTERNALLY_MANAGED_VERSION_RE.test(version)
+    )
+  ) {
+    return undefined;
+  }
+
+  return INIT_NEXT_ESLINT_VERSION;
+};
+
 const getInitNextPackageJsonDevDependencies = (
-  options: InitPackageJsonTemplateOptions
+  options: InitPackageJsonTemplateOptions,
+  eslintVersion: string | undefined
 ) => ({
   ...INIT_NEXT_PACKAGE_JSON_DEV_DEPENDENCIES,
+  ...(eslintVersion ? { eslint: eslintVersion } : {}),
   ...(options.backend === 'concave'
     ? {
         '@concavejs/cli': SUPPORTED_DEPENDENCY_VERSIONS.concaveCli.exact,
@@ -62,6 +133,14 @@ export function renderInitNextPackageJsonTemplate(
   options: InitPackageJsonTemplateOptions = {}
 ): string {
   const existing = source ? (JSON.parse(source) as ProjectPackageJson) : {};
+  const eslintVersion = resolveInitNextEslintVersionFromPackageJson(existing);
+  const existingDependencies = eslintVersion
+    ? Object.fromEntries(
+        Object.entries(existing.dependencies ?? {}).filter(
+          ([packageName]) => packageName !== 'eslint'
+        )
+      )
+    : existing.dependencies;
   const nextScripts: Record<string, string> = {
     ...existing.scripts,
     ...INIT_NEXT_PACKAGE_JSON_SCRIPTS,
@@ -89,12 +168,12 @@ export function renderInitNextPackageJsonTemplate(
       ...existing,
       scripts: nextScripts,
       dependencies: {
-        ...existing.dependencies,
+        ...existingDependencies,
         ...INIT_NEXT_PACKAGE_JSON_DEPENDENCIES,
       },
       devDependencies: {
         ...existing.devDependencies,
-        ...getInitNextPackageJsonDevDependencies(options),
+        ...getInitNextPackageJsonDevDependencies(options, eslintVersion),
       },
     },
     null,

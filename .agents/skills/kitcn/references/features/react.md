@@ -298,6 +298,22 @@ const mutation = useMutation(crpc.user.update.mutationOptions({
 
 Signature: `crpc.path.mutationOptions(options?)` — standard TanStack mutation options except `mutationFn`.
 
+Pass `optimisticUpdate(localStore, args)` to use Convex's optimistic local
+query store. This option is removed before the TanStack options are returned;
+Convex replays it as query data changes and owns rollback when the mutation
+completes.
+
+```ts
+const mutation = useMutation(crpc.todos.rename.mutationOptions({
+  optimisticUpdate: (store, args) => {
+    const todos = store.getQuery(api.todos.list, {});
+    if (todos) store.setQuery(api.todos.list, {}, todos.map((todo) =>
+      todo._id === args.id ? { ...todo, title: args.title } : todo
+    ));
+  },
+}));
+```
+
 ### Mutation Keys
 
 ```ts
@@ -374,20 +390,19 @@ export const list = publicQuery
   .input(z.object({ userId: z.string().optional() }))
   .paginated({ limit: 20, item: SessionSchema })
   .query(async ({ ctx, input }) => {
-    // input.cursor and input.limit auto-added
     return ctx.orm.query.session.findMany({
       where: input.userId ? { userId: input.userId } : undefined,
       orderBy: { createdAt: 'desc' },
       cursor: input.cursor,
+      endCursor: input.endCursor,
       limit: input.limit,
     });
-    // output auto-wrapped as { continueCursor, isDone, page }
   });
 ```
 
 `.paginated({ limit, item })`:
-- Adds `cursor` (string|null) and `limit` (number) to input
-- Auto-sets output schema: `{ continueCursor: string, isDone: boolean, page: T[] }`
+- Adds `cursor`, optional `endCursor`, and `limit` to input
+- Accepts the full Convex page result, including `pageStatus` and `splitCursor`
 - Must be called before `.query()`
 
 ### Return Value
@@ -414,7 +429,7 @@ const { data, isPlaceholderData } = useInfiniteQuery(
 
 ### Real-time & Error Recovery
 
-Each page maintains its own WebSocket subscription. Auto-recovers on `InvalidCursor` (resets to page 0) and `splitCursor` (auto-splits page). Pagination state persists in `queryClient` for scroll restoration.
+Each page maintains its own WebSocket subscription. Split pages use `endCursor` to keep adjacent subscriptions bounded. An `InvalidCursor` on a loaded page resets the list cleanly to page 0. Pagination state persists in `queryClient` for scroll restoration.
 
 ---
 
@@ -524,7 +539,11 @@ export const { createContext, createCaller, handler } = convexBetterAuth({
 | `createCaller` | Server-side caller factory |
 | `handler` | Next.js API route handler (`export const { GET, POST, OPTIONS } = handler;`) |
 
-Options: `api`, `convexSiteUrl`, `auth.jwtCache` (default true), `auth.isUnauthorized`.
+Options: `api`, `convexSiteUrl`, `auth.jwtCache` (boolean or `{ now }`, default true),
+`auth.expirationToleranceSeconds` (default 60), `auth.isUnauthorized`.
+`now` returns finite Unix seconds or a promise of seconds. For Next partial
+prefetching and request-time versus private-cache clocks, follow
+[Next setup](../setup/next.md#8a4-jwt-cache-and-partial-prefetching).
 
 ### Client Provider with Auth
 

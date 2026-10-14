@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
+import { kill as killProcess } from 'node:process';
 import { parseEnv } from 'node:util';
 import {
   KITCN_INSTALL_SPEC_ENV,
@@ -58,6 +59,7 @@ type ScenarioSpawnedProcess = {
   exited: Promise<number>;
   kill: (signal?: string) => void;
   killed?: boolean;
+  pid?: number;
 };
 
 type RunningScenarioProcess = ScenarioSpawnedProcess & {
@@ -190,13 +192,27 @@ const extractLocalConvexPort = (projectDir: string) => {
   return match?.[1];
 };
 
+const isMissingExecutableError = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  error.code === 'ENOENT';
+
 export const isProcessOwnedByProject = (pid: string, projectDir: string) => {
-  const result = Bun.spawnSync({
-    cmd: ['lsof', '-a', '-p', pid, '-d', 'cwd', '-Fn'],
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'ignore',
-  });
+  let result: ReturnType<typeof Bun.spawnSync>;
+  try {
+    result = Bun.spawnSync({
+      cmd: ['lsof', '-a', '-p', pid, '-d', 'cwd', '-Fn'],
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    });
+  } catch (error) {
+    if (isMissingExecutableError(error)) {
+      return false;
+    }
+    throw error;
+  }
   if (result.exitCode !== 0) {
     return false;
   }
@@ -221,12 +237,20 @@ export const stopLocalConvexBackendForProject = (projectDir: string) => {
     return;
   }
 
-  const result = Bun.spawnSync({
-    cmd: ['lsof', '-ti', `tcp:${port}`],
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'ignore',
-  });
+  let result: ReturnType<typeof Bun.spawnSync>;
+  try {
+    result = Bun.spawnSync({
+      cmd: ['lsof', '-ti', `tcp:${port}`],
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+    });
+  } catch (error) {
+    if (isMissingExecutableError(error)) {
+      return;
+    }
+    throw error;
+  }
   if (result.exitCode !== 0) {
     return;
   }
@@ -378,14 +402,24 @@ export const resolveScenarioProcessEnv = (scenarioKey: ScenarioKey) => {
   };
 };
 
+export const resolveScenarioProcessSpawnOptions = (params: {
+  interactive: boolean;
+}) => ({
+  detached: !params.interactive && process.platform !== 'win32',
+});
+
 const spawnScenarioCommand = (
   scenarioKey: ScenarioKey,
   cmd: string[],
-  cwd: string
+  cwd: string,
+  options: { interactive?: boolean } = {}
 ): ScenarioSpawnedProcess =>
   Bun.spawn({
     cmd,
     cwd,
+    ...resolveScenarioProcessSpawnOptions({
+      interactive: options.interactive ?? false,
+    }),
     env: resolveScenarioProcessEnv(scenarioKey),
     stdio: ['ignore', 'inherit', 'inherit'],
   });
@@ -562,6 +596,7 @@ const startScenarioProcesses = (
         process.kill(signal);
       },
       killed: process.killed,
+      pid: process.pid,
       exitCode: undefined,
     };
     process.exited.then((exitCode) => {
@@ -572,32 +607,101 @@ const startScenarioProcesses = (
 
 export const stopRunningScenarioProcesses = async (
   processes: readonly RunningScenarioProcess[],
-  forceStopTimeoutMs = SCENARIO_FORCE_STOP_TIMEOUT_MS
+  forceStopTimeoutMs = SCENARIO_FORCE_STOP_TIMEOUT_MS,
+  killProcessGroupFn: typeof killProcess = killProcess
 ) => {
-  for (const process of processes) {
-    if (!process.killed && process.exitCode === undefined) {
-      process.kill(SCENARIO_STOP_SIGNAL);
+  const isNoSuchProcessError = (error: unknown) =>
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'ESRCH';
+  const ownsProcessGroup = (runningProcess: RunningScenarioProcess) =>
+    runningProcess.pid !== undefined && process.platform !== 'win32';
+  const isProcessGroupRunning = (runningProcess: RunningScenarioProcess) => {
+    if (!ownsProcessGroup(runningProcess)) {
+      return false;
+    }
+
+    try {
+      killProcessGroupFn(-runningProcess.pid!, 0);
+      return true;
+    } catch (error) {
+      return !isNoSuchProcessError(error);
+    }
+  };
+  const waitForProcessGroupExit = async (
+    runningProcess: RunningScenarioProcess
+  ) => {
+    const deadline = Date.now() + forceStopTimeoutMs;
+    while (isProcessGroupRunning(runningProcess) && Date.now() < deadline) {
+      await sleep(Math.min(25, Math.max(1, deadline - Date.now())));
+    }
+    return !isProcessGroupRunning(runningProcess);
+  };
+  const stopProcess = (
+    runningProcess: RunningScenarioProcess,
+    signal: NodeJS.Signals
+  ) => {
+    if (ownsProcessGroup(runningProcess)) {
+      try {
+        killProcessGroupFn(-runningProcess.pid!, signal);
+        return;
+      } catch (error) {
+        if (isNoSuchProcessError(error)) {
+          return;
+        }
+      }
+    }
+    runningProcess.kill(signal);
+  };
+
+  for (const runningProcess of processes) {
+    if (
+      isProcessGroupRunning(runningProcess) ||
+      (!runningProcess.killed && runningProcess.exitCode === undefined)
+    ) {
+      stopProcess(runningProcess, SCENARIO_STOP_SIGNAL);
     }
   }
 
-  await Promise.allSettled(
-    processes.map(async (process) => {
-      if (process.exitCode !== undefined) {
+  const stopResults = await Promise.allSettled(
+    processes.map(async (runningProcess) => {
+      if (ownsProcessGroup(runningProcess)) {
+        const groupExited = await waitForProcessGroupExit(runningProcess);
+        if (!groupExited) {
+          stopProcess(runningProcess, SCENARIO_FORCE_STOP_SIGNAL);
+          if (!(await waitForProcessGroupExit(runningProcess))) {
+            throw new Error(
+              `Scenario process group ${runningProcess.pid} did not stop.`
+            );
+          }
+        }
+        await runningProcess.exited;
+        return;
+      }
+
+      if (runningProcess.exitCode !== undefined) {
         return;
       }
 
       const exited = await Promise.race([
-        process.exited.then(() => true),
+        runningProcess.exited.then(() => true),
         sleep(forceStopTimeoutMs).then(() => false),
       ]);
 
-      if (!exited && process.exitCode === undefined) {
-        process.kill(SCENARIO_FORCE_STOP_SIGNAL);
+      if (!exited && runningProcess.exitCode === undefined) {
+        stopProcess(runningProcess, SCENARIO_FORCE_STOP_SIGNAL);
       }
 
-      await process.exited;
+      await runningProcess.exited;
     })
   );
+  const stopFailure = stopResults.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  );
+  if (stopFailure) {
+    throw stopFailure.reason;
+  }
 };
 
 const waitForScenarioReady = async (
@@ -1116,7 +1220,10 @@ export const runScenarioDev = async (
     scenarioKey,
     params.runCommand ?? run
   );
-  const spawnCommand = params.spawnCommand ?? spawnScenarioCommand;
+  const spawnCommand =
+    params.spawnCommand ??
+    ((key: ScenarioKey, cmd: string[], cwd: string) =>
+      spawnScenarioCommand(key, cmd, cwd, { interactive: true }));
   const { commands, projectDir } = resolveScenarioDevCommands(scenarioKey, {
     backend: params.backend,
     outputRoot: params.outputRoot,
@@ -1183,35 +1290,45 @@ export const runScenarioTest = async (
     checkScenarioFn?: typeof checkScenario;
     runScenarioRuntimeProofFn?: typeof runScenarioRuntimeProof;
     runAuthSmokeFn?: typeof runAuthSmoke;
+    stopLocalConvexBackendForProjectFn?: typeof stopLocalConvexBackendForProject;
   } = {}
 ) => {
   const proofPath = resolveScenarioProofPath(scenarioKey);
+  const stopLocalBackendFn =
+    params.stopLocalConvexBackendForProjectFn ??
+    stopLocalConvexBackendForProject;
 
-  if (proofPath === 'check') {
-    await (params.checkScenarioFn ?? checkScenario)(scenarioKey, {
+  try {
+    if (proofPath === 'check') {
+      await (params.checkScenarioFn ?? checkScenario)(scenarioKey, {
+        backend: params.backend,
+        outputRoot: params.outputRoot,
+      });
+      return;
+    }
+
+    await (params.prepareScenarioFn ?? prepareScenario)(scenarioKey, {
       backend: params.backend,
       outputRoot: params.outputRoot,
     });
-    return;
+    await (params.runScenarioRuntimeProofFn ?? runScenarioRuntimeProof)(
+      scenarioKey,
+      {
+        backend: params.backend,
+        outputRoot: params.outputRoot,
+        afterReadyFn:
+          proofPath === 'auth-demo'
+            ? async (readyScenarioKey) => {
+                await (params.runAuthSmokeFn ?? runAuthSmoke)([
+                  readyScenarioKey,
+                ]);
+              }
+            : undefined,
+      }
+    );
+  } finally {
+    stopLocalBackendFn(getScenarioProjectDir(scenarioKey, params.outputRoot));
   }
-
-  await (params.prepareScenarioFn ?? prepareScenario)(scenarioKey, {
-    backend: params.backend,
-    outputRoot: params.outputRoot,
-  });
-  await (params.runScenarioRuntimeProofFn ?? runScenarioRuntimeProof)(
-    scenarioKey,
-    {
-      backend: params.backend,
-      outputRoot: params.outputRoot,
-      afterReadyFn:
-        proofPath === 'auth-demo'
-          ? async (readyScenarioKey) => {
-              await (params.runAuthSmokeFn ?? runAuthSmoke)([readyScenarioKey]);
-            }
-          : undefined,
-    }
-  );
 };
 
 export const testScenarios = async (

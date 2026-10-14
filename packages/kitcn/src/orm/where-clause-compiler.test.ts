@@ -1,4 +1,5 @@
 import { text } from './builders/text';
+import { timestamp } from './builders/timestamp';
 import {
   and,
   between,
@@ -287,7 +288,7 @@ describe('WhereClauseCompiler advanced index planning', () => {
     expect(result.probeFilters).toHaveLength(0);
   });
 
-  test('declines to promote a very wide AND-nested inArray', () => {
+  test('promotes an AND-nested inArray however wide the list is', () => {
     const compiler = new WhereClauseCompiler('users', [
       { indexName: 'by_status', indexFields: ['status'] },
     ]);
@@ -300,8 +301,11 @@ describe('WhereClauseCompiler advanced index planning', () => {
       )!
     ) as any;
 
-    expect(result.strategy).toBe('none');
-    expect(result.selectedIndex).toBeNull();
+    // How to read 200 index ranges is the executor's problem. Refusing to
+    // compile them would leave only a table scan, which is not the cheaper one.
+    expect(result.strategy).toBe('multiProbe');
+    expect(result.selectedIndex?.indexName).toBe('by_status');
+    expect(result.probeFilters).toHaveLength(200);
   });
 
   test('prefers a compound index that also supplies the order', () => {
@@ -462,6 +466,50 @@ describe('timestamp mode key normalization', () => {
     expect(specs).toEqual([
       { field: '_creationTime', direction: 'asc', nullable: false },
     ]);
+  });
+
+  test('orders wide temporal probes using their stored numeric keys', () => {
+    const temporal = convexTable('temporal_union_order', {
+      occurredAt: timestamp().notNull(),
+    });
+    const query = createQuery(temporal);
+    const probes = Array.from({ length: 65 }, (_, index) => [
+      eq(fieldRef<Date>('occurredAt'), new Date((64 - index) * 1000)),
+    ]);
+
+    expect(
+      query._orderDisjointProbes({
+        probeFilters: probes,
+        indexField: 'occurredAt',
+        order: 'asc',
+      })
+    ).toEqual(probes.slice().reverse());
+    expect(
+      query._orderDisjointProbes({
+        probeFilters: probes,
+        indexField: 'occurredAt',
+        order: 'desc',
+      })
+    ).toEqual(probes);
+  });
+
+  test('declines temporal probes that overlap after normalization', () => {
+    const temporal = convexTable('temporal_union_overlap', {
+      occurredAt: timestamp({ mode: 'string' }).notNull(),
+    });
+    const query = createQuery(temporal);
+    const probes = [
+      [eq(fieldRef<string>('occurredAt'), '2026-01-01T00:00:00Z')],
+      [eq(fieldRef<string>('occurredAt'), '2026-01-01T01:00:00+01:00')],
+    ];
+
+    expect(
+      query._orderDisjointProbes({
+        probeFilters: probes,
+        indexField: 'occurredAt',
+        order: 'asc',
+      })
+    ).toBeNull();
   });
 
   test('rejects _creationTime in orderBy object', () => {

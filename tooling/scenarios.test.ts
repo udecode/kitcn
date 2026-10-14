@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
@@ -28,6 +28,7 @@ import {
   resolveScenarioKeysForCheck,
   resolveScenarioKeysForRuntime,
   resolveScenarioProcessEnv,
+  resolveScenarioProcessSpawnOptions,
   resolveScenarioProofPath,
   resolveScenarioStepEnv,
   runScenarioDev,
@@ -102,6 +103,15 @@ describe('tooling/scenarios', () => {
     expect(SCENARIO_READY_TIMEOUT_MS).toBe(60_000);
   });
 
+  test('interactive scenario processes stay attached for interrupt forwarding', () => {
+    expect(resolveScenarioProcessSpawnOptions({ interactive: true })).toEqual({
+      detached: false,
+    });
+    expect(resolveScenarioProcessSpawnOptions({ interactive: false })).toEqual({
+      detached: process.platform !== 'win32',
+    });
+  });
+
   test('stopRunningScenarioProcesses force kills processes that ignore SIGINT', async () => {
     const kills: string[] = [];
     let resolveExit: ((code: number) => void) | undefined;
@@ -122,6 +132,52 @@ describe('tooling/scenarios', () => {
     await stopRunningScenarioProcesses([process] as never, 1);
 
     expect(kills).toEqual(['SIGINT', 'SIGKILL']);
+  });
+
+  test('stopRunningScenarioProcesses kills detached process groups', async () => {
+    const groupKills: Array<{ pid: number; signal: string }> = [];
+    const directKills: string[] = [];
+    let groupRunning = true;
+    let resolveExit: ((code: number) => void) | undefined;
+    const spawnedProcess = {
+      pid: 4242,
+      exitCode: undefined,
+      exited: new Promise<number>((resolve) => {
+        resolveExit = resolve;
+      }),
+      kill: (signal?: string) => {
+        directKills.push(signal ?? '');
+      },
+      killed: false,
+    };
+
+    await stopRunningScenarioProcesses([spawnedProcess] as never, 1, ((
+      pid: number,
+      signal: string | number
+    ) => {
+      if (signal === 0) {
+        if (!groupRunning) {
+          throw Object.assign(new Error('No such process group'), {
+            code: 'ESRCH',
+          });
+        }
+        return;
+      }
+
+      groupKills.push({ pid, signal });
+      if (signal === 'SIGINT') {
+        resolveExit?.(0);
+      }
+      if (signal === 'SIGKILL') {
+        groupRunning = false;
+      }
+    }) as never);
+
+    expect(groupKills).toEqual([
+      { pid: -4242, signal: 'SIGINT' },
+      { pid: -4242, signal: 'SIGKILL' },
+    ]);
+    expect(directKills).toEqual([]);
   });
 
   test('runScenarioTest uses check for bootstrap-heavy convex scenarios', async () => {
@@ -220,6 +276,29 @@ describe('tooling/scenarios', () => {
     });
 
     expect(calls).toEqual(['prepare', 'runtime']);
+  });
+
+  test('runScenarioTest only clears its project-owned local backend', async () => {
+    const calls: string[] = [];
+    const outputRoot = '/tmp/kitcn-scenario-cleanup-test';
+
+    await expect(
+      runScenarioTest('next', {
+        outputRoot,
+        prepareScenarioFn: mock(async () => undefined) as never,
+        runScenarioRuntimeProofFn: mock(async () => {
+          throw new Error('runtime failed');
+        }) as never,
+        stopLocalConvexBackendForProjectFn: mock((projectDir: string) => {
+          calls.push(`project:${projectDir}`);
+        }) as never,
+        stopScenarioBackendsFn: mock(() => {
+          calls.push('all');
+        }) as never,
+      } as never)
+    ).rejects.toThrow('runtime failed');
+
+    expect(calls).toEqual([`project:${outputRoot}/next/project`]);
   });
 
   test('resolveScenarioKeysForCheck keeps CI checks scoped to non-committed scenarios', () => {
@@ -723,6 +802,29 @@ describe('tooling/scenarios', () => {
       child.kill('SIGKILL');
       await child.exited.catch(() => {});
       await Bun.$`rm -rf ${rootDir}`.quiet();
+    }
+  });
+
+  test('stopLocalConvexBackendForProject tolerates missing lsof', async () => {
+    const rootDir = `/tmp/kitcn-scenario-no-lsof-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
+    const spawnSync = spyOn(Bun, 'spawnSync').mockImplementation(() => {
+      throw Object.assign(new Error('Executable not found'), {
+        code: 'ENOENT',
+      });
+    });
+
+    await Bun.write(
+      `${rootDir}/.env.local`,
+      'NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210\n'
+    );
+
+    try {
+      expect(() => stopLocalConvexBackendForProject(rootDir)).not.toThrow();
+    } finally {
+      spawnSync.mockRestore();
+      fs.rmSync(rootDir, { force: true, recursive: true });
     }
   });
 

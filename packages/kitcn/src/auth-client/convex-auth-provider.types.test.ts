@@ -136,6 +136,13 @@ ConvexAuthProvider({
   authClient,
   children: "ok",
   client,
+  onTokenIdentityAdmitted: (token) => {
+    const admittedToken: string = token;
+    admittedToken;
+  },
+  onTokenIdentityChange: () => {},
+  optimisticAuth: true,
+  tokenIdentityBaseline: () => "user-id|session-id",
 });
 
 ConvexAuthProvider({

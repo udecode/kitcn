@@ -224,6 +224,52 @@ describe('tooling/fixtures', () => {
     }
   });
 
+  test.each([
+    'expo',
+    'expo-auth',
+  ] as const)('%s snapshots exclude host-dependent Claude settings in every check scope', (templateKey) => {
+    const templateDir = mkdtempSync(
+      path.join(tmpdir(), 'kitcn-template-claude-')
+    );
+    const settingsPath = path.join(templateDir, '.claude', 'settings.json');
+    const commandPath = path.join(
+      templateDir,
+      '.claude',
+      'commands',
+      'test.md'
+    );
+    const guidancePath = path.join(templateDir, 'AGENTS.md');
+
+    try {
+      mkdirSync(path.dirname(commandPath), { recursive: true });
+      writeFileSync(
+        path.join(templateDir, 'package.json'),
+        JSON.stringify({ name: 'app', private: true })
+      );
+      writeFileSync(settingsPath, '{"enabledPlugins":{"expo":true}}');
+      writeFileSync(commandPath, 'Run tests.\n');
+      writeFileSync(guidancePath, 'Expo guidance.\n');
+
+      normalizeTemplateSnapshot(templateDir, templateKey);
+      normalizeTemplateSnapshot(templateDir, templateKey);
+      expect(existsSync(settingsPath)).toBe(false);
+
+      for (const scope of ['owned', 'full'] as const) {
+        writeFileSync(settingsPath, '{"enabledPlugins":{"expo":true}}');
+        stripFixtureComparisonArtifacts(templateDir, templateKey, scope);
+        expect(existsSync(settingsPath)).toBe(false);
+        expect(readFileSync(commandPath, 'utf8')).toBe('Run tests.\n');
+        expect(readFileSync(guidancePath, 'utf8')).toBe('Expo guidance.\n');
+      }
+
+      writeFileSync(settingsPath, '{"permissions":{}}');
+      stripFixtureComparisonArtifacts(templateDir, 'next', 'full');
+      expect(readFileSync(settingsPath, 'utf8')).toBe('{"permissions":{}}');
+    } finally {
+      rmSync(templateDir, { force: true, recursive: true });
+    }
+  });
+
   test('stripFixtureComparisonArtifacts ignores shadcn-owned UI component output by default', () => {
     const templateDir = mkdtempSync(
       path.join(tmpdir(), 'kitcn-template-comparison-')

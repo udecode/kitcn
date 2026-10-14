@@ -114,8 +114,11 @@ export type PaginationOpts = {
   maximumBytesRead?: number;
 };
 
-/** Extract input args without cursor/limit (user's filter args only) */
-export type InfiniteQueryInput<TInput> = Omit<TInput, 'cursor' | 'limit'>;
+/** Extract user args without hook-owned pagination transport fields */
+export type InfiniteQueryInput<TInput> = Omit<
+  TInput,
+  'cursor' | 'endCursor' | 'limit'
+>;
 
 /** Extract item type from PaginationResult<T> */
 export type ExtractPaginatedItem<TOutput> = TOutput extends {

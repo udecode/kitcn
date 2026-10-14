@@ -87,13 +87,14 @@ export interface IndexLike {
 const INDEX_ORDER_BONUS = 30;
 
 /**
- * Widest index union worth opening. Each probe becomes its own index range, and
- * a streamed union holds every one of them open at once, so past this width the
- * fan-out costs more than the single scan it would replace.
+ * Widest index union worth reading as one merged stream. A merge holds every
+ * probe's index range open at once, and past this width that fan-out costs more
+ * than reading the same ranges one after another.
  *
- * Owns both ends of that decision: whether to promote an `in` inside an AND to
- * a union here, and whether the executor may read a compiled union as a merged
- * stream instead of a bounded scan.
+ * Only the executor's business: it picks between a merged and a concatenated
+ * union. Width is never a reason to compile a scan instead of a union — the
+ * ranges an `in` opens are what bounds the read, and a table scan does not stop
+ * being a table scan because the list got longer.
  */
 export const MAX_INDEX_UNION_PROBES = 64;
 
@@ -233,12 +234,7 @@ export class WhereClauseCompiler {
         continue;
       }
       const probePlan = this.tryCompileInArray(term as BinaryExpression);
-      // A wide `in` opens one index range per value, which past some width
-      // costs more than the single scan it replaces. Leave those alone.
-      if (
-        !probePlan ||
-        probePlan.probeFilters.length > MAX_INDEX_UNION_PROBES
-      ) {
+      if (!probePlan) {
         continue;
       }
       return { ...probePlan, postFilters: [expression] };

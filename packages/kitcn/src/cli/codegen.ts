@@ -300,11 +300,11 @@ function emitProcedureNameLookupLiteral(lookup: ProcedureNameLookup): string {
       const items = locations
         .map(
           (location) =>
-            `{ column: ${location.column}, line: ${location.line}, name: ${JSON.stringify(location.name)} }`
+            `    { column: ${location.column}, line: ${location.line}, name: ${JSON.stringify(location.name)} },`
         )
-        .join(', ');
+        .join('\n');
 
-      return `  ${JSON.stringify(file)}: [${items}],`;
+      return `  ${JSON.stringify(file)}: [\n${items}\n  ],`;
     })
     .join('\n');
 

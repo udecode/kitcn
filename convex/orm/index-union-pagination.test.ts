@@ -54,6 +54,19 @@ const expectedMatchNames = () =>
     .map((index) => `User ${String(index).padStart(3, '0')}`)
     .sort();
 
+/**
+ * An `in` list of `size` values that matches the same four rows whatever its
+ * width. Everything past the two real statuses is a value no row carries, so
+ * widening the list adds empty index ranges and nothing else — the read count
+ * is allowed to stay flat as the probe count crosses the merge cap.
+ */
+const wideStatusList = (size: number) => [
+  ...MATCHING_STATUSES,
+  ...Array.from({ length: size - MATCHING_STATUSES.length }, (_, index) => {
+    return `bucket-${index}`;
+  }),
+];
+
 test('cursor pagination over an index union does not require maxScan', async () => {
   const t = convexTest(schema);
 
@@ -283,10 +296,11 @@ test('cursor pagination over a complement range union stays index-bounded', asyn
   });
 });
 
-test('an index union wider than the probe cap still needs maxScan under strict', async () => {
+test('an index union wider than the probe cap needs no maxScan', async () => {
   const t = convexTest(schema);
 
   await t.run(async (baseCtx) => {
+    const reads = countDocumentReads(baseCtx);
     const ctx = await runCtx(baseCtx);
     await seedUsers(baseCtx.db);
 
@@ -295,47 +309,56 @@ test('an index union wider than the probe cap still needs maxScan under strict',
       (_, index) => `bucket-${index}`
     );
 
-    await expect(
-      ctx.orm.query.users.withIndex('by_status').findMany({
-        where: { status: { in: wideList } },
-        cursor: null,
-        limit: 2,
-      })
-    ).rejects.toThrow(/maxScan/i);
-  });
-});
-
-test('a wide index union with endCursor still needs maxScan under strict', async () => {
-  const t = convexTest(schema);
-
-  await t.run(async (baseCtx) => {
-    const ctx = await runCtx(baseCtx);
-    await seedUsers(baseCtx.db);
-
-    const first: any = await ctx.orm.query.users
+    const before = reads.scanned;
+    const page: any = await ctx.orm.query.users
       .withIndex('by_status')
       .findMany({
-        where: { status: { in: [...MATCHING_STATUSES] } },
+        where: { status: { in: wideList } },
         cursor: null,
         limit: 2,
       });
-    const wideList = Array.from(
-      { length: 65 },
-      (_, index) => `bucket-${index}`
-    );
 
-    await expect(
-      ctx.orm.query.users.withIndex('by_status').findMany({
-        where: { status: { in: wideList } },
-        cursor: null,
-        endCursor: first.continueCursor,
-        limit: 2,
-      })
-    ).rejects.toThrow(/maxScan/i);
+    // No row carries any of these statuses, so every probe is an empty index
+    // range and the whole page costs nothing. A budgeted scan would have had to
+    // walk the table to learn the same thing.
+    expect(page.page).toEqual([]);
+    expect(page.isDone).toBe(true);
+    expect(reads.scanned - before).toBe(0);
   });
 });
 
-test('a rejected wide union preserves its predicate with maxScan and endCursor', async () => {
+test('a wide index union with endCursor needs no maxScan', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    await seedUsers(baseCtx.db);
+    const wide = wideStatusList(65);
+
+    const first: any = await ctx.orm.query.users
+      .withIndex('by_status')
+      .findMany({ where: { status: { in: wide } }, cursor: null, limit: 2 });
+    const pinned: any = await ctx.orm.query.users
+      .withIndex('by_status')
+      .findMany({
+        where: { status: { in: wide } },
+        cursor: null,
+        endCursor: first.continueCursor,
+        limit: 2,
+      });
+
+    // Pinning the end of the first page reproduces exactly that page.
+    expect(pinned.page.map((row: any) => row.name)).toEqual(
+      first.page.map((row: any) => row.name)
+    );
+    expect(pinned.page.map((row: any) => row.name)).toEqual([
+      'User 118',
+      'User 001',
+    ]);
+  });
+});
+
+test('a wide union still honours an explicit maxScan with endCursor', async () => {
   const t = convexTest(schema);
 
   await t.run(async (baseCtx) => {
@@ -414,5 +437,271 @@ test('an index union without a schema definition still needs maxScan under stric
         limit: 2,
       })
     ).rejects.toThrow(/maxScan/i);
+  });
+});
+
+test('a wide index union stays index-bounded on the select() pipeline path', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const reads = countDocumentReads(baseCtx);
+    const ctx = await runCtx(baseCtx);
+    await seedUsers(baseCtx.db);
+
+    const before = reads.scanned;
+    const names = await ctx.orm.query.users
+      .select()
+      .where({ status: { in: wideStatusList(65) } })
+      .map((row: any) => row.name)
+      .limit(4)
+      .execute();
+
+    // `by_status` ascending: 'active' before 'pending', oldest first inside a
+    // probe. Creation order would interleave the two statuses instead.
+    expect(names).toEqual(['User 000', 'User 119', 'User 001', 'User 118']);
+    // The matches sit at both ends of creation order, so the scan this replaced
+    // had to walk every row in the table to collect them.
+    expect(reads.scanned - before).toBeLessThanOrEqual(8);
+  });
+});
+
+test('a wide index union reads the same rows through select() and findMany', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    await seedUsers(baseCtx.db);
+    const wide = wideStatusList(65);
+
+    const piped = await ctx.orm.query.users
+      .select()
+      .where({ status: { in: wide } })
+      .map((row: any) => row.name)
+      .limit(4)
+      .execute();
+    const rows = await ctx.orm.query.users.findMany({
+      where: { status: { in: wide } },
+      limit: 4,
+    });
+
+    expect(piped.slice().sort()).toEqual(
+      rows.map((row: any) => row.name).sort()
+    );
+    expect(piped.slice().sort()).toEqual(expectedMatchNames());
+  });
+});
+
+test('crossing the merge cap does not change the order rows come out in', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    await seedUsers(baseCtx.db);
+
+    const readWidth = (size: number) =>
+      ctx.orm.query.users
+        .select()
+        .where({ status: { in: wideStatusList(size) } })
+        .map((row: any) => row.name)
+        .limit(4)
+        .execute();
+
+    // 64 probes is the widest merged union; 65 is the first concatenated one.
+    // Both walk the same index ranges, so both owe the same sequence.
+    const merged = await readWidth(64);
+    const concatenated = await readWidth(65);
+
+    expect(merged).toEqual(['User 000', 'User 119', 'User 001', 'User 118']);
+    expect(concatenated).toEqual(merged);
+  });
+});
+
+test('a wide index union pages from its probes without maxScan', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const reads = countDocumentReads(baseCtx);
+    const ctx = await runCtx(baseCtx);
+    await seedUsers(baseCtx.db);
+    const wide = wideStatusList(65);
+
+    const before = reads.scanned;
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 10; page += 1) {
+      const result: any = await ctx.orm.query.users
+        .withIndex('by_status')
+        .findMany({ where: { status: { in: wide } }, cursor, limit: 2 });
+      seen.push(...result.page.map((row: any) => row.name));
+      cursor = result.continueCursor;
+      if (result.isDone) break;
+    }
+
+    expect(seen.slice().sort()).toEqual(expectedMatchNames());
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(reads.scanned - before).toBeLessThanOrEqual(TABLE_ROWS / 2);
+  });
+});
+
+test('a wide complement union stays index-bounded on the pipeline path', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const reads = countDocumentReads(baseCtx);
+    const ctx = await runCtx(baseCtx);
+    await seedUsers(baseCtx.db);
+
+    // 70 excluded values compile to 71 complement ranges, past the merge cap.
+    // Only 'archived' hides real rows, so the answer is the four matches.
+    const excluded = [
+      'archived',
+      ...Array.from({ length: 69 }, (_, index) => `bucket-${index}`),
+    ];
+
+    const before = reads.scanned;
+    const names = await ctx.orm.query.users
+      .select()
+      .where({ status: { notIn: excluded } })
+      .map((row: any) => row.name)
+      .limit(4)
+      .execute();
+
+    expect(names.slice().sort()).toEqual(expectedMatchNames());
+    expect(reads.scanned - before).toBeLessThanOrEqual(8);
+  });
+});
+
+test('a wide index union whose order needs a merge keeps its scan budget', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    await seedUsers(baseCtx.db);
+
+    // Ordering by `createdAt` interleaves rows across probes, which only a
+    // merged union can produce — and a merge that wide is the fan-out the cap
+    // exists to refuse. Concatenation cannot stand in for it, so the read is
+    // still a budgeted scan.
+    await expect(
+      ctx.orm.query.users.withIndex('by_status').findMany({
+        where: { status: { in: wideStatusList(65) } },
+        orderBy: { createdAt: 'desc' },
+        cursor: null,
+        limit: 2,
+      })
+    ).rejects.toThrow(/maxScan/i);
+  });
+});
+
+test('a wide `in` beside a residual filter still compiles to its probes', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const reads = countDocumentReads(baseCtx);
+    const ctx = await runCtx(baseCtx);
+    await seedUsers(baseCtx.db);
+
+    const before = reads.scanned;
+    // An `in` beside another term compiles to an AND, and only the `in` is
+    // indexable. Width is not a reason to give that up: the alternative is not
+    // a cheaper union, it is the whole table.
+    const page = await ctx.orm.query.users.withIndex('by_status').findMany({
+      where: { status: { in: wideStatusList(65) }, name: { contains: '11' } },
+      cursor: null,
+      limit: 2,
+      maxScan: TABLE_ROWS,
+    });
+
+    expect(page.page.map((row: any) => row.name).sort()).toEqual([
+      'User 118',
+      'User 119',
+    ]);
+    expect(reads.scanned - before).toBeLessThanOrEqual(8);
+  });
+});
+
+test('an index union with a residual filter sizes the read by matches', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const reads = countDocumentReads(baseCtx);
+    const ctx = await runCtx(baseCtx);
+    // Every row carries the probed status, and the first one already satisfies
+    // the residual. Collecting the probes before applying it would read the
+    // whole population to answer a one-row page.
+    for (let index = 0; index < 400; index += 1) {
+      await baseCtx.db.insert('users', {
+        name: `Dense ${String(index).padStart(3, '0')}`,
+        email: `residual-${index}@example.com`,
+        status: 'active',
+      });
+    }
+
+    for (const width of [64, 65]) {
+      const before = reads.scanned;
+      const rows = await ctx.orm.query.users.withIndex('by_status').findMany({
+        where: {
+          status: { in: wideStatusList(width) },
+          name: { contains: 'Dense' },
+        },
+        limit: 1,
+      });
+
+      expect(rows.map((row: any) => row.name)).toEqual(['Dense 000']);
+      expect(reads.scanned - before).toBeLessThanOrEqual(4);
+    }
+  });
+});
+
+test('a bounded residual union still returns a true global top-k', async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (baseCtx) => {
+    const ctx = await runCtx(baseCtx);
+    // Statuses alternate, so any plan that truncates one probe before looking
+    // at the other returns the wrong three rows.
+    for (let index = 0; index < 40; index += 1) {
+      await baseCtx.db.insert('users', {
+        name: `Keep ${String(index).padStart(2, '0')}`,
+        email: `topk-${index}@example.com`,
+        status: index % 2 === 0 ? 'active' : 'pending',
+      });
+    }
+
+    for (const width of [2, 64, 65]) {
+      // An order the probed index serves: the union emits it directly, so the
+      // read may stop at three matches.
+      const served = await ctx.orm.query.users.withIndex('by_status').findMany({
+        where: {
+          status: { in: wideStatusList(width) },
+          name: { contains: 'Keep' },
+        },
+        orderBy: { createdAt: 'desc' },
+        limit: 3,
+      });
+      expect(served.map((row: any) => row.name)).toEqual([
+        'Keep 39',
+        'Keep 38',
+        'Keep 37',
+      ]);
+
+      // An order it cannot serve: the top-k is only known after every match is
+      // read, so this one keeps collecting and sorting.
+      const unserved = await ctx.orm.query.users
+        .withIndex('by_status')
+        .findMany({
+          where: {
+            status: { in: wideStatusList(width) },
+            name: { contains: 'Keep' },
+          },
+          orderBy: { name: 'asc' },
+          limit: 3,
+        });
+      expect(unserved.map((row: any) => row.name)).toEqual([
+        'Keep 00',
+        'Keep 01',
+        'Keep 02',
+      ]);
+    }
   });
 });

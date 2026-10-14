@@ -435,6 +435,28 @@ describe('use-query-options', () => {
     );
   });
 
+  test('useConvexMutationOptions passes optimisticUpdate to the Convex mutation', async () => {
+    const fn = makeFunctionReference<'mutation'>('todos:rename');
+    const withUpdate = mock(async () => null);
+    const withOptimisticUpdate = mock(() => withUpdate);
+    const convexMutation = Object.assign(
+      mock(async () => null),
+      { withOptimisticUpdate }
+    );
+    useConvexMutationSpy.mockImplementation(() => convexMutation as any);
+    const optimisticUpdate = () => {};
+
+    const { result } = renderHook(() =>
+      useConvexMutationOptions(fn, { optimisticUpdate } as any)
+    );
+    await result.current.mutationFn?.({ title: 'x' } as any, mutationFnContext);
+
+    expect(withOptimisticUpdate).toHaveBeenCalledWith(optimisticUpdate);
+    expect(withUpdate).toHaveBeenCalledTimes(1);
+    expect(convexMutation).toHaveBeenCalledTimes(0);
+    expect('optimisticUpdate' in result.current).toBe(false);
+  });
+
   test('useConvexActionOptions runs action when not guarded', async () => {
     const fn = makeFunctionReference<'action'>('ai:generate');
 

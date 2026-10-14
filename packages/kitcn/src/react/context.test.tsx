@@ -1,6 +1,8 @@
 import { renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
+import { executeHttpRequest } from '../crpc/http-client';
+import { getTransformer } from '../crpc/transformer';
 import * as authStoreModule from './auth-store';
 import {
   createCRPCContext,
@@ -9,6 +11,10 @@ import {
   useMeta,
 } from './context';
 import * as httpProxyModule from './http-proxy';
+import {
+  resetDocumentTripForTests,
+  tripDocument,
+} from './identity-guard-registry';
 import * as proxyModule from './proxy';
 import * as vanillaClientModule from './vanilla-client';
 
@@ -175,6 +181,203 @@ describe('createCRPCContext', () => {
     }
   });
 
+  test('http headers take their token from the guarded fetcher, not the cache', async () => {
+    const createHttpProxySpy = spyOn(
+      httpProxyModule,
+      'createHttpProxy'
+    ).mockReturnValue({} as any);
+    useAuthStoreSpy.mockImplementation(
+      () =>
+        ({
+          get: (key: string) =>
+            key === 'token'
+              ? 'cached-token'
+              : key === 'expiresAt'
+                ? Date.now() + 3_600_000
+                : null,
+        }) as any
+    );
+    let guarded: string | null = 'token-a';
+    const fetchAccessToken = mock(async () => guarded);
+    useFetchAccessTokenSpy.mockImplementation(() => fetchAccessToken as any);
+    const api = {
+      _http: { 'todos.get': { method: 'GET', path: '/todos/:id' } },
+    } as any;
+
+    try {
+      const { CRPCProvider, useCRPC } = createCRPCContext({
+        api,
+        convexSiteUrl: 'https://example.convex.site',
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <CRPCProvider convexClient={{} as any} convexQueryClient={{} as any}>
+          {children}
+        </CRPCProvider>
+      );
+      renderHook(() => useCRPC(), { wrapper });
+      const headers = createHttpProxySpy.mock.calls[0]?.[0]
+        ?.headers as () => Promise<Record<string, string>>;
+
+      expect(await headers()).toEqual({ Authorization: 'Bearer token-a' });
+      guarded = null;
+      expect(await headers()).toEqual({});
+      expect(fetchAccessToken).toHaveBeenCalledTimes(2);
+    } finally {
+      createHttpProxySpy.mockRestore();
+    }
+  });
+
+  test('http headers carry no kitcn token when the document trips while app headers load', async () => {
+    const createHttpProxySpy = spyOn(
+      httpProxyModule,
+      'createHttpProxy'
+    ).mockReturnValue({} as any);
+    const fetchAccessToken = mock(async () => 'token-a');
+    useFetchAccessTokenSpy.mockImplementation(() => fetchAccessToken as any);
+    let releaseHeaders!: (headers: Record<string, string>) => void;
+    const appHeaders = () =>
+      new Promise<Record<string, string>>((resolve) => {
+        releaseHeaders = resolve;
+      });
+    const api = {
+      _http: { 'todos.get': { method: 'GET', path: '/todos/:id' } },
+    } as any;
+
+    try {
+      const { CRPCProvider, useCRPC } = createCRPCContext({
+        api,
+        convexSiteUrl: 'https://example.convex.site',
+        headers: appHeaders,
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <CRPCProvider convexClient={{} as any} convexQueryClient={{} as any}>
+          {children}
+        </CRPCProvider>
+      );
+      renderHook(() => useCRPC(), { wrapper });
+      const headers = createHttpProxySpy.mock.calls[0]?.[0]
+        ?.headers as () => Promise<Record<string, string>>;
+
+      const pending = headers();
+      await new Promise((r) => setTimeout(r, 0));
+      tripDocument();
+      releaseHeaders({ 'x-app': '1' });
+
+      expect(await pending).toEqual({ 'x-app': '1' });
+    } finally {
+      resetDocumentTripForTests();
+      createHttpProxySpy.mockRestore();
+    }
+  });
+
+  test('the store-token fallback admits after the app headers load', async () => {
+    const createHttpProxySpy = spyOn(
+      httpProxyModule,
+      'createHttpProxy'
+    ).mockReturnValue({} as any);
+    useAuthStoreSpy.mockImplementation(
+      () =>
+        ({
+          get: (key: string) =>
+            key === 'token'
+              ? 'token-a'
+              : key === 'expiresAt'
+                ? Date.now() + 3_600_000
+                : null,
+        }) as any
+    );
+    let releaseHeaders!: (headers: Record<string, string>) => void;
+    const appHeaders = () =>
+      new Promise<Record<string, string>>((resolve) => {
+        releaseHeaders = resolve;
+      });
+    const api = {
+      _http: { 'todos.get': { method: 'GET', path: '/todos/:id' } },
+    } as any;
+
+    try {
+      const { CRPCProvider, useCRPC } = createCRPCContext({
+        api,
+        convexSiteUrl: 'https://example.convex.site',
+        headers: appHeaders,
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <CRPCProvider convexClient={{} as any} convexQueryClient={{} as any}>
+          {children}
+        </CRPCProvider>
+      );
+      renderHook(() => useCRPC(), { wrapper });
+      const headers = createHttpProxySpy.mock.calls[0]?.[0]
+        ?.headers as () => Promise<Record<string, string>>;
+
+      const pending = headers();
+      await new Promise((r) => setTimeout(r, 0));
+      tripDocument();
+      releaseHeaders({ 'x-app': '1' });
+
+      expect(await pending).toEqual({ 'x-app': '1' });
+    } finally {
+      resetDocumentTripForTests();
+      createHttpProxySpy.mockRestore();
+    }
+  });
+
+  test('no kitcn token is sent when the page trips while per-call headers load', async () => {
+    const createHttpProxySpy = spyOn(
+      httpProxyModule,
+      'createHttpProxy'
+    ).mockReturnValue({} as any);
+    const fetchAccessToken = mock(async () => 'token-a');
+    useFetchAccessTokenSpy.mockImplementation(() => fetchAccessToken as any);
+    const api = {
+      _http: { 'todos.get': { method: 'GET', path: '/todos/:id' } },
+    } as any;
+
+    try {
+      const { CRPCProvider, useCRPC } = createCRPCContext({
+        api,
+        convexSiteUrl: 'https://example.convex.site',
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <CRPCProvider convexClient={{} as any} convexQueryClient={{} as any}>
+          {children}
+        </CRPCProvider>
+      );
+      renderHook(() => useCRPC(), { wrapper });
+      const baseHeaders = createHttpProxySpy.mock.calls[0]?.[0]
+        ?.headers as () => Promise<Record<string, string>>;
+
+      let releaseCallHeaders!: (headers: Record<string, string>) => void;
+      const sent: Array<Record<string, string>> = [];
+      const request = executeHttpRequest({
+        args: {
+          headers: () =>
+            new Promise<Record<string, string>>((resolve) => {
+              releaseCallHeaders = resolve;
+            }),
+        },
+        baseFetch: (async (_url: string, init: RequestInit) => {
+          sent.push(init.headers as Record<string, string>);
+          return new Response('{}', { status: 200 });
+        }) as typeof fetch,
+        baseHeaders,
+        convexSiteUrl: 'https://example.convex.site',
+        procedureName: 'todos.get',
+        route: { method: 'GET', path: '/todos' },
+        transformer: getTransformer(),
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      tripDocument();
+      releaseCallHeaders({ 'x-call': '1' });
+      await request;
+
+      expect(sent).toEqual([{ 'x-call': '1' }]);
+    } finally {
+      resetDocumentTripForTests();
+      createHttpProxySpy.mockRestore();
+    }
+  });
+
   test('forwards transformer option to CRPC proxies', () => {
     const createOptionsProxySpy = spyOn(
       proxyModule,
@@ -301,6 +504,95 @@ describe('createCRPCContext', () => {
     };
     hook.rerender();
     expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(3);
+  });
+
+  test('keeps hydrated queries when Convex confirms the same token', () => {
+    const api = {} as any;
+    const convexClient = {} as any;
+    const convexQueryClient = {
+      resetAuthQueries: mock(async () => {}),
+    } as any;
+
+    // A server-rendered page reaches the browser carrying a token. The auth
+    // state reports it as unauthenticated while Convex checks it, then as
+    // authenticated once Convex accepts it. The reader did not change, so the
+    // queries the server render hydrated must stay in the cache.
+    const ssrToken = `a.${Buffer.from(
+      JSON.stringify({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        jti: 'ssr-token',
+        sub: 'account-a',
+      })
+    ).toString('base64')}.b`;
+
+    let authState = {
+      isAuthenticated: false,
+      token: ssrToken as string | null,
+    };
+    useAuthValueSpy.mockImplementation(
+      ((key: 'token' | 'isAuthenticated') => authState[key]) as any
+    );
+
+    const { CRPCProvider } = createCRPCContext({ api });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <CRPCProvider
+        convexClient={convexClient}
+        convexQueryClient={convexQueryClient}
+      >
+        {children}
+      </CRPCProvider>
+    );
+
+    const hook = renderHook(() => useMeta(), { wrapper });
+    expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
+
+    authState = { isAuthenticated: true, token: ssrToken };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
+
+    // Signing out drops the token, which is a different identity.
+    authState = { isAuthenticated: false, token: null };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(1);
+  });
+
+  test('resets auth queries when Convex rejects an existing token', () => {
+    const api = {} as any;
+    const convexClient = {} as any;
+    const convexQueryClient = {
+      resetAuthQueries: mock(async () => {}),
+    } as any;
+    const token = `a.${Buffer.from(
+      JSON.stringify({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        sub: 'account-a',
+      })
+    ).toString('base64')}.b`;
+
+    let authState = {
+      isAuthenticated: true,
+      token: token as string | null,
+    };
+    useAuthValueSpy.mockImplementation(
+      ((key: 'token' | 'isAuthenticated') => authState[key]) as any
+    );
+
+    const { CRPCProvider } = createCRPCContext({ api });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <CRPCProvider
+        convexClient={convexClient}
+        convexQueryClient={convexQueryClient}
+      >
+        {children}
+      </CRPCProvider>
+    );
+
+    const hook = renderHook(() => useMeta(), { wrapper });
+    expect(convexQueryClient.resetAuthQueries).not.toHaveBeenCalled();
+
+    authState = { isAuthenticated: false, token };
+    hook.rerender();
+    expect(convexQueryClient.resetAuthQueries).toHaveBeenCalledTimes(1);
   });
 
   test('ignores token rotation but resets when identity claims change', () => {

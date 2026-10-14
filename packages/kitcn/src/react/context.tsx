@@ -15,6 +15,7 @@ import {
   useMemo,
   useRef,
 } from 'react';
+import { withAuthorizationRecheck } from '../crpc/http-client';
 import type { HttpClientError } from '../crpc/http-types';
 import type { DataTransformerOptions } from '../crpc/transformer';
 import type { FnMeta, Meta } from '../crpc/types';
@@ -35,6 +36,7 @@ import {
   type VanillaHttpCRPCClientFromRouter,
 } from './http-proxy';
 import { createCRPCOptionsProxy } from './proxy';
+import { admitStoreToken } from './token-gate';
 import { createVanillaCRPCProxy } from './vanilla-client';
 
 // ============================================================================
@@ -196,8 +198,8 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
     const token = useAuthValue('token');
     const isAuthenticated = useAuthValue('isAuthenticated');
     const previousAuthRef = useRef<{
-      isAuthenticated: boolean;
       identity: string | null;
+      isAuthenticated: boolean;
     } | null>(null);
     // Get fetchAccessToken from context (immediately available, no race condition)
     const fetchAccessToken = useFetchAccessToken();
@@ -214,20 +216,18 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
       // Non-JWT strings (the opaque SSR session token) keep their own signature
       // so the opaque -> JWT and opaque -> logout transitions still reset.
       const identity = resolveAuthIdentity(token);
-      previousAuthRef.current = {
-        isAuthenticated,
-        identity,
-      };
+      previousAuthRef.current = { identity, isAuthenticated };
 
       if (!previous) {
         return;
       }
 
-      if (
-        tokenReady &&
-        (previous.identity !== identity ||
-          previous.isAuthenticated !== isAuthenticated)
-      ) {
+      // Convex initially reports false while confirming the token supplied by
+      // SSR, so false -> true for the same identity preserves hydrated data.
+      // Once accepted, true -> false means Convex rejected the existing token
+      // and its auth-bound cache must be cleared even if the token is retained.
+      const tokenRejected = previous.isAuthenticated && !isAuthenticated;
+      if ((tokenReady && previous.identity !== identity) || tokenRejected) {
         void convexQueryClient.resetAuthQueries();
       }
     }, [convexQueryClient, isAuthenticated, token]);
@@ -240,43 +240,29 @@ export function createCRPCContext<TApi extends Record<string, unknown>>(
         convexSiteUrl: httpOptions.convexSiteUrl,
         routes: meta._http,
         headers: async () => {
-          // Use authStore.get() for non-reactive access
-          const token = authStore.get('token');
           const expiresAt = authStore.get('expiresAt');
-
-          // Check cache (60s leeway)
           // eslint-disable-next-line react-hooks/purity -- called in async callback, not during render
-          const now = Date.now();
-          const timeRemaining = expiresAt ? expiresAt - now : 0;
-
-          if (token && expiresAt && timeRemaining >= 60_000) {
-            const userHeaders =
-              typeof httpOptions.headers === 'function'
-                ? await httpOptions.headers()
-                : httpOptions.headers;
-            return { ...userHeaders, Authorization: `Bearer ${token}` };
-          }
-
-          // Use fetchAccessToken from context (available immediately, no race condition)
-          if (fetchAccessToken) {
-            const newToken = await fetchAccessToken({
-              forceRefreshToken: !!expiresAt,
-            });
-            if (newToken) {
-              const userHeaders =
-                typeof httpOptions.headers === 'function'
-                  ? await httpOptions.headers()
-                  : httpOptions.headers;
-              return { ...userHeaders, Authorization: `Bearer ${newToken}` };
-            }
-          }
-
-          // No auth - return user headers only
+          const timeRemaining = expiresAt ? expiresAt - Date.now() : 0;
+          const heldToken = authStore.get('token');
+          const token = fetchAccessToken
+            ? await fetchAccessToken({
+                forceRefreshToken: !!expiresAt && timeRemaining < 60_000,
+              })
+            : heldToken && expiresAt && timeRemaining >= 60_000
+              ? heldToken
+              : null;
           const userHeaders =
             typeof httpOptions.headers === 'function'
               ? await httpOptions.headers()
               : httpOptions.headers;
-          return { ...userHeaders };
+          const admit = () =>
+            !!token && admitStoreToken(authStore, token, { use: 'handout' });
+          return admit()
+            ? withAuthorizationRecheck(
+                { ...userHeaders, Authorization: `Bearer ${token}` },
+                admit
+              )
+            : { ...userHeaders };
         },
         fetch: httpOptions.fetch,
         onError: httpOptions.onError,

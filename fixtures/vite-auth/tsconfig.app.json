@@ -10,6 +10,7 @@
     "types": [
       "vite/client"
     ],
+    "allowArbitraryExtensions": true,
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

@@ -386,6 +386,10 @@ export class ConvexQueryClient {
     if (isServer) {
       this.serverHttpClient = new ConvexHttpClient(this.convexClient.url, {
         fetch: options.serverFetch,
+        // The Convex client's logger: Convex's default logger registers its
+        // listener under a Math.random() id, which a prerender (Next Cache
+        // Components) refuses, and a server client is built per request.
+        logger: this.convexClient.logger,
       });
     }
   }

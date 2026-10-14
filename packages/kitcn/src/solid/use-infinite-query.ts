@@ -28,7 +28,10 @@ import { CRPCClientError, isCRPCClientError } from '../crpc/error';
 import { convexQuery } from '../crpc/query-options';
 import { type ExtractPaginatedItem, FUNC_REF_SYMBOL } from '../crpc/types';
 import { type EnabledFn, resolveEnabled } from '../internal/enabled';
-import { shouldSplitPaginationPage } from '../internal/pagination';
+import {
+  isInvalidPaginationCursor,
+  shouldSplitPaginationPage,
+} from '../internal/pagination';
 import type { DistributiveOmit } from '../internal/types';
 import { useMeta } from './auth';
 import { useAuthValue, useSafeConvexAuth } from './auth-store';
@@ -64,7 +67,7 @@ type InfiniteQueryOptions<TItem> = {
  * Pagination state persisted in queryClient.
  * Enables scroll restoration when navigating back to a paginated list.
  *
- * Uses flat { cursor, limit } structure like tRPC.
+ * Uses flat { cursor, endCursor, limit } structure like tRPC.
  */
 export type PaginationState = {
   id: number;
@@ -76,16 +79,14 @@ export type PaginationState = {
       /** Flat pagination args - tRPC style */
       args: Record<string, unknown> & {
         cursor: string | null;
+        endCursor?: string | null;
         limit?: number;
         /** Internal pagination ID for subscription management */
         __paginationId?: number;
       };
-      endCursor?: string | null;
     }
   >;
   version: number;
-  /** Recovery key to prevent infinite recovery loops */
-  autoRecoveryAttempted?: string;
 };
 
 // Query key prefix for pagination state storage
@@ -137,11 +138,11 @@ type PageState = {
   /** Flat pagination args - tRPC style */
   args: Record<string, unknown> & {
     cursor: string | null;
+    endCursor?: string | null;
     limit?: number;
     /** Internal pagination ID for subscription management */
     __paginationId?: number;
   };
-  endCursor?: string | null; // For page splitting - the cursor where this page ends
 };
 
 /** Aggregate of every page query, derived from the raw observer results */
@@ -217,8 +218,7 @@ const aggregatePages = <TItem>(
     error,
     failureReason: error,
     isError: results.some((r) => r.isError),
-    isFetchNextPageError:
-      results.length > 1 && (results.at(-1)?.isError ?? false),
+    isFetchNextPageError: results.slice(1).some((result) => result.isError),
     // Aggregate fetching across all pages
     isFetching,
     isLoading: status === 'LoadingFirstPage',
@@ -231,34 +231,21 @@ const aggregatePages = <TItem>(
   };
 };
 
-/** Build a unique key for recovery attempt detection */
-const buildRecoveryKey = (
-  pageKeys: number[],
-  page0Cursor: string | null,
-  page0UpdatedAt: number
-): string => JSON.stringify({ pageKeys, page0Cursor, page0UpdatedAt });
-
 /** Minimal shape the effects need from a raw page result */
 type PageResult = {
   data?: unknown;
-  dataUpdatedAt?: number;
+  error?: unknown;
   isError?: boolean;
   isFetching?: boolean;
 };
 
 type UseStaleCursorRecoveryOptions = {
-  argsObject: () => Record<string, unknown>;
   combined: {
     isFetchNextPageError: boolean;
-    status: string;
   };
-  limit?: number;
   /** Raw per-page observer results, fresh identity on every update */
   pageResults: () => PageResult[];
-  setState: (
-    updater: PaginationState | ((prev: PaginationState) => PaginationState)
-  ) => void;
-  state: () => PaginationState;
+  resetPagination: () => void;
 };
 
 /**
@@ -267,106 +254,26 @@ type UseStaleCursorRecoveryOptions = {
  * When Convex WebSocket reconnects, page 0 (cursor: null) resubscribes and
  * gets fresh data. However, pages 1+ may have stale cursors that fail.
  *
- * This hook detects this pattern and creates a recovery page that fetches
- * enough items to cover the lost pages, preserving the user's scroll position.
+ * This hook discards the invalid cursor chain and restarts from page one.
  */
 const useStaleCursorRecovery = ({
-  argsObject,
   combined,
-  limit,
   pageResults,
-  setState,
-  state,
+  resetPagination,
 }: UseStaleCursorRecoveryOptions): void => {
-  // Auto-recovery from stale cursors
-  // Triggers when: page 0 OK + pages 1+ errored + page 0 has continueCursor
   createEffect(
-    on(
-      [
-        () => combined.isFetchNextPageError,
-        pageResults,
-        () => state().pageKeys,
-        () => state().queries,
-        () => state().autoRecoveryAttempted,
-        argsObject,
-      ],
-      () => {
-        if (!combined.isFetchNextPageError) return;
+    on([() => combined.isFetchNextPageError, pageResults], () => {
+      if (!combined.isFetchNextPageError) return;
 
-        const results = pageResults();
-        const page0Result = results[0];
-        const page0Data = page0Result?.data as
-          | PaginationResult<unknown>
-          | undefined;
-        const page0UpdatedAt = page0Result?.dataUpdatedAt ?? 0;
-
-        const hasPage0Data = page0Data !== undefined && !page0Result?.isError;
-        const hasSubsequentErrors = results
-          .slice(1)
-          .some((q) => q?.isError && !q?.isFetching);
-
-        if (!hasPage0Data || !hasSubsequentErrors || !page0Data?.continueCursor)
-          return;
-
-        const currentState = state();
-        const recoveryKey = buildRecoveryKey(
-          currentState.pageKeys,
-          page0Data.continueCursor,
-          page0UpdatedAt
+      const hasInvalidCursor = pageResults()
+        .slice(1)
+        .some(
+          (result) =>
+            result?.isError &&
+            !result.isFetching &&
+            isInvalidPaginationCursor(result.error)
         );
-
-        if (currentState.autoRecoveryAttempted === recoveryKey) return;
-
-        const erroredPageKeys = currentState.pageKeys.filter(
-          (_, i) => i > 0 && results[i]?.isError
-        );
-        const itemsToRecover = erroredPageKeys.reduce((sum, key) => {
-          const pageLimit =
-            currentState.queries[key]?.args?.limit ?? limit ?? 20;
-          return sum + pageLimit;
-        }, 0);
-
-        console.warn('[Pagination] Auto-recovering from stale cursors', {
-          erroredPages: erroredPageKeys.length,
-          itemsToRecover,
-        });
-
-        setState((prev) => ({
-          ...prev,
-          id: prev.id,
-          nextPageKey: 2,
-          pageKeys: [prev.pageKeys[0], 1],
-          queries: {
-            [prev.pageKeys[0]]: prev.queries[prev.pageKeys[0]],
-            1: {
-              args: {
-                ...argsObject(),
-                cursor: page0Data.continueCursor,
-                limit: Math.min(itemsToRecover + (limit ?? 20), 500),
-                __paginationId: prev.id,
-              },
-            },
-          },
-          version: prev.version + 1,
-          autoRecoveryAttempted: recoveryKey,
-        }));
-      }
-    )
-  );
-
-  // Clear recovery flag on success
-  createEffect(
-    on([() => combined.status, () => state().autoRecoveryAttempted], () => {
-      if (
-        (combined.status === 'CanLoadMore' ||
-          combined.status === 'Exhausted') &&
-        state().autoRecoveryAttempted
-      ) {
-        setState((prev) => ({
-          ...prev,
-          autoRecoveryAttempted: undefined,
-        }));
-      }
+      if (hasInvalidCursor) resetPagination();
     })
   );
 };
@@ -614,12 +521,9 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
 
   // Auto-recovery from stale cursors after WebSocket reconnection
   useStaleCursorRecovery({
-    argsObject,
     combined,
-    limit,
     pageResults,
-    setState,
-    state,
+    resetPagination: () => setState(createInitialState()),
   });
 
   // Split when Convex requests it or a reactive page outgrows its target size.
@@ -641,18 +545,24 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
             if (
               shouldSplitPaginationPage(page, limit) &&
               pageState &&
-              !pageState.endCursor
+              pageState.args.endCursor !== page.splitCursor
             ) {
               setState((prev) => {
                 const currentPageState = prev.queries[pageKey];
-                if (!currentPageState || currentPageState.endCursor)
+                if (
+                  !currentPageState ||
+                  currentPageState.args.endCursor === page.splitCursor
+                )
                   return prev;
 
                 const newKey = prev.nextPageKey;
                 const splitCursor = page.splitCursor;
+                const endCursor =
+                  currentPageState.args.endCursor ?? page.continueCursor;
                 const splitPageArgs = {
                   ...argsObject(),
                   cursor: splitCursor,
+                  endCursor,
                   limit: currentPageState.args.limit,
                   __paginationId: prev.id,
                 };
@@ -671,7 +581,10 @@ const useInfiniteQueryInternal = <Query extends PaginatedQueryReference>(
                     // Mark current page with its end cursor
                     [pageKey]: {
                       ...currentPageState,
-                      endCursor: splitCursor,
+                      args: {
+                        ...currentPageState.args,
+                        endCursor: splitCursor,
+                      },
                     },
                     // Add the new split page
                     [newKey]: {

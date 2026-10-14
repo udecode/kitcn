@@ -51,6 +51,34 @@ const updateUser = useMutation(
 
 See [API Reference](#mutationoptions-1) for the full signature and options.
 
+### Convex optimistic updates
+
+Pass `optimisticUpdate` to update Convex's local query store while a mutation
+is pending. Convex replays the update when query data changes and rolls it back
+when the mutation completes.
+
+```tsx
+const renameTodo = useMutation(
+  crpc.todos.rename.mutationOptions({
+    optimisticUpdate: (localStore, args) => {
+      const todos = localStore.getQuery(api.todos.list, {});
+      if (!todos) return;
+
+      localStore.setQuery(
+        api.todos.list,
+        {},
+        todos.map((todo) =>
+          todo._id === args.id ? { ...todo, title: args.title } : todo
+        )
+      );
+    },
+  })
+);
+```
+
+`optimisticUpdate` is a Convex option, not a TanStack Query callback. Its
+arguments and query values use Convex's wire shape.
+
 ## Mutation Keys
 
 Get type-safe mutation keys for cache operations:

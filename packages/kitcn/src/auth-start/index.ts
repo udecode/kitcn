@@ -1,3 +1,9 @@
+import { settleClient } from '../auth-client/client-settlement';
+import {
+  admitToken,
+  isDocumentTripped,
+} from '../react/identity-guard-registry';
+
 export type MaybePromise<T> = Promise<T> | T;
 
 export type StartLoaderAuthClient = {
@@ -45,7 +51,11 @@ export const syncConvexAuthForStartLoader = async ({
   const serverHttpClient = isStartLoaderConvexQueryClient(convex)
     ? convex.serverHttpClient
     : undefined;
-  const token = (await getToken()) ?? null;
+  const loaderToken = (await getToken()) ?? null;
+  const admit = (candidate: string) =>
+    admitToken(candidate, { use: 'handout' });
+  const token =
+    loaderToken !== null && !admit(loaderToken) ? null : loaderToken;
   const previousToken = startLoaderAuthTokens.get(convex);
 
   if (previousToken === token) {
@@ -60,7 +70,14 @@ export const syncConvexAuthForStartLoader = async ({
     return { isAuthenticated: false, token };
   }
 
-  authClient.setAuth(async () => token);
+  settleClient(authClient);
+  authClient.setAuth(async () => (admit(token) ? token : null));
+  if (isDocumentTripped()) {
+    startLoaderAuthTokens.set(convex, null);
+    authClient.clearAuth();
+    serverHttpClient?.clearAuth?.();
+    return { isAuthenticated: false, token: null };
+  }
   serverHttpClient?.setAuth(token);
   return { isAuthenticated: true, token };
 };

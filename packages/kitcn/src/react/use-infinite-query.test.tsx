@@ -443,7 +443,78 @@ describe('useInfiniteQuery', () => {
     const options = createOptions({ limit: 3 });
     renderHook(() => useInfiniteQuery(options), { wrapper });
 
-    expect(useQueriesCalls.at(-1)?.queries).toHaveLength(2);
+    const splitQueries = useQueriesCalls.at(-1)?.queries as any[];
+    expect(splitQueries).toHaveLength(2);
+    expect(splitQueries[0].queryKey[2]).toMatchObject({
+      cursor: null,
+      endCursor: 'cursor-2',
+    });
+    expect(splitQueries[1].queryKey[2]).toMatchObject({
+      cursor: 'cursor-2',
+      endCursor: 'cursor-3',
+    });
+  });
+
+  test('resets cleanly when a loaded page cursor becomes invalid', () => {
+    useQueriesSpy.mockImplementation((arg: UseQueriesArg) => {
+      useQueriesCalls.push(arg);
+      const pages = [
+        {
+          page: [{ _id: 'post-1' }],
+          isDone: false,
+          continueCursor: 'cursor-1',
+        },
+        {
+          page: [{ _id: 'post-2' }],
+          isDone: false,
+          continueCursor: 'cursor-2',
+        },
+        {
+          page: [{ _id: 'post-3' }],
+          isDone: true,
+          continueCursor: 'cursor-3',
+        },
+      ];
+      const results = pages.slice(0, arg.queries.length).map((data, index) => ({
+        data,
+        dataUpdatedAt: index + 1,
+        isError: false,
+        isFetching: false,
+        isLoading: false,
+        isPlaceholderData: false,
+      }));
+      if (arg.queries.length === 3) {
+        results[1] = {
+          data: undefined as any,
+          dataUpdatedAt: 4,
+          error: new Error('InvalidCursor'),
+          isError: true,
+          isFetching: false,
+          isLoading: false,
+          isPlaceholderData: false,
+        } as any;
+      }
+      return (arg as any).combine(results);
+    });
+
+    const queryClient = new QueryClient();
+    const wrapper = makeWrapper(queryClient);
+    const { result } = renderHook(
+      () => useInfiniteQuery(createOptions({ limit: 2 })),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.fetchNextPage();
+    });
+    act(() => {
+      result.current.fetchNextPage();
+    });
+
+    const resetQueries = useQueriesCalls.at(-1)?.queries as any[];
+    expect(resetQueries).toHaveLength(1);
+    expect(resetQueries[0].queryKey[2].cursor).toBeNull();
+    expect(result.current.data).toEqual([{ _id: 'post-1' }]);
   });
 
   test('fetchNextPage adds a new page query with continueCursor and limit', () => {

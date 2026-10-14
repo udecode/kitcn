@@ -122,8 +122,15 @@ const normalizeTemplatePackageJson = (
   version: packageJson.version,
 });
 
-const stripFixtureSnapshotArtifacts = (directory: string) => {
+const stripFixtureSnapshotArtifacts = (
+  directory: string,
+  templateKey: TemplateKey
+) => {
   rmSync(path.join(directory, '.env.local'), { force: true });
+
+  if (TEMPLATE_DEFINITIONS[templateKey].initTemplate === 'expo') {
+    rmSync(path.join(directory, '.claude', 'settings.json'), { force: true });
+  }
 };
 
 export const stripFixtureComparisonArtifacts = (
@@ -131,7 +138,7 @@ export const stripFixtureComparisonArtifacts = (
   templateKey: TemplateKey,
   scope: FixtureCheckScope = DEFAULT_FIXTURE_CHECK_SCOPE
 ) => {
-  stripFixtureSnapshotArtifacts(directory);
+  stripFixtureSnapshotArtifacts(directory, templateKey);
 
   if (scope === 'full' || !SHADCN_TEMPLATE_KEYS.has(templateKey)) {
     return;
@@ -195,7 +202,7 @@ export const normalizeTemplateSnapshot = (
   normalizeEnvLocal(directory);
   patchPreparedLocalDevPort(directory);
   patchFixtureTsconfigPaths(directory, getTemplateFixtureDir(templateKey));
-  stripFixtureSnapshotArtifacts(directory);
+  stripFixtureSnapshotArtifacts(directory, templateKey);
 };
 
 type TsconfigJson = {

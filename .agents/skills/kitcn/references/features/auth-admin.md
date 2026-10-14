@@ -265,6 +265,7 @@ export const getAllUsers = authQuery
   .query(async ({ ctx, input }) => {
     const result = await ctx.orm.query.user.findMany({
       cursor: input.cursor,
+      endCursor: input.endCursor,
       limit: input.limit,
     });
 

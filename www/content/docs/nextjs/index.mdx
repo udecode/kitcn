@@ -240,6 +240,153 @@ The RSC file above exports these helpers. See the [Helpers](#helpers) reference 
   <Card title="Auth Helpers" href="/docs/auth/server#helpers" />
 </Cards>
 
+## JWT Cache and Partial Prefetching
+
+JWT caching reuses the signed-in cookie until its expiry tolerance window. The
+default clock reads `Math.floor(Date.now() / 1000)`. With Next 16
+`cacheComponents` and `partialPrefetching`, awaiting `headers()` does not make
+that clock read safe in the runtime prerendering stage.
+
+### Gate the complete token read
+
+For request-time auth, await `connection()` before the complete token read.
+This covers both cached JWT reuse and token fetching when the JWT cookie is
+missing. Keep the default caller factory and the headers-first context from
+[RSC Setup](#rsc-setup). Add this helper after its `caller` declaration:
+
+```ts title="src/lib/convex/rsc.tsx"
+import { getSessionCookie } from 'better-auth/cookies';
+import { headers } from 'next/headers';
+import { connection } from 'next/server';
+import { cache } from 'react';
+
+export const getToken = cache(async () => {
+  const heads = await headers();
+  if (getSessionCookie(heads) === null) {
+    return undefined;
+  }
+  await connection();
+  return caller.getToken();
+});
+```
+
+Match any custom session-cookie name or prefix in `getSessionCookie`. The
+session check avoids token fetching for signed-out requests. A session cookie
+without a JWT cookie still waits for `connection()` before fetching a token.
+
+Use this same helper for server queries. In `createServerQueryClient`, replace
+`getToken: caller.getToken` with `getToken`:
+
+```ts
+getServerQueryClientOptions({
+  getToken,
+  convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
+});
+```
+
+Put a component that awaits request-time auth beneath a `Suspense` boundary:
+
+```tsx title="app/(app)/layout.tsx"
+import { Suspense } from 'react';
+import { ConvexProvider } from '@/lib/convex/convex-provider';
+import { getToken } from '@/lib/convex/rsc';
+
+async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
+  const token = await getToken();
+  return <ConvexProvider token={token}>{children}</ConvexProvider>;
+}
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <AuthenticatedShell>{children}</AuthenticatedShell>
+    </Suspense>
+  );
+}
+```
+
+Next can abort a validation render in development. If your TanStack integration
+handles those aborts by leaving the read pending, apply that app-owned policy
+around the `connection()` await above, before `caller.getToken()`. Handling an
+abort only inside `jwtCache.now` does not cover token-fetch paths that bypass
+the clock. The example above does not suppress aborts. Do not suppress ordinary
+auth or network failures, or treat every `AbortError` as a Next render abort.
+Recording a rejected TanStack query can itself read `Date.now()`.
+
+### Override the expiry clock
+
+`auth.jwtCache.now` controls only the cached JWT expiry comparison. The callback
+returns finite Unix time in **seconds**, synchronously or as a promise. Kitcn
+awaits the callback before comparing a decoded JWT's expiry. Disabled caching,
+forced refresh, and missing, malformed, or expiry-less JWT cookies bypass it
+and fetch a token. A decoded expired JWT with an expiry calls the clock, then
+fetches a token.
+
+A complete token read that already waits for `connection()` does not need an
+extra clock hook. If you configure a request-time expiry clock separately, it
+can await `connection()`:
+
+```ts title="src/lib/convex/server.ts"
+import { api } from '@convex/api';
+import { convexBetterAuth } from 'kitcn/auth/nextjs';
+import { connection } from 'next/server';
+
+export const { createContext, createCaller, handler } = convexBetterAuth({
+  api,
+  convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
+  auth: {
+    jwtCache: {
+      now: async () => {
+        await connection();
+        return Math.floor(Date.now() / 1000);
+      },
+    },
+  },
+});
+```
+
+### Private-cache token reads
+
+`'use cache: private'` allows clock reads but forbids `connection()`. Use a
+separate caller factory with the default clock or a synchronous clock for that
+path. Do not call the request-time `getToken` helper or reuse the request-time
+clock above inside private cache.
+
+```ts title="src/lib/convex/private-token.ts"
+import { api } from '@convex/api';
+import { convexBetterAuth } from 'kitcn/auth/nextjs';
+import { cacheLife } from 'next/cache';
+import { headers } from 'next/headers';
+
+const privateAuth = convexBetterAuth({
+  api,
+  convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL!,
+});
+
+export async function getPrivateToken() {
+  'use cache: private';
+  cacheLife({ stale: 30 });
+  const context = await privateAuth.createContext({ headers: await headers() });
+  return context.token;
+}
+```
+
+A layout that waits for a token before rendering must defer the token-dependent
+subtree with `Suspense`, including when it awaits a private-cache helper.
+Private caching allows the clock read; it does not make runtime auth data
+available during static prerendering. Disabling the cookie
+cache with `auth: { jwtCache: false }` avoids its clock read but fetches a token
+from the auth endpoint on every context creation.
+
+Clock errors propagate unchanged. Kitcn does not call `connection()`, inspect
+Next's render context, or suppress render aborts. Clock results must be finite Unix seconds;
+kitcn rejects `NaN` and infinities instead of reusing a token with an invalid
+expiry comparison.
+
+See Next's [connection reference](https://nextjs.org/docs/app/api-reference/functions/connection)
+and [private-cache reference](https://nextjs.org/docs/app/api-reference/directives/use-cache-private)
+for the rendering constraints.
+
 ## API Reference
 
 ### convexBetterAuth
@@ -258,7 +405,8 @@ Options:
 |--------|-------------|
 | `api` | Your Convex API object |
 | `convexSiteUrl` | Convex site URL (must end in `.convex.site`) |
-| `auth.jwtCache` | Enable/disable JWT caching (default: `true`) |
+| `auth.jwtCache` | Boolean or `{ now?: () => number \| Promise<number> }` (default: `true`). The optional clock returns finite Unix seconds. |
+| `auth.expirationToleranceSeconds` | Refresh cached JWTs this many seconds before expiry (default: `60`) |
 | `auth.isUnauthorized` | Custom UNAUTHORIZED error detection |
 
 ### Helpers

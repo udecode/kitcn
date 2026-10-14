@@ -11,12 +11,14 @@ import type {
   UseMutationOptions,
   UseQueryOptions,
 } from '@tanstack/react-query';
+import type { OptimisticUpdate } from 'convex/browser';
 import type { Watch, WatchQueryOptions } from 'convex/react';
 import type {
   FunctionArgs,
   FunctionReference,
   FunctionReturnType,
 } from 'convex/server';
+import type { Value } from 'convex/values';
 import type {
   ConvexActionKey,
   ConvexInfiniteQueryMeta,
@@ -234,6 +236,15 @@ export type DecorateInfiniteQuery<T extends FunctionReference<'query'>> = {
 // ============================================================================
 
 /**
+ * Convex-native optimistic update for a cRPC mutation. It edits Convex's local
+ * query store, which the query client reads, so Convex rolls it back when the
+ * mutation fails. Args and query values are in their wire shape.
+ */
+export type ConvexOptimisticUpdateOption<Args extends Record<string, Value>> = {
+  optimisticUpdate?: OptimisticUpdate<Args>;
+};
+
+/**
  * Decorated mutation procedure with mutationOptions and mutationKey methods.
  */
 export type DecorateMutation<T extends FunctionReference<'mutation'>> = {
@@ -245,7 +256,8 @@ export type DecorateMutation<T extends FunctionReference<'mutation'>> = {
         MutationVariables<T>
       >,
       ReservedMutationOptions
-    >
+    > &
+      ConvexOptimisticUpdateOption<FunctionArgs<T>>
   ) => UseMutationOptions<
     FunctionReturnType<T>,
     DefaultError,

@@ -42,6 +42,62 @@ describe('CRPC error guards', () => {
     expect(isCRPCClientError(null)).toBe(false);
   });
 
+  test('recognizes client errors from another copy of CRPCClientError', () => {
+    const foreignError = Object.assign(new Error('UNAUTHORIZED: todos:list'), {
+      name: 'CRPCClientError',
+      code: 'UNAUTHORIZED',
+      functionName: 'todos:list',
+    });
+
+    expect(foreignError).not.toBeInstanceOf(CRPCClientError);
+    expect(isCRPCClientError(foreignError)).toBe(true);
+    expect(isCRPCError(foreignError)).toBe(true);
+    expect(isCRPCErrorCode(foreignError, 'UNAUTHORIZED')).toBe(true);
+    expect(isCRPCErrorCode(foreignError, 'FORBIDDEN')).toBe(false);
+  });
+
+  test('rejects incomplete or unsupported client error lookalikes', () => {
+    const lookalikes = [
+      { name: 'CRPCClientError' },
+      {
+        name: 'CRPCClientError',
+        code: 'MADE_UP_CODE',
+        functionName: 'example',
+        message: 'MADE_UP_CODE: example',
+      },
+      {
+        name: 'CRPCClientError',
+        code: 'UNAUTHORIZED',
+        message: 'UNAUTHORIZED: todos:list',
+      },
+      {
+        name: 'CRPCClientError',
+        code: 'UNAUTHORIZED',
+        functionName: 'todos:list',
+      },
+      {
+        name: 'CRPCClientError',
+        code: 'UNAUTHORIZED',
+        functionName: 'todos:list',
+        message: 'UNAUTHORIZED: todos:list',
+      },
+      {
+        name: 'Error',
+        code: 'UNAUTHORIZED',
+        functionName: 'todos:list',
+        message: 'UNAUTHORIZED: todos:list',
+      },
+      new Error('UNAUTHORIZED: todos:list'),
+      'CRPCClientError',
+    ];
+
+    for (const lookalike of lookalikes) {
+      expect(isCRPCClientError(lookalike)).toBe(false);
+      expect(isCRPCError(lookalike)).toBe(false);
+      expect(isCRPCErrorCode(lookalike, 'UNAUTHORIZED')).toBe(false);
+    }
+  });
+
   test('isCRPCError detects deterministic CRPC and 4xx HttpClientError-like values', () => {
     const crpcError = new CRPCClientError({
       code: 'BAD_REQUEST',

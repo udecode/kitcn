@@ -3,5 +3,8 @@
 // Do not edit manually. Run `kitcn codegen` to regenerate.
 
 export const procedureNames = {
-  "messages.ts": [{ column: 3, line: 32, name: "messages:create" }, { column: 3, line: 15, name: "messages:list" }],
+  "messages.ts": [
+    { column: 3, line: 32, name: "messages:create" },
+    { column: 3, line: 15, name: "messages:list" },
+  ],
 };

@@ -1,4 +1,6 @@
 import type { QueryFunctionContext } from '@tanstack/react-query';
+import { ConvexReactClient } from 'convex/react';
+import { syncConvexAuthForStartLoader } from '../auth-start';
 
 describe('ConvexQueryClient (server mode)', () => {
   const originalWindow = (globalThis as any).window;
@@ -123,6 +125,88 @@ describe('ConvexQueryClient (server mode)', () => {
 
     expect(calls).toEqual([{ args: { prompt: 'hi' }, name: 'action' }]);
     expect(result).toEqual({ args: { prompt: 'hi' }, ok: true });
+  });
+
+  describe('per-request server clients', () => {
+    const originalFetch = globalThis.fetch;
+    let seen: Array<{ auth: string | null; ts: string }> = [];
+
+    beforeEach(() => {
+      let nextTs = 0;
+      seen = [];
+      globalThis.fetch = (async (url: string, init?: RequestInit) => {
+        if (String(url).endsWith('/api/query_ts')) {
+          nextTs += 1;
+          return Response.json({ ts: `snapshot-${nextTs}` });
+        }
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        seen.push({
+          auth: new Headers(init?.headers).get('Authorization'),
+          ts: String(body.ts),
+        });
+        return Response.json({ status: 'success', value: null, logLines: [] });
+      }) as typeof fetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    const context = (name: string) =>
+      ({
+        queryKey: ['convexQuery', name, {}],
+      }) as unknown as QueryFunctionContext<readonly unknown[]>;
+
+    const startConvexClient = () => {
+      const convex = new ConvexReactClient(
+        'https://happy-otter-123.convex.cloud'
+      );
+      return {
+        url: convex.url,
+        logger: convex.logger,
+        setAuth: () => {},
+        clearAuth: () => {},
+      };
+    };
+
+    test('constructing and querying call no Math.random', async () => {
+      const ConvexQueryClient = await getServerConvexQueryClient('random');
+      const convex = startConvexClient();
+      const random = spyOn(Math, 'random');
+      try {
+        const client = new ConvexQueryClient(convex as any);
+        await client.queryFn()(context('a:one'));
+
+        expect(random).toHaveBeenCalledTimes(0);
+      } finally {
+        random.mockRestore();
+      }
+    });
+
+    test('interleaved Start requests keep their own auth and snapshot', async () => {
+      const ConvexQueryClient = await getServerConvexQueryClient('interleave');
+      const convex = startConvexClient();
+
+      const a = new ConvexQueryClient(convex as any);
+      await syncConvexAuthForStartLoader({
+        convex: a,
+        getToken: async () => 'token-a',
+      });
+      await a.queryFn()(context('a:one'));
+      const b = new ConvexQueryClient(convex as any);
+      await syncConvexAuthForStartLoader({
+        convex: b,
+        getToken: async () => 'token-b',
+      });
+      await b.queryFn()(context('b:one'));
+      await a.queryFn()(context('a:two'));
+
+      expect(seen).toEqual([
+        { auth: 'Bearer token-a', ts: 'snapshot-1' },
+        { auth: 'Bearer token-b', ts: 'snapshot-2' },
+        { auth: 'Bearer token-a', ts: 'snapshot-1' },
+      ]);
+    });
   });
 
   test('queryFn throws if a skipped query ever runs', async () => {

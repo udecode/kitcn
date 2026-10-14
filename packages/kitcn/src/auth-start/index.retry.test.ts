@@ -1,37 +1,50 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import * as startServer from '@tanstack/react-start/server';
+import { ConvexHttpClient } from 'convex/browser';
+import * as convexNextjs from 'convex/nextjs';
 import { makeFunctionReference } from 'convex/server';
+import * as tokenModule from '../auth/internal/token';
+
+import { convexBetterAuthReactStart } from './server';
+
+const activeSpies: Array<{ mockRestore: () => void }> = [];
+
+const trackSpy = <T extends { mockRestore: () => void }>(spy: T): T => {
+  activeSpies.push(spy);
+  return spy;
+};
 
 describe('auth/start token refresh', () => {
   afterEach(() => {
-    mock.restore();
+    for (const spy of activeSpies.splice(0)) {
+      spy.mockRestore();
+    }
   });
 
   test('retries with a fresh token when cached auth fails', async () => {
-    const query = mock(async function (
-      this: { token?: string },
-      _ref: unknown
-    ) {
-      if (this.token === 'stale-token') {
+    const tokens = new WeakMap<ConvexHttpClient, string>();
+    const query = mock(async (token?: string) => {
+      if (token === 'stale-token') {
         const error = new Error('unauthorized');
         (error as Error & { code?: string }).code = 'UNAUTHORIZED';
         throw error;
       }
       return 'ok';
     });
-
-    mock.module('convex/browser', () => ({
-      ConvexHttpClient: class {
-        token?: string;
-        constructor(_url: string) {}
-        query = query;
-        mutation = query;
-        action = query;
-        setAuth(token: string) {
-          this.token = token;
-        }
-        setFetchOptions(_options: RequestInit) {}
-      },
-    }));
+    trackSpy(
+      spyOn(ConvexHttpClient.prototype, 'setAuth').mockImplementation(function (
+        this: ConvexHttpClient,
+        token: string
+      ) {
+        tokens.set(this, token);
+      })
+    );
+    trackSpy(
+      spyOn(ConvexHttpClient.prototype, 'query').mockImplementation(
+        async function (this: ConvexHttpClient) {
+          return query(tokens.get(this));
+        } as typeof ConvexHttpClient.prototype.query
+      )
+    );
 
     const getToken = mock(async (_siteUrl: string, _headers: Headers) => {
       if (getToken.mock.calls.length === 1) {
@@ -40,15 +53,10 @@ describe('auth/start token refresh', () => {
       return { isFresh: true, token: 'fresh-token' };
     });
 
-    mock.module('../auth/internal/token', () => ({
-      getToken,
-    }));
+    trackSpy(spyOn(tokenModule, 'getToken').mockImplementation(getToken));
 
     const request = new Request('https://app.example.com/');
-    mock.module('@tanstack/react-start/server', () => ({
-      getRequest: () => request,
-      getRequestHeaders: () => request.headers,
-    }));
+    trackSpy(spyOn(startServer, 'getRequest').mockReturnValue(request));
 
     const serverMutation = mock(
       async (_ref: unknown, _args: unknown, options?: { token?: string }) => {
@@ -61,11 +69,21 @@ describe('auth/start token refresh', () => {
       }
     );
 
-    mock.module('convex/nextjs', () => ({
-      fetchAction: serverMutation,
-      fetchMutation: serverMutation,
-      fetchQuery: serverMutation,
-    }));
+    trackSpy(
+      spyOn(convexNextjs, 'fetchAction').mockImplementation(
+        serverMutation as typeof convexNextjs.fetchAction
+      )
+    );
+    trackSpy(
+      spyOn(convexNextjs, 'fetchMutation').mockImplementation(
+        serverMutation as typeof convexNextjs.fetchMutation
+      )
+    );
+    trackSpy(
+      spyOn(convexNextjs, 'fetchQuery').mockImplementation(
+        serverMutation as typeof convexNextjs.fetchQuery
+      )
+    );
 
     const mutationRef = makeFunctionReference<'mutation'>('todos:create');
     const api = {
@@ -76,8 +94,6 @@ describe('auth/start token refresh', () => {
         }),
       },
     } as const;
-
-    const { convexBetterAuthReactStart } = await import('./server');
 
     const auth = convexBetterAuthReactStart({
       api,
