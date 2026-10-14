@@ -74,10 +74,10 @@ Blocked condition:
 Task state:
 - task_type: bug / staged migration preparation
 - task_complexity: non-trivial
-- current_phase: delivery
-- current_phase_status: in_progress
-- next_phase: commit, final review and PR identity
-- goal_status: active
+- current_phase: source delivery complete
+- current_phase_status: done
+- next_phase: operator preparation deployment; dependent activation
+- goal_status: complete preparation source slice
 
 Current verdict:
 - verdict: source verified; delivery in progress
@@ -122,7 +122,7 @@ Start Gates:
 | Skill analysis before edits | yes | task/autoclosure/autogoal, architect, testing, deslop and autoreview owners loaded |
 | Active goal checked or created | yes | existing open-PR batch goal; no duplicate goal |
 | Source of truth read before edits | yes | VISION, docs owner map, issue443 and all PR452 raw feedback |
-| Exact per-PR task ownership | yes | not-yet-created preparation PR slice only; separate #452 activation plan |
+| Exact per-PR task ownership | yes | PR #487 only; separate #452 activation plan |
 | GitHub comments and attachments read | yes | 452-feedback-pre-review.json; 2 comments,9 reviews,6 threads,all12 thread comments |
 | Video transcript evidence required | no | N/A: no videos |
 | Pre-solution issue challenge required | yes | deploy-before-migrate source confirmed; alternative candidates evaluated |
@@ -136,121 +136,121 @@ Start Gates:
 | Browser tool decision for browser surface | no | N/A: no rendered change; public endpoint integration owns proof |
 | Commit / PR expectation decision | yes | whole checkout normal commit/push/new preparation PR authorized by user split and task |
 | Task-style PR body decision | yes | emoji task body with this plan and dependent #452 |
-| Task-plan PR body evidence | yes | N/A before new PR exists; final readback required |
+| Task-plan PR body evidence | yes | PR487 body names this exact plan; final-head receipt verifies ownership after identity repair |
 | GitHub issue sync expectation decision | yes | link dependency, no fixes443 claim in preparation |
 | Output budget strategy recorded | yes | bounded outputs; full logs under /tmp/kitcn-pr-closure-20261014 |
 
 Work Checklist:
-- [ ] If a duration was requested, it is recorded as minimum active work unless
+- [x] If a duration was requested, it is recorded as minimum active work unless
       explicitly marked hard stop; when no better metric exists, initial and
       final confidence scores are recorded.
-- [ ] Objective includes outcome, completion threshold, verification surface,
+- [x] Objective includes outcome, completion threshold, verification surface,
       constraints, boundaries, and blocked condition.
-- [ ] Task source classified with source type, id/link, title, task type,
+- [x] Task source classified with source type, id/link, title, task type,
       acceptance criteria, caveats, likely files/routes/packages, browser
       surface, and root-cause layer.
-- [ ] Every GitHub PR in scope has its own task plan. This plan owns one exact
+- [x] Every GitHub PR in scope has its own task plan. This plan owns one exact
       PR, owns a not-yet-created PR slice, or records N/A because no PR is in
       scope; a batch plan is not used as a substitute.
-- [ ] Required video or screen-recording evidence is cached/read as normalized
+- [x] Required video or screen-recording evidence is cached/read as normalized
       `<video-transcripts>` XML, or marked N/A with reason.
-- [ ] For public GitHub bug reports, behavior claims, technical diagnoses, or
+- [x] For public GitHub bug reports, behavior claims, technical diagnoses, or
       suggested fixes, reporter claims are challenged before implementation
       with a recorded verdict: `valid`, `not reproduced`, `invalid`,
       `wont-fix`, `partially valid`, or `platform limitation`. Feature, docs,
       support, or cleanup requests with no bug claim may mark reproduction
       `N/A` with reason.
-- [ ] Repro escalation ladder followed for bug/behavior claims: focused
+- [x] Repro escalation ladder followed for bug/behavior claims: focused
       test/source-level repro first when applicable; existing repo-owned
       automated browser or integration proof next when available and useful as
       executable coverage; the repo-approved Browser tool next when tests or
       automation cannot reproduce or cannot model the surface honestly;
       screenshot or explicit visual-proof waiver when visual/native state
       matters.
-- [ ] Hard-stop rule followed for bug/behavior claims: no code when the issue
+- [x] Hard-stop rule followed for bug/behavior claims: no code when the issue
       is not reproduced, invalid, or won't-fix; partial validity pivots to the
       best long-term fix and records what was wrong or incomplete in the
       issue's proposed path.
-- [ ] Nearby repo instructions and implementation patterns read before edits.
-- [ ] Source-listed case matrix is complete and every contradiction has an
+- [x] Nearby repo instructions and implementation patterns read before edits.
+- [x] Source-listed case matrix is complete and every contradiction has an
       owner, harness, and verdict before mutation.
-- [ ] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
+- [x] Readiness is classified `ready`, `repair-source`, `major`, `blocked`, or
       `invalid` with evidence.
-- [ ] Implementation fixes the right ownership boundary, or the narrower choice
+- [x] Implementation fixes the right ownership boundary, or the narrower choice
       is recorded with reason.
-- [ ] Release artifact requirement recorded: active changeset, new changeset, or
+- [x] Release artifact requirement recorded: active changeset, new changeset, or
       N/A with reason.
-- [ ] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
+- [x] Final handoff shape decided: bug/feature/testing/batch/review/GitHub
       requirements, PR body sync, and issue sync when applicable.
-- [ ] Commit/PR handling recorded for code-changing work: commit and PR
+- [x] Commit/PR handling recorded for code-changing work: commit and PR
       completed, no local patch, user explicitly declined, or blocker recorded.
       "User did not separately ask for a PR" is not a valid blocker.
-- [ ] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
+- [x] PR body shape recorded: PR #270 emoji task-style body used, N/A reason
       recorded, or blocker recorded.
-- [ ] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
+- [x] PR task evidence recorded: body includes `🧭 Task plan: ...`, the plan
       exists at the PR head, and it identifies the exact PR before autoclosure.
-- [ ] Branch handling recorded for code-changing work: dedicated branch used,
+- [x] Branch handling recorded for code-changing work: dedicated branch used,
       new branch needed, or N/A with reason.
-- [ ] Local-env-rot retry policy recorded for any surprising repo-wide failure:
+- [x] Local-env-rot retry policy recorded for any surprising repo-wide failure:
       reinstall/rerun evidence or N/A with reason.
-- [ ] Workspace authority recorded: every proof command names the cwd/tool that
+- [x] Workspace authority recorded: every proof command names the cwd/tool that
       owns the changed behavior.
-- [ ] Output budget discipline recorded and followed: broad searches are
+- [x] Output budget discipline recorded and followed: broad searches are
       scoped, capped, counted, or artifacted instead of streamed into goal
       context.
-- [ ] High-risk note recorded for public API, runtime, package-boundary,
+- [x] High-risk note recorded for public API, runtime, package-boundary,
       browser behavior, agent-action, or command-contract changes, or marked
       N/A with reason.
-- [ ] Review/autoreview target selected from actual diff state for non-trivial
+- [x] Review/autoreview target selected from actual diff state for non-trivial
       implementation work, or marked N/A with reason.
-- [ ] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
+- [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
-| Named verification threshold | pending | Run the command, proof, source audit, or artifact check named in this plan | pending |
-| Exact per-PR task ownership | pending | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | pending |
-| Pre-solution issue challenge verdict | pending | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | pending |
-| Repro escalation ladder | pending | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | pending |
-| Bug reproduced before fix | pending | Record failing test/repro or N/A with reason | pending |
-| Targeted behavior verification | pending | Run focused test/proof for changed behavior or record N/A | pending |
-| TypeScript or typed config changed | pending | Run relevant typecheck | pending |
-| Package exports or file layout changed | pending | Run the relevant package build before final verification and keep generated updates | pending |
-| Package manifests, lockfile, or install graph changed | pending | Run `bun install` and relevant package checks | pending |
-| Agent rules or skills changed | pending | Run `bun install` and verify generated skill sync | pending |
-| Workspace authority proof | pending | Run verification in the owning repo/package/app/route/tool and record cwd; do not count the wrong workspace as proof | pending |
-| Browser surface changed | pending | Capture Browser Use proof or record explicit waiver/blocker | pending |
-| Browser final proof | pending | Attach screenshot or exact browser verification caveat when browser proof applies | pending |
-| UI walkthrough | pending | If UI or rendered output changed, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | pending |
-| Scaffold or fixture output changed | pending | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | pending |
-| Package behavior or public API changed | pending | Add a changeset or record why no changeset applies | pending |
-| Docs and kitcn skill sync changed | pending | Keep `www/**` and `packages/kitcn/skills/kitcn/**` in sync, or record N/A | pending |
-| Docs or content changed | pending | For docs-heavy work, use `--template docs`; for incidental docs, verify source-backed claims, links, examples, and rendered output or record N/A | pending |
-| High-risk mini gate | pending | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | pending |
-| Agent-native review for agent/tooling changes | pending | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | pending |
-| Local install corruption suspected | pending | Run `bun install` once, rerun the exact failing command, or record N/A | pending |
-| Commit created | pending | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| PR create or update | pending | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | pending |
-| Task-style PR body verified | pending | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | pending |
-| PR task evidence verified | pending | Verify body plan line, plan at PR head, and exact PR ownership | pending |
-| PR proof image hosting | pending | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | pending |
-| GitHub issue sync-back | pending | Post concise issue sync after PR exists, or record N/A/blocker | pending |
-| Final handoff contract | pending | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | pending |
-| Final lint | pending | Run `bun lint:fix` or scoped equivalent | pending |
-| Output budget discipline | pending | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | pending |
-| Timed checkpoint | pending | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | pending |
-| Autoreview for non-trivial implementation changes | pending | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | pending |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/443-project-access-preparation.md` | pending |
+| Named verification threshold | yes | Run the command, proof, source audit, or artifact check named in this plan | Focused24 and full bun check passed including fixture/verify/runtime lanes |
+| Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | PR487 body plan path readback; this dedicated plan identifies exactPR487; final-head receipt validates all OIDs |
+| Pre-solution issue challenge verdict | yes | Record reporter claim, suggested fix, repro verdict, validity verdict, durable boundary, and hard-stop/pivot decision before implementation | Valid deploy-before-migrate defect; staged revision boundary approved by user |
+| Repro escalation ladder | yes | For bug/behavior claims, record test/source-level, automated browser/integration, Browser, and screenshot/visual-proof outcomes or N/A/blocker reasons before `not reproduced` | Source path + real authenticated endpoint tests; browser N/A no rendered change |
+| Bug reproduced before fix | yes | Record failing test/repro or N/A with reason | Fractional order and1500-project dropdown red logs; actual missing-wiring red probes |
+| Targeted behavior verification | yes | Run focused test/proof for changed behavior or record N/A | Four focused suites24 tests passed; post-push replay recorded externally |
+| TypeScript or typed config changed | yes | Run relevant typecheck | Full bun check typecheck passed |
+| Package exports or file layout changed | no | Run the relevant package build before final verification and keep generated updates | N/A: no published source/export change; package build ran only for codegen |
+| Package manifests, lockfile, or install graph changed | yes | Run `bun install` and relevant package checks | Generated fixture package pins converged through fixtures:sync; all fresh fixture installs/checks passed |
+| Agent rules or skills changed | no | Run `bun install` and verify generated skill sync | N/A: none changed |
+| Workspace authority proof | yes | Run verification in the owning repo/package/app/route/tool and record cwd; do not count the wrong workspace as proof | All source/check commands ran in /Users/zbeyens/git/better-convex; isolated Convex codegen owns generated artifacts |
+| Browser surface changed | no | Capture Browser Use proof or record explicit waiver/blocker | N/A: canonical public readers retained, no rendered output change |
+| Browser final proof | no | Attach screenshot or exact browser verification caveat when browser proof applies | N/A: real registered endpoint integration; no visual claim |
+| UI walkthrough | no | If UI or rendered output changed, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | N/A: no UI/rendered change |
+| Scaffold or fixture output changed | yes | Run `bun run fixtures:sync` and `bun run fixtures:check`, or record N/A | fixtures:sync and all eight fixtures:check passed; six generated lucide pins retained |
+| Package behavior or public API changed | no | Add a changeset or record why no changeset applies | N/A: no package behavior/API change; example-private storage only |
+| Docs and kitcn skill sync changed | no | Keep `www/**` and `packages/kitcn/skills/kitcn/**` in sync, or record N/A | N/A: no www or published user skill changes |
+| Docs or content changed | yes | For docs-heavy work, use `--template docs`; for incidental docs, verify source-backed claims, links, examples, and rendered output or record N/A | Dedicated plans preserve task ownership, user-approved staged scope and archive deferral; links/source paths checked |
+| High-risk mini gate | yes | For public API/runtime/package-boundary/browser/agent-action/command-contract changes, record realistic failure mode, proof plan, and why the chosen boundary is right; otherwise N/A | Empty access table cannot activate derived reads in preparation; actual registered public owner-list/member-dropdown/hasAny test |
+| Agent-native review for agent/tooling changes | yes | For `.agents/**`, `.claude/**`, `.codex/**`, skills, hooks, commands, prompts, or user-action tooling, load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted/actionable findings, or record N/A | Existing deployment/status CLI route audited; no changed agent integration; operator target/approval boundary explicit |
+| Local install corruption suspected | no | Run `bun install` once, rerun the exact failing command, or record N/A | N/A: no install corruption; isolated setup missing dependencies corrected at owning example resolution |
+| Commit created | yes | For verified code-changing work, stage the entire current checkout per repo policy and create a commit; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | Whole checkout commit df20cb263d23314d449c5424bf467dfb61f2cf45; identity closeout follows normal push |
+| PR create or update | yes | For verified code-changing work, run `check`, push, create or update the PR, and sync PR body to the task-style final handoff; N/A only for no local patch, explicit user decline, analytical/blocked/inconclusive work, or recorded external blocker | PR487 created after full bun check and clean committed autoreview; normal branch push |
+| Task-style PR body verified | yes | Verify the PR body with `gh pr view --json body`; it must preserve auto-release blocks when applicable, must not include a current-PR self-link, and must use the PR #270 emoji format: `🐛 Fixes ...`, `🟢 95-100% confidence`, `Phase / 🧪 Tests / 🌐 Browser` table, and bold emoji Outcome/Caveat/Design/Verified sections | 487-created-readback.json confirms emoji task body, dedicated plan, caveats and tests |
+| PR task evidence verified | yes | Verify body plan line, plan at PR head, and exact PR ownership | PR487 body has one plan line; this plan repairs exact487 identity; immutable-head receipt validates final push |
+| PR proof image hosting | no | If PR body needs browser proof, replace local image paths with hosted GitHub URLs or record N/A | N/A: no visual proof required |
+| GitHub issue sync-back | no | Post concise issue sync after PR exists, or record N/A/blocker | N/A: preparation is supporting slice; PR body links443 and dependent452 without claiming issue closure |
+| Final handoff contract | yes | Fill the final handoff fields below with exact PR/issue/confidence/tests/browser/outcome/caveats/design/verification content or N/A reason | PR487/source proof/preparation caveat recorded below; final external receipt owns head identity |
+| Final lint | yes | Run `bun lint:fix` or scoped equivalent | bun lint:fix and full check lint passed |
+| Output budget discipline | yes | Verify no unbounded high-volume command output was streamed, or record the accidental output and recovery | Bounded text; full logs in /tmp/kitcn-pr-closure-20261014; known isolated setup errors recorded |
+| Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A: no timed request |
+| Autoreview for non-trivial implementation changes | yes | Load `.agents/skills/autoreview/SKILL.md`; use dirty local `--mode local`, branch/PR `--mode branch --base <base>`, or committed slice `--mode commit --commit <ref>` until no accepted/actionable findings, or record N/A for docs-only/trivial/no local patch | Frozen committed branch df20cb263d23314d449c5424bf467dfb61f2cf45 clean; initial mutable review failed closed and is not counted |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/443-project-access-preparation.md` | check-complete.mjs runs on this materialized plan before final push; final receipt owns live external proof |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
-|-------|--------|----------|------|
-| Intake and source read | in_progress | created plan | implementation |
-| Implementation | pending | | verification |
-| Verification | pending | | closeout |
-| Commit / PR / GitHub sync | pending | | final response |
-| Closeout | pending | | final response |
+| --- | --- | --- | --- |
+| Intake | done | user-approved split and source review | proof |
+| Implementation | done | preparation retains canonical reads; maintained access and paged migrations | proof |
+| Verification | done | focused24 and full check incl runtime passed | delivery |
+| Delivery | done | PR487 created after clean review; plan identity closeout normal push | external receipt |
+| Closeout | done | source slice complete; activation separately gated | operator deployment |
 
 Findings:
 - See rollout contract and verification evidence below.
@@ -272,7 +272,7 @@ Error attempts:
 Verification evidence:
 - Focused24 tests in four suites passed. Full bun check passed on2026-10-14, including lint, typecheck, all tests, eight fixture checks, verify and runtime scenarios. Logs /tmp/kitcn-pr-closure-20261014/preparation-check.log and preparation-focused.log.
 - Source codegen ran on isolated anonymous Convex ports3235/3236; generated API/data model and procedure-name locations retained. Fixtures regenerated through CLI, six lucide snapshot pins converged.
-- Three independent cleanup lenses completed; only accepted P3 deletions applied. Frozen committed-branch autoreview remains before push.
+- Three independent cleanup lenses completed; only accepted P3 deletions applied. Frozen committed-branch autoreview on df20cb263d23314d449c5424bf467dfb61f2cf45 passed with no accepted/actionable findings.
 
 Source-listed case matrix:
 | Case | Source claim | Harness | Before | Expected after | Evidence | Status |
@@ -284,10 +284,10 @@ Source-listed case matrix:
 | Dropdown capacity | P2 | 750 owned + 750 shared | relation fanout exception | 1500 unique rows | access suite | passed |
 
 Final handoff contract:
-- Commit line: pending
-- PR line: pending
-- Issue line: pending
-- Confidence line: pending
+- Commit line: df20cb263d23314d449c5424bf467dfb61f2cf45 plus plan identity closeout
+- PR line: https://github.com/udecode/kitcn/pull/487
+- Issue line: supports #443; activation #452 owns completion
+- Confidence line: 95-100% preparation source; no activation claim
 - Flow table:
   - Reproduced: red fractional timestamp/dropdown/lifecycle wiring probes; browser N/A
   - Verified: focused suites passed; final check in progress; browser N/A
@@ -298,8 +298,8 @@ Final handoff contract:
   - Chosen boundary: deployable preparation and activation revisions
   - Why not quick patch: same-head deployment activates reads before migration completion
   - Why not broader change: no compatibility reader, ORM union redesign or new archive contract
-- Verified: pending
-- PR body verified: pending
+- Verified: focused24, full bun check, independent lenses, clean committed autoreview, real generated codegen
+- PR body verified: gh pr view487 body readback names dedicated plan and retained-read contract
 
 Task-style PR body contract:
 - Preserve any existing `<!-- auto-release:start -->` block. If a changeset is
@@ -323,9 +323,9 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: pending
-- PR: pending
-- Issue: pending
+- Commit: df20cb263d23314d449c5424bf467dfb61f2cf45 plus identity closeout
+- PR: https://github.com/udecode/kitcn/pull/487
+- Issue: supports443; does not close it
 - Browser proof: N/A: no rendered output change
 - Caveats: activation receipts absent; no remote deployment performed
 
@@ -335,8 +335,8 @@ Timeline:
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Intake and source read |
-| Where am I going? | Implementation, verification, commit/PR/GitHub sync, closeout |
+| Where am I? | Preparation source delivered as PR487 |
+| Where am I going? | Operator preparation deployment/backfills; activation452 remains gated |
 | What is the goal? | Prepare access while retaining canonical reads |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
@@ -351,7 +351,7 @@ Hard closeout guard:
 
 Authorized requirements and scope baseline:
 - User requested review and cleanup pushes for all open PRs; explicitly approved separate preparation/activation PRs and deferral of the archive >10,000 access-row P2.
-- This plan owns only the not-yet-created preparation PR. PR #452 has its own activation plan.
+- This plan owns exactly https://github.com/udecode/kitcn/pull/487. PR #452 has its own activation plan.
 - Preserve all canonical public reads until completed preparation deployment/backfills. No force push, merge or real remote deploy authorized.
 - Live archive finding remains open at https://github.com/udecode/kitcn/pull/452#discussion_r3942887895 with explicit user deferral.
 - Package source/API unchanged; no changeset required. Build package only to run codegen. Generated Convex files come from an isolated anonymous local backend, never hand edits.
@@ -376,3 +376,10 @@ Operator rollout contract (not executed):
 3. Only after every target has those receipts, authorize activation #452. A clean test run or two commits in one PR does not substitute.
 - Agent-native parity audit: existing CLI deployment and migration-status commands expose each operation and its JSON status. No new helper, hook, skill or agent integration introduced. Deployment target/approval remains an explicit operator boundary.
 - Prove It Works drove actual authenticated handler and real local codegen proof. Fix Root Causes drove the staged revision boundary rather than a readiness flag. Model the Domain keeps canonical entitlement writes in one helper and deletion in FK cascades.
+
+Live preparation feedback ledger:
+| URL | Priority | Verdict |
+| --- | --- | --- |
+| https://github.com/udecode/kitcn/pull/487#issuecomment-6168988902 | P3 | Status only: preview building; no source finding |
+| https://github.com/udecode/kitcn/pull/487#issuecomment-6168991505 | P3 | Quota notice, no source finding; independent local review completed |
+| https://github.com/udecode/kitcn/pull/487#issuecomment-6168992850 | P3 | No changeset expected: private example/test-only source changes |

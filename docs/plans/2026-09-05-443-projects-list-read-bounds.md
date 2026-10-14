@@ -634,3 +634,5 @@ Live feedback ledger (all raw surfaces, including resolved/outdated):
 | https://github.com/udecode/kitcn/pull/452#discussion_r3951347790 | P2 | Accepted owner-preserving rollback; replay source proof |
 | https://github.com/udecode/kitcn/pull/452#discussion_r3942887899 | P2 | Fixed source: dropdown hydrates bounded batches and returns 750 owned +750 shared; post-push replay required |
 | https://github.com/udecode/kitcn/pull/452#discussion_r3951352697 | P2 | Prior 2000 limit alone was insufficient; current batch hydration closes actual fanout failure |
+
+Preparation source is https://github.com/udecode/kitcn/pull/487, dedicated plan docs/plans/443-project-access-preparation.md. PR #452 remains the activation owner and cannot become ready before per-target preparation/backfill receipts.
