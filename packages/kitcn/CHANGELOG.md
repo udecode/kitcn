@@ -1,5 +1,22 @@
 # kitcn
 
+## 0.33.11
+
+### Patch Changes
+
+- [#485](https://github.com/udecode/kitcn/pull/485) [`1aea19e`](https://github.com/udecode/kitcn/commit/1aea19e9a2d6afe909fa7fe3e31238a15809eb74) Thanks [@EfficiencyCorp](https://github.com/EfficiencyCorp)! - ## Patches
+
+  - Fix Better Auth 1.7.6+ HTTP auth routes failing with `Unexpected field 'modelKey'`: the auth adapters no longer forward Better Auth's `modelKey` into Convex function arguments.
+
+- [#481](https://github.com/udecode/kitcn/pull/481) [`88140a0`](https://github.com/udecode/kitcn/commit/88140a045795e0fe4234dca44180d37ee3bcfa55) Thanks [@EfficiencyCorp](https://github.com/EfficiencyCorp)! - ## Patches
+
+  - Fix Better Auth `findMany` calls with `select` failing with `Unexpected field select` in the generated auth `findMany` query.
+
+- [#483](https://github.com/udecode/kitcn/pull/483) [`64d84a2`](https://github.com/udecode/kitcn/commit/64d84a28e629e0201ac0bbb768462d71f618c75d) Thanks [@EfficiencyCorp](https://github.com/EfficiencyCorp)! - ## Patches
+
+  - Fix `kitcn codegen` and `kitcn dev` making a running `convex dev` redeploy
+    when nothing changed.
+
 ## 0.33.10
 
 ### Patch Changes
