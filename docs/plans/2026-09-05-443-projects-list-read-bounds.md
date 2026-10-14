@@ -658,3 +658,22 @@ Final source proof checkpoint:
 - Generated procedure locations regenerated through real Convex/kitcn CLI. Three independent activation source lenses found no additional source defect. Slop delta only reports generated directory fanout; no source rewrite warranted.
 - The completion checker intentionally fails on the missing target-receipt checkbox and open Closeout phase. This is the agreed activation hold, not a source-check failure.
 - Committed-branch autoreview runs next against preparation base; cleanup push cannot resolve rollout findings.
+
+Verified cleanup delivery:
+- Source cleanup58ff9132ed7de370d0fc688a2ff32049dc161ee3 pushed normally. Full bun check passed before push; committed-branch autoreview against preparation base exited0 with no accepted/actionable P0 findings. Wider independent source lenses found no new runtime issue beyond the held rollout findings.
+- Three-way local/fetched/live source OID equality checked before post-push22-test replay. Paged membership P1 replay and owner-preserving rollback pass.
+- PR readback confirms draft=true and base=codex/project-access-preparation. Required CI is not configured for that dependent base; final local full check is passed. Do not describe missing required-check status as a passing required CI.
+- Dropdown capacity thread resolved after actual1500-result proof. Archive P2 remains open under current explicit user deferral. Two rollout P1 threads remain open.
+- Current raw counts after replies:2 top-level comments,13 review envelopes,6 threads;3 unresolved (2 rolloutP1 plus deferred archiveP2). Raw resolved/outdated surfaces retained.
+
+Additional feedback receipts:
+| Exact URL | Priority | Verdict |
+| --- | --- | --- |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5518528317 | P3 | Empty review envelope created with the recorded thread replies; no separate source request |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5518528720 | P3 | Empty review envelope created with the recorded thread replies; no separate source request |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5518529263 | P3 | Empty review envelope created with the recorded thread replies; no separate source request |
+| https://github.com/udecode/kitcn/pull/452#pullrequestreview-5518529644 | P3 | Empty review envelope created with the recorded thread replies; no separate source request |
+| https://github.com/udecode/kitcn/pull/452#discussion_r4271284894 | P1 | Rollout remains open; preparation source exists but real target receipts are absent |
+| https://github.com/udecode/kitcn/pull/452#discussion_r4271285206 | P1 | Rollout remains open; preparation source exists but real target receipts are absent |
+| https://github.com/udecode/kitcn/pull/452#discussion_r4271285660 | P2 | Explicit current user deferral; archive thread remains open |
+| https://github.com/udecode/kitcn/pull/452#discussion_r4271286002 | P2 | Resolved dropdown fanout after post-push1500-result proof |
