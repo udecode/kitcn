@@ -5,10 +5,12 @@ import { authMutation, authQuery, optionalAuthQuery } from '../lib/crpc';
 import type { Insert, Select } from '../shared/api';
 import {
   grantProjectAccess,
+  hasAnyProject,
+  listAccessibleProjects,
+  listProjectsForDropdown,
   revokeProjectAccess,
   syncProjectArchived,
 } from './_helpers/project_access';
-import { hasAnyProject } from './_helpers/project_existence';
 import { projectMembersTable, projectsTable } from './schema';
 
 // Schema for project list items
@@ -158,34 +160,15 @@ export const list = optionalAuthQuery
       };
     }
 
-    const memberships = await ctx.orm.query.projectMembers.findMany({
-      where: { userId },
-      limit: 1000,
-      columns: { projectId: true },
+    // One index walk over the viewer's own access rows. The previous read model
+    // scanned `projects` and post-filtered owner-or-member in JS, so it cost
+    // O(table) per page and every scanned row joined this subscription.
+    const results = await listAccessibleProjects(ctx, {
+      userId,
+      archived: input.includeArchived === true,
+      cursor: input.cursor,
+      limit: input.limit,
     });
-    const memberProjectIds = new Set(memberships.map((m) => m.projectId));
-
-    const results = await ctx.orm.query.projects
-      .select()
-      .orderBy({ createdAt: 'desc' })
-      .filter(async (project: ProjectRow) => {
-        const isOwner = project.ownerId === userId;
-        const isMember = memberProjectIds.has(project.id);
-
-        if (!(isOwner || isMember)) {
-          return false;
-        }
-
-        if (input.includeArchived) {
-          return project.archived;
-        }
-
-        return !project.archived;
-      })
-      .paginate({
-        cursor: input.cursor,
-        limit: input.limit,
-      });
 
     const projectIds = results.page.map((p) => p.id);
     const statsByProject = await getProjectStats(projectIds);
@@ -616,45 +599,9 @@ export const listForDropdown = authQuery
       })
     )
   )
-  .query(async ({ ctx }) => {
-    const userId = ctx.userId;
-
-    const owned = await ctx.orm.query.projects.findMany({
-      where: { ownerId: userId, archived: false },
-      limit: 1000,
-      columns: { id: true, name: true },
-      extras: { isOwner: true },
-    });
-
-    const memberRows = await ctx.orm.query.projectMembers.findMany({
-      where: { userId },
-      limit: 1000,
-      columns: { projectId: true },
-    });
-
-    const memberProjectIds = Array.from(
-      new Set(memberRows.map((row) => row.projectId))
-    );
-
-    const memberProjects = memberProjectIds.length
-      ? await ctx.orm.query.projects.findMany({
-          where: { id: { in: memberProjectIds }, archived: false },
-          limit: memberProjectIds.length,
-          columns: { id: true, name: true },
-          extras: { isOwner: false },
-        })
-      : [];
-
-    const byId = new Map<
-      string,
-      { id: string; isOwner: boolean; name: string }
-    >();
-    for (const project of memberProjects) byId.set(project.id, project);
-    for (const project of owned) byId.set(project.id, project);
-
-    return Array.from(byId.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
+  .query(({ ctx }) => {
+    // 1000 owned + 1000 member, the capacity the two-query read had.
+    return listProjectsForDropdown(ctx, { userId: ctx.userId, limit: 2000 });
   });
 
 export const hasAny = authQuery.output(z.boolean()).query(({ ctx }) => {

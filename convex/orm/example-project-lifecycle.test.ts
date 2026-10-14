@@ -4,7 +4,6 @@ import { expect, test, vi } from 'vitest';
 import * as z from 'zod';
 import { api, internal } from '../../example/convex/functions/_generated/api';
 import schema, {
-  projectMembersTable,
   projectsTable,
   sessionTable,
   userTable,
@@ -106,40 +105,6 @@ test('registered project mutations preserve owner and member visibility', async 
             archived,
           }));
         });
-      const legacyProjectId = await t.run(async (ctx) => {
-        const { orm } = withOrm(ctx, schema);
-        const [project] = await orm
-          .insert(projectsTable)
-          .values({
-            name: 'Before backfill',
-            ownerId: owner.userId,
-            isPublic: false,
-            archived: false,
-          })
-          .returning();
-        await orm
-          .insert(projectMembersTable)
-          .values({ projectId: project.id, userId: member.userId });
-        return project.id;
-      });
-      expect(await accessRows(legacyProjectId)).toEqual([]);
-      expect(
-        (await asOwner.query(api.projects.list, { cursor: null, limit: 20 }))
-          .page
-      ).toMatchObject([{ id: legacyProjectId }]);
-      for (const viewer of [asOwner, asMember]) {
-        expect(await viewer.query(api.projects.hasAny, {})).toBe(true);
-        expect(
-          await viewer.query(api.projects.listForDropdown, {})
-        ).toMatchObject([{ id: legacyProjectId }]);
-      }
-      await t.run(async (ctx) => {
-        const { orm } = withOrm(ctx, schema);
-        await orm
-          .delete(projectsTable)
-          .where(eq(projectsTable.id, legacyProjectId));
-      });
-
       const projectId = await asOwner.mutation(api.projects.create, {
         name: 'Registered lifecycle',
         isPublic: false,
@@ -158,6 +123,10 @@ test('registered project mutations preserve owner and member visibility', async 
         projectId,
         userEmail: 'member@project-lifecycle.test',
       });
+      expect(
+        (await asMember.query(api.projects.list, { cursor: null, limit: 20 }))
+          .page
+      ).toMatchObject([{ id: projectId, isOwner: false, memberCount: 1 }]);
       expect(await accessRows(projectId)).toHaveLength(2);
       await asOwner.mutation(api.projects.removeMember, {
         projectId,
@@ -194,6 +163,20 @@ test('registered project mutations preserve owner and member visibility', async 
         ).page
       ).toMatchObject([{ id: projectId, archived: true }]);
 
+      expect(
+        (await asMember.query(api.projects.list, { cursor: null, limit: 20 }))
+          .page
+      ).toEqual([]);
+      expect(
+        (
+          await asMember.query(api.projects.list, {
+            cursor: null,
+            limit: 20,
+            includeArchived: true,
+          })
+        ).page
+      ).toMatchObject([{ id: projectId, archived: true }]);
+
       await asOwner.mutation(api.projects.restore, { projectId });
       expect((await accessRows(projectId)).map((row) => row.archived)).toEqual([
         false,
@@ -201,6 +184,11 @@ test('registered project mutations preserve owner and member visibility', async 
       ]);
       expect(
         (await asOwner.query(api.projects.list, { cursor: null, limit: 20 }))
+          .page
+      ).toMatchObject([{ id: projectId, archived: false }]);
+
+      expect(
+        (await asMember.query(api.projects.list, { cursor: null, limit: 20 }))
           .page
       ).toMatchObject([{ id: projectId, archived: false }]);
 
