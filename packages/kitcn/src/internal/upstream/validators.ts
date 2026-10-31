@@ -44,6 +44,7 @@ export const CONVEX_VALIDATOR_KINDS = [
   'float64',
   'int64',
   'commitTs',
+  'function',
   'boolean',
   'null',
   'any',
@@ -705,6 +706,12 @@ export function validate<T extends Validator<any, any, any>>(
         }
         break;
       }
+      case 'function': {
+        if (typeof value !== 'string') {
+          valid = false;
+        }
+        break;
+      }
       case 'any': {
         break;
       }
@@ -954,7 +961,7 @@ export type VRequired<T extends Validator<any, OptionalProperty, any>> =
         : T extends VInt64<infer Type, OptionalProperty>
           ? VInt64<NotUndefined<Type>, 'required'>
           : T extends {
-                readonly kind: 'commitTs';
+                readonly kind: 'commitTs' | 'function';
                 readonly type: infer Type;
               }
             ? Omit<T, 'isOptional' | 'type'> & {
@@ -1055,6 +1062,12 @@ export function vRequired<T extends Validator<any, OptionalProperty, any>>(
       return v.int64() as VRequired<T>;
     case 'commitTs':
       return v.commitTs() as VRequired<T>;
+    case 'function':
+      return v.function({
+        fnType: validator.fnType,
+        args: validator.args,
+        returns: validator.returns,
+      }) as VRequired<T>;
     case 'boolean':
       return v.boolean() as VRequired<T>;
     case 'null':

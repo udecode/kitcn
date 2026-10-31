@@ -17,6 +17,7 @@ const CONVEX_OUTPUT_LINE_SPLIT_RE = /\r?\n/;
 const require = createRequire(import.meta.url);
 const convexPkg = require.resolve('convex/package.json');
 const REAL_CONVEX_CLI_PATH = join(dirname(convexPkg), 'bin/main.js');
+export const LOCAL_CONVEX_VERSION: string = require(convexPkg).version;
 
 export const CLEARED_CONVEX_ENV = {
   CONVEX_DEPLOYMENT: undefined,

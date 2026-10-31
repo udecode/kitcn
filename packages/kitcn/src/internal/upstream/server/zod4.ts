@@ -656,6 +656,9 @@ export function convexToZod<V extends GenericValidator>(
         z.custom(isCommitTsPlaceholder),
       ]);
       break;
+    case 'function':
+      zodValidator = z.string();
+      break;
     case 'boolean':
       zodValidator = z.boolean();
       break;
@@ -1857,7 +1860,7 @@ export type ZodFromValidatorBase<V extends GenericValidator> =
         : V extends VInt64<any>
           ? z.ZodBigInt
           : V extends {
-                readonly kind: 'commitTs';
+                readonly kind: 'commitTs' | 'function';
                 readonly type: infer Type;
               }
             ? z.ZodType<NotUndefined<Type>>
