@@ -1,7 +1,7 @@
 # convex 1.49 support
 
 Objective:
-Support Convex 1.47.x to 1.49.x in kitcn; done when the peer range is `>=1.42 <1.50.0`, pins and fixtures use 1.49.0, `kitcn env pull` keeps values under agents, the `function` validator kind is mapped, the dual-floor type gate and `bun check` pass (`test:runtime` waived to upstream CI), and the PR ships.
+Support Convex 1.47.x to 1.49.x in kitcn; done when the peer range is `>=1.42 <1.50.0`, pins and fixtures use 1.49.0, `kitcn env pull` keeps values under agents, local Convex 1.49 runs on Node 22 or 24, the `function` validator kind is mapped, the dual-floor type gate and `bun check` pass (`test:runtime` waived: no pre-merge runtime proof), and the PR ships.
 
 Goal plan:
 docs/plans/2026-10-31-convex-1-49-support.md
@@ -14,6 +14,8 @@ docs/plans/templates/task.md
 
 Applied packs:
 - package-api (docs/plans/templates/packs/package-api.md)
+- agent-native (docs/plans/templates/packs/agent-native.md): `kitcn env pull`
+  behavior under agents is user-action tooling
 
 Task source:
 - type: Convex release audit slice (support request from a downstream consumer)
@@ -24,8 +26,9 @@ Task source:
   scaffolds, example, fixtures and the latest type lane use Convex 1.49.0; the
   1.42 floor stays; `kitcn env pull` writes values when an agent runs it on
   Convex 1.48+; the `function` validator kind is handled by the vendored
-  helpers; `typecheck:convex` passes at 1.42.3 and 1.49.0; `bun check` passes,
-  with `test:runtime` waived to upstream CI; a changeset ships the delta.
+  helpers; local Convex 1.49 is run on Node 22 or 24; `typecheck:convex` passes
+  at 1.42.3 and 1.49.0; `bun check` passes, with `test:runtime` waived (no
+  pre-merge runtime proof); a changeset ships the delta.
 
 Timed checkpoint:
 - requested duration: N/A: no duration requested
@@ -41,12 +44,19 @@ Completion threshold:
 - `pullEnv` passes `--include-values` when the Convex it runs is 1.47 or newer,
   and omits it below.
 - `CONVEX_VALIDATOR_KINDS`, `validate`, `vRequired`, `VRequired`,
-  `convexToZod` and `ZodFromValidatorBase` handle `function`.
+  `convexToZod` and `ZodFromValidatorBase` handle `function`; `validate` and
+  `convexToZod` require the `function://` prefix.
+- `resolveSupportedLocalNodeEnvOverrides` accepts Node 22 and 24 when the
+  Convex kitcn runs is 1.49 or newer, and `{18, 20, 22, 24}` below.
 - `bun run typecheck:convex` passes against `convex-min-type-test@1.42.3` and
   `convex-type-test@1.49.0`.
-- `bun check` lanes pass: `check:ci` and `test:verify` locally; `test:runtime`
-  not run locally (port 3210 held on the host by an unrelated backend);
-  deferred to upstream CI by explicit waiver.
+- `bun check` lanes pass: `check:ci` and `test:verify` locally;
+  `test:runtime` not run: the runtime scenarios take no port or backend
+  override, and the expo scenarios probe the hardcoded
+  `http://127.0.0.1:3210/_dashboard`, held on this host by an unrelated
+  OrbStack backend. PR CI runs `check:ci` only; `test:runtime` runs in the
+  Convex Matrix workflow on pushes to `changeset-release/main`. This PR has no
+  pre-merge runtime proof.
 - Task closure is legal only when the source-of-truth acceptance criteria are
   satisfied or explicitly narrowed, required verification evidence is recorded,
   code-review and release-artifact gates are closed when applicable, verified
@@ -56,7 +66,7 @@ Completion threshold:
   `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-31-convex-1-49-support.md` passes.
 
 Verification surface:
-- `bun test packages/kitcn/src/cli/supported-dependencies.test.ts packages/kitcn/src/cli/env.test.ts packages/kitcn/src/orm/builders/custom.test.ts`
+- `bun test packages/kitcn/src/cli/supported-dependencies.test.ts packages/kitcn/src/cli/env.test.ts packages/kitcn/src/cli/commands/dev.test.ts packages/kitcn/src/orm/builders/custom.test.ts`
 - `bunx vitest run packages/kitcn/src/internal/upstream/validators.vitest.ts packages/kitcn/src/internal/upstream/server/zod4.vitest.ts`
 - `bun run typecheck:convex` (dual floor)
 - `bun run fixtures:sync`, then `bun check` (lint, typecheck, tests, CLI,
@@ -91,15 +101,15 @@ Boundaries:
   adding a validator kind.
 - Allowed edit scope: `supported-dependencies.ts` and its test, pin targets
   written by `tooling/dependency-pins.ts`, `bun.lock`, fixture manifests from
-  `fixtures:sync`, `cli/env.ts`, `cli/convex-command.ts`, the vendored
+  `fixtures:sync`, `cli/env.ts`, `cli/convex-command.ts`,
+  `cli/commands/dev.ts` and its test, the vendored
   `validators.ts` and `zod4.ts` with tests, the ORM custom test, one
   changeset, this plan and the parent audit plan.
 - Browser surface: N/A: no UI or rendered output.
 - GitHub issue sync: N/A: no GitHub issue.
 - Non-goals: moving the 1.42 floor; ORM `.staged()` tables (separate PR);
-  reshaping `SUPPORTED_LOCAL_CONVEX_NODE_MAJORS` by Convex version; adopting
-  `FunctionHandle_future` in kitcn caller types; wiring `typecheck:convex` into
-  CI.
+  adopting `FunctionHandle_future` in kitcn caller types; wiring
+  `typecheck:convex` into CI; the pre-existing `commitTs` gap in `validate`.
 
 Output budget strategy:
 - Gate output written to the session scratchpad and read with `tail`/`grep`.
@@ -116,20 +126,18 @@ Task state:
 - task_type: chore / dependency-support bump with two compatibility fixes
   (public package boundary)
 - task_complexity: non-trivial
-- current_phase: commit; review and PR pending
+- current_phase: review fix round 1 applied; delta review and PR pending
 - current_phase_status: local commits made, not pushed
-- next_phase: session review lanes, then PR after approval; upstream CI runs
-  `test:runtime`
+- next_phase: session delta review, then PR after approval; `test:runtime`
+  runs only on `changeset-release/main`
 - goal_status: active until the PR merges
 
 Current verdict:
 - verdict: valid
-- confidence: 80-94% (`test:runtime` unproven locally, waived to upstream CI)
+- confidence: 80-94% (no pre-merge `test:runtime` proof)
 - next owner: requesting session (review lanes, PR)
 - reason: every declared and generated surface covers 1.49.0; both type floors,
-  `check:ci` and `test:verify` pass; `test:runtime` not run locally (port 3210
-  held on the host by an unrelated backend); deferred to upstream CI by
-  explicit waiver.
+  `check:ci` and `test:verify` pass; `test:runtime` not run: no pre-merge runtime proof (it runs on `changeset-release/main`).
 
 Implementation readiness:
 - verdict: ready
@@ -202,6 +210,11 @@ Start Gates:
 | Release artifact path selected | yes | `.changeset/bright-handles-pull.md` |
 | `changeset` skill loaded when `.changeset` is required | yes | `.agents/rules/changeset.mdc` followed (`## Patches`, action verbs) |
 | Package build / fixture impact decision recorded | yes | `bun --cwd packages/kitcn build`, `bun --cwd packages/resend build`, `fixtures:sync`, `fixtures:check` |
+| Agent-native pack selected | yes | `kitcn env pull` output under agents changes (review r1 finding 4) |
+| Agent-facing action surface identified | yes | CLI command `kitcn env pull [--out <path>]` and the local Node re-exec for `dev`/`verify`/`init`/`add`/`codegen` |
+| Source rule versus generated mirror boundary identified | yes | No `.agents/**`, `.claude/**` or skill file changed; source owners are `packages/kitcn/src/cli/**` |
+| Installed-skill lock versus local-rule owner identified | yes | N/A: no installed skill or `skills-lock.json` change |
+| `agent-native-reviewer` loaded or waiver recorded | yes | Loaded and applied by hand; see Agent-native review |
 
 Work Checklist:
 - [x] If a duration was requested, it is recorded as minimum active work unless
@@ -241,7 +254,26 @@ Work Checklist:
 - [x] High-risk note recorded (see Open risks).
 - [x] Review/autoreview target selected: `--mode branch --base upstream/main`,
       run by the requesting session's review lanes.
-- [x] Agent-native review decision recorded. N/A: no agent tooling changed.
+- [x] Agent-native review decision recorded: applied by hand; verdict PASS,
+      see Agent-native review.
+- [x] Agent-native pack: source-of-truth rule files are edited instead of
+      generated skill mirrors. N/A: no rule or skill file changed; CLI source
+      edited directly.
+- [x] Agent-native pack: the changed agent action is discoverable from the
+      skill/rule text: `kitcn env --help` and
+      `www/content/docs/cli/backend.mdx` document `env pull` and stay accurate.
+- [x] Agent-native pack: generated mirrors are synced when `.agents/rules/**`
+      changed. N/A: `.agents/rules/**` unchanged.
+- [x] Agent-native pack: installed skills are changed only through
+      `npx skills add/update/remove`. N/A: no installed skill changed.
+- [x] Agent-native pack: routing, required receipts, placeholder failure,
+      completion representability, and forbidden behavior have eval/smoke rows:
+      behavior rows are the `env.test.ts` version matrix and the
+      `dev.test.ts` Node selection cases; routing/receipt rows N/A (no skill
+      or workflow text changed).
+- [x] Agent-native pack: accepted agent-native review findings are fixed or
+      explicitly rejected with reason: no findings; one item recorded under
+      Needs attention.
 - [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
 - [x] Package/API pack: release artifact matrix applied: `.changeset` created.
 - [x] Package/API pack: `.changeset` follows `changeset.mdc` package/version/prose rules.
@@ -263,8 +295,8 @@ Completion Gates:
 | Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | Not-yet-created single-PR slice; owned solely by this plan |
 | Pre-solution issue challenge verdict | yes | Record verdict | `valid` |
 | Repro escalation ladder | yes | Record ladder | Tests / source level |
-| Bug reproduced before fix | yes | Record failing repro | `env.test.ts` 3 fail without the fix; validator tests 4 fail without the fix |
-| Targeted behavior verification | yes | Focused test | supported-dependencies 16/0, env 14/0, ORM custom 10/0, vitest validators + zod4 11/0 |
+| Bug reproduced before fix | yes | Record failing repro | `env.test.ts` 3 fail without the fix; validator tests 4 fail without the fix; round 1: Node selection 2 fail, handle prefix 2 fail without their fixes |
+| Targeted behavior verification | yes | Focused test | supported-dependencies + env + dev + ORM custom: 70 pass / 0 fail; vitest validators + zod4 11/0 |
 | TypeScript or typed config changed | yes | Run typecheck | `bun run typecheck:convex` exit 0 at 1.49.0 and 1.42.3; `bun typecheck` in `check:ci` |
 | Package exports or file layout changed | no | Run package build | N/A: no export change; `bun --cwd packages/kitcn build` run anyway (72 files) |
 | Package manifests, lockfile, or install graph changed | yes | Run `bun install` | `bun install --frozen-lockfile` passes on the 7-line lockfile edit |
@@ -278,10 +310,10 @@ Completion Gates:
 | Docs and kitcn skill sync changed | no | Sync docs | N/A: no version-pinned guidance |
 | Docs or content changed | no | Verify docs | N/A: no docs changed |
 | High-risk mini gate | yes | Failure mode, proof, boundary | See Open risks |
-| Agent-native review for agent/tooling changes | no | Agent-native review | N/A: no agent tooling changed |
+| Agent-native review for agent/tooling changes | yes | Agent-native review | Applied by hand; PASS; see Agent-native review |
 | Local install corruption suspected | yes | Reinstall and rerun | Missing `dist` in a fresh worktree; package builds fixed it |
-| Commit created | yes | Commit | `chore(deps): support convex 1.47 to 1.49` plus `chore(fixtures): sync convex 1.49.0` |
-| PR create or update | yes | Run `check`, push, open PR | `check:ci` and `test:verify` pass; `test:runtime` not run locally (port 3210 held on the host by an unrelated backend); deferred to upstream CI by explicit waiver; push and PR by the requesting session after approval |
+| Commit created | yes | Commit | `chore(deps): support convex 1.47 to 1.49`, `chore(fixtures): sync convex 1.49.0`, `fix(cli): pick Node 22+ for local convex 1.49`, `fix(validators): require function:// handles`, `docs(plans): record review round 1` |
+| PR create or update | yes | Run `check`, push, open PR | `check:ci` and `test:verify` pass; `test:runtime` not run: no pre-merge runtime proof (it runs on `changeset-release/main`); push and PR by the requesting session after approval |
 | Task-style PR body verified | yes | Verify with `gh pr view --json body` | Requesting session sets and reads back the body |
 | PR task evidence verified | yes | Verify body plan line, plan at head, exact PR | Requesting session fills the PR number here and reads it back |
 | PR proof image hosting | no | Host images | N/A: no images |
@@ -290,7 +322,7 @@ Completion Gates:
 | Final lint | yes | `bun lint` | `biome check && eslint` clean (985 files) inside `check:ci` |
 | Output budget discipline | yes | No unbounded output | Gate output in the session scratchpad |
 | Timed checkpoint | no | Improve until elapsed | N/A: no duration requested |
-| Autoreview for non-trivial implementation changes | yes | Review until no accepted findings | Requesting session's read-only review lanes on the branch before the PR |
+| Autoreview for non-trivial implementation changes | yes | Review until no accepted findings | Sol standards + spec lanes on `6f047a3` (round 1): 4 accepted findings, fixed in this round (see Review fixes); session delta review pending |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-31-convex-1-49-support.md` | See Verification evidence |
 | Public API / package boundary proof | yes | Source-audit boundary | `peerDependencies.convex` widens; `convexToZod` and ORM columns accept `v.function()`; no export change |
 | Convex bundle/import proof | yes | Audit static graphs | No import change in Convex entries |
@@ -301,13 +333,19 @@ Completion Gates:
 | Package typecheck/build/test | yes | Owning package checks | `typecheck:convex` both floors; kitcn and resend builds clean |
 | Fixture/scaffold generation | yes | `fixtures:sync` + `fixtures:check` | Both pass |
 | Docs/package skill sync | no | Sync guidance | N/A: no version-pinned guidance |
+| Agent source / generated sync | no | Run `bun install` when `.agents/rules/**` changed and verify generated mirrors | N/A: `.agents/rules/**` unchanged |
+| Installed lock audit | no | Verify expected lock entries and removed skills through CLI-managed state | N/A: no skill install change |
+| Agent action discoverability | yes | Source-audit the skill/rule path an agent will read | `kitcn env --help`, `www/content/docs/cli/backend.mdx:125-193`; wording still matches behavior |
+| Helper and template smoke | no | Syntax-check helpers and prove incomplete failure/completed representation when applicable | N/A: no helper or template changed |
+| Agent-native review | yes | Load `.agents/skills/agent-native-reviewer/SKILL.md` and close accepted findings, or record N/A | PASS, no findings; see Agent-native review |
 
 Phase / pass table:
 | Phase | Status | Evidence | Next |
 |-------|--------|----------|------|
 | Intake and source read | complete | 1.49.0 published; parent audit; PR #484 and #343 read | implementation |
 | Implementation | complete | Constant to 1.49.0; pins synced; lockfile convex entries only; `env pull` gate; `function` kind; tests; changeset | verification |
-| Verification | partial, `test:runtime` waived | Dual-floor typecheck, focused tests, fixtures sync, `check:ci`, `test:verify` pass; `test:runtime` not run locally (port 3210 held on the host by an unrelated backend); deferred to upstream CI by explicit waiver | commit |
+| Verification | partial, `test:runtime` waived | Dual-floor typecheck, focused tests, fixtures sync, `check:ci`, `test:verify` pass; `test:runtime` not run: no pre-merge runtime proof (it runs on `changeset-release/main`) | commit |
+| Review fix round 1 | complete | Node selection by Convex version; `function://` prefix; waiver rewritten; agent-native pack applied | delta review |
 | Commit / PR / GitHub sync | partial | Local commits on `chore/support-convex-1-49`; push and PR by the requesting session after approval | closeout |
 | Closeout | partial | Plan filled; PR line set when the PR opens | final response |
 
@@ -324,6 +362,13 @@ Findings:
   supertypes; kitcn compiles unchanged at both floors.
 - Convex 1.49 declares `engines.node >=22` and its CLI exits on Node < 22.
   `convex@1.42.3` still runs on Node 18 (hard minimum 16, engines `>=18`).
+  Before round 1, a Node 20 parent skipped the re-exec and a Node 25 parent
+  picked Node 20 ahead of Node 22 on `PATH`.
+- Convex marks a function handle by the `function://` prefix
+  (`isFunctionHandle` in `src/server/components/paths.ts`, 1.49.0).
+- The runtime scenarios (`tooling/scenarios.ts`) take no port or backend
+  override: `DEFAULT_SCENARIO_READY_URL` is `http://127.0.0.1:3210/_dashboard`
+  for scenarios without a site URL.
 - `bun install` re-resolved only the seven convex lockfile lines.
 - `fixtures:sync` also picked up upstream scaffold drift (`lucide-react`,
   `cn`, `prettier`, `react`, `next`, `expo`, `@tanstack/router-cli`, and
@@ -336,19 +381,50 @@ Decisions and tradeoffs:
   `convex/package.json` `runLocalConvexCommand` resolves), injectable through
   `PullEnvDeps.convexVersion` for tests. The floor stays 1.42.
 - `function` follows the PR #343 `commitTs` shape: structural type branches so
-  the 1.42.3 floor still compiles; `validate` checks for a string;
-  `convexToZod` maps to `z.string()` because handles are strings and Convex
-  does not check `args` / `returns` at runtime.
-- Node: as PR 484 did for Node 20, a changeset line only.
-  `SUPPORTED_LOCAL_CONVEX_NODE_MAJORS` stays `{18, 20, 22, 24}` because it is
-  version-independent and the 1.42 floor still runs on 18 and 20.
+  the 1.42.3 floor still compiles; `validate` and `convexToZod` require a
+  `function://` string, Convex's own handle check; no `args` / `returns`
+  checks, which Convex skips at runtime too.
+- Node: supported majors follow `LOCAL_CONVEX_VERSION` (1.49+: 22 and 24;
+  older: 18, 20, 22, 24), injectable as `convexVersion` for tests. This
+  supersedes the PR 484 changeset-only precedent (review r1 ruling).
+- `isConvexVersionAtLeast` in `cli/convex-command.ts` is the one version gate
+  for both `env pull` and Node selection.
 - Lockfile edited by `bun install` with no unrelated re-resolve.
 
 Implementation notes:
 - `bun tooling/dependency-pins.ts sync --skip-validate` wrote every pin target.
 
 Review fixes:
-- None yet.
+- Round 1 (Sol standards + spec on `6f047a3`):
+  - [P2] Node selection accepted Node 20 for Convex 1.49: fixed in
+    `fix(cli): pick Node 22+ for local convex 1.49`; tests for the Node 20
+    parent and the Node 25 parent with Node 20 ahead of 22 on `PATH`, both
+    red before the fix.
+  - [P2] `function` validators accepted any string: fixed in
+    `fix(validators): require function:// handles`; `""` and
+    `"not-a-handle"` rejected in both helpers, red before the fix.
+  - [P2] Runtime waiver promised PR CI proof: rewritten; no port override
+    exists, so no run.
+  - [P3] Agent-native pack missing: added and applied by hand.
+  - Pre-existing, out of scope: `validate(v.commitTs(), "x")` returns true.
+
+Agent-native review:
+- Verdict: PASS (applied by hand from `.agents/skills/agent-native-reviewer`).
+- Capability map:
+
+| User action | Agent route | Source owner | Mirror/lock/doc | Proof | Status |
+|---|---|---|---|---|---|
+| Export deployment env values to a file | `kitcn env pull --out <path>` | `packages/kitcn/src/cli/env.ts` | `kitcn env --help`; `www/content/docs/cli/backend.mdx` | `env.test.ts` version matrix (1.42.3, 1.46.0, 1.47.0, 1.49.0) | pass: an agent now gets the same values a human gets on Convex 1.48+ |
+| Run local Convex under a compatible Node | `kitcn dev` / `verify` / `init` / `add` / `codegen` re-exec | `packages/kitcn/src/cli/commands/dev.ts`, `cli.ts` | `docs/solutions/integration-issues/local-convex-cli-must-reexec-under-a-supported-node-20260325.md` | `dev.test.ts` Node 20 and Node 25 cases | pass |
+
+- Findings: none.
+- Needs attention: `kitcn env pull` without `--out` prints values to stdout,
+  so under an agent the values land in its context, which Convex 1.48 avoids
+  by default. Kept, because `env pull` asks for values by name and printed
+  them on every Convex before 1.48; the session may rule otherwise (for
+  example, values only with `--out`).
+- Verification: source audit of `cli/env.ts`, `cli/commands/env.ts`,
+  `cli/commands/dev.ts`, `cli.ts` and the docs page; focused tests above.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -368,13 +444,27 @@ Verification evidence:
 - `bun run fixtures:sync`: exit 0.
 - `bun --cwd packages/kitcn build`: 72 files; `bun --cwd packages/resend build`:
   exit 0.
-- `bun check` lanes on the pinned `bun@1.3.9`: `check:ci` exit 0 (lint 985
-  files clean; typecheck 5/5; `bun test` 1583 pass / 0 fail; vitest 1105 pass,
-  14 skipped; `test:cli` 124 pass; concave smoke passed; `fixtures:check` all
-  eight fixtures match), then `test:verify` exit 0 (Convex 1.49.0 local
-  backend on port 3212, Node 22.23.4). `test:runtime` not run: its scenarios
-  probe `http://127.0.0.1:3210`, held on the host by an unrelated OrbStack
-  backend. Waiver: deferred to upstream CI on the PR.
+- `bun check` lanes on the pinned `bun@1.3.9` (round 0, head `6f047a3`):
+  `check:ci` exit 0, then `test:verify` exit 0 (Convex 1.49.0 local backend on
+  port 3212, Node 22.23.4).
+- Round 1 rerun on the pinned `bun@1.3.9`:
+  - `bun test` on supported-dependencies, env, `commands/dev` and ORM custom:
+    70 pass / 0 fail; vitest validators + zod4: 11 pass.
+  - Without `commands/dev.ts`: the two Convex 1.49 Node cases fail; without the
+    prefix change: 2 vitest cases fail.
+  - `bun run typecheck:convex`: exit 0 (1.49.0 and 1.42.3 lanes).
+  - `bun run check:ci`: exit 0 (lint 985 files clean; typecheck 5/5; `bun test`
+    1587 pass / 0 fail; vitest 1105 pass, 14 skipped; `test:cli` 124 pass;
+    concave smoke passed; `fixtures:check` all eight fixtures match).
+- `test:runtime` not run: the runtime scenarios take no port or backend
+  override (`tooling/scenarios.ts`), and the expo scenarios probe the
+  hardcoded `http://127.0.0.1:3210/_dashboard`, held on this host by an
+  unrelated OrbStack backend. PR CI runs `check:ci` only; `test:runtime` runs in
+  the Convex Matrix workflow on pushes to `changeset-release/main`. Waiver: no
+  pre-merge runtime proof for this PR.
+- Local `bun@1.4.4` fails 10 `commands/dev.test.ts` cases on this branch and on
+  `6f047a3` alike (it reports `process.version` v26); all pass on the pinned
+  `bun@1.3.9`.
 
 Source-listed case matrix:
 | Case | Source claim | Harness | Before | Expected after | Evidence | Status |
@@ -387,29 +477,30 @@ Source-listed case matrix:
 | 6 | `function` validator handled | validators, zod4, ORM custom tests; latest type guard | throws / guard fails | mapped | tests + `typecheck:convex` | done |
 | 7 | Types hold at 1.49 | `typecheck:convex` | n/a | exit 0 both floors | Verification evidence | done |
 | 8 | Scaffolds and fixtures on 1.49.0 | pins sync, `fixtures:sync` | 1.46.0 | 1.49.0 | diff | done |
+| 9 | Node 20 parent re-execs under Node 22 for Convex 1.49 | `dev.test.ts` `test.each` | no re-exec | `PATH` override to Node 22; unchanged on 1.46 | red before, green after | done |
+| 10 | Node 25 parent picks Node 22 over an earlier Node 20 for Convex 1.49 | `dev.test.ts` `test.each` | picks Node 20 | picks Node 22; 1.46 still picks 20 | red before, green after | done |
+| 11 | Malformed function handles rejected | validators + zod4 vitest | `""`, `"not-a-handle"` accepted | rejected | red before, green after | done |
 
 Final handoff contract:
-- Commit line: `chore(deps): support convex 1.47 to 1.49`; `chore(fixtures): sync convex 1.49.0`
+- Commit line: `chore(deps): support convex 1.47 to 1.49`; `chore(fixtures): sync convex 1.49.0`; `fix(cli): pick Node 22+ for local convex 1.49`; `fix(validators): require function:// handles`; `docs(plans): record review round 1`
 - PR line: PR pending (opened by the requesting session after approval)
 - Issue line: 🐛 Fixes ➖ N/A
-- Confidence line: 🟡 80-94% confidence (`test:runtime` waived to upstream CI)
+- Confidence line: 🟡 80-94% confidence (no pre-merge `test:runtime` proof)
 - Flow table:
-  - Reproduced: tests 🔴 `env` 3 fail and validator 4 fail before the fix; browser ➖ N/A
-  - Verified: tests 🟢 dual-floor `typecheck:convex`, `check:ci` and `test:verify`; `test:runtime` waived to upstream CI; browser ➖ N/A
+  - Reproduced: tests 🔴 `env`, validator and Node selection cases fail before their fixes; browser ➖ N/A
+  - Verified: tests 🟢 dual-floor `typecheck:convex`, `check:ci` and `test:verify`; `test:runtime` waived (no pre-merge runtime proof); browser ➖ N/A
 - Browser check: N/A: no browser surface
 - Outcome: kitcn supports Convex 1.47.x to 1.49.x; scaffolds use 1.49.0;
-  `kitcn env pull` keeps values under agents; `v.function()` works in ORM
-  columns and `convexToZod`.
-- Caveat: Convex 1.49 needs Node 22; `test:runtime` not run locally (port 3210
-  held on the host by an unrelated backend); deferred to upstream CI by
-  explicit waiver.
+  `kitcn env pull` keeps values under agents; local Convex 1.49 runs on Node
+  22 or 24; `v.function()` works in ORM columns and `convexToZod`.
+- Caveat: Convex 1.49 needs Node 22 or newer; `test:runtime` not run: no pre-merge runtime proof (it runs on `changeset-release/main`).
 - Design:
-  - Chosen boundary: `SUPPORTED_CONVEX_VERSION`; the Convex package kitcn runs;
-    the vendored validator switches
+  - Chosen boundary: `SUPPORTED_CONVEX_VERSION`; the Convex package kitcn runs
+    (`isConvexVersionAtLeast` gates `env pull` and Node selection); the
+    vendored validator switches
   - Why not quick patch: manifests are derived and revert on the next pins
     sync; always passing `--include-values` breaks the 1.42 to 1.46 range
-  - Why not broader change: raising the floor or version-aware Node selection
-    is not needed for 1.49 support
+  - Why not broader change: raising the floor is not needed for 1.49 support
 - Verified: see Verification evidence
 - PR body verified: set by the requesting session
 
@@ -435,11 +526,11 @@ Task-style PR body contract:
   of that output.
 
 Final handoff / sync:
-- Commit: two commits on `chore/support-convex-1-49`
+- Commit: five commits on `chore/support-convex-1-49`
 - PR: pending
 - Issue: N/A: no issue
 - Browser proof: N/A: no browser surface
-- Caveats: Node 22 floor from Convex 1.49; `test:runtime` waived to upstream CI
+- Caveats: Node 22 floor from Convex 1.49; no pre-merge `test:runtime` proof
 
 Timeline:
 - 2026-10-31T06:57Z Constant bumped, pins synced, lockfile edited.
@@ -447,25 +538,27 @@ Timeline:
   and `env pull` gate added with red-then-green tests; changeset added.
 - 2026-10-31T07:05Z Dual-floor typecheck, fixtures sync, `check:ci` and
   `test:verify` passed; `test:runtime` waived (host port 3210).
+- 2026-10-31T07:40Z Review round 1: Node selection follows the Convex version,
+  `function://` handles required, runtime waiver rewritten, agent-native pack
+  applied; gates rerun.
 
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Local commits on `chore/support-convex-1-49`; review and PR pending |
-| Where am I going? | Session review lanes, PR after approval, upstream CI runs `test:runtime` |
+| Where am I? | Review round 1 fixed in local commits on `chore/support-convex-1-49` |
+| Where am I going? | Session delta review, PR after approval; `test:runtime` runs on `changeset-release/main` |
 | What is the goal? | Support Convex 1.47.x to 1.49.x with the 1.42 floor kept |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
 
 Open risks:
-- Failure mode: a user on Node 20 with Convex 1.49 installed; kitcn treats 20
-  as supported and does not re-exec, so Convex prints its own Node 22 error.
-  Proof: upstream `src/cli/index.ts` hard minimum. Follow-up if wanted: pick
-  the Node set from the installed Convex.
+- Failure mode: no Node 22 or 24 on `PATH` with Convex 1.49 installed;
+  kitcn has nothing to re-exec under, and Convex prints its own Node 22 error.
 - `LOCAL_CONVEX_VERSION` reads the Convex package kitcn resolves; a hoisting
   layout where it differs from the app's Convex already affects every kitcn
   Convex command, not only `env pull`.
 - `typecheck:convex` is outside `bun check`; run manually here.
-- `test:runtime` not run locally (port 3210 held on the host by an unrelated
-  backend); deferred to upstream CI by explicit waiver; a runtime regression
-  would surface only there.
+- No pre-merge `test:runtime` proof: the scenarios take no port override and
+  probe the host's port 3210; PR CI runs `check:ci` only; the Convex Matrix
+  workflow runs `test:runtime` on `changeset-release/main`, so a runtime
+  regression would surface only on the release branch.

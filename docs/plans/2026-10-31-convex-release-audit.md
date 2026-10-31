@@ -179,7 +179,7 @@ Completion Gates:
 | Selected slice or no-action verdict | yes | Pick one PR slice or record why no PR should exist | Compatibility slice selected. |
 | Delegated `task` prompt | yes | Produce the exact implementation prompt, or N/A for no-action verdict | Recorded under Selected Slice; materialized as the linked plan. |
 | Package gates delegated | yes | Include build, changeset, fixtures, docs/skill sync, and browser checks when applicable | Linked plan runs build, changeset, `fixtures:sync`/`fixtures:check`, dual-floor typecheck, `check:ci`, `test:verify`. |
-| Autoreview before closing audit | yes | Run the appropriate review for local workflow edits or delegated task output | Delegated: the requesting session runs read-only review lanes on the branch before the PR opens. |
+| Autoreview before closing audit | yes | Run the appropriate review for local workflow edits or delegated task output | Delegated: Sol standards + spec lanes reviewed `6f047a3`; 4 accepted findings fixed in round 1 (linked plan Review fixes). |
 | Output budget discipline | yes | Verify broad output was scoped and only relevant evidence was kept | Changelog and diffs bounded as recorded. |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-31-convex-release-audit.md` | See Verification evidence. |
 
@@ -218,7 +218,7 @@ Opportunity Ledger:
 | no-op | `ctx.storage.get/store` in mutations | 1.48.0 package + Ship | `storage.d.ts` merges into `StorageWriter` | no storage type wrappers | Pass-through. |
 | no-op | `1.49.0-alpha.0` prerelease | npm only | none | none | Superseded by 1.49.0. |
 | no-op | `convex plugins install` | 1.49.0 package | `cli/plugins.d.ts` added | unknown-command passthrough | Reachable; no wrapper. |
-| compatibility | Node 20 dropped (Node 22+) | 1.49.0 package | `cli/index.ts` hard minimum 22; `engines.node >=22` | `SUPPORTED_LOCAL_CONVEX_NODE_MAJORS`; changeset | **Selected (changeset note only)**, as PR 484 did for Node 20. |
+| compatibility | Node 20 dropped (Node 22+) | 1.49.0 package | `cli/index.ts` hard minimum 22; `engines.node >=22` | `SUPPORTED_LOCAL_CONVEX_NODE_MAJORS`; changeset | **Selected:** pick Node 22 or 24 for local Convex 1.49+ (review r1 ruling; supersedes the PR 484 changeset-only precedent). |
 | compatibility | `v.function()` validator kind | 1.49.0 package | `VFunction` joins `Validator`; `values/index.d.ts` exports it | `CONVEX_VALIDATOR_KINDS`, `validate`, `vRequired`, `VRequired`, `convexToZod`, `ZodFromValidatorBase` | **Selected:** latest-lane type guard fails without it. |
 
 Opportunity Details:
@@ -247,14 +247,14 @@ Opportunity Details:
   - verify: `bunx vitest run` on `validators.vitest.ts` and `zod4.vitest.ts`;
     `bun test packages/kitcn/src/orm/builders/custom.test.ts`; dual-floor
     `typecheck:convex`
-- Compatibility, Node 22, selected as a changeset note, high confidence:
+- Compatibility, Node 22, selected, high confidence:
   - changelog: 1.49.0 drops Node 20
   - diff: `HARD_MINIMUM_NODE_MAJOR_VERSION` 20 -> 22 in `src/cli/index.ts`
-  - kitcn: `SUPPORTED_LOCAL_CONVEX_NODE_MAJORS` keeps 18 and 20 because the
-    1.42 floor still runs on them; PR 484 kept 18 when 1.45 dropped it and only
-    noted the Node floor in its changeset
-  - boundary: changeset line only
-  - verify: N/A beyond the changeset
+  - kitcn: `SUPPORTED_LOCAL_CONVEX_NODE_MAJORS` accepted Node 20, so a Node 20
+    parent skipped the re-exec and a Node 25 parent could pick Node 20 ahead
+    of Node 22 on `PATH`; the 1.42 floor still runs on 18 and 20
+  - boundary: accepted majors follow the Convex kitcn runs (1.49+: 22 and 24)
+  - verify: `bun test packages/kitcn/src/cli/commands/dev.test.ts`
 - Feature, `.staged()` tables, not selected: separate PR.
 
 Selected Slice:
@@ -263,12 +263,14 @@ Selected Slice:
   `function` validator kind in the vendored helpers.
 - class: compatibility
 - implementation boundary: `SUPPORTED_CONVEX_VERSION` and generated pins;
-  `cli/env.ts` + `cli/convex-command.ts`; `internal/upstream/validators.ts`
+  `cli/env.ts` + `cli/convex-command.ts`; `cli/commands/dev.ts` Node
+  selection; `internal/upstream/validators.ts`
   and `internal/upstream/server/zod4.ts`; tests; changeset
 - acceptance checks: focused tests red before / green after; dual-floor
   `typecheck:convex`; `bun --cwd packages/kitcn build`; `fixtures:sync` and
-  `fixtures:check`; `check:ci`; `test:verify`; `test:runtime` waived if the
-  host port is held
+  `fixtures:check`; `check:ci`; `test:verify`; `test:runtime` only where it
+  can run without the host's port 3210, otherwise waived as no pre-merge
+  runtime proof
 - delegated task prompt:
 
   ```md
@@ -329,10 +331,11 @@ Findings:
 Decisions and tradeoffs:
 - Gate the env flag on the installed Convex rather than raising the floor to
   1.47: the floor is a separate decision and the ruling keeps it at 1.42.
-- Node floor handled as in PR 484 (changeset note, Node set unchanged): the set
-  spans the 1.42 floor, and Convex 1.49 prints its own clear Node error.
-- `v.function()` maps to `z.string()` in `convexToZod`: function handles are
-  strings at runtime and Convex does not check `args`/`returns` at runtime.
+- Node majors follow the Convex kitcn runs: 1.49+ accepts 22 and 24, older
+  keeps 18, 20, 22, 24 (review r1 ruling, superseding the PR 484 precedent).
+- `v.function()` requires a `function://` string in `validate` and
+  `convexToZod`, Convex's own handle check (`isFunctionHandle`); `args` /
+  `returns` stay unchecked, as in Convex at runtime.
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
