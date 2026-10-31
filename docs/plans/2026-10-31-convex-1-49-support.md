@@ -19,7 +19,7 @@ Applied packs:
 
 Task source:
 - type: Convex release audit slice (support request from a downstream consumer)
-- id / link: PR pending (opened by the requesting session after approval); no
+- id / link: PR #492 (https://github.com/udecode/kitcn/pull/492); no
   udecode/kitcn issue
 - title: Support Convex 1.47 to 1.49
 - acceptance criteria: kitcn and `@kitcn/resend` declare `convex >=1.42 <1.50.0`;
@@ -126,8 +126,8 @@ Task state:
 - task_type: chore / dependency-support bump with two compatibility fixes
   (public package boundary)
 - task_complexity: non-trivial
-- current_phase: review fix round 1 applied; delta review and PR pending
-- current_phase_status: local commits made, not pushed
+- current_phase: review / PR #492 open
+- current_phase_status: pushed to the fork; upstream CI and maintainer review
 - next_phase: session delta review, then PR after approval; `test:runtime`
   runs only on `changeset-release/main`
 - goal_status: active until the PR merges
@@ -186,7 +186,7 @@ Start Gates:
 | Skill analysis before edits | yes | `convex-release-audit`, `task`, `autogoal` (`package-api` pack); `.agents/rules/changeset.mdc`; `major-task` declined (bump on an existing mechanism) |
 | Active goal checked or created | yes | Goal tools not exposed; this plan is the durable state |
 | Source of truth read before edits | yes | Parent audit; PR #484 plan and diff; PR #343 validator changes; `supported-dependencies.ts`; `tooling/dependency-pins.ts` |
-| Exact per-PR task ownership | yes | Not-yet-created single-PR slice on branch `chore/support-convex-1-49`; PR number recorded when the session opens it |
+| Exact per-PR task ownership | yes | PR #492, branch `chore/support-convex-1-49` |
 | GitHub comments and attachments read | no | N/A: no issue or PR yet |
 | Video transcript evidence required | no | N/A: no video |
 | Pre-solution issue challenge required | yes | `env pull` claim reproduced at source level; see challenge above |
@@ -198,7 +198,7 @@ Start Gates:
 | Branch decision for code-changing task | yes | `chore/support-convex-1-49` off `upstream/main` 0cca0ae9 |
 | Release artifact decision | yes | `.changeset/bright-handles-pull.md`, patch for `kitcn` and `@kitcn/resend` |
 | Browser tool decision for browser surface | no | N/A: no browser surface |
-| Commit / PR expectation decision | yes | Commit locally; the requesting session pushes and opens the PR after approval |
+| Commit / PR expectation decision | yes | Commit and push to the fork; PR #492 opened by the requesting session |
 | Task-style PR body decision | yes | PR #270 emoji body, set by the requesting session |
 | Task-plan PR body evidence | yes | Body must carry `🧭 Task plan: docs/plans/2026-10-31-convex-1-49-support.md` |
 | GitHub issue sync expectation decision | no | N/A: no issue |
@@ -242,8 +242,7 @@ Work Checklist:
 - [x] Commit/PR handling recorded: committed locally on
       `chore/support-convex-1-49`; push and PR by the requesting session.
 - [x] PR body shape recorded: PR #270 emoji task-style body.
-- [x] PR task evidence recorded: body names this plan; plan PR line pending
-      until the PR exists.
+- [x] PR task evidence recorded: PR #492 body names this plan; plan names PR #492.
 - [x] Branch handling recorded: dedicated branch `chore/support-convex-1-49`.
 - [x] Local-env-rot retry policy recorded: missing `packages/kitcn/dist` in a
       fresh worktree broke the minimum type lane; fixed by the package build,
@@ -292,7 +291,7 @@ Completion Gates:
 | Gate | Applies | Required action | Evidence |
 |------|---------|-----------------|----------|
 | Named verification threshold | yes | Run the named commands | See Verification evidence |
-| Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | Not-yet-created single-PR slice; owned solely by this plan |
+| Exact per-PR task ownership | yes | Record the exact PR and dedicated plan, or the not-yet-created single-PR slice | PR #492; owned solely by this plan |
 | Pre-solution issue challenge verdict | yes | Record verdict | `valid` |
 | Repro escalation ladder | yes | Record ladder | Tests / source level |
 | Bug reproduced before fix | yes | Record failing repro | `env.test.ts` 3 fail without the fix; validator tests 4 fail without the fix; round 1: Node selection 2 fail, handle prefix 2 fail without their fixes |
@@ -322,7 +321,7 @@ Completion Gates:
 | Final lint | yes | `bun lint` | `biome check && eslint` clean (985 files) inside `check:ci` |
 | Output budget discipline | yes | No unbounded output | Gate output in the session scratchpad |
 | Timed checkpoint | no | Improve until elapsed | N/A: no duration requested |
-| Autoreview for non-trivial implementation changes | yes | Review until no accepted findings | Sol standards + spec lanes on `6f047a3` (round 1): 4 accepted findings, fixed in this round (see Review fixes); session delta review pending |
+| Autoreview for non-trivial implementation changes | yes | Review until no accepted findings | Sol standards + spec lanes on `6f047a3` (round 1): 4 accepted findings, fixed in this round (see Review fixes); Sol fix-verification lane on `6f047a3..5e4441a`: all resolved, no findings |
 | Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-10-31-convex-1-49-support.md` | See Verification evidence |
 | Public API / package boundary proof | yes | Source-audit boundary | `peerDependencies.convex` widens; `convexToZod` and ORM columns accept `v.function()`; no export change |
 | Convex bundle/import proof | yes | Audit static graphs | No import change in Convex entries |
@@ -483,7 +482,7 @@ Source-listed case matrix:
 
 Final handoff contract:
 - Commit line: `chore(deps): support convex 1.47 to 1.49`; `chore(fixtures): sync convex 1.49.0`; `fix(cli): pick Node 22+ for local convex 1.49`; `fix(validators): require function:// handles`; `docs(plans): record review round 1`
-- PR line: PR pending (opened by the requesting session after approval)
+- PR line: PR #492 (https://github.com/udecode/kitcn/pull/492)
 - Issue line: 🐛 Fixes ➖ N/A
 - Confidence line: 🟡 80-94% confidence (no pre-merge `test:runtime` proof)
 - Flow table:
@@ -527,7 +526,7 @@ Task-style PR body contract:
 
 Final handoff / sync:
 - Commit: five commits on `chore/support-convex-1-49`
-- PR: pending
+- PR: #492 (https://github.com/udecode/kitcn/pull/492)
 - Issue: N/A: no issue
 - Browser proof: N/A: no browser surface
 - Caveats: Node 22 floor from Convex 1.49; no pre-merge `test:runtime` proof
