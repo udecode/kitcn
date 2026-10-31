@@ -38,6 +38,8 @@ import type {
 import { asObjectValidator, v } from 'convex/values';
 import { assert } from './index';
 
+export const FUNCTION_HANDLE_PREFIX = 'function://';
+
 export const CONVEX_VALIDATOR_KINDS = [
   'id',
   'string',
@@ -707,7 +709,10 @@ export function validate<T extends Validator<any, any, any>>(
         break;
       }
       case 'function': {
-        if (typeof value !== 'string') {
+        if (
+          typeof value !== 'string' ||
+          !value.startsWith(FUNCTION_HANDLE_PREFIX)
+        ) {
           valid = false;
         }
         break;

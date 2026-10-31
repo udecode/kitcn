@@ -44,6 +44,8 @@ describe('zod4 (vendored)', () => {
     const validator = convexToZod(v.function({ fnType: 'query' }));
 
     expect(validator.safeParse('function://handle').success).toBe(true);
+    expect(validator.safeParse('').success).toBe(false);
+    expect(validator.safeParse('not-a-handle').success).toBe(false);
     expect(validator.safeParse(42).success).toBe(false);
   });
 

@@ -45,7 +45,12 @@ import { ConvexError, v } from 'convex/values';
 import * as z from 'zod/v4';
 import * as zCore from 'zod/v4/core';
 import type { Expand } from '../index';
-import { addFieldsToValidator, type VRequired, vRequired } from '../validators';
+import {
+  addFieldsToValidator,
+  FUNCTION_HANDLE_PREFIX,
+  type VRequired,
+  vRequired,
+} from '../validators';
 import type { Customization, Registration } from './customFunctions';
 import { NoOp } from './customFunctions';
 
@@ -657,7 +662,7 @@ export function convexToZod<V extends GenericValidator>(
       ]);
       break;
     case 'function':
-      zodValidator = z.string();
+      zodValidator = z.string().startsWith(FUNCTION_HANDLE_PREFIX);
       break;
     case 'boolean':
       zodValidator = z.boolean();

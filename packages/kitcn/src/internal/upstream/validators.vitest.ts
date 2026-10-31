@@ -3,10 +3,12 @@ import { describe, expect, test } from 'vitest';
 import { validate, vRequired } from './validators';
 
 describe('validators (vendored)', () => {
-  test('validate checks function handle values are strings', () => {
+  test('validate requires function handle strings', () => {
     const validator = v.function({ fnType: 'action' });
 
     expect(validate(validator, 'function://handle')).toBe(true);
+    expect(validate(validator, '')).toBe(false);
+    expect(validate(validator, 'not-a-handle')).toBe(false);
     expect(validate(validator, 42)).toBe(false);
   });
 
