@@ -237,6 +237,58 @@ describe('cli/commands/dev', () => {
     });
   });
 
+  const createNodeLookupStub = (versions: Record<string, string>) =>
+    mock((cmd: string) => {
+      if (cmd === 'which') {
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: Object.keys(versions).join('\n'),
+          stderr: '',
+        });
+      }
+      if (versions[cmd]) {
+        return Promise.resolve({
+          exitCode: 0,
+          stdout: versions[cmd],
+          stderr: '',
+        });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+  test.each([
+    ['1.46.0', {}],
+    ['1.49.0', { PATH: '/node22/bin:/usr/bin' }],
+  ])('resolveSupportedLocalNodeEnvOverrides on Node 20 with Convex %s', async (convexVersion, expected) => {
+    const overrides = await resolveSupportedLocalNodeEnvOverrides({
+      convexVersion,
+      currentNodeVersion: 'v20.19.0',
+      env: { PATH: '/usr/bin' },
+      execaFn: createNodeLookupStub({ '/node22/bin/node': '22.22.1' }) as any,
+      runtimeName: 'node',
+    });
+
+    expect(overrides).toEqual(expected);
+  });
+
+  test.each([
+    ['1.46.0', '/node20/bin:/node22/bin:/usr/bin'],
+    ['1.49.0', '/node22/bin:/node20/bin:/usr/bin'],
+  ])('resolveSupportedLocalNodeEnvOverrides picks a PATH node for Convex %s', async (convexVersion, expectedPath) => {
+    const overrides = await resolveSupportedLocalNodeEnvOverrides({
+      convexVersion,
+      currentNodeVersion: 'v25.8.1',
+      env: { PATH: '/node20/bin:/node22/bin:/usr/bin' },
+      execaFn: createNodeLookupStub({
+        '/node20/bin/node': '20.19.0',
+        '/node22/bin/node': '22.22.1',
+      }) as any,
+      runtimeName: 'node',
+    });
+
+    expect(overrides).toEqual({ PATH: expectedPath });
+  });
+
   test('resolveConcaveLocalSiteUrl reads NEXT_PUBLIC_SITE_URL from .env.local', () => {
     const dir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'kitcn-dev-site-url-next-')

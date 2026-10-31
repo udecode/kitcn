@@ -18,6 +18,23 @@ const require = createRequire(import.meta.url);
 const convexPkg = require.resolve('convex/package.json');
 const REAL_CONVEX_CLI_PATH = join(dirname(convexPkg), 'bin/main.js');
 export const LOCAL_CONVEX_VERSION: string = require(convexPkg).version;
+const VERSION_MAJOR_MINOR_RE = /^(\d+)\.(\d+)/;
+
+export const isConvexVersionAtLeast = (
+  version: string,
+  major: number,
+  minor: number
+) => {
+  const match = VERSION_MAJOR_MINOR_RE.exec(version);
+  if (!match) {
+    return false;
+  }
+  const versionMajor = Number(match[1]);
+  return (
+    versionMajor > major ||
+    (versionMajor === major && Number(match[2]) >= minor)
+  );
+};
 
 export const CLEARED_CONVEX_ENV = {
   CONVEX_DEPLOYMENT: undefined,
