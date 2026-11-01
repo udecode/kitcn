@@ -5,6 +5,8 @@ import path from 'node:path';
 import { getConvexConfig } from './codegen.js';
 import {
   formatConvexCommandFailure,
+  isConvexVersionAtLeast,
+  LOCAL_CONVEX_VERSION,
   runLocalConvexCommand,
 } from './convex-command.js';
 import { loadDotenv } from './utils/lazy-deps.js';
@@ -46,6 +48,7 @@ type PushEnvDeps = {
 };
 
 type PullEnvDeps = {
+  convexVersion?: string;
   runCommand?: RunCommand;
 };
 
@@ -459,12 +462,20 @@ export async function pullEnv(
 ) {
   const cwd = process.cwd();
   const runCommand = deps.runCommand ?? defaultRunCommand;
+  const convexVersion = deps.convexVersion ?? LOCAL_CONVEX_VERSION;
   const targetArgs = options.targetArgs ?? [];
   const commandEnv = options.commandEnv;
   const result = await runConvexCommand(
     runCommand,
     cwd,
-    ['env', 'list', ...targetArgs],
+    [
+      'env',
+      'list',
+      ...(isConvexVersionAtLeast(convexVersion, 1, 47)
+        ? ['--include-values']
+        : []),
+      ...targetArgs,
+    ],
     commandEnv
   );
 

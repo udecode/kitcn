@@ -30,7 +30,11 @@ import {
   trackProcess,
   withLocalCodegenEnv,
 } from '../backend-core.js';
-import { stripConvexCommandNoise } from '../convex-command.js';
+import {
+  isConvexVersionAtLeast,
+  LOCAL_CONVEX_VERSION,
+  stripConvexCommandNoise,
+} from '../convex-command.js';
 import { resolveAuthEnvState } from '../env.js';
 import { logger } from '../utils/logger.js';
 
@@ -53,6 +57,7 @@ const DEV_SUPPRESSED_LINE_PATTERNS = [
   /WARN \[Better Auth\]: Rate limiting skipped: could not determine client IP address\./,
 ];
 const SUPPORTED_LOCAL_CONVEX_NODE_MAJORS = new Set([18, 20, 22, 24]);
+const SUPPORTED_LOCAL_CONVEX_1_49_NODE_MAJORS = new Set([22, 24]);
 const LINE_SPLIT_RE = /\r?\n/;
 
 type LocalSiteProxyHandle = {
@@ -81,6 +86,7 @@ type ConcaveLocalDevContract = {
 type DevDeps = Partial<RunDeps> & {
   resolveConcaveLocalSiteUrl?: (cwd?: string) => string;
   resolveSupportedLocalNodeEnvOverrides?: (params: {
+    convexVersion?: string;
     cwd?: string;
     currentNodeVersion?: string;
     env?: Record<string, string | undefined>;
@@ -782,12 +788,14 @@ function prependPathEntry(
 }
 
 export async function resolveSupportedLocalNodeEnvOverrides({
+  convexVersion = LOCAL_CONVEX_VERSION,
   cwd = process.cwd(),
   currentNodeVersion = process.version,
   env,
   execaFn,
   runtimeName = process.release?.name ?? 'node',
 }: {
+  convexVersion?: string;
   cwd?: string;
   currentNodeVersion?: string;
   env?: Record<string, string | undefined>;
@@ -798,11 +806,11 @@ export async function resolveSupportedLocalNodeEnvOverrides({
     return {};
   }
 
+  const supportedMajors = isConvexVersionAtLeast(convexVersion, 1, 49)
+    ? SUPPORTED_LOCAL_CONVEX_1_49_NODE_MAJORS
+    : SUPPORTED_LOCAL_CONVEX_NODE_MAJORS;
   const currentMajor = parseNodeMajor(currentNodeVersion);
-  if (
-    currentMajor !== null &&
-    SUPPORTED_LOCAL_CONVEX_NODE_MAJORS.has(currentMajor)
-  ) {
+  if (currentMajor !== null && supportedMajors.has(currentMajor)) {
     return {};
   }
 
@@ -842,10 +850,7 @@ export async function resolveSupportedLocalNodeEnvOverrides({
     }
 
     const candidateMajor = parseNodeMajor(versionResult.stdout ?? '');
-    if (
-      candidateMajor !== null &&
-      SUPPORTED_LOCAL_CONVEX_NODE_MAJORS.has(candidateMajor)
-    ) {
+    if (candidateMajor !== null && supportedMajors.has(candidateMajor)) {
       return {
         PATH: prependPathEntry(baseEnv.PATH, dirname(candidate)),
       };

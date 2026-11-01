@@ -356,6 +356,7 @@ describe('cli/env', () => {
       await pullEnv(
         {},
         {
+          convexVersion: '1.46.0',
           runCommand: async (args) => {
             expect(args).toEqual(['env', 'list']);
             return {
@@ -387,8 +388,9 @@ describe('cli/env', () => {
           targetArgs: ['--prod'],
         },
         {
+          convexVersion: '1.49.0',
           runCommand: async (args) => {
-            expect(args).toEqual(['env', 'list', '--prod']);
+            expect(args).toEqual(['env', 'list', '--include-values', '--prod']);
             return {
               exitCode: 0,
               stdout: 'FOO=bar\n',
@@ -401,6 +403,35 @@ describe('cli/env', () => {
       expect(
         fs.readFileSync(path.join(dir, 'convex', '.env.remote'), 'utf8')
       ).toBe('FOO=bar\n');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test.each([
+    ['1.42.3', ['env', 'list']],
+    ['1.46.0', ['env', 'list']],
+    ['1.47.0', ['env', 'list', '--include-values']],
+    ['1.49.0', ['env', 'list', '--include-values']],
+  ])('pullEnv on convex %s runs %p', async (convexVersion, expectedArgs) => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+    let receivedArgs: string[] = [];
+
+    try {
+      await pullEnv(
+        { outFilePath: 'convex/.env.remote' },
+        {
+          convexVersion,
+          runCommand: async (args) => {
+            receivedArgs = args;
+            return { exitCode: 0, stdout: 'FOO=bar\n', stderr: '' };
+          },
+        }
+      );
+
+      expect(receivedArgs).toEqual(expectedArgs);
     } finally {
       process.chdir(oldCwd);
     }
