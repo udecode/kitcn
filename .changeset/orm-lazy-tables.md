@@ -16,11 +16,21 @@ export default defineSchema({ posts }, { eagerTables: true });
 
 - Require `rlsPolicy(...).link(table)` at module scope. A linked policy applies to its table as soon as it is linked.
 
+```ts
+// Before: linked inside another table's extra config
+const posts = convexTable('posts', { body: text() }, () => [
+  rlsPolicy('read_users', { for: 'select' }).link(users),
+]);
+
+// After: link at module scope
+export const readUsers = rlsPolicy('read_users', { for: 'select' }).link(users);
+```
+
 ## Features
 
 - Add `defineSchema(tables, { eagerTables: true })` to build every table when the schema is defined.
 
 ## Patches
 
-- Improve cold Convex function start: a function builds only the tables it reads or writes, and query contexts no longer build every table's query builder and foreign-key graph.
-- Fix broken `references(() => ...)` callbacks surfacing on the first ORM call instead of on push.
+- Improve cold Convex function start: a query or insert builds only the tables it touches, and query contexts no longer build every table's query builder and foreign-key graph. The first update or delete still reads every table's foreign keys, and `createOrm` without the aggregate capability still builds every table.
+- Fix broken `references(() => ...)` callbacks surfacing on the first ORM call instead of on push, and passing on a retry.

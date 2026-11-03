@@ -379,8 +379,9 @@ Reboot status:
 Open risks:
 - ORMs without the aggregate capability still build every table at
   `createOrm` (fail-closed scan kept).
-- Mutations: the first update or delete builds every table that declares a
-  foreign key (incoming FK graph); inserts and reads stay per table.
+- Mutations: the first update or delete builds every table in the schema
+  (`buildForeignKeyGraph()` calls `getForeignKeys()` on each); reads and
+  inserts stay per table.
 - A missing FK target table (`Foreign key from X references missing table Y`)
   throws on the first update or delete instead of the first ORM call.
 - Under context reuse the memoised definitions persist across requests; they
