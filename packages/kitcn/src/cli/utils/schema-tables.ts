@@ -62,8 +62,8 @@ export function collectSchemaTables(
 /**
  * Whether the schema needs the aggregate-index runtime.
  *
- * `aggregateIndex(...)` / `rankIndex(...)` register synchronously inside
- * `convexTable(...)`, so the answer is final once `schema.ts` has evaluated.
+ * Reading a table's aggregate/rank indexes builds its definition, so the
+ * answer is final once `schema.ts` has evaluated.
  * Duck-typed rather than routed through `getTableConfig`, which throws on a
  * raw Convex `defineTable()` in a mixed schema.
  */

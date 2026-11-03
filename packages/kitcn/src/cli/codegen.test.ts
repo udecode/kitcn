@@ -12,6 +12,9 @@ import {
 } from './codegen';
 import { createProjectJiti } from './utils/project-jiti';
 
+const TABLE_DEFINITION_ERROR =
+  /kitcn codegen could not load .*Did you forget to call \.on/;
+
 const RESERVED_HTTP_NAMESPACE_ERROR = /root "http" namespace is reserved/i;
 const RESERVED_RUNTIME_NAMESPACE_ERROR = /reserved runtime caller namespace/i;
 const HASHED_RUNTIME_CALLER_RE =
@@ -2781,6 +2784,52 @@ export { httpAction, internalMutation };
           'utf-8'
         )
       ).toBe(ormServer);
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta fails on a table definition error in the schema', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeRealOrmFixture(dir);
+      writeFile(
+        path.join(dir, 'package.json'),
+        JSON.stringify({
+          name: 'schema-invalid',
+          private: true,
+          type: 'module',
+        })
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        import { convexTable, defineSchema, index, text } from 'kitcn/orm';
+
+        export const todos = convexTable(
+          'todos',
+          { title: text().notNull() },
+          () => [index('by_title') as any]
+        );
+
+        export default defineSchema({ todos });
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'server.js'),
+        `
+        export const httpAction = () => ({});
+        export const internalMutation = () => ({});
+        export const internalQuery = () => ({});
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        TABLE_DEFINITION_ERROR
+      );
     } finally {
       process.chdir(oldCwd);
     }
