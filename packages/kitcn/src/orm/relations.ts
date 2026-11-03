@@ -264,30 +264,41 @@ export function createRelationsHelper<TTables extends Schema>(
   tables: TTables
 ): RelationsBuilder<TTables> {
   const helperStatic = new RelationsHelperStatic(tables);
-  const relationsTables = Object.entries(tables).reduce<
-    Record<string, RelationsBuilderTable>
-  >((acc, [tKey, value]) => {
-    const rTable = new RelationsBuilderTable(value, tKey);
-    const columns = Object.entries(getTableColumns(value)).reduce<
-      Record<string, RelationsBuilderColumnBase>
-    >((colsAcc, [cKey, column]) => {
-      colsAcc[cKey] = new RelationsBuilderColumn(column, tKey, cKey);
-      return colsAcc;
-    }, {});
-
-    const relationsTable = Object.assign(rTable, columns);
-    Object.defineProperty(relationsTable, '_id', {
-      get() {
-        throw new Error('`_id` is no longer public in relations. Use `id`.');
+  for (const [tKey, value] of Object.entries(tables)) {
+    let relationsTable: RelationsBuilderTable | undefined;
+    Object.defineProperty(helperStatic, tKey, {
+      configurable: true,
+      enumerable: true,
+      get: () => {
+        relationsTable ??= createRelationsBuilderTable(tKey, value);
+        return relationsTable;
       },
-      enumerable: false,
-      configurable: false,
     });
-    acc[tKey] = relationsTable;
-    return acc;
+  }
+  return helperStatic as any;
+}
+
+function createRelationsBuilderTable(
+  tKey: string,
+  value: SchemaEntry
+): RelationsBuilderTable {
+  const rTable = new RelationsBuilderTable(value, tKey);
+  const columns = Object.entries(getTableColumns(value)).reduce<
+    Record<string, RelationsBuilderColumnBase>
+  >((colsAcc, [cKey, column]) => {
+    colsAcc[cKey] = new RelationsBuilderColumn(column, tKey, cKey);
+    return colsAcc;
   }, {});
 
-  return Object.assign(helperStatic, relationsTables) as any;
+  const relationsTable = Object.assign(rTable, columns);
+  Object.defineProperty(relationsTable, '_id', {
+    get() {
+      throw new Error('`_id` is no longer public in relations. Use `id`.');
+    },
+    enumerable: false,
+    configurable: false,
+  });
+  return relationsTable;
 }
 
 export function extractTablesFromSchema<TSchema extends object>(
