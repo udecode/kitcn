@@ -1558,6 +1558,7 @@ type TableDefinitionState = {
   rankIndexes: RankIndexEntry[];
   foreignKeys: ForeignKeyDefinition[];
   deferredForeignKeys: DeferredForeignKeyDefinition[];
+  foreignKeyFailure?: { error: unknown };
   stagedDbIndexes: any[];
   searchIndexes: SearchIndexEntry[];
   stagedSearchIndexes: SearchIndexEntry[];
@@ -1613,6 +1614,7 @@ function getTableDefinition(table: ConvexTableImpl<any>): TableDefinitionState {
   state.definition = definition;
   state.extraConfig = undefined;
   definingTables.push(table);
+  const restoreColumnBindings = bindColumnsToTable(table);
   try {
     applyColumnConstraints(table);
     applyExtraConfig(table, extraConfig?.(table));
@@ -1621,9 +1623,35 @@ function getTableDefinition(table: ConvexTableImpl<any>): TableDefinitionState {
     state.failure = { error };
     throw error;
   } finally {
+    restoreColumnBindings();
     definingTables.pop();
   }
   return definition;
+}
+
+function bindColumnsToTable(table: ConvexTableImpl<any>): () => void {
+  const previous: [
+    config: any,
+    name: unknown,
+    tableName: unknown,
+    owner: unknown,
+  ][] = [];
+  for (const [columnName, builder] of Object.entries(
+    table[Columns] as Record<string, unknown>
+  )) {
+    const config = (builder as any).config;
+    previous.push([config, config.name, config.tableName, config.table]);
+    config.name = columnName;
+    config.tableName = table.tableName;
+    config.table = table;
+  }
+  return () => {
+    for (const [config, name, tableName, owner] of previous) {
+      config.name = name;
+      config.tableName = tableName;
+      config.table = owner;
+    }
+  };
 }
 
 function applyColumnConstraints<T extends TableConfig>(
@@ -2017,9 +2045,25 @@ class ConvexTableImpl<T extends TableConfig> {
 
   private resolveDeferredForeignKeys(): void {
     const tableDefinition = getTableDefinition(this);
+    if (tableDefinition.foreignKeyFailure) {
+      throw tableDefinition.foreignKeyFailure.error;
+    }
     const deferredForeignKeys = tableDefinition.deferredForeignKeys;
+    if (deferredForeignKeys.length === 0) {
+      return;
+    }
+    try {
+      this.resolveForeignKeyReferences(deferredForeignKeys);
+    } catch (error) {
+      tableDefinition.foreignKeyFailure = { error };
+      throw error;
+    }
     tableDefinition.deferredForeignKeys = [];
+  }
 
+  private resolveForeignKeyReferences(
+    deferredForeignKeys: DeferredForeignKeyDefinition[]
+  ): void {
     for (const deferred of deferredForeignKeys) {
       let foreignColumn: ColumnBuilderBase;
       try {
