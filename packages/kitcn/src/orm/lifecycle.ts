@@ -45,8 +45,9 @@ type LifecycleTableHooks = NormalizedOrmTableTriggers<AnyRecord> & {
 };
 type HookMap = {
   get(tableName: string): LifecycleTableHooks | undefined;
-  keys(): Iterable<string>;
+  names(): Iterable<string>;
 };
+type LifecycleMarker = { hasHooks(): boolean };
 type HookOperation = 'create' | 'update' | 'delete';
 type QueuedHook = () => Promise<void>;
 
@@ -70,17 +71,28 @@ const isWriterDb = (
   typeof (db as any).delete === 'function';
 
 const isLifecycleWrappedDb = (
-  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>
-): boolean => (db as any)[ORMLIFECYCLE_WRAPPED_DB] === true;
+  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>,
+  marker: LifecycleMarker
+): boolean => {
+  const existing = (db as any)[ORMLIFECYCLE_WRAPPED_DB] as
+    | LifecycleMarker
+    | true
+    | undefined;
+  if (!existing) {
+    return false;
+  }
+  return existing === true || existing === marker || existing.hasHooks();
+};
 
 const markLifecycleWrappedDb = <TDb extends GenericDatabaseWriter<any>>(
-  db: TDb
+  db: TDb,
+  marker: LifecycleMarker
 ): TDb => {
   if (!Object.hasOwn(db as object, ORMLIFECYCLE_WRAPPED_DB)) {
     Object.defineProperty(db, ORMLIFECYCLE_WRAPPED_DB, {
       configurable: false,
       enumerable: false,
-      value: true,
+      value: marker,
       writable: false,
     });
   }
@@ -295,7 +307,7 @@ const tableNameFromId = (
   hooksByTable: HookMap,
   id: string
 ): string | null => {
-  for (const tableName of hooksByTable.keys()) {
+  for (const tableName of hooksByTable.names()) {
     if (db.normalizeId(tableName as any, id as any)) {
       return tableName;
     }
@@ -910,28 +922,31 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
     resolvedHooks.set(tableName, hooks);
     return hooks;
   };
+  const candidateTableNames = new Set([
+    ...triggerHooks.keys(),
+    ...tableConfigsByName.keys(),
+  ]);
   const tableHooks: HookMap = {
     get: resolveHooks,
-    *keys() {
-      const names = new Set([
-        ...triggerHooks.keys(),
-        ...tableConfigsByName.keys(),
-      ]);
-      for (const tableName of names) {
-        if (resolveHooks(tableName)) {
-          yield tableName;
-        }
-      }
-    },
+    names: () => candidateTableNames,
   };
   const hookedTableNames = {
     has: (tableName: string) => resolveHooks(tableName) !== undefined,
+  };
+  let hasHooks: boolean | undefined;
+  const marker: LifecycleMarker = {
+    hasHooks: () => {
+      hasHooks ??= [...candidateTableNames].some(
+        (tableName) => resolveHooks(tableName) !== undefined
+      );
+      return hasHooks;
+    },
   };
 
   return {
     enabled: true,
     wrapDB: <Ctx extends AnyCtx>(ctx: Ctx): Ctx => {
-      if (!isWriterDb(ctx.db) || isLifecycleWrappedDb(ctx.db)) {
+      if (!isWriterDb(ctx.db) || isLifecycleWrappedDb(ctx.db, marker)) {
         return ctx;
       }
 
@@ -945,7 +960,7 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
 
       return {
         ...ctx,
-        db: markLifecycleWrappedDb(wrappedDb),
+        db: markLifecycleWrappedDb(wrappedDb, marker),
       } as Ctx;
     },
   };
