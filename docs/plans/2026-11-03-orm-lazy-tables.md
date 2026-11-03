@@ -6,7 +6,7 @@ Build each kitcn ORM table on first use so a cold Convex call skips tables it ne
 Goal plan:
 docs/plans/2026-11-03-orm-lazy-tables.md
 
-PR: TBD
+PR: https://github.com/udecode/kitcn/pull/494
 
 Template:
 docs/plans/templates/major-task.md
@@ -83,7 +83,7 @@ Boundaries:
 - External sources: N/A: repo source and the local `convex`/`convex-test`
   packages settle it.
 - Browser surface: N/A: no UI.
-- GitHub sync: PR opened by the session after review; this plan gets the number.
+- GitHub sync: draft PR https://github.com/udecode/kitcn/pull/494 opened after review lanes passed; awaiting maintainers.
 - Non-goals: downstream app changes, Convex runtime changes, making
   `.relations()` or schema chaining cheaper.
 
@@ -98,15 +98,15 @@ Major state:
 - task_type: major
 - task_complexity: major
 - current_phase: closeout
-- current_phase_status: in_progress
-- next_phase: review lanes, then PR
+- current_phase_status: complete
+- next_phase: maintainer review on PR #494
 - goal_status: active
 
 Current verdict:
-- verdict: implemented, pending external review
+- verdict: implemented; review lanes passed; PR open awaiting maintainers
 - confidence: 90%
-- next owner: review lanes, then the session opens the PR
-- reason: ORM suites green; residual risks recorded below
+- next owner: kitcn maintainers on PR #494
+- reason: ORM suites green; Sol review round 1 (standards, spec, adversarial): 8 findings, all fixed in round 1 (c13bf3b0, 783460d7, b131516f, 26b5b655) and verified; residual risks recorded below
 
 Completion rule:
 - Do not call `update_goal(status: complete)` while any required checklist item
@@ -173,7 +173,7 @@ Work Checklist:
 - [x] At least one happy path and one denied/failure path are traced through
       exact symbols when implementation readiness is claimed.
 - [x] Review or pressure lenses are selected and completed, or marked N/A with
-      reason. External review lanes run after push.
+      reason. Sol review round 1 (standards, spec, adversarial): 8 findings, all fixed in round 1 (c13bf3b0, 783460d7, b131516f, 26b5b655) and verified.
 - [x] If implementation happens, touched-surface packs cover docs, browser,
       package/API, or agent-native surfaces as needed.
 - [x] Workspace authority recorded: every proof command names the cwd/tool that
@@ -182,7 +182,7 @@ Work Checklist:
       scoped, capped, counted, or artifacted instead of streamed into goal
       context.
 - [x] Accepted/actionable review findings are fixed or explicitly rejected with
-      evidence. N/A until external review.
+      evidence. Sol review round 1 (standards, spec, adversarial): 8 findings, all fixed in round 1 (c13bf3b0, 783460d7, b131516f, 26b5b655) and verified.
 - [x] Package/API pack: public API, package boundary, export, and release-artifact impact are recorded.
 - [x] Package/API pack: release artifact matrix is applied: `.changeset` or explicit no-artifact reason.
 - [x] Package/API pack: `.changeset` work loads `changeset` and follows its package/version/prose rules.
@@ -208,8 +208,8 @@ Completion Gates:
 | Current-state source audit | yes | Map current owner, boundaries, constraints, and affected surfaces | Findings |
 | Decision criteria closure | yes | Mark each criterion satisfied, narrowed, rejected, or blocked with evidence | Decisions and tradeoffs |
 | Options / tradeoffs / rejection record | yes | Record viable options, chosen recommendation, and why alternatives lose | Decisions and tradeoffs |
-| Review / pressure pass | yes | Run selected reviewer/lens or record N/A with reason | external review lanes after push |
-| Review findings closure | yes | Fix or explicitly reject accepted/actionable findings and record closure proof | pending external review |
+| Review / pressure pass | yes | Run selected reviewer/lens or record N/A with reason | Sol review round 1 (standards, spec, adversarial): 8 findings, all fixed in round 1 (c13bf3b0, 783460d7, b131516f, 26b5b655) and verified |
+| Review findings closure | yes | Fix or explicitly reject accepted/actionable findings and record closure proof | all 8 fixed with regression tests; verification clean at 26b5b65 |
 | External-source audit | no | Cite official/local clone/external sources when used, or record N/A | N/A: local `convex` and `convex-test` dist read |
 | Implementation gates | yes | If code changed, close primary-template and touched-surface gates; otherwise N/A | tests, lint, typecheck, build, check steps |
 | Service/API/auth/data-flow map | yes | Prove every architecture surface below or record N/A | map below |
@@ -219,8 +219,8 @@ Completion Gates:
 | Timed checkpoint | no | If duration was requested, keep improving until elapsed, then finish the current loop cleanly; otherwise N/A | N/A |
 | Agent-native reviewer | no | Run when agent workflow changes or record N/A | N/A: no agent surface touched |
 | UI walkthrough | no | If implementation changed UI or rendered output, run `.agents/skills/walkthrough/SKILL.md` after final proof and show annotated images in the final handoff; otherwise record N/A | N/A: no UI |
-| Autoreview | yes | Run final review and close every accepted actionable finding | external review lanes after push |
-| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-11-03-orm-lazy-tables.md` | pending PR number |
+| Autoreview | yes | Run final review and close every accepted actionable finding | Sol review round 1 (standards, spec, adversarial): 8 findings, all fixed in round 1 (c13bf3b0, 783460d7, b131516f, 26b5b655) and verified |
+| Goal plan complete | yes | Run `node .agents/skills/autogoal/scripts/check-complete.mjs docs/plans/2026-11-03-orm-lazy-tables.md` | run at plan closeout |
 | Public API / package boundary proof | yes | Source-audit public API, exports, and package boundary impact | no export added or removed; `SchemaOptions.eagerTables` added |
 | Convex bundle/import proof | yes | Audit affected function-entry static graphs or record N/A | only new static import: `rls/policies` -> `symbols` |
 | CLI/scaffold/generated proof | yes | Prove command contract and regenerate owned output or record N/A | codegen test; generated output unchanged |
@@ -241,10 +241,10 @@ Phase / pass table:
 | Intake and source read | complete | TLS-22, research report, prototype diff | |
 | Current-state map | complete | Findings | |
 | Options and recommendation | complete | Decisions and tradeoffs | |
-| Review / pressure pass | pending | external lanes | PR |
+| Review / pressure pass | complete | Sol review round 1 (standards, spec, adversarial): 8 findings, all fixed in round 1 (c13bf3b0, 783460d7, b131516f, 26b5b655) and verified | |
 | Implementation or plan artifact | complete | commits on `feat/orm-lazy-tables` | |
 | Verification | complete | Verification evidence | |
-| Closeout | in_progress | PR number pending | PR |
+| Closeout | complete | draft PR https://github.com/udecode/kitcn/pull/494 open, awaiting maintainers | maintainers |
 
 Findings:
 - Module-load walkers on `upstream/main`: every `convexTable()` resolved
@@ -309,7 +309,13 @@ Implementation notes:
   and still passes.
 
 Review fixes:
-- None yet.
+- Round 1 (Sol: standards, spec, adversarial), 8 findings, all fixed and verified:
+  stacked ORM hook suppression and id-only writes building every table
+  (c13bf3b0); foreign key reference failures not cached and shared column
+  builders binding to the wrong table (783460d7); codegen skipping kitcn
+  tables in a native Convex schema (b131516f); docs/changeset overstating
+  laziness and the missing `.link()` migration snippet (26b5b655); missing
+  construction-boundary tests (c13bf3b0).
 
 Error attempts:
 | Error / failed attempt | Count | Next different move | Resolution |
@@ -359,9 +365,9 @@ Final handoff contract:
 - Evidence: Verification evidence
 - Tests / commands: Verification evidence
 - Browser proof: N/A: no UI
-- PR / GitHub issue: TBD
+- PR / GitHub issue: https://github.com/udecode/kitcn/pull/494 (draft)
 - Caveats: Open risks
-- Next owner: review lanes, then the session opens the PR
+- Next owner: kitcn maintainers on PR #494
 
 Timeline:
 - 2026-11-03T15:46:47.780Z Major-task goal plan created.
@@ -370,8 +376,8 @@ Timeline:
 Reboot status:
 | Question | Answer |
 |----------|--------|
-| Where am I? | Closeout, PR pending |
-| Where am I going? | Review lanes, PR |
+| Where am I? | Closeout complete; PR #494 open |
+| Where am I going? | Maintainer review |
 | What is the goal? | Lazy ORM tables with push-time validation |
 | What have I learned? | See Findings |
 | What have I done? | See Timeline |
