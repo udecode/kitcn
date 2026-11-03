@@ -138,6 +138,7 @@ type SchemaOptions<StrictTableNameTypes extends boolean> =
   DefineSchemaOptions<StrictTableNameTypes> & {
     strict?: boolean;
     defaults?: OrmRuntimeDefaults;
+    eagerTables?: boolean;
   };
 
 type SchemaResult<
@@ -553,8 +554,14 @@ function materializeBaseSchema<
   const {
     strict: _strict,
     defaults: _defaults,
+    eagerTables,
     ...convexOptions
   } = state.options ?? {};
+  if (eagerTables) {
+    for (const table of Object.values(schemaWithExtensions)) {
+      (table as { export?: () => unknown }).export?.();
+    }
+  }
   const convexSchema = defineConvexSchema(
     schemaWithExtensions as any,
     convexOptions as DefineSchemaOptions<StrictTableNameTypes>

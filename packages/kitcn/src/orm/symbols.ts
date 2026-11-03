@@ -51,6 +51,7 @@ export const RlsPolicies = Symbol.for('kitcn:RlsPolicies');
 export const EnableRLS = Symbol.for('kitcn:EnableRLS');
 export const TableDeleteConfig = Symbol.for('kitcn:TableDeleteConfig');
 export const TablePolymorphic = Symbol.for('kitcn:TablePolymorphic');
+export const LinkRlsPolicy = Symbol.for('kitcn:LinkRlsPolicy');
 export const OrmSchemaOptions = Symbol.for('kitcn:OrmSchemaOptions');
 export const OrmSchemaDefinition = Symbol.for('kitcn:OrmSchemaDefinition');
 export const OrmSchemaExtensionTables = Symbol.for(
