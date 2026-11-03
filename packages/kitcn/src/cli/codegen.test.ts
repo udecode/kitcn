@@ -2835,6 +2835,60 @@ export { httpAction, internalMutation };
     }
   });
 
+  test('generateMeta fails on a kitcn table definition error inside a Convex schema', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeRealOrmFixture(dir);
+      writeFile(
+        path.join(dir, 'package.json'),
+        JSON.stringify({
+          name: 'native-invalid',
+          private: true,
+          type: 'module',
+        })
+      );
+      fs.symlinkSync(
+        fileURLToPath(
+          new URL('../../../../node_modules/convex', import.meta.url)
+        ),
+        path.join(dir, 'node_modules', 'convex'),
+        'dir'
+      );
+      writeFile(
+        path.join(dir, 'convex', 'schema.ts'),
+        `
+        import { defineSchema } from 'convex/server';
+        import { convexTable, index, text } from 'kitcn/orm';
+
+        export const todos = convexTable(
+          'todos',
+          { title: text().notNull() },
+          () => [index('by_title') as any]
+        );
+
+        export default defineSchema({ todos });
+        `.trim()
+      );
+      writeFile(
+        path.join(dir, 'convex', '_generated', 'server.js'),
+        `
+        export const httpAction = () => ({});
+        export const internalMutation = () => ({});
+        export const internalQuery = () => ({});
+        `.trim()
+      );
+
+      await expect(generateMeta(undefined, { silent: true })).rejects.toThrow(
+        TABLE_DEFINITION_ERROR
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta does not validate fabricated values for required env fields', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

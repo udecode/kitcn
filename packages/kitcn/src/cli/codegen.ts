@@ -20,8 +20,8 @@ import {
   registerMissingModuleFallback,
 } from './utils/project-jiti.js';
 import {
-  collectSchemaTables,
   schemaDeclaresAggregateIndexes,
+  validateOrmTables,
 } from './utils/schema-tables.js';
 
 /**
@@ -1141,13 +1141,7 @@ async function resolveSchemaMetadataForCodegen(
     }
 
     const hasOrmSchema = OrmSchemaOptions in schemaValue;
-    if (hasOrmSchema) {
-      for (const table of collectSchemaTables(
-        schemaValue as Record<string, unknown>
-      )) {
-        (table as { export?: () => unknown }).export?.();
-      }
-    }
+    validateOrmTables(schemaValue as Record<string, unknown>);
     const hasRelations = Boolean(getSchemaRelations(schemaValue));
     const hasTriggers = Boolean(getSchemaTriggers(schemaValue));
 
