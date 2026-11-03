@@ -123,6 +123,8 @@ The `strict` flag controls how aggressively the ORM enforces index usage:
 - `strict` (default `true`): relation index misses throw unless `allowFullScan: true`; predicate `where` requires explicit `.withIndex(...)`.
 - `strict: false`: relation index misses still require `allowFullScan`; predicate `where` still requires `.withIndex(...)`.
 
+Tables build on first use: a function builds only the tables it reads or writes. Definition errors (invalid indexes, constraints, foreign key references) throw when the schema is pushed or `kitcn codegen` runs. Pass `eagerTables: true` to throw them when `defineSchema` runs instead.
+
 ### Runtime Defaults
 
 You can set global runtime guardrails via the `defaults` option. These control limits for queries, relation loading, and mutation batching. For the full list of options and their built-in fallback values, see [API Reference](#runtime-defaults) below.
