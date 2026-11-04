@@ -2052,13 +2052,13 @@ class ConvexTableImpl<T extends TableConfig> {
     if (deferredForeignKeys.length === 0) {
       return;
     }
+    tableDefinition.deferredForeignKeys = [];
     try {
       this.resolveForeignKeyReferences(deferredForeignKeys);
     } catch (error) {
       tableDefinition.foreignKeyFailure = { error };
       throw error;
     }
-    tableDefinition.deferredForeignKeys = [];
   }
 
   private resolveForeignKeyReferences(

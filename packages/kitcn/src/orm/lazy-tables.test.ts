@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { aggregateCapability } from './aggregate-index';
+import type { AnyColumn } from './builders';
 import { id, integer, text } from './builders';
 import { resolveOrmCapabilities } from './capabilities';
 import { createOrm } from './create-orm';
@@ -397,6 +398,23 @@ describe('lazy tables', () => {
     const rewrapped = ormB.with(ormB.with({ db: writer } as any)) as any;
     await rewrapped.db.insert('lazy_stack_metrics', { name: 'a' });
     expect(calls).toEqual(['barrier', 'aggregate']);
+  });
+
+  test('schema export supports self references through table introspection', () => {
+    const nodes = convexTable('lazy_fk_nodes', {
+      parentId: text().references(
+        (): AnyColumn => getTableConfig(nodes).columns.id
+      ),
+    });
+    const schema = defineSchema({ lazy_fk_nodes: nodes });
+
+    expect(() => schema.export()).not.toThrow();
+    expect(() => schema.export()).not.toThrow();
+    expect(getTableConfig(nodes).foreignKeys).toHaveLength(1);
+    const foreignKey = getTableConfig(nodes).foreignKeys[0];
+    expect(foreignKey.columns).toEqual(['parentId']);
+    expect(foreignKey.foreignTableName).toBe('lazy_fk_nodes');
+    expect(foreignKey.foreignColumns).toEqual(['_id']);
   });
 
   test('a failed foreign key reference keeps failing', () => {

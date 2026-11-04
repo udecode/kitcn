@@ -32,5 +32,6 @@ export const readUsers = rlsPolicy('read_users', { for: 'select' }).link(users);
 
 ## Patches
 
+- Preserve self-referencing foreign keys whose callbacks read table metadata through `getTableConfig`.
 - Improve cold Convex function start: a query or insert builds only the tables it touches, and query contexts no longer build every table's query builder and foreign-key graph. The first update or delete still reads every table's foreign keys, and `createOrm` without the aggregate capability still builds every table.
 - Fix broken `references(() => ...)` callbacks surfacing on the first ORM call instead of on push, and passing on a retry.

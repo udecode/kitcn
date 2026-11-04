@@ -1,0 +1,4 @@
+time	phase	decision	evidence	result
+2026-11-04	triage	keep lazy tables	PR 494 scope and current passing CI	Repair the confirmed recursion defect without API changes.
+2026-11-04	proof	drain deferred references before callbacks	Self-reference schema export fails with Maximum call stack size exceeded before repair; 316 ORM tests pass after repair	Existing failure-cache tests still pass.
+2026-11-04	access	wait for deployment authorization	Vercel reports Authorization required to deploy	Owner approval requested; no access grant attempted.

@@ -297,6 +297,7 @@ import {
 // defineSchema takes tables map (not relations)
 export default defineSchema(tables, {
   strict: false, // false = warn instead of throw on missing indexes
+  eagerTables: true, // build every table now; default builds each on first use
   defaults: {
     defaultLimit: 100, // default limit for findMany
     mutationBatchSize: 100, // page size for mutation row collection
