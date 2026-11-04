@@ -2,3 +2,6 @@ time	phase	decision	evidence	result
 2026-11-04	triage	keep lazy tables	PR 494 scope and current passing CI	Repair the confirmed recursion defect without API changes.
 2026-11-04	proof	drain deferred references before callbacks	Self-reference schema export fails with Maximum call stack size exceeded before repair; 316 ORM tests pass after repair	Existing failure-cache tests still pass.
 2026-11-04	access	wait for deployment authorization	Vercel reports Authorization required to deploy	Owner approval requested; no access grant attempted.
+2026-11-04	triage	preserve per-table ownership	New P1 reproduced foreign-key target others instead of parents	Copy reused builders at the ownership assignment after expansion.
+2026-11-04	review	include generated discriminator columns	Intermediate repair failed a reused discriminator field index	Moved copying into the constructor; 318 ORM tests pass and independent review found no remaining blocker.
+2026-11-04	access	keep Vercel pending	Owner explicitly chose Leave Vercel pending for now	Do not retry deployment authorization or merge over its failed check.

@@ -1614,7 +1614,6 @@ function getTableDefinition(table: ConvexTableImpl<any>): TableDefinitionState {
   state.definition = definition;
   state.extraConfig = undefined;
   definingTables.push(table);
-  const restoreColumnBindings = bindColumnsToTable(table);
   try {
     applyColumnConstraints(table);
     applyExtraConfig(table, extraConfig?.(table));
@@ -1623,35 +1622,9 @@ function getTableDefinition(table: ConvexTableImpl<any>): TableDefinitionState {
     state.failure = { error };
     throw error;
   } finally {
-    restoreColumnBindings();
     definingTables.pop();
   }
   return definition;
-}
-
-function bindColumnsToTable(table: ConvexTableImpl<any>): () => void {
-  const previous: [
-    config: any,
-    name: unknown,
-    tableName: unknown,
-    owner: unknown,
-  ][] = [];
-  for (const [columnName, builder] of Object.entries(
-    table[Columns] as Record<string, unknown>
-  )) {
-    const config = (builder as any).config;
-    previous.push([config, config.name, config.tableName, config.table]);
-    config.name = columnName;
-    config.tableName = table.tableName;
-    config.table = table;
-  }
-  return () => {
-    for (const [config, name, tableName, owner] of previous) {
-      config.name = name;
-      config.tableName = tableName;
-      config.table = owner;
-    }
-  };
 }
 
 function applyColumnConstraints<T extends TableConfig>(
@@ -1752,12 +1725,22 @@ class ConvexTableImpl<T extends TableConfig> {
       linkedRlsPolicies: [],
     };
 
-    for (const [columnName, builder] of Object.entries(
-      columns as Record<string, unknown>
-    )) {
-      (builder as any).config.name = columnName;
-      (builder as any).config.tableName = name;
-      (builder as any).config.table = this;
+    const columnBuilders = columns as Record<string, AnyColumnBuilder>;
+    for (const [columnName, builder] of Object.entries(columnBuilders)) {
+      let config: ColumnBuilderRuntimeConfig<unknown> =
+        Object.getOwnPropertyDescriptor(builder, 'config')?.value;
+      if (config.table) {
+        const boundBuilder = Object.create(
+          Object.getPrototypeOf(builder),
+          Object.getOwnPropertyDescriptors(builder)
+        );
+        config = { ...config };
+        boundBuilder.config = config;
+        columnBuilders[columnName] = boundBuilder;
+      }
+      config.name = columnName;
+      config.tableName = name;
+      config.table = this;
     }
 
     this[Columns] = columns;

@@ -3,13 +3,14 @@ import { aggregateCapability } from './aggregate-index';
 import type { AnyColumn } from './builders';
 import { id, integer, text } from './builders';
 import { resolveOrmCapabilities } from './capabilities';
+import { foreignKey } from './constraints';
 import { createOrm } from './create-orm';
 import { aggregateIndex, index } from './indexes';
 import { getTableConfig } from './introspection';
 import { createOrmDbLifecycle } from './lifecycle';
 import { rlsPolicy } from './rls/policies';
 import { defineSchema, requireSchemaRelations } from './schema';
-import { convexTable } from './table';
+import { convexTable, discriminator } from './table';
 
 const FK_REFERENCE_ERROR =
   /Failed to resolve foreign key reference for '[a-z_]+\.brokenId'/;
@@ -460,6 +461,64 @@ describe('lazy tables', () => {
     expect(getTableConfig(b).indexes).toEqual([
       { name: 'b_by_tenant', fields: ['tenantId'] },
     ]);
-    expect((shared.tenantId as any).config.table).toBe(b);
+  });
+
+  test('foreign keys retain the referenced table when a column builder is reused', () => {
+    const shared = text().notNull().unique();
+    const parents = convexTable('lazy_shared_parents', { key: shared });
+    const children = convexTable(
+      'lazy_shared_children',
+      {
+        parentKey: text(),
+        parentRef: text().references(() => parents.key, {
+          onDelete: 'cascade',
+        }),
+      },
+      (t) => [
+        foreignKey({
+          columns: [t.parentKey],
+          foreignColumns: [parents.key],
+        }).onDelete('cascade'),
+      ]
+    );
+    const others = convexTable('lazy_shared_others', { otherKey: shared });
+    defineSchema({
+      lazy_shared_parents: parents,
+      lazy_shared_children: children,
+      lazy_shared_others: others,
+    }).export();
+
+    const foreignKeys = getTableConfig(children).foreignKeys;
+    expect(foreignKeys).toHaveLength(2);
+    for (const foreignKey of foreignKeys) {
+      expect(foreignKey.foreignTableName).toBe('lazy_shared_parents');
+      expect(foreignKey.foreignTable).toBe(parents);
+      expect(foreignKey.foreignColumns).toEqual(['key']);
+      expect(foreignKey.onDelete).toBe('cascade');
+    }
+  });
+
+  test('reused discriminator fields retain their table ownership', () => {
+    const shared = text();
+    const a = convexTable(
+      'lazy_variant_a',
+      { kind: discriminator({ variants: { one: { value: shared } } }) },
+      (t) => [index('a_value').on(t.value)]
+    );
+    const b = convexTable(
+      'lazy_variant_b',
+      { kind: discriminator({ variants: { one: { value: shared } } }) },
+      (t) => [index('b_value').on(t.value)]
+    );
+
+    expect(() =>
+      defineSchema({ lazy_variant_a: a, lazy_variant_b: b }).export()
+    ).not.toThrow();
+    expect(getTableConfig(a).indexes).toEqual([
+      { name: 'a_value', fields: ['value'] },
+    ]);
+    expect(getTableConfig(b).indexes).toEqual([
+      { name: 'b_value', fields: ['value'] },
+    ]);
   });
 });
