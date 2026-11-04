@@ -287,7 +287,7 @@ Why this exists:
 - committed `fixtures/*/package.json` stays normalized to `workspace:*`
 - `fixtures:check` swaps that to a packed local tarball before validation
 - manual runtime happens in `tmp/scenarios/*`, never in `fixtures/*`
-- use @.claude/skills/scenarios/scenarios.mdc for runtime proof after prepare;
+- use @.agents/rules/verify.mdc for runtime proof after prepare;
   it owns which scenario keys stop at `scenario:dev`, which ones add
   `test:auth` and `test:e2e`, and which ones must use `scenario:check`
 

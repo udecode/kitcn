@@ -102,3 +102,7 @@ yarn-error.log*
 .concave/
 .worktrees
 .omx/
+
+# pstack run artifacts and audit trails
+/docs/plans/artifacts/**
+/.audit/

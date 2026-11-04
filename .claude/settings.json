@@ -2,5 +2,84 @@
   "permissions": {
     "allow": ["Bash", "Edit", "Skill", "WebFetch", "WebSearch"]
   },
-  "enableAllProjectMcpServers": true
+  "enableAllProjectMcpServers": true,
+  "autoCompactWindow": 400000,
+  "worktree": {
+    "baseRef": "head"
+  },
+  "enabledPlugins": {
+    "pstack@pstack-claude": true
+  },
+  "extraKnownMarketplaces": {
+    "pstack-claude": {
+      "source": {
+        "source": "github",
+        "repo": "michael-denyer/pstack-claude",
+        "ref": "v0.9.117"
+      }
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && { [ ! -f .agents/pstack/reread.mjs ] || node .agents/pstack/reread.mjs --hook AGENTS.md \"$HOME/.claude/pstack-models.md\" .claude/settings.json; }",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && { [ ! -f .agents/pstack/head.mjs ] || node .agents/pstack/head.mjs; }",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "payload=$(cat); cd \"$CLAUDE_PROJECT_DIR\" && { [ ! -f .agents/pstack/setup.mjs ] || printf '%s' \"$payload\" | node .agents/pstack/setup.mjs --hook --install 'bun install'; }",
+            "timeout": 600
+          },
+          {
+            "type": "command",
+            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/.agents/skills/cleanup/scripts/scan.mjs\" ] || node \"$CLAUDE_PROJECT_DIR/.agents/skills/cleanup/scripts/scan.mjs\" --brief --repo \"$CLAUDE_PROJECT_DIR\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/.agents/pstack/title.mjs\" ] || node \"$CLAUDE_PROJECT_DIR/.agents/pstack/title.mjs\" --hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__ccd_host__sync_with_base_branch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/.agents/pstack/guard.mjs\" ] || node \"$CLAUDE_PROJECT_DIR/.agents/pstack/guard.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Artifact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/.agents/pstack/page-stop.mjs\" ] || node \"$CLAUDE_PROJECT_DIR/.agents/pstack/page-stop.mjs\" --hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }

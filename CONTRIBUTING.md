@@ -1,28 +1,19 @@
 # Contributing
 
-## One PR, one task
+## How work runs
 
-Every PR requires a dedicated `task` invocation and task plan under
-`docs/plans/**`.
+Install the pstack plugin as
+[docs/development/agent-skills.md](docs/development/agent-skills.md#install)
+says. Then describe the outcome you want to the agent, with the issue, package
+or route when you know it.
 
-Invoke `$kitcn:task <PR URL or #>` for an existing PR. For a new PR, invoke
-`$kitcn:task <issue, spec, or single-PR task>` before editing.
-
-The PR body must include `🧭 Task plan: docs/plans/<plan>.md`. The plan must
-exist at the PR head and identify the exact PR before autoclosure.
-
-- A batch plan can choose dependency order, but it cannot replace per-PR task
-  plans.
-- Run `autoclosure` only after the exact PR has entered through `task`.
-- Finish one `task` -> optional `autoclosure` PR slice before moving to the next
-  PR unless parallel work was explicitly requested.
-- Use the task-style PR body and record exact checks, merge, release, and
-  read-back receipts when they apply.
-
-Autoclosure comments on and closes PRs without valid task evidence before any
-code review or repair. Its remediation comment recommends GPT-5.6 with
-high-or-higher reasoning effort. The comment must be visible before the PR is
-closed.
+The agent plans through the Plan playbook and builds through the Build
+playbook in `.agents/playbooks/`, then lands the work through
+`node .agents/pstack/land.mjs`. From a contributor's clone, `land.mjs` opens
+the PR with the plan page as its body: a `## Why` section, a `## Verification`
+section and a `Beyond the ask:` line.
+[`.github/workflows/pr-body-check.yml`](.github/workflows/pr-body-check.yml)
+checks that body on every contributor PR.
 
 ## Verification
 
@@ -34,5 +25,6 @@ bun install
 bun check
 ```
 
-Edits to `.agents/AGENTS.md` or `.agents/rules/**` must be regenerated with
-`bun install`; never edit generated skill or root-agent mirrors directly.
+Edits to `.agents/rules/**` regenerate with `bun install`; never edit the
+generated skill mirrors directly. Root `AGENTS.md` is edited by hand outside
+its pstack block, which the `sync-pstack` skill renders.
