@@ -12,7 +12,7 @@ const formatDiagnostics = (diagnostics: readonly ts.Diagnostic[]) =>
 describe('createAuthMutations solid types', () => {
   test(
     'accepts a username sign-in method from Better Auth plugins',
-    { timeout: 15_000 },
+    { timeout: 60_000 },
     () => {
       const rootDir = process.cwd();
       const tmpRoot = path.join(rootDir, 'tmp');

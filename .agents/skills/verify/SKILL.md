@@ -111,7 +111,7 @@ path. It returns one of four paths:
   runtime and auth smoke only. Browser auth proof is the separate `test:e2e`
   lane. Prepare, start `scenario:dev`, then run `bun run test:e2e -- <name>`.
 - **`auth-runtime`** (`expo-auth`, `vite-auth`). The runtime proof only. These
-  apps have no `/auth` page or other browser auth surface. Do not fake
+  apps have no `/auth` page or other browser auth page. Do not fake
   `test:e2e` or add `test:auth` here unless the registry grows an auth proof
   lane for them.
 - **`check`** (the bootstrap-heavy Convex keys in `BOOTSTRAP_CHECK_SCENARIOS`).
@@ -122,10 +122,10 @@ path. It returns one of four paths:
   `convex init` plus `kitcn add auth --preset convex --yes`. They are not a
   `next-auth` browser demo, so do not invent `/auth` for them.
 
-Run `test:e2e` only when an auth surface changed. Default `bun check` never
+Run `test:e2e` only when an auth page or flow changed. Default `bun check` never
 depends on it.
 
-If a scenario has no real browser auth surface, do not invent one. Stop once
+If a scenario has no real browser auth page, do not invent one. Stop once
 the assigned proof path succeeds. Do not keep poking the app after that.
 
 Re-run `bun run scenario:prepare -- <name>` once when any of these holds:
@@ -278,10 +278,10 @@ the final bytes. Calling a failure unrelated does not close it. Only the same
 command failing the same way at the base commit, run in a clean detached
 worktree, makes it pre-existing.
 
-The final repo gate is `bun check`. It runs `check:ci` (`bun lint`,
-`bun typecheck`, `bun run test`, `test:cli`, `test:concave` and
-`fixtures:check`), then `test:verify` and `test:runtime`. Run it before a PR.
-Before that, run `bun lint:fix`.
+The final repo gate is `bun check`. `bun check --list` names its steps: the
+package build, intent validation, lint, typecheck, the Bun, Vitest, tooling,
+CLI and Concave tests, `fixtures:check`, `test:verify` and `test:runtime`.
+Run it before a PR, after `bun lint:fix`. `bun check <step>` reruns one step.
 
 ## Cleanup
 

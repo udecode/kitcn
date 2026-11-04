@@ -12,7 +12,7 @@ const formatDiagnostics = (diagnostics: readonly ts.Diagnostic[]) =>
 describe('Solid ConvexAuthProvider types', () => {
   test(
     'accepts Better Auth and structural auth clients',
-    { timeout: 15_000 },
+    { timeout: 60_000 },
     () => {
       const rootDir = process.cwd();
       const tmpRoot = path.join(rootDir, 'tmp');

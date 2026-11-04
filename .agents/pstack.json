@@ -5,9 +5,8 @@
   "autoSync": false,
   "lintFix": "bun lint:fix --no-errors-on-unmatched",
   "check": "bun check",
-  "landChecks": [
-    "bun build:pkg",
-    "bun check:ci"
+  "freshEnv": [
+    "CHECK_FRESH=1"
   ],
   "maxEffort": "high",
   "plans": "docs/plans",

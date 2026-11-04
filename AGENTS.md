@@ -151,4 +151,4 @@ bun run test:auth
 bun run test:e2e
 ```
 
-Every land runs `bun build:pkg`, then `bun check:ci`, as CI does; `landChecks` in `.agents/pstack.json` names both. `bun check` adds the scenario runtime proof, so a land whose change reaches a scenario, the CLI or a scaffold also passes `--check 'bun run test:verify && bun run test:runtime'`.
+`bun check` runs every check as named steps, side by side. CI runs `bun check --ci`, which leaves out the two scenario steps that the Convex Matrix workflow covers on the release branch. `bun check --list` lists the steps, `bun check <step>` runs one, and each step that needs the built package waits for the `build` step. It skips a step that passed on the same files in any worktree of the clone, and `CHECK_FRESH=1` ignores those passes. Every `land.mjs` run passes `--check 'bun check --affected'`, which also skips each step that none of the files changed since `origin/main` reaches, so a change to plans or agent prose runs nothing.
