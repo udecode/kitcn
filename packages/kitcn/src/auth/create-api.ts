@@ -513,10 +513,11 @@ export const createHandler = async (
 ) => {
   const triggerCtx = args.triggerCtx ?? ctx;
   const tableTriggers = args.tableTriggers;
+  const { _id, ...input } = args.input.data;
   const transformedData = await applyBeforeHook(
     args.input.model,
     'create',
-    args.input.data,
+    input,
     tableTriggers?.create?.before,
     triggerCtx
   );

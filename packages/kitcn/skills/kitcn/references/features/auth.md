@@ -15,6 +15,12 @@ Covers Better Auth integration with Convex: server setup, client hooks, triggers
 | Query/Mutation (`ctx.db`) | Direct DB | No `runQuery`/`runMutation` wrapper |
 | Action/HTTP | HTTP adapter | Uses `ctx.run*` APIs |
 
+**Document IDs** (Delta from parity) — Convex mints every `_id`; Better Auth reads it as `id`. A
+create that carries Better Auth's own id (`forceAllowId`: organization invitations,
+`reserveVerificationValue`) drops that id and returns the Convex id. Single-use checks keyed by a
+derived id (`reserveVerificationValue`, SAML assertion ids, `private_key_jwt` assertions) get no
+duplicate-key rejection, as with Better Auth's `generateId: "serial"`.
+
 **Entrypoints**:
 
 - `getSession(ctx)` from `kitcn/auth` in queries and mutations, including the shared cRPC auth

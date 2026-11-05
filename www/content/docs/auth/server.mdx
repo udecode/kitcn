@@ -307,6 +307,15 @@ Generated `getAuth(ctx)` uses the same context-aware adapter selection internall
 **Performance:** In queries/mutations, the direct DB adapter is selected automatically, avoiding the extra `ctx.runQuery`/`ctx.runMutation` hop.
 </Callout>
 
+### Document IDs
+
+Convex mints every document `_id`, and Better Auth reads it back as `id`. When Better Auth creates a
+row with its own id (`forceAllowId`), as the organization plugin's invitations and
+`reserveVerificationValue` do, the adapter drops that id and returns the row under its Convex id.
+Better Auth checks that key a single-use row by a derived id, such as `reserveVerificationValue`,
+SAML assertion ids and `private_key_jwt` assertions, get no duplicate-key rejection from the
+database, the same as Better Auth's `generateId: "serial"`.
+
 ### Triggers
 
 The recommended approach is schema-level [ORM Triggers](/docs/orm/schema/triggers) via `defineTriggers` in `schema.ts`. These run for **all writes** to auth tables (ORM mutations, auth API, direct `ctx.db`).
