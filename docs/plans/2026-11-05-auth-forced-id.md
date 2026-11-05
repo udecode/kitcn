@@ -1,6 +1,6 @@
 # Let Better Auth creates with a forced id work on Convex
 
-Status: building: branch fix/auth-forced-id on the EfficiencyCorp fork, PR not opened yet
+Status: in review: udecode/kitcn#495, branch fix/auth-forced-id on the EfficiencyCorp fork
 Playbook: bug-fix
 
 ## Brief
