@@ -731,6 +731,27 @@ function isConvexLifecycleBuilder(value: unknown): boolean {
   );
 }
 
+function builderConfig(
+  builder: AnyColumnBuilder
+): ColumnBuilderRuntimeConfig<unknown> {
+  return Object.getOwnPropertyDescriptor(builder, 'config')?.value;
+}
+
+function copyColumnBuilder<TBuilder extends AnyColumnBuilder>(
+  builder: TBuilder
+): TBuilder {
+  const copy = Object.create(
+    Object.getPrototypeOf(builder),
+    Object.getOwnPropertyDescriptors(builder)
+  );
+  copy.config = { ...builderConfig(builder) };
+  return copy;
+}
+
+function claimColumnBuilder(builder: AnyColumnBuilder): AnyColumnBuilder {
+  return builderConfig(builder).table ? copyColumnBuilder(builder) : builder;
+}
+
 function getColumnName(column: ColumnBuilderBase): string {
   const config = (column as { config?: { name?: string } }).config;
   if (!config?.name) {
@@ -1037,10 +1058,10 @@ function resolveTableColumns(
           );
         }
 
-        const fieldBuilder = rawFieldBuilder as AnyColumnBuilder;
-        const fieldConfig = (fieldBuilder as any).config as
-          | ColumnBuilderRuntimeConfig<unknown>
-          | undefined;
+        const fieldBuilder = copyColumnBuilder(
+          rawFieldBuilder as AnyColumnBuilder
+        );
+        const fieldConfig = builderConfig(fieldBuilder);
         const isRequiredForVariant =
           fieldConfig?.notNull === true &&
           fieldConfig.hasDefault !== true &&
@@ -1727,17 +1748,9 @@ class ConvexTableImpl<T extends TableConfig> {
 
     const columnBuilders = columns as Record<string, AnyColumnBuilder>;
     for (const [columnName, builder] of Object.entries(columnBuilders)) {
-      let config: ColumnBuilderRuntimeConfig<unknown> =
-        Object.getOwnPropertyDescriptor(builder, 'config')?.value;
-      if (config.table) {
-        const boundBuilder = Object.create(
-          Object.getPrototypeOf(builder),
-          Object.getOwnPropertyDescriptors(builder)
-        );
-        config = { ...config };
-        boundBuilder.config = config;
-        columnBuilders[columnName] = boundBuilder;
-      }
+      const claimed = claimColumnBuilder(builder);
+      columnBuilders[columnName] = claimed;
+      const config = builderConfig(claimed);
       config.name = columnName;
       config.tableName = name;
       config.table = this;

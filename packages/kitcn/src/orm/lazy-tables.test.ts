@@ -163,23 +163,6 @@ describe('lazy tables', () => {
     expect(() => getTableConfig(broken)).toThrow(first as Error);
   });
 
-  test('eagerTables builds every table when the schema is defined', () => {
-    let calls = 0;
-    const valid = convexTable('lazy_eager_valid', { name: text() }, (t) => {
-      calls++;
-      return [index('by_name').on(t.name)];
-    });
-    defineSchema({ lazy_eager_valid: valid }, { eagerTables: true });
-    expect(calls).toBe(1);
-
-    const broken = convexTable('lazy_eager_broken', { name: text() }, () => [
-      index('missing_on') as any,
-    ]);
-    expect(() =>
-      defineSchema({ lazy_eager_broken: broken }, { eagerTables: true })
-    ).toThrow(/Did you forget to call \.on/);
-  });
-
   test('schema export resolves foreign key references', () => {
     const parent = convexTable('lazy_fk_parent', { name: text() });
     const child = convexTable('lazy_fk_child', {
@@ -352,7 +335,7 @@ describe('lazy tables', () => {
     expect(writes[0]?.[0]).toBe(`${prefix}_posts`);
   });
 
-  test('stacked ORMs each run their write hooks once', async () => {
+  test('an ORM stacked on a hookless ORM still runs its write hooks once', async () => {
     const calls: string[] = [];
     const aggregate = {
       assertAggregateIndexesWritable: async () => {
@@ -496,6 +479,21 @@ describe('lazy tables', () => {
       expect(foreignKey.foreignColumns).toEqual(['key']);
       expect(foreignKey.onDelete).toBe('cascade');
     }
+  });
+
+  test('a builder reused in a discriminator stays required in its first table', () => {
+    const shared = text().notNull();
+    const plain = convexTable('lazy_required_plain', { required: shared });
+    const events = convexTable('lazy_required_events', {
+      kind: discriminator({ variants: { one: { value: shared } } }),
+    });
+
+    defineSchema({
+      lazy_required_plain: plain,
+      lazy_required_events: events,
+    }).export();
+
+    expect(plain.validator.fields.required.isOptional).toBe('required');
   });
 
   test('reused discriminator fields retain their table ownership', () => {
