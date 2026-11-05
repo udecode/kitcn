@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+    # Pull requests keep running, because CI is a required check and a
+    # skipped workflow never reports it.
+    paths-ignore:
+      - '.agents/**'
+      - '.claude/skills/**'
+      - '.codex/**'
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'README.md'
   pull_request:
     types:
       - opened

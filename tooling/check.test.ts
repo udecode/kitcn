@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { planAffected } from './check.mjs';
@@ -12,10 +12,31 @@ const needed = (files: string[]) =>
     .map((entry) => entry.step.name);
 
 describe('bun check --affected', () => {
-  test('a change to plans and agent prose runs no step', () => {
+  test('a change to plans and agent files runs no step', () => {
     expect(
-      needed(['docs/plans/x.md', 'AGENTS.md', '.agents/rules/verify.mdc'])
+      needed([
+        'docs/plans/x.md',
+        'AGENTS.md',
+        '.agents/rules/verify.mdc',
+        '.agents/pstack/land.mjs',
+        '.claude/skills/verify/SKILL.md',
+      ])
     ).toEqual([]);
+  });
+
+  test("CI's push trigger ignores only paths no step reads", () => {
+    const workflow = readFileSync(
+      path.join(import.meta.dir, '../.github/workflows/ci.yml'),
+      'utf-8'
+    );
+    const ignored = [
+      ...(
+        workflow.match(/paths-ignore:\n((?:\s+- .+\n)+)/u)?.[1] ?? ''
+      ).matchAll(/- '([^']+)'/gu),
+    ].map(([, glob]) => glob.replace('/**', '/x/index.ts'));
+    expect(ignored.length).toBeGreaterThan(0);
+    for (const file of ignored)
+      expect([file, needed([file])]).toEqual([file, []]);
   });
 
   test('a package source change runs the build and every test step', () => {

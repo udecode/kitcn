@@ -50,6 +50,15 @@ const scaffoldTooling = under(
   'tooling/template.config.ts'
 );
 
+export const NO_STEP = under(
+  '.agents/',
+  '.claude/skills/',
+  '.codex/',
+  'docs/',
+  'AGENTS.md',
+  'README.md'
+);
+
 const GLOBAL_PATHS = under(
   'biome.jsonc',
   'bun.lock',
@@ -255,7 +264,8 @@ export const scriptCoverage = () => {
   };
 };
 
-export const planAffected = (files) => {
+export const planAffected = (changed) => {
+  const files = changed.filter((file) => !NO_STEP(file));
   const everything = files.some(GLOBAL_PATHS);
   return steps.map((step) => ({
     needed: files.length > 0 && (everything || step.affected(files)),

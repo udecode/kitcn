@@ -11,6 +11,7 @@ import {
   rmdirSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -75,6 +76,11 @@ const workTree = (git, index) => {
     const env = { GIT_INDEX_FILE: path.join(scratch, 'index') };
     if (existsSync(index)) {
       writeFileSync(env.GIT_INDEX_FILE, readFileSync(index));
+      // git rehashes a file whose stat matches only when its index entry is no
+      // older than the index file, so a copy with a newer mtime would hide a
+      // same-size edit made in the second the index was written.
+      const { atime, mtime } = statSync(index);
+      utimesSync(env.GIT_INDEX_FILE, atime, mtime);
     } else {
       must(git, ['read-tree', 'HEAD'], { env });
     }
