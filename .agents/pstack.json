@@ -9,7 +9,7 @@
     "CHECK_FRESH=1"
   ],
   "maxEffort": "high",
-  "maxRounds": 2,
+  "maxRounds": 1,
   "plans": "docs/plans",
   "proof": "verify",
   "glossary": "CONTEXT.md",
