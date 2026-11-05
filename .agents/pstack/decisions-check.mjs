@@ -15,16 +15,22 @@
 //        Both append forms print the stage a written batch moves the log into, so
 //        the lead renames the session as the Session title rule asks, and in Claude
 //        Code, outside trunk delivery, print what page-stop.mjs stage prints for
-//        the plan beside the log.
+//        the plan beside the log. They also warn, without refusing, when a batch
+//        writes the first review or ship row of a babysit plan that has no Page: line.
 //        Both append forms, unlike the <log> and --all checks, refuse a partial, open, gap,
 //        blocked or inconclusive row without proof: <existing file under <plans>/artifacts/>
 //        or proof: none, and an accepted row unless its proof: names files an earlier row
 //        left not passed and its word: is a Word option in the plan's Defaults. Review-phase
 //        rows are exempt. In trunk delivery, once the log records a landed step, both
 //        refuse a new step's "built: step <n>" row while another step is built and has
-//        no delivery row "step <n> landed", published or dropped.
+//        no delivery row "step <n> landed", published or dropped. From a log's second
+//        open critical panel finding on, both refuse each one unless its result names
+//        task:<id> of an offered or started kind: decide task in the project's ledger
+//        whose finding, or one folded or merged into it, holds the log's file name
+//        without .decisions.tsv.
 //        node .agents/pstack/decisions-check.mjs rounds <log>
-//        (exits 1 when the log is at the cap of panel rounds before a build)
+//        (exits 1 when the log is at the cap of panel rounds before a build, the
+//        maxRounds in .agents/pstack.json or 3)
 //        node .agents/pstack/decisions-check.mjs chips [--fetch] [--session <id>] [<ledger>]
 //        (prints every open suggested task as ready, started, waiting or unmigrated,
 //        by priority, listing P0 and P1 in full and counting the rest unless chips all,
@@ -57,11 +63,12 @@
 
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { findLead, leadLabel, maxEffort, runtimeFolder } from './lead.mjs';
 import { cli as pageStop } from './page-stop.mjs';
+import { contextOf, pageUrlOf } from './plan-page.mjs';
 import { board, boardState, briefOf, CHIP_STATES, cleanupOf, chipRowProblems, baseRedProblems, gitMerges, ledgerPath, newChipRowProblems, newId, offeredAt, readShip, readTasks, recordRow, renderBoard, SESSION, staleReport, startedOverlaps } from './tasks.mjs';
-import { acceptedWord, bracketSeats, committedLines, decisionLogs, defaultsWords, isAcceptingWord, isHandOffReview, NOT_PASSED, proofLabels, proofStates, PROVEN, runPaths, seatRoster, SEATS, SEVERITIES, stageOfRow, STATUSES, statusOf } from './status.mjs';
+import { acceptedWord, bracketSeats, committedLines, decisionLogs, defaultsWords, isAcceptingWord, isHandOffReview, NOT_PASSED, proofLabels, proofStates, PROVEN, runPaths, seatRoster, SEATS, SEVERITIES, STAGE_PHASES, stageOfRow, STATUSES, statusOf } from './status.mjs';
 
 const HEADER = 'ts\tphase\tdecision\twhy\tevidence\tresult';
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u;
@@ -71,7 +78,11 @@ const opens = (line) => {
   const [, phase, decision = ''] = line.split('\t');
   return phase === 'panel' && SEATS.test(decision);
 };
-const MAX_ROUNDS = 3;
+const roundCap = () => {
+  const { maxRounds: cap = 3 } = projectConfig();
+  if (!Number.isInteger(cap) || cap < 1) throw new Error(`.agents/pstack.json: maxRounds is ${JSON.stringify(cap)}, not a whole number of 1 or more`);
+  return cap;
+};
 const restartsRoundCount = (line) => {
   const [, phase, decision = '', , , result = ''] = line.split('\t');
   if (phase === 'build') return /^built:\s*\S/u.test(decision) && /^(applied|fixed|partial|proven|recorded|verified)\b/u.test(result);
@@ -272,6 +283,27 @@ function appendOnlyLabelProblems(log, row, earlier, where) {
   return found;
 }
 
+const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+const isOpenCritical = ([phase, decision = '', , , result = '']) => phase === 'panel' && /^critical\b/u.test(decision) && /^open\b/u.test(result);
+
+function designQuestionProblems(log, cells, where, count) {
+  const slug = basename(log).replace(/\.decisions\.tsv$/u, '');
+  const cited = new RegExp(`(?<![\\w-])${escaped(slug)}(?![\\w-])`, 'u');
+  const held = `this log already holds ${count} open critical finding${count === 1 ? '' : 's'}, and a design that leaves two critical findings open may need a redesign`;
+  const route = `offer one kind: decide task in ${ledgerFile()}, with via: panel when it ranks P2 or P3, whose finding cites ${slug} and asks whether the design those findings live in needs a redesign, or fold this finding into the topic's open design question with a folded row whose finding cites ${slug}, then name it in this row's result as "task:<id>"`;
+  const ids = [...cells[4].matchAll(/(?:^|[\s,;(])task:\s*([\w-]+)/gu)].map((match) => match[1]);
+  if (ids.length === 0) return [`${where}: ${held}: ${route}`];
+  const reasons = ids.map((id) => {
+    const task = currentLedger().get(id);
+    if (!task) return `task:${id} is not a task in ${ledgerFile()}`;
+    if (task.kind !== 'decide') return `task:${id} is a ${task.kind} task, not a design question`;
+    if (!['offered', 'started'].includes(task.status)) return `task:${id} is ${task.status}, not open`;
+    const findings = [...task.findings, ...task.covers.flatMap((covered) => covered.findings)];
+    return findings.some((finding) => cited.test(finding)) ? null : `no finding of task:${id} cites ${slug}`;
+  });
+  return reasons.includes(null) ? [] : [`${where}: ${held}; ${reasons.join('; ')}; ${route}`];
+}
+
 function problems(path) {
   const lines = readFileSync(path, 'utf8').split('\n');
   if (lines[0] !== HEADER) return [`${path}:1: header must be "${HEADER.replaceAll('\t', ' ')}"`];
@@ -313,6 +345,7 @@ function append(path, batch, run, miss = null) {
   const isWriting = (line) => line.split('\t')[1] === 'writing';
   let written = isWriting(existing.findLast((line) => opens(line) || isWriting(line)) ?? '');
   let rounds = roundsSince(existing);
+  let openCriticals = existing.slice(1).filter((line) => isOpenCritical(line.split('\t').slice(1))).length;
   const steps = trunk() ? { built: new Set(), unlanded: new Set(), landing: false } : null;
   if (steps) for (const line of existing.slice(1)) trackStep(steps, line);
   const chips = readTasks(existing.slice(1));
@@ -335,11 +368,15 @@ function append(path, batch, run, miss = null) {
     const row = [stamp, ...cells].join('\t');
     if (cells[0] === 'chip' && !ledger) found.push(`${where}: chip rows go in the project's ledger ${ledgerFile()}, because a suggested task outlives the run that offered it`);
     found.push(...rowProblems(row, where, roster, ledger ? chips : null), ...newRowProblems(cells, where, ledger ? chips : null, writer), ...missingPlan(path, row, where), ...appendOnlyLabelProblems(path, row, [...existing.slice(1).filter(Boolean), ...rows], where));
+    if (isOpenCritical(cells)) {
+      if (openCriticals > 0) found.push(...designQuestionProblems(path, cells, where, openCriticals));
+      openCriticals += 1;
+    }
     if (opens(row) && roster && !written) {
       found.push(`${where}: a later round's seats row needs a writing row after the previous seats row: log the round's writing passes under phase writing, or log a writing row that says why none ran`);
     }
-    if (opens(row) && rounds >= MAX_ROUNDS) {
-      found.push(`${where}: this would be panel round ${rounds + 1} since the last restart, past the cap of ${MAX_ROUNDS}. Stop reviewing: settle each open finding as applied, dismissed on its proof, deferred with its owner when it is not critical, or open with its patch:, owner: and stop: when the Panel review rule lets it stay open, pivoting the run for a critical the lead must apply, then build a plan or move a diff to its next gate. A build row whose decision starts with "built:" and names the files a plan's build changed, with a result that starts applied, fixed, partial, proven, recorded or verified, or an owner row whose decision starts with "another round:" and quotes the owner, starts the count again`);
+    if (opens(row) && rounds >= roundCap()) {
+      found.push(`${where}: this would be panel round ${rounds + 1} since the last restart, past the cap of ${roundCap()}. Stop reviewing: settle each open finding as applied, dismissed on its proof, deferred with its owner when it is not critical, or open with its patch:, owner: and stop: when the Panel review rule lets it stay open, pivoting the run for a critical the lead must apply, then build a plan or move a diff to its next gate. A build row whose decision starts with "built:" and names the files a plan's build changed, with a result that starts applied, fixed, partial, proven, recorded or verified, or an owner row whose decision starts with "another round:" and quotes the owner, starts the count again`);
     }
     if (steps) {
       found.push(...stepInFlightProblems(steps, row, where));
@@ -382,6 +419,26 @@ function stagePage(log) {
   }
 }
 
+const pageDue = (phase) => [...STAGE_PHASES.Review, ...STAGE_PHASES.Ship, 'quality'].includes(phase) || /^(review|deliver)/iu.test(phase ?? '');
+const pageDueRows = (path) =>
+  existsSync(path) ? readFileSync(path, 'utf8').split('\n').slice(1).filter((line) => pageDue(line.split('\t')[1])).length : 0;
+
+function warnUnpublishedBabysit(log) {
+  const plan = log.replace(/\.decisions\.tsv$/u, '.md');
+  if (plan === log || !existsSync(plan)) return;
+  try {
+    const { plan: parsed, root, playbooks, subjectPath } = contextOf(resolve(plan));
+    const name = parsed.meta.playbook;
+    const babysit = name === 'babysit' || playbooks.some((entry) => entry.name === name && entry.extends.includes('babysit'));
+    const target = subjectPath ?? resolve(plan);
+    if (babysit && !pageUrlOf(root, target).url) {
+      console.error(`Warning: ${relative(process.cwd(), target)} has no Page: line, and the babysit playbook publishes the plan page before its first review round. Publish it now, before the next public action, as the plan-page skill says.`);
+    }
+  } catch (error) {
+    console.error(`No page check: ${error.message}`);
+  }
+}
+
 const args = process.argv.slice(2);
 const invokedFrom = process.cwd();
 runLedgerCommandFromMainCheckout(args);
@@ -399,8 +456,9 @@ if (args[0] === 'rounds') {
   }
   const lines = readFileSync(args[1], 'utf8').split('\n');
   const rounds = roundsSince(lines);
-  console.info(`${rounds} panel round(s) since the last restart; the cap is ${MAX_ROUNDS}`);
-  process.exit(rounds >= MAX_ROUNDS ? 1 : 0);
+  const cap = roundCap();
+  console.info(`${rounds} panel round(s) since the last restart; the cap is ${cap}`);
+  process.exit(rounds >= cap ? 1 : 0);
 }
 if (args[0] === 'chips') {
   const fetch = args.includes('--fetch');
@@ -528,6 +586,7 @@ if (args[0] === 'append') {
           .map((line) => line.split('\t'))
       : [args.slice(2)];
   const before = stageMoves(args[1] ?? '').length;
+  const dueBefore = pageDueRows(args[1] ?? '');
   const lead = findLead();
   const run = lead.run ?? null;
   if (!run) console.error(`Runtime identity is unknown because ${lead.miss}, so ${args[1]} records an unknown lead boundary.`);
@@ -541,6 +600,7 @@ if (args[0] === 'append') {
   const entered = stageMoves(args[1]).slice(before);
   if (entered.length) console.info(`Stage: ${entered.join(', then ')}.${existsSync(new URL('rules/title.md', import.meta.url)) ? ' Rename the session now, as .agents/pstack/rules/title.md says.' : ''}`);
   stagePage(args[1]);
+  if (dueBefore === 0 && pageDueRows(args[1]) > 0) warnUnpublishedBabysit(args[1]);
   process.exit(0);
 }
 const paths = args[0] === '--all' ? decisionLogs(plansDir()) : args;

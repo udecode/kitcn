@@ -26,14 +26,23 @@
 // sends to the background moves nothing after it, one that ends a pipeline
 // counts both ways, because zsh runs it in the current shell and bash does not,
 // and one whose target the guard cannot resolve, such as a variable, keeps the
-// earlier directory, as does a `git -C` value holding `$` or a backtick. A bare
-// name also counts in the earlier directory, because CDPATH could send it
+// earlier directory, as does a `git -C` value holding `$`, a backtick, `*`,
+// `?` or `[`, so such a target that leads into a checkout holding the
+// companion directory, or into one on the branch, passes there. A push or
+// companion denial names each `cd` target holding `$` or a backtick and each
+// `git -C` value the guard cannot resolve. A bare name also counts in the
+// earlier directory, because CDPATH could send it
 // elsewhere, and `cd <old> <new>` counts where zsh swaps the operands, in
 // `<old>`, where bash 3.2 moves, and in the earlier directory. The owner's
 // terminal never runs this hook. It denies an agent's `gh pr create` or `gh pr
-// new` into the branch or with no --base, because land.mjs opens those PRs; one
-// that names another base, such as a PR stacked on someone's head branch,
-// passes. In a checkout that holds the config's `companion.dir`, it denies what
+// new` into the branch or with no --base, because land.mjs opens those PRs;
+// one that names another base, such as a PR stacked on someone's head branch,
+// passes, and so does one where --help or -h is a flag rather than an option's
+// value. It denies any line whose text, with quotes and backslashes removed,
+// holds `actions/runs/` followed later by `/approve` or
+// `/pending_deployments`, whatever the client or method, so a read of pending
+// deployments or a commit message that spells such a path is denied too. In a
+// checkout that holds the config's `companion.dir`, it denies what
 // would delete or overwrite the files that companion repository tracks there:
 // `git clean -x` or `-X`, any `git clean` through its git directory, and a
 // checkout, switch, reset, merge or rebase to a commit without
@@ -62,7 +71,7 @@ const PREFIXES = new Set(['sudo', 'env', 'command', 'builtin', 'exec', 'nohup', 
 const SHELLS = new Set(['bash', 'sh', 'zsh']);
 const KEYWORDS = new Set(['!', 'if', 'then', 'elif', 'else', 'while', 'until', 'do']);
 const OPERATOR = /;|&&|\|[|&]?|&(?!>)|\n|[(){}]/uy;
-const BARE = /(?:\\.|[<>]&|&>|[$<>](?!\()|[^\s;&|(){}"'`\\$<>])+/uy;
+const BARE = /(?:\\.|\$\{[^{}\s$`\\]*\}|[<>]&|&>|[$<>](?!\()|[^\s;&|(){}"'`\\$<>])+/uy;
 const SUBSTITUTION = /[$<>]\(/uy;
 
 function stripHeredocs(text) {
@@ -157,6 +166,8 @@ function segments(source) {
   return result;
 }
 
+const unresolved = new Set();
+
 function shellPath(word, dir) {
   if (/[$`*?[]/u.test(word)) return null;
   return word === '~' || word.startsWith('~/') ? join(homedir(), word.slice(2)) : resolve(dir, word);
@@ -197,6 +208,7 @@ function eachCommand(command, visit, cwds, depth = 0) {
       if (start < words.length) for (const dir of entry) visit(words.slice(start), prefix, dir);
       if (words[start] === 'cd' && prefix.every((word) => STAYS.has(word) || /^[A-Za-z_]\w*=/u.test(word))) {
         ifOk = new Set([...entry].flatMap((dir) => cdTargets(words.slice(start + 1), dir)));
+        if (words.slice(start + 1).some((word) => /[$`]/u.test(word))) unresolved.add(['cd', ...words.slice(start + 1)].join(' '));
         if (prefix.includes('!')) ifOk = ifFailed = union(ifOk, ifFailed);
       }
       if (depth < 4) {
@@ -243,7 +255,11 @@ function gitCommand(words, cwd) {
   let dir = cwd;
   let gitDir = null;
   while (words[index]?.startsWith('-')) {
-    if (words[index] === '-C') dir = shellPath(words[index + 1] ?? '.', dir) ?? dir;
+    if (words[index] === '-C') {
+      const path = shellPath(words[index + 1] ?? '.', dir);
+      if (path === null) unresolved.add(`git -C ${words[index + 1]}`);
+      dir = path ?? dir;
+    }
     if (words[index] === '--git-dir') gitDir = words[index + 1] ?? '';
     if (words[index].startsWith('--git-dir=')) gitDir = words[index].slice('--git-dir='.length);
     index += GIT_VALUE_OPTIONS.has(words[index]) ? 2 : 1;
@@ -305,6 +321,7 @@ function pushes(words, cwd) {
 // Whether a command is `gh pr create` into the branch or with no base, which defaults to the repository's default branch.
 function opensPr(words, branch) {
   if (words[0]?.split('/').at(-1) !== 'gh' || words[1] !== 'pr' || !['create', 'new'].includes(words[2])) return false;
+  if (asksHelp(words.slice(3))) return false;
   let base = null;
   for (let at = 3; at < words.length; at += 1) {
     const word = words[at];
@@ -314,6 +331,29 @@ function opensPr(words, branch) {
   }
   return base === null || base.replace(/^refs\/heads\//u, '') === branch;
 }
+
+// gh pr create's flags that take no value; any other option consumes the next word, so `--title --help` sets a title.
+const PR_SWITCHES = new Set(['--draft', '--editor', '--fill', '--fill-first', '--fill-verbose', '--web', '--dry-run', '--no-maintainer-edit']);
+const SHORT_SWITCHES = /^[dewf]+/u;
+
+function asksHelp(args) {
+  for (let at = 0; at < args.length; at += 1) {
+    const word = args[at];
+    if (word === '--') return false;
+    if (word === '--help' || word === '--help=true') return true;
+    if (word.startsWith('--')) {
+      if (!word.includes('=') && !PR_SWITCHES.has(word)) at += 1;
+    } else if (word.startsWith('-')) {
+      // A short cluster such as `-dt` ends with a flag that takes the next word, while `-tx` holds its value.
+      const rest = word.slice(1).replace(SHORT_SWITCHES, '');
+      if (rest.startsWith('h')) return true;
+      if (rest.length === 1) at += 1;
+    }
+  }
+  return false;
+}
+
+const RUN_APPROVAL = /actions\/runs\/.*?\/(?:approve|pending_deployments)\b/u;
 
 const MOVES = new Set(['checkout', 'switch', 'reset', 'merge', 'rebase']);
 
@@ -329,7 +369,7 @@ function companionDenial(words, cwd, companion) {
   const flags = args.filter((word) => /^-[A-Za-z]+$/u.test(word)).join('');
   if (sub === 'clean' && !flags.includes('n') && !args.includes('--dry-run')) {
     if (gitDir !== null && existsSync(resolve(dir, gitDir)) && sameDir(resolve(dir, gitDir), join(top, companion.dir))) return `git clean through ${companion.dir} deletes every public file, which that repository does not track. Clean through this checkout's own git instead.`;
-    if (/[xX]/u.test(flags)) return `git clean -x or -X deletes the files ${companion.dir} tracks, which this checkout's git ignores. Run it without -x or -X, or with -n to list what it would delete.`;
+    if (/[xX]/u.test(flags)) return `git clean -x or -X in ${top} deletes the files ${companion.dir} tracks, which that checkout's git ignores. Run it without -x or -X, or with -n to list what it would delete.`;
   }
   if (!MOVES.has(sub) || gitDir !== null) return null;
   const paths = args.indexOf('--');
@@ -337,7 +377,7 @@ function companionDenial(words, cwd, companion) {
   for (const rev of (paths === -1 ? args : args.slice(0, paths)).filter((word) => !word.startsWith('-'))) {
     if (git(dir, 'rev-parse', '--verify', '--quiet', `${rev}^{commit}`) === null) continue;
     if (git(dir, 'cat-file', '-e', `${rev}:${companion.list}`) !== null) continue;
-    return `${rev} has no ${companion.list}, so moving this checkout there overwrites the files ${companion.dir} tracks with their old copies. Read an old file with \`git show ${rev}:<path>\`, or look around in a detached worktree from \`git worktree add --detach <path> ${rev}\`.`;
+    return `${rev} has no ${companion.list}, so moving ${top} there overwrites the files ${companion.dir} tracks with their old copies. Read an old file with \`git show ${rev}:<path>\`, or look around in a detached worktree from \`git worktree add --detach <path> ${rev}\`.`;
   }
   return null;
 }
@@ -483,6 +523,16 @@ if (lost) reasons.push(lost);
 if (pr) {
   reasons.push(
     `agents open a PR into ${config.branch} only through \`node .agents/pstack/land.mjs\`, which renders the plan page as its body. A PR stacked on another branch names that branch with --base.`
+  );
+}
+if (RUN_APPROVAL.test(command.replace(/['"\\]/gu, ''))) {
+  reasons.push(
+    `agents never approve a workflow run, such as a contributor's fork run waiting for approval, because that needs the user's word. Tell the user which runs wait, so they click "Approve and run workflows" on the PR or run the command in their own terminal. A line that only mentions such a path, such as a commit message, writes it without \`actions/runs/\`:\n  ${command}`
+  );
+}
+if ((lost || direct || hits.size > 0) && unresolved.size > 0) {
+  reasons.push(
+    `The guard could not resolve ${[...unresolved].map((part) => `\`${part}\``).join(', ')}, so it judged what follows in the directory before that step. If it runs elsewhere, repeat it with an absolute path.`
   );
 }
 if (reasons.length > 0) deny(reasons.join('\n'));
