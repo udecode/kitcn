@@ -312,9 +312,14 @@ Generated `getAuth(ctx)` uses the same context-aware adapter selection internall
 Convex mints every document `_id`, and Better Auth reads it back as `id`. When Better Auth creates a
 row with its own id (`forceAllowId`), as the organization plugin's invitations and
 `reserveVerificationValue` do, the adapter drops that id and returns the row under its Convex id.
-Better Auth checks that key a single-use row by a derived id, such as `reserveVerificationValue`,
-SAML assertion ids and `private_key_jwt` assertions, get no duplicate-key rejection from the
-database, the same as Better Auth's `generateId: "serial"`.
+
+`reserveVerificationValue` derives that id from the verification identifier and relies on the
+duplicate key to let only the first caller in. It backs the magic link and email OTP cleanup lock,
+SIWE email claims, DPoP proofs, SAML assertion ids and `private_key_jwt` assertions. Convex cannot
+store the forced id, so the identifier stands in for it: a verification create that carries a
+forced id is refused while a row with the same identifier exists. The second caller gets an error
+rather than `false`, so these checks fail closed. The verification table needs its `identifier`
+index, which the generated auth schema declares.
 
 ### Triggers
 

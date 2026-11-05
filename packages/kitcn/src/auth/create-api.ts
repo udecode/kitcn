@@ -20,6 +20,7 @@ import { eq } from '../orm/filter-expression';
 import { unsetToken } from '../orm/unset-token';
 import {
   adapterWhereValidator,
+  checkForcedIdVerification,
   checkUniqueFields,
   listOne,
   paginate,
@@ -537,6 +538,15 @@ export const createHandler = async (
     args.input.model,
     data
   );
+  if (_id !== undefined) {
+    await checkForcedIdVerification(
+      ctx,
+      schema,
+      betterAuthSchema,
+      args.input.model,
+      data
+    );
+  }
   const ormTable = resolveOrmTable(
     ctx,
     schema,

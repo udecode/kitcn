@@ -438,6 +438,62 @@ export const checkUniqueFields = async <
   }
 };
 
+/**
+ * Better Auth gates single-use work on a forced id: `reserveVerificationValue`
+ * derives a verification row's id from its identifier, so the first insert
+ * wins and every later one fails on the duplicate key. Magic link and email
+ * OTP cleanup locks, SIWE email claims, DPoP proofs, SAML assertion ids and
+ * client assertion `jti`s rely on that refusal.
+ *
+ * Convex picks its own ids and cannot store the forced one, so the identifier
+ * stands in for it: a verification create that arrived with a forced id is
+ * refused while a row with the same identifier exists, as the duplicate key
+ * would refuse it. The read and the insert run in one mutation, so concurrent
+ * reservations serialize on the identifier index. A schema without that index
+ * fails closed.
+ */
+export const checkForcedIdVerification = async <
+  Schema extends SchemaDefinition<any, any>,
+>(
+  ctx: GenericQueryCtx<GenericDataModel>,
+  schema: Schema,
+  betterAuthSchema: BetterAuthDBSchema,
+  table: string,
+  input: Record<string, any>
+) => {
+  const { modelNameToKey } = getSchemaViews(betterAuthSchema);
+  if ((modelNameToKey.get(table) ?? table) !== 'verification') {
+    return;
+  }
+
+  const field =
+    (betterAuthSchema as any)?.verification?.fields?.identifier?.fieldName ??
+    'identifier';
+  const value = input[field];
+  if (typeof value !== 'string') {
+    throw new Error(`${table} ${field} is required with a forced id`);
+  }
+
+  const { index } =
+    findIndex(schema, {
+      model: table,
+      where: [{ field, operator: 'eq', value }],
+    }) || {};
+
+  if (!index) {
+    throw new Error(`No index found for ${table} ${field}`);
+  }
+
+  const existingDoc = await ctx.db
+    .query(table as any)
+    .withIndex(index.indexDescriptor, (q) => q.eq(field, value))
+    .first();
+
+  if (existingDoc) {
+    throw new Error(`${table} ${field} already exists`);
+  }
+};
+
 // This handles basic select (stripping out the other fields if there
 // is a select arg).
 export const selectFields = <

@@ -151,4 +151,50 @@ describe('auth create with a forced id', () => {
       { identifier: 'synthetic-reservation', value: 'first' },
     ]);
   });
+
+  test('reserveVerificationValue refuses a second caller until the reservation is released', async () => {
+    const { auth, t } = makeAuth();
+    const context = await auth.$context;
+    const reserve = (value: string) =>
+      context.internalAdapter.reserveVerificationValue({
+        expiresAt: new Date(Date.now() + 60_000),
+        identifier: 'synthetic-lock',
+        value,
+      });
+    const readRows = () =>
+      t.run((ctx) => ctx.db.query('verification').collect());
+
+    expect(await reserve('first')).toBe(true);
+    await expect(reserve('second')).rejects.toThrow(
+      'verification identifier already exists'
+    );
+    expect(await readRows()).toMatchObject([
+      { identifier: 'synthetic-lock', value: 'first' },
+    ]);
+
+    await context.internalAdapter.deleteVerificationByIdentifier(
+      'synthetic-lock'
+    );
+    expect(await reserve('third')).toBe(true);
+    expect(await readRows()).toMatchObject([
+      { identifier: 'synthetic-lock', value: 'third' },
+    ]);
+  });
+
+  test('a verification value created without a forced id may share its identifier', async () => {
+    const { auth, t } = makeAuth();
+    const context = await auth.$context;
+    const create = (value: string) =>
+      context.internalAdapter.createVerificationValue({
+        expiresAt: new Date(Date.now() + 60_000),
+        identifier: 'synthetic-otp',
+        value,
+      });
+
+    await create('first');
+    await create('second');
+
+    const rows = await t.run((ctx) => ctx.db.query('verification').collect());
+    expect(rows.map((row) => row.value).sort()).toEqual(['first', 'second']);
+  });
 });
