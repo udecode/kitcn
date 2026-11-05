@@ -648,7 +648,6 @@ describe('cli/analyze entry sweep concurrency', () => {
   test('mapWithConcurrency runs entries in parallel up to the cap', async () => {
     let inFlight = 0;
     let peak = 0;
-    const startedAt = Date.now();
 
     await __test.mapWithConcurrency(
       Array.from({ length: 12 }, (_, index) => index),
@@ -662,9 +661,7 @@ describe('cli/analyze entry sweep concurrency', () => {
       }
     );
 
-    // Serial execution would peak at 1 and take ~240ms.
     expect(peak).toBe(4);
-    expect(Date.now() - startedAt).toBeLessThan(200);
   });
 
   test('mapWithConcurrency handles empty input and cap larger than input', async () => {

@@ -1,15 +1,14 @@
 ---
+description: kitcn's code standards for formatting, style, correctness, React and performance. Read in full before planning, writing, reviewing or deslopping any source, test or tooling change.
 name: 4-ultracite
-description: 'Skill: 4-ultracite'
 metadata:
   skiller:
     source: .agents/rules/4-ultracite.mdc
-    alwaysApply: true
 ---
 
 ## Code Standards
 
-When writing code in a project with Ultracite, follow these standards. For the full rules reference, see [references/code-standards.md](references/code-standards.md).
+When writing code in a project with Ultracite, follow these standards.
 
 Key rules at a glance:
 

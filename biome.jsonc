@@ -8,6 +8,8 @@
   "files": {
     "includes": [
       "!!tmp",
+      "!!.agents/pstack",
+      "!!.agents/pstack.json",
       "!fixtures",
       "!**/skills",
       "!**/_generated",

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import solid from 'vite-plugin-solid';
 import { defineConfig } from 'vitest/config';
 
@@ -101,7 +102,15 @@ export default defineConfig({
           environment: 'happy-dom',
           include: ['packages/kitcn/src/solid/**/*.vitest.{ts,tsx}'],
           exclude: ['**/node_modules/**'],
-          setupFiles: ['./tooling/test-setup-solid.ts'],
+          // vite-plugin-solid adds jest-dom's setup by bare name unless one is
+          // listed, and in a worktree under .claude/worktrees that name
+          // resolves to the main checkout's copy, which vitest cannot load.
+          setupFiles: [
+            fileURLToPath(
+              import.meta.resolve('@testing-library/jest-dom/vitest')
+            ),
+            './tooling/test-setup-solid.ts',
+          ],
           globals: true,
           server: {
             deps: {

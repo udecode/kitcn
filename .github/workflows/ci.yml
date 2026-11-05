@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+    # Pull requests keep running, because CI is a required check and a
+    # skipped workflow never reports it.
+    paths-ignore:
+      - '.agents/**'
+      - '.claude/skills/**'
+      - '.codex/**'
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'README.md'
   pull_request:
     types:
       - opened
@@ -27,8 +36,10 @@ jobs:
         github.event_name != 'pull_request' ||
         github.event.pull_request.title != '[Release] Version packages'
       ) && (
-        github.event_name != 'push' ||
-        !contains(github.event.head_commit.message, '[skip ci]')
+        github.event_name != 'push' || (
+          !contains(github.event.head_commit.message, '[Release] Version packages') &&
+          !contains(github.event.head_commit.message, '[skip ci]')
+        )
       )
 
     steps:
@@ -43,16 +54,5 @@ jobs:
         with:
           generate: "true"
 
-      - name: 🧠 Validate Skills
-        run: bun run intent:validate
-
-      - name: 📦 Build Packages
-        run: bun build:pkg
-
-      # KITCN_SKIP_LOCAL_BUILD is load-bearing on step order: it is only sound
-      # because "📦 Build Packages" runs immediately above. Keep it on this step
-      # and never job-wide.
       - name: 🔬 Run PR gate
-        run: bun run check:ci
-        env:
-          KITCN_SKIP_LOCAL_BUILD: "1"
+        run: bun check --ci

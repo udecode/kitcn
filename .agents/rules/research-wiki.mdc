@@ -22,8 +22,8 @@ This skill should decide whether the job is:
 
 The support docs remain canonical detail:
 
-- [docs/research/commands/full-pipeline.md](docs/research/commands/full-pipeline.md)
-- [docs/research/commands/maintain.md](docs/research/commands/maintain.md)
+- `docs/research/commands/full-pipeline.md`
+- `docs/research/commands/maintain.md`
 
 Use them as sub-workflows, not as dead docs.
 
@@ -62,15 +62,15 @@ Use them as sub-workflows, not as dead docs.
 
 Always read:
 
-1. [docs/research/README.md](docs/research/README.md)
-2. [docs/research/index.md](docs/research/index.md)
-3. [docs/research/log.md](docs/research/log.md)
+1. `docs/research/README.md`
+2. `docs/research/index.md`
+3. `docs/research/log.md`
 
 Then choose one support doc:
 
-- [docs/research/commands/full-pipeline.md](docs/research/commands/full-pipeline.md)
+- `docs/research/commands/full-pipeline.md`
   for `full`
-- [docs/research/commands/maintain.md](docs/research/commands/maintain.md)
+- `docs/research/commands/maintain.md`
   for `maintain`
 
 ## Mode Selection

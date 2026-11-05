@@ -1,5 +1,5 @@
 ---
-description: Audit newer npm package releases against kitcn. Use when checking whether a newer dependency version unlocks kitcn improvements, compatibility work, CLI/agent workflows, or cleanup of local package-specific hacks. Reads package changelogs, GitHub releases, upstream diffs, and local kitcn usage before delegating an implementation PR through `task`.
+description: Audit newer npm package releases against kitcn. Use when checking whether a newer dependency version unlocks kitcn improvements, compatibility work, CLI/agent workflows, or cleanup of local package-specific hacks. Reads package changelogs, GitHub releases, upstream diffs, and local kitcn usage before handing one implementation slice to the Build playbook.
 ---
 
 # Package Release Audit
@@ -7,9 +7,9 @@ description: Audit newer npm package releases against kitcn. Use when checking w
 Handle $ARGUMENTS.
 
 Goal: find newer releases for a named package, extract work kitcn can actually
-use, then delegate one concrete implementation slice to
-[$task](/Users/zbeyens/git/better-convex/.agents/skills/task/SKILL.md) so it
-opens the PR.
+use, then hand one concrete implementation slice to the Build playbook
+(`.agents/playbooks/build.md`), which lands it through
+`node .agents/pstack/land.mjs`.
 
 ## Rules
 
@@ -186,17 +186,16 @@ Pick the highest-leverage slice using this order:
 4. product feature kitcn can expose cleanly
 5. docs or skill-only update
 
-If the winning slice touches published package code, the delegated task must
-update the active changeset and run `bun --cwd packages/kitcn build`.
+If the winning slice touches published package code, the build must update
+the active changeset and run `bun --cwd packages/kitcn build`.
 
-If it touches scaffold templates, the delegated task must run
-`bun run fixtures:sync` and `bun run fixtures:check`.
+If it touches scaffold templates, the build must run `bun run fixtures:sync`
+and `bun run fixtures:check`.
 
-## 7. Delegate Through `task`
+## 7. Hand Off To The Build Playbook
 
-Load
-[$task](/Users/zbeyens/git/better-convex/.agents/skills/task/SKILL.md) with a
-prompt in this exact shape:
+Run the slice as "go" through the Build playbook
+(`.agents/playbooks/build.md`) with a brief in this exact shape:
 
 ```md
 Implement this package release opportunity.
@@ -221,17 +220,19 @@ Acceptance:
 - <tests/checks>
 - <package build if packages/kitcn changes>
 - <fixtures commands if scaffold output changes>
-- open the PR after verification
+- land through `node .agents/pstack/land.mjs` after verification
 
 Do not preserve obsolete package workarounds if the upstream release removes
 the need for them. Hard cut the hack.
 ```
 
-Then follow `task` until the PR exists or a real blocker is proven.
+Then follow the Build playbook until `land.mjs` pushes the slice to `main` from
+the owner's clone or opens its PR from a contributor's, or a real blocker is
+proven.
 
 ## Output
 
-Before delegation, keep the audit terse:
+Before the handoff, keep the audit terse:
 
 ```md
 Package: <package-name>
@@ -242,7 +243,7 @@ Target: <version>
 | --- | --- | --- | --- |
 | cleanup | ... | ... | selected |
 
-Delegating to task: <selected slice>
+Handing to Build: <selected slice>
 ```
 
-After `task` finishes, use its final handoff format.
+After the build lands, use the Build playbook's hand-back.
