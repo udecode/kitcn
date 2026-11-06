@@ -123,6 +123,10 @@ The `strict` flag controls how aggressively the ORM enforces index usage:
 - `strict` (default `true`): relation index misses throw unless `allowFullScan: true`; predicate `where` requires explicit `.withIndex(...)`.
 - `strict: false`: relation index misses still require `allowFullScan`; predicate `where` still requires `.withIndex(...)`.
 
+Tables build on first use: a query or insert builds only the tables it touches. The first update or delete reads every table's foreign keys, and `createOrm` without the aggregate capability builds every table to check for aggregate indexes. Definition errors (invalid indexes, constraints, foreign key references) throw when the schema is pushed or `kitcn codegen` runs. Call `schema.export()` in a test to throw them there.
+
+In extra config, reference columns through the table argument (`t.tenantId`), not through a builder variable that several tables share. Call `rlsPolicy(...).link(table)` at module scope in `schema.ts` or in the module that declares the table, so the policy attaches whenever the schema loads.
+
 ### Runtime Defaults
 
 You can set global runtime guardrails via the `defaults` option. These control limits for queries, relation loading, and mutation batching. For the full list of options and their built-in fallback values, see [API Reference](#runtime-defaults) below.

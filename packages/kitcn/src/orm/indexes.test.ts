@@ -14,6 +14,12 @@ import {
   vectorIndex,
 } from './index';
 
+const expectExportToThrow = (table: { tableName: string }, error: RegExp) => {
+  expect(() =>
+    defineSchema({ [table.tableName]: table } as any).export()
+  ).toThrow(error);
+};
+
 test('search and vector index builders export correctly', () => {
   const posts = convexTable(
     'posts',
@@ -136,65 +142,73 @@ test('extraConfig object return works for search and vector indexes', () => {
 });
 
 test('searchIndex requires .on()', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { text: text().notNull() }, () => [
       searchIndex('missing_on') as any,
-    ])
-  ).toThrow(/Did you forget to call \.on/);
+    ]),
+    /Did you forget to call \.on/
+  );
 });
 
 test('vectorIndex requires .on()', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { embedding: vector(1536).notNull() }, () => [
       vectorIndex('missing_on') as any,
-    ])
-  ).toThrow(/Did you forget to call \.on/);
+    ]),
+    /Did you forget to call \.on/
+  );
 });
 
 test('vectorIndex requires dimensions', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { embedding: vector(1536).notNull() }, (t) => [
       vectorIndex('missing_dimensions').on(t.embedding),
-    ])
-  ).toThrow(/missing dimensions/i);
+    ]),
+    /missing dimensions/i
+  );
 });
 
 test('searchIndex validates search field type', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { count: integer().notNull() }, (t) => [
       searchIndex('search_count').on(t.count),
-    ])
-  ).toThrow(/only supports text\(\) columns/);
+    ]),
+    /only supports text\(\) columns/
+  );
 });
 
 test('vectorIndex validates vector field type', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { text: text().notNull() }, (t) => [
       vectorIndex('vec').on(t.text).dimensions(1536),
-    ])
-  ).toThrow(/requires a vector\(\) column/);
+    ]),
+    /requires a vector\(\) column/
+  );
 });
 
 test('vectorIndex validates dimensions match vector column', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { embedding: vector(1536).notNull() }, (t) => [
       vectorIndex('vec').on(t.embedding).dimensions(768),
-    ])
-  ).toThrow(/dimensions \(768\) do not match vector column/);
+    ]),
+    /dimensions \(768\) do not match vector column/
+  );
 });
 
 test('vectorIndex validates dimensions values', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { embedding: vector(1536).notNull() }, (t) => [
       vectorIndex('vec').on(t.embedding).dimensions(0),
-    ])
-  ).toThrow(/must be positive/);
+    ]),
+    /must be positive/
+  );
 
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { embedding: vector(1536).notNull() }, (t) => [
       vectorIndex('vec').on(t.embedding).dimensions(1.5),
-    ])
-  ).toThrow(/must be an integer/);
+    ]),
+    /must be an integer/
+  );
 });
 
 test('vector builder validates dimensions values', () => {
@@ -205,15 +219,16 @@ test('vector builder validates dimensions values', () => {
 test('searchIndex validates table ownership for columns', () => {
   const users = convexTable('users', { name: text().notNull() });
 
-  expect(() =>
+  expectExportToThrow(
     convexTable('posts', { text: text().notNull() }, () => [
       searchIndex('search_users').on(users.name),
-    ])
-  ).toThrow(/references column from 'users'/);
+    ]),
+    /references column from 'users'/
+  );
 });
 
 test('createdAt index is forbidden because createdAt aliases _creationTime', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable(
       'events',
       {
@@ -221,8 +236,9 @@ test('createdAt index is forbidden because createdAt aliases _creationTime', () 
         createdAt: integer().notNull(),
       },
       (t) => [index('by_created_at').on(t.createdAt)]
-    )
-  ).toThrow(/cannot use 'createdAt'/i);
+    ),
+    /cannot use 'createdAt'/i
+  );
 });
 
 test('aggregateIndex count-only usage exports and stores metadata', () => {
@@ -250,11 +266,12 @@ test('aggregateIndex count-only usage exports and stores metadata', () => {
 });
 
 test('aggregateIndex requires .on(...) or .all()', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable('count_index_missing_on', { orgId: text().notNull() }, () => [
       aggregateIndex('missing_on') as any,
-    ])
-  ).toThrow(/Did you forget to call \.on\(\.\.\.\) or \.all\(\)/);
+    ]),
+    /Did you forget to call \.on\(\.\.\.\) or \.all\(\)/
+  );
 });
 
 test('aggregateIndex builder exports and stores metric metadata', () => {
@@ -308,13 +325,14 @@ test('aggregateIndex builder exports and stores metric metadata', () => {
 });
 
 test('aggregateIndex requires .on(...) or .all()', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable(
       'aggregate_index_missing_on',
       { orgId: text().notNull() },
       () => [aggregateIndex('missing_on') as any]
-    )
-  ).toThrow(/Did you forget to call \.on\(\.\.\.\) or \.all\(\)/);
+    ),
+    /Did you forget to call \.on\(\.\.\.\) or \.all\(\)/
+  );
 });
 
 test('rankIndex orderBy accepts documented direction objects', () => {
@@ -347,21 +365,23 @@ test('rankIndex orderBy accepts documented direction objects', () => {
 });
 
 test('aggregateIndex sum() validates numeric columns', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable(
       'aggregate_index_invalid_sum',
       { orgId: text().notNull(), status: text() },
       (t) => [aggregateIndex('by_org').on(t.orgId).sum(t.status)]
-    )
-  ).toThrow(/sum\(\) supports integer\(\)\/timestamp\(\) columns only/i);
+    ),
+    /sum\(\) supports integer\(\)\/timestamp\(\) columns only/i
+  );
 });
 
 test('aggregateIndex avg() validates numeric columns', () => {
-  expect(() =>
+  expectExportToThrow(
     convexTable(
       'aggregate_index_invalid_avg',
       { orgId: text().notNull(), status: text() },
       (t) => [aggregateIndex('by_org').on(t.orgId).avg(t.status)]
-    )
-  ).toThrow(/avg\(\) supports integer\(\)\/timestamp\(\) columns only/i);
+    ),
+    /avg\(\) supports integer\(\)\/timestamp\(\) columns only/i
+  );
 });

@@ -19,7 +19,10 @@ import {
   getProjectServerParserShimPath,
   registerMissingModuleFallback,
 } from './utils/project-jiti.js';
-import { schemaDeclaresAggregateIndexes } from './utils/schema-tables.js';
+import {
+  schemaDeclaresAggregateIndexes,
+  validateOrmTables,
+} from './utils/schema-tables.js';
 
 /**
  * Generate api.ts with cRPC metadata and client-facing public API refs.
@@ -1138,6 +1141,7 @@ async function resolveSchemaMetadataForCodegen(
     }
 
     const hasOrmSchema = OrmSchemaOptions in schemaValue;
+    validateOrmTables(schemaValue as Record<string, unknown>);
     const hasRelations = Boolean(getSchemaRelations(schemaValue));
     const hasTriggers = Boolean(getSchemaTriggers(schemaValue));
 

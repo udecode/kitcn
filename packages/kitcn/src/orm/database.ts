@@ -213,7 +213,9 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
     });
     const ormContext: OrmContextValue = {
       capabilities: options?.capabilities,
-      foreignKeyGraph: getForeignKeyGraph(schema),
+      get foreignKeyGraph() {
+        return getForeignKeyGraph(schema);
+      },
       schema,
       edgeMetadata,
       relationLoading: options?.relationLoading,
@@ -241,21 +243,25 @@ export function createDatabase<TSchema extends TablesRelationalConfig>(
     const query: any = {};
     const edgesBySourceTable = getEdgesBySourceTable(edgeMetadata);
 
-    // Create query builder for each table in schema
     for (const [tableName, tableConfig] of Object.entries(schema)) {
-      // Edges originating from this table, partitioned once per edge list.
-      const tableEdges = edgesBySourceTable.get(tableConfig.name) ?? NO_EDGES;
-
-      query[tableName] = new RelationalQueryBuilder(
-        schema,
-        tableConfig,
-        tableEdges,
-        baseDb,
-        edgeMetadata, // M6.5 Phase 2: Pass all edges for nested relation loading
-        rls,
-        options?.relationLoading,
-        options?.vectorSearch
-      );
+      let builder: RelationalQueryBuilder<any, any> | undefined;
+      Object.defineProperty(query, tableName, {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          builder ??= new RelationalQueryBuilder(
+            schema,
+            tableConfig,
+            edgesBySourceTable.get(tableConfig.name) ?? NO_EDGES,
+            baseDb,
+            edgeMetadata, // M6.5 Phase 2: Pass all edges for nested relation loading
+            rls,
+            options?.relationLoading,
+            options?.vectorSearch
+          );
+          return builder;
+        },
+      });
     }
 
     const isWriter =

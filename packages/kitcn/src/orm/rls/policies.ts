@@ -1,5 +1,6 @@
 import { entityKind } from '../builders/column-builder';
 import type { FilterExpression } from '../filter-expression';
+import { LinkRlsPolicy } from '../symbols';
 import type { ConvexTable, ConvexTableWithColumns } from '../table';
 import type { RlsRole } from './roles';
 
@@ -60,6 +61,9 @@ export class RlsPolicy<TCtx = any, TTable = ConvexTableWithColumns<any>>
 
   link(table: ConvexTable<any>): this {
     this._linkedTable = table;
+    (table as { [LinkRlsPolicy]?: (policy: RlsPolicy) => void })[
+      LinkRlsPolicy
+    ]?.(this);
     return this;
   }
 }
