@@ -17,7 +17,9 @@ import {
   createMissingModuleResolver,
   createProjectJiti,
   getProjectServerParserShimPath,
+  projectGraphCache,
   registerMissingModuleFallback,
+  withSharedProjectGraph,
 } from './utils/project-jiti.js';
 import {
   schemaDeclaresAggregateIndexes,
@@ -2225,6 +2227,7 @@ async function parseModuleRuntime(
           async: true,
           ext: '.ts',
           filename: filePath,
+          cache: projectGraphCache(),
         });
 
   if (!module || typeof module !== 'object') {
@@ -2526,82 +2529,84 @@ export async function generateMeta(
         placeholderRuntimeExportNames
       );
 
-      for (const file of parseCandidateFiles) {
-        const filePath = path.join(functionsDir, file);
-        // Use path (minus .ts) as namespace key: 'items/queries' for nested files
-        const moduleName = file.replace(TS_EXTENSION_RE, '');
+      await withSharedProjectGraph(async () => {
+        for (const file of parseCandidateFiles) {
+          const filePath = path.join(functionsDir, file);
+          // Use path (minus .ts) as namespace key: 'items/queries' for nested files
+          const moduleName = file.replace(TS_EXTENSION_RE, '');
 
-        try {
-          const {
-            meta: moduleMeta,
-            httpRoutes,
-            procedures,
-          } = await parseModuleRuntime(
-            fileCache,
-            filePath,
-            jitiInstance,
-            serverShimSpecifier
-          );
+          try {
+            const {
+              meta: moduleMeta,
+              httpRoutes,
+              procedures,
+            } = await parseModuleRuntime(
+              fileCache,
+              filePath,
+              jitiInstance,
+              serverShimSpecifier
+            );
 
-          if (moduleMeta) {
-            meta[moduleName] = moduleMeta;
-            const fnCount = Object.keys(moduleMeta).length;
-            totalFunctions += fnCount;
-            if (debug) {
-              logger.info(`  ✓ ${moduleName}: ${fnCount} functions`);
+            if (moduleMeta) {
+              meta[moduleName] = moduleMeta;
+              const fnCount = Object.keys(moduleMeta).length;
+              totalFunctions += fnCount;
+              if (debug) {
+                logger.info(`  ✓ ${moduleName}: ${fnCount} functions`);
+              }
+            }
+
+            // Merge HTTP routes
+            if (Object.keys(httpRoutes).length > 0 && debug) {
+              logger.info(
+                `  ✓ ${moduleName}: ${Object.keys(httpRoutes).length} HTTP routes`
+              );
+            }
+            Object.assign(allHttpRoutes, httpRoutes);
+
+            for (const procedure of procedures) {
+              procedureEntries.push({
+                moduleName,
+                exportName: procedure.exportName,
+                internal: procedure.internal,
+                type: procedure.type,
+                kind: 'crpc',
+              });
+            }
+
+            const procedureNameEntries = buildProcedureNameLookupEntries({
+              file,
+              fileCache,
+              filePath,
+              moduleName,
+              procedures,
+            });
+            if (procedureNameEntries.length > 0) {
+              procedureNameLookup[file] = procedureNameEntries;
+            }
+          } catch (error) {
+            const runtimeFile = getGeneratedRuntimeOutputFile(
+              functionsDir,
+              moduleName
+            );
+            if (existingRuntimeFilesBeforeParse.has(runtimeFile)) {
+              runtimeFilesPreservedFromParseFailures.add(runtimeFile);
+            }
+            const shouldLogParseFailure =
+              debug ||
+              (file === 'http.ts' && !shouldSuppressHttpParseWarning(error));
+            const shouldTreatParseFailureAsFatal = !(
+              file === 'http.ts' && shouldSuppressHttpParseWarning(error)
+            );
+            if (shouldLogParseFailure) {
+              logger.error(`  ⚠ Failed to parse ${file}:`, error);
+            }
+            if (shouldTreatParseFailureAsFatal) {
+              fatalParseFailures.push({ file, error });
             }
           }
-
-          // Merge HTTP routes
-          if (Object.keys(httpRoutes).length > 0 && debug) {
-            logger.info(
-              `  ✓ ${moduleName}: ${Object.keys(httpRoutes).length} HTTP routes`
-            );
-          }
-          Object.assign(allHttpRoutes, httpRoutes);
-
-          for (const procedure of procedures) {
-            procedureEntries.push({
-              moduleName,
-              exportName: procedure.exportName,
-              internal: procedure.internal,
-              type: procedure.type,
-              kind: 'crpc',
-            });
-          }
-
-          const procedureNameEntries = buildProcedureNameLookupEntries({
-            file,
-            fileCache,
-            filePath,
-            moduleName,
-            procedures,
-          });
-          if (procedureNameEntries.length > 0) {
-            procedureNameLookup[file] = procedureNameEntries;
-          }
-        } catch (error) {
-          const runtimeFile = getGeneratedRuntimeOutputFile(
-            functionsDir,
-            moduleName
-          );
-          if (existingRuntimeFilesBeforeParse.has(runtimeFile)) {
-            runtimeFilesPreservedFromParseFailures.add(runtimeFile);
-          }
-          const shouldLogParseFailure =
-            debug ||
-            (file === 'http.ts' && !shouldSuppressHttpParseWarning(error));
-          const shouldTreatParseFailureAsFatal = !(
-            file === 'http.ts' && shouldSuppressHttpParseWarning(error)
-          );
-          if (shouldLogParseFailure) {
-            logger.error(`  ⚠ Failed to parse ${file}:`, error);
-          }
-          if (shouldTreatParseFailureAsFatal) {
-            fatalParseFailures.push({ file, error });
-          }
         }
-      }
+      });
     } finally {
       releaseRuntimePlaceholders();
       // biome-ignore lint/performance/noDelete: globalThis property, not a plain object — delete is correct here

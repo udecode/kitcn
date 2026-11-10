@@ -5104,6 +5104,86 @@ export default createHttpRouter({}, router({}));
     }
   });
 
+  test('generateMeta evaluates a module shared by many procedure modules once per run', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+    const log = path.join(dir, 'evaluations.log');
+    const writeShared = (type: string) =>
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'shared.ts'),
+        `
+        import fs from 'node:fs';
+        fs.appendFileSync(${JSON.stringify(log)}, 'shared\\n');
+        export const meta = { type: '${type}' };
+        `.trim()
+      );
+    const evaluations = () =>
+      fs.readFileSync(log, 'utf-8').trim().split('\n').length;
+    const api = () =>
+      fs.readFileSync(path.join(dir, 'convex', 'shared', 'api.ts'), 'utf-8');
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeShared('query');
+      for (const name of ['a', 'b', 'c']) {
+        writeFile(
+          path.join(dir, 'convex', `${name}.ts`),
+          `
+          import { meta } from './lib/shared';
+          export const ${name}Proc = { _crpcMeta: meta };
+          `.trim()
+        );
+      }
+
+      await generateMeta(undefined, { silent: true });
+      expect(evaluations()).toBe(1);
+      expect(api()).not.toContain('mutation');
+
+      writeShared('mutation');
+      await generateMeta(undefined, { silent: true });
+      expect(evaluations()).toBe(2);
+      expect(api()).toContain('mutation');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
+  test('generateMeta fails every procedure module that imports a module that throws', async () => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeFile(
+        path.join(dir, 'convex', 'lib', 'broken.ts'),
+        "throw new Error('broken helper');"
+      );
+      for (const name of ['a', 'b']) {
+        writeFile(
+          path.join(dir, 'convex', `${name}.ts`),
+          `
+          import './lib/broken';
+          export const ${name}Query = { _crpcMeta: { type: 'query' } };
+          `.trim()
+        );
+      }
+
+      const error = await generateMeta(undefined, { silent: true }).then(
+        () => null,
+        (caught: unknown) => String(caught)
+      );
+      expect(error).toContain(
+        'kitcn codegen aborted because module parsing failed'
+      );
+      expect(error).toContain('- a.ts: broken helper');
+      expect(error).toContain('- b.ts: broken helper');
+    } finally {
+      process.chdir(oldCwd);
+    }
+  });
+
   test('generateMeta parses modules that import tsx files', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();
