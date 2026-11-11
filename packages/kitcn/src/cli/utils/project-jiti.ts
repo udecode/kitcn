@@ -534,6 +534,25 @@ const loadWithMissingModuleFallback = (
   return load(...loadArgs);
 };
 
+const sharedProjectGraph = new AsyncLocalStorage<ModuleCache>();
+
+// A module whose evaluation threw stays in Jiti's cache unloaded. Dropping it
+// before each root makes every root that imports it evaluate it again.
+const pruneUnloaded = (cache: ModuleCache) => {
+  for (const key of Object.keys(cache)) {
+    if (cache[key]?.loaded !== true) delete cache[key];
+  }
+  return cache;
+};
+
+export const projectGraphCache = (): ModuleCache => {
+  const shared = sharedProjectGraph.getStore();
+  return shared ? pruneUnloaded(shared) : Object.create(null);
+};
+
+export const withSharedProjectGraph = <T>(fn: () => Promise<T>): Promise<T> =>
+  sharedProjectGraph.run(Object.create(null), fn);
+
 const importProjectGraph = (
   jiti: Jiti,
   load: ModuleLoad,
@@ -545,8 +564,9 @@ const importProjectGraph = (
     return load(...args);
   }
   // Jiti propagates this cache through nested modules. Each root import gets
-  // a fresh graph so cycles share exports without hiding later file edits.
-  const cache: ModuleCache = Object.create(null);
+  // a fresh graph so cycles share exports without hiding later file edits,
+  // unless the caller scoped one graph to a single pass.
+  const cache = projectGraphCache();
   return projectImportGraph.run({ jiti, cache }, () => {
     const resolved = resolve(...args);
     const filename = resolved?.startsWith('file:')
