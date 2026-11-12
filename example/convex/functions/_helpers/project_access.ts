@@ -185,8 +185,7 @@ export const listAccessibleProjects = async (
     .filter((project): project is ProjectRow => project !== null);
 
   return {
-    continueCursor: access.continueCursor,
-    isDone: access.isDone,
+    ...access,
     page,
   };
 };
