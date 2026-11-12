@@ -539,13 +539,7 @@ export const createHandler = async (
     data
   );
   if (_id !== undefined) {
-    await checkForcedId(
-      ctx,
-      schema,
-      betterAuthSchema,
-      args.input.model,
-      data
-    );
+    await checkForcedId(ctx, schema, betterAuthSchema, args.input.model, data);
   }
   const ormTable = resolveOrmTable(
     ctx,

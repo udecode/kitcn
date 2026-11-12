@@ -454,9 +454,7 @@ export const checkUniqueFields = async <
  * fails closed. A client assertion row holds nothing but its id, so its
  * forced-id create is refused outright rather than letting every replay in.
  */
-export const checkForcedId = async <
-  Schema extends SchemaDefinition<any, any>,
->(
+export const checkForcedId = async <Schema extends SchemaDefinition<any, any>>(
   ctx: GenericQueryCtx<GenericDataModel>,
   schema: Schema,
   betterAuthSchema: BetterAuthDBSchema,
