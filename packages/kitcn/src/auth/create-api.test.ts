@@ -509,6 +509,40 @@ describe('createHandler', () => {
     expect(result).toMatchObject({ _id: 'user-1', id: 'user-1' });
   });
 
+  test('refuses a forced-id client assertion create instead of letting a replay in', async () => {
+    const insertCalls: unknown[] = [];
+    await expect(
+      createHandler(
+        {
+          db: {
+            normalizeId: (_table: string, id: string) => id,
+            get: async () => null,
+            insert: async (_model: string, data: unknown) => {
+              insertCalls.push(data);
+              return 'assertion-1';
+            },
+          },
+        } as any,
+        {
+          input: {
+            data: { _id: 'jti-digest', expiresAt: 2 },
+            model: 'oauthClientAssertion',
+          },
+        },
+        {
+          tables: {
+            oauthClientAssertion: {
+              export: () => ({ indexes: [] }),
+              validator: { fields: { expiresAt: v.number() } },
+            },
+          },
+        } as any,
+        { oauthClientAssertion: { fields: {} } } as any
+      )
+    ).rejects.toThrow('oauthClientAssertion needs its forced id');
+    expect(insertCalls).toEqual([]);
+  });
+
   test('refuses a forced-id verification create when its table has no identifier index', async () => {
     const insertCalls: unknown[] = [];
     await expect(

@@ -20,7 +20,7 @@ import { eq } from '../orm/filter-expression';
 import { unsetToken } from '../orm/unset-token';
 import {
   adapterWhereValidator,
-  checkForcedIdVerification,
+  checkForcedId,
   checkUniqueFields,
   listOne,
   paginate,
@@ -539,7 +539,7 @@ export const createHandler = async (
     data
   );
   if (_id !== undefined) {
-    await checkForcedIdVerification(
+    await checkForcedId(
       ctx,
       schema,
       betterAuthSchema,

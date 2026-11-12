@@ -439,20 +439,22 @@ export const checkUniqueFields = async <
 };
 
 /**
- * Better Auth gates single-use work on a forced id: `reserveVerificationValue`
- * derives a verification row's id from its identifier, so the first insert
- * wins and every later one fails on the duplicate key. Magic link and email
- * OTP cleanup locks, SIWE email claims, DPoP proofs, SAML assertion ids and
- * client assertion `jti`s rely on that refusal.
+ * Better Auth gates single-use work on a forced id: it derives the id from a
+ * one-time key, so the first insert wins and every later one fails on the
+ * duplicate key. `reserveVerificationValue` does this on the verification
+ * model (magic link and email OTP cleanup locks, SIWE email claims, DPoP
+ * proofs, SAML assertion ids), and `private_key_jwt` does it on
+ * `oauthClientAssertion` with each assertion's `jti`.
  *
- * Convex picks its own ids and cannot store the forced one, so the identifier
- * stands in for it: a verification create that arrived with a forced id is
+ * Convex picks its own ids and cannot store the forced one. On the
+ * verification model the identifier stands in for it: a forced-id create is
  * refused while a row with the same identifier exists, as the duplicate key
  * would refuse it. The read and the insert run in one mutation, so concurrent
  * reservations serialize on the identifier index. A schema without that index
- * fails closed.
+ * fails closed. A client assertion row holds nothing but its id, so its
+ * forced-id create is refused outright rather than letting every replay in.
  */
-export const checkForcedIdVerification = async <
+export const checkForcedId = async <
   Schema extends SchemaDefinition<any, any>,
 >(
   ctx: GenericQueryCtx<GenericDataModel>,
@@ -462,7 +464,13 @@ export const checkForcedIdVerification = async <
   input: Record<string, any>
 ) => {
   const { modelNameToKey } = getSchemaViews(betterAuthSchema);
-  if ((modelNameToKey.get(table) ?? table) !== 'verification') {
+  const model = modelNameToKey.get(table) ?? table;
+  if (model === 'oauthClientAssertion') {
+    throw new Error(
+      `${table} needs its forced id to block replays, which Convex cannot store`
+    );
+  }
+  if (model !== 'verification') {
     return;
   }
 
