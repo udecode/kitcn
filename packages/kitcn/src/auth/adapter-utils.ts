@@ -438,6 +438,68 @@ export const checkUniqueFields = async <
   }
 };
 
+/**
+ * Better Auth gates single-use work on a forced id: it derives the id from a
+ * one-time key, so the first insert wins and every later one fails on the
+ * duplicate key. `reserveVerificationValue` does this on the verification
+ * model (magic link and email OTP cleanup locks, SIWE email claims, DPoP
+ * proofs, SAML assertion ids), and `private_key_jwt` does it on
+ * `oauthClientAssertion` with each assertion's `jti`.
+ *
+ * Convex picks its own ids and cannot store the forced one. On the
+ * verification model the identifier stands in for it: a forced-id create is
+ * refused while a row with the same identifier exists, as the duplicate key
+ * would refuse it. The read and the insert run in one mutation, so concurrent
+ * reservations serialize on the identifier index. A schema without that index
+ * fails closed. A client assertion row holds nothing but its id, so its
+ * forced-id create is refused outright rather than letting every replay in.
+ */
+export const checkForcedId = async <Schema extends SchemaDefinition<any, any>>(
+  ctx: GenericQueryCtx<GenericDataModel>,
+  schema: Schema,
+  betterAuthSchema: BetterAuthDBSchema,
+  table: string,
+  input: Record<string, any>
+) => {
+  const { modelNameToKey } = getSchemaViews(betterAuthSchema);
+  const model = modelNameToKey.get(table) ?? table;
+  if (model === 'oauthClientAssertion') {
+    throw new Error(
+      `${table} needs its forced id to block replays, which Convex cannot store`
+    );
+  }
+  if (model !== 'verification') {
+    return;
+  }
+
+  const field =
+    (betterAuthSchema as any)?.verification?.fields?.identifier?.fieldName ??
+    'identifier';
+  const value = input[field];
+  if (typeof value !== 'string') {
+    throw new Error(`${table} ${field} is required with a forced id`);
+  }
+
+  const { index } =
+    findIndex(schema, {
+      model: table,
+      where: [{ field, operator: 'eq', value }],
+    }) || {};
+
+  if (!index) {
+    throw new Error(`No index found for ${table} ${field}`);
+  }
+
+  const existingDoc = await ctx.db
+    .query(table as any)
+    .withIndex(index.indexDescriptor, (q) => q.eq(field, value))
+    .first();
+
+  if (existingDoc) {
+    throw new Error(`${table} ${field} already exists`);
+  }
+};
+
 // This handles basic select (stripping out the other fields if there
 // is a select arg).
 export const selectFields = <
