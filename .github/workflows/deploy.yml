@@ -1,0 +1,85 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'www/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.repository == 'udecode/kitcn' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: Production
+      url: https://kitcn.dev
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_CLI_VERSION: 64.5.0
+    steps:
+      - name: Check deployment configuration
+        run: |
+          if [[ -z "$VERCEL_TOKEN" || -z "$VERCEL_ORG_ID" || -z "$VERCEL_PROJECT_ID" ]]; then
+            echo '::error::Configure the VERCEL_TOKEN secret and the VERCEL_ORG_ID and VERCEL_PROJECT_ID variables in the Production environment.'
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global "vercel@$VERCEL_CLI_VERSION"
+
+      - name: Pull production settings
+        run: vercel pull --yes --environment=production
+
+      - name: Build
+        run: vercel build --prod
+
+      - name: Upload without assigning domains
+        id: deploy
+        run: |
+          url="$(vercel deploy --prebuilt --prod --skip-domain --meta githubCommitSha="$GITHUB_SHA")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Check deployed routes
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          curl --fail --silent --show-error --retry 2 --max-time 120 "$DEPLOYMENT_URL/" > /dev/null
+          curl --fail --silent --show-error --retry 2 --max-time 120 "$DEPLOYMENT_URL/docs" > /dev/null
+
+      - name: Promote to kitcn.dev
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          vercel promote "$DEPLOYMENT_URL" --yes
+          echo "Deployed $GITHUB_SHA to https://kitcn.dev" >> "$GITHUB_STEP_SUMMARY"

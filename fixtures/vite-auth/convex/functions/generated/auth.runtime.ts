@@ -14,6 +14,7 @@ import type { ActionCtx, MutationCtx, QueryCtx } from './server';
 import type { OrmTriggerContext } from 'kitcn/orm';
 
 const procedureRegistry = {
+  "consumeOne": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").consumeOne>("generated/auth:consumeOne"), () => (require("./auth") as Record<string, unknown>)["consumeOne"])],
   "count": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof import("./auth").count>("generated/auth:count"), () => (require("./auth") as Record<string, unknown>)["count"])],
   "create": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").create>("generated/auth:create"), () => (require("./auth") as Record<string, unknown>)["create"])],
   "deleteMany": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").deleteMany>("generated/auth:deleteMany"), () => (require("./auth") as Record<string, unknown>)["deleteMany"])],
@@ -21,6 +22,7 @@ const procedureRegistry = {
   "findMany": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof import("./auth").findMany>("generated/auth:findMany"), () => (require("./auth") as Record<string, unknown>)["findMany"])],
   "findOne": ["query", typedProcedureResolver(createGeneratedFunctionReference<"query", "internal", typeof import("./auth").findOne>("generated/auth:findOne"), () => (require("./auth") as Record<string, unknown>)["findOne"])],
   "getLatestJwks": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "internal", typeof import("./auth").getLatestJwks>("generated/auth:getLatestJwks"), () => (require("./auth") as Record<string, unknown>)["getLatestJwks"])],
+  "incrementOne": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").incrementOne>("generated/auth:incrementOne"), () => (require("./auth") as Record<string, unknown>)["incrementOne"])],
   "rotateKeys": ["action", typedProcedureResolver(createGeneratedFunctionReference<"action", "internal", typeof import("./auth").rotateKeys>("generated/auth:rotateKeys"), () => (require("./auth") as Record<string, unknown>)["rotateKeys"])],
   "updateMany": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").updateMany>("generated/auth:updateMany"), () => (require("./auth") as Record<string, unknown>)["updateMany"])],
   "updateOne": ["mutation", typedProcedureResolver(createGeneratedFunctionReference<"mutation", "internal", typeof import("./auth").updateOne>("generated/auth:updateOne"), () => (require("./auth") as Record<string, unknown>)["updateOne"])],

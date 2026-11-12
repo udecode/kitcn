@@ -160,9 +160,8 @@ export const list = optionalAuthQuery
       };
     }
 
-    // One index walk over the viewer's own access rows. The previous read model
-    // scanned `projects` and post-filtered owner-or-member in JS, so it cost
-    // O(table) per page and every scanned row joined this subscription.
+    // Walk only the viewer's access rows, so the page and its read set never
+    // touch projects the viewer cannot see.
     const results = await listAccessibleProjects(ctx, {
       userId,
       archived: input.includeArchived === true,
@@ -600,7 +599,6 @@ export const listForDropdown = authQuery
     )
   )
   .query(({ ctx }) => {
-    // 1000 owned + 1000 member, the capacity the two-query read had.
     return listProjectsForDropdown(ctx, { userId: ctx.userId, limit: 2000 });
   });
 

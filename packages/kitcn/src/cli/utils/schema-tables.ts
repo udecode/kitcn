@@ -9,6 +9,7 @@
 
 import { getAggregateIndexes, getRankIndexes } from '../../orm/index-utils.js';
 import { getSchemaRelations } from '../../orm/schema.js';
+import { Brand } from '../../orm/symbols.js';
 
 /** The `defineSchema(...)` value behind a loaded `schema.ts` module. */
 export function resolveSchemaDefaultExport(
@@ -62,8 +63,8 @@ export function collectSchemaTables(
 /**
  * Whether the schema needs the aggregate-index runtime.
  *
- * `aggregateIndex(...)` / `rankIndex(...)` register synchronously inside
- * `convexTable(...)`, so the answer is final once `schema.ts` has evaluated.
+ * Reading a table's aggregate/rank indexes builds its definition, so the
+ * answer is final once `schema.ts` has evaluated.
  * Duck-typed rather than routed through `getTableConfig`, which throws on a
  * raw Convex `defineTable()` in a mixed schema.
  */
@@ -75,4 +76,13 @@ export function schemaDeclaresAggregateIndexes(
       getAggregateIndexes(table as any).length > 0 ||
       getRankIndexes(table as any).length > 0
   );
+}
+
+/** Builds every kitcn table behind a schema value, throwing its definition error. */
+export function validateOrmTables(schemaValue: Record<string, unknown>): void {
+  for (const table of collectSchemaTables(schemaValue)) {
+    if ((table as { [Brand]?: unknown })[Brand] === 'ConvexTable') {
+      (table as { export(): unknown }).export();
+    }
+  }
 }

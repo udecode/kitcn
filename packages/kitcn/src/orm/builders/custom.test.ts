@@ -88,6 +88,21 @@ describe('custom array/object sugar', () => {
     expect(commitTimestamps.fieldType.value.type).toBe('commitTs');
   });
 
+  test('arrayOf supports optional function handle validators', () => {
+    const jobs = convexTable('jobs_function_handle_test', {
+      callbacks: arrayOf(
+        v.optional(v.function({ fnType: 'mutation' }))
+      ).notNull(),
+    });
+
+    const callbacks = (jobs.validator as any).json.value.callbacks;
+    expect(callbacks.optional).toBe(false);
+    expect(callbacks.fieldType.value).toEqual({
+      type: 'function',
+      fnType: 'mutation',
+    });
+  });
+
   test('arrayOf(objectOf(...)) matches custom(v.array(v.object(...))) for timeline schemas', () => {
     const customProductions = createProductionsWithCustom(
       'productions_custom_timeline_test'

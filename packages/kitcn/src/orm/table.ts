@@ -49,6 +49,7 @@ import {
   Brand,
   Columns,
   EnableRLS,
+  LinkRlsPolicy,
   type OrmDeleteMode,
   type OrmTableDeleteConfig,
   RlsPolicies,
@@ -730,6 +731,27 @@ function isConvexLifecycleBuilder(value: unknown): boolean {
   );
 }
 
+function builderConfig(
+  builder: AnyColumnBuilder
+): ColumnBuilderRuntimeConfig<unknown> {
+  return Object.getOwnPropertyDescriptor(builder, 'config')?.value;
+}
+
+function copyColumnBuilder<TBuilder extends AnyColumnBuilder>(
+  builder: TBuilder
+): TBuilder {
+  const copy = Object.create(
+    Object.getPrototypeOf(builder),
+    Object.getOwnPropertyDescriptors(builder)
+  );
+  copy.config = { ...builderConfig(builder) };
+  return copy;
+}
+
+function claimColumnBuilder(builder: AnyColumnBuilder): AnyColumnBuilder {
+  return builderConfig(builder).table ? copyColumnBuilder(builder) : builder;
+}
+
 function getColumnName(column: ColumnBuilderBase): string {
   const config = (column as { config?: { name?: string } }).config;
   if (!config?.name) {
@@ -1036,10 +1058,10 @@ function resolveTableColumns(
           );
         }
 
-        const fieldBuilder = rawFieldBuilder as AnyColumnBuilder;
-        const fieldConfig = (fieldBuilder as any).config as
-          | ColumnBuilderRuntimeConfig<unknown>
-          | undefined;
+        const fieldBuilder = copyColumnBuilder(
+          rawFieldBuilder as AnyColumnBuilder
+        );
+        const fieldConfig = builderConfig(fieldBuilder);
         const isRequiredForVariant =
           fieldConfig?.notNull === true &&
           fieldConfig.hasDefault !== true &&
@@ -1146,9 +1168,9 @@ function applyExtraConfig<T extends TableConfig>(
 
     if (isRlsPolicy(entry)) {
       const target = (entry as any)._linkedTable ?? table;
-      if (typeof (target as any).addRlsPolicy === 'function') {
-        (target as any).addRlsPolicy(entry);
-      } else {
+      if (target === table) {
+        table.addRlsPolicy(entry);
+      } else if (!(LinkRlsPolicy in target)) {
         const policies = ((target as any)[RlsPolicies] as RlsPolicy[]) ?? [];
         policies.push(entry);
         (target as any)[RlsPolicies] = policies;
@@ -1509,81 +1531,203 @@ function applyExtraConfig<T extends TableConfig>(
   }
 }
 
+type TableIndexEntry = { indexDescriptor: string; fields: string[] };
+
+type UniqueIndexEntry = {
+  name: string;
+  fields: string[];
+  nullsNotDistinct: boolean;
+};
+
+type AggregateIndexEntry = {
+  name: string;
+  fields: string[];
+  countFields: string[];
+  sumFields: string[];
+  avgFields: string[];
+  minFields: string[];
+  maxFields: string[];
+};
+
+type RankIndexEntry = {
+  name: string;
+  partitionFields: string[];
+  orderFields: Array<{
+    field: string;
+    direction: 'asc' | 'desc';
+  }>;
+  sumField?: string;
+};
+
+type SearchIndexEntry = {
+  indexDescriptor: string;
+  searchField: string;
+  filterFields: string[];
+};
+
+type VectorIndexEntry = {
+  indexDescriptor: string;
+  vectorField: string;
+  dimensions: number;
+  filterFields: string[];
+};
+
+type TableDefinitionState = {
+  indexes: TableIndexEntry[];
+  uniqueIndexes: UniqueIndexEntry[];
+  aggregateIndexes: AggregateIndexEntry[];
+  rankIndexes: RankIndexEntry[];
+  foreignKeys: ForeignKeyDefinition[];
+  deferredForeignKeys: DeferredForeignKeyDefinition[];
+  foreignKeyFailure?: { error: unknown };
+  stagedDbIndexes: any[];
+  searchIndexes: SearchIndexEntry[];
+  stagedSearchIndexes: SearchIndexEntry[];
+  vectorIndexes: VectorIndexEntry[];
+  stagedVectorIndexes: VectorIndexEntry[];
+  checks: { name: string; expression: FilterExpression<boolean> }[];
+  rlsPolicies: RlsPolicy[];
+  deleteConfig?: OrmTableDeleteConfig;
+};
+
+type TableExtraConfigFn = (
+  table: any
+) => ConvexTableExtraConfigValue[] | ConvexTableExtraConfig | undefined;
+
+type LazyTableState = {
+  extraConfig?: TableExtraConfigFn;
+  definition?: TableDefinitionState;
+  failure?: { error: unknown };
+  validator?: Validator<Record<string, any>, 'required', any>;
+  rlsEnabled: boolean;
+  linkedRlsPolicies: RlsPolicy[];
+};
+
+const LazyTable = Symbol('kitcn:LazyTable');
+
+const definingTables: ConvexTableImpl<any>[] = [];
+
+function getTableDefinition(table: ConvexTableImpl<any>): TableDefinitionState {
+  const state = table[LazyTable];
+  if (state.definition) {
+    return state.definition;
+  }
+  if (state.failure) {
+    throw state.failure.error;
+  }
+
+  const definition: TableDefinitionState = {
+    indexes: [],
+    uniqueIndexes: [],
+    aggregateIndexes: [],
+    rankIndexes: [],
+    foreignKeys: [],
+    deferredForeignKeys: [],
+    stagedDbIndexes: [],
+    searchIndexes: [],
+    stagedSearchIndexes: [],
+    vectorIndexes: [],
+    stagedVectorIndexes: [],
+    checks: [],
+    rlsPolicies: [...state.linkedRlsPolicies],
+  };
+  const extraConfig = state.extraConfig;
+  state.definition = definition;
+  state.extraConfig = undefined;
+  definingTables.push(table);
+  try {
+    applyColumnConstraints(table);
+    applyExtraConfig(table, extraConfig?.(table));
+  } catch (error) {
+    state.definition = undefined;
+    state.failure = { error };
+    throw error;
+  } finally {
+    definingTables.pop();
+  }
+  return definition;
+}
+
+function applyColumnConstraints<T extends TableConfig>(
+  table: ConvexTableImpl<T>
+): void {
+  for (const [columnName, builder] of Object.entries(
+    table[Columns] as Record<string, unknown>
+  )) {
+    const config = (builder as any).config as
+      | {
+          isUnique?: boolean;
+          uniqueName?: string;
+          uniqueNulls?: string;
+          foreignKeyConfigs?: {
+            ref: () => ColumnBuilderBase;
+            config: {
+              name?: string;
+              onUpdate?: ForeignKeyAction;
+              onDelete?: ForeignKeyAction;
+            };
+          }[];
+          referenceTable?: string;
+        }
+      | undefined;
+
+    if (config?.isUnique) {
+      const indexName = getUniqueIndexName(
+        table.tableName,
+        [columnName],
+        config.uniqueName
+      );
+      const nullsNotDistinct = config.uniqueNulls === 'not distinct';
+      table.addIndex(indexName, [columnName]);
+      table.addUniqueIndex(indexName, [columnName], nullsNotDistinct);
+    }
+
+    if (
+      config?.referenceTable &&
+      (!config.foreignKeyConfigs || config.foreignKeyConfigs.length === 0)
+    ) {
+      table.addForeignKey({
+        name: undefined,
+        columns: [columnName],
+        foreignTableName: config.referenceTable,
+        foreignColumns: ['_id'],
+      });
+    }
+
+    if (config?.foreignKeyConfigs?.length) {
+      const { deferredForeignKeys } = getTableDefinition(table);
+      for (const foreignConfig of config.foreignKeyConfigs) {
+        deferredForeignKeys.push({
+          localColumnName: columnName,
+          ref: foreignConfig.ref,
+          config: foreignConfig.config,
+        });
+      }
+    }
+  }
+}
+
 /**
  * ConvexTable implementation class
  * Provides all properties required by Convex's TableDefinition
  *
- * Following convex-ents pattern:
- * - Private fields for indexes (matches TableDefinition structure)
- * - Duck typing (defineSchema only checks object shape)
- * - Direct validator storage (no re-wrapping)
+ * Column builders are attached when the table is declared. The document
+ * validator, indexes, constraints, RLS policies and the extra-config callback
+ * are built on first read, once per table.
  */
 class ConvexTableImpl<T extends TableConfig> {
-  /**
-   * Required by TableDefinition
-   * Public validator property containing v.object({...}) with all column validators
-   */
-  validator: Validator<Record<string, any>, 'required', any>;
-
-  /**
-   * TableDefinition private fields
-   * These satisfy structural typing requirements for defineSchema()
-   */
-  private indexes: any[] = [];
-  private uniqueIndexes: {
-    name: string;
-    fields: string[];
-    nullsNotDistinct: boolean;
-  }[] = [];
-  private aggregateIndexes: {
-    name: string;
-    fields: string[];
-    countFields: string[];
-    sumFields: string[];
-    avgFields: string[];
-    minFields: string[];
-    maxFields: string[];
-  }[] = [];
-  private rankIndexes: {
-    name: string;
-    partitionFields: string[];
-    orderFields: Array<{
-      field: string;
-      direction: 'asc' | 'desc';
-    }>;
-    sumField?: string;
-  }[] = [];
-  private foreignKeys: ForeignKeyDefinition[] = [];
-  private deferredForeignKeys: DeferredForeignKeyDefinition[] = [];
-  private deferredForeignKeysResolved = false;
-  private stagedDbIndexes: any[] = [];
-  private searchIndexes: any[] = [];
-  private stagedSearchIndexes: any[] = [];
-  private vectorIndexes: any[] = [];
-  private stagedVectorIndexes: any[] = [];
-  private checks: { name: string; expression: FilterExpression<boolean> }[] =
-    [];
-
-  /**
-   * Symbol-based metadata storage
-   */
-  [TableName]: T['name'];
-  [Columns]: T['columns'];
+  declare [TableName]: T['name'];
+  declare [Columns]: T['columns'];
   [Brand] = 'ConvexTable' as const;
-  [EnableRLS] = false;
-  [RlsPolicies]: RlsPolicy[] = [];
-  [TableDeleteConfig]?: OrmTableDeleteConfig;
-  [TablePolymorphic]?: readonly TablePolymorphicConfigRuntime[];
-
-  /**
-   * Public tableName for convenience
-   */
-  tableName: T['name'];
+  declare [TablePolymorphic]?: readonly TablePolymorphicConfigRuntime[];
+  declare [LazyTable]: LazyTableState;
+  declare tableName: T['name'];
 
   constructor(
     name: T['name'],
     columns: T['columns'],
-    polymorphicConfigs?: readonly TablePolymorphicConfigRuntime[]
+    polymorphicConfigs?: readonly TablePolymorphicConfigRuntime[],
+    extraConfig?: TableExtraConfigFn
   ) {
     validateTableName(name);
 
@@ -1596,80 +1740,98 @@ class ConvexTableImpl<T extends TableConfig> {
     }
 
     this[TableName] = name;
+    this[LazyTable] = {
+      extraConfig,
+      rlsEnabled: false,
+      linkedRlsPolicies: [],
+    };
 
-    // Assign column names to builders
-    const namedColumns = Object.fromEntries(
-      Object.entries(columns).map(([columnName, builder]) => {
-        // Set the column name in the builder's config
-        (builder as any).config.name = columnName;
-        // Track table name for relation typing and runtime introspection
-        (builder as any).config.tableName = name;
-        // Track table instance for constraint enforcement
-        (builder as any).config.table = this;
-        return [columnName, builder];
-      })
-    ) as T['columns'];
+    const columnBuilders = columns as Record<string, AnyColumnBuilder>;
+    for (const [columnName, builder] of Object.entries(columnBuilders)) {
+      const claimed = claimColumnBuilder(builder);
+      columnBuilders[columnName] = claimed;
+      const config = builderConfig(claimed);
+      config.name = columnName;
+      config.tableName = name;
+      config.table = this;
+    }
 
-    this[Columns] = namedColumns;
+    this[Columns] = columns;
     this.tableName = name;
     if (polymorphicConfigs && polymorphicConfigs.length > 0) {
       this[TablePolymorphic] = polymorphicConfigs;
     }
+  }
 
-    // Use factory to create validator from columns
-    // This extracts .convexValidator from each builder and creates v.object({...})
-    this.validator = createValidatorFromColumns(namedColumns as any);
+  get validator(): Validator<Record<string, any>, 'required', any> {
+    const state = this[LazyTable];
+    state.validator ??= createValidatorFromColumns(this[Columns] as any);
+    return state.validator;
+  }
 
-    for (const [columnName, builder] of Object.entries(namedColumns)) {
-      const config = (builder as any).config as
-        | {
-            isUnique?: boolean;
-            uniqueName?: string;
-            uniqueNulls?: string;
-            foreignKeyConfigs?: {
-              ref: () => ColumnBuilderBase;
-              config: {
-                name?: string;
-                onUpdate?: ForeignKeyAction;
-                onDelete?: ForeignKeyAction;
-              };
-            }[];
-            referenceTable?: string;
-          }
-        | undefined;
+  set validator(validator: Validator<Record<string, any>, 'required', any>) {
+    this[LazyTable].validator = validator;
+  }
 
-      if (config?.isUnique) {
-        const indexName = getUniqueIndexName(
-          name,
-          [columnName],
-          config.uniqueName
-        );
-        const nullsNotDistinct = config.uniqueNulls === 'not distinct';
-        this.addIndex(indexName, [columnName]);
-        this.addUniqueIndex(indexName, [columnName], nullsNotDistinct);
-      }
+  get indexes(): TableIndexEntry[] {
+    return getTableDefinition(this).indexes;
+  }
 
-      if (
-        config?.referenceTable &&
-        (!config.foreignKeyConfigs || config.foreignKeyConfigs.length === 0)
-      ) {
-        this.addForeignKey({
-          name: undefined,
-          columns: [columnName],
-          foreignTableName: config.referenceTable,
-          foreignColumns: ['_id'],
-        });
-      }
+  get stagedDbIndexes(): any[] {
+    return getTableDefinition(this).stagedDbIndexes;
+  }
 
-      if (config?.foreignKeyConfigs?.length) {
-        for (const foreignConfig of config.foreignKeyConfigs) {
-          this.deferredForeignKeys.push({
-            localColumnName: columnName,
-            ref: foreignConfig.ref,
-            config: foreignConfig.config,
-          });
-        }
-      }
+  get searchIndexes(): SearchIndexEntry[] {
+    return getTableDefinition(this).searchIndexes;
+  }
+
+  get stagedSearchIndexes(): SearchIndexEntry[] {
+    return getTableDefinition(this).stagedSearchIndexes;
+  }
+
+  get vectorIndexes(): VectorIndexEntry[] {
+    return getTableDefinition(this).vectorIndexes;
+  }
+
+  get stagedVectorIndexes(): VectorIndexEntry[] {
+    return getTableDefinition(this).stagedVectorIndexes;
+  }
+
+  get [EnableRLS](): boolean {
+    getTableDefinition(this);
+    return this[LazyTable].rlsEnabled;
+  }
+
+  set [EnableRLS](enabled: boolean) {
+    this[LazyTable].rlsEnabled = enabled;
+  }
+
+  get [RlsPolicies](): RlsPolicy[] {
+    return getTableDefinition(this).rlsPolicies;
+  }
+
+  get [TableDeleteConfig](): OrmTableDeleteConfig | undefined {
+    return getTableDefinition(this).deleteConfig;
+  }
+
+  set [TableDeleteConfig](config: OrmTableDeleteConfig | undefined) {
+    getTableDefinition(this).deleteConfig = config;
+  }
+
+  [LinkRlsPolicy](policy: RlsPolicy): void {
+    const defining = definingTables.at(-1);
+    if (defining && defining !== this) {
+      throw new Error(
+        `rlsPolicy('${policy.name}').link(${this.tableName}) must be called at module scope, not inside convexTable('${defining.tableName}', ..., extraConfig).`
+      );
+    }
+    const state = this[LazyTable];
+    if (!state.linkedRlsPolicies.includes(policy)) {
+      state.linkedRlsPolicies.push(policy);
+    }
+    state.rlsEnabled = true;
+    if (state.definition && !state.definition.rlsPolicies.includes(policy)) {
+      state.definition.rlsPolicies.push(policy);
     }
   }
 
@@ -1684,7 +1846,7 @@ class ConvexTableImpl<T extends TableConfig> {
    *
    */
   addIndex<IndexName extends string>(name: IndexName, fields: string[]): void {
-    this.indexes.push({ indexDescriptor: name, fields });
+    getTableDefinition(this).indexes.push({ indexDescriptor: name, fields });
   }
 
   /**
@@ -1695,7 +1857,11 @@ class ConvexTableImpl<T extends TableConfig> {
     fields: string[],
     nullsNotDistinct: boolean
   ): void {
-    this.uniqueIndexes.push({ name, fields, nullsNotDistinct });
+    getTableDefinition(this).uniqueIndexes.push({
+      name,
+      fields,
+      nullsNotDistinct,
+    });
   }
 
   addAggregateIndex<IndexName extends string>(
@@ -1709,15 +1875,16 @@ class ConvexTableImpl<T extends TableConfig> {
       maxFields: string[];
     }
   ): void {
+    const definition = getTableDefinition(this);
     if (
-      this.aggregateIndexes.some((index) => index.name === name) ||
-      this.rankIndexes.some((index) => index.name === name)
+      definition.aggregateIndexes.some((index) => index.name === name) ||
+      definition.rankIndexes.some((index) => index.name === name)
     ) {
       throw new Error(
         `Duplicate aggregate index '${name}' on '${this.tableName}'.`
       );
     }
-    this.aggregateIndexes.push({
+    definition.aggregateIndexes.push({
       name,
       fields: config.fields,
       countFields: config.countFields,
@@ -1739,15 +1906,16 @@ class ConvexTableImpl<T extends TableConfig> {
       sumField?: string;
     }
   ): void {
+    const definition = getTableDefinition(this);
     if (
-      this.rankIndexes.some((index) => index.name === name) ||
-      this.aggregateIndexes.some((index) => index.name === name)
+      definition.rankIndexes.some((index) => index.name === name) ||
+      definition.aggregateIndexes.some((index) => index.name === name)
     ) {
       throw new Error(
         `Duplicate aggregate index '${name}' on '${this.tableName}'.`
       );
     }
-    this.rankIndexes.push({
+    definition.rankIndexes.push({
       name,
       partitionFields: config.partitionFields,
       orderFields: config.orderFields,
@@ -1755,51 +1923,29 @@ class ConvexTableImpl<T extends TableConfig> {
     });
   }
 
-  getAggregateIndexes(): {
-    name: string;
-    fields: string[];
-    countFields: string[];
-    sumFields: string[];
-    avgFields: string[];
-    minFields: string[];
-    maxFields: string[];
-  }[] {
-    return [...this.aggregateIndexes];
+  getAggregateIndexes(): AggregateIndexEntry[] {
+    return [...getTableDefinition(this).aggregateIndexes];
   }
 
-  getRankIndexes(): {
-    name: string;
-    partitionFields: string[];
-    orderFields: Array<{
-      field: string;
-      direction: 'asc' | 'desc';
-    }>;
-    sumField?: string;
-  }[] {
-    return [...this.rankIndexes];
+  getRankIndexes(): RankIndexEntry[] {
+    return [...getTableDefinition(this).rankIndexes];
   }
 
   /**
    * Internal: expose unique index metadata for mutation enforcement
    */
-  getUniqueIndexes(): {
-    name: string;
-    fields: string[];
-    nullsNotDistinct: boolean;
-  }[] {
-    return this.uniqueIndexes;
+  getUniqueIndexes(): UniqueIndexEntry[] {
+    return getTableDefinition(this).uniqueIndexes;
   }
 
   /**
    * Internal: expose index metadata for runtime enforcement
    */
   getIndexes(): { name: string; fields: string[] }[] {
-    return this.indexes.map(
-      (entry: { indexDescriptor: string; fields: string[] }) => ({
-        name: entry.indexDescriptor,
-        fields: entry.fields,
-      })
-    );
+    return getTableDefinition(this).indexes.map((entry) => ({
+      name: entry.indexDescriptor,
+      fields: entry.fields,
+    }));
   }
 
   /**
@@ -1810,17 +1956,11 @@ class ConvexTableImpl<T extends TableConfig> {
     searchField: string;
     filterFields: string[];
   }[] {
-    return this.searchIndexes.map(
-      (entry: {
-        indexDescriptor: string;
-        searchField: string;
-        filterFields: string[];
-      }) => ({
-        name: entry.indexDescriptor,
-        searchField: entry.searchField,
-        filterFields: entry.filterFields,
-      })
-    );
+    return getTableDefinition(this).searchIndexes.map((entry) => ({
+      name: entry.indexDescriptor,
+      searchField: entry.searchField,
+      filterFields: entry.filterFields,
+    }));
   }
 
   /**
@@ -1832,27 +1972,23 @@ class ConvexTableImpl<T extends TableConfig> {
     dimensions: number;
     filterFields: string[];
   }[] {
-    return this.vectorIndexes.map(
-      (entry: {
-        indexDescriptor: string;
-        vectorField: string;
-        dimensions: number;
-        filterFields: string[];
-      }) => ({
-        name: entry.indexDescriptor,
-        vectorField: entry.vectorField,
-        dimensions: entry.dimensions,
-        filterFields: entry.filterFields,
-      })
-    );
+    return getTableDefinition(this).vectorIndexes.map((entry) => ({
+      name: entry.indexDescriptor,
+      vectorField: entry.vectorField,
+      dimensions: entry.dimensions,
+      filterFields: entry.filterFields,
+    }));
   }
 
   /**
    * Internal: attach an RLS policy to this table
    */
   addRlsPolicy(policy: RlsPolicy): void {
-    this[RlsPolicies].push(policy);
-    this[EnableRLS] = true;
+    const { rlsPolicies } = getTableDefinition(this);
+    if (!rlsPolicies.includes(policy)) {
+      rlsPolicies.push(policy);
+    }
+    this[LazyTable].rlsEnabled = true;
   }
 
   /**
@@ -1896,19 +2032,35 @@ class ConvexTableImpl<T extends TableConfig> {
       return true;
     };
 
-    this.foreignKeys = this.foreignKeys.filter(
+    const tableDefinition = getTableDefinition(this);
+    tableDefinition.foreignKeys = tableDefinition.foreignKeys.filter(
       (existing) => !matches(existing)
     );
-    this.foreignKeys.push(definition);
+    tableDefinition.foreignKeys.push(definition);
   }
 
   private resolveDeferredForeignKeys(): void {
-    if (this.deferredForeignKeysResolved) {
+    const tableDefinition = getTableDefinition(this);
+    if (tableDefinition.foreignKeyFailure) {
+      throw tableDefinition.foreignKeyFailure.error;
+    }
+    const deferredForeignKeys = tableDefinition.deferredForeignKeys;
+    if (deferredForeignKeys.length === 0) {
       return;
     }
-    this.deferredForeignKeysResolved = true;
+    tableDefinition.deferredForeignKeys = [];
+    try {
+      this.resolveForeignKeyReferences(deferredForeignKeys);
+    } catch (error) {
+      tableDefinition.foreignKeyFailure = { error };
+      throw error;
+    }
+  }
 
-    for (const deferred of this.deferredForeignKeys) {
+  private resolveForeignKeyReferences(
+    deferredForeignKeys: DeferredForeignKeyDefinition[]
+  ): void {
+    for (const deferred of deferredForeignKeys) {
       let foreignColumn: ColumnBuilderBase;
       try {
         foreignColumn = deferred.ref();
@@ -1943,8 +2095,6 @@ class ConvexTableImpl<T extends TableConfig> {
         onUpdate: deferred.config.onUpdate,
       });
     }
-
-    this.deferredForeignKeys = [];
   }
 
   /**
@@ -1952,15 +2102,15 @@ class ConvexTableImpl<T extends TableConfig> {
    */
   getForeignKeys(): ForeignKeyDefinition[] {
     this.resolveDeferredForeignKeys();
-    return this.foreignKeys;
+    return getTableDefinition(this).foreignKeys;
   }
 
   addCheck(name: string, expression: FilterExpression<boolean>): void {
-    this.checks.push({ name, expression });
+    getTableDefinition(this).checks.push({ name, expression });
   }
 
   getChecks(): { name: string; expression: FilterExpression<boolean> }[] {
-    return this.checks;
+    return getTableDefinition(this).checks;
   }
 
   /**
@@ -1978,15 +2128,16 @@ class ConvexTableImpl<T extends TableConfig> {
       staged?: boolean;
     }
   ): void {
+    const definition = getTableDefinition(this);
     const entry = {
       indexDescriptor: name,
       searchField: config.searchField,
       filterFields: config.filterFields ?? [],
     };
     if (config.staged) {
-      this.stagedSearchIndexes.push(entry);
+      definition.stagedSearchIndexes.push(entry);
     } else {
-      this.searchIndexes.push(entry);
+      definition.searchIndexes.push(entry);
     }
   }
 
@@ -2006,6 +2157,7 @@ class ConvexTableImpl<T extends TableConfig> {
       staged?: boolean;
     }
   ): void {
+    const definition = getTableDefinition(this);
     const entry = {
       indexDescriptor: name,
       vectorField: config.vectorField,
@@ -2013,9 +2165,9 @@ class ConvexTableImpl<T extends TableConfig> {
       filterFields: config.filterFields ?? [],
     };
     if (config.staged) {
-      this.stagedVectorIndexes.push(entry);
+      definition.stagedVectorIndexes.push(entry);
     } else {
-      this.vectorIndexes.push(entry);
+      definition.vectorIndexes.push(entry);
     }
   }
 
@@ -2024,6 +2176,8 @@ class ConvexTableImpl<T extends TableConfig> {
    * Mirrors convex/server TableDefinition.export().
    */
   export() {
+    const definition = getTableDefinition(this);
+    this.resolveDeferredForeignKeys();
     const documentType = (this.validator as unknown as { json: unknown }).json;
     if (typeof documentType !== 'object') {
       throw new Error(
@@ -2032,12 +2186,12 @@ class ConvexTableImpl<T extends TableConfig> {
     }
 
     return {
-      indexes: this.indexes,
-      stagedDbIndexes: this.stagedDbIndexes,
-      searchIndexes: this.searchIndexes,
-      stagedSearchIndexes: this.stagedSearchIndexes,
-      vectorIndexes: this.vectorIndexes,
-      stagedVectorIndexes: this.stagedVectorIndexes,
+      indexes: definition.indexes,
+      stagedDbIndexes: definition.stagedDbIndexes,
+      searchIndexes: definition.searchIndexes,
+      stagedSearchIndexes: definition.stagedSearchIndexes,
+      vectorIndexes: definition.vectorIndexes,
+      stagedVectorIndexes: definition.stagedVectorIndexes,
       documentType,
     };
   }
@@ -2201,11 +2355,11 @@ const convexTableInternal: ConvexTableFnInternal = (
     columns as Record<string, unknown>
   );
 
-  // Create raw table instance
   const rawTable = new ConvexTableImpl(
     name,
     expanded.columns as any,
-    expanded.polymorphicConfigs
+    expanded.polymorphicConfigs,
+    extraConfig as TableExtraConfigFn | undefined
   );
 
   // Create system fields (public id/createdAt + internal _creationTime)
@@ -2236,8 +2390,6 @@ const convexTableInternal: ConvexTableFnInternal = (
     configurable: true,
     writable: false,
   });
-
-  applyExtraConfig(rawTable, extraConfig?.(table));
 
   return table as any;
 };

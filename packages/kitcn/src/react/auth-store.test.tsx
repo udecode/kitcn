@@ -584,14 +584,14 @@ describe('ConvexProviderWithAuth recovery', () => {
 
     let first!: Promise<void>;
     act(() => {
-      first = harness.recovery.recover({ timeoutMs: 5 });
+      first = harness.recovery.recover({ timeoutMs: 5 }).catch(() => undefined);
     });
     await waitFor(() => {
       expect(harness.bindings).toHaveLength(2);
     });
     await harness.bindings[1]!.fetchToken({ forceRefreshToken: false });
     await act(async () => {
-      await first.catch(() => undefined);
+      await first;
     });
 
     let second!: Promise<void>;

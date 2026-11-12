@@ -20,6 +20,7 @@ import { eq } from '../orm/filter-expression';
 import { unsetToken } from '../orm/unset-token';
 import {
   adapterWhereValidator,
+  checkForcedId,
   checkUniqueFields,
   listOne,
   paginate,
@@ -513,10 +514,11 @@ export const createHandler = async (
 ) => {
   const triggerCtx = args.triggerCtx ?? ctx;
   const tableTriggers = args.tableTriggers;
+  const { _id, ...input } = args.input.data;
   const transformedData = await applyBeforeHook(
     args.input.model,
     'create',
-    args.input.data,
+    input,
     tableTriggers?.create?.before,
     triggerCtx
   );
@@ -536,6 +538,9 @@ export const createHandler = async (
     args.input.model,
     data
   );
+  if (_id !== undefined) {
+    await checkForcedId(ctx, schema, betterAuthSchema, args.input.model, data);
+  }
   const ormTable = resolveOrmTable(
     ctx,
     schema,
@@ -677,6 +682,7 @@ export const findManyHandler = async (
     paginationOpts: any;
     limit?: number;
     offset?: number;
+    select?: string[];
     sortBy?: {
       direction: 'asc' | 'desc';
       field: string;
@@ -1371,6 +1377,7 @@ export const createApi = <
         model: modelValidator,
         offset: v.optional(v.number()),
         paginationOpts: paginationOptsValidator,
+        select: v.optional(v.array(v.string())),
         sortBy: v.optional(
           v.object({
             direction: v.union(v.literal('asc'), v.literal('desc')),

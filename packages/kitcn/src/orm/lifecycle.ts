@@ -43,7 +43,11 @@ type WriteBarrier = (db: GenericDatabaseReader<any>) => Promise<void>;
 type LifecycleTableHooks = NormalizedOrmTableTriggers<AnyRecord> & {
   writeBarrier?: WriteBarrier;
 };
-type HookMap = Map<string, LifecycleTableHooks>;
+type HookMap = {
+  get(tableName: string): LifecycleTableHooks | undefined;
+  names(): Iterable<string>;
+};
+type LifecycleMarker = { hasHooks(): boolean };
 type HookOperation = 'create' | 'update' | 'delete';
 type QueuedHook = () => Promise<void>;
 
@@ -67,17 +71,28 @@ const isWriterDb = (
   typeof (db as any).delete === 'function';
 
 const isLifecycleWrappedDb = (
-  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>
-): boolean => (db as any)[ORMLIFECYCLE_WRAPPED_DB] === true;
+  db: GenericDatabaseReader<any> | GenericDatabaseWriter<any>,
+  marker: LifecycleMarker
+): boolean => {
+  const existing = (db as any)[ORMLIFECYCLE_WRAPPED_DB] as
+    | LifecycleMarker
+    | true
+    | undefined;
+  if (!existing) {
+    return false;
+  }
+  return existing === true || existing === marker || existing.hasHooks();
+};
 
 const markLifecycleWrappedDb = <TDb extends GenericDatabaseWriter<any>>(
-  db: TDb
+  db: TDb,
+  marker: LifecycleMarker
 ): TDb => {
   if (!Object.hasOwn(db as object, ORMLIFECYCLE_WRAPPED_DB)) {
     Object.defineProperty(db, ORMLIFECYCLE_WRAPPED_DB, {
       configurable: false,
       enumerable: false,
-      value: true,
+      value: marker,
       writable: false,
     });
   }
@@ -292,7 +307,7 @@ const tableNameFromId = (
   hooksByTable: HookMap,
   id: string
 ): string | null => {
-  for (const tableName of hooksByTable.keys()) {
+  for (const tableName of hooksByTable.names()) {
     if (db.normalizeId(tableName as any, id as any)) {
       return tableName;
     }
@@ -697,10 +712,15 @@ function writerWithHooks(
         vars: typeof innerDb extends { vars: infer Vars } ? Vars : never;
       }
     ).vars,
-    system: innerDb.system,
-    get: innerDb.get.bind(innerDb),
-    query: innerDb.query.bind(innerDb),
-    normalizeId: innerDb.normalizeId.bind(innerDb),
+    get system() {
+      return innerDb.system;
+    },
+    get: ((...args: unknown[]) =>
+      (innerDb as any).get(...args)) as typeof innerDb.get,
+    query: ((...args: unknown[]) =>
+      (innerDb as any).query(...args)) as typeof innerDb.query,
+    normalizeId: ((...args: unknown[]) =>
+      (innerDb as any).normalizeId(...args)) as typeof innerDb.normalizeId,
   };
 
   Object.defineProperty(wrappedDb, ORMLIFECYCLE_INNER_DB, {
@@ -723,6 +743,105 @@ const createNoopLifecycle = (): OrmDbLifecycle => ({
   wrapDB: <Ctx extends AnyCtx>(ctx: Ctx): Ctx => ctx,
 });
 
+const withAggregateHooks = (
+  tableConfig: TablesRelationalConfig[string],
+  existing: LifecycleTableHooks | undefined,
+  capabilities: OrmCapabilities | undefined
+): LifecycleTableHooks | undefined => {
+  const aggregateIndexes = getAggregateIndexDefinitions(tableConfig);
+  const rankIndexes = getRankIndexDefinitions(tableConfig);
+  if (aggregateIndexes.length === 0 && rankIndexes.length === 0) {
+    return existing;
+  }
+
+  // Deliberately the relations key, matching `defineSchema`'s object key.
+  // Every other aggregate site keys on it too — the backfill targets in
+  // `aggregate-index/backfill.ts` and the `count()`/`rank()` read paths in
+  // `aggregate-index/runtime.ts` and `rank-runtime.ts`. Resolving the table
+  // object's own name here instead would make maintenance write buckets
+  // under a key the backfill and every read never look at.
+  const tableName = tableConfig.name;
+
+  // Fail closed: writes to a table with aggregate/rank indexes must maintain
+  // them, and the runtime that does so is only in the graph when the app
+  // registers the capability.
+  const aggregate = requireAggregateCapability(
+    capabilities,
+    `Table '${tableName}' declares an aggregateIndex/rankIndex, which`
+  );
+
+  const existingChange = existing?.change;
+  const existingBarrier = existing?.writeBarrier;
+  const metricIndexNames = aggregateIndexes.map((entry) => entry.name);
+  const rankIndexNames = rankIndexes.map((entry) => entry.name);
+
+  return {
+    ...existing,
+    writeBarrier: async (db) => {
+      await existingBarrier?.(db);
+      await aggregate.assertAggregateIndexesWritable(
+        db as GenericDatabaseWriter<any>,
+        tableName,
+        metricIndexNames,
+        rankIndexNames
+      );
+    },
+    change: async (change, ctx) => {
+      if (change.operation === 'delete') {
+        if (aggregateIndexes.length > 0) {
+          await aggregate.applyAggregateIndexesForChange(
+            ctx.db as GenericDatabaseWriter<any>,
+            tableName,
+            aggregateIndexes,
+            {
+              operation: 'delete',
+              id: change.id as any,
+            }
+          );
+        }
+        if (rankIndexes.length > 0) {
+          await aggregate.applyRankIndexesForChange(
+            ctx.db as GenericDatabaseWriter<any>,
+            tableName,
+            rankIndexes,
+            {
+              operation: 'delete',
+              id: change.id as any,
+            }
+          );
+        }
+      } else {
+        if (aggregateIndexes.length > 0) {
+          await aggregate.applyAggregateIndexesForChange(
+            ctx.db as GenericDatabaseWriter<any>,
+            tableName,
+            aggregateIndexes,
+            {
+              operation: change.operation,
+              id: change.id as any,
+              newDoc: change.newDoc as Record<string, unknown>,
+            }
+          );
+        }
+        if (rankIndexes.length > 0) {
+          await aggregate.applyRankIndexesForChange(
+            ctx.db as GenericDatabaseWriter<any>,
+            tableName,
+            rankIndexes,
+            {
+              operation: change.operation,
+              id: change.id as any,
+              newDoc: change.newDoc as Record<string, unknown>,
+            }
+          );
+        }
+      }
+
+      await existingChange?.(change, ctx);
+    },
+  };
+};
+
 export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
   schema: TSchema,
   triggerDefinitions?: OrmTriggers<TSchema, any>,
@@ -730,6 +849,7 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
 ): OrmDbLifecycle {
   const tableNameBySchemaKey = new Map<string, string>();
   const tableNames = new Set<string>();
+  const tableConfigsByName = new Map<string, TablesRelationalConfig[string]>();
 
   for (const [schemaKey, tableConfig] of Object.entries(schema)) {
     if (!tableConfig?.table) {
@@ -741,9 +861,12 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
       tableConfig.name;
     tableNameBySchemaKey.set(schemaKey, tableName);
     tableNames.add(tableName);
+    if (tableConfig.name) {
+      tableConfigsByName.set(tableConfig.name, tableConfig);
+    }
   }
 
-  const tableHooks: HookMap = new Map<string, LifecycleTableHooks>();
+  const triggerHooks = new Map<string, LifecycleTableHooks>();
   const normalizedTriggers = normalizeOrmTriggers(triggerDefinitions);
 
   for (const [triggerKey, hooks] of normalizedTriggers.entries()) {
@@ -757,7 +880,7 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
       );
     }
 
-    tableHooks.set(tableName, {
+    triggerHooks.set(tableName, {
       create: hooks.create && {
         before: wrapUserHook(hooks.create.before),
         after: wrapUserHook(hooks.create.after),
@@ -774,115 +897,56 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
     });
   }
 
-  for (const tableConfig of Object.values(schema)) {
-    if (!tableConfig?.table || !tableConfig?.name) {
-      continue;
+  if (!capabilities?.aggregate) {
+    for (const tableConfig of tableConfigsByName.values()) {
+      withAggregateHooks(tableConfig, undefined, capabilities);
     }
-    const aggregateIndexes = getAggregateIndexDefinitions(tableConfig);
-    const rankIndexes = getRankIndexDefinitions(tableConfig);
-    if (aggregateIndexes.length === 0 && rankIndexes.length === 0) {
-      continue;
+    if (triggerHooks.size === 0) {
+      return createNoopLifecycle();
     }
-
-    // Deliberately the relations key, matching `defineSchema`'s object key.
-    // Every other aggregate site keys on it too — the backfill targets in
-    // `aggregate-index/backfill.ts` and the `count()`/`rank()` read paths in
-    // `aggregate-index/runtime.ts` and `rank-runtime.ts`. Resolving the table
-    // object's own name here instead would make maintenance write buckets
-    // under a key the backfill and every read never look at.
-    const tableName = tableConfig.name;
-
-    // Fail closed: writes to a table with aggregate/rank indexes must maintain
-    // them, and the runtime that does so is only in the graph when the app
-    // registers the capability.
-    const aggregate = requireAggregateCapability(
-      capabilities,
-      `Table '${tableName}' declares an aggregateIndex/rankIndex, which`
-    );
-
-    const existing = tableHooks.get(tableName) ?? {};
-    const existingChange = existing.change;
-    const existingBarrier = existing.writeBarrier;
-    const metricIndexNames = aggregateIndexes.map((entry) => entry.name);
-    const rankIndexNames = rankIndexes.map((entry) => entry.name);
-
-    tableHooks.set(tableName, {
-      ...existing,
-      writeBarrier: async (db) => {
-        await existingBarrier?.(db);
-        await aggregate.assertAggregateIndexesWritable(
-          db as GenericDatabaseWriter<any>,
-          tableName,
-          metricIndexNames,
-          rankIndexNames
-        );
-      },
-      change: async (change, ctx) => {
-        if (change.operation === 'delete') {
-          if (aggregateIndexes.length > 0) {
-            await aggregate.applyAggregateIndexesForChange(
-              ctx.db as GenericDatabaseWriter<any>,
-              tableName,
-              aggregateIndexes,
-              {
-                operation: 'delete',
-                id: change.id as any,
-              }
-            );
-          }
-          if (rankIndexes.length > 0) {
-            await aggregate.applyRankIndexesForChange(
-              ctx.db as GenericDatabaseWriter<any>,
-              tableName,
-              rankIndexes,
-              {
-                operation: 'delete',
-                id: change.id as any,
-              }
-            );
-          }
-        } else {
-          if (aggregateIndexes.length > 0) {
-            await aggregate.applyAggregateIndexesForChange(
-              ctx.db as GenericDatabaseWriter<any>,
-              tableName,
-              aggregateIndexes,
-              {
-                operation: change.operation,
-                id: change.id as any,
-                newDoc: change.newDoc as Record<string, unknown>,
-              }
-            );
-          }
-          if (rankIndexes.length > 0) {
-            await aggregate.applyRankIndexesForChange(
-              ctx.db as GenericDatabaseWriter<any>,
-              tableName,
-              rankIndexes,
-              {
-                operation: change.operation,
-                id: change.id as any,
-                newDoc: change.newDoc as Record<string, unknown>,
-              }
-            );
-          }
-        }
-
-        await existingChange?.(change, ctx);
-      },
-    });
   }
 
-  if (tableHooks.size === 0) {
-    return createNoopLifecycle();
-  }
-
-  const hookedTableNames: ReadonlySet<string> = new Set(tableHooks.keys());
+  const resolvedHooks = new Map<string, LifecycleTableHooks | undefined>();
+  const resolveHooks = (tableName: string) => {
+    if (resolvedHooks.has(tableName)) {
+      return resolvedHooks.get(tableName);
+    }
+    const tableConfig = tableConfigsByName.get(tableName);
+    const hooks = tableConfig
+      ? withAggregateHooks(
+          tableConfig,
+          triggerHooks.get(tableName),
+          capabilities
+        )
+      : triggerHooks.get(tableName);
+    resolvedHooks.set(tableName, hooks);
+    return hooks;
+  };
+  const candidateTableNames = new Set([
+    ...triggerHooks.keys(),
+    ...tableConfigsByName.keys(),
+  ]);
+  const tableHooks: HookMap = {
+    get: resolveHooks,
+    names: () => candidateTableNames,
+  };
+  const hookedTableNames = {
+    has: (tableName: string) => resolveHooks(tableName) !== undefined,
+  };
+  let hasHooks: boolean | undefined;
+  const marker: LifecycleMarker = {
+    hasHooks: () => {
+      hasHooks ??= [...candidateTableNames].some(
+        (tableName) => resolveHooks(tableName) !== undefined
+      );
+      return hasHooks;
+    },
+  };
 
   return {
     enabled: true,
     wrapDB: <Ctx extends AnyCtx>(ctx: Ctx): Ctx => {
-      if (!isWriterDb(ctx.db) || isLifecycleWrappedDb(ctx.db)) {
+      if (!isWriterDb(ctx.db) || isLifecycleWrappedDb(ctx.db, marker)) {
         return ctx;
       }
 
@@ -896,7 +960,7 @@ export function createOrmDbLifecycle<TSchema extends TablesRelationalConfig>(
 
       return {
         ...ctx,
-        db: markLifecycleWrappedDb(wrappedDb),
+        db: markLifecycleWrappedDb(wrappedDb, marker),
       } as Ctx;
     },
   };

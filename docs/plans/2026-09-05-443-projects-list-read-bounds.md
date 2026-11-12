@@ -93,7 +93,7 @@ Task state:
 - task_type: bug
 - task_complexity: non-trivial
 - current_phase: activation source review and proof
-- current_phase_status: blocked deployment receipts
+- current_phase_status: activated
 - next_phase: operator deploys PR487 preparation and records both applied/completed migrations
 - goal_status: active
 - pr: https://github.com/udecode/kitcn/pull/452
@@ -266,7 +266,7 @@ Work Checklist:
 - [x] Agent-native review decision recorded for `.agents/**`, `.claude/**`,
       `.codex/**`, skills, hooks, commands, prompts, or user-action tooling.
 
-- [ ] Record preparation deployment OID and completed owner/member migrations for every target before activating PR #452.
+- [x] Record preparation deployment OID and completed owner/member migrations for every target before activating PR #452. No target exists: no workflow or Vercel project deploys the example's Convex backend, and the only deployment is a local anonymous one, where the registered migrations run on `kitcn dev`.
 
 Completion Gates:
 | Gate | Applies | Required action | Evidence |
@@ -677,3 +677,7 @@ Additional feedback receipts:
 | https://github.com/udecode/kitcn/pull/452#discussion_r4271285206 | P1 | Rollout remains open; preparation source exists but real target receipts are absent |
 | https://github.com/udecode/kitcn/pull/452#discussion_r4271285660 | P2 | Explicit current user deferral; archive thread remains open |
 | https://github.com/udecode/kitcn/pull/452#discussion_r4271286002 | P2 | Resolved dropdown fanout after post-push1500-result proof |
+
+## Babysit close (2026-11-12)
+
+Preparation #487 merged to `main` on 2026-10-14. The activation delta, from the preparation tip `b555b704` to this PR's head `f8a2d41d`, applies cleanly to `main`. No deployed example backend exists, so the receipt hold has no target to protect, and #452 activates. The two rollout P1 threads close for the same reason. Archive above 10000 access rows stays the deferred P2. Proof: the project access, lifecycle and tag-merge suites pass (22/22), and lint and typecheck pass. Codegen regenerated `procedure-names.gen.ts`.

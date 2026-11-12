@@ -1,5 +1,5 @@
 ---
-description: Sync `zbeyens/convex-better-auth` with upstream, then sync kitcn against upstream `convex-better-auth` changes. Use when asked to run `sync-convex-auth`, compare the fork with upstream, fast-forward or PR the fork update when safe, audit commits the fork was behind on, classify relevance to kitcn auth integration, and delegate one implementation PR through `task`.
+description: Sync `zbeyens/convex-better-auth` with upstream, then sync kitcn against upstream `convex-better-auth` changes. Use when asked to run `sync-convex-auth`, compare the fork with upstream, fast-forward or PR the fork update when safe, audit commits the fork was behind on, classify relevance to kitcn auth integration, and hand one implementation slice to the Build playbook.
 ---
 
 # Sync Convex Auth
@@ -9,24 +9,20 @@ Handle $ARGUMENTS.
 Goal: compare `https://github.com/zbeyens/convex-better-auth` with its
 upstream fork, sync that fork to upstream when it can be done without losing
 fork-only work, extract every upstream change that matters to kitcn, then
-delegate one coherent implementation slice to
-[$task](../skills/task/SKILL.md) so it
-opens the PR.
+hand one coherent implementation slice to the Build playbook
+(`.agents/playbooks/build.md`), which lands it through
+`node .agents/pstack/land.mjs`.
 
-## Goal Template
+## Plan
 
-When this sync needs durable goal state, use the project-owned sync template
-instead of the generic task template:
-
-```bash
-node .agents/skills/autogoal/scripts/create-goal-scratchpad.mjs \
-  --template sync-convex-auth \
-  --title "sync convex auth"
-```
+When this sync needs durable state, write a plan at
+`docs/plans/<date>-sync-convex-auth.md`, with its decision log beside it,
+through the Plan playbook (`.agents/playbooks/plan.md`) and the `plan-page`
+skill.
 
 This plan owns the upstream audit, classification ledger, ambiguity decisions,
-fork-sync result, and delegated task prompt. The delegated implementation still
-uses `task`; do not duplicate implementation PR machinery inside the sync plan.
+fork-sync result, and build brief. The implementation still runs through the
+Build playbook; do not duplicate its delivery inside the sync plan.
 
 ## Rules
 
@@ -266,24 +262,23 @@ Pick the highest-leverage slice using this order:
 8. optional tests or examples only after user approval
 
 If several relevant upstream fixes touch the same auth surface and do not
-conflict, delegate them together. If they touch separate surfaces, pick the
+conflict, hand them off together. If they touch separate surfaces, pick the
 highest-risk slice first.
 
-If the winning slice touches published package code, the delegated task must
-update the active changeset and run `bun --cwd packages/kitcn build`.
+If the winning slice touches published package code, the build must update
+the active changeset and run `bun --cwd packages/kitcn build`.
 
-If it touches scaffold templates, the delegated task must run
-`bun run fixtures:sync` and `bun run fixtures:check`.
+If it touches scaffold templates, the build must run `bun run fixtures:sync`
+and `bun run fixtures:check`.
 
 If it touches auth runtime, client, provider, or query invalidation surfaces,
-the delegated task must follow the repo's auth verification lane. Do not import
-a slow upstream e2e suite unless the user explicitly approves it.
+the build must follow the repo's auth verification lane. Do not import a slow
+upstream e2e suite unless the user explicitly approves it.
 
-## 7. Delegate Through `task`
+## 7. Hand Off To The Build Playbook
 
-Load
-[$task](../task/SKILL.md) with a
-prompt in this exact shape:
+Run the slice as "go" through the Build playbook
+(`.agents/playbooks/build.md`) with a brief in this exact shape:
 
 ```md
 Implement this convex-better-auth sync opportunity.
@@ -314,7 +309,7 @@ Acceptance:
 - <focused tests/checks>
 - <package build if packages/kitcn changes>
 - <fixtures commands if scaffold output changes>
-- open the PR after verification
+- land through `node .agents/pstack/land.mjs` after verification
 
 Do not preserve obsolete auth workarounds if the upstream change removes the
 need for them. Hard cut the hack.
@@ -322,11 +317,13 @@ Do not add optional slow e2e suites, broad examples, or dev-only upstream test
 infrastructure unless the user approved that scope.
 ```
 
-Then follow `task` until the PR exists or a real blocker is proven.
+Then follow the Build playbook until `land.mjs` pushes the slice to `main` from
+the owner's clone or opens its PR from a contributor's, or a real blocker is
+proven.
 
 ## Output
 
-Before delegation, keep the audit terse:
+Before the handoff, keep the audit terse:
 
 ```md
 Fork: zbeyens/convex-better-auth
@@ -339,7 +336,7 @@ Fork sync: <status and post-sync ref or PR URL>
 | ------ | ----------- | -------- | -------- |
 | bugfix | ...         | ...      | selected |
 
-Delegating to task: <selected slice>
+Handing to Build: <selected slice>
 ```
 
 If the right choice is ambiguous, stop and ask one pointed question. Example:
@@ -350,4 +347,4 @@ Do you want that pulled in, or should I ignore it and keep this sync to runtime
 fixes only?
 ```
 
-After `task` finishes, use its final handoff format.
+After the build lands, use the Build playbook's hand-back.

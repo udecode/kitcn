@@ -171,6 +171,11 @@ const parseWhere = (
   }) as ConvexCleanedWhere[];
 };
 
+const omitModelKey = <T extends object>(args: T & { modelKey?: unknown }) => {
+  const { modelKey: _modelKey, ...rest } = args;
+  return rest;
+};
+
 type DocWithFlexibleId = {
   _id?: string | null;
   id?: string | null;
@@ -328,7 +333,8 @@ export const httpAdapter = <
         options: {
           isRunMutationCtx: isRunMutationCtx(ctx),
         },
-        count: async (data) => {
+        count: async (args) => {
+          const data = omitModelKey(args);
           assertSupportedOrWhere(data.where, 'count');
           if (hasOrWhere(data.where)) {
             const results = await asyncMap(data.where, async (w) =>
@@ -405,7 +411,8 @@ export const httpAdapter = <
             },
           });
         },
-        deleteMany: async (data) => {
+        deleteMany: async (args) => {
+          const data = omitModelKey(args);
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
@@ -439,7 +446,8 @@ export const httpAdapter = <
 
           return result.count;
         },
-        findMany: async (data): Promise<any[]> => {
+        findMany: async (args): Promise<any[]> => {
+          const data = omitModelKey(args);
           if (data.offset) {
             throw new Error('offset not supported');
           }
@@ -484,7 +492,8 @@ export const httpAdapter = <
 
           return result.docs;
         },
-        findOne: async (data): Promise<any> => {
+        findOne: async (args): Promise<any> => {
+          const data = omitModelKey(args);
           const parsedWhere = parseWhere(data.where);
 
           if (data.where?.every((w) => w.connector === 'OR')) {
@@ -505,7 +514,8 @@ export const httpAdapter = <
             where: parsedWhere,
           });
         },
-        incrementOne: async (data): Promise<any> => {
+        incrementOne: async (args): Promise<any> => {
+          const data = omitModelKey(args);
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
@@ -550,7 +560,8 @@ export const httpAdapter = <
 
           throw new Error('where clause not supported');
         },
-        updateMany: async (data) => {
+        updateMany: async (args) => {
+          const data = omitModelKey(args);
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
@@ -654,7 +665,8 @@ export const dbAdapter = <
         options: {
           isRunMutationCtx: isRunMutationCtx(ctx),
         },
-        count: async (data) => {
+        count: async (args) => {
+          const data = omitModelKey(args);
           assertSupportedOrWhere(data.where, 'count');
           if (hasOrWhere(data.where)) {
             const results = await asyncMap(data.where, async (w) =>
@@ -743,7 +755,8 @@ export const dbAdapter = <
             },
           });
         },
-        deleteMany: async (data) => {
+        deleteMany: async (args) => {
+          const data = omitModelKey(args);
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
@@ -777,7 +790,8 @@ export const dbAdapter = <
 
           return result.count;
         },
-        findMany: async (data): Promise<any[]> => {
+        findMany: async (args): Promise<any[]> => {
+          const data = omitModelKey(args);
           if (data.offset) {
             throw new Error('offset not supported');
           }
@@ -832,7 +846,8 @@ export const dbAdapter = <
 
           return result.docs;
         },
-        findOne: async (data): Promise<any> => {
+        findOne: async (args): Promise<any> => {
+          const data = omitModelKey(args);
           if (data.where?.every((w) => w.connector === 'OR')) {
             for (const w of data.where) {
               const result = await findOneHandler(
@@ -861,7 +876,8 @@ export const dbAdapter = <
             betterAuthSchema
           );
         },
-        incrementOne: async (data): Promise<any> => {
+        incrementOne: async (args): Promise<any> => {
+          const data = omitModelKey(args);
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }
@@ -905,7 +921,8 @@ export const dbAdapter = <
 
           throw new Error('where clause not supported');
         },
-        updateMany: async (data) => {
+        updateMany: async (args) => {
+          const data = omitModelKey(args);
           if (!('runMutation' in ctx)) {
             throw new Error('ctx is not a mutation ctx');
           }

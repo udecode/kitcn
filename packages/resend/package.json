@@ -1,6 +1,6 @@
 {
   "name": "@kitcn/resend",
-  "version": "0.33.9",
+  "version": "0.33.12",
   "description": "kitcn Resend plugin",
   "type": "module",
   "sideEffects": false,
@@ -21,7 +21,7 @@
   },
   "peerDependencies": {
     "kitcn": ">=0.11.0 <1",
-    "convex": ">=1.42 <1.47.0"
+    "convex": ">=1.42 <1.50.0"
   },
   "devDependencies": {
     "kitcn": "workspace:*",

@@ -19,7 +19,7 @@ export const DEFAULT_WRITE_FANOUT_CONCURRENCY = 25;
  */
 export const markLifecycleHookedTables = <TDb extends object>(
   db: TDb,
-  tableNames: ReadonlySet<string>
+  tableNames: { has(tableName: string): boolean }
 ): TDb => {
   Object.defineProperty(db, ORMLIFECYCLE_HOOKED_TABLES, {
     configurable: false,
@@ -39,6 +39,6 @@ export const markLifecycleHookedTables = <TDb extends object>(
 export const hasLifecycleHooks = (db: unknown, tableName: string): boolean => {
   const tables = (db as Record<PropertyKey, unknown> | null | undefined)?.[
     ORMLIFECYCLE_HOOKED_TABLES
-  ] as ReadonlySet<string> | undefined;
+  ] as { has(tableName: string): boolean } | undefined;
   return tables?.has(tableName) ?? false;
 };

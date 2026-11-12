@@ -40,6 +40,15 @@ describe('zod4 (vendored)', () => {
     expect(validator.safeParse(42).success).toBe(false);
   });
 
+  test('convexToZod supports function handle validators', () => {
+    const validator = convexToZod(v.function({ fnType: 'query' }));
+
+    expect(validator.safeParse('function://handle').success).toBe(true);
+    expect(validator.safeParse('').success).toBe(false);
+    expect(validator.safeParse('not-a-handle').success).toBe(false);
+    expect(validator.safeParse(42).success).toBe(false);
+  });
+
   test('zid converts to a table-scoped Convex id validator', () => {
     const validator = zodToConvex(
       z.object({

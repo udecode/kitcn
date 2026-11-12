@@ -90,9 +90,10 @@ layout; spinners belong to bounded operations.
 4. Implement the smallest coherent component ownership.
 5. Test responsive, keyboard, reduced-motion, loading, empty, error, and
    permission states.
-6. Use Browser for route/DOM/responsive/screenshot proof. Use Chrome or Computer
-   only when native browser/OS behavior requires it.
-7. Run focused tests and React review rules, then `autoreview`.
+6. Prove the route in the browser as the `verify` skill's Drive section says.
+7. Run focused tests and React review rules. Then give the diff its writing
+   passes, and the panel that AGENTS.md's `push` review row names when that row
+   applies.
 
 ## Definition Of Done
 
