@@ -315,11 +315,16 @@ row with its own id (`forceAllowId`), as the organization plugin's invitations a
 
 `reserveVerificationValue` derives that id from the verification identifier and relies on the
 duplicate key to let only the first caller in. It backs the magic link and email OTP cleanup lock,
-SIWE email claims, DPoP proofs, SAML assertion ids and `private_key_jwt` assertions. Convex cannot
-store the forced id, so the identifier stands in for it: a verification create that carries a
-forced id is refused while a row with the same identifier exists. The second caller gets an error
-rather than `false`, so these checks fail closed. The verification table needs its `identifier`
-index, which the generated auth schema declares.
+SIWE email claims, DPoP proofs and SAML assertion ids. Convex cannot store the forced id, so the
+identifier stands in for it: a verification create that carries a forced id is refused while a row
+with the same identifier exists. The second caller gets an error rather than `false`, so these
+checks fail closed. The verification table needs its `identifier` index, which the generated auth
+schema declares. With `advanced.database.generateId` set to `"uuid"` or `"serial"`, Better Auth
+sends no forced id for a reservation, so nothing refuses the second caller.
+
+`private_key_jwt` client authentication keys each `oauthClientAssertion` row by its `jti` and has
+no other column to check, so a forced-id create on that table is refused and the assertion fails
+with a server error.
 
 ### Triggers
 

@@ -25,7 +25,7 @@ The create path now drops the forced id and returns the row under its Convex id.
 
 - `createHandler` in `packages/kitcn/src/auth/create-api.ts` drops `_id` from the create input before the `create.before` trigger, the unique-field check and the insert. Every adapter create reaches it through the generated `create` mutation, from both `httpAdapter` and `dbAdapter`.
 - The returned row already carries the Convex `_id` and `id`; Better Auth's output mapping reads `_id` as `id`, so the invitation and verification rows read back under their Convex ids.
-- `checkForcedIdVerification` in `packages/kitcn/src/auth/adapter-utils.ts` runs after the unique-field check when a forced id arrived: on the verification model it reads the identifier index and refuses the create when a row exists. A table without that index fails closed.
+- `checkForcedId` in `packages/kitcn/src/auth/adapter-utils.ts` runs after the unique-field check when a forced id arrived: on the verification model it reads the identifier index and refuses the create when a row exists. A table without that index fails closed. On `oauthClientAssertion`, whose row holds only the `jti`-derived id, it refuses every forced-id create.
 
 ## Defaults
 
@@ -39,10 +39,11 @@ The create path now drops the forced id and returns the row under its Convex id.
 
 - [x] Reproduce: a forced-id create through the generated auth functions fails with ``Unexpected field `_id` ``. Proof: `bunx vitest run packages/kitcn/src/auth/forced-id.vitest.ts` at base, 1 of 2 red on the 1.7.1 pin and 2 of 2 red on 1.7.16.
 - [x] Fix `createHandler`. Proof: the same file, 2 of 2 green on 1.7.1 and on 1.7.16.
-- [x] Keep single-use reservations exclusive (fix round 1). Proof: `forced-id.vitest.ts` "refuses a second caller until the reservation is released" is red without `checkForcedIdVerification` and green with it; `create-api.test.ts` covers the missing-index refusal and a forced id on another model.
+- [x] Keep single-use reservations exclusive (fix round 1). Proof: `forced-id.vitest.ts` "refuses a second caller until the reservation is released" is red without `checkForcedId` and green with it; `create-api.test.ts` covers the missing-index refusal and a forced id on another model.
 - [x] Docs: the Document IDs section in `www/content/docs/auth/server.mdx` and its line in `packages/kitcn/skills/kitcn/references/features/auth.md`. Proof: both pages read the same contract.
 - [x] Changeset `.changeset/auth-forced-id.md` (patch). Proof: the file exists.
-- [ ] Review panel and land through `land.mjs`. Proof: the PR's checks.
+- [x] Babysit: keep `private_key_jwt` replays blocked. Dropping the forced id on every other model let each replayed `oauthClientAssertion` insert succeed, because Better Auth 1.7.16 and later key that row by the `jti` alone. Proof: `create-api.test.ts` "refuses a forced-id client assertion create" is red without the gate and green with it.
+- [ ] Merge once CI is green. Proof: the PR's checks.
 
 ## Verification
 
@@ -52,5 +53,6 @@ The create path now drops the forced id and returns the row under its Convex id.
 
 ## Open work
 
-- A second reservation of the same identifier throws where Better Auth expects `false`: the magic link cleanup lock and `private_key_jwt` replays fail with a server error rather than their own handling (SIWE catches it and reads `false`). Returning `false` needs the forced id stored in a uniquely indexed column. Owner: kitcn maintainers. Stop: a decision on storing forced ids.
+- A second reservation of the same identifier throws where Better Auth expects `false`: the magic link cleanup lock and DPoP proofs fail with a server error rather than their own handling (SIWE catches it and reads `false`). Returning `false` needs the forced id stored in a uniquely indexed column. Owner: kitcn maintainers. Stop: a decision on storing forced ids.
+- `private_key_jwt` fails with a server error on every assertion, as it did before this change, because `oauthClientAssertion` has no column to stand in for the forced id. Making it work needs the same stored forced id. Owner: kitcn maintainers. Stop: the same decision.
 - Raising the pinned Better Auth past 1.7.1 is a separate change. Owner: kitcn maintainers.
