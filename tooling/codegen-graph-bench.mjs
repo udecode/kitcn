@@ -3,12 +3,13 @@
 // process and one cold jiti cache per sample.
 //
 //   node tooling/codegen-graph-bench.mjs [--pkg packages/kitcn] [--runs 5]
-//     [--modules 200] [--shared 100]
+//     [--modules 200] [--shared 100] [--cyclic 0]
 //
 // The project has `--modules` Convex modules, each exporting one procedure and
 // importing the top of a chain of `--shared` helper modules. Each helper
 // appends a line to a log when it evaluates, so a sample reports how many
-// helper evaluations one codegen run made, beside its wall time.
+// helper evaluations one codegen run made, beside its wall time. The first
+// `--cyclic` modules also import one side of a two-module import cycle each.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -23,6 +24,7 @@ const pkg = path.resolve(option('pkg', 'packages/kitcn'));
 const runs = Number(option('runs', '5'));
 const moduleCount = Number(option('modules', '200'));
 const sharedCount = Number(option('shared', '100'));
+const cyclicCount = Number(option('cyclic', '0'));
 
 const write = (file, content) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -54,11 +56,21 @@ ${i > 0 ? `import { table as previous } from './s${i - 1}';\n` : 'const previous
 export const table = { ...previous, ${Array.from({ length: 20 }, (_, k) => `f${i}_${k}: { index: ${k} }`).join(', ')} };
 `
     );
+  for (let j = 0; j < cyclicCount; j += 1) {
+    write(
+      path.join(dir, 'convex', 'lib', 'cycle', `a${j}.ts`),
+      `import { b } from './b${j}';\nexport const a = () => b;\n`
+    );
+    write(
+      path.join(dir, 'convex', 'lib', 'cycle', `b${j}.ts`),
+      `import { a } from './a${j}';\nexport const b = () => a;\n`
+    );
+  }
   for (let j = 0; j < moduleCount; j += 1)
     write(
       path.join(dir, 'convex', `m${j}.ts`),
       `import { table } from './lib/shared/s${sharedCount - 1}';
-void table;
+${j < cyclicCount ? `import { a } from './lib/cycle/a${j}';\nvoid a;\n` : ''}void table;
 export const q${j} = { _crpcMeta: { type: 'query' } };
 `
     );
@@ -108,6 +120,7 @@ process.stdout.write(
     pkg,
     modules: moduleCount,
     shared: sharedCount,
+    cyclic: cyclicCount,
     runs,
     p50Ms: Math.round(median(samples.map((s) => s.ms))),
     helperEvaluations: median(samples.map((s) => s.evaluations)),

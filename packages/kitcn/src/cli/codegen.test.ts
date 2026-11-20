@@ -5184,6 +5184,154 @@ export default createHttpRouter({}, router({}));
     }
   });
 
+  const writeConvexFiles = (dir: string, files: Record<string, string>) => {
+    for (const [file, source] of Object.entries(files)) {
+      writeFile(path.join(dir, 'convex', file), source);
+    }
+  };
+  const generateIn = async (files: Record<string, string>) => {
+    const dir = mkTempDir();
+    const oldCwd = process.cwd();
+    process.chdir(dir);
+    try {
+      writeScopedFixture(dir);
+      writeConvexFiles(dir, files);
+      return await generateMeta(undefined, { silent: true }).then(
+        () => ({
+          api: fs.readFileSync(
+            path.join(dir, 'convex', 'shared', 'api.ts'),
+            'utf-8'
+          ),
+          error: null,
+        }),
+        (caught: unknown) => ({ api: null, error: String(caught) })
+      );
+    } finally {
+      process.chdir(oldCwd);
+    }
+  };
+  const registry = [
+    'const names = new Set<string>();',
+    'export function register(name: string) {',
+    "  if (names.has(name)) throw new Error('duplicate ' + name);",
+    '  names.add(name);',
+    '}',
+    'export const size = () => String(names.size);',
+  ].join('\n');
+
+  test('generateMeta gives a procedure module its own entry into an import cycle', async () => {
+    // x.ts sorts first and enters the cycle at b.ts, so a.ts reads Q before
+    // b.ts sets it; y.ts enters at a.ts.
+    const { api, error } = await generateIn({
+      'lib/a.ts': "import { Q } from './b';\nexport const P = 'p:' + Q;",
+      'lib/b.ts':
+        "import { P } from './a';\nexport const Q = 'Q';\nexport const readP = () => P;",
+      'x.ts':
+        "import { readP } from './lib/b';\nexport const xQuery = { _crpcMeta: { type: 'query' }, readP };",
+      'y.ts':
+        "import { P } from './lib/a';\nexport const yQuery = { _crpcMeta: { type: 'query', p: P } };",
+    });
+    expect(error).toBeNull();
+    expect(api).toContain('p: "p:Q"');
+  });
+
+  test('generateMeta evaluates a procedure module once when another one imports it', async () => {
+    const { api, error } = await generateIn({
+      'lib/registry.ts': registry,
+      'x.ts':
+        "import { yQuery } from './y';\nexport const xQuery = { _crpcMeta: { type: 'query' }, yQuery };",
+      'y.ts':
+        "import { register } from './lib/registry';\nregister('y');\nexport const yQuery = { _crpcMeta: { type: 'query' } };",
+    });
+    expect(error).toBeNull();
+    expect(api).toContain('xQuery');
+    expect(api).toContain('yQuery');
+  });
+
+  test('generateMeta does not repeat the side effects of a module in an import cycle', async () => {
+    // Only z.ts registers, and z.ts sits in a cycle with lib/back.ts.
+    const { api, error } = await generateIn({
+      'lib/registry.ts': registry,
+      'lib/back.ts':
+        "import { zQuery } from '../z';\nexport const back = () => zQuery;",
+      'x.ts':
+        "import { register } from './lib/registry';\nexport const xQuery = { _crpcMeta: { type: 'query' }, register };",
+      'y.ts':
+        "import { zQuery } from './z';\nexport const yQuery = { _crpcMeta: { type: 'query' }, zQuery };",
+      'z.ts':
+        "import { register } from './lib/registry';\nimport { back } from './lib/back';\nregister('z');\nexport const zQuery = { _crpcMeta: { type: 'query' }, back };",
+    });
+    expect(error).toBeNull();
+    expect(api).toContain('zQuery');
+  });
+
+  test('generateMeta counts one evaluation of a module in an import cycle for each procedure module', async () => {
+    const { api, error } = await generateIn({
+      'lib/counter.ts':
+        'let n = 0;\nexport const next = () => String((n += 1));',
+      'lib/a.ts':
+        "import { Q } from './b';\nimport { next } from './counter';\nexport const P = 'p:' + Q + ':' + next();",
+      'lib/b.ts':
+        "import { P } from './a';\nexport const Q = 'Q';\nexport const readP = () => P;",
+      'w.ts':
+        "import { next } from './lib/counter';\nexport const wQuery = { _crpcMeta: { type: 'query' }, next };",
+      'x.ts':
+        "import { readP } from './lib/b';\nexport const xQuery = { _crpcMeta: { type: 'query' }, readP };",
+      'y.ts':
+        "import { P } from './lib/a';\nexport const yQuery = { _crpcMeta: { type: 'query', p: P } };",
+    });
+    expect(error).toBeNull();
+    expect(api).toContain('p: "p:Q:1"');
+  });
+
+  test('generateMeta keeps one module instance per run for procedure modules outside import cycles', async () => {
+    const { error } = await generateIn({
+      'lib/registry.ts': registry,
+      'x.ts':
+        "import { register } from './lib/registry';\nregister('send');\nexport const xQuery = { _crpcMeta: { type: 'query' } };",
+      'y.ts':
+        "import { register } from './lib/registry';\nregister('send');\nexport const yQuery = { _crpcMeta: { type: 'query' } };",
+    });
+    expect(error).toContain('- y.ts: duplicate send');
+    expect(error).not.toContain('- x.ts');
+  });
+
+  test('generateMeta parses a procedure module with a computed import in a graph of its own', async () => {
+    const { api, error } = await generateIn({
+      'lib/registry.ts': registry,
+      'a.ts':
+        "import { register } from './lib/registry';\nregister('a');\nexport const aQuery = { _crpcMeta: { type: 'query' } };",
+      'b.ts':
+        "import { register, size } from './lib/registry';\nconst load = (file: string) => import(file);\nregister('b');\nexport const bQuery = { _crpcMeta: { type: 'query', seen: size() }, load };",
+    });
+    expect(error).toBeNull();
+    expect(api).toContain('seen: "1"');
+  });
+
+  const caughtCycle = (load: string) => ({
+    'lib/a.ts': `let P = 'p:fallback';\ntry {\n  P = 'p:' + ${load}.Q;\n} catch {}\nexport { P };`,
+    'lib/b.ts':
+      "import { P } from './a';\nexport const Q = 'Q';\nexport const readP = () => P;",
+    'x.ts':
+      "import { P } from './lib/a';\nexport const xQuery = { _crpcMeta: { type: 'query', p: P } };",
+  });
+
+  test('generateMeta parses a procedure module that loads through require.call in a graph of its own', async () => {
+    const { api, error } = await generateIn(
+      caughtCycle("require.call(null, './b')")
+    );
+    expect(error).toBeNull();
+    expect(api).toContain('p: "p:Q"');
+  });
+
+  test('generateMeta rejects a procedure module whose shared-graph violation project code caught', async () => {
+    // arguments[1] is the module wrapper's require, a load the scan does not see.
+    const { api, error } = await generateIn(caughtCycle("arguments[1]('./b')"));
+    expect(api).toBeNull();
+    expect(error).toContain('- x.ts: ');
+    expect(error).toContain('lib/a.ts');
+  });
+
   test('generateMeta parses modules that import tsx files', async () => {
     const dir = mkTempDir();
     const oldCwd = process.cwd();

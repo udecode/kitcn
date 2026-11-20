@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { Jiti, JitiOptions, ModuleCache } from 'jiti';
 import { CRPC_BUILDER_STUB_SOURCE } from './crpc-builder-stub.js';
 import { loadBabelParser, loadJiti } from './lazy-deps.js';
@@ -534,24 +534,492 @@ const loadWithMissingModuleFallback = (
   return load(...loadArgs);
 };
 
-const sharedProjectGraph = new AsyncLocalStorage<ModuleCache>();
+const TSX_SOURCE_RE = /\.[cm]?tsx$/;
+const TS_SOURCE_RE = /\.[cm]?ts$/;
 
-// A module whose evaluation threw stays in Jiti's cache unloaded. Dropping it
-// before each root makes every root that imports it evaluate it again.
-const pruneUnloaded = (cache: ModuleCache) => {
-  for (const key of Object.keys(cache)) {
-    if (cache[key]?.loaded !== true) delete cache[key];
+type AstNode = { type: string } & Record<string, unknown>;
+
+const isAstNode = (value: unknown): value is AstNode =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { type?: unknown }).type === 'string';
+
+const NAME_KEY_NODE_TYPES = new Set([
+  'ObjectProperty',
+  'ObjectMethod',
+  'ClassMethod',
+  'ClassProperty',
+  'ClassPrivateProperty',
+  'ClassAccessorProperty',
+  'TSPropertySignature',
+  'TSMethodSignature',
+  'TSDeclareMethod',
+]);
+const TYPE_ONLY_NODE_TYPES = new Set([
+  'TSImportType',
+  'TSTypeReference',
+  'TSTypeAnnotation',
+  'TSInterfaceDeclaration',
+  'TSTypeAliasDeclaration',
+  'TSDeclareFunction',
+]);
+
+const REQUIRE_NON_LOADING_MEMBERS = new Set([
+  'resolve',
+  'cache',
+  'main',
+  'extensions',
+]);
+
+// `require` read as anything but a call, a non-loading member, a property name
+// or `typeof` could load a module the scan cannot see.
+const isRequireNameOnly = (node: AstNode, parent: AstNode | null) => {
+  if (!parent) return false;
+  if (parent.type === 'CallExpression' && parent.callee === node) return true;
+  const isMember =
+    parent.type === 'MemberExpression' ||
+    parent.type === 'OptionalMemberExpression';
+  if (isMember && parent.object === node) {
+    const property = parent.property;
+    return (
+      !parent.computed &&
+      isAstNode(property) &&
+      REQUIRE_NON_LOADING_MEMBERS.has(property.name as string)
+    );
   }
-  return cache;
+  if (isMember && parent.property === node && !parent.computed) return true;
+  if (
+    NAME_KEY_NODE_TYPES.has(parent.type) &&
+    parent.key === node &&
+    !parent.computed
+  ) {
+    return true;
+  }
+  if (parent.type === 'UnaryExpression' && parent.operator === 'typeof') {
+    return true;
+  }
+  return parent.type === 'TSQualifiedName' || parent.type === 'TSTypeQuery';
 };
 
-export const projectGraphCache = (): ModuleCache => {
+const literalSpecifier = (node: unknown) => {
+  if (!isAstNode(node)) return;
+  if (node.type === 'StringLiteral') return node.value as string;
+  if (
+    node.type === 'TemplateLiteral' &&
+    (node.expressions as unknown[]).length === 0
+  ) {
+    return (node.quasis as { value: { cooked: string } }[])[0]?.value.cooked;
+  }
+};
+
+const callName = (node: AstNode) => {
+  const callee = node.callee;
+  return isAstNode(callee) && callee.type === 'Identifier'
+    ? (callee.name as string)
+    : undefined;
+};
+
+type StaticImports = { specifiers: string[]; opaque: boolean };
+
+// The imports a static scan can follow in one project file. `opaque` marks a
+// file that loads modules some other way, or does not parse.
+const scanStaticImports = (filename: string): StaticImports => {
+  let program: unknown;
+  try {
+    const plugins: ('typescript' | 'jsx')[] = TSX_SOURCE_RE.test(filename)
+      ? ['typescript', 'jsx']
+      : TS_SOURCE_RE.test(filename)
+        ? ['typescript']
+        : ['jsx'];
+    program = loadBabelParser().parse(fs.readFileSync(filename, 'utf8'), {
+      sourceType: 'unambiguous',
+      plugins,
+      allowReturnOutsideFunction: true,
+      allowAwaitOutsideFunction: true,
+    }).program;
+  } catch {
+    return { specifiers: [], opaque: true };
+  }
+  const specifiers: string[] = [];
+  let opaque = false;
+  const visit = (node: unknown, parent: AstNode | null): void => {
+    if (opaque || !isAstNode(node) || TYPE_ONLY_NODE_TYPES.has(node.type)) {
+      return;
+    }
+    switch (node.type) {
+      case 'ImportDeclaration':
+        if (node.importKind !== 'type') {
+          specifiers.push((node.source as { value: string }).value);
+        }
+        return;
+      case 'ExportNamedDeclaration':
+      case 'ExportAllDeclaration':
+        if (isAstNode(node.source) && node.exportKind !== 'type') {
+          specifiers.push(node.source.value as string);
+        }
+        break;
+      case 'TSImportEqualsDeclaration': {
+        const reference = node.moduleReference;
+        if (
+          node.importKind !== 'type' &&
+          isAstNode(reference) &&
+          reference.type === 'TSExternalModuleReference'
+        ) {
+          specifiers.push((reference.expression as { value: string }).value);
+        }
+        return;
+      }
+      case 'ImportExpression':
+      case 'CallExpression':
+      case 'NewExpression': {
+        const isImport =
+          node.type === 'ImportExpression' ||
+          (isAstNode(node.callee) && node.callee.type === 'Import');
+        const name =
+          node.type === 'ImportExpression' ? undefined : callName(node);
+        if (
+          isImport ||
+          (name === 'require' && node.type === 'CallExpression')
+        ) {
+          const specifier = literalSpecifier(
+            node.type === 'ImportExpression'
+              ? node.source
+              : (node.arguments as unknown[])[0]
+          );
+          if (specifier === undefined) opaque = true;
+          else specifiers.push(specifier);
+        }
+        if (name === 'eval' || name === 'Function') opaque = true;
+        break;
+      }
+      case 'Identifier':
+        if (
+          node.name === 'createRequire' ||
+          (node.name === 'require' && !isRequireNameOnly(node, parent))
+        ) {
+          opaque = true;
+        }
+        break;
+      case 'MemberExpression':
+        if (
+          isAstNode(node.object) &&
+          node.object.type === 'Identifier' &&
+          node.object.name === 'module' &&
+          !node.computed &&
+          isAstNode(node.property) &&
+          node.property.name === 'require'
+        ) {
+          opaque = true;
+        }
+        break;
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'loc' || key.endsWith('Comments') || key === 'extra')
+        continue;
+      if (Array.isArray(value)) for (const child of value) visit(child, node);
+      else visit(value, node);
+    }
+  };
+  visit(program, null);
+  return { specifiers, opaque };
+};
+
+type ProjectGraphPlan = {
+  isShareable: (filename: string) => boolean;
+  reaches: (filename: string, targets: Set<string>) => boolean;
+};
+
+// Which roots may share the run's graph: those whose static import closure
+// holds no import cycle and nothing opaque. Imports resolve through the run's
+// own jiti and the missing-module fallbacks it consults.
+export const planProjectGraph = (
+  jiti: Jiti,
+  rootFiles: string[]
+): ProjectGraphPlan => {
+  const aliases = jiti.options.alias ?? {};
+  const edges = new Map<string, Set<string>>();
+  const opaque = new Set<string>();
+  const resolveStatic = (specifier: string, parentFile: string) => {
+    let target: string | undefined;
+    try {
+      target = jiti.esmResolve(specifier, {
+        parentURL: pathToFileURL(parentFile).href,
+        try: true,
+      });
+    } catch {
+      target = undefined;
+    }
+    if (!target) {
+      const request = resolveRequestAlias(specifier, aliases);
+      for (const fallback of missingModuleFallbacks) {
+        target = fallback(request, parentFile);
+        if (target) break;
+      }
+    }
+    if (!target) return null;
+    return target.startsWith('file:') ? fileURLToPath(target) : target;
+  };
+
+  const pending = [...rootFiles];
+  while (pending.length > 0) {
+    const filename = pending.pop() as string;
+    if (edges.has(filename)) continue;
+    const targets = new Set<string>();
+    edges.set(filename, targets);
+    const scan = scanStaticImports(filename);
+    if (scan.opaque) opaque.add(filename);
+    for (const specifier of scan.specifiers) {
+      const target = resolveStatic(specifier, filename);
+      if (target === null) {
+        opaque.add(filename);
+        continue;
+      }
+      if (!isProjectSource(target)) continue;
+      targets.add(target);
+      pending.push(target);
+    }
+  }
+
+  // Tarjan's strongly connected components. A component closes when all its
+  // successors have, so `unsafe` is final for them by then.
+  const order = new Map<string, number>();
+  const low = new Map<string, number>();
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const componentOf = new Map<string, number>();
+  const unsafe = new Set<string>();
+  const visit = (filename: string) => {
+    order.set(filename, order.size);
+    low.set(filename, order.get(filename) as number);
+    stack.push(filename);
+    onStack.add(filename);
+    for (const target of edges.get(filename) ?? []) {
+      if (!order.has(target)) {
+        visit(target);
+        low.set(
+          filename,
+          Math.min(low.get(filename) as number, low.get(target) as number)
+        );
+      } else if (onStack.has(target)) {
+        low.set(
+          filename,
+          Math.min(low.get(filename) as number, order.get(target) as number)
+        );
+      }
+    }
+    if (low.get(filename) !== order.get(filename)) return;
+    const component: string[] = [];
+    let member: string | undefined;
+    do {
+      member = stack.pop() as string;
+      onStack.delete(member);
+      component.push(member);
+    } while (member !== filename);
+    const id = componentOf.size;
+    for (const file of component) componentOf.set(file, id);
+    let componentUnsafe =
+      component.length > 1 || (edges.get(filename)?.has(filename) ?? false);
+    for (const file of component) {
+      if (opaque.has(file)) componentUnsafe = true;
+      for (const target of edges.get(file) ?? []) {
+        if (componentOf.get(target) !== id && unsafe.has(target)) {
+          componentUnsafe = true;
+        }
+      }
+    }
+    if (componentUnsafe) for (const file of component) unsafe.add(file);
+  };
+  for (const filename of edges.keys()) {
+    if (!order.has(filename)) visit(filename);
+  }
+
+  return {
+    isShareable: (filename) => edges.has(filename) && !unsafe.has(filename),
+    reaches: (filename, targets) => {
+      const seen = new Set<string>();
+      const queue = [filename];
+      while (queue.length > 0) {
+        const file = queue.pop() as string;
+        if (seen.has(file)) continue;
+        seen.add(file);
+        if (targets.has(file)) return true;
+        for (const target of edges.get(file) ?? []) queue.push(target);
+      }
+      return false;
+    },
+  };
+};
+
+type SharedProjectGraph = {
+  plan: ProjectGraphPlan;
+  target: ModuleCache;
+  cache: ModuleCache;
+  root: string | undefined;
+  violation: Error | undefined;
+};
+
+const sharedProjectGraph = new AsyncLocalStorage<SharedProjectGraph>();
+
+// One graph for the roots the plan lets share: an entry is created once and
+// never replaced or removed, and a read of an entry that has not finished
+// loading while a root evaluates aborts that root. Such a read means a cycle or
+// a failed module the plan did not see, and sharing it would hand the reader a
+// partial module.
+const createSharedProjectGraph = (
+  plan: ProjectGraphPlan
+): SharedProjectGraph => {
+  const target: ModuleCache = Object.create(null);
+  const graph: SharedProjectGraph = {
+    plan,
+    target,
+    cache: target,
+    root: undefined,
+    violation: undefined,
+  };
+  const relative = (filename: string) => path.relative(process.cwd(), filename);
+  // Kept as well as thrown, so the root is rejected after it evaluates even
+  // if project code caught the error.
+  const violate = (message: string): never => {
+    const error = new Error(message);
+    graph.violation ??= error;
+    throw error;
+  };
+  graph.cache = new Proxy(target, {
+    get(cacheTarget, key, receiver) {
+      const entry = Reflect.get(cacheTarget, key, receiver);
+      if (
+        graph.root &&
+        typeof key === 'string' &&
+        entry &&
+        entry.loaded !== true
+      ) {
+        violate(
+          `kitcn codegen: ${relative(graph.root)} reached ${relative(key)} before it finished loading in the shared module graph`
+        );
+      }
+      return entry;
+    },
+    set(cacheTarget, key, value, receiver) {
+      if (typeof key === 'string' && Object.hasOwn(cacheTarget, key)) {
+        violate(
+          `kitcn codegen: ${relative(key)} would be evaluated twice in the shared module graph`
+        );
+      }
+      return Reflect.set(cacheTarget, key, value, receiver);
+    },
+    deleteProperty(_cacheTarget, key) {
+      return violate(
+        `kitcn codegen: ${String(key)} would be removed from the shared module graph`
+      );
+    },
+  });
+  return graph;
+};
+
+export const withSharedProjectGraph = <T>(
+  plan: ProjectGraphPlan,
+  fn: () => Promise<T>
+): Promise<T> => sharedProjectGraph.run(createSharedProjectGraph(plan), fn);
+
+// The view jiti's `interopDefault` gives an evaluated module, so a reused root
+// reads as an evaluated one.
+const interopDefaultView = (mod: unknown): unknown => {
+  if (mod === null || (typeof mod !== 'object' && typeof mod !== 'function')) {
+    return mod;
+  }
+  const exports = mod as Record<PropertyKey, unknown>;
+  const fallback = exports.default;
+  const fallbackIsNil = fallback === null || fallback === undefined;
+  if (fallbackIsNil && mod instanceof Promise) return mod;
+  const mergeDefault =
+    (typeof fallback === 'object' || typeof fallback === 'function') &&
+    !(fallback instanceof Promise);
+  const seen = new Map<PropertyKey, unknown>();
+  return new Proxy(exports, {
+    get(target, key) {
+      if (seen.has(key)) return seen.get(key);
+      let value: unknown;
+      if (key === '__esModule') value = true;
+      else if (key === 'default') {
+        const nested = (fallback as { default?: unknown } | undefined)?.default;
+        value = fallbackIsNil
+          ? mod
+          : typeof nested === 'function' && exports.__esModule
+            ? nested
+            : fallback;
+      } else if (key in target) value = target[key];
+      else if (mergeDefault) {
+        value = (fallback as Record<PropertyKey, unknown>)[key];
+        if (typeof value === 'function') value = value.bind(fallback);
+      }
+      seen.set(key, value);
+      return value;
+    },
+    apply:
+      typeof fallback === 'function' && typeof mod !== 'function'
+        ? (_target, thisArg, args) =>
+            Reflect.apply(
+              fallback as (...a: unknown[]) => unknown,
+              thisArg,
+              args
+            )
+        : undefined,
+  });
+};
+
+// Runs one root in the mode its plan gives it: `evaluate` receives the shared
+// graph's cache, or `undefined` to evaluate in a graph of its own. A root that
+// reaches a module an earlier root left unfinished runs in its own graph, so a
+// failing module fails each importer as it would alone.
+export const evaluateProjectRoot = (
+  filename: string,
+  evaluate: (cache: ModuleCache | undefined) => unknown,
+  operation: 'require' | 'import'
+): unknown => {
   const shared = sharedProjectGraph.getStore();
-  return shared ? pruneUnloaded(shared) : Object.create(null);
+  if (!shared?.plan.isShareable(filename)) return evaluate(undefined);
+  const unfinished = new Set(
+    Object.keys(shared.target).filter(
+      (key) => shared.target[key]?.loaded !== true
+    )
+  );
+  if (unfinished.size > 0 && shared.plan.reaches(filename, unfinished)) {
+    return evaluate(undefined);
+  }
+  const existing = shared.target[filename];
+  if (existing) {
+    const view = interopDefaultView(existing.exports);
+    return operation === 'require' ? view : Promise.resolve(view);
+  }
+  shared.root = filename;
+  const finish = () => {
+    shared.root = undefined;
+    const violation = shared.violation;
+    shared.violation = undefined;
+    return violation;
+  };
+  let result: unknown;
+  try {
+    result = evaluate(shared.cache);
+  } catch (error) {
+    throw finish() ?? error;
+  }
+  if (result instanceof Promise) {
+    return result.then(
+      (value) => {
+        const violation = finish();
+        if (violation) throw violation;
+        return value;
+      },
+      (error) => {
+        throw finish() ?? error;
+      }
+    );
+  }
+  const violation = finish();
+  if (violation) throw violation;
+  return result;
 };
-
-export const withSharedProjectGraph = <T>(fn: () => Promise<T>): Promise<T> =>
-  sharedProjectGraph.run(Object.create(null), fn);
 
 const importProjectGraph = (
   jiti: Jiti,
@@ -565,23 +1033,34 @@ const importProjectGraph = (
   }
   // Jiti propagates this cache through nested modules. Each root import gets
   // a fresh graph so cycles share exports without hiding later file edits,
-  // unless the caller scoped one graph to a single pass.
-  const cache = projectGraphCache();
-  return projectImportGraph.run({ jiti, cache }, () => {
-    const resolved = resolve(...args);
-    const filename = resolved?.startsWith('file:')
-      ? fileURLToPath(resolved)
-      : resolved;
-    if (!filename || !isProjectSource(filename)) {
-      return load(...args);
+  // unless the parse loop planned a shared graph for it.
+  return projectImportGraph.run(
+    { jiti, cache: Object.create(null) },
+    (): unknown => {
+      const resolved = resolve(...args);
+      const filename = resolved?.startsWith('file:')
+        ? fileURLToPath(resolved)
+        : resolved;
+      if (!filename || !isProjectSource(filename)) {
+        return load(...args);
+      }
+      return evaluateProjectRoot(
+        filename,
+        (sharedCache) => {
+          const cache: ModuleCache = sharedCache ?? Object.create(null);
+          return projectImportGraph.run({ jiti, cache }, () =>
+            jiti.evalModule(fs.readFileSync(filename, 'utf8'), {
+              filename,
+              async: operation === 'import',
+              forceTranspile: true,
+              cache,
+            })
+          );
+        },
+        operation
+      );
     }
-    return jiti.evalModule(fs.readFileSync(filename, 'utf8'), {
-      filename,
-      async: operation === 'import',
-      forceTranspile: true,
-      cache,
-    });
-  });
+  );
 };
 
 /**
