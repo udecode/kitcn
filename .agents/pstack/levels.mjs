@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Lists each stretch of a decision log that ran below this session's level or
 // the configured seats: a lead stretch on a lower effort, another model or a
-// Codex lead, and a panel, architect or arena round with a seat missing or on
+// Codex lead, and a panel or arena round with a seat missing or on
 // a lower effort. The configured seats come from the runtime's models sheet;
 // a `<seat> @<effort>` that a project rule outside the pstack block names
 // replaces that seat's effort, the highest one when it names several. The
@@ -13,18 +13,17 @@
 //        --seats replaces the configured seats of every round)
 
 import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { capEffort, EFFORTS, findLead, maxEffort } from './lead.mjs';
+import { capEffort, EFFORTS, findLead, maxEffort, modelsSheet } from './lead.mjs';
 
 const rank = (effort) => EFFORTS.indexOf(effort);
-const MODEL = /^(?:codex:[\w.-]+|claude-[\w.-]+|gpt-[\w.-]+|opus|sonnet|haiku|fable)$/u;
-const family = (model) => (/^(?:claude-|opus|sonnet|haiku|fable)/u.test(model) ? 'claude' : 'codex');
+const MODEL = /^(?:(?:codex|agy):[\w.-]+|claude-[\w.-]+|gpt-[\w.-]+|gemini-[\w.-]+|opus|sonnet|haiku|fable)$/u;
+const family = (model) => (/^(?:claude-|opus|sonnet|haiku|fable)/u.test(model) ? 'claude' : /^(?:agy:|gemini-)/u.test(model) ? 'gemini' : 'codex');
+// cross.mjs marks a seat refused only for a Codex or Gemini provider, so a Claude seat marked skipped is missing.
+const REFUSING = new Set(['codex', 'gemini']);
 // A sheet names `opus` where a row may name `claude-opus-5-5`; both are the Opus seat.
-const seatKey = (model) => model.replace(/^codex:/u, '').replace(/^claude-([a-z]+)-.*$/u, '$1');
+const seatKey = (model) => model.replace(/^(?:codex|agy):/u, '').replace(/^claude-([a-z]+)-.*$/u, '$1');
 const ROUNDS = {
   panel: { opens: /^seats\b/u, role: 'interrogate reviewers' },
-  architect: { opens: /^runners\b/u, role: 'architect runners' },
   arena: { opens: /^runners\b/u, role: 'arena runners' },
 };
 const BLOCK = /<!-- pstack:begin[\s\S]*?<!-- pstack:end -->/gu;
@@ -34,10 +33,12 @@ function seatOf(entry) {
   const at = words.findIndex((word) => MODEL.test(word));
   if (at === -1) return null;
   const model = words[at];
+  const refused = words.includes('skipped') && REFUSING.has(family(model));
+  const missing = !refused && (words.includes('missing') || words.includes('skipped'));
   return {
     name: seatKey(model),
     effort: words[at + 1]?.match(/^@(\w+)$/u)?.[1] ?? null,
-    status: words.includes('missing') ? 'missing' : entry.includes('same-family') ? 'same-family' : 'answered',
+    status: refused ? 'skipped' : missing ? 'missing' : entry.includes('same-family') ? 'same-family' : 'answered',
   };
 }
 
@@ -85,6 +86,7 @@ function leadGap(label, lead) {
 
 function roundGap(seats, wanted) {
   const gaps = wanted.flatMap((target) => {
+    if (seats.some((candidate) => candidate.name === target.name && candidate.status === 'skipped')) return [];
     const seat = seats.find((candidate) => candidate.name === target.name && candidate.status === 'answered');
     if (!seat) return [`${target.name} missing`];
     if (rank(seat.effort) === -1) return [`${seat.name} has no effort`];
@@ -151,9 +153,7 @@ function main(argv) {
     return [error.message, 1];
   }
   const run = { ...found, effort: capEffort(found.effort, max) };
-  const home = process.env.HOME ?? homedir();
-  const sheetPath =
-    family(run.model) === 'claude' ? join(home, '.claude/pstack-models.md') : join(process.env.CODEX_HOME ?? join(home, '.codex'), 'pstack-models.md');
+  const sheetPath = modelsSheet(family(run.model) === 'claude' ? 'claude' : 'codex');
   const sheet = existsSync(sheetPath) ? readFileSync(sheetPath, 'utf8') : null;
   const sheetEffort = sheet?.match(/^default effort:\s*(\w+)/mu)?.[1];
   const defaultEffort = !sheetEffort || sheetEffort === 'session' ? run.effort : sheetEffort;

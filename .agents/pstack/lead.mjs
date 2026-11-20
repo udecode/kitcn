@@ -59,16 +59,24 @@ function claudeRun(lines, upTo = lines.length - 1) {
   return null;
 }
 
+export const claudeTranscript = (sessionId) => filesUnder(join(claudeHome(), 'projects'), 1).find((file) => basename(file) === `${sessionId}.jsonl`) ?? null;
+
 /** The model and effort a finished `claude -p --session-id <id>` run used. */
 export function claudeSessionRun(sessionId) {
-  const projects = join(claudeHome(), 'projects');
-  const path = filesUnder(projects, 1).find((file) => file.endsWith(`/${sessionId}.jsonl`));
+  const path = claudeTranscript(sessionId);
   return path ? claudeRun(tailLines(path)) : null;
 }
 
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 
+// Windows has no ps that takes -o, so there a command names its runtime by the variable each runtime sets in its shell.
+export const runtimeFromEnv = (env) => (env.CLAUDE_CODE_SESSION_ID ? 'claude' : env.CODEX_THREAD_ID ? 'codex' : null);
+
 function nearestRuntime() {
+  if (process.platform === 'win32') {
+    const name = runtimeFromEnv(process.env);
+    return name && { name, pid: null, shell: null };
+  }
   let pid = process.ppid;
   let shell = null;
   const seen = new Set();
@@ -154,6 +162,8 @@ export function invocationRun(identity, transcripts) {
 }
 
 const NOTIFIED = /<task-notification>[\s\S]*?<tool-use-id>([^<]+)<\/tool-use-id>/gu;
+// A PreToolUse hook can move a call to the background. The transcript keeps the input the model sent, so only the start result shows it.
+const BACKGROUNDED = /^Command running in background with ID: /u;
 const OUTPUT_FILE = /Output is being written to: (\S+?)\.?(?:\s|$)/u;
 const EXIT_LINE = /(?:^|\n)\[(?:exited with code -?\d+|killed)\]\n?$/u;
 
@@ -182,8 +192,9 @@ function openClaudeCalls(transcripts) {
         if (record.type === 'assistant' && block.type === 'tool_use' && block.name === 'Bash') open.set(block.id, { record, command: block.input?.command, background: block.input?.run_in_background === true, output: null });
         if (record.type !== 'user' || block.type !== 'tool_result' || !open.has(block.tool_use_id)) continue;
         const call = open.get(block.tool_use_id);
-        if (block.is_error || !call.background) open.delete(block.tool_use_id);
-        else call.output = OUTPUT_FILE.exec(typeof block.content === 'string' ? block.content : '')?.[1] ?? null;
+        const said = typeof block.content === 'string' ? block.content : '';
+        if (block.is_error || !(call.background || BACKGROUNDED.test(said))) open.delete(block.tool_use_id);
+        else call.output = OUTPUT_FILE.exec(said)?.[1] ?? null;
       }
     }
     return [...open.values()].map(({ record, command, output }) => ({ runtime: 'claude', model: record.message.model, effort: record.effort, at: record.timestamp, transcript, command, output }));
@@ -244,7 +255,7 @@ const ANY_CALL_WAIT_MS = 1000;
 
 function claudeLead(sessionId, command) {
   if (!ID.test(sessionId ?? '')) return { miss: 'CLAUDE_CODE_SESSION_ID holds no session id' };
-  const path = filesUnder(join(claudeHome(), 'projects'), 1).find((file) => file.endsWith(`/${sessionId}.jsonl`));
+  const path = filesUnder(join(claudeHome(), 'projects'), 1).find((file) => basename(file) === `${sessionId}.jsonl`);
   if (!path) return { miss: `no ${sessionId}.jsonl transcript is under ${join(claudeHome(), 'projects')}` };
   const files = [path, ...filesUnder(join(path.slice(0, -'.jsonl'.length), 'subagents'), 0)];
   const parsed = new Map();
@@ -286,6 +297,49 @@ export function findLead() {
 
 export const leadLabel = (run) => `${run.model} @${run.effort}`;
 
+const PSTACK = 'pstack@pstack-claude';
+const MARKETPLACE = 'pstack-claude';
+const REPO = 'michael-denyer/pstack-claude';
+const versionOrder = (a, b) => {
+  const [x, y] = [a, b].map((version) => version.split('.').map(Number));
+  return x.reduce((order, part, index) => order || part - (y[index] ?? 0), 0);
+};
+const readJson = (path) => (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null);
+const mainCheckout = (root) => {
+  try {
+    return execFileSync('git', ['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim().replace(/\/\.git$/u, '');
+  } catch {
+    return root;
+  }
+};
+
+/**
+ * How this runtime's installed pstack falls behind the tag the project's .claude/settings.json pins, with the
+ * command that updates it and the folder it runs from, or null. Claude Code loads the main checkout's project-scope
+ * install in every worktree, whatever stale record a worktree's own path keeps, else the user-scope one; Codex loads
+ * its cache folder for the tag.
+ */
+export function pluginLag(runtime, root = process.cwd(), env = process.env) {
+  const ref = readJson(join(root, '.claude/settings.json'))?.extraKnownMarketplaces?.[MARKETPLACE]?.source?.ref;
+  const pin = ref?.replace(/^v/u, '');
+  if (!pin || !runtime) return null;
+  const home = env.HOME ?? homedir();
+  if (runtime === 'codex') {
+    const cache = join(env.CODEX_HOME ?? join(home, '.codex'), 'plugins/cache', MARKETPLACE, 'pstack');
+    if (existsSync(join(cache, pin))) return null;
+    const installed = existsSync(cache) ? readdirSync(cache).filter((name) => /^\d+(?:\.\d+)*$/u.test(name)).sort(versionOrder).at(-1) ?? null : null;
+    return { pin, installed, cwd: home, command: `codex plugin marketplace remove ${MARKETPLACE} && codex plugin marketplace add ${REPO} --ref v${pin} && codex plugin add ${PSTACK}` };
+  }
+  const entries = readJson(join(env.CLAUDE_CONFIG_DIR ?? join(home, '.claude'), 'plugins/installed_plugins.json'))?.plugins?.[PSTACK] ?? [];
+  const main = mainCheckout(root);
+  const entry = entries.find((each) => each.scope === 'project' && each.projectPath === main) ?? entries.find((each) => each.scope === 'user');
+  if (entry && versionOrder(entry.version, pin) >= 0) return null;
+  // Claude Code hides a marketplace whose settings entry and registry disagree, so only adding it at the pin
+  // lets the update reach the pinned tag.
+  const install = entry ? `update ${PSTACK} --scope ${entry.scope}` : `install ${PSTACK} --scope project`;
+  return { pin, installed: entry?.version ?? null, cwd: main, command: `claude plugin marketplace add ${REPO}#v${pin} && claude plugin ${install}` };
+}
+
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export function maxEffort(root = process.cwd()) {
@@ -297,6 +351,47 @@ export function maxEffort(root = process.cwd()) {
 }
 
 export const capEffort = (effort, max) => (max && EFFORTS.indexOf(effort) > EFFORTS.indexOf(max) ? max : effort);
+
+// A sheet without one of these lines falls back to pstack's own seat defaults, which name Claude models these
+// projects never dispatch. Any other model may take a seat, so a one-family sheet such as Codex-only passes, but
+// Sonnet, Haiku or a seat below high runs a weaker panel than the project asks for (owner's word, 2026-11-15). Seats
+// follow pstack's own defaults at high, below a project's maxEffort of xhigh (owner's word, 2026-11-20).
+const SEAT_ROLES = ['interrogate reviewers', 'arena runners'];
+const SEAT_FLOOR = 'high';
+const NEVER = /\b(?:sonnet|haiku)\b/gu;
+
+// A Claude Code sheet committed at the repository root replaces each person's, as pstack's session hook reads it.
+export const modelsSheet = (runtime, env = process.env, root = process.cwd()) =>
+  runtime === 'claude'
+    ? existsSync(join(root, '.claude/pstack-models.md'))
+      ? join(root, '.claude/pstack-models.md')
+      : join(env.HOME ?? homedir(), '.claude/pstack-models.md')
+    : join(env.CODEX_HOME ?? join(env.HOME ?? homedir(), '.codex'), 'pstack-models.md');
+
+/** Each way a models sheet seats the wrong models, written as the edit that fixes it. */
+export function sheetMisses(text, max) {
+  const roles = new Map(
+    (text ?? '')
+      .split('\n')
+      .map((line) => line.match(/^([a-z][a-z ,-]*):\s*(.*)$/u))
+      .filter(Boolean)
+      .map(([, role, value]) => [role, value])
+  );
+  const misses = [...roles].flatMap(([role, value]) => [...new Set(value.match(NEVER))].map((model) => `\`${role}:\` names ${model}, which no pstack project dispatches`));
+  for (const role of SEAT_ROLES) {
+    const value = roles.get(role);
+    if (value === undefined) {
+      misses.push(`add the line \`${role}: opus, codex:gpt-6.2-sol\`, or \`${role}: codex:gpt-6.2-sol\` without Claude Code`);
+      continue;
+    }
+    for (const [model, at] of value.split(',').map((entry) => entry.trim().split(/\s+/u))) {
+      const effort = at?.match(/^@(\w+)$/u)?.[1];
+      const floor = capEffort(SEAT_FLOOR, max);
+      if (effort && EFFORTS.indexOf(effort) < EFFORTS.indexOf(floor)) misses.push(`\`${role}:\` runs ${model} @${effort}, below the seat floor ${floor}`);
+    }
+  }
+  return misses;
+}
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { run, miss } = findLead();

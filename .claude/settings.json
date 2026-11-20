@@ -15,7 +15,7 @@
       "source": {
         "source": "github",
         "repo": "michael-denyer/pstack-claude",
-        "ref": "v0.9.117"
+        "ref": "v0.9.145"
       }
     }
   },
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && { [ ! -f .agents/pstack/reread.mjs ] || node .agents/pstack/reread.mjs --hook AGENTS.md \"$HOME/.claude/pstack-models.md\" .claude/settings.json; }",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && { [ ! -f .agents/pstack/reread.mjs ] || node .agents/pstack/reread.mjs --hook AGENTS.md .claude/pstack-models.md \"$HOME/.claude/pstack-models.md\" .claude/settings.json; }",
             "timeout": 30
           },
           {

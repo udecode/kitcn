@@ -18,7 +18,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SEATS, SEVERITIES, STAGE_PHASES, STATES, isFence, isHandOffReview, landed, readFence, reopened, splitRow, stageOfRow, stateOf, TABLE_RULE, tablesOf } from './status.mjs';
+import { SEATS, SEVERITIES, severityOf, STAGE_PHASES, STATES, isFence, isHandOffReview, landed, outsideFences, readFence, reopened, splitRow, stageOfRow, stateOf, strayFence, TABLE_RULE, tablesOf } from './status.mjs';
 
 export const slugOf = (path) => path.split('/').at(-1).replace(/\.md$/u, '').replace(/[^A-Za-z0-9._-]+/gu, '-');
 
@@ -159,7 +159,7 @@ details.iteration[open] > summary { margin-bottom: 4px; }
 .tone { color: var(--hue); font-weight: 600; }
 .seats { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .seat { display: inline-flex; gap: 3px; align-items: center; border: 1.5px solid var(--hue); color: var(--hue); border-radius: 999px; padding: 0 8px; font: 600 0.74rem var(--mono); }
-.seat.missing { --hue: var(--c-red); }
+.seat.missing { --hue: var(--c-red); } .seat.skipped { --hue: var(--c-grey); }
 .round-tag { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .card { border: 1px solid var(--rule); border-top: 3px solid var(--hue, var(--rule)); border-radius: 10px; padding: 10px 14px 12px; min-width: 0; }
 .brief.card { display: grid; gap: 0; padding: 2px 14px; border-top: 1px solid var(--rule); }
@@ -248,7 +248,7 @@ function pageConfig(root) {
           };
         })
     : [];
-  return { playbooks, plans: config.plans ?? 'docs/plans', topic: config.pageTopic ?? {}, branch: config.branch ?? 'main' };
+  return { playbooks, plans: config.plans ?? 'docs/plans', topic: config.pageTopic ?? {}, branch: config.branch ?? 'main', planBoxes: config.planBoxes ?? {} };
 }
 
 export const gitOrNull = (root, ...args) => {
@@ -410,10 +410,25 @@ const deltaKeys = (source) =>
       .flatMap((table) => table.rows.map((row) => `${sameText(section.title)}\n${sameText(row[1] ?? '')}`))
   );
 
+const showsAfter =({ first, after }, shown, held) => {
+  const before = blockLines(first.body);
+  const next = blockLines(after.body);
+  if (sameBlock(before, next)) return false;
+  const changed = [...next.filter((line) => !before.includes(line)), ...before.filter((line) => !next.includes(line))];
+  if (changed.length > 0 && changed.every((line) => held.has(line))) return false;
+  const beforeShown = before.length > 0 && !holds(next, before) && shown.some((lines) => holds(lines, before));
+  return shown.some((lines) => holds(lines, next)) && !beforeShown;
+};
+
+const fenceBlocks = (source, title) => fencesOf(sectionNamed(source, title)?.lines ?? []).map((fence) => blockLines(fence.body));
+
+const builds = (plan) => !plan.meta['built by'];
+
 // A later iteration may rewrite a call this plan folded, so a line another iteration's before fence holds is not checked.
 function assertFolded(plan, doc, { isChange, others, paired, where }) {
-  const fail = (what) => {
-    throw new Error(`${where} ${what}; fold the plan's delta into it before its Status says executed`);
+  const builder = plan.meta['built by'];
+  const fail = (what, hint = "fold the plan's delta into it before the plan closes") => {
+    throw new Error(`${where} ${what}; ${hint}`);
   };
   const touched = new Set(others.flatMap(deltaKeys));
   for (const section of plan.sections.filter(isChange)) {
@@ -430,6 +445,7 @@ function assertFolded(plan, doc, { isChange, others, paired, where }) {
       }
     }
   }
+  const builders = others.filter(builds);
   for (const section of plan.sections.filter((entry) => paired.includes(entry.title.toLowerCase()))) {
     const linesOf = (sources, side, read = codeLines) =>
       new Set(
@@ -438,15 +454,26 @@ function assertFolded(plan, doc, { isChange, others, paired, where }) {
           return match ? fencePairs(match.lines).pairs.flatMap((pair) => read(pair[side].body)) : [];
         })
       );
-    const rewritten = linesOf(others, 'first');
-    const kept = linesOf([plan, ...others], 'after');
+    const rewritten = linesOf(builders, 'first');
+    const kept = linesOf([plan, ...builders], 'after');
     const current = sectionNamed(doc, section.title);
     const shown = new Set(current ? fencesOf(current.lines).flatMap((fence) => codeLines(fence.body)) : []);
-    const blocks = current ? fencesOf(current.lines).map((fence) => blockLines(fence.body)) : [];
-    const rewrittenExact = linesOf(others, 'first', blockLines);
-    for (const { first, after } of fencePairs(section.lines).pairs) {
+    const blocks = fenceBlocks(doc, section.title);
+    const rewrittenExact = linesOf(builders, 'first', blockLines);
+    const held = new Set(builders.flatMap((source) => fenceBlocks(source, section.title)).flat());
+    for (const pair of fencePairs(section.lines).pairs) {
+      if (builder) {
+        if (showsAfter(pair, blocks, held)) fail(`already shows the after side of a ## ${section.title} pair`, `keep the plan's calls on its page until ${builder} builds them`);
+        continue;
+      }
+      const { first, after } = pair;
       const missing = codeLines(after.body).find((line) => !rewritten.has(line) && !shown.has(line));
-      if (missing) fail(`does not show the after line "${missing.slice(0, 60)}" in ## ${section.title}`);
+      if (missing) {
+        fail(
+          `does not show the after line "${missing.slice(0, 60)}" in ## ${section.title}`,
+          "fold the plan's delta into it before the plan closes, or, when another task builds these calls, name it in a Built by: line under Status"
+        );
+      }
       const stale = codeLines(first.body).find((line) => !kept.has(line) && shown.has(line));
       if (stale) fail(`still shows the before line "${stale.slice(0, 60)}" in ## ${section.title}`);
       const next = blockLines(after.body);
@@ -480,18 +507,10 @@ function assertUnfolded(plan, doc, { name, others, paired, where }) {
     }
   }
   for (const section of plan.sections.filter((entry) => paired.includes(entry.title.toLowerCase()))) {
-    const fences = (source) => fencesOf(sectionNamed(source, section.title)?.lines ?? []).map((fence) => blockLines(fence.body));
-    const shown = fences(doc);
-    const held = new Set(others.flatMap(fences).flat());
-    for (const { first, after } of fencePairs(section.lines).pairs) {
-      const before = blockLines(first.body);
-      const next = blockLines(after.body);
-      // A deleted call proves nothing: the subject may never have listed it.
-      if (next.length === 0 || sameBlock(before, next)) continue;
-      const changed = [...next.filter((line) => !before.includes(line)), ...before.filter((line) => !next.includes(line))];
-      if (changed.length > 0 && changed.every((line) => held.has(line))) continue;
-      const beforeShown = before.length > 0 && !holds(next, before) && shown.some((lines) => holds(lines, before));
-      if (shown.some((lines) => holds(lines, next)) && !beforeShown) {
+    const shown = fenceBlocks(doc, section.title);
+    const held = new Set(others.filter(builds).flatMap((source) => fenceBlocks(source, section.title)).flat());
+    for (const pair of fencePairs(section.lines).pairs) {
+      if (showsAfter(pair, shown, held)) {
         fail(`already shows the after side of a ## ${section.title} pair`, '; when the before call is a current call site the subject does not list, add it to the subject');
       }
     }
@@ -504,6 +523,16 @@ const isDefaultsHead = (head) => DEFAULTS_HEAD.every((cell, index) => headCell(h
 const IMPACTS = new Set(['big', 'small']);
 const RETIRED_IMPACTS = new Set(['detail']);
 const impactColumn = (head) => head.findIndex((cell) => headCell(cell) === 'impact');
+
+const OPEN_BOXES = 8;
+// A plan written before the cap keeps its count as a ceiling in planBoxes, so it can only shrink.
+function assertBoxes(plan, where, baselines) {
+  const open = stepChecks(plan).filter((done) => !done).length;
+  const max = baselines[basename(where)]?.max ?? OPEN_BOXES;
+  if (open <= max) return;
+  const cap = max === OPEN_BOXES ? `the cap of ${OPEN_BOXES}` : `its planBoxes baseline of ${max} in .agents/pstack.json`;
+  throw new Error(`${where} has ${open} unticked step boxes under ## Steps, past ${cap}; give only the next phase step boxes and cut each later phase to one paragraph`);
+}
 
 function assertDefaults(plan, where) {
   for (const section of sectionsNamed(plan, 'Defaults')) {
@@ -541,8 +570,9 @@ function briefOf(plan) {
   const section = sectionNamed(plan, 'Brief');
   if (!section) return null;
   const answers = [];
-  for (const line of section.lines) {
-    const heading = line.match(/^###\s+(.*)$/);
+  const outside = outsideFences(section.lines);
+  for (const [index, line] of section.lines.entries()) {
+    const heading = outside[index] && line.match(/^###\s+(.*)$/);
     if (heading) answers.push({ question: heading[1].trim(), lines: [] });
     else answers.at(-1)?.lines.push(line);
   }
@@ -606,9 +636,11 @@ function readFencePair(lines, start) {
 const codeHtml = ({ lang, body }) =>
   `<div class="scroll"><pre><code${lang ? ` class="language-${lang}"` : ''}>${escapeHtml(body)}</code></pre></div>`;
 
+const bodyLines = (body) => (body.trim() ? body.split('\n') : []);
+
 function lineDiff(before, after) {
-  const a = before.split('\n');
-  const b = after.split('\n');
+  const a = bodyLines(before);
+  const b = bodyLines(after);
   const common = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
   for (let i = a.length - 1; i >= 0; i -= 1) {
     for (let j = b.length - 1; j >= 0; j -= 1) {
@@ -1004,8 +1036,9 @@ function questionGroups(sections) {
     if (note === last) note.lines.push('');
     if (!from && intro.length) intro.push('');
     let own = null;
-    for (const line of lines) {
-      const heading = line.match(/^###\s+(.*)$/);
+    const outside = outsideFences(lines);
+    for (const [index, line] of lines.entries()) {
+      const heading = outside[index] && line.match(/^###\s+(.*)$/);
       if (heading) groups.push((own = { header: heading[1].trim(), lines: [], from, plan }));
       else (own?.lines ?? (from ? note.lines : intro)).push(line);
     }
@@ -1075,6 +1108,10 @@ function assertPlain(plan, where) {
   }
 }
 
+function assertFences(plan, where) {
+  if (plan.strayLine) throw new Error(`${where} line ${plan.strayLine} opens a fence that never closes or that holds another fence's opening line, so later headings can read as code; close it first, or quote fenced text in a longer fence such as \`\`\`\`md`);
+}
+
 const listed = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items[0]);
 
 function assertAsks(plan, where) {
@@ -1112,20 +1149,20 @@ const seatName = (seat) =>
   seat
     .replace(/\([^)]*\)?/g, '')
     .replace(/@\w+/, '')
-    .replace(/\bmissing\b/i, '')
+    .replace(/\b(?:missing|skipped)\b/i, '')
     .replace(/^.*:\s+/, '')
-    .replace(/^codex:/i, '')
+    .replace(/^(?:codex|agy):/i, '')
     .trim()
     .split(/\s+/)[0];
 
 const seatList = (seats) =>
   seats
     .split(/,\s*(?![^(]*\))/)
-    .map((seat) => ({ name: seatName(seat), effort: seat.match(/@(\w+)/)?.[1] ?? '', missing: /\bmissing\b/i.test(seat) }))
+    .map((seat) => ({ name: seatName(seat), effort: seat.match(/@(\w+)/)?.[1] ?? '', mark: seat.match(/\b(missing|skipped)\b/i)?.[1].toLowerCase() ?? '' }))
     .filter((seat) => seat.name);
 
-const seatChip = ({ name, effort, missing }, count = 1) =>
-  `<span class="seat hue-${modelHue(name)}${missing ? ' missing' : ''}">${escapeHtml(name)}${effort ? ` <span class="effort">${escapeHtml(effort)}</span>` : ''}${missing ? ' <span class="effort">missing</span>' : ''}${count > 1 ? ` <span class="effort">×${count}</span>` : ''}</span>`;
+const seatChip = ({ name, effort, mark }, count = 1) =>
+  `<span class="seat hue-${modelHue(name)}${mark ? ` ${mark}` : ''}">${escapeHtml(name)}${effort ? ` <span class="effort">${escapeHtml(effort)}</span>` : ''}${mark ? ` <span class="effort">${mark}</span>` : ''}${count > 1 ? ` <span class="effort">×${count}</span>` : ''}</span>`;
 
 function seatsHtml(seats) {
   return `<span class="seats">${seatList(seats)
@@ -1144,7 +1181,7 @@ function leadSeats(entries) {
       if (row.phase !== 'panel' || !SEATS.test(row.decision)) continue;
       const seats = byLead.get(lead);
       for (const seat of seatList(row.decision.replace(SEATS, ''))) {
-        const key = `${seat.name}@${seat.effort}${seat.missing ? ' missing' : ''}`;
+        const key = `${seat.name}@${seat.effort}${seat.mark ? ` ${seat.mark}` : ''}`;
         seats.set(key, { seat, count: (seats.get(key)?.count ?? 0) + 1 });
       }
     }
@@ -1170,7 +1207,7 @@ const RESULT_HUES = { accepted: 'green', applied: 'green', fixed: 'green', verif
 function findingHtml(decision, result) {
   const severity = decision.match(/^(\w+)/)?.[1];
   const hue = SEVERITY_HUES[severity];
-  const body = hue ? `<span class="badge hue-${hue}">${escapeHtml(severity)}</span> ${inline(decision.slice(severity.length).trim())}` : inline(decision);
+  const body = hue ? `<span class="badge hue-${hue}">${escapeHtml(severity)}</span> ${inline(decision.slice(severity.length).replace(/^:/u, '').trim())}` : inline(decision);
   const word = result.match(/^(\w+)/)?.[1]?.toLowerCase();
   const resultHtml = result ? ` <span class="tone hue-${RESULT_HUES[word] ?? 'grey'}">${inline(result)}</span>` : '';
   return `<li>${body}${resultHtml}</li>`;
@@ -1385,26 +1422,29 @@ function parsePlan(source) {
   let title = '';
   const lead = [];
   const sections = [];
-  for (const line of lines) {
-    const field = line.match(/^(Status|Page|Topic|Playbook|Plans):\s*(.*)$/);
+  const outside = outsideFences(lines);
+  for (const [index, line] of lines.entries()) {
+    const field = outside[index] && line.match(/^(Status|Page|Topic|Playbook|Plans|Built by):\s*(.*)$/);
     if (field && sections.length === 0) {
       meta[field[1].toLowerCase()] = field[2].trim();
       fields[field[1].toLowerCase()] = field[2].trim();
       continue;
     }
-    if (!title && /^#\s+/.test(line)) {
+    if (!title && outside[index] && /^#\s+/.test(line)) {
       title = line.replace(/^#\s+/, '').trim();
       continue;
     }
-    const heading = line.match(/^##\s+(.*)$/);
+    const heading = outside[index] && line.match(/^##\s+(.*)$/);
     if (heading) sections.push({ title: heading[1].trim(), lines: [] });
     else (sections.at(-1)?.lines ?? lead).push(line);
   }
-  return { meta, fields, lists, title, lead, sections };
+  const stray = strayFence(lines);
+  const strayLine = stray < 0 ? 0 : source.split('\n').length - lines.length + stray + 1;
+  return { meta, fields, lists, title, lead, sections, strayLine };
 }
 
 const severity = (row) => {
-  const rank = SEVERITIES.indexOf(row.decision.split(/\s/u)[0]);
+  const rank = SEVERITIES.indexOf(severityOf(row.decision));
   return rank < 0 ? SEVERITIES.length : rank;
 };
 
@@ -1440,7 +1480,7 @@ function contextOf(planPath) {
     encoding: 'utf-8',
   }).trim();
   const repoPath = relative(root, planPath);
-  const { playbooks, topic, branch } = pageConfig(root);
+  const { playbooks, topic, branch, planBoxes } = pageConfig(root);
   const plansDir = dirname(planPath);
   const named = subjectOf(plan, topic);
   const namedPath = named && join(plansDir, 'topics', `${named}.md`);
@@ -1449,7 +1489,7 @@ function contextOf(planPath) {
   const subjectPath = subject && namedPath;
   const doc = subjectPath ? parsePlan(readFileSync(subjectPath, 'utf-8')) : plan;
   const iterations = subject ? iterationsOf(plansDir, subject, topic) : [];
-  return { plan, root, repoPath, playbooks, topic, branch, plansDir, subject, subjectPath, doc, iterations, missingSubject };
+  return { plan, root, repoPath, playbooks, topic, branch, planBoxes, plansDir, subject, subjectPath, doc, iterations, missingSubject };
 }
 
 function stagesOf(planPath) {
@@ -1501,7 +1541,7 @@ export const blobFacts = (root, paths) => {
 
 // With run, the result is that run's body: its own questions, inputs named by its key, pictures linked as shots/ files, and History.
 function page(planPath, { folded = false, run = null } = {}) {
-  const { plan, root, repoPath, playbooks, topic, plansDir, subject, subjectPath, doc, iterations, missingSubject } = contextOf(planPath);
+  const { plan, root, repoPath, playbooks, topic, planBoxes, plansDir, subject, subjectPath, doc, iterations, missingSubject } = contextOf(planPath);
   const shot = shotRenderer(framesOrMainCheckout(dirname(planPath), root, plansDir), run?.shots ?? null);
   if (missingSubject) {
     if (plan.fields.topic) throw new Error(`${repoPath} belongs to topic ${missingSubject.subject}; ${missingSubject.hint}`);
@@ -1522,7 +1562,7 @@ function page(planPath, { folded = false, run = null } = {}) {
   const { lead, pairs, require } = pageSections(playbooks, known ? plan.meta.playbook : null, repoPath);
   const isChange = (section) => {
     const role = roleOf(section, lead);
-    return ['api', 'lead', 'main'].includes(role) || (role === 'idea' && Boolean(sectionNamed(doc, section.title)));
+    return ['api', 'lead', 'main'].includes(role) || (role === 'idea' && (Boolean(sectionNamed(doc, section.title)) || tablesOf(section.lines).some((table) => isDelta(table.head))));
   };
   const owesBrief = (entry) => Boolean(briefOf(entry.plan)) || (entry.path === planPath && Boolean(stateOf(entry.plan.meta.status ?? '')));
   for (const entry of doc === plan ? [self] : iterations.filter(isOpen)) {
@@ -1530,9 +1570,11 @@ function page(planPath, { folded = false, run = null } = {}) {
     pageSections(playbooks, entry.plan.meta.playbook, where);
     assertPairs(entry.plan.sections, pairs, where);
     if (!finished(entry.plan.meta.status ?? '')) assertDefaults(entry.plan, where);
+    if (!finished(entry.plan.meta.status ?? '')) assertBoxes(entry.plan, where, planBoxes);
     if (!finished(entry.plan.meta.status ?? '') && owesBrief(entry)) assertBrief(entry.plan, where);
     assertDemo(entry.plan, where);
     if (stateOf(entry.plan.meta.status ?? '') && !finished(entry.plan.meta.status ?? '')) {
+      assertFences(entry.plan, where);
       assertAsks(entry.plan, where);
       assertPlain(entry.plan, where);
       assertTeach(entry.plan, where);
@@ -2174,7 +2216,7 @@ const PR_START = '<!-- plan-page:start -->';
 const PR_END = '<!-- plan-page:end -->';
 const FRAME_NOTE = /^<!-- frame: (\S+) -->$/;
 
-const seatMd = ({ name, effort, missing }) => `\`${name}\`${effort ? ` \`${effort}\`` : ''}${missing ? ' missing' : ''}`;
+const seatMd = ({ name, effort, mark }) => `\`${name}\`${effort ? ` \`${effort}\`` : ''}${mark ? ` ${mark}` : ''}`;
 
 function githubOf(root) {
   try {
@@ -2208,8 +2250,8 @@ function unifiedDiff(before, after) {
   const [beforeHead, ...beforeRest] = before.split('\n');
   const [afterHead, ...afterRest] = after.split('\n');
   if (PATH_NOTE.test(beforeHead) && PATH_NOTE.test(afterHead)) return [` ${afterHead}`, ...unifiedDiff(beforeRest.join('\n'), afterRest.join('\n'))];
-  if (!before.trim()) return after.split('\n').map((line) => `+${line}`);
-  if (!after.trim()) return before.split('\n').map((line) => `-${line}`);
+  if (!before.trim()) return bodyLines(after).map((line) => `+${line}`);
+  if (!after.trim()) return bodyLines(before).map((line) => `-${line}`);
   const out = [];
   let removed = [];
   let added = [];
@@ -2489,7 +2531,7 @@ function topicIndex(root) {
         .map((name) => basename(name, '.md'))
     : [];
   const hubPath = (name) => (topic.hub ? topic.hub.replaceAll('{topic}', name) : null);
-  const asks = (plan) => plan.sections.some((section) => /^open questions$/i.test(section.title) && section.lines.some((line) => /^###\s/.test(line)));
+  const asks = (plan) => plan.sections.some((section) => /^open questions$/i.test(section.title) && outsideFences(section.lines).some((outside, index) => outside && /^###\s/.test(section.lines[index])));
   const subjects = names.map((name) => {
     const doc = parsePlan(readFileSync(join(topicsDir, `${name}.md`), 'utf-8'));
     const iterations = iterationsOf(plansDir, name, topic);

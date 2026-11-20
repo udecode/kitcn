@@ -3,8 +3,111 @@
 // cited proof is a path under <plans>/artifacts/.
 
 import { spawnSync } from 'node:child_process';
-import { closeSync, existsSync, lstatSync, openSync, readdirSync, readSync, realpathSync } from 'node:fs';
+import { closeSync, existsSync, lstatSync, openSync, readdirSync, readFileSync, readSync, realpathSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+
+const GLOB = { '**/': '(?:.*/)?', '**': '.*', '*': '[^/]*', '?': '[^/]' };
+// ** matches dot directories such as .agents too, which node:path's matchesGlob skips.
+export const globMatcher = (globs = []) => {
+  const patterns = globs.map((glob) => new RegExp(`^${glob.replace(/[.+^${}()|[\]\\]/gu, '\\$&').replace(/\*\*\/|\*\*|\*|\?/gu, (token) => GLOB[token])}$`, 'u'));
+  return (path) => patterns.some((pattern) => pattern.test(path));
+};
+
+const STEP_EXCLUDE = ['**/*.test.*', '**/*.spec.*', '**/__tests__/**', '**/fixtures/**', '**/*.md', '**/*.mdx'];
+export const plansOf = (config) => (config.plans || 'docs/plans').replace(/^(?:\.\/)+/u, '').replace(/\/+$/u, '');
+export const stepBudget = (config) => {
+  const { stepBudget: { lines = 400, exclude = [] } = {}, generated = [] } = config;
+  if (!Number.isInteger(lines) || lines < 1) throw new Error(`.agents/pstack.json: stepBudget.lines is ${JSON.stringify(lines)}, not a whole number of 1 or more`);
+  return { lines, excluded: globMatcher([...STEP_EXCLUDE, `${plansOf(config)}/**`, ...generated.flatMap((entry) => entry.paths ?? []), ...exclude]) };
+};
+export const BIG_STEP = /^big step:\s*\S/u;
+const LANDED_ROW = /^(?:steps? [^\t]*?)?landed as [0-9a-f]{7,40}\b/iu;
+export const liftsStep = (text) =>
+  text.split('\n').reduce((lifted, line) => {
+    const [, phase, decision = ''] = line.split('\t');
+    if (phase === 'owner' && BIG_STEP.test(decision)) return true;
+    return LANDED_ROW.test(decision) ? false : lifted;
+  }, false);
+export const overBudget = (product, lines) =>
+  `changes ${product} product lines, past the step budget of ${lines}. Split the step into lettered steps that land one by one, such as step 4a and step 4b, each with its own diff round, or log an owner row whose decision starts "big step:" and quotes the owner`;
+
+// Git counts a symlink as the one line of its target path.
+const countLines = (path) => {
+  let text;
+  try {
+    if (lstatSync(path).isSymbolicLink()) return 1;
+    text = readFileSync(path);
+  } catch {
+    return 0;
+  }
+  if (text.length === 0 || text.includes(0)) return 0;
+  const lines = text.toString('utf8').split('\n').length;
+  return text.at(-1) === 10 ? lines - 1 : lines;
+};
+
+const split = (output) => (output === null ? null : output.split('\0').filter(Boolean));
+
+const nearestBase = (git, config) => {
+  const names = ['upstream', 'origin'].flatMap((remote) => [config.branch, config.protected].filter(Boolean).map((branch) => `refs/remotes/${remote}/${branch}`));
+  if (names.length === 0) return null;
+  const listed = git('for-each-ref', '--format=%(refname)', ...names)?.split('\n') ?? [];
+  let best = null;
+  for (const ref of listed.filter((name) => names.includes(name))) {
+    const sha = git('merge-base', 'HEAD', ref);
+    const count = sha && git('rev-list', '--count', `${sha}..HEAD`);
+    const ahead = count === null ? Number.NaN : Number(count);
+    if (sha && Number.isInteger(ahead) && (best === null || ahead < best.ahead)) best = { ref: ref.replace(/^refs\/remotes\//u, ''), sha, ahead };
+  }
+  return best;
+};
+
+export function stepLines(top, config, gitAt) {
+  const { excluded } = stepBudget(config);
+  const git = (...args) => gitAt(top, ...args);
+  const base = nearestBase(git, config);
+  const fields = base && split(git('diff', '--numstat', '-z', base.sha));
+  const untracked = fields && split(git('ls-files', '--others', '--exclude-standard', '-z'));
+  if (!untracked) return null;
+  const step = { product: 0, base: `${base.ref} at ${base.sha.slice(0, 10)}`, sha: base.sha.slice(0, 10), files: [] };
+  for (let at = 0; at < fields.length; at += 1) {
+    const [added, deleted, ...rest] = fields[at].split('\t');
+    const path = rest.join('\t');
+    // A rename's numstat leaves the path empty and names the old and new paths in the next two fields.
+    const file = path === '' ? fields[(at += 2)] : path;
+    step.files.push(file);
+    if (added !== '-' && !excluded(file)) step.product += Number(added) + Number(deleted);
+  }
+  for (const file of untracked) {
+    step.files.push(file);
+    if (!excluded(file)) step.product += countLines(join(top, file));
+  }
+  return step;
+}
+
+const companionPlanFiles = (top, config, gitAt, plans) => {
+  const companion = (...args) => gitAt(top, `--git-dir=${join(top, config.companion.dir)}`, `--work-tree=${top}`, ...args);
+  const from = nearestBase(companion, config);
+  const changed = from ? split(companion('diff', '--name-only', '--diff-filter=d', '-z', from.sha)) : [];
+  const companionNew = split(companion('ls-files', '--others', '-z', '--', `:(glob)${plans}/*`, `:(exclude,glob)${plans}/*/**`));
+  const tracked = split(gitAt(top, 'ls-files', '-z', '--', `${plans}/`));
+  if (!changed || !companionNew || !tracked) return null;
+  const publicTracked = new Set(tracked);
+  return [...changed, ...companionNew.filter((file) => !publicTracked.has(file))];
+};
+
+export function stepRecords(top, config, gitAt, files) {
+  const plans = plansOf(config);
+  const companion = config.companion?.dir && existsSync(join(top, config.companion.dir)) ? companionPlanFiles(top, config, gitAt, plans) : [];
+  if (companion === null) return null;
+  const records = { logs: [], planned: false };
+  for (const file of [...files, ...companion]) {
+    const name = file.startsWith(`${plans}/`) ? file.slice(plans.length + 1) : '/';
+    if (name.includes('/') || !existsSync(join(top, file))) continue;
+    if (name.endsWith('.decisions.tsv')) records.logs.push(join(top, file));
+    if (/^\d{4}-\d{2}-\d{2}-.+\.(?:md|decisions\.tsv)$/u.test(name)) records.planned = true;
+  }
+  return records;
+}
 
 const LANDED = ['done', 'complete', 'completed', 'shipped', 'executed', 'implemented', 'fixed', 'released', 'merged', 'verified', 'landed'];
 
@@ -31,11 +134,20 @@ export function stateOf(status) {
   return Object.keys(STATES).find((state) => STATES[state].includes(first)) ?? null;
 }
 
+const WAIT_WORD = /\b(?:wait(?:s|ing)?|awaiting|blocked|needs?|hold|held|until)\b/iu;
+const OWNER_WORD = /\b(?:you|your|owner)\b/iu;
+export const waitsOnOwner = (status) =>
+  /^\W*paused\b/iu.test(status) ||
+  status.split(/[.;]/u).some((clause) => {
+    const at = clause.search(WAIT_WORD);
+    return at >= 0 && OWNER_WORD.test(clause.slice(at));
+  });
+
 export const SEATS = /^seats\s/u;
 export const CRITICAL_SEATS = /^critical \[([^\]]*)\]:\s*\S/u;
 
-export const SEAT_MODEL = /(?<![\w.:-])(?:codex:)?(?:claude-[\w.-]*\w|gpt-[\w.-]*\w|opus|sonnet|haiku|fable)(?![\w-])/gu;
-export const seatName = (name) => name.trim().replace(/^codex:/u, '').replace(/\s+missing$/u, '').replace(/\s+@\w+$/u, '');
+export const SEAT_MODEL = /(?<![\w.:-])(?:codex:|agy:)?(?:claude-[\w.-]*\w|gpt-[\w.-]*\w|gemini-[\w.-]*\w|opus|sonnet|haiku|fable)(?![\w-])/gu;
+export const seatName = (name) => name.trim().replace(/^(?:codex|agy):/u, '').replace(/\s+missing$/u, '').replace(/\s+@\w+$/u, '');
 export const seatKey = (name) => seatName(name.toLowerCase()).replace(/^claude-([a-z]+)-.*$/u, '$1');
 
 function modelForSeatWord(key, models) {
@@ -55,7 +167,7 @@ export function seatRoster(decision) {
     .replace(/\([^)]*\)/gu, ' ')
     .split(/[,;]/u)
     .flatMap((entry) => {
-      const [named, ...after] = entry.split(/\bmissing\b/u);
+      const [named, ...after] = entry.split(/\b(?:missing|skipped)\b/u);
       const seat = named.match(SEAT_MODEL)?.[0];
       if (after.length === 0) return seat ? [seatKey(seat)] : [];
       if (seat) marked.add(seatKey(seat));
@@ -75,6 +187,8 @@ export const decisionLogs = (plans) =>
 export const isHandOffReview = (phase) => /^review/iu.test(phase ?? '');
 
 export const SEVERITIES = ['critical', 'warning', 'nit'];
+const SEVERITY = new RegExp(`^(?:${SEVERITIES.join('|')})(?=$|[\\s:])`, 'u');
+export const severityOf = (decision) => decision.match(SEVERITY)?.[0];
 
 export const STAGE_PHASES = {
   Design: ['architect', 'prototype', 'arena', 'how', 'why', 'design'],
@@ -111,7 +225,7 @@ export const reopened = (status) => words(status)[0] === 'reopened';
 const LOCATION = /(?::\d+){1,2}(?:-\d+)?$|#L\d+(?:-L?\d+)?$/u;
 const TRAILING = /[.:,;!?*_–—]+$/u;
 const NOT_ONE_FILE = /[*?<>{}|[\]]|\.\.|\$\{/u;
-const tidy = (path) => path.replace(TRAILING, '').replace(LOCATION, '').replace(TRAILING, '');
+export const tidy = (path) => path.replace(TRAILING, '').replace(LOCATION, '').replace(TRAILING, '');
 
 const viaAnotherTree = (lead) => lead.endsWith('/') && !lead.startsWith('/') && lead !== './';
 const firstExisting = (candidates) => candidates.find((candidate) => existsSync(candidate)) ?? candidates.at(-1);
@@ -163,6 +277,7 @@ export function committedLines(path) {
 
 export const STATUSES = [
   'accepted',
+  'apart',
   'applied',
   'blocked',
   'carded',
@@ -196,8 +311,8 @@ export const PROVEN = ['fixed', 'proven', 'verified'];
 export const statusOf = (result) => result.replace(/^'/u, '').match(/^[a-z]+/iu)?.[0]?.toLowerCase();
 
 export function parseFence(line) {
-  const match = line.match(/^\s*(```|~~~)(.*)$/);
-  if (!match || (match[1] === '```' && match[2].includes('`'))) return null;
+  const match = line.match(/^\s*(`{3,}|~{3,})(.*)$/);
+  if (!match || (match[1][0] === '`' && match[2].includes('`'))) return null;
   const words = match[2].trim().split(/\s+/).filter(Boolean);
   const tag = ['before', 'after'].includes(words.at(-1)) ? words.pop() : undefined;
   return { marker: match[1], lang: words[0] ?? '', tag };
@@ -261,19 +376,48 @@ export function markdownLines(markdown) {
   return lines;
 }
 
-export function readFence(lines, start) {
-  const { marker, lang, tag } = parseFence(lines[start]);
-  const body = [];
+const indentOf = (line) => line.length - line.trimStart().length;
+
+const sameFence = (opener) => {
+  const { marker } = parseFence(opener);
+  const deepest = indentOf(opener) + 3;
+  const run = new RegExp(`^[ \\t]{0,${deepest}}${marker[0]}{${marker.length},}`, 'u');
+  const rest = (line) => line.replace(run, '').trim();
+  return { closes: (line) => run.test(line) && !rest(line), opens: (line) => run.test(line) && Boolean(rest(line)) && isFence(line) };
+};
+
+function fenceClose(lines, start) {
+  const { closes } = sameFence(lines[start]);
   let index = start + 1;
-  for (
-    ;
-    index < lines.length && !lines[index].trim().startsWith(marker);
-    index += 1
-  ) {
-    body.push(lines[index]);
-  }
-  return { lang, tag, body: body.join('\n'), next: index + 1 };
+  while (index < lines.length && !closes(lines[index])) index += 1;
+  return index;
 }
+
+export function readFence(lines, start) {
+  const { lang, tag } = parseFence(lines[start]);
+  const close = fenceClose(lines, start);
+  return { lang, tag, body: lines.slice(start + 1, close).join('\n'), next: close + 1 };
+}
+
+function fenceSpans(lines) {
+  const spans = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isFence(lines[index])) continue;
+    const close = fenceClose(lines, index);
+    spans.push({ open: index, close });
+    if (close < lines.length) index = close;
+  }
+  return spans;
+}
+
+export function outsideFences(lines) {
+  const outside = lines.map(() => true);
+  for (const { open, close } of fenceSpans(lines)) if (close < lines.length) outside.fill(false, open, close + 1);
+  return outside;
+}
+
+export const strayFence = (lines) =>
+  fenceSpans(lines).find(({ open, close }) => close === lines.length || lines.slice(open + 1, close).some(sameFence(lines[open]).opens))?.open ?? -1;
 
 export const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
 
