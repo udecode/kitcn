@@ -87,10 +87,11 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readF
 import { devNull, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findLead, leadLabel, maxEffort, modelsSheet, pluginLag, runtimeFromEnv, sheetMisses } from './lead.mjs';
+import { effectiveModelsSheet, findLead, leadLabel, maxEffort, pluginLag, runtimeFromEnv, sheetMisses } from './lead.mjs';
 import { defaultsRefusal } from './plan-page.mjs';
 import { alive, LAND_CHECK, reserve } from './proof.mjs';
 import { ledgerPath, readTasks, TASK_ID } from './tasks.mjs';
+import { remoteWorkingBranch } from './working-branch.mjs';
 import { findings } from './writing-check.mjs';
 
 const USAGE = 'Usage: node .agents/pstack/land.mjs [--message <file>] [--check <command>]... [--dry], or node .agents/pstack/land.mjs --friction';
@@ -211,6 +212,10 @@ const forked = mode === 'pr' && git('remote', 'get-url', 'upstream').status === 
 const canonical = forked ? 'upstream' : 'origin';
 const upstream = `refs/remotes/${canonical}/${branch}`;
 const target = `${canonical}/${branch}`;
+const working = remoteWorkingBranch(canonical);
+if (working && working !== branch) {
+  fail(`this checkout's .agents/pstack.json lands on ${branch}, but ${canonical} now works on ${working}, so this checkout was cut from a retired branch. Run \`git rebase --onto ${canonical}/${working} ${canonical}/${branch}\`, then run land.mjs again`);
+}
 const current = must('branch', '--show-current');
 if (guarded && current === guarded) fail(`this checkout is on ${guarded}; land from a worktree cut from ${target}`);
 
@@ -218,10 +223,10 @@ if (pair && mode !== 'push') fail(`${pair.dir} lands only in push mode; run \`gi
 // A PR's panel ran on its author's own models sheet, so a sheet that seats a weaker panel than the project asks stops the PR before it opens.
 const runtime = mode === 'pr' ? runtimeFromEnv(process.env) : null;
 if (runtime) {
-  const sheet = modelsSheet(runtime);
-  const misses = sheetMisses(existsSync(sheet) ? readFileSync(sheet, 'utf8') : '', maxEffort());
+  const sheet = effectiveModelsSheet(runtime);
+  const misses = sheetMisses(sheet.text ?? '', maxEffort());
   if (misses.length) {
-    fail(`${sheet} runs panels on models or efforts this project does not allow, so this PR's panel ran weaker than the project asks. Fix the sheet, run the panel on the diff again, then run land.mjs again:\n${misses.map((miss) => `- ${miss}`).join('\n')}`);
+    fail(`${sheet.paths.join(' with ')} runs panels on models or efforts this project does not allow, so this PR's panel ran weaker than the project asks. Fix the sheet, run the panel on the diff again, then run land.mjs again:\n${misses.map((miss) => `- ${miss}`).join('\n')}`);
   }
 }
 // A session on older pstack than the pin follows rules the project has moved past, so its work does not land.

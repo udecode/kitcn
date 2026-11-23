@@ -9,7 +9,8 @@
 // refspec or a `:<branch>` refspec. It also denies any other push to the
 // branch, because land.mjs squashes, checks and signs each landing there,
 // except a dry run and a push prefixed with PSTACK_RELEASE=1, which only a
-// project's release skill writes. A push with no refspec, or one whose
+// project's release skill writes. A push from a checkout of another repository
+// passes, because that repository's rules own its branches. A push with no refspec, or one whose
 // destination is HEAD, targets the current branch, and one with --tags and no
 // refspec targets no branch. A matching `:` refspec and a wildcard refspec
 // target each branch they match. The guard reads no git config, so a push with
@@ -35,7 +36,8 @@
 // elsewhere, and `cd <old> <new>` counts where zsh swaps the operands, in
 // `<old>`, where bash 3.2 moves, and in the earlier directory. The owner's
 // terminal never runs this hook. It denies an agent's `gh pr create` or `gh pr
-// new` into the branch or with no --base, because land.mjs opens those PRs;
+// new` into the branch or with no --base, because land.mjs opens those PRs,
+// unless it runs in a checkout of another repository and names no --repo;
 // one that names another base, such as a PR stacked on someone's head branch,
 // passes, and so does one where --help or -h is a flag rather than an option's
 // value. It denies any line whose text, with quotes and backslashes removed,
@@ -54,17 +56,29 @@
 // holds the suggested-task ledger and the run directories; a linked worktree,
 // even one nested in the main checkout's folder, is its own checkout and
 // passes. In a checkout of this repository whose change builds a dated plan's
-// step, it also denies an edit of a file the step budget counts once the change
-// is past that budget, as status.mjs's stepLines counts it, unless a changed
-// decision log holds an owner "big step:" row with no later "landed as" row;
-// that check lets the edit through when git or the check fails. Otherwise it
-// refuses the edit when git or the guard itself fails, because a hook that exits
-// with an error lets the edit through.
+// step, it also denies an edit of a file the step budget counts when the change,
+// as status.mjs's stepLines counts it, passes the budget that the worktree's own
+// .agents/pstack.json sets. For a Write, and for an Edit or MultiEdit whose old
+// strings the file holds, it counts the change with the edit's text in place on
+// a copy of the worktree's index, so git applies its own line-ending filters and
+// rename detection; for any other edit it counts the change as it stands. It
+// lets the edit through when git cannot put the edit's text in place, when the
+// edit lowers the step's count, when it edits a .gitignore or .gitattributes
+// file, whose effect on other files counts at the next edit it checks, or when a
+// changed decision log holds a build or owner "big step:" row with no later
+// "landed as" row and no later delivery row that names a step as landed,
+// published or dropped. It also lets the edit through when git cannot count
+// the change or the budget check fails. Otherwise it refuses the edit when git
+// or the guard itself fails, because a hook that exits with an error lets the
+// edit through. The desktop app
+// runs a worktree session's hooks from the main checkout, so a change to this
+// file takes effect once it lands there and setup.mjs fast-forwards that
+// checkout.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { copyFileSync, existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const CONFIG = new URL('../pstack.json', import.meta.url);
@@ -278,6 +292,7 @@ function pushes(words, cwd) {
   const call = gitCommand(words, cwd);
   if (call?.sub !== 'push') return null;
   const { args, dir } = call;
+  if (otherRepository(dir)) return null;
   let forced = false;
   let every = false;
   let deleting = false;
@@ -324,17 +339,27 @@ function pushes(words, cwd) {
 }
 
 // Whether a command is `gh pr create` into the branch or with no base, which defaults to the repository's default branch.
-function opensPr(words, branch) {
+function opensPr(words, branch, dir) {
   if (words[0]?.split('/').at(-1) !== 'gh' || words[1] !== 'pr' || !['create', 'new'].includes(words[2])) return false;
   if (asksHelp(words.slice(3))) return false;
   let base = null;
+  let repo = false;
   for (let at = 3; at < words.length; at += 1) {
     const word = words[at];
+    if (word === '--repo' || word === '-R' || word.startsWith('--repo=') || /^-R./u.test(word)) repo = true;
     if (word === '--base' || word === '-B') base = words[++at] ?? '';
     else if (word.startsWith('--base=')) base = word.slice('--base='.length);
     else if (/^-B./u.test(word)) base = word.slice(2);
   }
+  if (!repo && otherRepository(dir)) return false;
   return base === null || base.replace(/^refs\/heads\//u, '') === branch;
+}
+
+// Whether dir is a checkout of a repository other than the one this guard belongs to; unknown counts as ours.
+function otherRepository(dir) {
+  const common = git(dir, 'rev-parse', '--path-format=absolute', '--git-common-dir');
+  const ours = git(dirname(fileURLToPath(import.meta.url)), 'rev-parse', '--path-format=absolute', '--git-common-dir');
+  return Boolean(common && ours && !sameDir(common, ours));
 }
 
 // gh pr create's flags that take no value; any other option consumes the next word, so `--title --help` sets a title.
@@ -392,15 +417,15 @@ const globMatches = (pattern, name) =>
 
 // Claude Code kills a hook at its settings entry's timeout, 10 seconds in Plate,
 // and a killed hook lets the edit through. So the git calls share one budget
-// that ends 8 seconds after the process starts, instead of a short limit per
-// call, which refused valid edits on a loaded host.
+// that ends 8 seconds after the process starts.
 const GIT_DEADLINE = performance.timeOrigin + 8000;
-const git = (dir, ...args) => {
+const gitRun = (dir, args, { env, input } = {}) => {
   const timeout = Math.floor(GIT_DEADLINE - Date.now());
   if (timeout <= 0) return null;
-  const run = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: 1 << 28, timeout, killSignal: 'SIGKILL' });
-  return run.error || run.status !== 0 ? null : run.stdout.replace(/\n$/u, '');
+  const run = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8', input, env: env && { ...process.env, ...env }, maxBuffer: 1 << 28, timeout, killSignal: 'SIGKILL' });
+  return run.error || run.status !== 0 ? null : run.stdout;
 };
+const git = (dir, ...args) => gitRun(dir, args)?.replace(/\n$/u, '') ?? null;
 const sameDir = (a, b) => {
   const [x, y] = [statSync(a), statSync(b)];
   return x.dev === y.dev && x.ino === y.ino;
@@ -485,7 +510,49 @@ function editDenial(config, file, cwd) {
   return `agents never edit the main checkout on ${branch || 'a detached HEAD'}, here ${path}. ${worktree ? `Edit ${join(worktree, path)} in your worktree instead` : 'Move to your own worktree, such as with EnterWorktree, edit there'}, and land it with land.mjs.${artifacts ? ` Only ${artifacts}, which holds the suggested-task ledger, is writable in the main checkout.` : ''}`;
 }
 
-function budgetDenial({ liftsStep, overBudget, stepLines, stepRecords }, budget, config, file, cwd) {
+function editedText(tool, edit, path) {
+  if (tool === 'Write') return typeof edit.content === 'string' ? edit.content : null;
+  if (tool !== 'Edit' && tool !== 'MultiEdit') return null;
+  let text = existsSync(path) ? readFileSync(path, 'utf8') : '';
+  for (const { old_string: from, new_string: to, replace_all: all } of tool === 'MultiEdit' ? (edit.edits ?? []) : [edit]) {
+    if (typeof from !== 'string' || typeof to !== 'string') return null;
+    // Claude Code's Edit fills an empty or missing file when old_string is empty.
+    if (from === '') {
+      if (text !== '') return null;
+      text = to;
+      continue;
+    }
+    if (!text.includes(from)) return null;
+    text = all ? text.split(from).join(to) : text.replace(from, () => to);
+  }
+  return text;
+}
+
+function stepWithEdit({ countText, stepLines }, top, config, step, name, text) {
+  const index = git(top, 'rev-parse', '--path-format=absolute', '--git-path', 'index');
+  if (index === null) return null;
+  const dir = mkdtempSync(join(tmpdir(), 'pstack-guard-'));
+  try {
+    const env = { GIT_INDEX_FILE: join(dir, 'index') };
+    if (existsSync(index)) copyFileSync(index, env.GIT_INDEX_FILE);
+    const inCopy = (at, ...args) => gitRun(at, args, { env })?.replace(/\n$/u, '') ?? null;
+    // git add --update drops the entry of a tracked file missing from disk, so the entry is read first. A literal
+    // pathspec also matches the files under a directory of that name, so only the entry for the path itself counts.
+    const entries = inCopy(top, 'ls-files', '-z', '--stage', '--', `:(literal)${name}`);
+    if (entries === null || inCopy(top, 'add', '--update') === null) return null;
+    const entry = entries.split('\0').find((line) => line.slice(line.indexOf('\t') + 1) === name);
+    if (!entry) return stepLines(top, config, inCopy, { cached: true, edited: { path: name, lines: countText(text) }, from: step.from });
+    const blob = gitRun(top, ['hash-object', '-w', `--path=${name}`, '--stdin'], { input: text })?.trim();
+    if (!blob || inCopy(top, 'update-index', '--add', '--cacheinfo', `${entry.split(' ')[0]},${blob},${name}`) === null) return null;
+    return stepLines(top, config, inCopy, { cached: true, from: step.from });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const GIT_RULE_FILES = new Set(['.gitignore', '.gitattributes']);
+
+function budgetDenial(status, mainConfig, file, cwd, input) {
   const path = resolvePhysically(resolve(cwd, file.trim().replace(/^~(?=\/|$)/u, homedir())));
   let dir = dirname(path);
   while (!existsSync(dir)) dir = dirname(dir);
@@ -493,15 +560,24 @@ function budgetDenial({ liftsStep, overBudget, stepLines, stepRecords }, budget,
   const common = top && git(top, 'rev-parse', '--path-format=absolute', '--git-common-dir');
   const ours = git(dirname(fileURLToPath(import.meta.url)), 'rev-parse', '--path-format=absolute', '--git-common-dir');
   if (!common || !ours || !sameDir(common, ours)) return null;
+  const own = join(top, '.agents/pstack.json');
+  const config = existsSync(own) ? JSON.parse(readFileSync(own, 'utf8')) : mainConfig;
+  const budget = status.stepBudget(config);
   const name = relative(top, path).split(sep).join('/');
-  if (budget.excluded(name) || git(top, 'check-ignore', '-q', '--', name) !== null) return null;
-  const step = stepLines(top, config, git);
-  if (!step || step.product <= budget.lines) return null;
-  const records = stepRecords(top, config, git, step.files);
-  if (!records?.planned || records.logs.some((log) => liftsStep(readFileSync(log, 'utf8')))) return null;
+  if (budget.excluded(name) || GIT_RULE_FILES.has(basename(name)) || git(top, 'check-ignore', '-q', '--', name) !== null) return null;
+  const step = status.stepLines(top, config, git);
+  if (!step) return null;
+  const records = status.stepRecords(top, config, git, step.files);
+  if (!records?.planned || records.logs.some((log) => status.liftsStep(readFileSync(log, 'utf8')))) return null;
+  const text = editedText(input.tool_name, input.tool_input, path);
+  const edited = text === null ? null : stepWithEdit(status, top, config, step, name, text);
+  if (text !== null && edited === null) return null;
+  const product = edited?.product ?? step.product;
+  if (product <= budget.lines || (edited && edited.product < step.product)) return null;
   const companion = config.companion?.dir && existsSync(join(top, config.companion.dir));
-  return `this worktree's change since ${step.base} ${overBudget(step.product, budget.lines)}. So the guard refuses this edit to ${name} now, while the step is built, instead of at its panel. To split, save the whole diff in the run directory${companion ? `, the ${config.companion.dir} half's too` : ''}, restore in this worktree every file the first lettered step does not need, with \`git restore --source ${step.sha} -- <paths>\` for a tracked file, land that step, then apply the rest in a new worktree for the next one. Tests, specs, fixtures, Markdown, plans, excluded globs and files git ignores stay editable. A "big step:" row counts in a decision log this worktree changes, until that log's next "landed as" row.`;
+  return `this worktree's change since ${step.base}${edited ? ', with this edit,' : ''} ${status.overBudget(product, budget.lines)}. So the guard refuses this edit to ${name} now, while the step is built, instead of at its panel. To split, save the whole diff in the run directory${companion ? `, the ${config.companion.dir} half's too` : ''}, restore in this worktree every file the first lettered step does not need, with \`git restore --source ${step.sha} -- <paths>\` for a tracked file, land that step, then apply the rest in this worktree for the next one. Tests, specs, fixtures, Markdown, plans, excluded globs, files git ignores and .gitignore and .gitattributes files stay editable, and so does an edit that lowers the step's count. A "big step:" row counts in a decision log this worktree changes, until that log's next "landed as" row or delivery row that names the step as landed, published or dropped.`;
 }
+
 const failOpen = (check) => {
   try {
     return check();
@@ -522,8 +598,7 @@ if (EDIT_TOOLS.has(input.tool_name)) {
     reason = editDenial(config, file, cwd);
     if (!reason) {
       const status = await import('./status.mjs');
-      const budget = status.stepBudget(config);
-      reason = failOpen(() => budgetDenial(status, budget, config, file, cwd));
+      reason = failOpen(() => budgetDenial(status, config, file, cwd, input));
     }
   } catch (error) {
     reason = `the guard failed (${error.message}), so it refuses this edit. Fix the path, git or .agents/pstack.json, then retry.`;
@@ -554,7 +629,7 @@ eachCommand(command, (words, prefix, dir) => {
       } else if (name === config.branch && !push.dry && !prefix.includes('PSTACK_RELEASE=1')) direct = true;
     }
   }
-  pr ||= opensPr(words, config.branch);
+  pr ||= opensPr(words, config.branch, dir);
 }, new Set([input.cwd ?? process.cwd()]));
 const reasons = [];
 if (hits.size > 0) reasons.push(`agents never force-push or delete ${[...hits].join(' and ')}. Tell the owner, who can run it in their own terminal if they want it:\n  ${command}`);
