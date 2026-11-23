@@ -1,5 +1,7 @@
 # @kitcn/resend
 
+## 0.34.0
+
 ## 0.33.12
 
 ### Patch Changes
