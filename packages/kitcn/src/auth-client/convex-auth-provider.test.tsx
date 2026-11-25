@@ -2,6 +2,7 @@ import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { type ReactNode, Suspense, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { syncConvexAuthForStartLoader } from '../auth-start';
 import { AuthMutationError } from '../crpc/auth-error';
 import { createAuthMutations } from '../react/auth-mutations';
@@ -1936,6 +1937,126 @@ describe('ConvexAuthProvider', () => {
       });
       await flush();
       expect(result.current.auth.isAuthenticated).toBe(false);
+    });
+
+    test('reports authenticated on the first render from a held, unexpired JWT', () => {
+      const seen: { isAuthenticated: boolean; isLoading: boolean }[] = [];
+      const client = { setAuth: () => {}, clearAuth: () => {} };
+      const authClient = {
+        useSession: () => ({ data: null, isPending: true }),
+        convex: { token: async () => ({ data: {} }) },
+        getSession: async () => null,
+        updateSession: () => {},
+        crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+      };
+      const Probe = () => {
+        const { isAuthenticated, isLoading } = useAuth();
+        seen.push({ isAuthenticated, isLoading });
+        return null;
+      };
+      for (const [token, optimisticAuth, expected] of [
+        [makeJwt(3600), true, { isAuthenticated: true, isLoading: false }],
+        [makeJwt(3600), false, { isAuthenticated: false, isLoading: true }],
+        [makeJwt(-10), true, { isAuthenticated: false, isLoading: true }],
+        [
+          'opaque-session-token',
+          true,
+          { isAuthenticated: false, isLoading: true },
+        ],
+      ] as const) {
+        seen.length = 0;
+        const view = render(
+          <ConvexAuthProvider
+            authClient={authClient as any}
+            client={client as any}
+            initialToken={token}
+            optimisticAuth={optimisticAuth}
+          >
+            <Probe />
+          </ConvexAuthProvider>
+        );
+        expect(seen[0]).toEqual(expected);
+        view.unmount();
+      }
+    });
+
+    test('reports the seeded state on the server render too', () => {
+      const authClient = {
+        useSession: () => ({ data: null, isPending: true }),
+        convex: { token: async () => ({ data: {} }) },
+        getSession: async () => null,
+        updateSession: () => {},
+        crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+      };
+      const Probe = () => {
+        const { hasSession, isAuthenticated, isLoading } = useAuth();
+        return <p>{`${hasSession}/${isAuthenticated}/${isLoading}`}</p>;
+      };
+      const serverRender = (optimisticAuth: boolean) => {
+        const win = globalThis.window;
+        // biome-ignore lint/performance/noDelete: a server render has no window
+        delete (globalThis as { window?: unknown }).window;
+        try {
+          return renderToString(
+            <ConvexAuthProvider
+              authClient={authClient as any}
+              client={{ setAuth: () => {}, clearAuth: () => {} } as any}
+              initialToken={makeJwt(3600)}
+              optimisticAuth={optimisticAuth}
+            >
+              <Probe />
+            </ConvexAuthProvider>
+          );
+        } finally {
+          globalThis.window = win;
+        }
+      };
+
+      expect(serverRender(true)).toContain('true/true/false');
+      expect(serverRender(false)).toContain('true/false/true');
+    });
+
+    test('a client that already reported an auth result does not open from the first render again', async () => {
+      let reportAuth: ((isAuthenticated: boolean) => void) | null = null;
+      const client = {
+        setAuth: (_fetchToken: unknown, onChange: (value: boolean) => void) => {
+          reportAuth = onChange;
+        },
+        clearAuth: () => {},
+      };
+      const authClient = {
+        useSession: () => ({ data: null, isPending: true }),
+        convex: { token: async () => ({ data: {} }) },
+        getSession: async () => null,
+        updateSession: () => {},
+        crossDomain: { oneTimeToken: { verify: async () => ({ data: {} }) } },
+      };
+      const seen: boolean[] = [];
+      const Probe = () => {
+        seen.push(useAuth().isAuthenticated);
+        return null;
+      };
+      const mount = () =>
+        render(
+          <ConvexAuthProvider
+            authClient={authClient as any}
+            client={client as any}
+            initialToken={makeJwt(3600)}
+            optimisticAuth
+          >
+            <Probe />
+          </ConvexAuthProvider>
+        );
+
+      const first = mount();
+      await flush();
+      await act(async () => reportAuth?.(false));
+      expect(isClientSettled(client as any)).toBe(true);
+      first.unmount();
+
+      seen.length = 0;
+      mount();
+      expect(seen[0]).toBe(false);
     });
 
     test('the confirmed state takes over once Convex confirms', async () => {
