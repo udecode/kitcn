@@ -482,20 +482,33 @@ export function ConvexAuthProvider({
     joinPage(guard);
   });
 
-  // Memoize decoded JWT to avoid re-parsing on every render
-  const tokenValues = useMemo(
-    () =>
-      refusedInitialToken || inheritedTrip
-        ? { expiresAt: null, token: null }
-        : {
-            expiresAt: initialToken ? decodeJwtExp(initialToken) : null,
-            token: initialToken ?? null,
-          },
-    [initialToken, inheritedTrip, refusedInitialToken]
-  );
+  // Memoize decoded JWT to avoid re-parsing on every render. With
+  // `optimisticAuth`, a held, unexpired JWT on a client that has not reported
+  // an auth result opens the gate from the first render, server render
+  // included, instead of after `AuthStateSync`'s first effect.
+  const tokenValues = useMemo(() => {
+    if (refusedInitialToken || inheritedTrip) {
+      return { expiresAt: null, token: null };
+    }
+    const values = {
+      expiresAt: initialToken ? decodeJwtExp(initialToken) : null,
+      token: initialToken ?? null,
+    };
+    return optimisticAuth &&
+      initialToken &&
+      isOptimisticToken(initialToken) &&
+      !isClientSettled(client)
+      ? { ...values, isAuthenticated: true, isLoading: false }
+      : values;
+  }, [
+    client,
+    initialToken,
+    inheritedTrip,
+    optimisticAuth,
+    refusedInitialToken,
+  ]);
 
   // AuthProvider wraps inner so useAuthStore() is available inside
-  // SSR initial values: set token/expiresAt, keep isLoading=true until Convex validates
   return (
     <AuthProvider
       initialValues={tokenValues}

@@ -370,7 +370,7 @@ All from `kitcn/react`:
 
 | Hook | Returns | Description |
 |------|---------|-------------|
-| `useAuth()` | `{ hasSession, isAuthenticated, isLoading }` | Full auth state |
+| `useAuth()` | `{ hasSession, isAuthenticated, isLoading }` | Full auth state; with `optimisticAuth` and an unexpired JWT `initialToken`, authenticated from the first render, server render included |
 | `useMaybeAuth()` | `boolean` | Has token (optimistic, may not be verified) |
 | `useIsAuth()` | `boolean` | Server-verified authentication (with `optimisticAuth`, also during the optimistic window) |
 | `useAuthGuard()` | `() => boolean` | Guard mutations, returns true if blocked |

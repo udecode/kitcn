@@ -276,7 +276,7 @@ function AuthStatus() {
 | Property | Description |
 |----------|-------------|
 | `hasSession` | Has a session token (may not be verified) |
-| `isAuthenticated` | Token exists AND Convex auth verified. With `optimisticAuth`, also `true` for a held, unexpired JWT before Convex confirms it; the server still enforces auth |
+| `isAuthenticated` | Token exists AND Convex auth verified. With `optimisticAuth`, also `true` for a held, unexpired JWT before Convex confirms it, from the first render (the server render included) when that JWT is `initialToken`; the server still enforces auth |
 | `isLoading` | Convex auth is still loading |
 
 ### useMaybeAuth

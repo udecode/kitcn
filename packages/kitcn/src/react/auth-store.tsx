@@ -521,14 +521,12 @@ export const useAuth = () => {
 
   // Check kitcn AuthProvider first
   if (authStore.store) {
-    // During SSR/prerendering, read token from store for SSR auth-awareness
+    // During SSR/prerendering, read the store as the provider seeded it
     if (typeof window === 'undefined') {
-      const token = authStore.get('token');
-
       return {
-        hasSession: !!token,
-        isAuthenticated: false,
-        isLoading: true,
+        hasSession: !!authStore.get('token'),
+        isAuthenticated: authStore.get('isAuthenticated'),
+        isLoading: authStore.get('isLoading'),
       };
     }
 
