@@ -16,8 +16,9 @@ import { logger } from './utils/logger.js';
 import {
   createMissingModuleResolver,
   createProjectJiti,
+  evaluateProjectRoot,
   getProjectServerParserShimPath,
-  projectGraphCache,
+  planProjectGraph,
   registerMissingModuleFallback,
   withSharedProjectGraph,
 } from './utils/project-jiti.js';
@@ -2223,12 +2224,17 @@ async function parseModuleRuntime(
   const module =
     rewrittenSource === source
       ? await jitiInstance.import(filePath)
-      : await jitiInstance.evalModule(rewrittenSource, {
-          async: true,
-          ext: '.ts',
-          filename: filePath,
-          cache: projectGraphCache(),
-        });
+      : await evaluateProjectRoot(
+          filePath,
+          (cache) =>
+            jitiInstance.evalModule(rewrittenSource, {
+              async: true,
+              ext: '.ts',
+              filename: filePath,
+              ...(cache ? { cache } : {}),
+            }),
+          'import'
+        );
 
   if (!module || typeof module !== 'object') {
     if (isHttp) {
@@ -2529,7 +2535,11 @@ export async function generateMeta(
         placeholderRuntimeExportNames
       );
 
-      await withSharedProjectGraph(async () => {
+      const graphPlan = planProjectGraph(
+        jitiInstance,
+        parseCandidateFiles.map((file) => path.join(functionsDir, file))
+      );
+      await withSharedProjectGraph(graphPlan, async () => {
         for (const file of parseCandidateFiles) {
           const filePath = path.join(functionsDir, file);
           // Use path (minus .ts) as namespace key: 'items/queries' for nested files
